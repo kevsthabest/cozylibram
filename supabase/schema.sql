@@ -1,0 +1,26 @@
+-- Spicy Shelves: per-user book storage.
+-- Run once in your Supabase project: Dashboard → SQL Editor → paste → Run.
+--
+-- One row per book per user. The whole book object lives in `data` (jsonb),
+-- so the app can evolve without schema migrations. Row Level Security makes
+-- sure every user can only ever see their own rows.
+
+create table if not exists books (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  book_id text not null,
+  isbn text,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  unique (user_id, book_id)
+);
+
+create index if not exists books_user_isbn on books (user_id, isbn);
+
+alter table books enable row level security;
+
+drop policy if exists "own rows" on books;
+create policy "own rows" on books
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
