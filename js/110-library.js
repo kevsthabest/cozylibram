@@ -36,7 +36,7 @@ function coverTile(b, i) {
   const short = { tbr: 'TBR', reading: 'Reading', read: 'Read', dnf: 'DNF' };
   const inner = b.cover
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-    : '📕';
+    : '<span class="tile-fallback">📕</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
   const pk = primaryAxisKey(b);
   const pv = (b.ratings || {})[pk] || 0;

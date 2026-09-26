@@ -33,16 +33,19 @@ ok('no orphaned declarations outside rule blocks', !orphan);
 const base = clean.match(/#view\s*\{[^}]*\}/);
 ok('#view centers with auto margins', !!base && /margin\s*:\s*0\s+auto/.test(base[0]));
 
-// 4. grid normalization (v49): the tile box is sized by aspect-ratio alone —
-// the cover img must be absolutely positioned so a tall phone photo of a
-// physical book can never stretch its tile.
+// 4. grid normalization (v50): the tile box is forced to 2:3 by the padding
+// technique — the cover img must be absolutely positioned so a tall phone
+// photo of a physical book can never stretch its tile.
 const tileBox = clean.match(/\.cover-tile\s+\.tile-cover\s*\{[^}]*\}/);
-ok('tile box keeps aspect-ratio 2/3', !!tileBox && /aspect-ratio\s*:\s*2\/3/.test(tileBox[0]));
+ok('tile box forces 2:3 via padding-bottom',
+  !!tileBox && /height\s*:\s*0/.test(tileBox[0]) && /padding-bottom\s*:\s*150%/.test(tileBox[0]));
 const tileImg = clean.match(/\.cover-tile\s+\.tile-cover\s+img\s*\{[^}]*\}/);
 ok('tile img is absolutely positioned (cannot stretch tile)',
   !!tileImg && /position\s*:\s*absolute/.test(tileImg[0]));
 ok('tile img still covers the box',
   !!tileImg && /object-fit\s*:\s*cover/.test(tileImg[0]));
+ok('tile no-cover fallback centers over the box',
+  /\.cover-tile\s+\.tile-fallback\s*\{[^}]*\}/.test(clean));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

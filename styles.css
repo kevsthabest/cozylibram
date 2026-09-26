@@ -480,22 +480,31 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .cover-tile { cursor: pointer; }
 .cover-tile .tile-cover {
   position: relative;
+  /* Forced 2:3 box via the classic padding technique (v50): works in every
+     browser and cannot be defeated by the image inside, no matter how tall
+     or wide the photo is. aspect-ratio is kept as a secondary hint. */
+  height: 0;
+  padding-bottom: 150%;
   aspect-ratio: 2/3;
   border-radius: 10px;
   overflow: hidden;
   background: linear-gradient(140deg, var(--card2), var(--bg2));
-  display: flex; align-items: center; justify-content: center;
-  font-size: 30px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   transition: transform 0.15s ease;
 }
 .cover-tile:active .tile-cover { transform: scale(0.96); }
 /* The cover image is absolutely positioned so its natural dimensions can
-   never stretch the tile: the 2:3 box comes from aspect-ratio alone, even
-   for tall phone photos of physical books (v49). */
+   never stretch the tile: the 2:3 box comes from the forced padding alone,
+   even for tall phone photos of physical books. */
 .cover-tile .tile-cover img {
   position: absolute; inset: 0;
   width: 100%; height: 100%; object-fit: cover; display: block;
+}
+/* No-cover fallback emoji, centered over the forced box. */
+.cover-tile .tile-fallback {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
 }
 .tile-status {
   position: absolute; top: 6px; left: 6px;
