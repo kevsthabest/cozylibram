@@ -9,6 +9,7 @@ function render() {
   else if (view === 'pick') renderPick();
   else if (view === 'stats') renderStats();
   else if (view === 'settings') renderSettings();
+  else if (view === 'profile') renderProfile();
 }
 
 applyTheme();

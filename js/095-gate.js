@@ -125,11 +125,14 @@ async function enterApp(user) {
   hideGate();
   view = 'library';
   render();
+  adoptCloudProfile(user);
+  renderTopbar();
   await cloudFirstSync();
 }
 
 function leaveApp() {
   gateEnteredUid = null;
   setLocalUser(null);
+  renderTopbar();
   renderGate();
 }

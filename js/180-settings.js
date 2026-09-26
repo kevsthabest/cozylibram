@@ -18,7 +18,8 @@ function renderSettings() {
   const ax0 = Object.keys(axTot).sort((x, y) => axTot[y].n - axTot[x].n)[0];
 
   setView(
-    '<h2 class="section serif">Your shelves at a glance</h2>' +
+    '<div class="view-head"><button class="btn ghost sm" id="st-back">← Back</button>' +
+    '<h2 class="section serif">Your shelves at a glance</h2></div>' +
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + counts.tbr + '</div><div class="l">TBR</div></div>' +
     '<div class="stat"><div class="n">' + counts.reading + '</div><div class="l">Reading</div></div>' +
@@ -103,6 +104,7 @@ function renderSettings() {
   );
 
   // Appearance wiring
+  document.getElementById('st-back').addEventListener('click', () => go('library'));
   document.querySelectorAll('#th-theme button').forEach(btn =>
     btn.addEventListener('click', () => {
       localStorage.setItem('theme', btn.dataset.t);
