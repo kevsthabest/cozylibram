@@ -167,13 +167,79 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('first sync creates the cloud row', stub.rows['u24'] && stub.rows['u24'].first_name === 'Solo');
   ok('avatar id stored in the row', stub.rows['u24'].avatar_id === 'dragon');
 
-  // Uploaded photo: cloud keeps the themed id, photo stays local.
-  useAs('u25'); wipeLocal('u25');
-  delete stub.rows['u25'];
-  runInWindow('touchProfile({ firstName: "Pic", lastName: "", avatar: { type: "upload", dataUrl: "data:image/jpeg;base64,xx" }, updatedAt: 0 });');
+  // ---- profile photos in the private `avatars` bucket ----
+  const PHOTO = 'data:image/jpeg;base64,' + Buffer.from('fake-jpeg-bytes-1234').toString('base64');
+  const mkFullStub = () => {
+    const rows = {};
+    const files = {};
+    return { rows, files,
+      from: (table) => {
+        if (table !== 'profiles') throw new Error('unexpected table ' + table);
+        return {
+          select: () => ({ eq: (col, val) => ({ maybeSingle: async () => ({ data: rows[val] || null, error: null }) }) }),
+          upsert: async (row) => { rows[row.user_id] = Object.assign({}, row); return { error: null }; },
+        };
+      },
+      storage: { from: (bucket) => {
+        if (bucket !== 'avatars') throw new Error('unexpected bucket ' + bucket);
+        return {
+          upload: async (path, blob) => { files[path] = blob; return { error: null }; },
+          download: async (path) => files[path]
+            ? { data: files[path], error: null }
+            : { data: null, error: { message: 'not found' } },
+        };
+      } },
+    };
+  };
+  const fstub = mkFullStub();
+  window.__sbStub = fstub;
+  const toBlob = window.eval('dataUrlToBlob');
+
+  // New photo picked → uploaded to the bucket, path stored in the row.
+  useAs('u30'); wipeLocal('u30');
+  runInWindow('touchProfile({ firstName: "Pic", lastName: "", avatar: { type: "upload", dataUrl: "' + PHOTO + '" }, avatarCloudPath: "", updatedAt: 0 });');
+  await probe('pushCloudProfile(loadProfile())'); await tick();
+  ok('uploaded photo lands in the avatars bucket', !!fstub.files['u30/avatar.jpg']);
+  ok('row points at the photo path', fstub.rows['u30'] && fstub.rows['u30'].avatar_path === 'u30/avatar.jpg');
+  ok('local profile remembers the cloud path', JSON.parse(lsGet('spicyshelves.profile.u30')).avatarCloudPath === 'u30/avatar.jpg');
+
+  // Fresh device downloads the photo the winning row points at.
+  useAs('u31'); wipeLocal('u31');
+  fstub.files['u31/avatar.jpg'] = toBlob(PHOTO);
+  fstub.rows['u31'] = cloudRow('u31', { avatar_id: '', avatar_path: 'u31/avatar.jpg', updated_at: new Date(Date.now() + 60000).toISOString() });
   await probe('syncCloudProfile()'); await tick();
-  ok('upload does not put a photo in the cloud row', stub.rows['u25'] && stub.rows['u25'].avatar_id === '');
-  ok('uploaded photo kept locally', JSON.parse(lsGet('spicyshelves.profile.u25')).avatar.type === 'upload');
+  const got = JSON.parse(lsGet('spicyshelves.profile.u31'));
+  ok('fresh device downloads the cloud photo', got.avatar.type === 'upload' && got.avatar.dataUrl === PHOTO);
+  ok('downloaded photo path remembered', got.avatarCloudPath === 'u31/avatar.jpg');
+
+  // Switching to a themed avatar clears the cloud photo reference.
+  useAs('u32'); wipeLocal('u32');
+  fstub.rows['u32'] = cloudRow('u32', { avatar_path: 'u32/avatar.jpg', updated_at: new Date(Date.now() - 60000).toISOString() });
+  runInWindow('touchProfile({ firstName: "X", lastName: "", avatar: { type: "letter" }, avatarCloudPath: "u32/avatar.jpg", updatedAt: 0 });');
+  await probe('syncCloudProfile()'); await tick();
+  ok('themed avatar clears the cloud photo reference', fstub.rows['u32'].avatar_path === '');
+
+  // Same photo on both sides → no re-download.
+  useAs('u33'); wipeLocal('u33');
+  const localPhoto = 'data:image/jpeg;base64,' + Buffer.from('local-bytes').toString('base64');
+  const otherPhoto = 'data:image/jpeg;base64,' + Buffer.from('other-bytes').toString('base64');
+  fstub.files['u33/avatar.jpg'] = toBlob(otherPhoto);
+  fstub.rows['u33'] = cloudRow('u33', { first_name: 'New', avatar_path: 'u33/avatar.jpg', updated_at: new Date().toISOString() });
+  runInWindow('saveProfile({ firstName: "Old", lastName: "", avatar: { type: "upload", dataUrl: "' + localPhoto + '" }, avatarCloudPath: "u33/avatar.jpg", updatedAt: ' + (Date.now() - 60000) + ' });');
+  await probe('syncCloudProfile()'); await tick();
+  const keptPhoto = JSON.parse(lsGet('spicyshelves.profile.u33'));
+  ok('names still update from the newer row', keptPhoto.firstName === 'New');
+  ok('identical photo path is not re-downloaded', keptPhoto.avatar.dataUrl === localPhoto);
+
+  // Photo missing from the bucket → graceful fallback, no crash.
+  useAs('u34'); wipeLocal('u34');
+  delete fstub.files['u34/avatar.jpg'];
+  fstub.rows['u34'] = cloudRow('u34', { avatar_id: 'raven', avatar_path: 'u34/avatar.jpg', updated_at: new Date(Date.now() + 60000).toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  const fellBack = JSON.parse(lsGet('spicyshelves.profile.u34'));
+  ok('missing cloud photo falls back to the themed avatar', fellBack.avatar.type === 'default' && fellBack.avatar.id === 'raven');
+
+  window.__sbStub = null;
 
   // Empty everywhere → nothing pushed.
   useAs('u26'); wipeLocal('u26');

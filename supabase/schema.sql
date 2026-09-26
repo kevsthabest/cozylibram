@@ -90,3 +90,19 @@ create policy "own profile" on profiles
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Profile photos live in Supabase Storage (bucket `avatars`), one file per
+-- user; the profiles row just points at it with avatar_path. The bucket is
+-- private — the app downloads with the signed-in user's own session.
+-- RLS: each user owns the folder named after their user id.
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', false)
+on conflict (id) do nothing;
+
+alter table profiles add column if not exists avatar_path text not null default '';
+
+drop policy if exists "own avatar files" on storage.objects;
+create policy "own avatar files" on storage.objects
+  for all
+  using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1])
+  with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);

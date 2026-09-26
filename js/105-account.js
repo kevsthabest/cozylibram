@@ -17,7 +17,7 @@ function profileKey() {
   return 'spicyshelves.profile.' + (cloudUser ? cloudUser.id : 'offline');
 }
 function blankProfile() {
-  return { firstName: '', lastName: '', avatar: { type: 'letter' }, updatedAt: 0 };
+  return { firstName: '', lastName: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0 };
 }
 function loadProfile() {
   let p = null;
@@ -26,6 +26,7 @@ function loadProfile() {
   if (!p || typeof p !== 'object') return base;
   base.firstName = String(p.firstName || '');
   base.lastName = String(p.lastName || '');
+  base.avatarCloudPath = String(p.avatarCloudPath || '');
   base.updatedAt = Number(p.updatedAt) || 0;
   if (p.avatar && typeof p.avatar === 'object') {
     if (p.avatar.type === 'default' && DEFAULT_AVATARS.some(a => a.id === p.avatar.id)) base.avatar = { type: 'default', id: p.avatar.id };
@@ -42,6 +43,24 @@ function touchProfile(p) {
   p.updatedAt = Date.now();
   saveProfile(p);
   return p;
+}
+// dataURL <-> Blob helpers for the avatar bucket (btoa/atob/arrayBuffer exist
+// in both browsers and Node, so the test suite can exercise the real path).
+function dataUrlToBlob(dataUrl) {
+  const parts = String(dataUrl).split(',');
+  const type = (parts[0].match(/data:(.*?);/) || [])[1] || 'image/jpeg';
+  const bin = atob(parts[1] || '');
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: type });
+}
+async function blobToDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return 'data:' + (blob.type || 'image/jpeg') + ';base64,' + btoa(bin);
 }
 // One-time bridge: v37 briefly mirrored names into auth user_metadata.
 // If this device never set a profile, carry those values forward once.
@@ -60,28 +79,64 @@ function adoptLegacyMetadata(user) {
   if (md.avatar_id && DEFAULT_AVATARS.some(a => a.id === md.avatar_id)) p.avatar = { type: 'default', id: md.avatar_id };
   touchProfile(p);
 }
-// Push this device's profile to the profiles table (best-effort).
-// Uploaded photos stay on this device — the cloud keeps the themed avatar id.
+// Push this device's profile to the profiles table (best-effort). A newly
+// picked photo is uploaded to the private `avatars` bucket first (one file
+// per user, overwritten in place); the row just stores its path.
 async function pushCloudProfile(p) {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
   try {
+    let cloudPath = p.avatarCloudPath || '';
+    if (p.avatar.type === 'upload' && p.avatar.dataUrl && sb.storage) {
+      if (!cloudPath) {
+        cloudPath = cloudUser.id + '/avatar.jpg';
+        const up = await sb.storage.from('avatars').upload(cloudPath, dataUrlToBlob(p.avatar.dataUrl), { upsert: true, contentType: 'image/jpeg' });
+        if (up.error) throw up.error;
+        p.avatarCloudPath = cloudPath;
+        saveProfile(p);
+      }
+    } else if (p.avatar.type !== 'upload' && cloudPath) {
+      cloudPath = '';
+      p.avatarCloudPath = '';
+      saveProfile(p);
+    }
     const { error } = await sb.from('profiles').upsert({
       user_id: cloudUser.id,
       first_name: p.firstName || '',
       last_name: p.lastName || '',
       avatar_id: p.avatar.type === 'default' ? p.avatar.id : '',
+      avatar_path: cloudPath,
       updated_at: new Date(p.updatedAt || Date.now()).toISOString()
     }, { onConflict: 'user_id' });
     if (error) throw error;
   } catch (e) { /* offline — local copy is the source of truth */ }
+}
+function themedOrLetterAvatar(id) {
+  return DEFAULT_AVATARS.some(a => a.id === id) ? { type: 'default', id: id } : { type: 'letter' };
+}
+// Adopt the photo a winning cloud row points at (download once, keep local).
+async function adoptCloudPhoto(sb, p, row) {
+  const want = row.avatar_path || '';
+  if (want && want === p.avatarCloudPath && p.avatar.type === 'upload' && p.avatar.dataUrl) return;
+  if (want && sb.storage) {
+    try {
+      const dl = await sb.storage.from('avatars').download(want);
+      if (!dl.error && dl.data) {
+        p.avatar = { type: 'upload', dataUrl: await blobToDataUrl(dl.data) };
+        p.avatarCloudPath = want;
+        return;
+      }
+    } catch (e) { /* fall through to the fallback */ }
+  }
+  p.avatar = themedOrLetterAvatar(row.avatar_id);
+  p.avatarCloudPath = '';
 }
 // Two-way sync with the profiles table. Newer updatedAt wins, either direction.
 async function syncCloudProfile() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
   try {
-    const res = await sb.from('profiles').select('first_name,last_name,avatar_id,updated_at').eq('user_id', cloudUser.id).maybeSingle();
+    const res = await sb.from('profiles').select('first_name,last_name,avatar_id,avatar_path,updated_at').eq('user_id', cloudUser.id).maybeSingle();
     if (res.error) throw res.error;
     const row = res.data || null;
     const p = loadProfile();
@@ -90,8 +145,7 @@ async function syncCloudProfile() {
     if (row && remoteTs > localTs) {
       p.firstName = row.first_name || '';
       p.lastName = row.last_name || '';
-      p.avatar = DEFAULT_AVATARS.some(a => a.id === row.avatar_id)
-        ? { type: 'default', id: row.avatar_id } : { type: 'letter' };
+      await adoptCloudPhoto(sb, p, row);
       p.updatedAt = remoteTs;
       saveProfile(p);
       renderTopbar();
@@ -239,7 +293,7 @@ function renderProfile() {
       '<div class="field"><label>Email</label>' +
       '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
       '<button class="btn block" id="pf-save">Save profile</button>' +
-      '<p class="note">Your name and themed avatar sync to your cloud account when you\'re signed in.</p>' +
+      '<p class="note">Your name, themed avatar, and profile picture sync to your cloud account when you\'re signed in, so they follow you across devices.</p>' +
     '</div>'
   );
   document.getElementById('pf-back').addEventListener('click', () => go('library'));
@@ -250,6 +304,7 @@ function renderProfile() {
   const applyAvatar = (av, msg) => {
     const np = loadProfile();
     np.avatar = av;
+    if (av.type === 'upload') np.avatarCloudPath = ''; // new photo → re-upload
     touchProfile(np);
     pushCloudProfile(np);
     renderTopbar();
