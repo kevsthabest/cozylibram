@@ -1,4 +1,4 @@
-// Server-shared Hardcover token tests: precedence + settings UI.
+// Home-server Hardcover token tests: server-only config + settings UI.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -15,36 +15,28 @@ const q = (s) => window.document.querySelector(s);
 
 // 1. Nothing configured
 delete window.SPICY_CONFIG;
-window.localStorage.removeItem('hc_token');
 ok('no token when nothing configured', window.hcToken() === '');
-ok('status says none set', window.hcStatusText() === 'No token set.');
+ok('status says none set', window.hcStatusText().indexOf('No token set') === 0);
 
-// 2. Server token only
+// 2. Server token
 window.SPICY_CONFIG = { hardcoverToken: 'srv_token_123' };
-ok('server token used when no manual entry', window.hcToken() === 'srv_token_123');
+ok('server token used', window.hcToken() === 'srv_token_123');
 ok('status mentions home server', window.hcStatusText().includes('home-server'));
 
-// 3. Manual entry wins over server token
-window.localStorage.setItem('hc_token', 'manual_token_456');
-ok('manual token takes precedence', window.hcToken() === 'manual_token_456');
-ok('status mentions manual entry', window.hcStatusText().includes('manual'));
+// 3. Stale device keys are ignored (and were cleaned up at boot)
+window.localStorage.setItem('hc_token', 'stale_token_999');
+ok('stale hc_token ignored', window.hcToken() === 'srv_token_123');
 window.localStorage.removeItem('hc_token');
 
-// 4. Settings UI with server token: shows note, input stays empty (no leak into field)
+// 4. Settings UI: no manual entry fields anymore
 window.renderSettings();
-const bodyText = window.document.getElementById('view').textContent;
-ok('settings shows home-server note', bodyText.includes('home server'));
-ok('server token not prefilled into input', q('#hc-token').value === '');
+const view = window.document.getElementById('view');
+ok('no token input in settings', !q('#hc-token'));
+ok('no save button in settings', !q('#hc-save'));
+ok('test + enrich buttons still present', !!q('#hc-test') && !!q('#hc-bulk'));
+ok('settings mentions server-config.json', view.textContent.includes('server-config.json'));
 
-// 5. Settings UI with manual token: note hidden, input prefilled with manual only
-window.localStorage.setItem('hc_token', 'manual_token_456');
-window.renderSettings();
-ok('manual token prefilled', q('#hc-token').value === 'manual_token_456');
-ok('home-server note hidden when manual set',
-  !window.document.getElementById('view').textContent.includes('no need to enter anything'));
-window.localStorage.removeItem('hc_token');
-
-// 6. Empty server payload behaves like no server
+// 5. Empty server payload behaves like no server
 window.SPICY_CONFIG = {};
 ok('empty server config means no token', window.hcToken() === '');
 

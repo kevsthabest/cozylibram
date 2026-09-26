@@ -38,13 +38,13 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
 
 (async () => {
   // 1. No token -> no fetch, returns false
-  window.localStorage.removeItem('hc_token');
+  delete window.SPICY_CONFIG;
   fetchCalls.length = 0;
   const r0 = await window.enrichHardcover({ title: 'X', authors: ['Y'], categories: [] });
   ok('no token: returns false without network', r0 === false && fetchCalls.length === 0);
 
   // 2. ISBN match path
-  window.localStorage.setItem('hc_token', 'fake-token-for-tests');
+  window.SPICY_CONFIG = { hardcoverToken: 'fake-token-for-tests' };
   responseQueue = [tsDoc(onyxDoc)];
   const book = { id: 'b1', title: 'Onyx Storm', authors: ['Rebecca Yarros'], isbn: '9780349437064', categories: [], tropes: [], ratings: {}, axes: [] };
   const r1 = await window.enrichHardcover(book);

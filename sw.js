@@ -1,6 +1,6 @@
 /* Spicy Shelves service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'spicy-shelves-v28';
+const CACHE = 'spicy-shelves-v29';
 const JS = ['00-core.js', '10-theming.js', '20-ratings.js', '30-storefront.js', '40-storage.js', '50-helpers.js', '60-metadata.js', '61-gbooks-key.js', '70-hardcover.js', '80-pagecount.js', '90-sync.js', '100-nav.js', '110-library.js', '120-favorites.js', '130-add.js', '140-collections.js', '150-modal-discovery.js', '160-roulette.js', '170-stats.js', '180-settings.js', '190-wishlist.js', '200-boot.js'].map(f => './js/' + f);
 const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg'].concat(JS);
 

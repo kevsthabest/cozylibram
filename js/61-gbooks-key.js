@@ -4,18 +4,15 @@
 // Without a key, Google Books draws from one anonymous quota shared by everyone,
 // which can run dry (HTTP 429). A free personal key gives your own 1,000
 // requests/day. Get one: Google Cloud Console → enable "Books API" → create an
-// API key (restrict it to the Books API). Stored on-device; the home server can
-// also share it with LAN clients via server-config.json.
-function gbServerKey() {
+// API key (restrict it to the Books API). The key lives in server-config.json
+// on the home PC and is shared with LAN clients via /config.js.
+function gbKey() {
   try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.googleBooksKey) || '').trim(); }
   catch (e) { return ''; }
 }
-function gbManualKey() { return (localStorage.getItem('gbooks_key') || '').trim(); }
-function gbKey() { return gbManualKey() || gbServerKey(); }
 function gbKeyStatusText() {
-  if (gbManualKey()) return 'API key saved ✓ (manual entry)';
-  if (gbServerKey()) return '🏠 Using home-server key ✓';
-  return 'No key set — using the shared anonymous quota.';
+  if (gbKey()) return '🏠 Using home-server key ✓';
+  return 'No key set — add google_books_key to server-config.json on your home PC.';
 }
 // Append the API key to a Google Books URL when we have one.
 function gbUrl(base) {

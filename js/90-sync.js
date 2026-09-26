@@ -2,24 +2,20 @@
 
 /* ---------------- Cloud sync (Supabase, optional) ---------------- */
 // Per-user long-term storage. Needs a Supabase project (see supabase/schema.sql).
-// Credentials: the home server shares them with LAN clients via /config.js, or
-// enter them manually in Settings → Account. The anon key is safe in the
-// browser — Row Level Security ensures each user only sees their own rows.
+// Credentials: the home server shares them with LAN clients via /config.js
+// (LAN-only). They are configured once in server-config.json on the home PC.
+// The anon key is safe in the browser — Row Level Security ensures each user
+// only sees their own rows.
 const SB_LIB_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 let sbClient = null, sbClientCfg = '', cloudUser = null;
 let cloudTimer = null, cloudLastSync = 0, cloudSyncing = false;
 
-function cloudServerCfg() {
+function cloudCfg() {
   try {
     const c = window.SPICY_CONFIG || {};
     return { url: (c.supabaseUrl || '').trim(), key: (c.supabaseAnonKey || '').trim() };
   } catch (e) { return { url: '', key: '' }; }
 }
-function cloudManualCfg() {
-  return { url: (localStorage.getItem('sb_url') || '').trim(),
-           key: (localStorage.getItem('sb_key') || '').trim() };
-}
-function cloudCfg() { const m = cloudManualCfg(); return (m.url && m.key) ? m : cloudServerCfg(); }
 function cloudConfigured() { const c = cloudCfg(); return !!(c.url && c.key); }
 
 function loadSupabaseLib() {

@@ -93,7 +93,8 @@ function makeFake() {
   ok('server config used on LAN', window.cloudCfg().url === 'https://srv.supabase.co' && window.cloudConfigured());
   window.localStorage.setItem('sb_url', 'https://man.supabase.co');
   window.localStorage.setItem('sb_key', 'mankey');
-  ok('manual config overrides server', window.cloudCfg().url === 'https://man.supabase.co');
+  ok('stale manual config ignored', window.cloudCfg().url === 'https://srv.supabase.co');
+  window.localStorage.removeItem('sb_url'); window.localStorage.removeItem('sb_key');
 
   // 4. _mtime stamping: only changed books get stamped
   runInWindow(`

@@ -1,6 +1,18 @@
 {
- "hardcover_token": "PASTE_YOUR_TOKEN_HERE",
- "supabase_anon_key": "PASTE_ANON_KEY_HERE",
- "supabase_url": "https://xyzcompany.supabase.co",
- "google_books_key": "PASTE_YOUR_GOOGLE_BOOKS_API_KEY_HERE"
+  "_readme": [
+    "Spicy Shelves home-server config.",
+    "HOW TO USE: copy this file to server-config.json (same folder) and fill in your keys.",
+    "server-config.json is NEVER committed to git, and is only served to devices",
+    "on your home network via /config.js — it is never exposed to the internet.",
+    "Lines starting with _ are just notes; the server ignores them."
+  ],
+  "_section_server": "Port the home server listens on.",
+  "port": 8000,
+  "_section_hardcover": "Hardcover token — series info, content warnings, moods. Free token: hardcover.app → Account settings → API.",
+  "hardcover_token": "PASTE_YOUR_HARDCOVER_TOKEN_HERE",
+  "_section_google_books": "Google Books API key — personal quota of 1,000 requests/day (the shared anonymous quota can run out). Get one: Google Cloud Console → enable the 'Books API' → Credentials → Create an API key (restrict it to the Books API).",
+  "google_books_key": "PASTE_YOUR_GOOGLE_BOOKS_API_KEY_HERE",
+  "_section_supabase": "Supabase — optional cloud sync. Supabase dashboard → Project Settings → API.",
+  "supabase_url": "https://xyzcompany.supabase.co",
+  "supabase_anon_key": "PASTE_YOUR_SUPABASE_ANON_KEY_HERE"
 }

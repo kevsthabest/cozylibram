@@ -61,25 +61,16 @@ function renderSettings() {
     '<p class="note" id="pc-backfill-note"></p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
     '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, and moods. ' +
-    'On your home network the server can share the token automatically (see server-config.json) — ' +
-    'otherwise paste it here; it stays on this device. Get one at hardcover.app → Account settings → API.</p>' +
-    (hcServerToken() && !hcManualToken() ? '<p class="note">🏠 Using the token from your home server — no need to enter anything.</p>' : '') +
-    '<div class="search-row"><input id="hc-token" type="password" class="text-input" ' +
-    'placeholder="hc_pat_…" value="' + esc(hcManualToken()) + '">' +
-    '<button class="btn" id="hc-save">Save</button></div>' +
+    'The token lives in server-config.json on your home PC and is shared with this device automatically over your home network. ' +
+    'Get one at hardcover.app → Account settings → API.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
     '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
     '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
     '<p class="note">Google Books lookups share one anonymous quota that can run out. ' +
-    'Add your own free API key for a personal quota of 1,000 requests/day: Google Cloud Console → ' +
-    'enable the "Books API" → Credentials → Create an API key (restrict it to the Books API). ' +
-    'The key stays on this device; on your home network the server can share it automatically ' +
-    '(see server-config.json).</p>' +
-    (gbServerKey() && !gbManualKey() ? '<p class="note">🏠 Using the key from your home server — no need to enter anything.</p>' : '') +
-    '<div class="search-row"><input id="gb-key" type="password" class="text-input" ' +
-    'placeholder="AIza…" value="' + esc(gbManualKey()) + '">' +
-    '<button class="btn" id="gb-save">Save</button></div>' +
+    'A personal API key gives 1,000 requests/day: Google Cloud Console → enable the "Books API" → ' +
+    'Credentials → Create an API key (restrict it to the Books API), then add it as google_books_key ' +
+    'in server-config.json on your home PC.</p>' +
     '<p class="note" id="gb-status">' + gbKeyStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Account & cloud sync</h2>' +
     '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
@@ -99,13 +90,10 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p>' +
     '</div>' +
-    '<p class="note">Supabase project — from your Supabase dashboard → Project Settings → API:</p>' +
-    (cloudServerCfg().url ? '<p class="note">🏠 Using the home server’s Supabase config — no need to enter anything.</p>' : '') +
-    '<div class="search-row"><input id="ac-url" class="text-input" placeholder="https://xyzcompany.supabase.co" ' +
-    'value="' + esc(cloudManualCfg().url) + '" autocapitalize="off" spellcheck="false"></div>' +
-    '<div class="search-row"><input id="ac-key" type="password" class="text-input" placeholder="anon public key" ' +
-    'value="' + esc(cloudManualCfg().key) + '" autocapitalize="off" spellcheck="false">' +
-    '<button class="btn" id="ac-save">Save</button></div>' +
+    '<p class="note">Supabase project — from your Supabase dashboard → Project Settings → API. ' +
+    'Enter the URL and anon key once in server-config.json on your home PC; ' +
+    'this device picks them up automatically over your home network.</p>' +
+    '<p class="note" id="ac-cfg">' + (cloudCfg().url ? '🏠 Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
     '<button class="btn danger block" id="bk-wipe" style="margin-top:26px">Delete everything</button>'
   );
 
@@ -191,15 +179,6 @@ function renderSettings() {
   document.getElementById('ac-sync').addEventListener('click', async () => {
     toast('Syncing…'); await cloudFirstSync();
   });
-  document.getElementById('ac-save').addEventListener('click', () => {
-    const u = document.getElementById('ac-url').value.trim();
-    const k = document.getElementById('ac-key').value.trim();
-    if (u) localStorage.setItem('sb_url', u); else localStorage.removeItem('sb_url');
-    if (k) localStorage.setItem('sb_key', k); else localStorage.removeItem('sb_key');
-    sbClient = null; sbClientCfg = ''; cloudUser = null; // force reconnect
-    toast(u && k ? 'Supabase config saved' : 'Supabase config cleared');
-    initCloud();
-  });
   refreshAccountUI();
 
   document.getElementById('bk-wipe').addEventListener('click', async () => {
@@ -210,28 +189,12 @@ function renderSettings() {
     toast('Shelves cleared');
   });
 
-  // Google Books key wiring
-  document.getElementById('gb-save').addEventListener('click', () => {
-    const v = document.getElementById('gb-key').value.trim();
-    if (v) localStorage.setItem('gbooks_key', v);
-    else localStorage.removeItem('gbooks_key');
-    const st = document.getElementById('gb-status'); if (st) st.textContent = gbKeyStatusText();
-    toast(v ? 'Google Books key saved' : 'Google Books key removed');
-  });
-
   // Hardcover wiring
   const hcStatus = () => document.getElementById('hc-status');
-  document.getElementById('hc-save').addEventListener('click', () => {
-    const v = document.getElementById('hc-token').value.trim();
-    if (v) localStorage.setItem('hc_token', v);
-    else localStorage.removeItem('hc_token');
-    const st = hcStatus(); if (st) st.textContent = hcStatusText();
-    toast(v ? 'Hardcover token saved' : 'Hardcover token removed');
-  });
   document.getElementById('pc-backfill').addEventListener('click', () => backfillPageCounts());
   document.getElementById('hc-test').addEventListener('click', async () => {
     const st = hcStatus(); if (!st) return;
-    if (!hcToken()) { st.textContent = 'Save a token first.'; return; }
+    if (!hcToken()) { st.textContent = 'No token — add hardcover_token to server-config.json on your home PC.'; return; }
     st.textContent = 'Testing…';
     try {
       const data = await hcGraphQL('query { search(query: "Dune", query_type: "Book", per_page: 1) { results } }');

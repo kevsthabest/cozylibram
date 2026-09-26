@@ -55,7 +55,7 @@ const mk = (id, title, series) =>
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 (async () => {
-  runInWindow(`localStorage.clear(); localStorage.setItem('hc_token', 'fake-token');
+  runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcoverToken: 'fake-token' };
     library.push(${mk('d1', 'Owned Book', true)});`);
 
   // 1. author sheet: library section + external "more by author"
@@ -93,7 +93,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   q('#c-x').click();
 
   // 4. series without token -> hint
-  runInWindow(`localStorage.removeItem('hc_token'); seriesCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
+  runInWindow(`delete window.SPICY_CONFIG; seriesCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
   ok('no-token hint shown', q('#c-more').textContent.includes('Connect Hardcover'));
   q('#c-x').click();
@@ -106,7 +106,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
     window.inLibrary({ isbn: '', title: 'Nope', author: 'Nobody' }) === false);
 
   // 6. dead Hardcover token -> honest error, not "nothing missing"
-  runInWindow(`window.__hcDead = true; localStorage.setItem('hc_token', 'revoked-token');
+  runInWindow(`window.__hcDead = true; window.SPICY_CONFIG = { hardcoverToken: 'revoked-token' };
     seriesCache.clear(); authorCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
   ok('dead token shows token hint, not empty-shelf',

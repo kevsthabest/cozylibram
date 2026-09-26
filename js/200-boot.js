@@ -12,5 +12,12 @@ function render() {
 }
 
 applyTheme();
+
+// One-time cleanup (v29): API keys moved to server-config.json on the home PC.
+// Drop any copies left over from the old per-device Settings entries.
+try {
+  ['hc_token', 'gbooks_key', 'sb_url', 'sb_key'].forEach(k => localStorage.removeItem(k));
+} catch (e) {}
+
 render();
 initCloud();

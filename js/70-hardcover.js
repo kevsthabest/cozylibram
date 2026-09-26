@@ -2,20 +2,17 @@
 
 /* ---------------- Hardcover (series, content warnings, moods) ---------------- */
 // Free GraphQL API: https://api.hardcover.app/v1/graphql
-// Needs a personal token (hardcover.app → account settings → API), stored on-device.
+// Needs a personal token (hardcover.app → account settings → API). The token
+// lives in server-config.json on the home PC and is shared with LAN clients
+// via /config.js (LAN-only, never cached).
 const HC_API = 'https://api.hardcover.app/v1/graphql';
-// Token the home server shares with LAN clients (server.py serves it only to
-// internal IPs via /config.js). Manual entry in Settings always wins.
-function hcServerToken() {
+function hcToken() {
   try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcoverToken) || '').trim(); }
   catch (e) { return ''; }
 }
-function hcManualToken() { return (localStorage.getItem('hc_token') || '').trim(); }
-function hcToken() { return hcManualToken() || hcServerToken(); }
 function hcStatusText() {
-  if (hcManualToken()) return 'Token saved ✓ (manual entry)';
-  if (hcServerToken()) return '🏠 Using home-server token ✓';
-  return 'No token set.';
+  if (hcToken()) return '🏠 Using home-server token ✓';
+  return 'No token set — add hardcover_token to server-config.json on your home PC.';
 }
 
 async function hcGraphQL(query) {
