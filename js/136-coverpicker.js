@@ -11,8 +11,37 @@ function httpsCover(u) {
   return String(u || '').replace(/^http:/, 'https:');
 }
 
+// Apple Books (iTunes Search API — free, no key). Artwork comes back at
+// 100x100; the same CDN serves larger sizes, so ask for 600x600.
+async function appleBookCovers(term, freshPush) {
+  try {
+    const r = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(term) +
+      '&media=ebook&entity=ebook&limit=8');
+    const d = await r.json();
+    (d.results || []).forEach(x => {
+      const u = String(x.artworkUrl100 || '').replace(/\d+x\d+bb\.jpg$/, '600x600bb.jpg');
+      if (u) freshPush(u, 'Apple Books');
+    });
+  } catch (e) { /* Apple unreachable */ }
+}
+
+// Hardcover edition cover art — only when the home-server token is set.
+async function hardcoverCover(isbn, freshPush) {
+  if (typeof hcToken !== 'function' || !hcToken()) return;
+  try {
+    const q = 'query { editions(where: {isbn_13: {_eq: ' + JSON.stringify(isbn) +
+      '}}, limit: 8) { image { url } } }';
+    const data = await hcGraphQL(q);
+    ((data || {}).editions || []).forEach(e => {
+      const u = e && e.image && e.image.url;
+      if (u) freshPush(u, 'Hardcover');
+    });
+  } catch (e) { /* token/query issue — skip silently */ }
+}
+
 // Every candidate cover for this book: current first, then Google Books
-// edition thumbnails, then all Open Library work covers. Deduped.
+// edition thumbnails, Apple Books artwork, all Open Library covers for the
+// edition and its work, and Hardcover's edition art. Deduped.
 async function fetchCoverCandidates(book) {
   const seen = new Set();
   const out = [];
@@ -43,16 +72,20 @@ async function fetchCoverCandidates(book) {
         const il = ((it || {}).volumeInfo || {}).imageLinks || {};
         freshPush(il.thumbnail || il.smallThumbnail, 'Google Books');
       });
-    } catch (e) { /* Google Books unreachable — Open Library may still work */ }
+    } catch (e) { /* Google Books unreachable — others may still work */ }
+    await appleBookCovers('isbn:' + isbn, freshPush);
     try {
       const ed = await (await fetch('https://openlibrary.org/isbn/' + isbn + '.json')).json();
+      (ed.covers || []).forEach(id =>
+        freshPush('https://covers.openlibrary.org/b/id/' + id + '-L.jpg', 'Open Library'));
       const wkey = ed && ed.works && ed.works[0] && ed.works[0].key;
       if (wkey) {
         const w = await (await fetch('https://openlibrary.org' + wkey + '.json')).json();
         (w.covers || []).forEach(id =>
           freshPush('https://covers.openlibrary.org/b/id/' + id + '-L.jpg', 'Open Library'));
       }
-    } catch (e) { /* no work covers */ }
+    } catch (e) { /* no OL covers */ }
+    await hardcoverCover(isbn, freshPush);
   } else {
     try {
       const q = 'https://openlibrary.org/search.json?q=' +
@@ -63,6 +96,7 @@ async function fetchCoverCandidates(book) {
         if (doc.cover_i) freshPush('https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg', 'Open Library');
       });
     } catch (e) { /* offline */ }
+    await appleBookCovers(String(book.title || '') + ' ' + (book.authors || []).join(' '), freshPush);
   }
   coverCandidateCache.set(cacheKey, fresh);
   return out;

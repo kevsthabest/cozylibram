@@ -12,10 +12,12 @@ let gbItems = [];
 let olEdition = null;
 let olWork = null;
 let olSearchDocs = [];
+let appleResults = [];
 window.fetch = async (url) => {
   const u = String(url);
   fetchCalls.push(u);
   if (u.includes('googleapis.com/books/v1/volumes')) return { json: async () => ({ items: gbItems }) };
+  if (u.includes('itunes.apple.com/search')) return { json: async () => ({ results: appleResults }) };
   if (u.includes('openlibrary.org/isbn/')) return { json: async () => olEdition };
   if (u.includes('openlibrary.org/works/')) return { json: async () => olWork };
   if (u.includes('openlibrary.org/search.json')) return { json: async () => ({ docs: olSearchDocs }) };
@@ -42,8 +44,15 @@ const mk = (id, fields) =>
     { volumeInfo: { imageLinks: { smallThumbnail: 'https://example.com/b.jpg' } } },
     { volumeInfo: {} }, // no image
   ];
-  olEdition = { works: [{ key: '/works/OL1W' }] };
+  olEdition = { works: [{ key: '/works/OL1W' }], covers: [999] };
   olWork = { covers: [111, 222] };
+  appleResults = [
+    { trackName: 'T', artworkUrl100: 'https://is1-ssl.mzstatic.com/x/abc/100x100bb.jpg' },
+    { trackName: 'T', artworkUrl100: 'https://is1-ssl.mzstatic.com/x/abc/100x100bb.jpg' }, // dup
+    { trackName: 'T' }, // no artwork
+  ];
+  window.eval(`hcToken = () => 'tok'; hcGraphQL = async (q) =>
+    ({ editions: [{ image: { url: 'https://img.hardcover.app/hc1.jpg' } }, { image: null }] });`);
 
   runInWindow(`localStorage.clear(); library.length = 0;
     library.push(${mk('k1', { isbn: '9780061120084', title: 'T', cover: 'https://example.com/current.jpg' })});`);
@@ -55,6 +64,12 @@ const mk = (id, fields) =>
   ok('duplicate GB thumbnail deduped', urls.filter(u => u === 'https://example.com/a.jpg').length === 1);
   ok('OL work covers included', urls.includes('https://covers.openlibrary.org/b/id/111-L.jpg') &&
     urls.includes('https://covers.openlibrary.org/b/id/222-L.jpg'));
+  ok('OL edition covers included', urls.includes('https://covers.openlibrary.org/b/id/999-L.jpg'));
+  ok('Apple Books artwork upscaled to 600px', urls.includes('https://is1-ssl.mzstatic.com/x/abc/600x600bb.jpg'));
+  ok('Apple Books duplicates deduped', urls.filter(u => u.includes('mzstatic')).length === 1);
+  ok('Hardcover edition art included',
+    cands.some(c => c.url === 'https://img.hardcover.app/hc1.jpg' && c.label === 'Hardcover'));
+  ok('Apple searched by ISBN', fetchCalls.some(u => u.includes('itunes.apple.com') && u.includes('isbn')));
   ok('labels carried through', cands.find(c => c.url.endsWith('111-L.jpg')).label === 'Open Library');
 
   // second call serves from cache — no new fetches
@@ -62,12 +77,23 @@ const mk = (id, fields) =>
   await window.eval(`fetchCoverCandidates(library[0])`);
   ok('candidates cached per ISBN', fetchCalls.length === nCalls);
 
-  // no ISBN → title/author fallback via OL search
+  // no ISBN → title/author fallback via OL search + Apple Books
   olSearchDocs = [{ cover_i: 333 }, { cover_i: 333 }, {}];
   runInWindow(`library.push(${mk('k2', { isbn: '', title: 'Some Title', authors: ['Some Author'] })});`);
+  fetchCalls = [];
   const c2 = await window.eval(`fetchCoverCandidates(library[1])`);
+  const urls2 = c2.map(c => c.url);
   ok('no-ISBN fallback finds OL covers, deduped',
-    c2.length === 1 && c2[0].url === 'https://covers.openlibrary.org/b/id/333-L.jpg');
+    urls2.filter(u => u === 'https://covers.openlibrary.org/b/id/333-L.jpg').length === 1);
+  ok('no-ISBN fallback also asks Apple Books by title',
+    fetchCalls.some(u => u.includes('itunes.apple.com') && !u.includes('isbn')));
+
+  // Hardcover skipped gracefully when no token is configured
+  window.eval(`hcToken = () => ''; coverCandidateCache.clear();`);
+  runInWindow(`library.push(${mk('k3', { isbn: '9780553382563', title: 'T3' })});`);
+  const c3 = await window.eval(`fetchCoverCandidates(library[2])`);
+  ok('no token → no Hardcover candidates, no crash',
+    !c3.some(c => c.label === 'Hardcover') && c3.some(c => c.label === 'Apple Books'));
 
   // picker UI renders the options
   runInWindow(`openCoverPicker('k1')`);
