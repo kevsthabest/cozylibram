@@ -11,6 +11,7 @@ const olDocs = [
   { title: 'Owned Book', author_name: ['Jane Doe'], isbn: ['9781111111111'], cover_i: 111 },
   { title: 'Missing Book One', author_name: ['Jane Doe'], isbn: ['9782222222222'], cover_i: 222 },
   { title: 'Missing Book Two', author_name: ['Jane Doe'], isbn: ['9783333333333'] },
+  { title: 'Box Set A / Box Set B', author_name: ['Jane Doe'], isbn: ['9784444444440'] },
 ];
 const hcSeries = { data: { series: [ { id: 7, name: 'Test Saga', author: { name: 'Jane Doe' }, books_count: 3,
   book_series: [
@@ -129,6 +130,19 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   ok('author rows render (already-added book stays filtered)', qa('#c-more .crow.ext').length === 1);
   window.fetch = origFetch;
   q('#c-x').click();
+
+  // 8. dedupe collapses editions (same title+author, different ISBNs); omnibus sets filtered
+  const dupes = window.dedupeExternal([
+    { title: 'Same Book', author: 'Jane Doe', isbn: '9780000000001' },
+    { title: 'Same Book', author: 'Jane Doe', isbn: '9780000000002' },
+    { title: 'Same Book', author: 'Jane Doe', isbn: '9780000000001' },
+    { title: 'Other Book', author: 'Jane Doe', isbn: '' },
+  ]);
+  ok('dedupe collapses editions by title+author', dupes.length === 2);
+  runInWindow(`authorCache.clear();`);
+  const rows8 = await window.fetchMoreByAuthor('Jane Doe');
+  ok('omnibus box sets filtered from author results',
+    rows8.every(x => x.title.indexOf(' / ') === -1));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

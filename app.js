@@ -1378,11 +1378,16 @@ function inLibrary(x) {
 }
 
 function dedupeExternal(rows) {
-  const seen = new Set();
+  // Dedupe primarily by title+author so different editions of the same book
+  // (different ISBNs) collapse; ISBN catches exact-duplicate rows too.
+  const seenTitle = new Set();
+  const seenIsbn = new Set();
   return rows.filter(x => {
-    const k = (normISBN(x.isbn) || String(x.title || '').trim().toLowerCase() + '|' + String(x.author || '').trim().toLowerCase());
-    if (!k || seen.has(k)) return false;
-    seen.add(k);
+    const t = String(x.title || '').trim().toLowerCase() + '|' + String(x.author || '').trim().toLowerCase();
+    const isbn = normISBN(x.isbn);
+    if ((t !== '|' && seenTitle.has(t)) || (isbn && seenIsbn.has(isbn))) return false;
+    if (t !== '|') seenTitle.add(t);
+    if (isbn) seenIsbn.add(isbn);
     return true;
   });
 }
@@ -1401,7 +1406,8 @@ async function fetchMoreByAuthor(author) {
     isbn: normISBN((doc.isbn || [])[0]),
     position: null,
     seriesName: null,
-  })).filter(x => x.title && !inLibrary(x))).slice(0, 30);
+  // Skip omnibus/box-set editions ("Book A / Book B / ...") — clutter in an author list.
+  })).filter(x => x.title && x.title.indexOf(' / ') === -1 && !inLibrary(x))).slice(0, 30);
   authorCache.set(key, rows);
   return rows;
 }
