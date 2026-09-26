@@ -24,13 +24,11 @@ library, synced across devices.
 3. Copy the **anon public** key (the long `eyJ…` token). This key is designed to
    be public — it goes in the browser. Row Level Security protects the data.
 
-## 4. Point the app at Supabase (pick one)
+## 4. Point the app at Supabase
 
-- **Easiest (home server):** in `server-config.json` on your PC, add
-  `supabase_url` and `supabase_anon_key` (see `server-config.example.json`).
-  The server shares them with devices on your home network only, via `/config.js`.
-- **Manual:** on each device, open Spicy Shelves → **Settings → Account & cloud sync**
-  and paste the Project URL + anon key.
+In `server-config.json` on your PC, add `supabase_url` and `supabase_anon_key`
+(see `server-config.example.json`). The server shares them with devices on your
+home network only, via `/config.js`.
 
 ## 5. Email login (on by default)
 
@@ -41,12 +39,18 @@ confirmation before first sign-in:
 
 Without confirmation, new accounts sign in immediately.
 
+> **Important:** confirmation emails link back to the **Site URL** below. If you
+> leave it at the default `http://localhost:3000`, the link in the email won't
+> open your app. Set the Site URL (step 6.3) even if you never use Google sign-in.
+
 ## 6. Google sign-in (optional)
 
 1. In the Google Cloud Console, create an **OAuth client ID** (Web application)
-   for your project.
+   for your project. Under **Authorized redirect URIs**, add
+   `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   (replace `<your-project-ref>` with the subdomain of your Supabase Project URL).
 2. In Supabase: **Authentication → Providers → Google** → enable, paste the
-   **Client ID** and **Client secret**.
+   **Client ID** and **Client secret**, and **Save**.
 3. **Authentication → URL Configuration**:
    - **Site URL:** your app's address, e.g. `http://192.168.1.10:8000`
      (use whatever address you actually open the app at).
