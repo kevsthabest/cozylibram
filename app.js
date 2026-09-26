@@ -1359,6 +1359,175 @@ function collectionRowHTML(b) {
     '<span class="ctext"><b>' + esc(b.title) + '</b><small>' + sub + '</small></span>' +
     '<span class="cgo">›</span></button>';
 }
+/* ---- "missing books" discovery: more by author / full series from outside the library ---- */
+const authorCache = new Map(); // author key -> external rows
+const seriesCache = new Map(); // series key -> { rows } or { needsToken: true }
+
+function normISBN(s) { return String(s || '').replace(/[^0-9X]/gi, ''); }
+
+// true when an external result is already on her shelves (ISBN or title+author match)
+function inLibrary(x) {
+  const isbn = normISBN(x.isbn);
+  const xt = String(x.title || '').trim().toLowerCase();
+  const xa = String(x.author || '').trim().toLowerCase();
+  return library.some(b => {
+    if (isbn && normISBN(b.isbn) === isbn) return true;
+    return !!xt && String(b.title || '').trim().toLowerCase() === xt &&
+      String((b.authors || [])[0] || '').trim().toLowerCase() === xa;
+  });
+}
+
+function dedupeExternal(rows) {
+  const seen = new Set();
+  return rows.filter(x => {
+    const k = (normISBN(x.isbn) || String(x.title || '').trim().toLowerCase() + '|' + String(x.author || '').trim().toLowerCase());
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+// More books by an author via Google Books (no token needed).
+async function fetchMoreByAuthor(author) {
+  const key = String(author).trim().toLowerCase();
+  if (authorCache.has(key)) return authorCache.get(key);
+  const url = 'https://www.googleapis.com/books/v1/volumes?q=' +
+    encodeURIComponent('inauthor:"' + author + '"') +
+    '&maxResults=40&printType=books&langRestrict=en';
+  const d = await (await fetch(url)).json();
+  const rows = dedupeExternal((d.items || []).map(v => {
+    const b = normalizeVolume(v);
+    return {
+      title: b.title,
+      author: (b.authors || [])[0] || author,
+      cover: b.cover || '',
+      isbn: normISBN(b.isbn),
+      position: null,
+      seriesName: null,
+    };
+  }).filter(x => x.title && !inLibrary(x))).slice(0, 30);
+  authorCache.set(key, rows);
+  return rows;
+}
+
+// Every book in a series via Hardcover (needs the token).
+async function fetchSeriesBooks(seriesName, authorName) {
+  const key = String(seriesName).trim().toLowerCase();
+  if (seriesCache.has(key)) return seriesCache.get(key);
+  if (!hcToken()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
+  const gql = 'query { series(where: {name: {_ilike: ' + JSON.stringify(seriesName) +
+    '}, books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) {' +
+    ' id name author { name }' +
+    ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
+    ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +
+    ' position details book { id title image { url } default_physical_edition { isbn_13 } } } } }';
+  const data = await hcGraphQL(gql);
+  const list = (data && data.series) || [];
+  const want = String(authorName || '').trim().toLowerCase();
+  const hit = list.find(s => want && String((s.author || {}).name || '').trim().toLowerCase() === want) || list[0];
+  let rows = [];
+  if (hit) {
+    const sAuthor = (hit.author || {}).name || authorName || '';
+    rows = dedupeExternal((hit.book_series || []).map(bs => {
+      const bk = bs.book || {};
+      const pos = parseFloat(bs.position);
+      return {
+        title: bk.title || '',
+        author: sAuthor,
+        cover: (bk.image || {}).url || '',
+        isbn: normISBN((bk.default_physical_edition || {}).isbn_13),
+        position: isNaN(pos) ? (bs.details || null) : (Number.isInteger(pos) ? pos : Math.round(pos * 10) / 10),
+        seriesName: hit.name,
+      };
+    }).filter(x => x.title && !inLibrary(x)));
+  }
+  const out = { rows };
+  seriesCache.set(key, out);
+  return out;
+}
+
+// Add a discovered book straight to the wishlist (she doesn't own it yet).
+function addExternalBook(x) {
+  const book = {
+    id: uid(),
+    isbn: x.isbn || '',
+    title: x.title,
+    authors: x.author ? [x.author] : [],
+    cover: x.cover || '',
+    description: '',
+    pageCount: null,
+    publishedDate: '',
+    categories: [],
+    publicRating: null,
+    ratingsCount: 0,
+    status: 'tbr',
+    owned: false, // discovered = wanted
+    ratings: {},
+    myRating: 0,
+    tropes: [],
+    progress: 0,
+    dateAdded: new Date().toISOString(),
+    dateFinished: null,
+    notes: '',
+    favorite: false,
+    series: x.seriesName ? { name: x.seriesName, position: x.position } : null,
+    log: [],
+    _mtime: Date.now(),
+  };
+  book.axes = autoDetectAxes(book);
+  library.unshift(book);
+  saveLibrary();
+  return book;
+}
+
+function externalRowHTML(x, i) {
+  const sub = (x.position != null && x.position !== '' ? '#' + esc(String(x.position)) + ' · ' : '') +
+    esc(x.author || 'Unknown author');
+  return '<div class="crow ext">' +
+    (x.cover ? '<img src="' + esc(x.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+      : '<span class="cnocover">📕</span>') +
+    '<span class="ctext"><b>' + esc(x.title) + '</b><small>' + sub + '</small></span>' +
+    '<button class="btn small" data-extadd="' + i + '">+ Wishlist</button></div>';
+}
+
+// Fill the "more books" section of the collection sheet (async, after it opens).
+async function fillMoreSection(kind, name, fromId, ov) {
+  const box = ov.querySelector('#c-more');
+  if (!box) return;
+  const heading = kind === 'author' ? '🔍 More by ' + name : '🔍 Every book in this series';
+  try {
+    let rows;
+    if (kind === 'author') {
+      rows = await fetchMoreByAuthor(name);
+    } else {
+      const from = library.find(b => b.id === fromId);
+      const r = await fetchSeriesBooks(name, from && from.authors[0]);
+      if (r.needsToken) {
+        box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+          '<p class="note">💡 Connect Hardcover in Settings to see every book in this series.</p>';
+        return;
+      }
+      rows = r.rows;
+    }
+    if (!rows.length) {
+      box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+        '<p class="note">Nothing missing — nice shelf! 🎉</p>';
+      return;
+    }
+    box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+      '<div class="collection-list">' + rows.map(externalRowHTML).join('') + '</div>';
+    box.querySelectorAll('[data-extadd]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        addExternalBook(rows[Number(btn.dataset.extadd)]);
+        btn.outerHTML = '<span class="c-added">💝 In wishlist</span>';
+        toast('Added to wishlist 💝');
+      }));
+  } catch (e) {
+    box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+      '<p class="note">Couldn\'t look up more books right now.</p>';
+  }
+}
+
 function openCollection(kind, name, fromId) {
   const key = String(name).trim().toLowerCase();
   const match = b => kind === 'author'
@@ -1383,6 +1552,7 @@ function openCollection(kind, name, fromId) {
     (others.length
       ? '<div class="collection-list">' + others.map(collectionRowHTML).join('') + '</div>'
       : '<p class="note">Nothing else here yet — this is the only one.</p>') +
+    '<div id="c-more"><p class="note">Looking for more books…</p></div>' +
     '</div></div>';
   document.body.appendChild(ov);
   const close = () => ov.remove();
@@ -1390,6 +1560,7 @@ function openCollection(kind, name, fromId) {
   ov.querySelector('#c-x').addEventListener('click', close);
   ov.querySelectorAll('[data-book]').forEach(el =>
     el.addEventListener('click', () => { close(); openDetail(el.dataset.book); }));
+  fillMoreSection(kind, name, fromId, ov);
 }
 
 function openDetail(id) {

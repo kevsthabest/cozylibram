@@ -719,3 +719,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .buy-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .buy-row .btn { flex: 1 1 30%; text-align: center; text-decoration: none; }
 .note-inline { font-weight: 400; opacity: .6; font-size: .85em; }
+
+/* collection sheet: external "more books" section */
+.c-more-h { margin: 18px 0 8px; font-size: 1.1em; }
+.crow.ext { cursor: default; }
+.c-added { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
