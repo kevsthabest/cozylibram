@@ -714,3 +714,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* wishlist tab */
 .wish-head { text-align: center; padding: 18px 16px 6px; }
 .wish-head h2 { margin: 0 0 4px; font-size: 1.5em; }
+
+/* where-to-buy row */
+.buy-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.buy-row .btn { flex: 1 1 30%; text-align: center; text-decoration: none; }
+.note-inline { font-weight: 400; opacity: .6; font-size: .85em; }
