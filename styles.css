@@ -490,7 +490,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   transition: transform 0.15s ease;
 }
 .cover-tile:active .tile-cover { transform: scale(0.96); }
-.cover-tile .tile-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The cover image is absolutely positioned so its natural dimensions can
+   never stretch the tile: the 2:3 box comes from aspect-ratio alone, even
+   for tall phone photos of physical books (v49). */
+.cover-tile .tile-cover img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
 .tile-status {
   position: absolute; top: 6px; left: 6px;
   font-size: 10px; font-weight: 600;
