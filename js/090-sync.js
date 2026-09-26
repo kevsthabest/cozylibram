@@ -44,11 +44,14 @@ function bookToRow(b, userId) {
   return { user_id: userId, book_id: b.id, isbn: b.isbn || null, data: b };
 }
 // Merge cloud rows into the local library. Newer _mtime wins conflicts.
+// Rows for tombstoned books are skipped — that's the deletion propagating
+// instead of the book resurrecting.
 function mergeCloudBooks(local, remoteRows) {
+  const dead = tombstonedIds();
   const byId = new Map(local.map(b => [b.id, b]));
   let changed = false;
   for (const r of remoteRows) {
-    if (!r || !r.book_id) continue;
+    if (!r || !r.book_id || dead.has(r.book_id)) continue;
     const lb = byId.get(r.book_id);
     const rd = migrateBook(Object.assign({}, r.data || {}));
     if (!lb) { local.push(rd); byId.set(r.book_id, rd); changed = true; }
@@ -60,8 +63,9 @@ function mergeCloudBooks(local, remoteRows) {
 // Translate cryptic PostgREST errors into actionable messages.
 function cloudErrMsg(e) {
   const m = String((e && e.message) || e);
-  if (m.indexOf("Could not find the table 'public.books'") >= 0)
-    return "Cloud sync failed: the 'books' table doesn't exist in your Supabase " +
+  const missing = m.match(/Could not find the table 'public\.(\w+)'/);
+  if (missing)
+    return "Cloud sync failed: the '" + missing[1] + "' table doesn't exist in your Supabase " +
       "project yet — run supabase/schema.sql in the Supabase SQL editor, then tap Sync now.";
   return 'Cloud sync failed: ' + m;
 }
@@ -76,6 +80,12 @@ async function cloudPushNow() {
       const { error } = await sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' });
       if (error) throw error;
     }
+    if (tombstones.length) {
+      const trows = tombstones.map(t => ({ user_id: cloudUser.id, book_id: t.id,
+        deleted_at: new Date(t.at).toISOString() }));
+      const { error } = await sb.from('deleted_books').upsert(trows, { onConflict: 'user_id,book_id' });
+      if (error) throw error;
+    }
     cloudLastSync = Date.now();
     return true;
   } catch (e) {
@@ -85,6 +95,32 @@ async function cloudPushNow() {
     cloudSyncing = false;
     refreshAccountUI();
   }
+}
+
+async function cloudPullTombstones() {
+  const sb = await cloudClient().catch(() => null);
+  if (!sb || !cloudUser) return [];
+  const { data, error } = await sb.from('deleted_books').select('book_id');
+  if (error) throw error;
+  return (data || []).map(r => r.book_id).filter(Boolean);
+}
+
+// Apply remote tombstones: drop matching local books and record the
+// tombstones locally so this device never re-pushes them.
+function applyTombstones(ids) {
+  if (!ids || !ids.length) return false;
+  const dead = tombstonedIds();
+  let changed = false;
+  for (const id of ids) {
+    if (library.some(b => b.id === id)) {
+      library = library.filter(b => b.id !== id);
+      bookSnapshots.delete(id);
+      changed = true;
+    }
+    if (!dead.has(id)) { tombstones.push({ id: id, at: Date.now() }); dead.add(id); changed = true; }
+  }
+  if (changed) { saveTombstones(); saveLibrary({ noCloud: true }); }
+  return changed;
 }
 function scheduleCloudPush() {
   if (!cloudConfigured()) return;
@@ -99,9 +135,12 @@ async function cloudPullRows() {
   return data || [];
 }
 async function cloudFirstSync() {
-  // After sign-in (or on boot with a session): pull, merge, push.
+  // After sign-in (or on boot with a session): pull tombstones, apply them,
+  // then pull books, merge, and push. Tombstones go first so a deletion that
+  // happened on another device can't be undone by this device's push.
   if (!cloudUser) return;
   try {
+    if (applyTombstones(await cloudPullTombstones())) render();
     const remote = await cloudPullRows();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); }
     await cloudPushNow();
@@ -150,10 +189,32 @@ async function cloudGoogle() {
   });
 }
 
+async function cloudResetPassword(email) {
+  const sb = await cloudClient().catch(() => null);
+  if (!sb) { toast('Cloud sync is not configured'); return false; }
+  const redirectTo = location.origin + location.pathname + '#recovery';
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+  if (error) { toast('Reset failed: ' + error.message); return false; }
+  return true;
+}
+
+// A password-reset link lands back here with ?code=…. Exchange it for a
+// session, then show the new-password form instead of the normal boot flow.
+async function handlePasswordRecovery(sb, code) {
+  try {
+    const { data, error } = await sb.auth.exchangeCodeForSession(code);
+    if (error || !data || !data.user) { renderGate(); toast('That reset link expired — request a new one.'); return; }
+    cloudUser = data.user;
+    try { history.replaceState(null, '', location.pathname + '#recovery'); } catch (e) {}
+    renderNewPassword();
+  } catch (e) { renderGate(); }
+}
 async function initCloud() {
   if (!cloudConfigured()) return;
   try {
     const sb = await cloudClient();
+    const code = new URLSearchParams(location.search).get('code');
+    if (code) { await handlePasswordRecovery(sb, code); return; }
     sb.auth.onAuthStateChange((event, session) => {
       const user = (session && session.user) || null;
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {

@@ -5,11 +5,10 @@ Goal: stable, no data loss, easy for non-technical family to pick up.
 Target user: Kevin's wife (primary) + a handful of family/friend testers.
 
 ### Must-have: data safety & sync
-- [ ] **Deletion tombstones** — deleted books currently resurrect on the next
-  sync. Deletions need to propagate so a book deleted on one device stays
-  deleted everywhere.
-- [ ] **Password-reset UI** — testers will forget passwords; without this,
-  every reset is a manual trip to the Supabase dashboard.
+- [x] **Deletion tombstones** (v33) — deletions propagate as tombstones
+  (`deleted_books` table + per-user on-device set) instead of resurrecting.
+- [x] **Password-reset UI** (v33) — "Forgot password?" on the gate sends a
+  Supabase reset email; the link returns to the app with a new-password form.
 - [ ] **First-login merge hardening** — the adopt-and-merge path works, but it
   needs a deliberate test pass (two devices, offline edits, then sign-in).
 
@@ -17,8 +16,11 @@ Target user: Kevin's wife (primary) + a handful of family/friend testers.
 - [ ] **Bulk ISBN import** — paste a list of ISBNs, add them all. With a
   several-hundred-book collection, one-at-a-time entry is the biggest
   pain point left in the app.
-- [ ] **Bookmory import** — wife tracks books in Bookmory; awaiting her
-  export file, then map it onto our book shape.
+- [ ] **Unified import hub** — a single point of entry for third-party
+  backups: pick a file, the app detects the format (Bookmory, Goodreads
+  CSV, …), shows a preview, and imports. One UI, a format registry
+  underneath, so new sources are cheap to add. Bookmory mapping lands as
+  soon as its export file is available.
 
 ### Should-have: tester onboarding
 - [ ] **Supabase Site URL fix** — verification emails still link to
@@ -40,21 +42,24 @@ Target user: Kevin's wife (primary) + a handful of family/friend testers.
 
 ---
 
-## v1.1 — Public GitHub release (self-hosted, BYOK)
+## Backburner — not started until v1.0 is comfortable
+(Kevin's call; roadmap kept here so the direction isn't lost.)
+
+### v1.1 — Public GitHub release (self-hosted, BYOK)
 - [ ] Key-leak audit: `server-config.json` handling, `/config.js` LAN-only
   sharing, no tokens in client bundle or repo history.
 - [ ] BYOK setup docs polish (README + `server-config.example.json`).
 - [ ] `book_meta` becomes a per-instance shared cache — document it.
 - [ ] Rate limiting / abuse notes for self-hosters.
 
-## v1.2 — Hosted APK track
+### v1.2 — Hosted APK track
 - [ ] Central hosting: API proxy holds keys server-side, one global
   `book_meta` cache for all APK users.
 - [ ] Capacitor packaging: Google OAuth deep-link callbacks, camera/barcode
   in Android WebView, `localStorage`, service-worker review.
 - [ ] Password-reset + email deep links working against the hosted domain.
 
-## Future — App Store
+### Future — App Store
 - [ ] Premium features + in-app payments (entitlements validated server-side).
 - [ ] Mood-based recommendation "sommelier".
 - [ ] Monitoring, backups, production HTTPS/domain.

@@ -18,9 +18,9 @@ prefixes (lexicographic sort must equal numeric order) and don't create circular
 | `061-gbooks-key.js` | Optional Google Books API key (quota) |
 | `070-hardcover.js` | Hardcover enrichment (series, moods, …) |
 | `080-pagecount.js` | Page-count lookup + backfill |
-| `090-sync.js` | Supabase auth + cloud sync (optional) |
+| `090-sync.js` | Supabase auth + cloud sync + deletion tombstones + password reset (optional) |
 | `092-metacache.js` | Shared per-ISBN metadata cache (all signed-in users) |
-| `095-gate.js` | Sign-in gate + per-user on-device libraries |
+| `095-gate.js` | Sign-in gate + per-user on-device libraries + password-reset views |
 | `100-nav.js` | Bottom-nav wiring |
 | `110-library.js` | Library tab |
 | `120-favorites.js` | Favorites bookshelf + spine pull-out animation |

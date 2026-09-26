@@ -184,6 +184,10 @@ function renderSettings() {
   document.getElementById('bk-wipe').addEventListener('click', async () => {
     if (!confirm('Delete ALL ' + library.length + ' books? Export a backup first!')) return;
     if (!confirm('Really? This cannot be undone.')) return;
+    library.forEach(b => {
+      if (!tombstones.some(t => t.id === b.id)) tombstones.push({ id: b.id, at: Date.now() });
+    });
+    saveTombstones();
     library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true }); render();
     await cloudWipe();
     toast('Shelves cleared');

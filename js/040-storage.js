@@ -24,6 +24,35 @@ function bookSnap(b) {
   return JSON.stringify(c);
 }
 
+// Deletion tombstones: deleting a book records { id, at } so the deletion
+// propagates through sync instead of the book resurrecting from another
+// device's push. Partitioned per user exactly like the library.
+let tombstones = [];
+function tombKey() {
+  return localUid ? 'spicyshelves.tombstones.v2.' + localUid : 'spicyshelves.tombstones.v1';
+}
+function loadTombstones() {
+  try { return JSON.parse(localStorage.getItem(tombKey())) || []; }
+  catch (e) { return []; }
+}
+function saveTombstones() {
+  try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
+}
+tombstones = loadTombstones();
+function tombstonedIds() { return new Set(tombstones.map(t => t.id)); }
+// Central removal path: drops the book locally and records a tombstone.
+function removeBook(id) {
+  library = library.filter(b => b.id !== id);
+  bookSnapshots.delete(id);
+  if (!tombstones.some(t => t.id === id)) tombstones.push({ id: id, at: Date.now() });
+  saveTombstones();
+  saveLibrary();
+}
+// Re-adding the exact same book id is an un-delete.
+function untombstone(id) {
+  const i = tombstones.findIndex(t => t.id === id);
+  if (i >= 0) { tombstones.splice(i, 1); saveTombstones(); }
+}
 // Daily reading log: one entry per book per day { d:'YYYY-MM-DD', from, to }.
 // Logged on every page update (steppers, manual entry, mark-as-read).
 function logPages(b, oldP, newP) {
@@ -69,7 +98,9 @@ function saveLibrary(opts) {
 function setLocalUser(uid) {
   if (uid === localUid) return;
   try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
+  try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
   const hadBooks = library.length > 0;
+  const hadTombs = tombstones.length > 0;
   localUid = uid || null;
   bookSnapshots.clear();
   let next = loadLibrary();
@@ -82,5 +113,14 @@ function setLocalUser(uid) {
   }
   library = next;
   library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
+  let nextTombs = loadTombstones();
+  if (uid && nextTombs.length === 0 && hadTombs) {
+    nextTombs = tombstones;
+    try {
+      localStorage.setItem(tombKey(), JSON.stringify(nextTombs));
+      localStorage.removeItem('spicyshelves.tombstones.v1');
+    } catch (e) {}
+  }
+  tombstones = nextTombs;
 }
 

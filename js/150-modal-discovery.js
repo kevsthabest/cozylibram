@@ -450,8 +450,8 @@ function openDetail(id) {
 
   document.getElementById('m-del').addEventListener('click', () => {
     if (!confirm('Remove "' + b.title + '" from your shelves?')) return;
-    library = library.filter(x => x.id !== id);
-    saveLibrary(); close(); render();
+    removeBook(id);
+    close(); render();
     toast('Removed');
   });
 }

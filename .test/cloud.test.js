@@ -25,8 +25,10 @@ const waitFor = async (key) => {
 
 function makeFake() {
   const store = [];
+  const deleted = [];
   const fake = {
     store,
+    deleted,
     user: { id: 'user-1', email: 'wife@example.com' },
     auth: {
       getUser: async () => ({ data: { user: fake.user } }),
@@ -37,7 +39,18 @@ function makeFake() {
       signInWithOAuth: async () => ({ data: { url: 'https://oauth' }, error: null }),
       onAuthStateChange: (cb) => { fake._cb = cb; return { data: { subscription: { unsubscribe() {} } } }; },
     },
-    from: () => ({
+    from: (table) => {
+      if (table === 'deleted_books') return {
+        upsert: async (rows) => {
+          for (const r of rows) {
+            const i = deleted.findIndex(x => x.user_id === r.user_id && x.book_id === r.book_id);
+            if (i >= 0) deleted[i] = r; else deleted.push(r);
+          }
+          return { error: null };
+        },
+        select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id })), error: null }),
+      };
+      return {
       upsert: async (rows) => {
         for (const r of rows) {
           const i = store.findIndex(x => x.user_id === r.user_id && x.book_id === r.book_id);
@@ -53,7 +66,8 @@ function makeFake() {
           return { error: null };
         }
       }),
-    }),
+      };
+    },
   };
   return fake;
 }

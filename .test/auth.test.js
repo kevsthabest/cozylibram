@@ -13,17 +13,28 @@ window.SPICY_CONFIG = { supabaseUrl: 'https://xyz.supabase.co', supabaseAnonKey:
 
 function makeFake() {
   const store = [];
+  const deleted = [];
   const fake = {
-    store, user: null, _cb: null,
+    store, deleted, user: null, _cb: null,
     auth: {
       getSession: async () => ({ data: { session: fake.user ? { user: fake.user } : null } }),
       signUp: async ({ email }) => { fake.user = { id: 'u-' + email, email }; return { data: { session: { user: fake.user } }, error: null }; },
       signInWithPassword: async ({ email }) => { fake.user = { id: 'u-' + email, email }; return { data: { session: { user: fake.user } }, error: null }; },
       signOut: async () => { fake.user = null; return { error: null }; },
       signInWithOAuth: async () => ({ data: {}, error: null }),
+      resetPasswordForEmail: async (email, opts) => { fake.resetTo = email; fake.resetRedirect = opts && opts.redirectTo; return { error: null }; },
+      exchangeCodeForSession: async (code) => code === 'good-code'
+        ? { data: { user: { id: 'u-r', email: 'r@x.com' } }, error: null }
+        : { data: null, error: new Error('bad code') },
+      updateUser: async ({ password }) => { fake.pwUpdated = password; return { error: null }; },
       onAuthStateChange: (cb) => { fake._cb = cb; return { data: { subscription: { unsubscribe() {} } } }; },
     },
-    from: () => ({
+    from: (table) => {
+      if (table === 'deleted_books') return {
+        upsert: async (rows) => { for (const r of rows) { const i = deleted.findIndex(x => x.user_id === r.user_id && x.book_id === r.book_id); if (i >= 0) deleted[i] = r; else deleted.push(r); } return { error: null }; },
+        select: async () => ({ data: deleted.filter(r => fake.user && r.user_id === fake.user.id).map(r => ({ book_id: r.book_id })), error: null }),
+      };
+      return {
       upsert: async (rows) => {
         for (const r of rows) {
           const i = store.findIndex(x => x.user_id === r.user_id && x.book_id === r.book_id);
@@ -35,7 +46,8 @@ function makeFake() {
       // RLS-faithful: a signed-in user only ever sees their own rows.
       select: async () => ({ data: store.filter(r => fake.user && r.user_id === fake.user.id).map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })), error: null }),
       delete: () => ({ eq: async (col, val) => { for (let i = store.length - 1; i >= 0; i--) if (store[i][col] === val) store.splice(i, 1); return { error: null }; } }),
-    }),
+      };
+    },
     fire: (event, user) => { fake.user = user || null; fake._cb(event, user ? { user } : null); },
   };
   return fake;
@@ -108,6 +120,40 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   window.__sbStub.fire('SIGNED_IN', { id: 'user-1', email: 'wife@example.com' });
   await tick(6);
   ok('first user shelf restored on re-sign-in', probe('library.some(b => b.id === "b1")') === true);
+
+  // Password reset: forgot-link → reset email → code exchange → new password.
+  await window.cloudSignOut();
+  await tick(4);
+  ok('gate has a forgot-password link', !!q('#gate-forgot'));
+  q('#gate-forgot').click();
+  await tick(2);
+  ok('forgot link opens the reset view', !!q('#gr-email') && !!q('#gr-send'));
+  q('#gr-email').value = 'wife@example.com';
+  q('#gr-send').click();
+  await tick(6);
+  ok('reset email requested for the typed address', window.__sbStub.resetTo === 'wife@example.com');
+  ok('reset redirect returns to the app', (window.__sbStub.resetRedirect || '').indexOf('#recovery') >= 0);
+  ok('reset confirmation shown', q('#gr-status').textContent.indexOf('check your email') >= 0);
+  q('#gr-back').click();
+  await tick(2);
+  ok('back returns to the gate', !!q('#gate-signin'));
+
+  await window.handlePasswordRecovery(window.__sbStub, 'good-code');
+  await tick(2);
+  ok('valid reset code opens the new-password form', !!q('#np-pass') && !!q('#np-save'));
+  q('#np-pass').value = 'short';
+  q('#np-save').click();
+  await tick(3);
+  ok('short password rejected', q('#np-status').textContent.indexOf('6 characters') >= 0 && !window.__sbStub.pwUpdated);
+  q('#np-pass').value = 'newsecret1';
+  q('#np-save').click();
+  await tick(8);
+  ok('new password saved via updateUser', window.__sbStub.pwUpdated === 'newsecret1');
+  ok('signed in after password reset', !!q('#view .toolbar'));
+
+  await window.handlePasswordRecovery(window.__sbStub, 'bad-code');
+  await tick(2);
+  ok('expired reset code returns to the gate', !!q('#gate-signin'));
 
   // No backend configured → no gate, classic behavior.
   await window.cloudSignOut();

@@ -52,3 +52,21 @@ create policy "refresh meta" on book_meta
   for update
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- Deletion tombstones: when a book is deleted on one device, the deletion
+-- must propagate instead of the book resurrecting on the next sync.
+-- One row per deleted book per user; RLS mirrors the books table.
+create table if not exists deleted_books (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  book_id text not null,
+  deleted_at timestamptz not null default now(),
+  primary key (user_id, book_id)
+);
+
+alter table deleted_books enable row level security;
+
+drop policy if exists "own deletions" on deleted_books;
+create policy "own deletions" on deleted_books
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

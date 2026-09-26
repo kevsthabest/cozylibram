@@ -20,7 +20,9 @@ library, synced across devices.
    - a `book_meta` table: a shared per-ISBN metadata cache (covers,
      descriptions, ratings, page counts) readable by every signed-in user,
      so the first person to look up a book pays the API cost and everyone
-     after reads it from Supabase.
+     after reads it from Supabase;
+   - a `deleted_books` table: deletion tombstones so a book deleted on one
+     device stays deleted everywhere instead of resurrecting on sync.
 4. Re-running `schema.sql` later is safe — it only adds what's missing, so
    run it again after updating the app to pick up new tables.
 

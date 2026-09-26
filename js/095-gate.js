@@ -26,6 +26,7 @@ function renderGate() {
       ? '<button class="btn ghost block" id="gate-google">Sign in with Google</button>'
       : '') +
     '<button class="btn ghost block gate-offline" id="gate-offline">Continue offline →</button>' +
+    '<button class="btn ghost block gate-offline" id="gate-forgot" style="margin-top:2px">Forgot password?</button>' +
     '</div></div>'
   );
   const em = () => document.getElementById('gate-email').value.trim();
@@ -50,6 +51,62 @@ function renderGate() {
     try { localStorage.setItem(OFFLINE_KEY, '1'); } catch (e) {}
     hideGate();
     render();
+  });
+  document.getElementById('gate-forgot').addEventListener('click', renderGateReset);
+}
+
+// "Forgot password?" view: sends a Supabase reset email. The link returns to
+// this app with ?code=…, which initCloud exchanges and turns into the
+// new-password form below. (Needs the Supabase Site URL set to the app's real
+// address, or the email link points at localhost.)
+function renderGateReset() {
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = 'none';
+  setView(
+    '<div class="gate-wrap"><div class="gate-card">' +
+    '<h1 class="serif">Reset password</h1>' +
+    '<p class="note" id="gr-status">Enter your account email and we\'ll send a reset link.</p>' +
+    '<input id="gr-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
+    '<button class="btn block" id="gr-send">Send reset link</button>' +
+    '<button class="btn ghost block" id="gr-back">← Back to sign in</button>' +
+    '</div></div>'
+  );
+  const busy = (msg) => { const st = document.getElementById('gr-status'); if (st) st.textContent = msg; };
+  document.getElementById('gr-back').addEventListener('click', renderGate);
+  document.getElementById('gr-send').addEventListener('click', async () => {
+    const em = document.getElementById('gr-email').value.trim();
+    if (!em) { busy('Enter your email first.'); return; }
+    busy('Sending…');
+    const ok = await cloudResetPassword(em);
+    busy(ok ? 'Reset link sent — check your email.' : 'Could not send the link. Try again.');
+  });
+}
+
+// New-password form shown after a reset link is exchanged.
+function renderNewPassword() {
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = 'none';
+  setView(
+    '<div class="gate-wrap"><div class="gate-card">' +
+    '<h1 class="serif">New password</h1>' +
+    '<p class="note" id="np-status">Choose a new password for your account.</p>' +
+    '<input id="np-pass" type="password" class="text-input" placeholder="New password (6+ characters)" autocomplete="new-password">' +
+    '<button class="btn block" id="np-save">Save new password</button>' +
+    '</div></div>'
+  );
+  const busy = (msg) => { const st = document.getElementById('np-status'); if (st) st.textContent = msg; };
+  document.getElementById('np-save').addEventListener('click', async () => {
+    const pw = document.getElementById('np-pass').value;
+    if (pw.length < 6) { busy('Use at least 6 characters.'); return; }
+    busy('Saving…');
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) { busy('Something went wrong — request a new link.'); return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if (error) { busy('Could not save: ' + error.message); return; }
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    toast('Password updated ✨');
+    if (cloudUser) enterApp(cloudUser);
+    else renderGate();
   });
 }
 

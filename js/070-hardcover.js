@@ -143,6 +143,7 @@ function alreadyHave(book) {
 
 function addBook(book, openEditor) {
   if (alreadyHave(book)) { toast('Already on your shelves 📚'); return null; }
+  untombstone(book.id); // re-adding the same id is an un-delete
   library.unshift(book);
   saveLibrary();
   render();
