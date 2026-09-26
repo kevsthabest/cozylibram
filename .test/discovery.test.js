@@ -7,15 +7,10 @@ const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'danger
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });
 
-const gbItems = [
-  { volumeInfo: { title: 'Owned Book', authors: ['Jane Doe'],
-    industryIdentifiers: [{ type: 'ISBN_13', identifier: '9781111111111' }],
-    imageLinks: { thumbnail: 'http://x/owned.jpg' } } },
-  { volumeInfo: { title: 'Missing Book One', authors: ['Jane Doe'],
-    industryIdentifiers: [{ type: 'ISBN_13', identifier: '9782222222222' }],
-    imageLinks: { thumbnail: 'http://x/m1.jpg' } } },
-  { volumeInfo: { title: 'Missing Book Two', authors: ['Jane Doe'],
-    industryIdentifiers: [{ type: 'ISBN_13', identifier: '9783333333333' }] } },
+const olDocs = [
+  { title: 'Owned Book', author_name: ['Jane Doe'], isbn: ['9781111111111'], cover_i: 111 },
+  { title: 'Missing Book One', author_name: ['Jane Doe'], isbn: ['9782222222222'], cover_i: 222 },
+  { title: 'Missing Book Two', author_name: ['Jane Doe'], isbn: ['9783333333333'] },
 ];
 const hcSeries = { data: { series: [ { id: 7, name: 'Test Saga', author: { name: 'Jane Doe' }, books_count: 3,
   book_series: [
@@ -29,8 +24,11 @@ const hcSeries = { data: { series: [ { id: 7, name: 'Test Saga', author: { name:
 
 window.fetch = async (url) => {
   const u = String(url);
-  if (u.includes('googleapis.com/books')) return { json: async () => ({ items: gbItems }) };
-  if (u.includes('api.hardcover.app')) return { json: async () => hcSeries };
+  if (u.includes('openlibrary.org/search.json?author=')) return { json: async () => ({ docs: olDocs }) };
+  if (u.includes('api.hardcover.app')) {
+    if (window.__hcDead) return { json: async () => ({ message: 'unauthorized' }) }; // no data field
+    return { json: async () => hcSeries };
+  }
   throw new Error('unexpected fetch: ' + u);
 };
 
@@ -107,6 +105,30 @@ const tick = () => new Promise(r => setTimeout(r, 20));
     window.inLibrary({ isbn: '', title: 'owned book', author: 'jane doe' }) === true);
   ok('inLibrary false for unknown',
     window.inLibrary({ isbn: '', title: 'Nope', author: 'Nobody' }) === false);
+
+  // 6. dead Hardcover token -> honest error, not "nothing missing"
+  runInWindow(`window.__hcDead = true; localStorage.setItem('hc_token', 'revoked-token');
+    seriesCache.clear(); authorCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
+  await tick(); await tick();
+  ok('dead token shows token hint, not empty-shelf',
+    q('#c-more').textContent.includes('check the token') &&
+    !q('#c-more').textContent.includes('Nothing missing'));
+  q('#c-x').click();
+
+  // 7. author lookup hits Open Library (quota-proof), not Google Books
+  let sawOL = false;
+  const origFetch = window.fetch;
+  window.fetch = async (url, opts) => {
+    if (String(url).includes('openlibrary.org/search.json?author=')) sawOL = true;
+    if (String(url).includes('googleapis.com')) throw new Error('must not use Google Books');
+    return origFetch(url, opts);
+  };
+  runInWindow(`window.__hcDead = false; authorCache.clear(); openCollection('author', 'Jane Doe', 'd1');`);
+  await tick(); await tick();
+  ok('author discovery uses Open Library', sawOL);
+  ok('author rows render (already-added book stays filtered)', qa('#c-more .crow.ext').length === 1);
+  window.fetch = origFetch;
+  q('#c-x').click();
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

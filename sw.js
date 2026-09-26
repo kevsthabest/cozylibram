@@ -1,6 +1,6 @@
 /* Spicy Shelves service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'spicy-shelves-v23';
+const CACHE = 'spicy-shelves-v24';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {

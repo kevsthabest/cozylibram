@@ -1387,25 +1387,21 @@ function dedupeExternal(rows) {
   });
 }
 
-// More books by an author via Google Books (no token needed).
+// More books by an author via Open Library (no key, no quota).
 async function fetchMoreByAuthor(author) {
   const key = String(author).trim().toLowerCase();
   if (authorCache.has(key)) return authorCache.get(key);
-  const url = 'https://www.googleapis.com/books/v1/volumes?q=' +
-    encodeURIComponent('inauthor:"' + author + '"') +
-    '&maxResults=40&printType=books&langRestrict=en';
+  const url = 'https://openlibrary.org/search.json?author=' + encodeURIComponent(author) +
+    '&limit=40&fields=key,title,author_name,isbn,cover_i';
   const d = await (await fetch(url)).json();
-  const rows = dedupeExternal((d.items || []).map(v => {
-    const b = normalizeVolume(v);
-    return {
-      title: b.title,
-      author: (b.authors || [])[0] || author,
-      cover: b.cover || '',
-      isbn: normISBN(b.isbn),
-      position: null,
-      seriesName: null,
-    };
-  }).filter(x => x.title && !inLibrary(x))).slice(0, 30);
+  const rows = dedupeExternal(((d || {}).docs || []).map(doc => ({
+    title: doc.title || '',
+    author: ((doc.author_name || [])[0]) || author,
+    cover: doc.cover_i ? 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-M.jpg' : '',
+    isbn: normISBN((doc.isbn || [])[0]),
+    position: null,
+    seriesName: null,
+  })).filter(x => x.title && !inLibrary(x))).slice(0, 30);
   authorCache.set(key, rows);
   return rows;
 }
@@ -1415,14 +1411,22 @@ async function fetchSeriesBooks(seriesName, authorName) {
   const key = String(seriesName).trim().toLowerCase();
   if (seriesCache.has(key)) return seriesCache.get(key);
   if (!hcToken()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
-  const gql = 'query { series(where: {name: {_ilike: ' + JSON.stringify(seriesName) +
-    '}, books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) {' +
-    ' id name author { name }' +
+  const seriesFields = 'id name author { name }' +
     ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
     ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +
-    ' position details book { id title image { url } default_physical_edition { isbn_13 } } } } }';
-  const data = await hcGraphQL(gql);
-  const list = (data && data.series) || [];
+    ' position details book { id title image { url } default_physical_edition { isbn_13 } } }';
+  const qFor = pattern => 'query { series(where: {name: {_ilike: ' + JSON.stringify(pattern) +
+    '}, books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) { ' + seriesFields + ' } }';
+  const noData = () => { throw new Error('Hardcover returned no data — the token may be invalid or revoked.'); };
+  let data = await hcGraphQL(qFor(seriesName));
+  if (!data) noData();
+  let list = data.series || [];
+  if (!list.length) {
+    // retry with a contains-match in case of minor name differences
+    data = await hcGraphQL(qFor('%' + seriesName + '%'));
+    if (!data) noData();
+    list = data.series || [];
+  }
   const want = String(authorName || '').trim().toLowerCase();
   const hit = list.find(s => want && String((s.author || {}).name || '').trim().toLowerCase() === want) || list[0];
   let rows = [];
@@ -1523,8 +1527,11 @@ async function fillMoreSection(kind, name, fromId, ov) {
         toast('Added to wishlist 💝');
       }));
   } catch (e) {
+    const hint = kind === 'series'
+      ? 'Couldn\'t reach Hardcover — if this keeps happening, check the token in Settings → Hardcover.'
+      : 'Couldn\'t look up more books right now.';
     box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
-      '<p class="note">Couldn\'t look up more books right now.</p>';
+      '<p class="note">' + hint + '</p>';
   }
 }
 
