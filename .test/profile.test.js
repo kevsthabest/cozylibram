@@ -32,6 +32,13 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('settings removed from the bottom nav', !q('.bottom-nav [data-nav="settings"]'));
   ok('bottom nav keeps five tabs', qa('.bottom-nav button').length === 5);
   ok('menu button lives in the top-right header', !!q('.app-header .topbar-menu-wrap #menu-btn'));
+  ok('on wide screens the menu docks to the top-right corner next to the nav', (() => {
+    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const mq = css.indexOf('@media (min-width: 760px)');
+    const rule = css.indexOf('.topbar-menu-wrap', mq);
+    const chunk = css.slice(rule, rule + 120);
+    return mq > -1 && rule > mq && chunk.includes('position: fixed') && chunk.includes('right: 14px');
+  })());
 
   // Signed out, no backend → menu offers Settings only (no Sign in without config).
   q('#menu-btn').click(); await tick();

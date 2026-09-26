@@ -609,6 +609,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   }
   .bottom-nav button span { font-size: 13px; }
 
+  /* account menu docks to the top-right corner, next to the top nav */
+  .topbar-menu-wrap {
+    position: fixed; top: 13px; right: 14px; z-index: 140;
+  }
+  .app-header { justify-content: center; }
+  .app-header .brand { text-align: center; }
+
   /* toasts drop from the top instead */
   #toast-root { top: calc(var(--nav-h) + 16px); bottom: auto; }
 }
