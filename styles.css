@@ -724,3 +724,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .c-more-h { margin: 18px 0 8px; font-size: 1.1em; }
 .crow.ext { cursor: default; }
 .c-added { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
+
+/* sign-in gate */
+.gate-wrap { min-height: 72vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.gate-card { width: 100%; max-width: 340px; text-align: center; }
+.gate-card h1 { margin: 0 0 2px; font-size: 1.9em; }
+.gate-card .text-input { width: 100%; margin: 5px 0; box-sizing: border-box; }
+.gate-card #gate-status { min-height: 2.2em; }
+.gate-offline { margin-top: 18px !important; }

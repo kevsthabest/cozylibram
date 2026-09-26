@@ -11,6 +11,19 @@ const RATING_AXES = [
 ];
 function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES[0]; }
 
+// Genres come from the Google Books categories saved on each book,
+// e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
+function bookGenres(b) {
+  const out = [];
+  (b.categories || []).forEach(c => {
+    String(c).split('/').map(s => s.trim()).forEach(s => {
+      if (!s || /^(fiction|nonfiction|general)$/i.test(s)) return;
+      if (!out.includes(s)) out.push(s);
+    });
+  });
+  return out;
+}
+
 // Guess which axes fit a book from its genres, tropes and title. Falls back to spice.
 function autoDetectAxes(b) {
   const hay = (bookGenres(b).join(' ') + ' ' + (b.tropes || []).join(' ') + ' ' + (b.title || '')).toLowerCase();

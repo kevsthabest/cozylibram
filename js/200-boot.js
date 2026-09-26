@@ -19,5 +19,15 @@ try {
   ['hc_token', 'gbooks_key', 'sb_url', 'sb_key'].forEach(k => localStorage.removeItem(k));
 } catch (e) {}
 
-render();
+// Boot: no backend (or offline chosen) → straight to the library, classic
+// behavior. Backend configured → sign-in gate first; initCloud() enters the
+// app automatically when a session already exists.
+function boot() {
+  let offline = false;
+  try { offline = localStorage.getItem(OFFLINE_KEY) === '1'; } catch (e) {}
+  if (!cloudConfigured() || offline) render();
+  else renderGate();
+}
+
+boot();
 initCloud();

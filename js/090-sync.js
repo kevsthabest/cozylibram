@@ -108,7 +108,7 @@ async function cloudWipe() {
 
 async function cloudSignUp(email, password) {
   const sb = await cloudClient().catch(() => null);
-  if (!sb) { toast('Add your Supabase project details first'); return; }
+  if (!sb) { toast('Cloud sync is not configured — add it to server-config.json on your home PC'); return; }
   const { data, error } = await sb.auth.signUp({ email: email, password: password });
   if (error) { toast('Sign up failed: ' + error.message); return; }
   if (data && data.session) toast('☁️ Account created — signed in');
@@ -116,7 +116,7 @@ async function cloudSignUp(email, password) {
 }
 async function cloudSignIn(email, password) {
   const sb = await cloudClient().catch(() => null);
-  if (!sb) { toast('Add your Supabase project details first'); return; }
+  if (!sb) { toast('Cloud sync is not configured — add it to server-config.json on your home PC'); return; }
   const { error } = await sb.auth.signInWithPassword({ email: email, password: password });
   if (error) { toast('Sign in failed: ' + error.message); return; }
   // onAuthStateChange fires SIGNED_IN → cloudFirstSync runs there.
@@ -124,11 +124,17 @@ async function cloudSignIn(email, password) {
 async function cloudSignOut() {
   const sb = await cloudClient().catch(() => null);
   if (sb) await sb.auth.signOut().catch(() => {});
-  toast('Signed out — your books stay on this device');
+  // The SIGNED_OUT event also triggers leaveApp; the cloudUser guard keeps it
+  // from running twice (e.g. when the event doesn't fire while offline).
+  if (cloudUser) { cloudUser = null; leaveApp(); }
+  toast('Signed out');
 }
 async function cloudGoogle() {
   const sb = await cloudClient().catch(() => null);
-  if (!sb) { toast('Add your Supabase project details first'); return; }
+  if (!sb) { toast('Cloud sync is not configured'); return; }
+  // NOTE (future APK via Capacitor): Google OAuth needs a custom URL scheme
+  // there — use skipBrowserRedirect and handle the callback with deep links
+  // instead of this web redirect.
   await sb.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: location.href.split('#')[0] }
@@ -140,13 +146,19 @@ async function initCloud() {
   try {
     const sb = await cloudClient();
     sb.auth.onAuthStateChange((event, session) => {
-      cloudUser = (session && session.user) || null;
-      if (event === 'SIGNED_IN') cloudFirstSync();
+      const user = (session && session.user) || null;
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && user) {
+        if (!cloudUser || cloudUser.id !== user.id) { cloudUser = user; enterApp(user); }
+        else cloudUser = user;
+      } else if (event === 'SIGNED_OUT') {
+        if (cloudUser) { cloudUser = null; leaveApp(); }
+      }
       refreshAccountUI();
     });
+    // Fallback in case INITIAL_SESSION doesn't fire on this client.
     const { data } = await sb.auth.getSession();
-    cloudUser = (data && data.session && data.session.user) || null;
-    if (cloudUser) await cloudFirstSync();
+    const user = (data && data.session && data.session.user) || null;
+    if (user && (!cloudUser || cloudUser.id !== user.id)) { cloudUser = user; enterApp(user); }
     refreshAccountUI();
   } catch (e) { /* offline or bad config — app keeps working locally */ }
 }
@@ -157,7 +169,7 @@ function refreshAccountUI() {
   const inEl = document.getElementById('ac-signedin');
   const outEl = document.getElementById('ac-signedout');
   if (!cloudConfigured()) {
-    st.textContent = 'Cloud sync is off — add your Supabase project below (or let the home server share it).';
+    st.textContent = 'Cloud sync is off — add supabase_url and supabase_anon_key to server-config.json on your home PC.';
     if (inEl) inEl.style.display = 'none';
     if (outEl) outEl.style.display = '';
     return;

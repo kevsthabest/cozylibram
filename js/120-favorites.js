@@ -54,6 +54,7 @@ function loadSpineColorCache() {
 function saveSpineColorCache() {
   try { localStorage.setItem('spicyshelves.spinecolors', JSON.stringify(spineColorCache)); } catch (e) {}
 }
+loadSpineColorCache();
 // Dominant color of a cover image (darkened a touch so spine text stays readable).
 // Falls back to null when the image can't be read (CORS-tainted canvas etc.).
 function coverDominantColor(url) {

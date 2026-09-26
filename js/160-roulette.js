@@ -1,19 +1,6 @@
 'use strict';
 
 /* ---------------- TBR roulette ---------------- */
-// Genres come from the Google Books categories saved on each book,
-// e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
-function bookGenres(b) {
-  const out = [];
-  (b.categories || []).forEach(c => {
-    String(c).split('/').map(s => s.trim()).forEach(s => {
-      if (!s || /^(fiction|nonfiction|general)$/i.test(s)) return;
-      if (!out.includes(s)) out.push(s);
-    });
-  });
-  return out;
-}
-
 function tbrBooks() { return library.filter(b => b.status === 'tbr'); }
 
 function allPickGenres() {

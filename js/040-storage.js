@@ -1,8 +1,15 @@
 'use strict';
 
 /* ---------------- storage ---------------- */
+// On-device libraries are partitioned by signed-in user so several people can
+// share one device without mixing shelves. `localUid` is null when signed out
+// (classic single-device library under LS_KEY).
+let localUid = null;
+function libKey() {
+  return localUid ? 'spicyshelves.library.v2.' + localUid : LS_KEY;
+}
 function loadLibrary() {
-  try { return (JSON.parse(localStorage.getItem(LS_KEY)) || []).map(migrateBook); }
+  try { return (JSON.parse(localStorage.getItem(libKey())) || []).map(migrateBook); }
   catch (e) { return []; }
 }
 // Snapshots (excluding _mtime) so saveLibrary() can stamp only books that changed.
@@ -10,7 +17,6 @@ const bookSnapshots = new Map();
 // NOTE: library loads here (not at the top of the file) because migrateBook can
 // reach RATING_AXES/autoDetectAxes — both must be initialized first.
 let library = loadLibrary();
-loadSpineColorCache();
 library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
 function bookSnap(b) {
   const c = {};
@@ -52,8 +58,29 @@ function saveLibrary(opts) {
     const s = bookSnap(b);
     if (bookSnapshots.get(b.id) !== s) { b._mtime = now; bookSnapshots.set(b.id, bookSnap(b)); }
   }
-  try { localStorage.setItem(LS_KEY, JSON.stringify(library)); }
+  try { localStorage.setItem(libKey(), JSON.stringify(library)); }
   catch (e) { toast('Storage full — export a backup!'); }
   if (!opts.noCloud) scheduleCloudPush();
+}
+
+// Switch the on-device library between users (null = signed out). On the
+// first sign-in on a device, an existing offline library is adopted into the
+// new per-user slot instead of being abandoned.
+function setLocalUser(uid) {
+  if (uid === localUid) return;
+  try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
+  const hadBooks = library.length > 0;
+  localUid = uid || null;
+  bookSnapshots.clear();
+  let next = loadLibrary();
+  if (uid && next.length === 0 && hadBooks) {
+    next = library;
+    try {
+      localStorage.setItem(libKey(), JSON.stringify(next));
+      localStorage.removeItem(LS_KEY);
+    } catch (e) {}
+  }
+  library = next;
+  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
 }
 

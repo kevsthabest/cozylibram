@@ -61,15 +61,22 @@ Without confirmation, new accounts sign in immediately.
 
 ## 7. Test it
 
-1. Open Spicy Shelves → **Settings → Account & cloud sync**.
+1. Open Spicy Shelves → you'll land on a **sign-in gate** (it only appears
+   while signed out and only when the backend is configured).
 2. **Create account**, then add a book on one device.
 3. **Sign in** on another device → the book appears after the first sync.
 4. **Sync now** forces a sync; the last-sync time shows under the account panel.
+5. **Sign out** (Settings → Account) returns to the gate. Each user gets their
+   own on-device library, so sharing one device between testers is safe.
 
 ## How syncing works
 
 - Each book is one row, keyed by `(user_id, book_id)`.
 - Changes merge by timestamp (`_mtime`): the newest edit wins, never a blind overwrite.
+- On-device libraries are partitioned per user (`spicyshelves.library.v2.<uid>`);
+  signing out clears the in-memory shelf and the next sign-in loads that user's
+  own library. The old single-device library is adopted into the new per-user
+  slot on first sign-in, never silently dropped.
 - Signing in on a new device **pulls** your cloud library and merges it with
   whatever is on the device — nothing is ever silently deleted.
 - "Delete everything" wipes the device library *and* your cloud rows.
