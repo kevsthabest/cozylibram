@@ -4,7 +4,7 @@
 // Free GraphQL API: https://api.hardcover.app/v1/graphql
 // Needs a personal token (hardcover.app → account settings → API). The token
 // lives in server-config.json on the home PC and is shared with LAN clients
-// via /config.js (LAN-only, never cached).
+// via /config.js (never cached).
 const HC_API = 'https://api.hardcover.app/v1/graphql';
 function hcToken() {
   try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcoverToken) || '').trim(); }

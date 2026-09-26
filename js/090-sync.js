@@ -3,7 +3,7 @@
 /* ---------------- Cloud sync (Supabase, optional) ---------------- */
 // Per-user long-term storage. Needs a Supabase project (see supabase/schema.sql).
 // Credentials: the home server shares them with LAN clients via /config.js
-// (LAN-only). They are configured once in server-config.json on the home PC.
+// They are configured once in server-config.json on the home PC.
 // The anon key is safe in the browser — Row Level Security ensures each user
 // only sees their own rows.
 const SB_LIB_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';

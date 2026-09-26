@@ -1,41 +1,22 @@
-"""server.py tests: LAN-only token gating."""
+"""server.py tests: config sharing (gating removed 2026-09-26) + cover proxy."""
 import importlib.util
 
 spec = importlib.util.spec_from_file_location('spicy_server', '/home/hatch/workspace/booktok/server.py')
 server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 
-cases = [
-    ('127.0.0.1', True), ('::1', True), ('localhost', True),
-    ('192.168.1.50', True), ('192.168.0.1', True),
-    ('10.0.0.5', True), ('10.200.1.1', True),
-    ('172.16.4.2', True), ('172.31.255.255', True),
-    ('169.254.10.20', True),  # link-local
-    ('8.8.8.8', False), ('203.0.113.7', False), ('1.1.1.1', False),
-    ('172.32.0.1', False),  # just outside 172.16/12
-]
 failed = 0
-for addr, expected in cases:
-    got = server.client_is_internal(addr)
-    status = 'PASS' if got == expected else 'FAIL'
-    if got != expected:
-        failed += 1
-    print('%s - client_is_internal(%r) = %s' % (status, addr, got))
 
-# Token is served to LAN clients only
+# Token is served to every client (no LAN/WAN gating)
 server.load_token = lambda: 'tok_secret_999'
-lan_body = server.config_js_body('192.168.1.50').decode('utf-8')
-wan_body = server.config_js_body('8.8.8.8').decode('utf-8')
-ok = 'tok_secret_999' in lan_body
-print(('PASS' if ok else 'FAIL') + ' - LAN client receives token')
-failed += 0 if ok else 1
-ok = wan_body == 'window.SPICY_CONFIG = {};'
-print(('PASS' if ok else 'FAIL') + ' - external client gets empty config')
+body = server.config_js_body().decode('utf-8')
+ok = 'tok_secret_999' in body
+print(('PASS' if ok else 'FAIL') + ' - every client receives token')
 failed += 0 if ok else 1
 
 # No token configured -> empty for everyone
 server.load_token = lambda: ''
-ok = server.config_js_body('192.168.1.50').decode('utf-8') == 'window.SPICY_CONFIG = {};'
+ok = server.config_js_body() == b'window.SPICY_CONFIG = {};'
 print(('PASS' if ok else 'FAIL') + ' - empty config when no token set')
 failed += 0 if ok else 1
 

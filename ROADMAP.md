@@ -50,7 +50,7 @@ Target user: Kevin's wife (primary) + a handful of family/friend testers.
 (Kevin's call; roadmap kept here so the direction isn't lost.)
 
 ### v1.1 — Public GitHub release (self-hosted, BYOK)
-- [ ] Key-leak audit: `server-config.json` handling, `/config.js` LAN-only
+- [ ] Key-leak audit: `server-config.json` handling, `/config.js` exposure (gating removed 2026-09-26 — keep port off public internet)
   sharing, no tokens in client bundle or repo history.
 - [ ] BYOK setup docs polish (README + `server-config.example.json`).
 - [ ] `book_meta` becomes a per-instance shared cache — document it.

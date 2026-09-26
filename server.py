@@ -2,17 +2,14 @@
 """Spicy Shelves server.
 
 Serves the app's static files, plus a dynamic /config.js that hands the
-Hardcover API token ONLY to clients on the local network (loopback, private
-LAN, or link-local addresses). Anyone connecting from an unknown/external IP
-gets an empty config and must enter the token manually in Settings.
-
-The same LAN-only mechanism can share Supabase credentials (supabase_url and
-supabase_anon_key in server-config.json) so home-network devices get cloud
-sync with zero setup.
+configured secrets (Hardcover token, Google Books key, Supabase credentials)
+to every client. NOTE: anyone who can reach this server's port can read
+those secrets — keep the port off the public internet (no port forwarding)
+unless you accept that exposure.
 
 Setup: copy server-config.example.json to server-config.json and paste your
 Hardcover personal token and Google Books API key in it. server-config.json
-is read by this server only — it is never sent to clients.
+is read by this server only — it is never committed to git.
 """
 import ipaddress
 import json
@@ -45,32 +42,6 @@ def load_gb_key():
         return ''
 
 
-def client_is_internal(addr):
-    """True for loopback, private LAN, and link-local addresses.
-
-    Uses explicit ranges — ipaddress's is_private is too broad (it also
-    matches documentation/test ranges like 203.0.113.0/24).
-    """
-    host = addr.split('%')[0].strip().lower()
-    if host == 'localhost':
-        return True
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    internal_nets = [
-        ipaddress.ip_network('127.0.0.0/8'),    # loopback v4
-        ipaddress.ip_network('10.0.0.0/8'),      # private LAN
-        ipaddress.ip_network('172.16.0.0/12'),   # private LAN
-        ipaddress.ip_network('192.168.0.0/16'),  # private LAN
-        ipaddress.ip_network('169.254.0.0/16'),  # link-local v4
-        ipaddress.ip_network('::1/128'),         # loopback v6
-        ipaddress.ip_network('fc00::/7'),        # unique-local v6
-        ipaddress.ip_network('fe80::/10'),       # link-local v6
-    ]
-    return any(ip in net for net in internal_nets)
-
-
 def load_cloud_cfg():
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
@@ -81,21 +52,24 @@ def load_cloud_cfg():
         return {'supabaseUrl': '', 'supabaseAnonKey': ''}
 
 
-def config_js_body(client_addr):
-    """The /config.js payload for one client: secrets only for internal IPs."""
-    internal = client_is_internal(client_addr)
+def config_js_body():
+    """The /config.js payload: all configured secrets, served to every client.
+
+    Gating was removed per the owner's decision (2026-09-26). Anyone able to
+    reach this server can read these secrets — do not expose the port to the
+    public internet.
+    """
     payload = {}
     token = load_token()
-    if token and internal:
+    if token:
         payload['hardcoverToken'] = token
     gbk = load_gb_key()
-    if gbk and internal:
+    if gbk:
         payload['googleBooksKey'] = gbk
-    if internal:
-        cc = load_cloud_cfg()
-        if cc['supabaseUrl'] and cc['supabaseAnonKey']:
-            payload['supabaseUrl'] = cc['supabaseUrl']
-            payload['supabaseAnonKey'] = cc['supabaseAnonKey']
+    cc = load_cloud_cfg()
+    if cc['supabaseUrl'] and cc['supabaseAnonKey']:
+        payload['supabaseUrl'] = cc['supabaseUrl']
+        payload['supabaseAnonKey'] = cc['supabaseAnonKey']
     return ('window.SPICY_CONFIG = %s;' % json.dumps(payload)).encode('utf-8')
 
 
@@ -130,7 +104,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == '/config.js':
-            body = config_js_body(self.client_address[0])
+            body = config_js_body()
             self.send_response(200)
             self.send_header('Content-Type', 'application/javascript; charset=utf-8')
             self.send_header('Cache-Control', 'no-store')
@@ -191,12 +165,12 @@ def main():
     print('[Spicy Shelves] Serving at http://localhost:%d' % PORT)
     print('[Spicy Shelves] On your home network, also reachable at this PC\'s LAN IP.')
     if token:
-        print('[Spicy Shelves] Hardcover token loaded — shared with home-network devices only.')
+        print('[Spicy Shelves] Hardcover token loaded — served to every client (/config.js).')
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
-        print('[Spicy Shelves] Supabase config loaded — shared with home-network devices only.')
+        print('[Spicy Shelves] Supabase config loaded — served to every client (/config.js).')
     if not token and not (cc['supabaseUrl'] and cc['supabaseAnonKey']):
         print('[Spicy Shelves] No secrets in server-config.json — each device must enter')
-        print('[Spicy Shelves] them in Settings. To auto-share on your home network, copy')
+        print('[Spicy Shelves] them in Settings. To auto-share with every device, copy')
         print('[Spicy Shelves] server-config.example.json to server-config.json and fill it in.')
     print('[Spicy Shelves] Keep this window open. Close it to stop.\n')
     ThreadingHTTPServer(('0.0.0.0', PORT), partial(Handler, directory=BASE_DIR)).serve_forever()
