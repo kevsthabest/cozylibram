@@ -79,6 +79,21 @@ runInWindow(`library.forEach(b => b.favorite = false); favExpanded = false; rend
 ok('empty shelf hint shown', q('.fav-shelf').textContent.includes('Tap 🤍'));
 ok('no spines when empty', qa('.fav-shelf .spine').length === 0);
 
+// 7. cover CORS allowlist: only request CORS where the host sends ACAO,
+// so Google Books covers don't spam CORS errors in the console (v51)
+runInWindow(`window.__cors = [
+  coverCorsOK('https://covers.openlibrary.org/b/id/1-L.jpg'),
+  coverCorsOK('https://is1-ssl.mzstatic.com/image/thumb/x.jpg'),
+  coverCorsOK('http://books.google.com/books/content?id=X&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api'),
+  coverCorsOK('data:image/jpeg;base64,AAAA'),
+  coverCorsOK('')
+];`);
+ok('Open Library covers allow CORS pixel reads', window.__cors[0] === true);
+ok('Apple artwork allows CORS pixel reads', window.__cors[1] === true);
+ok('Google Books covers skip CORS (no console errors)', window.__cors[2] === false);
+ok('data: URLs need no CORS', window.__cors[3] === true);
+ok('empty url is safe', window.__cors[4] === true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

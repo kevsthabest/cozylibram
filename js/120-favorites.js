@@ -94,12 +94,23 @@ function saveSpineColorCache() {
   try { localStorage.setItem('spicyshelves.spinecolors', JSON.stringify(spineColorCache)); } catch (e) {}
 }
 loadSpineColorCache();
+// Hosts verified (2026-09-26) to send `Access-Control-Allow-Origin: *` on
+// cover images, so pixel reads work there. Google Books (books.google.com)
+// sends none — requesting CORS there only spams the console, so we load
+// those without it and take the graceful null fallback instead.
+function coverCorsOK(url) {
+  if (!url || url.indexOf('data:') === 0 || url.indexOf('blob:') === 0) return true;
+  const m = /^https?:\/\/([^/]+)/i.exec(url || '');
+  const host = (m && m[1] || '').toLowerCase();
+  return /(^|\.)covers\.openlibrary\.org$/.test(host) ||
+         /(^|\.)mzstatic\.com$/.test(host);
+}
 // Dominant color of a cover image (darkened a touch so spine text stays readable).
 // Falls back to null when the image can't be read (CORS-tainted canvas etc.).
 function coverDominantColor(url) {
   return new Promise(resolve => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (coverCorsOK(url)) img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
         const S = 24, c = document.createElement('canvas');
