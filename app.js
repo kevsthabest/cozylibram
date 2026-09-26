@@ -414,7 +414,8 @@ function applyHardcoverDoc(book, doc) {
 function hcDetailHTML(b) {
   let h = '';
   if (b.series && b.series.name) {
-    h += '<p class="series-line">📚 ' + esc(b.series.name) +
+    h += '<p class="series-line">📚 <button class="taplink" data-series="' + esc(b.series.name) + '">' +
+      esc(b.series.name) + '</button>' +
       (b.series.position != null && b.series.position !== '' ? ' · Book ' + esc(String(b.series.position)) : '') + '</p>';
   }
   if (b.moods && b.moods.length) {
@@ -1258,6 +1259,52 @@ function renderIsbnTab() {
 }
 
 /* ---------------- detail modal ---------------- */
+/* ---- author / series collections: "more like this" from your own shelves ---- */
+function collectionRowHTML(b) {
+  const sub = (b.series && b.series.name
+    ? '📚 ' + esc(b.series.name) +
+      (b.series.position != null && b.series.position !== '' ? ' #' + esc(String(b.series.position)) : '') + ' · '
+    : '') +
+    esc((b.authors || []).join(', ') || 'Unknown author') + ' · ' + STATUS[b.status];
+  return '<button class="crow" data-book="' + b.id + '">' +
+    (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+      : '<span class="cnocover">📕</span>') +
+    '<span class="ctext"><b>' + esc(b.title) + '</b><small>' + sub + '</small></span>' +
+    '<span class="cgo">›</span></button>';
+}
+function openCollection(kind, name, fromId) {
+  const key = String(name).trim().toLowerCase();
+  const match = b => kind === 'author'
+    ? (b.authors || []).some(a => String(a).trim().toLowerCase() === key)
+    : (b.series && b.series.name && String(b.series.name).trim().toLowerCase() === key);
+  const others = library.filter(b => b.id !== fromId && match(b));
+  others.sort((a, b) => {
+    if (kind === 'series') {
+      const pa = parseFloat(a.series && a.series.position), pb = parseFloat(b.series && b.series.position);
+      const d = (isNaN(pa) ? 1e9 : pa) - (isNaN(pb) ? 1e9 : pb);
+      if (d) return d;
+    }
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="c-back" style="z-index:70"><div class="modal" role="dialog">' +
+    '<button class="modal-close" id="c-x">✕</button>' +
+    '<h2 class="serif" style="margin-top:0">' + (kind === 'author' ? '✍️ ' : '📚 ') + esc(name) + '</h2>' +
+    '<p class="note">' + others.length + ' other book' + (others.length === 1 ? '' : 's') + ' on your shelves</p>' +
+    (others.length
+      ? '<div class="collection-list">' + others.map(collectionRowHTML).join('') + '</div>'
+      : '<p class="note">Nothing else here yet — this is the only one.</p>') +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('#c-back').addEventListener('click', e => { if (e.target.id === 'c-back') close(); });
+  ov.querySelector('#c-x').addEventListener('click', close);
+  ov.querySelectorAll('[data-book]').forEach(el =>
+    el.addEventListener('click', () => { close(); openDetail(el.dataset.book); }));
+}
+
 function openDetail(id) {
   const b = library.find(x => x.id === id);
   if (!b) return;
@@ -1335,7 +1382,9 @@ function openDetail(id) {
     '<button class="modal-close" id="m-x">✕</button>' +
     '<div class="modal-head">' + coverHTML(b) +
     '<div><h2>' + esc(b.title) + '</h2>' +
-    '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
+    '<p class="author">' + ((b.authors && b.authors.length)
+      ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
+      : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
     (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
     '</div>' +
@@ -1422,6 +1471,10 @@ function openDetail(id) {
   const close = () => { root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null; };
   document.getElementById('m-x').addEventListener('click', close);
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
+  root.querySelectorAll('[data-author]').forEach(el =>
+    el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
+  root.querySelectorAll('[data-series]').forEach(el =>
+    el.addEventListener('click', () => openCollection('series', el.dataset.series, id)));
   renderProgressSection();
 
   document.getElementById('f-fav').addEventListener('click', () => {
