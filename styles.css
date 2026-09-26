@@ -883,3 +883,30 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .vflags { display: block; font-size: 12px; opacity: .9; margin-top: 3px; line-height: 1.5; }
 .vflags .vf { display: block; }
 .vflags s { opacity: .65; }
+
+/* ---- Cover picker (v47) ---- */
+.mcover-col { display: flex; flex-direction: column; gap: 6px; align-items: center; flex: none; }
+.mcover-col .cover-wrap { flex: none; }
+#m-changecover { font-size: 15px; padding: 3px 8px; line-height: 1.2; }
+.cover-picker-backdrop {
+  position: fixed; inset: 0; background: rgba(8, 5, 12, 0.72);
+  z-index: 70; display: flex; align-items: flex-end; justify-content: center;
+}
+@media (min-width: 600px) { .cover-picker-backdrop { align-items: center; } }
+.cover-picker {
+  background: var(--nav-bg); border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0; padding: 18px;
+  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+}
+@media (min-width: 600px) { .cover-picker { border-radius: 18px; border: 1px solid var(--line); } }
+.cover-picker h3 { margin: 0 0 4px; }
+.cp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
+.cp-pick {
+  border: 2px solid transparent; border-radius: 10px; padding: 0;
+  background: none; cursor: pointer; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.cp-pick img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--bg); }
+.cp-pick span { font-size: 11px; color: var(--muted); padding: 4px 2px; }
+.cp-pick.current { border-color: var(--accent); }
+.cp-actions { display: flex; gap: 10px; justify-content: space-between; }

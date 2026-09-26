@@ -1,0 +1,159 @@
+'use strict';
+
+/* ---- Cover picker (v47): some imports/scans end up with a photo of the
+   physical book instead of clean cover art. The 🖼️ button on the book modal
+   opens a picker with candidate covers (Google Books editions + every cover
+   Open Library has for the work), plus an upload-your-own option. ---- */
+
+const coverCandidateCache = new Map(); // isbn-or-title key -> [{url, label}] (excludes "current")
+
+function httpsCover(u) {
+  return String(u || '').replace(/^http:/, 'https:');
+}
+
+// Every candidate cover for this book: current first, then Google Books
+// edition thumbnails, then all Open Library work covers. Deduped.
+async function fetchCoverCandidates(book) {
+  const seen = new Set();
+  const out = [];
+  const push = (url, label) => {
+    url = httpsCover(url);
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    out.push({ url: url, label: label });
+  };
+  if (book.cover) push(book.cover, 'Current');
+  const isbn = cleanISBN(book.isbn);
+  const cacheKey = isbn || ('t:' + normTitle(book.title) + '|' + (book.authors || []).join(',').toLowerCase());
+  const cached = coverCandidateCache.get(cacheKey);
+  if (cached) { cached.forEach(c => push(c.url, c.label)); return out; }
+  const fresh = [];
+  const freshPush = (url, label) => {
+    url = httpsCover(url);
+    if (!url || fresh.some(c => c.url === url)) return;
+    fresh.push({ url: url, label: label });
+    push(url, label);
+  };
+  if (isbn) {
+    try {
+      const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
+        encodeURIComponent(isbn) + '&maxResults=8'));
+      const d = await r.json();
+      (d.items || []).forEach(it => {
+        const il = ((it || {}).volumeInfo || {}).imageLinks || {};
+        freshPush(il.thumbnail || il.smallThumbnail, 'Google Books');
+      });
+    } catch (e) { /* Google Books unreachable — Open Library may still work */ }
+    try {
+      const ed = await (await fetch('https://openlibrary.org/isbn/' + isbn + '.json')).json();
+      const wkey = ed && ed.works && ed.works[0] && ed.works[0].key;
+      if (wkey) {
+        const w = await (await fetch('https://openlibrary.org' + wkey + '.json')).json();
+        (w.covers || []).forEach(id =>
+          freshPush('https://covers.openlibrary.org/b/id/' + id + '-L.jpg', 'Open Library'));
+      }
+    } catch (e) { /* no work covers */ }
+  } else {
+    try {
+      const q = 'https://openlibrary.org/search.json?q=' +
+        encodeURIComponent(String(book.title || '') + ' ' + (book.authors || []).join(' ')) +
+        '&fields=cover_i&limit=8';
+      const d = await (await fetch(q)).json();
+      (d.docs || []).forEach(doc => {
+        if (doc.cover_i) freshPush('https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg', 'Open Library');
+      });
+    } catch (e) { /* offline */ }
+  }
+  coverCandidateCache.set(cacheKey, fresh);
+  return out;
+}
+
+// Downscale an uploaded image to a data URL small enough for localStorage.
+function fileToCoverDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const S = 512, scale = Math.min(1, S / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read that image')); };
+    img.src = url;
+  });
+}
+
+function closeCoverPicker() {
+  const ov = document.getElementById('cover-picker');
+  if (ov) ov.remove();
+}
+
+function chooseCover(bookId, url) {
+  const b = library.find(x => x.id === bookId);
+  if (!b || !url) return;
+  b.cover = url;
+  b._mtime = Date.now();
+  saveLibrary();
+  closeCoverPicker();
+  const wrap = document.querySelector('#modal-root .modal-head .cover-wrap');
+  if (wrap) wrap.outerHTML = coverHTML(b);
+  render(); // refresh the shelf behind the modal
+  toast('🖼️ Cover updated');
+}
+
+function openCoverPicker(bookId) {
+  const b = library.find(x => x.id === bookId);
+  if (!b) return;
+  closeCoverPicker();
+  const ov = document.createElement('div');
+  ov.className = 'cover-picker-backdrop';
+  ov.id = 'cover-picker';
+  ov.innerHTML =
+    '<div class="cover-picker" role="dialog" aria-label="Choose a cover">' +
+    '<h3 class="serif">🖼️ Choose a cover</h3>' +
+    '<p class="note" id="cp-note">Looking for covers…</p>' +
+    '<div class="cp-grid" id="cp-grid"></div>' +
+    '<div class="cp-actions">' +
+    '<button class="btn ghost" id="cp-upload">📤 Upload your own</button>' +
+    '<input type="file" id="cp-file" accept="image/*" style="display:none">' +
+    '<button class="btn ghost" id="cp-cancel">Cancel</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('cp-cancel').addEventListener('click', closeCoverPicker);
+  ov.addEventListener('click', e => { if (e.target === ov) closeCoverPicker(); });
+  document.getElementById('cp-upload').addEventListener('click', () =>
+    document.getElementById('cp-file').click());
+  document.getElementById('cp-file').addEventListener('change', async e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      chooseCover(bookId, await fileToCoverDataURL(f));
+    } catch (err) { toast('Could not read that image'); }
+  });
+  fetchCoverCandidates(b).then(cands => {
+    const grid = document.getElementById('cp-grid');
+    const note = document.getElementById('cp-note');
+    if (!grid) return; // picker was closed while loading
+    if (!cands.length) {
+      if (note) note.textContent = 'No covers found — try uploading your own.';
+      return;
+    }
+    if (note) note.textContent = cands.length + ' option' + (cands.length === 1 ? '' : 's') +
+      ' — tap one to use it.';
+    grid.innerHTML = cands.map((c, i) =>
+      '<button class="cp-pick' + (i === 0 && b.cover ? ' current' : '') + '" data-cpurl="' +
+      esc(c.url) + '" title="' + esc(c.label) + '">' +
+      '<img src="' + esc(c.url) + '" alt="' + esc(c.label) + '" loading="lazy" onerror="this.closest(\'.cp-pick\').remove()">' +
+      '<span>' + esc(c.label) + '</span></button>').join('');
+    grid.querySelectorAll('[data-cpurl]').forEach(btn =>
+      btn.addEventListener('click', () => chooseCover(bookId, btn.dataset.cpurl)));
+  });
+}

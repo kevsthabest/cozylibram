@@ -355,7 +355,8 @@ function renderDetailModal(b, viaBook) {
   root.innerHTML =
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog">' +
     '<button class="modal-close" id="m-x">✕</button>' +
-    '<div class="modal-head">' + coverHTML(b) +
+    '<div class="modal-head"><div class="mcover-col">' + coverHTML(b) +
+    '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">🖼️</button></div>' +
     '<div><h2>' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
       ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
@@ -463,6 +464,7 @@ function renderDetailModal(b, viaBook) {
 
   const close = () => { root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null; };
   document.getElementById('m-x').addEventListener('click', close);
+  document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
