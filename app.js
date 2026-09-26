@@ -14,6 +14,7 @@ const STATUS = {
 
 let view = 'library';
 let filter = 'all';
+let ownFilter = 'all'; // all | owned | tobuy
 let query = '';
 let calY = new Date().getFullYear();
 let calM = new Date().getMonth();
@@ -78,8 +79,16 @@ function migrateBook(b) {
   if (b.series === undefined) b.series = null;
   if (!Array.isArray(b.log)) b.log = []; // daily reading log { d, from, to }
   b.favorite = !!b.favorite; // pinned to the favorites bookshelf
+  if (b.owned === undefined) b.owned = true; // owned vs wishlist ("to buy")
   if (b._mtime == null) b._mtime = 0; // last-modified stamp, used for cloud conflict resolution
   return b;
+}
+
+// Ownership badge: 🏠 owned vs 🛒 to buy (wishlist)
+function ownedBadge(b) {
+  return b.owned
+    ? '<span class="badge owned">🏠 Owned</span>'
+    : '<span class="badge tobuy">🛒 To buy</span>';
 }
 
 // Badges for every rated axis, e.g. 🌶️🌶️🌶️ 👻👻
@@ -206,6 +215,7 @@ function normalizeVolume(item, isbnHint) {
     publicRating: v.averageRating || null,
     ratingsCount: v.ratingsCount || 0,
     status: 'tbr',
+    owned: true,
     ratings: {},
     myRating: 0,
     tropes: [],
@@ -271,6 +281,7 @@ function olDocToBook(doc) {
     publicRating: null,
     ratingsCount: 0,
     status: 'tbr',
+    owned: true,
     ratings: {},
     myRating: 0,
     tropes: [],
@@ -759,6 +770,8 @@ function filteredBooks() {
   const q = query.trim().toLowerCase();
   return library.filter(b => {
     if (filter !== 'all' && b.status !== filter) return false;
+    if (ownFilter === 'owned' && !b.owned) return false;
+    if (ownFilter === 'tobuy' && b.owned) return false;
     if (!q) return true;
     return (b.title + ' ' + b.authors.join(' ') + ' ' + b.tropes.join(' '))
       .toLowerCase().includes(q);
@@ -766,7 +779,7 @@ function filteredBooks() {
 }
 
 function bookCard(b, i) {
-  const badges = ['<span class="badge status-' + b.status + '">' + STATUS[b.status] + '</span>'];
+  const badges = ['<span class="badge status-' + b.status + '">' + STATUS[b.status] + '</span>', ownedBadge(b)];
   if (b.publicRating) badges.push('<span class="badge">★ ' + Number(b.publicRating).toFixed(1) + '</span>');
   badges.push(ratingBadges(b));
   if (b.myRating > 0) badges.push('<span class="badge">' + '♥'.repeat(b.myRating) + '</span>');
@@ -797,6 +810,7 @@ function coverTile(b, i) {
   return '<div class="cover-tile' + anim + '" data-id="' + b.id + '">' +
     '<div class="tile-cover">' + inner +
     '<span class="tile-status s-' + b.status + '">' + short[b.status] + '</span>' +
+    (b.owned ? '' : '<span class="tile-buy" title="To buy">🛒</span>') +
     ratingOverlay +
     '</div>' +
     '<div class="tile-title">' + esc(b.title) + '</div>' +
@@ -953,6 +967,13 @@ function renderLibrary() {
     chip('read', '✅ Read · ' + counts.read, filter === 'read') +
     chip('dnf', '🚫 DNF · ' + counts.dnf, filter === 'dnf') +
     '</div>';
+  const ownCounts = { owned: 0, tobuy: 0 };
+  library.forEach(b => { b.owned ? ownCounts.owned++ : ownCounts.tobuy++; });
+  html += '<div class="chips">' +
+    '<button class="chip' + (ownFilter === 'all' ? ' active' : '') + '" data-of="all">Ownership: All</button>' +
+    '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">🏠 Owned · ' + ownCounts.owned + '</button>' +
+    '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">🛒 To buy · ' + ownCounts.tobuy + '</button>' +
+    '</div>';
 
   if (!books.length) {
     html += '<div class="empty"><div class="big">📚</div><h2 class="serif">No books here yet</h2>' +
@@ -978,8 +999,10 @@ function renderLibrary() {
       animateIn = true;
       render();
     }));
-  document.querySelectorAll('.chip').forEach(c =>
+  document.querySelectorAll('.chip:not([data-of])').forEach(c =>
     c.addEventListener('click', () => { filter = c.dataset.f; animateIn = true; render(); }));
+  document.querySelectorAll('[data-of]').forEach(c =>
+    c.addEventListener('click', () => { ownFilter = c.dataset.of; animateIn = true; render(); }));
   document.querySelectorAll('.book-card, .cover-tile').forEach(c =>
     c.addEventListener('click', () => openDetail(c.dataset.id)));
   document.querySelectorAll('.spine').forEach(s =>
@@ -1395,6 +1418,10 @@ function openDetail(id) {
 
     '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div></div>' +
 
+    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
+    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">🏠 Owned</button>' +
+    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">🛒 To buy</button></div></div>' +
+
     '<div class="field"><label>Ratings</label>' +
     '<div class="chips" id="f-axes">' + axChipsHTML + '</div>' +
     '<div id="f-axrows">' + axRowsHTML() + '</div></div>' +
@@ -1441,6 +1468,12 @@ function openDetail(id) {
         if (pi) pi.value = draft.progress;
       }
       renderProgressSection();
+    }));
+
+  root.querySelectorAll('#f-owned button').forEach(btn =>
+    btn.addEventListener('click', () => {
+      draft.owned = btn.dataset.o === '1';
+      root.querySelectorAll('#f-owned button').forEach(x => x.classList.toggle('active', x === btn));
     }));
 
   const wirePicker = (sel, key) => {
