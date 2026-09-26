@@ -931,6 +931,7 @@ function pullSpine(el, id) {
   }
   setTimeout(() => {
     if (overlay) overlay.remove();
+    el.classList.remove('pulling');
     pullBusy = false;
     openDetail(id);
   }, b.cover ? 950 : 380);

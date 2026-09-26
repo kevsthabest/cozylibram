@@ -84,6 +84,7 @@ ok('cover overlay appears', qa('.pull-overlay').length === before + 1);
 ok('overlay shows the book cover', q('.pull-overlay img').src === 'http://x/b.jpg');
 await tick(1100);
 ok('overlay removed after pull', qa('.pull-overlay').length === before);
+ok('spine resets to shelf after pull', !sp2.classList.contains('pulling'));
 ok('modal opens after animation', !!q('#f-fav'));
 window.document.getElementById('m-x').click();
 
