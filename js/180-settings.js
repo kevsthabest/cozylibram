@@ -65,6 +65,14 @@ function renderSettings() {
     'checked via Google Books first, then Open Library.</p>' +
     '<button class="btn ghost block" id="pc-backfill">📄 Fill missing page counts</button>' +
     '<p class="note" id="pc-backfill-note"></p>' +
+    '<h2 class="section serif" style="margin-top:26px">Metadata check</h2>' +
+    '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
+    'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
+    'You review each difference and apply the fixes you want; nothing changes on its own.</p>' +
+    '<button class="btn ghost block" id="meta-verify">🔍 Check metadata</button>' +
+    '<p class="note" id="meta-verify-note">' +
+    library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
+    ' books have ISBNs to check.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
     '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, and moods. ' +
     'The token lives in server-config.json on your home PC and is shared with this device automatically over your home network. ' +
@@ -211,6 +219,7 @@ function renderSettings() {
   // Hardcover wiring
   const hcStatus = () => document.getElementById('hc-status');
   document.getElementById('pc-backfill').addEventListener('click', () => backfillPageCounts());
+  document.getElementById('meta-verify').addEventListener('click', () => runMetadataCheck());
   document.getElementById('hc-test').addEventListener('click', async () => {
     const st = hcStatus(); if (!st) return;
     if (!hcToken()) { st.textContent = 'No token — add hardcover_token to server-config.json on your home PC.'; return; }

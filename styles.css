@@ -878,3 +878,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .gate-card .text-input { width: 100%; margin: 5px 0; box-sizing: border-box; }
 .gate-card #gate-status { min-height: 2.2em; }
 .gate-offline { margin-top: 18px !important; }
+
+/* ---- Metadata check results (v46) ---- */
+.vflags { display: block; font-size: 12px; opacity: .9; margin-top: 3px; line-height: 1.5; }
+.vflags .vf { display: block; }
+.vflags s { opacity: .65; }
