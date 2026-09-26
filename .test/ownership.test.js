@@ -69,5 +69,20 @@ ok('owned filter shows none now', qa('.book-card').length === 0);
 q('[data-of="all"]').click();
 ok('all restores both', qa('.book-card').length === 2);
 
+// 7. wishlist tab
+ok('nav has wishlist button', !!q('.bottom-nav [data-nav="wishlist"]'));
+q('.bottom-nav [data-nav="wishlist"]').click();
+ok('wishlist view renders', !!q('.wish-head'));
+ok('wishlist shows only to-buy', qa('#view .book-card').length === 2);
+ok('wishlist cards have to-buy badges',
+  qa('#view .book-card .badge.tobuy').length === 2);
+q('#view .book-card').click();
+ok('wishlist card opens detail', !!q('#f-owned'));
+window.document.getElementById('m-x').click();
+
+// 8. empty wishlist state
+runInWindow(`library.forEach(b => b.owned = true); renderWishlist();`);
+ok('empty wishlist message', q('#view .empty').textContent.includes('Nothing on the wishlist'));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
