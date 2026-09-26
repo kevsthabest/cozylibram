@@ -1,0 +1,66 @@
+# Spicy Shelves Roadmap
+
+## v1.0 — "Share with loved ones" (private testers)
+Goal: stable, no data loss, easy for non-technical family to pick up.
+Target user: Kevin's wife (primary) + a handful of family/friend testers.
+
+### Must-have: data safety & sync
+- [ ] **Deletion tombstones** — deleted books currently resurrect on the next
+  sync. Deletions need to propagate so a book deleted on one device stays
+  deleted everywhere.
+- [ ] **Password-reset UI** — testers will forget passwords; without this,
+  every reset is a manual trip to the Supabase dashboard.
+- [ ] **First-login merge hardening** — the adopt-and-merge path works, but it
+  needs a deliberate test pass (two devices, offline edits, then sign-in).
+
+### Must-have: getting books in
+- [ ] **Bulk ISBN import** — paste a list of ISBNs, add them all. With a
+  several-hundred-book collection, one-at-a-time entry is the biggest
+  pain point left in the app.
+- [ ] **Bookmory import** — wife tracks books in Bookmory; awaiting her
+  export file, then map it onto our book shape.
+
+### Should-have: tester onboarding
+- [ ] **Supabase Site URL fix** — verification emails still link to
+  `localhost:3000`. Set Site URL + Redirect URLs to the real app address
+  (Kevin's task, ~5 min in the Supabase dashboard).
+- [ ] **First-run welcome** — 2–3 swipeable slides (scan a barcode → shelves
+  → roulette) so non-technical testers get the core loop immediately.
+
+### Should-have: delight
+- [ ] **Yearly reading goal** — "Read N books in 2026" with a progress ring
+  in Stats. A BookTok staple, and a natural fit for a prolific reader.
+- [ ] **Reading reminders (opt-in)** — gentle daily nudge; keep it optional
+  and off by default.
+
+### Stretch (only if time)
+- [ ] Shared shelf view — see a loved one's shelf (read-only) without
+  account switching. Only if testers ask for it; per-user libraries stay
+  the default.
+
+---
+
+## v1.1 — Public GitHub release (self-hosted, BYOK)
+- [ ] Key-leak audit: `server-config.json` handling, `/config.js` LAN-only
+  sharing, no tokens in client bundle or repo history.
+- [ ] BYOK setup docs polish (README + `server-config.example.json`).
+- [ ] `book_meta` becomes a per-instance shared cache — document it.
+- [ ] Rate limiting / abuse notes for self-hosters.
+
+## v1.2 — Hosted APK track
+- [ ] Central hosting: API proxy holds keys server-side, one global
+  `book_meta` cache for all APK users.
+- [ ] Capacitor packaging: Google OAuth deep-link callbacks, camera/barcode
+  in Android WebView, `localStorage`, service-worker review.
+- [ ] Password-reset + email deep links working against the hosted domain.
+
+## Future — App Store
+- [ ] Premium features + in-app payments (entitlements validated server-side).
+- [ ] Mood-based recommendation "sommelier".
+- [ ] Monitoring, backups, production HTTPS/domain.
+
+---
+
+## Deliberately out of scope
+- Social network features (follows, feeds) — this is a personal library app.
+- Scraping retailer sites — affiliate/search links only.
