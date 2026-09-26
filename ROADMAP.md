@@ -18,8 +18,13 @@ Target user: Kevin's wife (primary) + a handful of family/friend testers.
 - [x] **Unified import hub** (v34) — Settings → Backup → "Import from other
   apps": one file picker, format auto-detection (Goodreads CSV, StoryGraph
   CSV, plain ISBN lists), preview, deduped import. New sources are one
-  registry entry. Bookmory is recognized by filename; its parser lands when
-  a real export file is available.
+  registry entry.
+- [x] **Bookmory import** (v44) — the `Database.bookmory` ZIP is read directly
+  in the browser (dependency-free ZIP + inflate + SQLite readers): 189 books
+  with statuses, ratings, page logs, favorites and tags; one binary-corrupted
+  record ("Dungeon Crawler Carl") is reported by name for manual re-adding.
+  Re-imports update in place via stable `bm-` ids; written reading memos are
+  not in the export file.
 
 ### Should-have: tester onboarding
 - [ ] **Supabase Site URL fix** — verification emails still link to

@@ -134,11 +134,8 @@ const IMPORT_FORMATS = [
 ];
 
 function detectImportFormat(text, filename) {
-  const name = String(filename || '').toLowerCase();
-  // Recognized but not mapped yet — the parser lands when a real export file arrives.
-  if (name.includes('bookmory')) return { id: 'bookmory', name: 'Bookmory' };
   for (const f of IMPORT_FORMATS) {
-    try { if (f.detect(text, name)) return f; } catch (e) { /* try the next one */ }
+    try { if (f.detect(text, filename)) return f; } catch (e) { /* try the next one */ }
   }
   return null;
 }
@@ -169,6 +166,9 @@ function importForeignBooks(books, label) {
 
 function handleImportFile(file) {
   const mount = document.getElementById('im-result');
+  const name = String(file.name || '').toLowerCase();
+  // Bookmory ships a binary ZIP (Database.bookmory) — handled separately.
+  if (name.includes('bookmory')) { handleBookmoryFile(file, mount); return; }
   mount.innerHTML = '<p class="note">Reading file…</p>';
   const r = new FileReader();
   r.onload = () => {
@@ -176,12 +176,7 @@ function handleImportFile(file) {
     const fmt = detectImportFormat(text, file.name);
     if (!fmt) {
       mount.innerHTML = '<p class="note">Couldn\'t recognize this file. The hub currently understands ' +
-        IMPORT_FORMATS.map(f => f.name).join(', ') + ' exports.</p>';
-      return;
-    }
-    if (fmt.id === 'bookmory') {
-      mount.innerHTML = '<p class="note"><b>Bookmory</b> recognized — but its export format isn\'t mapped yet. ' +
-        'Hang onto the file; support lands in a later update.</p>';
+        IMPORT_FORMATS.map(f => f.name).join(', ') + ' and Bookmory exports.</p>';
       return;
     }
     if (fmt.needsLookup) return importISBNListFile(text, mount);

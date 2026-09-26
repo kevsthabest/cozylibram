@@ -71,7 +71,8 @@ const SG_CSV = 'Title,Authors,Contributors,ISBN/UID,Format,Read Status,Date Adde
   ok('detects Goodreads', window.detectImportFormat(GR_CSV, 'goodreads.csv').id === 'goodreads');
   ok('detects StoryGraph', window.detectImportFormat(SG_CSV, 'export.csv').id === 'storygraph');
   ok('detects ISBN list', window.detectImportFormat('9781649374189\n9780756404741\n9781649374045\n', 'isbns.txt').id === 'isbn-list');
-  ok('recognizes Bookmory by name', window.detectImportFormat('???', 'bookmory_backup.db').id === 'bookmory');
+  ok('Bookmory skips text detection (routed by filename in handleImportFile)',
+    window.detectImportFormat('???', 'bookmory_backup.db') === null);
   ok('unknown file → null', window.detectImportFormat('hello world', 'notes.txt') === null);
 
   // 6. bulkLookupISBNs classification (stubbed lookupISBN)

@@ -56,8 +56,8 @@ function renderSettings() {
     '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
     '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
     '<h3 class="serif" style="margin-top:18px">Import from other apps</h3>' +
-    '<p class="note">One front door for every backup: Goodreads, StoryGraph, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
-    '<input type="file" id="im-file" accept=".csv,.txt,.json" style="display:none">' +
+    '<p class="note">One front door for every backup: Goodreads, StoryGraph, Bookmory, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
+    '<input type="file" id="im-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
     '<button class="btn ghost block" id="im-pick">📥 Choose an export file</button>' +
     '<div id="im-result"></div>' +
     '<h2 class="section serif" style="margin-top:26px">Page counts</h2>' +
