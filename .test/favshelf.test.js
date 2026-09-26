@@ -94,6 +94,26 @@ ok('Google Books covers skip CORS (no console errors)', window.__cors[2] === fal
 ok('data: URLs need no CORS', window.__cors[3] === true);
 ok('empty url is safe', window.__cors[4] === true);
 
+// 8. cover proxy: http(s) covers route through the same-origin proxy so
+// pixels are readable from any host; data:/blob: URLs pass through (v52)
+runInWindow(`window.__proxy = [
+  coverProxyURL('http://books.google.com/books/content?id=X&img=1'),
+  coverProxyURL('https://covers.openlibrary.org/b/id/1-L.jpg'),
+  coverProxyURL('data:image/jpeg;base64,AAAA'),
+  coverColorSources('http://books.google.com/books/content?id=X&img=1'),
+  coverColorSources('data:image/jpeg;base64,AAAA')
+];`);
+ok('google cover goes through proxy',
+  window.__proxy[0] === '/cover-proxy?url=' + encodeURIComponent('http://books.google.com/books/content?id=X&img=1'));
+ok('open library cover goes through proxy',
+  window.__proxy[1].indexOf('/cover-proxy?url=') === 0);
+ok('data: URL skips proxy', window.__proxy[2] === 'data:image/jpeg;base64,AAAA');
+ok('google sources: proxy first, then direct without CORS',
+  window.__proxy[3].length === 2 && window.__proxy[3][0][0].indexOf('/cover-proxy') === 0 &&
+  window.__proxy[3][1][1] === false);
+ok('data: sources: direct with CORS ok',
+  window.__proxy[4].length === 1 && window.__proxy[4][0][1] === true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

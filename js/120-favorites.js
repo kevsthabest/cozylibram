@@ -105,40 +105,75 @@ function coverCorsOK(url) {
   return /(^|\.)covers\.openlibrary\.org$/.test(host) ||
          /(^|\.)mzstatic\.com$/.test(host);
 }
-// Dominant color of a cover image (darkened a touch so spine text stays readable).
-// Falls back to null when the image can't be read (CORS-tainted canvas etc.).
-function coverDominantColor(url) {
+// Same-origin cover proxy (server.py /cover-proxy): lets us read cover pixels
+// from hosts that don't send CORS headers (e.g. Google Books). Only when the
+// app is served over http(s); file:// has no server to proxy through.
+function coverProxyURL(url) {
+  try {
+    if (!/^https?:/i.test(url || '')) return url; // data:/blob: need no proxy
+    if (!/^https?:$/.test(location.protocol)) return url;
+    return '/cover-proxy?url=' + encodeURIComponent(url);
+  } catch (e) { return url; }
+}
+// Load one image and read its dominant color. Resolves {hex} when pixels were
+// read, {hex:null} when the image loaded but pixels are unreadable (tainted
+// canvas), or {loadError:true} when the image itself failed to load.
+function coverImageHex(src, useCors) {
   return new Promise(resolve => {
     const img = new Image();
-    if (coverCorsOK(url)) img.crossOrigin = 'anonymous';
+    if (useCors) img.crossOrigin = 'anonymous';
     img.onload = () => {
-      try {
-        const S = 24, c = document.createElement('canvas');
-        c.width = S; c.height = S;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0, S, S);
-        const d = ctx.getImageData(0, 0, S, S).data;
-        const buckets = {};
-        for (let i = 0; i < d.length; i += 4) {
-          const r = d[i], g = d[i + 1], b = d[i + 2];
-          if (d[i + 3] < 128) continue;
-          const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-          if (mx - mn < 12) continue; // near-gray tells us nothing
-          if (mx > 242 && mn > 225) continue; // white borders
-          if (mx < 16) continue; // black borders
-          const k = (r >> 5) + ',' + (g >> 5) + ',' + (b >> 5);
-          buckets[k] = (buckets[k] || 0) + 1;
-        }
-        let best = null, bestN = 0;
-        for (const k in buckets) if (buckets[k] > bestN) { bestN = buckets[k]; best = k; }
-        if (!best) return resolve(null);
-        const rgb = best.split(',').map(x => Math.round(Math.min(255, ((Number(x) << 5) + 16) * 0.82)));
-        resolve('#' + rgb.map(x => x.toString(16).padStart(2, '0')).join(''));
-      } catch (e) { resolve(null); }
+      try { resolve({ hex: dominantHex(img) }); }
+      catch (e) { resolve({ hex: null }); }
     };
-    img.onerror = () => resolve(null);
-    img.src = url;
+    img.onerror = () => resolve({ loadError: true });
+    img.src = src;
   });
+}
+// Ordered pixel sources for a cover: same-origin proxy first (reads pixels
+// from any host), then the direct URL (CORS only where the host allows it).
+function coverColorSources(url) {
+  const sources = [];
+  const proxy = coverProxyURL(url);
+  if (proxy !== url) sources.push([proxy, false]); // same-origin: no CORS needed
+  sources.push([url, coverCorsOK(url)]);            // direct, CORS only where allowed
+  return sources;
+}
+// Dominant color of a cover image (darkened a touch so spine text stays readable).
+// Falls back to null when the image can't be read.
+function coverDominantColor(url) {
+  const sources = coverColorSources(url);
+  return (async () => {
+    for (const [src, cors] of sources) {
+      const r = await coverImageHex(src, cors);
+      if (!r.loadError) return r.hex;
+    }
+    return null;
+  })();
+}
+// Dominant non-gray, non-border color of a loaded image, darkened ~18%.
+function dominantHex(img) {
+  const S = 24, c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0, S, S);
+  const d = ctx.getImageData(0, 0, S, S).data;
+  const buckets = {};
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (d[i + 3] < 128) continue;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx - mn < 12) continue; // near-gray tells us nothing
+    if (mx > 242 && mn > 225) continue; // white borders
+    if (mx < 16) continue; // black borders
+    const k = (r >> 5) + ',' + (g >> 5) + ',' + (b >> 5);
+    buckets[k] = (buckets[k] || 0) + 1;
+  }
+  let best = null, bestN = 0;
+  for (const k in buckets) if (buckets[k] > bestN) { bestN = buckets[k]; best = k; }
+  if (!best) return null;
+  const rgb = best.split(',').map(x => Math.round(Math.min(255, ((Number(x) << 5) + 16) * 0.82)));
+  return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
 }
 function paintSpineColors() {
   document.querySelectorAll('.fav-shelf .spine').forEach(sp => {

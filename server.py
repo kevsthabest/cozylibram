@@ -17,6 +17,10 @@ is read by this server only — it is never sent to clients.
 import ipaddress
 import json
 import os
+import re
+import socket
+import urllib.parse
+import urllib.request
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -95,6 +99,25 @@ def config_js_body(client_addr):
     return ('window.SPICY_CONFIG = %s;' % json.dumps(payload)).encode('utf-8')
 
 
+def cover_proxy_host_blocked(host):
+    """SSRF guard for /cover-proxy: True when the host must not be fetched —
+    DNS failure, or every resolved address being private, loopback,
+    link-local, multicast, or reserved."""
+    try:
+        addrs = socket.getaddrinfo(host, None)
+    except OSError:
+        return True
+    for info in addrs:
+        try:
+            ip = ipaddress.ip_address(info[4][0].split('%')[0])
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or \
+                ip.is_multicast or ip.is_reserved:
+            return True
+    return False
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
@@ -115,7 +138,48 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == '/cover-proxy':
+            self.handle_cover_proxy()
+            return
         super().do_GET()
+
+    def handle_cover_proxy(self):
+        """Fetch a cover image server-side and return its bytes same-origin.
+
+        Lets the app read cover pixels (favorites spine colors) from hosts
+        that don't send CORS headers (e.g. Google Books). Guards: only
+        http(s) URLs, 4 MB cap, must be an image, and the host must not
+        resolve to a private/loopback/link-local address (SSRF guard).
+        """
+        try:
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            url = (qs.get('url') or [''])[0].strip()[:2000]
+            if not re.match(r'^https?://', url, re.I):
+                self.send_error(400, 'need an http(s) url')
+                return
+            host = urllib.parse.urlparse(url).hostname or ''
+            if cover_proxy_host_blocked(host):
+                self.send_error(403, 'private hosts are blocked')
+                return
+            req = urllib.request.Request(
+                url, headers={'User-Agent': 'SpicyShelves/1.0 cover-proxy'})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = r.read(4 * 1024 * 1024)
+                ctype = r.headers.get('Content-Type', 'application/octet-stream')
+            if not ctype.split(';')[0].strip().lower().startswith('image/'):
+                self.send_error(502, 'not an image')
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Cache-Control', 'public, max-age=86400')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'cover fetch failed')
+            except Exception:
+                pass
 
     def log_message(self, fmt, *args):  # keep the console window quiet
         pass

@@ -63,7 +63,7 @@ async function fetchMetaByISBN(isbn) {
   } catch (e) { /* fall through to Google Books */ }
   try {
     const d = await get(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
-      encodeURIComponent(clean) + '&maxResults=5'));
+      encodeURIComponent(clean) + '&langRestrict=en&maxResults=5'));
     const items = (d.items || []).map(i => i.volumeInfo || {});
     const ids = it => (it.industryIdentifiers || []).map(x => isbnDigits(x.identifier));
     const hit = items.find(it => ids(it).includes(clean));

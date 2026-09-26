@@ -55,6 +55,16 @@ const runInWindow = (js) => {
   await window.searchBooks('iron flame');
   ok('searchBooks omits key when unset', lastUrl.indexOf('key=') === -1);
 
+  // 6. English-only results: Google Books calls carry langRestrict=en (v52)
+  seenUrls.length = 0;
+  await window.searchBooks('haunting adeline');
+  ok('searchBooks requests English volumes',
+    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('langRestrict=en') !== -1));
+  seenUrls.length = 0;
+  await window.lookupISBN('9780123456789');
+  ok('lookupISBN requests English volumes',
+    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('langRestrict=en') !== -1));
+
   // 5. server-shared key via SPICY_CONFIG; stale device keys ignored
   runInWindow(`window.SPICY_CONFIG = { googleBooksKey: 'AIzaSERVER' };`);
   ok('server key picked up', window.gbKey() === 'AIzaSERVER');

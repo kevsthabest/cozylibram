@@ -70,5 +70,74 @@ ok = ('tok_secret_999' in cfg_body and 'anon123' in cfg_body
 print(('PASS' if ok else 'FAIL') + ' - localhost /config.js carries secrets, no-store')
 if not ok:
     raise SystemExit(1)
+
+# /cover-proxy: SSRF guard + image validation (live)
+import urllib.parse
+def proxy_get(target):
+    conn.request('GET', '/cover-proxy?url=' + urllib.parse.quote(target, safe=''))
+    r = conn.getresponse()
+    body = r.read()
+    return r.status, r.getheader('Content-Type'), body
+
+st, _, _ = proxy_get('not a url')
+ok = st == 400
+print(('PASS' if ok else 'FAIL') + ' - /cover-proxy rejects non-http(s) url (400)')
+if not ok:
+    raise SystemExit(1)
+
+st, _, _ = proxy_get('http://127.0.0.1:9/internal')
+ok = st == 403
+print(('PASS' if ok else 'FAIL') + ' - /cover-proxy blocks private hosts (403)')
+if not ok:
+    raise SystemExit(1)
+
+# SSRF guard unit tests (monkeypatched DNS — no network needed)
+_real_gai = server.socket.getaddrinfo
+def fake_gai_factory(ips=None, exc=None):
+    def fake(host, port, *a, **k):
+        if exc:
+            raise exc
+        return [(2, 1, 6, '', (ip, 0)) for ip in ips]
+    return fake
+server.socket.getaddrinfo = fake_gai_factory(ips=['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946'])
+ok = server.cover_proxy_host_blocked('example.com') is False
+print(('PASS' if ok else 'FAIL') + ' - SSRF guard allows public IPs')
+if not ok:
+    raise SystemExit(1)
+for bad_ip in ['127.0.0.1', '10.0.0.5', '192.168.1.1', '169.254.10.20', '::1']:
+    server.socket.getaddrinfo = fake_gai_factory(ips=[bad_ip])
+    ok = server.cover_proxy_host_blocked('x') is True
+    print(('PASS' if ok else 'FAIL') + ' - SSRF guard blocks %s' % bad_ip)
+    if not ok:
+        raise SystemExit(1)
+server.socket.getaddrinfo = fake_gai_factory(exc=OSError('no dns'))
+ok = server.cover_proxy_host_blocked('x') is True
+print(('PASS' if ok else 'FAIL') + ' - SSRF guard blocks on DNS failure')
+if not ok:
+    raise SystemExit(1)
+server.socket.getaddrinfo = _real_gai
+
+# Live fetch tests need real DNS; this sandbox proxies all DNS to 198.18/15.
+def sandbox_dns_poisoned():
+    try:
+        ips = [i[4][0] for i in _real_gai('example.com', None)]
+        return all(ip.startswith('198.18.') for ip in ips)
+    except OSError:
+        return True
+if sandbox_dns_poisoned():
+    print('SKIP - live cover fetch tests (sandbox DNS proxies all hosts)')
+else:
+    st, _, _ = proxy_get('https://example.com/')
+    ok = st == 502
+    print(('PASS' if ok else 'FAIL') + ' - /cover-proxy rejects non-image content (502)')
+    if not ok:
+        raise SystemExit(1)
+
+    st, ct, body = proxy_get('https://covers.openlibrary.org/b/id/12345-L.jpg')
+    ok = st == 200 and (ct or '').startswith('image/') and len(body) > 1000
+    print(('PASS' if ok else 'FAIL') + ' - /cover-proxy fetches a real cover image (200)')
+    if not ok:
+        raise SystemExit(1)
+
 srv.shutdown()
 print('ALL SERVER TESTS PASSED')

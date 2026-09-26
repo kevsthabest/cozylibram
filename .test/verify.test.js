@@ -10,10 +10,11 @@ window.matchMedia = () => ({ matches: false });
 // Mock network: Open Library ISBN search + Google Books ISBN search.
 let olDocs = [];
 let gbItems = [];
+let seenGb = [];
 window.fetch = async (url) => {
   const u = String(url);
   if (u.includes('openlibrary.org/search.json?isbn=')) return { ok: true, json: async () => ({ docs: olDocs }) };
-  if (u.includes('googleapis.com/books/v1/volumes')) return { ok: true, json: async () => ({ items: gbItems }) };
+  if (u.includes('googleapis.com/books/v1/volumes')) { seenGb.push(u); return { ok: true, json: async () => ({ items: gbItems }) }; }
   throw new Error('unexpected fetch: ' + u);
 };
 
@@ -80,6 +81,8 @@ const mk = (id, fields) =>
   const m2 = await window.eval(`fetchMetaByISBN('9781234567890')`);
   ok('GB fallback verifies industryIdentifiers', m2 && m2.title === 'GB Title' && m2.pageCount === 250);
   ok('GB cover upgraded to https', m2 && m2.cover === 'https://example.com/t.jpg');
+  ok('GB fallback requests English volumes (v52)',
+    seenGb.length > 0 && seenGb.every(u => u.indexOf('langRestrict=en') !== -1));
 
   // nothing anywhere → null
   olDocs = []; gbItems = [];
