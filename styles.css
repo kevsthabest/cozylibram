@@ -698,6 +698,63 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .spine, .pull-overlay, .pull-overlay img { transition: none; }
 }
 
+/* ---- book-opening transition: cover flies to center, then swings open ---- */
+.bookopen-overlay { position: fixed; inset: 0; z-index: 120; pointer-events: none; }
+.bookopen-backdrop { position: absolute; inset: 0; background: rgba(5,3,8,.62);
+  opacity: 0; transition: opacity .35s ease; }
+.bookopen-overlay.lit .bookopen-backdrop { opacity: 1; }
+.bookopen-overlay.gone { opacity: 0; transition: opacity .4s ease; }
+.bookopen-stage { position: absolute; perspective: 1100px;
+  transition: left .4s cubic-bezier(.3,.7,.3,1), top .4s cubic-bezier(.3,.7,.3,1),
+              width .4s cubic-bezier(.3,.7,.3,1), height .4s cubic-bezier(.3,.7,.3,1); }
+.bookopen-book { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+.bookopen-pages { position: absolute; inset: 0; border-radius: 4px 10px 10px 4px;
+  background: linear-gradient(105deg, #e9dcbf 0%, #f7efdd 9%, #f7efdd 100%);
+  box-shadow: 0 24px 70px rgba(0,0,0,.6), inset 10px 0 14px -8px rgba(90,70,45,.55);
+  display: flex; flex-direction: column; padding: 18px 14px 14px 24px; overflow: hidden; }
+.bop-title { font-family: Georgia, 'Times New Roman', serif; font-size: 15px; font-weight: 700;
+  color: #4a3b28; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden; }
+.bop-lines { flex: 1; border-radius: 2px;
+  background: repeating-linear-gradient(to bottom, transparent 0 7px, rgba(120,100,70,.30) 7px 8px); }
+.bookopen-cover { position: absolute; inset: 0; transform-origin: left center;
+  border-radius: 4px 10px 10px 4px; overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  transition: transform .75s cubic-bezier(.45,.05,.3,1); backface-visibility: hidden; }
+.bookopen-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bookopen-book.open .bookopen-cover { transform: rotateY(-158deg); }
+.bo-nocover { width: 100%; height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center;
+  color: rgba(255,255,255,.92); }
+.bo-nocover span { font-size: 34px; }
+.bo-nocover b { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical; overflow: hidden; }
+/* modal entrance when it arrives via the book-open transition */
+.modal-backdrop.from-book .modal { animation: modalRise .38s cubic-bezier(.2,.9,.3,1.12); }
+@keyframes modalRise { from { opacity: 0; transform: translateY(26px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) {
+  .bookopen-stage, .bookopen-cover, .bookopen-backdrop, .bookopen-overlay.gone { transition: none; }
+}
+
+/* ---- recently-read strip ---- */
+.recent-strip { margin: 2px 0 12px; }
+.recent-head h3 { margin: 0 0 8px; font-size: 16px; }
+.recent-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.recent-card { scroll-snap-align: start; flex: 0 0 96px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 8px; cursor: pointer;
+  color: inherit; font: inherit; display: flex; flex-direction: column; gap: 6px;
+  align-items: stretch; text-align: left; }
+.recent-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 7px; }
+.recent-nocover { width: 100%; aspect-ratio: 2/3; border-radius: 7px; background: var(--card2);
+  display: flex; align-items: center; justify-content: center; font-size: 26px; }
+.recent-title { font-size: 11.5px; font-weight: 600; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 30px; }
+.recent-prog { height: 4px; border-radius: 99px; background: var(--bg2); overflow: hidden; }
+.recent-prog .fill { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.recent-sub { font-size: 10.5px; color: var(--faint); }
+
 /* tappable author / series links + collections */
 .taplink { background: none; border: none; padding: 0; font: inherit; color: var(--accent);
   cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }

@@ -36,7 +36,8 @@ ok('google factory defaults owned', window.normalizeVolume({ volumeInfo: { title
 ok('openlibrary factory defaults owned', window.olDocToBook({ title: 'T', key: '/works/1' }).owned === true);
 
 // 3. badges on list cards
-runInWindow(`localStorage.clear(); library.push(${mk('o1', true)}); library.push(${mk('o2', false)}); renderLibrary();`);
+runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.animation', 'off');
+  library.push(${mk('o1', true)}); library.push(${mk('o2', false)}); renderLibrary();`);
 ok('owned badge on card', q('.book-card[data-id="o1"] .badge.owned').textContent.includes('Owned'));
 ok('to-buy badge on card', q('.book-card[data-id="o2"] .badge.tobuy').textContent.includes('To buy'));
 

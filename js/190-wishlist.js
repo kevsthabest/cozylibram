@@ -15,6 +15,6 @@ function renderWishlist() {
   }
   setView(html);
   document.querySelectorAll('.book-card').forEach(c =>
-    c.addEventListener('click', () => openDetail(c.dataset.id)));
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
 }
 

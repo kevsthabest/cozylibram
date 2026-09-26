@@ -165,7 +165,7 @@ function renderStats() {
   );
 
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
-    c.addEventListener('click', () => openDetail(c.dataset.id)));
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
 
   document.getElementById('cal-prev').addEventListener('click', () => {
     calM--; if (calM < 0) { calM = 11; calY--; } renderStats();
@@ -179,6 +179,6 @@ function renderStats() {
       renderStats();
     }));
   document.querySelectorAll('#cal-books .cal-book, .dstat-card .cal-book').forEach(c =>
-    c.addEventListener('click', () => openDetail(c.dataset.id)));
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
 }
 

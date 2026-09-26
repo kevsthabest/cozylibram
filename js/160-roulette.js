@@ -158,6 +158,6 @@ function showWinner(b) {
     go('library');
   });
   document.getElementById('w-again').addEventListener('click', runRoulette);
-  document.getElementById('w-detail').addEventListener('click', () => openDetail(b.id));
+  document.getElementById('w-detail').addEventListener('click', e => openDetail(b.id, { fromEl: e.currentTarget }));
 }
 

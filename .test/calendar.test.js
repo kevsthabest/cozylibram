@@ -22,6 +22,7 @@ const runInWindow = (js) => {
 const iso = (y, m, d) => new Date(y, m - 1, d, 12).toISOString();
 
 runInWindow(`localStorage.clear();
+  localStorage.setItem('spicyshelves.animation', 'off'); // these tests assert instant modal opens
   const mk = (id, title, status, df) => ({ id, isbn: '', title, authors: ['A'], cover: '', description: '',
     pageCount: 300, publishedDate: '', categories: [], publicRating: null, ratingsCount: 0, status,
     ratings: {}, axes: [], myRating: 0, tropes: [], progress: 0,

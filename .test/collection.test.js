@@ -27,6 +27,7 @@ const mk = (id, title, authors, series, status) =>
   `series: ${series ? `{ name: '${series[0]}', position: '${series[1]}' }` : 'null'} })`;
 
 runInWindow(`localStorage.clear();
+  localStorage.setItem('spicyshelves.animation', 'off'); // these tests assert instant modal opens
   library.push(${mk('c1', 'Alpha', ['Jane Doe', 'Co Writer'], ['The Saga', '2'], 'read')});
   library.push(${mk('c2', 'Beta', ['Jane Doe'], ['The Saga', '1'], 'tbr')});
   library.push(${mk('c3', 'Gamma', ['Jane Doe'], ['The Saga', '3'], 'reading')});

@@ -22,6 +22,45 @@ function spineHTML(b) {
     '<span class="spine-band"></span><span class="spine-title">' + esc(b.title) + '</span>' +
     (author ? '<span class="spine-author">' + esc(author) + '</span>' : '') + '</div>';
 }
+/* ---- recently read: quick access to books with fresh reading activity ---- */
+// Latest reading-activity day key for a book: newest log entry or finish date.
+function lastReadActivity(b) {
+  let k = '';
+  (b.log || []).forEach(e => { if (e.d && e.d > k) k = e.d; });
+  if (b.dateFinished) {
+    try { const fk = dayKey(new Date(b.dateFinished)); if (fk > k) k = fk; } catch (e) {}
+  }
+  return k;
+}
+function recentBooks(limit) {
+  return library
+    .filter(b => b.status === 'reading' || lastReadActivity(b))
+    .sort((a, b) => {
+      const ka = lastReadActivity(a), kb = lastReadActivity(b);
+      if (ka !== kb) return ka < kb ? 1 : -1;
+      return String(b.dateAdded || '') < String(a.dateAdded || '') ? 1 : -1;
+    })
+    .slice(0, limit || 8);
+}
+function recentStripHTML() {
+  const rec = recentBooks(8);
+  if (!rec.length) return '';
+  return '<div class="recent-strip"><div class="recent-head"><h3 class="serif">🕘 Recently read</h3></div>' +
+    '<div class="recent-row">' + rec.map(b => {
+      const total = b.pageCount || 0;
+      const cur = total ? Math.min(b.progress || 0, total) : (b.progress || 0);
+      const pct = b.status === 'read' ? 100 : (total ? Math.round(cur / total * 100) : 0);
+      const sub = b.status === 'read' ? 'Finished 🎉'
+        : (total ? 'p. ' + cur + ' / ' + total + ' · ' + pct + '%' : 'p. ' + cur);
+      const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
+        : '<div class="recent-nocover">📖</div>';
+      return '<button class="recent-card" data-id="' + b.id + '" title="' + esc(b.title) + '">' + cov +
+        '<span class="recent-title">' + esc(b.title) + '</span>' +
+        '<span class="recent-prog"><span class="fill" style="width:' + pct + '%"></span></span>' +
+        '<span class="recent-sub">' + sub + '</span></button>';
+    }).join('') + '</div></div>';
+}
+
 function favShelfHTML() {
   const favs = library.filter(b => b.favorite);
   const vw = (document.getElementById('view') || {}).clientWidth || 360;
@@ -120,19 +159,21 @@ function pullSpine(el, id) {
   if (reducedMotion()) { openDetail(id); return; }
   pullBusy = true;
   el.classList.add('pulling');
-  let overlay = null;
+  let overlay = null, popImg = null;
   if (b.cover) {
     overlay = document.createElement('div');
     overlay.className = 'pull-overlay';
     overlay.innerHTML = '<img src="' + esc(b.cover) + '" alt="">';
     document.body.appendChild(overlay);
+    popImg = overlay.querySelector('img');
     requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('show')));
   }
   setTimeout(() => {
-    if (overlay) overlay.remove();
     el.classList.remove('pulling');
     pullBusy = false;
-    openDetail(id);
+    // Hand the popped cover to the book-opening transition: it swings open
+    // from exactly where the pop left it.
+    openDetail(id, overlay ? { fromEl: popImg, dropEl: overlay } : null);
   }, b.cover ? 950 : 380);
 }
 
@@ -141,7 +182,7 @@ function renderLibrary() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
 
-  let html = favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
+  let html = recentStripHTML() + favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div>' +
     (cloudUser && cloudUser.email ? '<button id="lib-account" class="avatar-btn" title="Signed in as ' + esc(cloudUser.email) + ' — tap to sign out">' +
@@ -190,7 +231,9 @@ function renderLibrary() {
   document.querySelectorAll('[data-of]').forEach(c =>
     c.addEventListener('click', () => { ownFilter = c.dataset.of; animateIn = true; render(); }));
   document.querySelectorAll('.book-card, .cover-tile').forEach(c =>
-    c.addEventListener('click', () => openDetail(c.dataset.id)));
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
+  document.querySelectorAll('.recent-card').forEach(c =>
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   document.querySelectorAll('.spine').forEach(s =>
     s.addEventListener('click', () => pullSpine(s, s.dataset.id)));
   const ft = document.getElementById('fav-toggle');

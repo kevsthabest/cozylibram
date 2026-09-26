@@ -80,7 +80,7 @@ ok('spine gets pulling class', sp2.classList.contains('pulling'));
 await tick(150);
 ok('cover overlay appears', qa('.pull-overlay').length === before + 1);
 ok('overlay shows the book cover', q('.pull-overlay img').src === 'http://x/b.jpg');
-await tick(1100);
+await tick(2100); // pull (950ms) + book-open transition (~800ms)
 ok('overlay removed after pull', qa('.pull-overlay').length === before);
 ok('spine resets to shelf after pull', !sp2.classList.contains('pulling'));
 ok('modal opens after animation', !!q('#f-fav'));

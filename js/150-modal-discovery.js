@@ -213,13 +213,76 @@ function openCollection(kind, name, fromId) {
   ov.querySelector('#c-back').addEventListener('click', e => { if (e.target.id === 'c-back') close(); });
   ov.querySelector('#c-x').addEventListener('click', close);
   ov.querySelectorAll('[data-book]').forEach(el =>
-    el.addEventListener('click', () => { close(); openDetail(el.dataset.book); }));
+    el.addEventListener('click', () => {
+      const r = el.getBoundingClientRect(); // capture before close() detaches it
+      close();
+      openDetail(el.dataset.book, { fromRect: r });
+    }));
   fillMoreSection(kind, name, fromId, ov);
 }
 
-function openDetail(id) {
+/* ---- book-opening transition: the tapped cover flies to center, then swings
+   open like a real book cover, revealing the detail modal behind it ---- */
+function bookCoverFaceHTML(b) {
+  if (b.cover) return '<img src="' + esc(b.cover) + '" alt="">';
+  const c = (typeof spineColorCache !== 'undefined' && spineColorCache[b.id] && spineColorCache[b.id].hex) ||
+    SPINE_COLORS[hashStr(b.title || '?') % SPINE_COLORS.length];
+  return '<div class="bo-nocover" style="background:' + c + '"><span>📖</span><b>' +
+    esc(b.title || 'Untitled') + '</b></div>';
+}
+// from: element or rect the cover starts from. dropEl: removed in the same
+// frame (used by the spine pull-out so its popped cover swaps seamlessly).
+function playBookOpen(b, from, dropEl, done) {
+  const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : from;
+  const vw = window.innerWidth || 360, vh = window.innerHeight || 640;
+  const bw = Math.min(230, vw * 0.62), bh = bw * 1.5;
+  const cx = (vw - bw) / 2, cy = Math.max(8, (vh - bh) / 2 - 24);
+  const start = (r && r.width > 4)
+    ? 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px'
+    : 'left:' + cx + 'px;top:' + cy + 'px;width:' + bw + 'px;height:' + bh + 'px';
+  const ov = document.createElement('div');
+  ov.className = 'bookopen-overlay';
+  ov.innerHTML =
+    '<div class="bookopen-backdrop"></div>' +
+    '<div class="bookopen-stage" style="' + start + '">' +
+      '<div class="bookopen-book">' +
+        '<div class="bookopen-pages"><div class="bop-title">' + esc(b.title || 'Untitled') + '</div>' +
+        '<div class="bop-lines"></div></div>' +
+        '<div class="bookopen-cover">' + bookCoverFaceHTML(b) + '</div>' +
+      '</div></div>';
+  if (dropEl && dropEl.remove) dropEl.remove();
+  document.body.appendChild(ov);
+  const stage = ov.querySelector('.bookopen-stage');
+  const book = ov.querySelector('.bookopen-book');
+  const raf = window.requestAnimationFrame || (fn => setTimeout(fn, 16));
+  raf(() => raf(() => {
+    ov.classList.add('lit');
+    stage.style.left = cx + 'px'; stage.style.top = cy + 'px';
+    stage.style.width = bw + 'px'; stage.style.height = bh + 'px';
+  }));
+  const FLY = 400, FLIP = 750;
+  setTimeout(() => book.classList.add('open'), FLY);
+  setTimeout(() => { done(); ov.classList.add('gone'); }, FLY + Math.round(FLIP * 0.55));
+  setTimeout(() => ov.remove(), FLY + Math.round(FLIP * 0.55) + 450);
+}
+// Open a book's detail modal, playing the book-opening transition when the
+// call site has a cover element (or rect) to start from and motion is allowed.
+function openBookFromEl(el, id) {
+  openDetail(id, el ? { fromEl: el } : null);
+}
+function openDetail(id, opts) {
   const b = library.find(x => x.id === id);
   if (!b) return;
+  const from = opts && (opts.fromEl || opts.fromRect);
+  if (from && !reducedMotion()) {
+    playBookOpen(b, from, opts.dropEl, () => renderDetailModal(b, true));
+  } else {
+    if (opts && opts.dropEl && opts.dropEl.remove) opts.dropEl.remove();
+    renderDetailModal(b, false);
+  }
+}
+function renderDetailModal(b, viaBook) {
+  const id = b.id;
   editingId = id;
   const root = document.getElementById('modal-root');
 
@@ -290,7 +353,7 @@ function openDetail(id) {
   refreshProgressSection = renderProgressSection;
 
   root.innerHTML =
-    '<div class="modal-backdrop" id="m-back"><div class="modal" role="dialog">' +
+    '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog">' +
     '<button class="modal-close" id="m-x">✕</button>' +
     '<div class="modal-head">' + coverHTML(b) +
     '<div><h2>' + esc(b.title) + '</h2>' +
