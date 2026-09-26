@@ -24,7 +24,8 @@ prefixes (lexicographic sort must equal numeric order) and don't create circular
 | `100-nav.js` | Bottom-nav wiring |
 | `110-library.js` | Library tab |
 | `120-favorites.js` | Favorites bookshelf + spine pull-out animation |
-| `130-add.js` | Add tab: ISBN scan, title search, manual entry |
+| `130-add.js` | Add tab: ISBN scan, title search, manual entry, bulk ISBN import |
+| `132-import.js` | Unified import hub: format registry (Goodreads, StoryGraph, ISBN list), CSV parsing, preview + import |
 | `140-collections.js` | Author/series sheets from your own shelves |
 | `150-modal-discovery.js` | Book detail modal + external discovery |
 | `160-roulette.js` | TBR "pick for me" roulette |

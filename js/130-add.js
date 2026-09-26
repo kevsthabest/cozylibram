@@ -4,7 +4,7 @@
 function renderAdd() {
   let html = '<h2 class="section serif">Add a book</h2>' +
     '<div class="tabs">' +
-    tab('scan', '📷 Scan') + tab('search', '🔍 Search') + tab('isbn', '⌨️ ISBN') +
+    tab('scan', '📷 Scan') + tab('search', '🔍 Search') + tab('isbn', '⌨️ ISBN') + tab('bulk', '📋 Bulk') +
     '</div><div id="add-body"></div>';
   setView(html);
   document.querySelectorAll('.tabs button').forEach(b =>
@@ -12,6 +12,7 @@ function renderAdd() {
   if (addTab === 'scan') renderScanTab();
   if (addTab === 'search') renderSearchTab();
   if (addTab === 'isbn') renderIsbnTab();
+  if (addTab === 'bulk') renderBulkTab();
 }
 function tab(t, label) {
   return '<button data-t="' + t + '" class="' + (addTab === t ? 'active' : '') + '">' + label + '</button>';
@@ -245,7 +246,7 @@ function renderIsbnTab() {
   body.innerHTML =
     '<div class="search-row"><input id="i-q" class="text-input" inputmode="numeric" placeholder="978…">' +
     '<button class="btn" id="i-go">Look up</button></div><div id="i-result"></div>' +
-    '<p class="note">Paste a stack of ISBNs? Do them one at a time for now — bulk import is coming.</p>';
+    '<p class="note">Pasting a whole stack? The 📋 Bulk tab does them all at once.</p>';
   const run = () => {
     const v = document.getElementById('i-q').value.trim();
     if (v.length < 10) { toast('That ISBN looks too short'); return; }
@@ -255,3 +256,86 @@ function renderIsbnTab() {
   document.getElementById('i-q').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 }
 
+
+/* ---------------- bulk ISBN import ---------------- */
+// Split pasted text into clean, deduped ISBN candidates (10 or 13 digits).
+function parseISBNList(text) {
+  const seen = new Set();
+  const out = [];
+  String(text || '').split(/[\s,;]+/).forEach(raw => {
+    const clean = raw.replace(/[^0-9X]/gi, '').toUpperCase();
+    if ((clean.length === 10 || clean.length === 13) && !seen.has(clean)) {
+      seen.add(clean); out.push(clean);
+    }
+  });
+  return out;
+}
+
+// Look up a list of ISBNs one by one (300ms pacing, metacache-backed).
+// Returns [{ isbn, status: 'found'|'duplicate'|'missing', book }].
+async function bulkLookupISBNs(isbns, onStep) {
+  const results = [];
+  for (let i = 0; i < isbns.length; i++) {
+    if (onStep) onStep(i + 1, isbns.length);
+    let book = null;
+    try { book = await lookupISBN(isbns[i]); } catch (e) { book = null; }
+    if (!book) results.push({ isbn: isbns[i], status: 'missing', book: null });
+    else if (alreadyHave(book)) results.push({ isbn: isbns[i], status: 'duplicate', book: book });
+    else results.push({ isbn: isbns[i], status: 'found', book: book });
+    if (i < isbns.length - 1) await new Promise(r => setTimeout(r, 300));
+  }
+  return results;
+}
+
+// Add a batch of books at once: one save, one render, one toast.
+// Skips background enrichment/page-count fetch — lookupISBN already fills
+// page counts, and Settings → Hardcover → "Enrich all" backfills the rest.
+function bulkAddBooks(books) {
+  let n = 0;
+  for (const book of books) {
+    if (alreadyHave(book)) continue;
+    untombstone(book.id);
+    library.unshift(book);
+    n++;
+  }
+  saveLibrary();
+  render();
+  toast(n ? 'Added ' + n + ' book' + (n === 1 ? '' : 's') + ' ✨' : 'Nothing new to add');
+}
+
+function renderBulkTab() {
+  const body = document.getElementById('add-body');
+  body.innerHTML =
+    '<textarea id="b-isbns" class="text-input" rows="6" inputmode="numeric" ' +
+    'placeholder="978125031…&#10;9780593…&#10;one ISBN per line"></textarea>' +
+    '<button class="btn block" id="b-go">Look up all</button>' +
+    '<p class="note" id="b-progress"></p><div id="b-results"></div>' +
+    '<p class="note">Tip: series &amp; moods fill in later via Settings → Hardcover → “Enrich all books”.</p>';
+  document.getElementById('b-go').addEventListener('click', async () => {
+    const isbns = parseISBNList(document.getElementById('b-isbns').value);
+    const prog = document.getElementById('b-progress');
+    const resEl = document.getElementById('b-results');
+    if (!isbns.length) { toast('Paste some ISBNs first'); return; }
+    document.getElementById('b-go').disabled = true;
+    const results = await bulkLookupISBNs(isbns,
+      (i, n) => { prog.textContent = 'Looking up ' + i + ' / ' + n + '…'; });
+    prog.textContent = '';
+    const found = results.filter(r => r.status === 'found');
+    const chip = (r) => r.status === 'found' ? '<span class="badge owned">✅ ready</span>'
+      : r.status === 'duplicate' ? '<span class="badge tobuy">📚 already on shelves</span>'
+      : '<span class="badge">❓ not found</span>';
+    resEl.innerHTML = results.map(r =>
+      '<div class="result-card">' +
+      (r.book ? coverHTML(r.book) : '<div class="cover-ph"></div>') +
+      '<div class="book-meta"><h3>' + esc(r.book ? r.book.title : r.isbn) + '</h3>' +
+      '<p class="author">' + esc(r.book ? r.book.authors.join(', ') : 'no match in Google Books / Open Library') + '</p>' +
+      chip(r) + '</div></div>').join('') +
+      (found.length
+        ? '<button class="btn block" id="b-add">Add ' + found.length + ' book' +
+          (found.length === 1 ? '' : 's') + ' to TBR</button>'
+        : '<p class="note">Nothing new to add.</p>');
+    const add = document.getElementById('b-add');
+    if (add) add.addEventListener('click', () =>
+      bulkAddBooks(found.map(r => r.book)));
+  });
+}

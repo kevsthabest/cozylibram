@@ -13,14 +13,13 @@ Target user: Kevin's wife (primary) + a handful of family/friend testers.
   needs a deliberate test pass (two devices, offline edits, then sign-in).
 
 ### Must-have: getting books in
-- [ ] **Bulk ISBN import** — paste a list of ISBNs, add them all. With a
-  several-hundred-book collection, one-at-a-time entry is the biggest
-  pain point left in the app.
-- [ ] **Unified import hub** — a single point of entry for third-party
-  backups: pick a file, the app detects the format (Bookmory, Goodreads
-  CSV, …), shows a preview, and imports. One UI, a format registry
-  underneath, so new sources are cheap to add. Bookmory mapping lands as
-  soon as its export file is available.
+- [x] **Bulk ISBN import** (v34) — new 📋 Bulk tab in Add: paste a stack of
+  ISBNs, paced metacache-backed lookup, per-ISBN status, one-tap add to TBR.
+- [x] **Unified import hub** (v34) — Settings → Backup → "Import from other
+  apps": one file picker, format auto-detection (Goodreads CSV, StoryGraph
+  CSV, plain ISBN lists), preview, deduped import. New sources are one
+  registry entry. Bookmory is recognized by filename; its parser lands when
+  a real export file is available.
 
 ### Should-have: tester onboarding
 - [ ] **Supabase Site URL fix** — verification emails still link to
