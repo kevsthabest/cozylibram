@@ -1,0 +1,90 @@
+'use strict';
+
+/* ---------------- storefront links ("where to buy" for wishlist books) ---------------- */
+// Region-aware retailer search links. Most stores search by ISBN when we have
+// one (lands on the exact edition); Indigo and Kobo search by title + author,
+// where ISBN search proved unreliable. No APIs or keys needed.
+const STORE_REGIONS = {
+  CA: { label: 'Canada', stores: [
+    { name: 'Amazon', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
+    { name: 'Indigo', mode: 'title', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
+    { name: 'Kobo', mode: 'title', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
+  ] },
+  US: { label: 'United States', stores: [
+    { name: 'Amazon', url: q => 'https://www.amazon.com/s?k=' + encodeURIComponent(q) },
+    { name: 'Barnes & Noble', url: q => 'https://www.barnesandnoble.com/s/' + encodeURIComponent(q) },
+    { name: 'Bookshop.org', url: q => 'https://bookshop.org/search?keywords=' + encodeURIComponent(q) },
+  ] },
+  UK: { label: 'United Kingdom', stores: [
+    { name: 'Amazon', url: q => 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(q) },
+    { name: 'Waterstones', url: q => 'https://www.waterstones.com/books/search/term/' + encodeURIComponent(q).replace(/%20/g, '+') },
+    { name: 'Bookshop.org', url: q => 'https://bookshop.org/search?keywords=' + encodeURIComponent(q) },
+  ] },
+  AU: { label: 'Australia', stores: [
+    { name: 'Amazon', url: q => 'https://www.amazon.com.au/s?k=' + encodeURIComponent(q) },
+    { name: 'Booktopia', url: q => 'https://www.booktopia.com.au/search.ep?keywords=' + encodeURIComponent(q) },
+  ] },
+};
+const STORE_REGION_KEYS = Object.keys(STORE_REGIONS);
+
+function storeRegionSetting() {
+  try { return localStorage.getItem('spicyshelves.storeRegion') || 'auto'; }
+  catch (e) { return 'auto'; }
+}
+
+function detectStoreRegion() {
+  const s = storeRegionSetting();
+  if (STORE_REGIONS[s]) return s;
+  // auto: device language first (en-CA -> CA), then timezone, then US
+  try {
+    const lang = String((typeof navigator !== 'undefined' && navigator.language) || '').toUpperCase();
+    const m = lang.match(/-([A-Z]{2})$/);
+    if (m) {
+      if (STORE_REGIONS[m[1]]) return m[1];
+      if (m[1] === 'GB') return 'UK';
+    }
+  } catch (e) {}
+  try {
+    const tz = (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || '';
+    if (/^(America\/(Halifax|Toronto|Montreal|Vancouver|Winnipeg|Edmonton|Regina|St_Johns)|Canada\/)/.test(tz)) return 'CA';
+    if (tz === 'Europe/London') return 'UK';
+    if (/^Australia\//.test(tz)) return 'AU';
+  } catch (e) {}
+  return 'US';
+}
+
+// What to search the storefront for: ISBN when we have one, else title + author.
+function storeQuery(b) {
+  const isbn = String(b.isbn || '').replace(/[^0-9X]/gi, '');
+  if (isbn) return isbn;
+  return storeTitleQuery(b);
+}
+
+// Title + author query, for stores where ISBN search is unreliable.
+function storeTitleQuery(b) {
+  return [b.title, (b.authors || [])[0]].filter(Boolean).join(' ');
+}
+
+function storeLinks(b) {
+  const isbnQ = storeQuery(b);
+  const titleQ = storeTitleQuery(b);
+  return STORE_REGIONS[detectStoreRegion()].stores.map(s => ({
+    name: s.name,
+    url: s.url(s.mode === 'title' ? titleQ : isbnQ),
+  }));
+}
+
+// Badges for every rated axis, e.g. 🌶️🌶️🌶️ 👻👻
+function ratingBadges(b) {
+  return (b.axes || []).map(k => {
+    const v = (b.ratings || {})[k] || 0;
+    return v > 0 ? '<span class="badge spice">' + axisByKey(k).emoji.repeat(v) + '</span>' : '';
+  }).join('');
+}
+
+// The book's "main" axis: first one with a rating, else first enabled axis.
+function primaryAxisKey(b) {
+  const axes = (b.axes && b.axes.length) ? b.axes : ['spice'];
+  return axes.find(k => ((b.ratings || {})[k] || 0) > 0) || axes[0];
+}
+

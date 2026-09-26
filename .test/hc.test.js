@@ -15,9 +15,7 @@ window.fetch = async (url, opts) => {
   return { json: async () => next };
 };
 
-const scriptEl = window.document.createElement('script');
-scriptEl.textContent = fs.readFileSync('/home/hatch/workspace/booktok/app.js', 'utf8');
-window.document.body.appendChild(scriptEl);
+require('./harness').loadApp(window);
 
 const tsDoc = (doc) => ({ data: { search: { results: { found: 1, hits: [{ document: doc }] } } } });
 const tsEmpty = { data: { search: { results: { found: 0, hits: [] } } } };

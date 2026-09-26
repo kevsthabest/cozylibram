@@ -33,9 +33,7 @@ window.fetch = async (url) => {
   throw new Error('unexpected fetch: ' + u);
 };
 
-const scriptEl = window.document.createElement('script');
-scriptEl.textContent = fs.readFileSync('/home/hatch/workspace/booktok/app.js', 'utf8');
-window.document.body.appendChild(scriptEl);
+require('./harness').loadApp(window);
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };

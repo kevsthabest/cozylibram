@@ -7,9 +7,7 @@ const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'danger
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in calendar tests'); };
 
-const scriptEl = window.document.createElement('script');
-scriptEl.textContent = fs.readFileSync('/home/hatch/workspace/booktok/app.js', 'utf8');
-window.document.body.appendChild(scriptEl);
+require('./harness').loadApp(window);
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };

@@ -1,0 +1,176 @@
+'use strict';
+
+/* ---------------- TBR roulette ---------------- */
+// Genres come from the Google Books categories saved on each book,
+// e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
+function bookGenres(b) {
+  const out = [];
+  (b.categories || []).forEach(c => {
+    String(c).split('/').map(s => s.trim()).forEach(s => {
+      if (!s || /^(fiction|nonfiction|general)$/i.test(s)) return;
+      if (!out.includes(s)) out.push(s);
+    });
+  });
+  return out;
+}
+
+function tbrBooks() { return library.filter(b => b.status === 'tbr'); }
+
+function allPickGenres() {
+  const set = [];
+  tbrBooks().forEach(b => bookGenres(b).forEach(g => { if (!set.includes(g)) set.push(g); }));
+  return set.sort();
+}
+
+function pickCandidates() {
+  const q = pickState.trope.trim().toLowerCase();
+  return tbrBooks().filter(b => {
+    if (pickState.genres.length && !bookGenres(b).some(g => pickState.genres.includes(g))) return false;
+    if (q && !(b.tropes || []).join(' ').toLowerCase().includes(q)) return false;
+    const pk = primaryAxisKey(b);
+    if (((b.ratings || {})[pk] || 0) < pickState.minIntensity) return false;
+    return true;
+  });
+}
+
+function renderPick() {
+  const tbr = tbrBooks();
+  const genres = allPickGenres();
+  const intensityOpts = [
+    [0, 'Any'], [1, '💥+'], [2, '💥💥+'], [3, '💥💥💥+']
+  ];
+
+  let html = '<h2 class="section serif" style="font-size:26px">🎲 TBR Roulette</h2>' +
+    '<p class="note">Can\'t decide what to read next? Set your mood, spin the wheel, and let fate choose.</p>';
+
+  if (!tbr.length) {
+    html += '<div class="empty"><div class="big">🎲</div><h2 class="serif">Your TBR is empty</h2>' +
+      '<p>Add some books first,<br>then come back and spin.</p>' +
+      '<button class="btn" data-nav="add">Add books</button></div>';
+    setView(html);
+    const btn = document.querySelector('#view [data-nav="add"]');
+    if (btn) btn.addEventListener('click', () => go('add'));
+    return;
+  }
+
+  html += '<div class="pick-filters">';
+  if (genres.length) {
+    html += '<div class="stat-sub">Genre</div><div class="chips">' +
+      genres.map(g => '<button class="chip' + (pickState.genres.includes(g) ? ' active' : '') +
+        '" data-g="' + esc(g) + '">' + esc(g) + '</button>').join('') + '</div>';
+  }
+  html += '<div class="stat-sub">Trope or tag</div>' +
+    '<input id="pk-trope" class="text-input" placeholder="e.g. enemies to lovers, dragons…" value="' + esc(pickState.trope) + '">' +
+    '<div class="stat-sub">How intense?</div><div class="chips">' +
+    intensityOpts.map(([v, l]) => '<button class="chip' + (pickState.minIntensity === v ? ' active' : '') +
+      '" data-s="' + v + '">' + l + '</button>').join('') + '</div>';
+  html += '</div>';
+
+  html += '<p class="note" id="pick-count"></p>' +
+    '<button class="btn pick-btn" id="pk-spin">🎲 Pick my next read</button>' +
+    '<div id="roulette-result" style="margin-top:18px"></div>';
+
+  setView(html);
+  updatePickCount();
+
+  document.querySelectorAll('#view [data-g]').forEach(c => c.addEventListener('click', () => {
+    const g = c.dataset.g;
+    pickState.genres = pickState.genres.includes(g)
+      ? pickState.genres.filter(x => x !== g)
+      : pickState.genres.concat(g);
+    c.classList.toggle('active');
+    updatePickCount();
+  }));
+  document.querySelectorAll('#view [data-s]').forEach(c => c.addEventListener('click', () => {
+    pickState.minIntensity = Number(c.dataset.s);
+    document.querySelectorAll('#view [data-s]').forEach(x => x.classList.toggle('active', x === c));
+    updatePickCount();
+  }));
+  document.getElementById('pk-trope').addEventListener('input', e => {
+    pickState.trope = e.target.value;
+    updatePickCount();
+  });
+  document.getElementById('pk-spin').addEventListener('click', runRoulette);
+}
+
+function updatePickCount() {
+  const el = document.getElementById('pick-count');
+  if (!el) return;
+  const n = pickCandidates().length;
+  el.innerHTML = n
+    ? '<b style="color:var(--gold)">' + n + '</b> book' + (n === 1 ? '' : 's') + ' match your mood'
+    : 'No TBR books match — loosen the filters a little.';
+  const btn = document.getElementById('pk-spin');
+  if (btn) btn.disabled = !n;
+}
+
+function runRoulette() {
+  const candidates = pickCandidates();
+  if (!candidates.length) { toast('No matching books 🎲'); return; }
+  if (rouletteTimer) clearInterval(rouletteTimer);
+
+  const box = document.getElementById('roulette-result');
+  const btn = document.getElementById('pk-spin');
+  if (btn) btn.disabled = true;
+
+  box.innerHTML = '<div class="slot"><div class="slot-cover" id="slot-cover"></div>' +
+    '<div class="slot-title" id="slot-title"></div></div>';
+  const coverEl = document.getElementById('slot-cover');
+  const titleEl = document.getElementById('slot-title');
+
+  let ticks = 0;
+  const total = 16;
+  rouletteTimer = setInterval(() => {
+    const b = candidates[Math.floor(Math.random() * candidates.length)];
+    coverEl.innerHTML = b.cover
+      ? '<img src="' + esc(b.cover) + '" alt="" onerror="this.remove()">'
+      : '📕';
+    titleEl.textContent = b.title;
+    if (++ticks >= total) {
+      clearInterval(rouletteTimer);
+      rouletteTimer = null;
+      // Fisher-Yates pick
+      const pool = candidates.slice();
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      showWinner(pool[0]);
+      if (btn) btn.disabled = false;
+    }
+  }, 90);
+}
+
+function showWinner(b) {
+  const box = document.getElementById('roulette-result');
+  const genres = bookGenres(b);
+  const pills = genres.map(g => '<span class="badge">' + esc(g) + '</span>').join('') +
+    ratingBadges(b) +
+    (b.tropes || []).slice(0, 4).map(t => '<span class="badge">🏷️ ' + esc(t) + '</span>').join('');
+  box.innerHTML = '<div class="winner">' +
+    '<div class="stat-sub" style="margin-top:0">Fate has spoken ✨</div>' +
+    '<div class="winner-cover">' + (b.cover
+      ? '<img src="' + esc(b.cover) + '" alt="" onerror="this.remove()">'
+      : '📕') + '</div>' +
+    '<h3 class="serif">' + esc(b.title) + '</h3>' +
+    '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
+    (b.description ? '<p class="winner-desc">' + esc(b.description.slice(0, 220)) +
+      (b.description.length > 220 ? '…' : '') + '</p>' : '') +
+    '<div class="badges" style="justify-content:center">' + pills + '</div>' +
+    '<div class="winner-actions">' +
+    '<button class="btn" id="w-start">📖 Start reading</button>' +
+    '<button class="btn ghost" id="w-again">🎲 Again</button>' +
+    '<button class="btn ghost" id="w-detail">🔍 Details</button>' +
+    '</div></div>';
+
+  document.getElementById('w-start').addEventListener('click', () => {
+    b.status = 'reading';
+    saveLibrary();
+    toast('Happy reading! 📖');
+    filter = 'reading';
+    go('library');
+  });
+  document.getElementById('w-again').addEventListener('click', runRoulette);
+  document.getElementById('w-detail').addEventListener('click', () => openDetail(b.id));
+}
+

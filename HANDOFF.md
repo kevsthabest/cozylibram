@@ -12,9 +12,9 @@ My name is Kevin. I have minimal coding experience but some — I build by colla
 
 ## Project location and stack
 
-- Files live in `~/workspace/booktok/` (adjust the path if my setup moved): `index.html`, `styles.css`, `app.js`, `manifest.json`, `sw.js`, `icon.svg`, `README.md`
+- Files live in `~/workspace/booktok/` (adjust the path if my setup moved): `index.html`, `styles.css`, `js/` (22 numbered modules — see `js/README.md`), `manifest.json`, `sw.js`, `icon.svg`, `README.md`
 - Preview screenshots in `preview/` (numbered, e.g. `1-shelves-list.png`) — look at these to understand the visual direction
-- **Vanilla HTML/CSS/JS, no build system, no backend.** Storage is browser `localStorage`. Metadata comes from the free Google Books API (covers fall back to Open Library); public ratings blend Google Books + Open Library via a count-weighted average (`enrichRatings()` in app.js). No API keys needed for the basics; an optional free Hardcover token (Settings tab) adds series info, content warnings, and moods.
+- **Vanilla HTML/CSS/JS, no build system, no backend.** Storage is browser `localStorage`. Metadata comes from the free Google Books API (covers fall back to Open Library); public ratings blend Google Books + Open Library via a count-weighted average (`enrichRatings()` in `js/60-metadata.js`). No API keys needed for the basics; an optional free Hardcover token (Settings tab) adds series info, content warnings, and moods.
 - Installable PWA (manifest + service worker). Camera barcode scanning requires HTTPS or localhost.
 - The app is **fully responsive**: phone-first, 2-column layouts on tablets, 3-column + top nav bar on desktop.
 
@@ -72,7 +72,7 @@ Books have genre-appropriate rating axes instead of one-size-fits-all spice:
 
 1. **Keep it simple and dependency-free** unless there's a strong reason otherwise. No frameworks, no build step.
 2. **Verify everything visually**: use a headless browser (Playwright/Chromium) to screenshot changed views at phone (390×844) and desktop (1440×900) sizes. If you need sample data, inject it temporarily via a `?demo` query-param hook — then **remove the hook completely** before finishing and confirm with `grep` that no demo code remains.
-3. **Syntax-check** with `node --check app.js` after every JS change.
+3. **Syntax-check** with `node --check js/<file>.js` after every JS change.
 4. **Update `README.md`** when features change, and save key screenshots to `preview/`.
 5. **Never break the data model** without a migration path — her library data is precious. Old backups must keep importing.
 6. Explain what you changed in plain language, show screenshots, and ask before starting anything destructive or that adds a backend/account.
