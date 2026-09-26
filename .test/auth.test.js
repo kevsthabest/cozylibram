@@ -101,6 +101,19 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   ok('books persisted under per-user key', lsBooks('spicyshelves.library.v2.user-1').some(b => b.id === 'b1'));
   ok('cloud received the books', window.__sbStub.store.some(r => r.user_id === 'user-1' && r.book_id === 'b1'));
 
+  // Toolbar account button: visible while signed in, signs out on tap.
+  const avatar = q('#lib-account');
+  ok('account avatar shown while signed in', !!avatar && avatar.textContent.trim().toLowerCase() === 'w');
+  ok('avatar titles with the signed-in email', avatar.title.includes('wife@example.com'));
+  window.confirm = () => false; // dismiss the dialog → stays signed in
+  avatar.click();
+  await tick();
+  ok('dismissed confirm keeps the session', !q('#gate-signin') && probe('cloudUser && cloudUser.id') === 'user-1');
+  window.confirm = () => true; // confirm → sign out
+  q('#lib-account').click();
+  await tick(2);
+  ok('avatar tap signs out to the gate', !!q('#gate-signin') && probe('cloudUser') === null);
+
   // Sign out → gate, memory cleared, per-user data kept on device.
   await window.cloudSignOut();
   await tick();
@@ -162,6 +175,7 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   runInWindow('boot();');
   await tick();
   ok('no gate without backend config', !q('#gate-signin') && !!q('#view .toolbar'));
+  ok('no avatar without a signed-in user', !q('#lib-account'));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

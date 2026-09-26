@@ -143,7 +143,9 @@ function renderLibrary() {
 
   let html = favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
-    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div></div>';
+    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div>' +
+    (cloudUser && cloudUser.email ? '<button id="lib-account" class="avatar-btn" title="Signed in as ' + esc(cloudUser.email) + ' — tap to sign out">' +
+      esc(cloudUser.email.trim()[0]) + '</button>' : '') + '</div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
     chip('tbr', '📖 TBR · ' + counts.tbr, filter === 'tbr') +
@@ -193,6 +195,10 @@ function renderLibrary() {
     s.addEventListener('click', () => pullSpine(s, s.dataset.id)));
   const ft = document.getElementById('fav-toggle');
   if (ft) ft.addEventListener('click', () => { favExpanded = !favExpanded; render(); });
+  const acct = document.getElementById('lib-account');
+  if (acct) acct.addEventListener('click', () => {
+    if (confirm('Sign out of ' + cloudUser.email + '?\nYour books stay on this device.')) cloudSignOut();
+  });
   paintSpineColors();
   const addBtn = document.querySelector('#view [data-nav="add"]');
   if (addBtn) addBtn.addEventListener('click', () => go('add'));
