@@ -32,6 +32,16 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('settings removed from the bottom nav', !q('.bottom-nav [data-nav="settings"]'));
   ok('bottom nav keeps five tabs', qa('.bottom-nav button').length === 5);
   ok('menu button lives in the top-right header', !!q('.app-header .topbar-menu-wrap #menu-btn'));
+  ok('header title is centered on all screens', (() => {
+    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const m = css.match(/\.app-header\s*\{[^}]*\}/);
+    return !!m && m[0].includes('justify-content: center') && m[0].includes('text-align: center');
+  })());
+  ok('menu button is out of the header flow on phones', (() => {
+    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const m = css.match(/\.topbar-menu-wrap\s*\{[^}]*\}/);
+    return !!m && m[0].includes('position: absolute');
+  })());
   ok('on wide screens the menu docks to the top-right corner next to the nav', (() => {
     const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
     const mq = css.indexOf('@media (min-width: 760px)');

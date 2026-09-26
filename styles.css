@@ -58,13 +58,16 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 
 /* ---------- header ---------- */
 .app-header {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 14px 16px 6px;
+  text-align: center;
 }
-.app-header .brand { min-width: 0; }
+.app-header .brand { min-width: 0; text-align: center; }
 .app-header h1 {
   margin: 0;
   font-size: 26px;
@@ -81,8 +84,8 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   font-size: 12px;
 }
 
-/* account menu button, top right */
-.topbar-menu-wrap { position: relative; flex: 0 0 auto; }
+/* account menu button, top right — out of the flex flow so the title stays centered */
+.topbar-menu-wrap { position: absolute; top: 14px; right: 16px; }
 .menu-avatar {
   width: 42px; height: 42px; border-radius: 50%;
   border: 1px solid var(--line); background: var(--card);
@@ -445,7 +448,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 @keyframes shimmer { to { background-position: 220% center; } }
 .app-header::after {
   content: '❦';
-  display: block;
+  flex-basis: 100%;
   color: var(--accent-deep);
   opacity: 0.55;
   font-size: 15px;
