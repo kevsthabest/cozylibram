@@ -55,8 +55,17 @@ setRegion('CA');
 const ca = window.storeLinks({ isbn: '9780123456789', title: 'T', authors: [] });
 ok('CA has 3 stores', ca.length === 3 && ca[0].name === 'Amazon');
 ok('CA amazon link', ca[0].url === 'https://www.amazon.ca/s?k=9780123456789');
-ok('CA indigo link', ca[1].url === 'https://www.indigo.ca/en-ca/search?q=9780123456789');
-ok('CA kobo link', ca[2].url === 'https://www.kobo.com/ca/en/search?query=9780123456789');
+ok('CA indigo link uses title+author (ISBN unreliable there)',
+  ca[1].url === 'https://www.indigo.ca/search?q=' + encodeURIComponent('T'));
+ok('CA kobo link uses title+author (ISBN unreliable there)',
+  ca[2].url === 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent('T'));
+// title+author mode with a real title/author pair
+const ca2 = window.storeLinks({ isbn: '9780123456789', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
+ok('indigo title+author query', ca2[1].url ===
+  'https://www.indigo.ca/search?q=' + encodeURIComponent('Iron Flame Rebecca Yarros'));
+ok('kobo title+author query', ca2[2].url ===
+  'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent('Iron Flame Rebecca Yarros'));
+ok('amazon still prefers ISBN', ca2[0].url === 'https://www.amazon.ca/s?k=9780123456789');
 setRegion('US');
 const us = window.storeLinks({ isbn: '', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
 ok('US b&n link', us[1].url === 'https://www.barnesandnoble.com/s/Iron%20Flame%20Rebecca%20Yarros');

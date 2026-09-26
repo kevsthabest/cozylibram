@@ -92,13 +92,14 @@ function ownedBadge(b) {
 }
 
 /* ---------------- storefront links ("where to buy" for wishlist books) ---------------- */
-// Region-aware retailer search links. ISBN is preferred (lands on the exact
-// edition); falls back to title + author. No APIs or keys needed.
+// Region-aware retailer search links. Most stores search by ISBN when we have
+// one (lands on the exact edition); Indigo and Kobo search by title + author,
+// where ISBN search proved unreliable. No APIs or keys needed.
 const STORE_REGIONS = {
   CA: { label: 'Canada', stores: [
     { name: 'Amazon', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
-    { name: 'Indigo', url: q => 'https://www.indigo.ca/en-ca/search?q=' + encodeURIComponent(q) },
-    { name: 'Kobo', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
+    { name: 'Indigo', mode: 'title', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
+    { name: 'Kobo', mode: 'title', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
   ] },
   US: { label: 'United States', stores: [
     { name: 'Amazon', url: q => 'https://www.amazon.com/s?k=' + encodeURIComponent(q) },
@@ -147,12 +148,21 @@ function detectStoreRegion() {
 function storeQuery(b) {
   const isbn = String(b.isbn || '').replace(/[^0-9X]/gi, '');
   if (isbn) return isbn;
+  return storeTitleQuery(b);
+}
+
+// Title + author query, for stores where ISBN search is unreliable.
+function storeTitleQuery(b) {
   return [b.title, (b.authors || [])[0]].filter(Boolean).join(' ');
 }
 
 function storeLinks(b) {
-  const q = storeQuery(b);
-  return STORE_REGIONS[detectStoreRegion()].stores.map(s => ({ name: s.name, url: s.url(q) }));
+  const isbnQ = storeQuery(b);
+  const titleQ = storeTitleQuery(b);
+  return STORE_REGIONS[detectStoreRegion()].stores.map(s => ({
+    name: s.name,
+    url: s.url(s.mode === 'title' ? titleQ : isbnQ),
+  }));
 }
 
 // Badges for every rated axis, e.g. 🌶️🌶️🌶️ 👻👻
