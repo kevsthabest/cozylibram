@@ -6,20 +6,39 @@
    shared with the discovery sheets, each with a + Wishlist button. ---- */
 let authorView = null; // author display name when view === 'author'
 
+// Grouping key: "H. D. Carlton", "H D Carlton" and "H.D. Carlton" (plus stray
+// double spaces / trailing spaces from exports) all become one author.
+// Display keeps the most common original spelling; book records are untouched.
+function authorKey(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\./g, ' ') // "H.D." → "h d", matching "H. D." and "H D"
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function authorIndex() {
   const map = new Map();
   library.forEach(b => {
     (b.authors || []).forEach(a => {
       const name = String(a || '').trim();
       if (!name) return;
-      const key = name.toLowerCase();
-      if (!map.has(key)) map.set(key, { name: name, owned: [], wanted: [] });
+      const key = authorKey(name);
+      if (!map.has(key)) map.set(key, { name: name, names: {}, owned: [], wanted: [] });
       const e = map.get(key);
+      e.names[name] = (e.names[name] || 0) + 1;
       if (b.owned) e.owned.push(b); else e.wanted.push(b);
     });
   });
   // only authors she owns at least one book by
   const list = Array.from(map.values()).filter(e => e.owned.length > 0);
+  list.forEach(e => {
+    let best = e.name, bestN = 0; // most common spelling wins; ties keep first seen
+    for (const n of Object.keys(e.names)) {
+      if (e.names[n] > bestN) { best = n; bestN = e.names[n]; }
+    }
+    e.name = best;
+  });
   list.sort((x, y) => x.name.localeCompare(y.name));
   return list;
 }
@@ -93,8 +112,8 @@ async function fillMissingBooks(name) {
 
 function renderAuthorDetail() {
   const name = authorView || '';
-  const key = name.trim().toLowerCase();
-  const match = b => (b.authors || []).some(a => String(a).trim().toLowerCase() === key);
+  const key = authorKey(name);
+  const match = b => (b.authors || []).some(a => authorKey(a) === key);
   const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''));
   const owned = library.filter(b => match(b) && b.owned).sort(byTitle);
   const wanted = library.filter(b => match(b) && !b.owned).sort(byTitle);

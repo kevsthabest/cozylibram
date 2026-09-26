@@ -81,6 +81,24 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   q('#a-back').click();
   ok('back returns to authors list', qa('#view [data-author]').length === 2);
 
+  // spelling variants merge: "H. D. Carlton" / "H D Carlton" / "H.D. Carlton"
+  // and stray whitespace ("James Patterson " vs "James Patterson") are one author
+  runInWindow(`localStorage.clear(); library.length = 0;
+    library.push(${mk('c1', 'B1', ['H. D. Carlton'], true)});
+    library.push(${mk('c2', 'B2', ['H D Carlton'], true)});
+    library.push(${mk('c3', 'B3', ['H.D. Carlton'], true)});
+    library.push(${mk('c4', 'B4', ['H. D. Carlton'], true)});
+    library.push(${mk('c5', 'B5', ['James Patterson'], true)});
+    library.push(${mk('c6', 'B6', ['James Patterson '], true)});`);
+  const idx2 = window.eval(`authorIndex().map(e => e.name + ':' + e.owned.length).join('|')`);
+  ok('punctuation variants merge into one author', idx2 === 'H. D. Carlton:4|James Patterson:2');
+  runInWindow(`openAuthor('H D Carlton')`); // any variant opens the merged detail
+  await tick(4);
+  const detailText = q('#view').textContent;
+  ok('merged detail lists every variant spelling\'s books',
+    ['B1', 'B2', 'B3', 'B4'].every(t => detailText.includes(t)));
+  ok('merged detail shows the most common spelling', detailText.includes('H. D. Carlton'));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
