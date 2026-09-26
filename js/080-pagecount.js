@@ -7,6 +7,11 @@
 async function fetchPageCountByISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean) return null;
+  // Someone may already have looked this book up: free page count, no APIs.
+  try {
+    const snap = await metaCacheGet(clean);
+    if (snap && snap.pageCount > 0) return snap.pageCount;
+  } catch (e) { /* fall through to APIs */ }
   const get = async (url) => {
     const r = await fetch(url);
     if (!r.ok) throw new Error('http ' + r.status);

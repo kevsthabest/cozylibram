@@ -19,6 +19,7 @@ prefixes (lexicographic sort must equal numeric order) and don't create circular
 | `070-hardcover.js` | Hardcover enrichment (series, moods, …) |
 | `080-pagecount.js` | Page-count lookup + backfill |
 | `090-sync.js` | Supabase auth + cloud sync (optional) |
+| `092-metacache.js` | Shared per-ISBN metadata cache (all signed-in users) |
 | `095-gate.js` | Sign-in gate + per-user on-device libraries |
 | `100-nav.js` | Bottom-nav wiring |
 | `110-library.js` | Library tab |

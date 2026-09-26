@@ -20,7 +20,19 @@ function gbUrl(base) {
   return k ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(k) : base;
 }
 
+// ISBN lookup with the shared metadata cache in front: a cache hit returns
+// instantly with zero API calls; a miss runs the normal API path and stores
+// the result so the next user gets it from Supabase.
 async function lookupISBN(isbn) {
+  const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
+  const snap = await metaCacheGet(clean);
+  if (snap) return bookFromMeta(snap, clean);
+  const book = await lookupISBNFromAPIs(clean);
+  if (book && book.isbn) metaCachePut(book.isbn, metaSnapshot(book)); // no await: don't slow the UI
+  return book;
+}
+
+async function lookupISBNFromAPIs(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
   try {
     const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean)));

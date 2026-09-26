@@ -10,12 +10,19 @@ library, synced across devices.
 2. Pick a name (e.g. `spicy-shelves`), a database password, and a region close to you.
 3. Wait for the project to finish provisioning.
 
-## 2. Create the books table
+## 2. Create the tables
 
 1. In the Supabase dashboard, open **SQL Editor** → **New query**.
 2. Paste the contents of `schema.sql` (in this folder) and **Run**.
-3. This creates a `books` table with one row per book per user, and a Row Level
-   Security policy so each signed-in user can only read/write their own rows.
+3. This creates:
+   - a `books` table with one row per book per user, and a Row Level
+     Security policy so each signed-in user can only read/write their own rows;
+   - a `book_meta` table: a shared per-ISBN metadata cache (covers,
+     descriptions, ratings, page counts) readable by every signed-in user,
+     so the first person to look up a book pays the API cost and everyone
+     after reads it from Supabase.
+4. Re-running `schema.sql` later is safe — it only adds what's missing, so
+   run it again after updating the app to pick up new tables.
 
 ## 3. Get your API credentials
 

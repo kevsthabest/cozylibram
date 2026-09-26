@@ -24,3 +24,31 @@ create policy "own rows" on books
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Shared metadata cache: one row per ISBN, readable by every signed-in user.
+-- The first user to look up a book pays the API cost (Google Books / Open
+-- Library); everyone after that reads the cached metadata from here instead.
+-- User-specific fields (shelf, ratings, progress, notes) are never stored here.
+create table if not exists book_meta (
+  isbn text primary key,
+  data jsonb not null,
+  fetched_at timestamptz not null default now()
+);
+
+alter table book_meta enable row level security;
+
+drop policy if exists "read meta" on book_meta;
+create policy "read meta" on book_meta
+  for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "write meta" on book_meta;
+create policy "write meta" on book_meta
+  for insert
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "refresh meta" on book_meta;
+create policy "refresh meta" on book_meta
+  for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
