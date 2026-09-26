@@ -181,6 +181,12 @@ function makeFake() {
     ok('existing _mtime values preserved', w2.eval('library[0]._mtime') === 111);
   }
 
+  // 8. missing-table error becomes an actionable message
+  runInWindow(`window.__errMissing = cloudErrMsg(new Error("Could not find the table 'public.books' in the schema cache"));`);
+  runInWindow(`window.__errOther = cloudErrMsg(new Error('boom'));`);
+  ok('missing books table explains the fix', window.__errMissing.indexOf('schema.sql') >= 0);
+  ok('other errors pass through', window.__errOther === 'Cloud sync failed: boom');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('TEST CRASH:', e); process.exit(1); });

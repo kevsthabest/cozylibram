@@ -57,6 +57,15 @@ function mergeCloudBooks(local, remoteRows) {
   return changed;
 }
 
+// Translate cryptic PostgREST errors into actionable messages.
+function cloudErrMsg(e) {
+  const m = String((e && e.message) || e);
+  if (m.indexOf("Could not find the table 'public.books'") >= 0)
+    return "Cloud sync failed: the 'books' table doesn't exist in your Supabase " +
+      "project yet — run supabase/schema.sql in the Supabase SQL editor, then tap Sync now.";
+  return 'Cloud sync failed: ' + m;
+}
+
 async function cloudPushNow() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser || cloudSyncing) return false;
@@ -70,7 +79,7 @@ async function cloudPushNow() {
     cloudLastSync = Date.now();
     return true;
   } catch (e) {
-    toast('Cloud sync failed: ' + e.message);
+    toast(cloudErrMsg(e));
     return false;
   } finally {
     cloudSyncing = false;
@@ -97,7 +106,7 @@ async function cloudFirstSync() {
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); }
     await cloudPushNow();
     toast('☁️ Library synced');
-  } catch (e) { toast('Cloud sync failed: ' + e.message); }
+  } catch (e) { toast(cloudErrMsg(e)); }
 }
 async function cloudWipe() {
   const sb = await cloudClient().catch(() => null);
