@@ -125,8 +125,9 @@ async function enterApp(user) {
   hideGate();
   view = 'library';
   render();
-  adoptCloudProfile(user);
   renderTopbar();
+  adoptLegacyMetadata(user);
+  await syncCloudProfile();
   await cloudFirstSync();
 }
 

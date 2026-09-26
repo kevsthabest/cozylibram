@@ -17,7 +17,7 @@ function profileKey() {
   return 'spicyshelves.profile.' + (cloudUser ? cloudUser.id : 'offline');
 }
 function blankProfile() {
-  return { firstName: '', lastName: '', avatar: { type: 'letter' } };
+  return { firstName: '', lastName: '', avatar: { type: 'letter' }, updatedAt: 0 };
 }
 function loadProfile() {
   let p = null;
@@ -26,6 +26,7 @@ function loadProfile() {
   if (!p || typeof p !== 'object') return base;
   base.firstName = String(p.firstName || '');
   base.lastName = String(p.lastName || '');
+  base.updatedAt = Number(p.updatedAt) || 0;
   if (p.avatar && typeof p.avatar === 'object') {
     if (p.avatar.type === 'default' && DEFAULT_AVATARS.some(a => a.id === p.avatar.id)) base.avatar = { type: 'default', id: p.avatar.id };
     else if (p.avatar.type === 'upload' && p.avatar.dataUrl) base.avatar = { type: 'upload', dataUrl: p.avatar.dataUrl };
@@ -35,34 +36,71 @@ function loadProfile() {
 function saveProfile(p) {
   try { localStorage.setItem(profileKey(), JSON.stringify(p)); } catch (e) {}
 }
-// Adopt names + default avatar from Supabase user_metadata on sign-in so the
-// profile roams across devices. Only into a fresh (never edited) local slot —
-// any local edit means "set up here" and always wins.
-function adoptCloudProfile(user) {
+// Stamp a user edit and save it. The stamp is what last-write-wins sync
+// compares across devices.
+function touchProfile(p) {
+  p.updatedAt = Date.now();
+  saveProfile(p);
+  return p;
+}
+// One-time bridge: v37 briefly mirrored names into auth user_metadata.
+// If this device never set a profile, carry those values forward once.
+function adoptLegacyMetadata(user) {
   const md = (user && user.user_metadata) || {};
   if (!md.first_name && !md.last_name && !md.avatar_id) return;
+  try {
+    const flag = 'spicyshelves.profileMigrated.' + user.id;
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, '1');
+  } catch (e) { return; }
   const p = loadProfile();
   if (p.firstName || p.lastName || p.avatar.type !== 'letter') return;
-  let changed = false;
-  if (md.first_name) { p.firstName = String(md.first_name); changed = true; }
-  if (md.last_name) { p.lastName = String(md.last_name); changed = true; }
-  if (md.avatar_id && DEFAULT_AVATARS.some(a => a.id === md.avatar_id)) {
-    p.avatar = { type: 'default', id: md.avatar_id }; changed = true;
-  }
-  if (changed) saveProfile(p);
+  if (md.first_name) p.firstName = String(md.first_name);
+  if (md.last_name) p.lastName = String(md.last_name);
+  if (md.avatar_id && DEFAULT_AVATARS.some(a => a.id === md.avatar_id)) p.avatar = { type: 'default', id: md.avatar_id };
+  touchProfile(p);
 }
-// Mirror names + default avatar choice to the cloud account (best-effort).
-// Uploaded photos stay on this device — the cloud keeps the last themed choice
-// as the roaming fallback instead.
+// Push this device's profile to the profiles table (best-effort).
+// Uploaded photos stay on this device — the cloud keeps the themed avatar id.
 async function pushCloudProfile(p) {
+  const sb = await cloudClient().catch(() => null);
+  if (!sb || !cloudUser) return;
   try {
-    const sb = await cloudClient();
-    if (!sb || !cloudUser) return;
-    const data = { first_name: p.firstName || '', last_name: p.lastName || '' };
-    if (p.avatar.type === 'default') data.avatar_id = p.avatar.id;
-    else if (p.avatar.type === 'letter') data.avatar_id = '';
-    await sb.auth.updateUser({ data: data });
+    const { error } = await sb.from('profiles').upsert({
+      user_id: cloudUser.id,
+      first_name: p.firstName || '',
+      last_name: p.lastName || '',
+      avatar_id: p.avatar.type === 'default' ? p.avatar.id : '',
+      updated_at: new Date(p.updatedAt || Date.now()).toISOString()
+    }, { onConflict: 'user_id' });
+    if (error) throw error;
   } catch (e) { /* offline — local copy is the source of truth */ }
+}
+// Two-way sync with the profiles table. Newer updatedAt wins, either direction.
+async function syncCloudProfile() {
+  const sb = await cloudClient().catch(() => null);
+  if (!sb || !cloudUser) return;
+  try {
+    const res = await sb.from('profiles').select('first_name,last_name,avatar_id,updated_at').eq('user_id', cloudUser.id).maybeSingle();
+    if (res.error) throw res.error;
+    const row = res.data || null;
+    const p = loadProfile();
+    const localTs = p.updatedAt || 0;
+    const remoteTs = row ? (Date.parse(row.updated_at) || 0) : 0;
+    if (row && remoteTs > localTs) {
+      p.firstName = row.first_name || '';
+      p.lastName = row.last_name || '';
+      p.avatar = DEFAULT_AVATARS.some(a => a.id === row.avatar_id)
+        ? { type: 'default', id: row.avatar_id } : { type: 'letter' };
+      p.updatedAt = remoteTs;
+      saveProfile(p);
+      renderTopbar();
+      if (view === 'profile') renderProfile();
+    } else {
+      const hasContent = !!(p.firstName || p.lastName || p.avatar.type !== 'letter' || localTs > 0);
+      if (hasContent && (!row || localTs > remoteTs)) await pushCloudProfile(p);
+    }
+  } catch (e) { /* offline — try again next sync */ }
 }
 
 function avatarSrc(p) {
@@ -212,7 +250,7 @@ function renderProfile() {
   const applyAvatar = (av, msg) => {
     const np = loadProfile();
     np.avatar = av;
-    saveProfile(np);
+    touchProfile(np);
     pushCloudProfile(np);
     renderTopbar();
     renderProfile();
@@ -237,7 +275,7 @@ function renderProfile() {
     const np = loadProfile();
     np.firstName = document.getElementById('pf-first').value.trim().slice(0, 40);
     np.lastName = document.getElementById('pf-last').value.trim().slice(0, 40);
-    saveProfile(np);
+    touchProfile(np);
     pushCloudProfile(np);
     renderTopbar();
     toast('Profile saved ✨');

@@ -111,23 +111,86 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   q('#st-back').click(); await tick();
   ok('settings back button returns home', probe('view') === 'library');
 
-  // adoptCloudProfile: cloud metadata adopted when local slot is empty…
-  runInWindow('cloudUser = { id: "u9", email: "x@y.z" };');
-  runInWindow('adoptCloudProfile({ id: "u9", email: "x@y.z", user_metadata: { first_name: "Cloud", last_name: "Name", avatar_id: "moon" } });');
-  const adopted = JSON.parse(lsGet('spicyshelves.profile.u9'));
-  ok('cloud names adopted on sign-in', adopted.firstName === 'Cloud' && adopted.lastName === 'Name');
-  ok('cloud default avatar adopted on sign-in', adopted.avatar.type === 'default' && adopted.avatar.id === 'moon');
-  // …but local edits always win.
-  runInWindow('saveProfile({ firstName: "Local", lastName: "", avatar: { type: "letter" } });');
-  runInWindow('adoptCloudProfile({ id: "u9", email: "x@y.z", user_metadata: { first_name: "Cloud", last_name: "Name", avatar_id: "moon" } });');
-  const kept = JSON.parse(lsGet('spicyshelves.profile.u9'));
-  ok('local name wins over cloud metadata', kept.firstName === 'Local');
-  ok('local avatar choice wins over cloud metadata', kept.avatar.type === 'letter');
-  ok('bogus avatar ids never adopted', (() => {
-    runInWindow('cloudUser = { id: "u10", email: "z@z.z" };');
-    runInWindow('adoptCloudProfile({ id: "u10", email: "z@z.z", user_metadata: { avatar_id: "nope" } });');
-    return lsGet('spicyshelves.profile.u10') === null;
-  })());
+  // ---- profiles table sync (last-write-wins across devices) ----
+  const mkStub = () => {
+    const rows = {};
+    return { rows, from: (table) => {
+      if (table !== 'profiles') throw new Error('unexpected table ' + table);
+      return {
+        select: () => ({ eq: (col, val) => ({ maybeSingle: async () => ({ data: rows[val] || null, error: null }) }) }),
+        upsert: async (row) => { rows[row.user_id] = Object.assign({}, row); return { error: null }; },
+      };
+    } };
+  };
+  const stub = mkStub();
+  window.__sbStub = stub;
+  const cloudRow = (uid, patch) => Object.assign(
+    { user_id: uid, first_name: 'Cloud', last_name: 'Woman', avatar_id: 'moon', updated_at: new Date().toISOString() }, patch || {});
+  const useAs = (uid) => runInWindow('cloudUser = { id: "' + uid + '", email: "' + uid + '@x.y" };');
+  const wipeLocal = (uid) => window.localStorage.removeItem('spicyshelves.profile.' + uid);
+
+  // Fresh device adopts the cloud profile.
+  useAs('u20'); wipeLocal('u20');
+  stub.rows['u20'] = cloudRow('u20', { updated_at: new Date(Date.now() + 60000).toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  const adopted = JSON.parse(lsGet('spicyshelves.profile.u20'));
+  ok('fresh device adopts cloud names', adopted.firstName === 'Cloud' && adopted.lastName === 'Woman');
+  ok('fresh device adopts cloud avatar', adopted.avatar.type === 'default' && adopted.avatar.id === 'moon');
+  ok('topbar shows the adopted avatar', !!q('#menu-btn img') && q('#menu-btn img').src.includes('avatar-moon.webp'));
+
+  // Newer local edit wins and pushes up.
+  useAs('u21'); wipeLocal('u21');
+  stub.rows['u21'] = cloudRow('u21', { first_name: 'Old', updated_at: new Date(Date.now() - 60000).toISOString() });
+  runInWindow('touchProfile({ firstName: "Local", lastName: "Edit", avatar: { type: "letter" }, updatedAt: 0 });');
+  await probe('syncCloudProfile()'); await tick();
+  ok('newer local edit wins over the cloud row', stub.rows['u21'].first_name === 'Local');
+  ok('local profile untouched when it wins', JSON.parse(lsGet('spicyshelves.profile.u21')).firstName === 'Local');
+
+  // Newer cloud row wins and overwrites local.
+  useAs('u22'); wipeLocal('u22');
+  runInWindow('saveProfile({ firstName: "Stale", lastName: "", avatar: { type: "letter" }, updatedAt: ' + (Date.now() - 60000) + ' });');
+  stub.rows['u22'] = cloudRow('u22', { first_name: 'Fresh', updated_at: new Date().toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  ok('newer cloud row overwrites stale local', JSON.parse(lsGet('spicyshelves.profile.u22')).firstName === 'Fresh');
+
+  // Bogus avatar ids fall back to the initial.
+  useAs('u23'); wipeLocal('u23');
+  stub.rows['u23'] = cloudRow('u23', { avatar_id: 'nope', updated_at: new Date(Date.now() + 60000).toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  ok('bogus cloud avatar id falls back to initial', JSON.parse(lsGet('spicyshelves.profile.u23')).avatar.type === 'letter');
+
+  // No cloud row yet + local content → row created.
+  useAs('u24'); wipeLocal('u24');
+  delete stub.rows['u24'];
+  runInWindow('touchProfile({ firstName: "Solo", lastName: "", avatar: { type: "default", id: "dragon" }, updatedAt: 0 });');
+  await probe('syncCloudProfile()'); await tick();
+  ok('first sync creates the cloud row', stub.rows['u24'] && stub.rows['u24'].first_name === 'Solo');
+  ok('avatar id stored in the row', stub.rows['u24'].avatar_id === 'dragon');
+
+  // Uploaded photo: cloud keeps the themed id, photo stays local.
+  useAs('u25'); wipeLocal('u25');
+  delete stub.rows['u25'];
+  runInWindow('touchProfile({ firstName: "Pic", lastName: "", avatar: { type: "upload", dataUrl: "data:image/jpeg;base64,xx" }, updatedAt: 0 });');
+  await probe('syncCloudProfile()'); await tick();
+  ok('upload does not put a photo in the cloud row', stub.rows['u25'] && stub.rows['u25'].avatar_id === '');
+  ok('uploaded photo kept locally', JSON.parse(lsGet('spicyshelves.profile.u25')).avatar.type === 'upload');
+
+  // Empty everywhere → nothing pushed.
+  useAs('u26'); wipeLocal('u26');
+  delete stub.rows['u26'];
+  await probe('syncCloudProfile()'); await tick();
+  ok('blank profile creates no cloud row', !stub.rows['u26']);
+
+  // v37 legacy bridge: user_metadata carried forward once.
+  useAs('u27'); wipeLocal('u27');
+  delete stub.rows['u27'];
+  runInWindow('adoptLegacyMetadata({ id: "u27", user_metadata: { first_name: "Old", last_name: "Meta", avatar_id: "raven" } });');
+  const bridged = JSON.parse(lsGet('spicyshelves.profile.u27'));
+  ok('legacy metadata adopted once', bridged.firstName === 'Old' && bridged.avatar.id === 'raven');
+  runInWindow('saveProfile({ firstName: "Changed", lastName: "", avatar: { type: "letter" }, updatedAt: 0 });');
+  runInWindow('adoptLegacyMetadata({ id: "u27", user_metadata: { first_name: "Old", last_name: "Meta", avatar_id: "raven" } });');
+  ok('legacy bridge never overwrites local edits', JSON.parse(lsGet('spicyshelves.profile.u27')).firstName === 'Changed');
+  window.__sbStub = null;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

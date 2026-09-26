@@ -70,3 +70,23 @@ create policy "own deletions" on deleted_books
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Profile: display name + avatar choice, synced across the user's devices.
+-- One row per user. Uploaded photos stay on-device (too big for a text
+-- column and they don't need to roam); the cloud keeps the themed avatar id
+-- as the cross-device fallback.
+create table if not exists profiles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  first_name text not null default '',
+  last_name text not null default '',
+  avatar_id text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+
+drop policy if exists "own profile" on profiles;
+create policy "own profile" on profiles
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

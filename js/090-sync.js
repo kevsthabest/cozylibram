@@ -140,6 +140,7 @@ async function cloudFirstSync() {
   // happened on another device can't be undone by this device's push.
   if (!cloudUser) return;
   try {
+    await syncCloudProfile();
     if (applyTombstones(await cloudPullTombstones())) render();
     const remote = await cloudPullRows();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); }
