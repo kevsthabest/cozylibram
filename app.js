@@ -303,10 +303,33 @@ function normalizeVolume(item, isbnHint) {
   return book;
 }
 
+/* ---------------- Google Books API key (raise the quota) ---------------- */
+// Without a key, Google Books draws from one anonymous quota shared by everyone,
+// which can run dry (HTTP 429). A free personal key gives your own 1,000
+// requests/day. Get one: Google Cloud Console → enable "Books API" → create an
+// API key (restrict it to the Books API). Stored on-device; the home server can
+// also share it with LAN clients via server-config.json.
+function gbServerKey() {
+  try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.googleBooksKey) || '').trim(); }
+  catch (e) { return ''; }
+}
+function gbManualKey() { return (localStorage.getItem('gbooks_key') || '').trim(); }
+function gbKey() { return gbManualKey() || gbServerKey(); }
+function gbKeyStatusText() {
+  if (gbManualKey()) return 'API key saved ✓ (manual entry)';
+  if (gbServerKey()) return '🏠 Using home-server key ✓';
+  return 'No key set — using the shared anonymous quota.';
+}
+// Append the API key to a Google Books URL when we have one.
+function gbUrl(base) {
+  const k = gbKey();
+  return k ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(k) : base;
+}
+
 async function lookupISBN(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
   try {
-    const r = await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean));
+    const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean)));
     const d = await r.json();
     if (d.items && d.items.length) return enrichRatings(normalizeVolume(d.items[0], clean));
   } catch (e) { /* fall through to Open Library */ }
@@ -328,7 +351,7 @@ async function lookupISBN(isbn) {
 
 async function searchBooks(q) {
   try {
-    const r = await fetch('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&maxResults=12');
+    const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&maxResults=12'));
     const d = await r.json();
     if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
   } catch (e) { /* fall through to Open Library */ }
@@ -597,7 +620,7 @@ async function fetchPageCountByISBN(isbn) {
     return r.json();
   };
   try {
-    const data = await get('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5');
+    const data = await get(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
     const items = (data.items || []).map(i => i.volumeInfo || {});
     const ids = it => (it.industryIdentifiers || []).map(x => String(x.identifier || '').replace(/[^0-9X]/gi, ''));
     const hit = items.find(it => it.pageCount > 0 && ids(it).includes(clean)) ||
@@ -2251,6 +2274,17 @@ function renderSettings() {
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
     '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
     '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
+    '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
+    '<p class="note">Google Books lookups share one anonymous quota that can run out. ' +
+    'Add your own free API key for a personal quota of 1,000 requests/day: Google Cloud Console → ' +
+    'enable the "Books API" → Credentials → Create an API key (restrict it to the Books API). ' +
+    'The key stays on this device; on your home network the server can share it automatically ' +
+    '(see server-config.json).</p>' +
+    (gbServerKey() && !gbManualKey() ? '<p class="note">🏠 Using the key from your home server — no need to enter anything.</p>' : '') +
+    '<div class="search-row"><input id="gb-key" type="password" class="text-input" ' +
+    'placeholder="AIza…" value="' + esc(gbManualKey()) + '">' +
+    '<button class="btn" id="gb-save">Save</button></div>' +
+    '<p class="note" id="gb-status">' + gbKeyStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Account & cloud sync</h2>' +
     '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
     'The app works fine without it — everything stays on this device.</p>' +
@@ -2378,6 +2412,15 @@ function renderSettings() {
     library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true }); render();
     await cloudWipe();
     toast('Shelves cleared');
+  });
+
+  // Google Books key wiring
+  document.getElementById('gb-save').addEventListener('click', () => {
+    const v = document.getElementById('gb-key').value.trim();
+    if (v) localStorage.setItem('gbooks_key', v);
+    else localStorage.removeItem('gbooks_key');
+    const st = document.getElementById('gb-status'); if (st) st.textContent = gbKeyStatusText();
+    toast(v ? 'Google Books key saved' : 'Google Books key removed');
   });
 
   // Hardcover wiring

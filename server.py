@@ -11,8 +11,8 @@ supabase_anon_key in server-config.json) so home-network devices get cloud
 sync with zero setup.
 
 Setup: copy server-config.example.json to server-config.json and paste your
-Hardcover personal token in it. server-config.json is read by this server
-only — it is never sent to clients.
+Hardcover personal token and Google Books API key in it. server-config.json
+is read by this server only — it is never sent to clients.
 """
 import ipaddress
 import json
@@ -29,6 +29,14 @@ def load_token():
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
             return (json.load(f).get('hardcover_token') or '').strip()
+    except Exception:
+        return ''
+
+
+def load_gb_key():
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            return (json.load(f).get('google_books_key') or '').strip()
     except Exception:
         return ''
 
@@ -76,6 +84,9 @@ def config_js_body(client_addr):
     token = load_token()
     if token and internal:
         payload['hardcoverToken'] = token
+    gbk = load_gb_key()
+    if gbk and internal:
+        payload['googleBooksKey'] = gbk
     if internal:
         cc = load_cloud_cfg()
         if cc['supabaseUrl'] and cc['supabaseAnonKey']:
