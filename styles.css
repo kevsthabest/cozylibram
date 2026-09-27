@@ -1340,3 +1340,27 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 }
 .shelf-tile b { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); }
 .shelf-tile span { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; opacity: 0.7; }
+
+/* ================= v123: contextual primary + overflow menu ================= */
+.modal-actions { display: flex; gap: 8px; align-items: stretch; }
+.modal-actions #m-primary { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.modal-actions #m-primary svg { width: 18px; height: 18px; }
+.more-wrap { position: relative; flex: none; }
+.more-menu {
+  position: absolute; right: 0; bottom: calc(100% + 6px); min-width: 150px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); padding: 6px; z-index: 60;
+}
+.more-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; color: inherit; font: inherit; font-size: 14px;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer; text-align: left;
+}
+.more-item:active { background: var(--bg); }
+.more-item svg { width: 18px; height: 18px; }
+.more-item.danger { color: var(--danger, #e5484d); }
+.flash { animation: mflash 1.4s ease; }
+@keyframes mflash {
+  0%, 100% { box-shadow: none; }
+  25% { box-shadow: 0 0 0 3px var(--accent); border-radius: 8px; }
+}

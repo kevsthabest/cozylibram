@@ -60,6 +60,8 @@ const ICONS = {
   // crossed swords (adventure)
   swords: '<path d="M6.8 6.8l9.5 9.5"/><path d="M4.6 4.6l2.9-.7-.7 2.9z"/><path d="M17.2 6.8l-9.5 9.5"/><path d="M19.4 4.6l-2.9-.7.7 2.9z"/>',
   // ---- v85: full-UI line-art sweep ----
+  // overflow menu (vertical ellipsis)
+  dots: '<circle cx="12" cy="5.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none"/>',
   // die (roulette)
   dice: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.1" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.1" fill="currentColor" stroke="none"/>',
   // sparkles (toggles, headers)

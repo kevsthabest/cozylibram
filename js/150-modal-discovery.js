@@ -741,10 +741,63 @@ function renderDetailModal(b, viaBook) {
     '<details class="m-collapsible"><summary>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></summary>' +
     '<div id="m-quotes"></div></details>' +
 
-    '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
-    '<button class="btn ghost" id="m-share">' + icon('share') + ' Share</button>' +
+    '<div class="modal-actions"><button class="btn primary" id="m-primary"></button>' +
+    '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
+    '<div class="more-menu" id="m-moremenu" hidden>' +
+    '<button class="more-item" id="m-share">' + icon('share') + ' Share</button>' +
+    '<button class="more-item danger" id="m-del">Remove</button>' +
+    '</div></div>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
+
+  // v123: contextual primary action — the one thing she most likely wants,
+  // based on the book's shelf. Secondary actions live behind the ⋮ menu.
+  const PRIMARY = {
+    tbr:     { label: 'Start Reading',    ic: 'reading', run: () => primarySetStatus('reading') },
+    reading: { label: 'Log Pages',        ic: 'pencil',  run: () => scrollToField('m-progress') },
+    read:    { label: 'Rate & Review',    ic: 'heart',   run: () => scrollToField('f-myrating') },
+    dnf:     { label: 'Give it another go', ic: 'tbr',   run: () => primarySetStatus('tbr') },
+  };
+  const paintPrimary = () => {
+    const cfg = PRIMARY[draft.status] || PRIMARY.tbr;
+    const btn = document.getElementById('m-primary');
+    if (btn) btn.innerHTML = icon(cfg.ic) + ' ' + esc(cfg.label);
+  };
+  const primarySetStatus = (s) => {
+    const from = b.status;
+    if (from === s) return;
+    b.status = s; draft.status = s;
+    if (['reading', 'read', 'dnf'].includes(s)) upNextRemove(id);
+    if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;
+    saveLibrary();
+    track('book_status_changed', { from: from, to: s });
+    if (s === 'read') track('book_completed');
+    toast(s === 'reading' ? 'Happy reading ✨' : 'Back on the TBR');
+    root.querySelectorAll('#f-status button').forEach(x => x.classList.toggle('active', x.dataset.s === s));
+    paintPrimary();
+    renderProgressSection();
+  };
+  const scrollToField = (fid) => {
+    const el = document.getElementById(fid);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1400);
+  };
+  paintPrimary();
+  document.getElementById('m-primary').addEventListener('click', () => {
+    const cfg = PRIMARY[draft.status] || PRIMARY.tbr;
+    cfg.run();
+  });
+  const moreBtn = document.getElementById('m-more');
+  const moreMenu = document.getElementById('m-moremenu');
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    moreMenu.hidden = !moreMenu.hidden;
+  });
+  root.addEventListener('click', (e) => {
+    if (!moreMenu.hidden && !e.target.closest('.more-wrap')) moreMenu.hidden = true;
+  });
 
   // wire controls (work on the draft copy until Save)
   const wireAxRows = () => {
@@ -773,6 +826,7 @@ function renderDetailModal(b, viaBook) {
         if (pi) pi.value = draft.progress;
       }
       renderProgressSection();
+      paintPrimary(); // v123: primary action follows the shelf
     }));
 
   document.getElementById('f-prevread').addEventListener('change', e => {
