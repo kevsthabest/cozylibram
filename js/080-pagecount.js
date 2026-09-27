@@ -18,7 +18,7 @@ async function fetchPageCountByISBN(isbn) {
     return r.json();
   };
   try {
-    const data = await get(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
+    const data = await get(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
     const items = (data.items || []).map(i => i.volumeInfo || {});
     const ids = it => (it.industryIdentifiers || []).map(x => String(x.identifier || '').replace(/[^0-9X]/gi, ''));
     const hit = items.find(it => it.pageCount > 0 && ids(it).includes(clean)) ||

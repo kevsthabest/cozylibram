@@ -16,7 +16,7 @@ let appleResults = [];
 window.fetch = async (url) => {
   const u = String(url);
   fetchCalls.push(u);
-  if (u.includes('googleapis.com/books/v1/volumes')) return { json: async () => ({ items: gbItems }) };
+  if (u.includes('googleapis.com/books/v1/volumes') || u.includes('/api/gbooks/books/v1/volumes')) return { json: async () => ({ items: gbItems }) };
   if (u.includes('itunes.apple.com/search')) return { json: async () => ({ results: appleResults }) };
   if (u.includes('openlibrary.org/isbn/')) return { json: async () => olEdition };
   if (u.includes('openlibrary.org/works/')) return { json: async () => olWork };
@@ -51,7 +51,7 @@ const mk = (id, fields) =>
     { trackName: 'T', artworkUrl100: 'https://is1-ssl.mzstatic.com/x/abc/100x100bb.jpg' }, // dup
     { trackName: 'T' }, // no artwork
   ];
-  window.eval(`hcToken = () => 'tok'; hcGraphQL = async (q) =>
+  window.eval(`hcReady = () => true; hcGraphQL = async (q) =>
     ({ editions: [{ image: { url: 'https://img.hardcover.app/hc1.jpg' } }, { image: null }] });`);
 
   runInWindow(`localStorage.clear(); library.length = 0;
@@ -89,7 +89,7 @@ const mk = (id, fields) =>
     fetchCalls.some(u => u.includes('itunes.apple.com') && !u.includes('isbn')));
 
   // Hardcover skipped gracefully when no token is configured
-  window.eval(`hcToken = () => ''; coverCandidateCache.clear();`);
+  window.eval(`hcReady = () => false; coverCandidateCache.clear();`);
   runInWindow(`library.push(${mk('k3', { isbn: '9780553382563', title: 'T3' })});`);
   const c3 = await window.eval(`fetchCoverCandidates(library[2])`);
   ok('no token → no Hardcover candidates, no crash',

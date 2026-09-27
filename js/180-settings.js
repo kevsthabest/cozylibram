@@ -253,7 +253,7 @@ function renderSettings() {
   document.getElementById('meta-verify').addEventListener('click', () => runMetadataCheck());
   document.getElementById('hc-test').addEventListener('click', async () => {
     const st = hcStatus(); if (!st) return;
-    if (!hcToken()) { st.textContent = 'No token — add hardcover_token to server-config.json on your home PC.'; return; }
+    if (!hcReady()) { st.textContent = 'No key — set HARDCOVER_TOKEN (Pages) or hardcover_token (server-config.json).'; return; }
     st.textContent = 'Testing…';
     try {
       const data = await hcGraphQL('query { search(query: "Dune", query_type: "Book", per_page: 1) { results } }');
@@ -263,7 +263,7 @@ function renderSettings() {
   });
   document.getElementById('hc-bulk').addEventListener('click', async () => {
     const btn = document.getElementById('hc-bulk');
-    if (!hcToken()) { toast('Save a Hardcover token first'); return; }
+    if (!hcReady()) { toast('No Hardcover key on this server'); return; }
     if (btn.disabled || hcEnrichBusy) return;
     btn.disabled = true; hcEnrichBusy = true;
     const targets = library.filter(b => !b.hcEnriched);

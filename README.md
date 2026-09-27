@@ -26,28 +26,35 @@ button or title search instead.
 
 The repo also deploys to Cloudflare Pages (no build step, root output directory):
 
-- `functions/config.js.js` serves `/config.js` from Pages environment variables
-  (`HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`).
+- `functions/config.js.js` serves `/config.js` from Pages environment variables.
+  Since v89 it carries **no secrets** — only `hardcover`/`gbooks` capability
+  flags plus the Supabase URL/anon key (public by design).
+- `functions/api/hardcover.js` serves `POST /api/hardcover`: forwards GraphQL
+  queries to Hardcover with `HARDCOVER_TOKEN` attached server-side.
+- `functions/api/gbooks/[[path]].js` serves `GET /api/gbooks/books/v1/volumes`:
+  forwards to Google Books with `GOOGLE_BOOKS_KEY` attached server-side
+  (only the volumes endpoint is allowed).
 - `functions/cover-proxy.js` serves `/cover-proxy`, restricted to known cover hosts.
 - `_headers` keeps `/sw.js` out of edge caching so updates propagate.
-- `server.py` stays for local development; it is not used on Pages.
+- `server.py` stays for local development (it mirrors the `/api/*` proxies
+  using `server-config.json`); it is not used on Pages.
 
-### Hardcover token auto-sharing (optional, home network only)
+Pages env vars to set: `HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`, `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`. Because the secrets never reach the browser, no
+Cloudflare Access allowlist is needed to keep them private — though Access
+is still a fine extra layer if you want the whole site login-gated.
 
-The server can hand your Hardcover token to devices on your home network automatically,
-so nobody has to paste it into Settings:
+### API keys (server-side since v89)
 
-1. Copy `server-config.example.json` to `server-config.json` and paste your token.
-2. Restart `start-server.bat`.
+Put your Hardcover token and Google Books key in `server-config.json` (local:
+copy `server-config.example.json`) or in the Pages environment variables
+(`HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`). The keys stay on the server and are
+attached to API calls by the `/api/*` proxies — browsers only ever see
+capability flags, so no device ever needs a key pasted into Settings and
+there is nothing worth stealing in `/config.js`.
 
-Phones/tablets on your Wi-Fi then enrich books with zero setup. Anyone connecting
-from outside your network gets an empty config and must enter the token manually
-in Settings (it stays on that device). A manually entered token always overrides
-the server one.
-
-Security notes: the check happens **server-side** — the token is never sent to
-external clients at all. Anyone already on your home Wi-Fi could technically read
-it from the page, so only do this on a network you trust. If a token was ever
+Security notes: the keys never leave the server at all — browsers only see
+capability flags. If a token was ever
 pasted anywhere public (chat logs, screenshots), revoke it at hardcover.app and
 make a fresh one for `server-config.json`. Never commit `server-config.json`
 anywhere.

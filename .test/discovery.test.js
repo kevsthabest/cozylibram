@@ -55,7 +55,7 @@ const mk = (id, title, series) =>
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 (async () => {
-  runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcoverToken: 'fake-token' };
+  runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcover: true };
     library.push(${mk('d1', 'Owned Book', true)});`);
 
   // 1. author sheet: library section + external "more by author"
@@ -106,7 +106,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
     window.inLibrary({ isbn: '', title: 'Nope', author: 'Nobody' }) === false);
 
   // 6. dead Hardcover token -> honest error, not "nothing missing"
-  runInWindow(`window.__hcDead = true; window.SPICY_CONFIG = { hardcoverToken: 'revoked-token' };
+  runInWindow(`window.__hcDead = true; window.SPICY_CONFIG = { hardcover: true };
     seriesCache.clear(); authorCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
   ok('dead token shows token-rejected reason, not empty-shelf',

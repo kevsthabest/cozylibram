@@ -10,8 +10,8 @@ const window = dom.window;
 const jok = (j) => ({ ok: true, json: async () => j });
 const no = { ok: false, status: 404 };
 window.fetch = async (url) => {
-  const u = String(url);
-  if (u.includes('googleapis.com')) {
+  const u = decodeURIComponent(String(url));
+  if (u.includes('googleapis.com') || u.includes('/api/gbooks')) {
     if (u.includes('isbn:1111111111')) return jok({ items: [{ volumeInfo: { pageCount: 384, industryIdentifiers: [{ type: 'ISBN_10', identifier: '1111111111' }] } }] });
     if (u.includes('isbn:6666666666')) return jok({ items: [{ volumeInfo: { pageCount: 500, industryIdentifiers: [{ identifier: '6666666666' }] } }] });
     if (u.includes('isbn:2222222222')) return jok({ items: [

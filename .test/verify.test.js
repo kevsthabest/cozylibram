@@ -14,7 +14,7 @@ let seenGb = [];
 window.fetch = async (url) => {
   const u = String(url);
   if (u.includes('openlibrary.org/search.json?isbn=')) return { ok: true, json: async () => ({ docs: olDocs }) };
-  if (u.includes('googleapis.com/books/v1/volumes')) { seenGb.push(u); return { ok: true, json: async () => ({ items: gbItems }) }; }
+  if (u.includes('googleapis.com/books/v1/volumes') || u.includes('/api/gbooks/books/v1/volumes')) { seenGb.push(u); return { ok: true, json: async () => ({ items: gbItems }) }; }
   throw new Error('unexpected fetch: ' + u);
 };
 

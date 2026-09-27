@@ -27,7 +27,7 @@ async function appleBookCovers(term, freshPush) {
 
 // Hardcover edition cover art — only when the home-server token is set.
 async function hardcoverCover(isbn, freshPush) {
-  if (typeof hcToken !== 'function' || !hcToken()) return;
+  if (typeof hcReady !== 'function' || !hcReady()) return;
   try {
     const q = 'query { editions(where: {isbn_13: {_eq: ' + JSON.stringify(isbn) +
       '}}, limit: 8) { image { url } } }';
@@ -65,7 +65,7 @@ async function fetchCoverCandidates(book) {
   };
   if (isbn) {
     try {
-      const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
+      const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
         encodeURIComponent(isbn) + '&maxResults=8'));
       const d = await r.json();
       (d.items || []).forEach(it => {

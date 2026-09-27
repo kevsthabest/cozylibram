@@ -1,15 +1,14 @@
-// Google Books API key tests: key appended to requests when set, omitted when not.
+// Google Books proxy tests: requests go to the same-origin /api/gbooks proxy,
+// the key never appears in client-built URLs (v89).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
 const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
-let lastUrl = null;
 const seenUrls = [];
 window.fetch = async (url) => {
-  lastUrl = String(url);
-  seenUrls.push(lastUrl);
+  seenUrls.push(String(url));
   return { ok: true, json: async () => ({ items: [] }) };
 };
 window.matchMedia = () => ({ matches: false });
@@ -25,55 +24,38 @@ const runInWindow = (js) => {
 };
 
 (async () => {
-  // 1. no key: URL untouched
+  // 1. not configured: flag false, status text explains
   runInWindow(`delete window.SPICY_CONFIG;`);
-  ok('gbUrl without key leaves URL alone',
-    window.gbUrl('https://www.googleapis.com/books/v1/volumes?q=test') ===
-    'https://www.googleapis.com/books/v1/volumes?q=test');
+  ok('gbReady false with no config', window.gbReady() === false);
   ok('status text with no key', window.gbKeyStatusText().indexOf('No key set') === 0);
 
-  // 2. manual key: appended
-  runInWindow(`window.SPICY_CONFIG = { googleBooksKey: 'AIzaTEST123' };`);
-  ok('gbUrl appends key',
-    window.gbUrl('https://www.googleapis.com/books/v1/volumes?q=test') ===
-    'https://www.googleapis.com/books/v1/volumes?q=test&key=AIzaTEST123');
-  ok('status text with server key', window.gbKeyStatusText().indexOf('home-server') !== -1);
+  // 2. gbProxyUrl rewrites Google URLs to the same-origin proxy
+  ok('gbProxyUrl rewrites to /api/gbooks',
+    window.gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=test') ===
+    '/api/gbooks/books/v1/volumes?q=test');
+  ok('gbProxyUrl strips a client-supplied key',
+    window.gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=test&key=ABC').indexOf('key=') === -1);
 
-  // 3. searchBooks sends the key (GB returns no items here, so it falls through to OL)
+  // 3. configured: flag true, status text says server-side
+  runInWindow(`window.SPICY_CONFIG = { gbooks: true };`);
+  ok('gbReady true when configured', window.gbReady() === true);
+  ok('status text mentions server-side', window.gbKeyStatusText().indexOf('server-side') !== -1);
+
+  // 4. searchBooks goes through the proxy, key never in the URL
   seenUrls.length = 0;
   await window.searchBooks('iron flame');
-  ok('searchBooks includes key',
-    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('key=AIzaTEST123') !== -1));
-
-  // 4. lookupISBN sends the key on the Google Books call (then falls back to OL)
-  seenUrls.length = 0;
-  runInWindow(`window.SPICY_CONFIG = { googleBooksKey: 'AIzaTEST123' };`);
-  await window.lookupISBN('9780123456789');
-  ok('lookupISBN Google Books call includes key',
-    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('key=AIzaTEST123') !== -1));
-  runInWindow(`delete window.SPICY_CONFIG;`);
-  await window.searchBooks('iron flame');
-  ok('searchBooks omits key when unset', lastUrl.indexOf('key=') === -1);
-
-  // 6. English-only results: Google Books calls carry langRestrict=en (v52)
-  seenUrls.length = 0;
-  await window.searchBooks('haunting adeline');
+  ok('searchBooks uses /api/gbooks',
+    seenUrls.some(u => u.indexOf('/api/gbooks/books/v1/volumes') !== -1));
+  ok('searchBooks URL carries no key',
+    seenUrls.every(u => u.indexOf('key=') === -1));
   ok('searchBooks requests English volumes',
-    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('langRestrict=en') !== -1));
+    seenUrls.some(u => u.indexOf('langRestrict=en') !== -1));
+
+  // 5. lookupISBN goes through the proxy too (then falls back to OL)
   seenUrls.length = 0;
   await window.lookupISBN('9780123456789');
-  ok('lookupISBN requests English volumes',
-    seenUrls.some(u => u.indexOf('googleapis.com') !== -1 && u.indexOf('langRestrict=en') !== -1));
-
-  // 5. server-shared key via SPICY_CONFIG; stale device keys ignored
-  runInWindow(`window.SPICY_CONFIG = { googleBooksKey: 'AIzaSERVER' };`);
-  ok('server key picked up', window.gbKey() === 'AIzaSERVER');
-  ok('gbUrl uses server key',
-    window.gbUrl('https://x/?a=1').indexOf('key=AIzaSERVER') !== -1);
-  ok('status text with server key', window.gbKeyStatusText().indexOf('home-server') !== -1);
-  runInWindow(`localStorage.setItem('gbooks_key', 'AIzaSTALE');`);
-  ok('stale device key ignored', window.gbKey() === 'AIzaSERVER');
-  runInWindow(`delete window.SPICY_CONFIG;`);
+  ok('lookupISBN uses /api/gbooks',
+    seenUrls.some(u => u.indexOf('/api/gbooks/books/v1/volumes') !== -1 && u.indexOf('q=isbn%3A') !== -1));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

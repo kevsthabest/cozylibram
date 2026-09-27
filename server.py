@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Cozy Libram server.
 
-Serves the app's static files, plus a dynamic /config.js that hands the
-configured secrets (Hardcover token, Google Books key, Supabase credentials)
-to every client. NOTE: anyone who can reach this server's port can read
-those secrets — keep the port off the public internet (no port forwarding)
-unless you accept that exposure.
+Serves the app's static files, plus:
+- /config.js: capability flags (which server-side keys are configured) and
+  Supabase credentials. Carries NO secrets since v89 — the Hardcover token
+  and Google Books key stay in server-config.json and are attached
+  server-side by the /api/* proxies below.
+- /api/hardcover: POST {query} → Hardcover GraphQL with the server token.
+- /api/gbooks/...: GET → Google Books API with the server key.
+- /cover-proxy: same-origin cover fetches for pixel reads.
 
 Setup: copy server-config.example.json to server-config.json and paste your
 Hardcover personal token and Google Books API key in it. server-config.json
@@ -16,6 +19,7 @@ import json
 import os
 import re
 import socket
+import urllib.error
 import urllib.parse
 import urllib.request
 from functools import partial
@@ -53,19 +57,14 @@ def load_cloud_cfg():
 
 
 def config_js_body():
-    """The /config.js payload: all configured secrets, served to every client.
+    """The /config.js payload: capability flags, not secrets.
 
-    Gating was removed per the owner's decision (2026-09-26). Anyone able to
-    reach this server can read these secrets — do not expose the port to the
-    public internet.
+    Since v89 the Hardcover token and Google Books key never leave the
+    server — the /api/* proxies attach them. Clients only learn whether
+    each integration is configured.
     """
-    payload = {}
-    token = load_token()
-    if token:
-        payload['hardcoverToken'] = token
-    gbk = load_gb_key()
-    if gbk:
-        payload['googleBooksKey'] = gbk
+    payload = {'hardcover': bool(load_token()),
+               'gbooks': bool(load_gb_key())}
     cc = load_cloud_cfg()
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
         payload['supabaseUrl'] = cc['supabaseUrl']
@@ -115,7 +114,112 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/cover-proxy':
             self.handle_cover_proxy()
             return
+        if path == '/api/hardcover':
+            self.send_error(405, 'use POST')
+            return
+        if path.startswith('/api/gbooks/'):
+            self.handle_api_gbooks()
+            return
         super().do_GET()
+
+    def do_POST(self):
+        path = self.path.split('?')[0]
+        if path == '/api/hardcover':
+            self.handle_api_hardcover()
+            return
+        self.send_error(404)
+
+    def handle_api_hardcover(self):
+        """POST {query} → Hardcover GraphQL with the server-side token.
+
+        Mirrors functions/api/hardcover.js. Hardcover's own HTTP status is
+        forwarded so the client's 401/403 handling keeps working.
+        """
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+            raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
+            query = json.loads(raw).get('query') or ''
+            if not isinstance(query, str) or not query or len(query) > 8000:
+                self.send_error(400, 'bad request')
+                return
+            token = load_token()
+            if not token:
+                body = b'{"errors":[{"message":"hardcover not configured on this server"}]}'
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            req = urllib.request.Request(
+                'https://api.hardcover.app/v1/graphql',
+                data=json.dumps({'query': query}).encode('utf-8'),
+                headers={'Content-Type': 'application/json',
+                         'Authorization': 'Bearer ' + token,
+                         'User-Agent': 'CozyLibram/1.0 hc-proxy'})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = r.read(2 * 1024 * 1024)
+                status = r.status
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read(256 * 1024)
+            self.send_response(e.code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'hardcover fetch failed')
+            except Exception:
+                pass
+
+    def handle_api_gbooks(self):
+        """GET /api/gbooks/books/v1/volumes?... → Google Books, key attached.
+
+        Mirrors functions/api/gbooks/[[path]].js. Only the volumes endpoint
+        is allowed; a client-supplied key param is stripped and replaced.
+        """
+        try:
+            parts = self.path.split('?', 1)
+            subpath = parts[0][len('/api/gbooks/'):]
+            if subpath != 'books/v1/volumes':
+                self.send_error(404)
+                return
+            qs = urllib.parse.parse_qs(parts[1] if len(parts) > 1 else '')
+            qs.pop('key', None)
+            key = load_gb_key()
+            if key:
+                qs['key'] = [key]
+            url = ('https://www.googleapis.com/' + subpath + '?' +
+                   urllib.parse.urlencode(qs, doseq=True))
+            req = urllib.request.Request(
+                url, headers={'User-Agent': 'CozyLibram/1.0 gbooks-proxy'})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = r.read(2 * 1024 * 1024)
+                ctype = r.headers.get('Content-Type', 'application/json')
+                status = r.status
+            self.send_response(status)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read(256 * 1024)
+            self.send_response(e.code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'gbooks fetch failed')
+            except Exception:
+                pass
 
     def handle_cover_proxy(self):
         """Fetch a cover image server-side and return its bytes same-origin.
@@ -165,7 +269,7 @@ def main():
     print('[Cozy Libram] Serving at http://localhost:%d' % PORT)
     print('[Cozy Libram] On your home network, also reachable at this PC\'s LAN IP.')
     if token:
-        print('[Cozy Libram] Hardcover token loaded — served to every client (/config.js).')
+        print('[Cozy Libram] Hardcover token loaded — attached server-side (/api/hardcover).')
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
         print('[Cozy Libram] Supabase config loaded — served to every client (/config.js).')
     if not token and not (cc['supabaseUrl'] and cc['supabaseAnonKey']):

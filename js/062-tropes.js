@@ -105,7 +105,7 @@ async function fetchHardcoverTags(book) {
   try { delete book._hcDocTags; } catch (e) {}
   // Community tags via the books table need the token (one extra request).
   try {
-    if (book.hcId && typeof hcToken === 'function' && hcToken() && typeof hcGraphQL === 'function') {
+    if (book.hcId && typeof hcReady === 'function' && hcReady() && typeof hcGraphQL === 'function') {
       const data = await hcGraphQL('query { books(where: {id: {_eq: ' + Number(book.hcId) + '}}) { cached_tags } }');
       const ct = data && data.books && data.books[0] && data.books[0].cached_tags;
       normalizeCachedTags(ct).forEach(push);

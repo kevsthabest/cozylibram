@@ -1,4 +1,5 @@
-// Home-server Hardcover token tests: server-only config + settings UI.
+// Server-side key tests: the browser only learns capability flags (v89) —
+// the Hardcover token and Google Books key never reach the client.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -15,30 +16,34 @@ const q = (s) => window.document.querySelector(s);
 
 // 1. Nothing configured
 delete window.SPICY_CONFIG;
-ok('no token when nothing configured', window.hcToken() === '');
-ok('status says none set', window.hcStatusText().indexOf('No token set') === 0);
+ok('not ready when nothing configured', window.hcReady() === false);
+ok('gbooks not ready when nothing configured', window.gbReady() === false);
+ok('status says none set', window.hcStatusText().indexOf('No key') === 0);
 
-// 2. Server token
-window.SPICY_CONFIG = { hardcoverToken: 'srv_token_123' };
-ok('server token used', window.hcToken() === 'srv_token_123');
-ok('status mentions home server', window.hcStatusText().includes('home-server'));
+// 2. Server flags set — ready, but no secret is exposed to the client
+window.SPICY_CONFIG = { hardcover: true, gbooks: true };
+ok('hcReady true from flag', window.hcReady() === true);
+ok('gbReady true from flag', window.gbReady() === true);
+ok('status mentions server-side', window.hcStatusText().includes('server-side'));
+ok('no secret anywhere on the client config',
+  JSON.stringify(window.SPICY_CONFIG).indexOf('srv_token') === -1);
 
-// 3. Stale device keys are ignored (and were cleaned up at boot)
-window.localStorage.setItem('hc_token', 'stale_token_999');
-ok('stale hc_token ignored', window.hcToken() === 'srv_token_123');
-window.localStorage.removeItem('hc_token');
+// 3. Legacy secret fields (old cached /config.js) expose nothing usable
+window.SPICY_CONFIG = { hardcoverToken: 'srv_token_123', googleBooksKey: 'AIzaOLD' };
+ok('legacy token field does not enable calls', window.hcReady() === false);
+ok('legacy gbooks field does not enable calls', window.gbReady() === false);
 
 // 4. Settings UI: no manual entry fields anymore
+window.SPICY_CONFIG = { hardcover: true };
 window.renderSettings();
 const view = window.document.getElementById('view');
 ok('no token input in settings', !q('#hc-token'));
 ok('no save button in settings', !q('#hc-save'));
 ok('test + enrich buttons still present', !!q('#hc-test') && !!q('#hc-bulk'));
-ok('settings mentions server-config.json', view.textContent.includes('server-config.json'));
 
 // 5. Empty server payload behaves like no server
 window.SPICY_CONFIG = {};
-ok('empty server config means no token', window.hcToken() === '');
+ok('empty server config means not ready', window.hcReady() === false);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

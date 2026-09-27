@@ -2,34 +2,38 @@
 
 /* ---------------- Hardcover (series, content warnings, moods) ---------------- */
 // Free GraphQL API: https://api.hardcover.app/v1/graphql
-// Needs a personal token (hardcover.app → account settings → API). The token
-// lives in server-config.json on the home PC and is shared with LAN clients
-// via /config.js (never cached).
-const HC_API = 'https://api.hardcover.app/v1/graphql';
-function hcToken() {
-  try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcoverToken) || '').trim(); }
-  catch (e) { return ''; }
+// v89: the personal token never reaches the browser. The app POSTs queries to
+// the same-origin /api/hardcover proxy (Pages Function or server.py), which
+// attaches the token server-side. /config.js only carries a boolean flag.
+const HC_API = '/api/hardcover';
+function hcReady() {
+  try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcover)); }
+  catch (e) { return false; }
 }
 function hcStatusText() {
-  if (hcToken()) return icon('owned') + ' Using home-server token ✓';
-  return 'No token set — add hardcover_token to server-config.json on your home PC.';
+  if (hcReady()) return icon('owned') + ' Using server-side Hardcover key ✓';
+  return 'No key set — add HARDCOVER_TOKEN (Pages env) or hardcover_token (server-config.json).';
 }
 
 async function hcGraphQL(query) {
-  const token = hcToken();
-  if (!token) return null;
+  if (!hcReady()) return null;
   // v77: every failure mode throws a specific, human-readable error instead of
   // silently returning undefined — callers (series overlay, test button,
   // enrichment) can finally tell "token rejected" apart from "offline".
+  // v89: the proxy forwards Hardcover's own HTTP status, so the handling below
+  // is unchanged.
   let r;
   try {
     r = await fetch(HC_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query })
     });
   } catch (e) {
-    throw new Error('Network error — couldn\'t reach Hardcover. Check your connection and try again.');
+    throw new Error('Network error — couldn\'t reach the server. Check your connection and try again.');
+  }
+  if (r.status === 503) {
+    throw new Error('Hardcover isn\'t configured on this server (no token).');
   }
   if (r.status === 401 || r.status === 403) {
     // v83: a 403 isn't always the token — Hardcover also answers 403 when the
@@ -43,9 +47,9 @@ async function hcGraphQL(query) {
     if (r.status === 403 && detail && /not permitted|forbidden|blocked|ilike/i.test(detail)) {
       throw new Error('Hardcover blocked this query (HTTP 403): ' + detail);
     }
-    throw new Error('Hardcover rejected the token (HTTP ' + r.status + '). It may be expired or revoked — ' +
+    throw new Error('Hardcover rejected the server token (HTTP ' + r.status + '). It may be expired or revoked — ' +
       'Hardcover tokens expire every Jan 1. Grab a fresh one at hardcover.app → Account settings → API, ' +
-      'then update hardcover_token in server-config.json on your home PC.');
+      'then update it on the server.');
   }
   let d;
   try { d = await r.json(); }
@@ -61,7 +65,7 @@ function hcHits(data) {
 // Enrich a book with Hardcover data: series, content warnings, moods, genres, rating.
 // Returns true when Hardcover had the book.
 async function enrichHardcover(book) {
-  if (!hcToken() || book.hcEnriched) return false;
+  if (!hcReady() || book.hcEnriched) return false;
   try {
     let doc = null;
     if (book.isbn) {
@@ -143,7 +147,7 @@ function hcSweepTargets() {
   return library.filter(b => !b.hcEnriched && !(b.hcCheckedAt > weekAgo));
 }
 async function autoEnrichSweep() {
-  if (hcEnrichBusy || !hcToken() || !hcAutoEnabled()) return;
+  if (hcEnrichBusy || !hcReady() || !hcAutoEnabled()) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const targets = hcSweepTargets();
   if (!targets.length) return;
@@ -240,7 +244,7 @@ function addBook(book, openEditor) {
     });
   }
   // Background Hardcover enrichment — lands a moment later without blocking the add.
-  if (hcToken() && !book.hcEnriched) {
+  if (hcReady() && !book.hcEnriched) {
     enrichHardcover(book).then(ok => {
       if (!ok) return;
       saveLibrary();

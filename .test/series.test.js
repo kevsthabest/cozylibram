@@ -121,7 +121,7 @@ ok('empty state without series', q('#view .empty') && q('#view').textContent.inc
 // resolves the series id, then detail is fetched by id. A depth rejection
 // retries with the slim field set.
 (async () => {
-  runInWindow('window.SPICY_CONFIG = { hardcoverToken: "tok" };');
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
   runInWindow(`window.__queries = [];
     window.__fullDetail = { id: 7, name: 'ACOTAR', author: { name: 'Sarah J. Maas' },
       book_series: [

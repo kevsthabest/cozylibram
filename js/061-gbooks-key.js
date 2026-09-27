@@ -4,20 +4,27 @@
 // Without a key, Google Books draws from one anonymous quota shared by everyone,
 // which can run dry (HTTP 429). A free personal key gives your own 1,000
 // requests/day. Get one: Google Cloud Console → enable "Books API" → create an
-// API key (restrict it to the Books API). The key lives in server-config.json
-// on the home PC and is shared with LAN clients via /config.js.
-function gbKey() {
-  try { return ((window.SPICY_CONFIG && window.SPICY_CONFIG.googleBooksKey) || '').trim(); }
-  catch (e) { return ''; }
+// API key (restrict it to the Books API).
+// v89: the key never reaches the browser. Requests go to the same-origin
+// /api/gbooks proxy (Pages Function or server.py), which attaches the key
+// server-side. /config.js only carries a boolean flag.
+function gbReady() {
+  try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.gbooks)); }
+  catch (e) { return false; }
 }
 function gbKeyStatusText() {
-  if (gbKey()) return icon('owned') + ' Using home-server key ✓';
-  return 'No key set — add google_books_key to server-config.json on your home PC.';
+  if (gbReady()) return icon('owned') + ' Using server-side Google Books key ✓';
+  return 'No key set — add GOOGLE_BOOKS_KEY (Pages env) or google_books_key (server-config.json).';
 }
-// Append the API key to a Google Books URL when we have one.
-function gbUrl(base) {
-  const k = gbKey();
-  return k ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(k) : base;
+// Rewrite a Google Books API URL to the same-origin proxy. Any client-side
+// `key` param is stripped — the server attaches its own (or forwards the
+// request anonymously when it has none).
+function gbProxyUrl(googleUrl) {
+  try {
+    const u = new URL(googleUrl);
+    u.searchParams.delete('key');
+    return '/api/gbooks' + u.pathname + (u.search ? u.search : '');
+  } catch (e) { return googleUrl; }
 }
 
 // ISBN lookup with the shared metadata cache in front: a cache hit returns
@@ -35,7 +42,7 @@ async function lookupISBN(isbn) {
 async function lookupISBNFromAPIs(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
   try {
-    const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
+    const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
     const d = await r.json();
     if (d.items && d.items.length) return enrichRatings(normalizeVolume(d.items[0], clean));
   } catch (e) { /* fall through to Open Library */ }
@@ -57,7 +64,7 @@ async function lookupISBNFromAPIs(isbn) {
 
 async function searchBooks(q) {
   try {
-    const r = await fetch(gbUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
+    const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
     const d = await r.json();
     if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
   } catch (e) { /* fall through to Open Library */ }

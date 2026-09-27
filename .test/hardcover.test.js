@@ -30,14 +30,14 @@ async function throwsWith(setup, needle) {
 }
 
 (async () => {
-  runInWindow('window.SPICY_CONFIG = { hardcoverToken: "tok" };');
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
 
   ok('401 -> token rejected',
     await throwsWith(async () => ({ status: 401, json: async () => ({ message: 'unauthorized' }) }),
-      'rejected the token (HTTP 401)'));
+      'server token (HTTP 401)'));
   ok('403 -> token rejected',
     await throwsWith(async () => ({ status: 403, json: async () => ({}) }),
-      'rejected the token (HTTP 403)'));
+      'server token (HTTP 403)'));
   ok('403 with blocked-operation body -> query blamed, not the token',
     await throwsWith(async () => ({ status: 403,
         json: async () => ({ message: 'ilike and related operations are not permitted on this server' }) }),

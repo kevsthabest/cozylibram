@@ -86,7 +86,7 @@ const BLURB = 'A mafia prince falls for his enemy — forced proximity in a worl
   ok('transient doc tags cleaned up', !('_hcDocTags' in window.__b3));
 
   // hardcover books query via hcId (mocked hcGraphQL)
-  runInWindow('window.SPICY_CONFIG = { hardcoverToken: "tok" };');
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
   runInWindow('window.hcGraphQL = async () => ({ books: [{ cached_tags: ["forced proximity", "Fiction", "#stalker"] }] });');
   runInWindow('window.__b4 = { tropes: [], description: "", hcId: 123 };');
   runInWindow('refreshTropeSuggestions(window.__b4).then(r => { window.__r4 = r; });');

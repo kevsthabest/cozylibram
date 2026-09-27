@@ -30,7 +30,7 @@ const seed = () => runInWindow(`(function(){
   library.push(B('b2', { hcEnriched: true }));                          // already done
   library.push(B('b3', { hcCheckedAt: Date.now() }));                   // miss, checked recently
   library.push(B('b4', { hcCheckedAt: Date.now() - 8 * 86400000 }));     // miss, retry due
-  window.SPICY_CONFIG = { hardcoverToken: 'fake-token-for-tests' };
+  window.SPICY_CONFIG = { hardcover: true };
 })();`);
 
 (async () => {

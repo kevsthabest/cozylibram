@@ -57,7 +57,7 @@ async function fetchMoreByAuthor(author) {
 async function fetchSeriesBooks(seriesName, authorName) {
   const key = String(seriesName).trim().toLowerCase();
   if (seriesCache.has(key)) return seriesCache.get(key);
-  if (!hcToken()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
+  if (!hcReady()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
   const fullFields = 'id name author { name }' +
     ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
     ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +

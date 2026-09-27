@@ -1,4 +1,4 @@
-"""server.py tests: config sharing (gating removed 2026-09-26) + cover proxy."""
+"""server.py tests: /config.js flags (no secrets since v89) + /api/* proxies + cover proxy."""
 import importlib.util
 
 spec = importlib.util.spec_from_file_location('spicy_server', '/home/hatch/workspace/booktok/server.py')
@@ -7,25 +7,29 @@ spec.loader.exec_module(server)
 
 failed = 0
 
-# Token is served to every client (no LAN/WAN gating)
+# /config.js carries flags only — the token never reaches the client
 server.load_token = lambda: 'tok_secret_999'
+server.load_gb_key = lambda: ''
 body = server.config_js_body().decode('utf-8')
-ok = 'tok_secret_999' in body
-print(('PASS' if ok else 'FAIL') + ' - every client receives token')
+ok = ('"hardcover": true' in body and '"gbooks": false' in body
+      and 'tok_secret_999' not in body and 'hardcoverToken' not in body)
+print(('PASS' if ok else 'FAIL') + ' - /config.js carries flags, never the token')
 failed += 0 if ok else 1
 
-# No token configured -> empty for everyone
+# Nothing configured -> both flags false
 server.load_token = lambda: ''
-ok = server.config_js_body() == b'window.SPICY_CONFIG = {};'
-print(('PASS' if ok else 'FAIL') + ' - empty config when no token set')
+server.load_gb_key = lambda: ''
+ok = server.config_js_body() == b'window.SPICY_CONFIG = {"hardcover": false, "gbooks": false};'
+print(('PASS' if ok else 'FAIL') + ' - empty config when nothing set')
 failed += 0 if ok else 1
 
 print('\n%d failed' % failed)
 if failed:
     raise SystemExit(1)
 
-# Live HTTP checks: /health and LAN-only /config.js
+# Live HTTP checks
 import http.client
+import json
 import threading
 
 srv = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
@@ -42,13 +46,47 @@ if not ok:
     raise SystemExit(1)
 
 server.load_token = lambda: 'tok_secret_999'
+server.load_gb_key = lambda: 'gbkey_123'
 server.load_cloud_cfg = lambda: {'supabaseUrl': 'https://xyz.supabase.co', 'supabaseAnonKey': 'anon123'}
 conn.request('GET', '/config.js')
 r = conn.getresponse()
 cfg_body = r.read().decode('utf-8')
-ok = ('tok_secret_999' in cfg_body and 'anon123' in cfg_body
+payload = json.loads(cfg_body.replace('window.SPICY_CONFIG = ', '').rstrip(';'))
+ok = (payload.get('hardcover') is True and payload.get('gbooks') is True
+      and 'tok_secret_999' not in cfg_body and 'gbkey_123' not in cfg_body
+      and payload.get('supabaseAnonKey') == 'anon123'
       and 'no-store' in (r.getheader('Cache-Control') or ''))
-print(('PASS' if ok else 'FAIL') + ' - localhost /config.js carries secrets, no-store')
+print(('PASS' if ok else 'FAIL') + ' - /config.js: flags + supabase, no secrets, no-store')
+if not ok:
+    raise SystemExit(1)
+
+# /api/hardcover guards (no upstream network needed)
+conn.request('GET', '/api/hardcover')
+ok = conn.getresponse().status == 405
+print(('PASS' if ok else 'FAIL') + ' - /api/hardcover GET -> 405')
+if not ok:
+    raise SystemExit(1)
+
+conn.request('POST', '/api/hardcover', body=b'{"nope":1}',
+             headers={'Content-Type': 'application/json'})
+ok = conn.getresponse().status == 400
+print(('PASS' if ok else 'FAIL') + ' - /api/hardcover bad body -> 400')
+if not ok:
+    raise SystemExit(1)
+
+server.load_token = lambda: ''
+conn.request('POST', '/api/hardcover', body=b'{"query":"query { x }"}',
+             headers={'Content-Type': 'application/json'})
+r = conn.getresponse()
+ok = r.status == 503
+print(('PASS' if ok else 'FAIL') + ' - /api/hardcover no token -> 503')
+if not ok:
+    raise SystemExit(1)
+
+# /api/gbooks guards (no upstream network needed)
+conn.request('GET', '/api/gbooks/books/v1/mylibrary/bookshelves')
+ok = conn.getresponse().status == 404
+print(('PASS' if ok else 'FAIL') + ' - /api/gbooks non-volumes path -> 404')
 if not ok:
     raise SystemExit(1)
 
