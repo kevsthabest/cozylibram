@@ -62,25 +62,31 @@ async function lookupISBNFromAPIs(isbn) {
   } catch (e) { return null; }
 }
 
-async function searchBooks(q) {
-  try {
-    const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
+async function searchBooks(q, source) {
+  // v139: source filter — 'all' (default waterfall), 'gbooks', 'openlibrary',
+  // 'hardcover'. The v138 relevance gate applies to the automatic waterfall
+  // only; an explicitly chosen source shows what it returns.
+  source = source || 'all';
+  const wantGb = source === 'all' || source === 'gbooks';
+  const wantOl = source === 'all' || source === 'openlibrary';
+  const wantHc = source === 'all' || source === 'hardcover';
+  if (wantGb) {
+    try {
+      const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
+      const d = await r.json();
+      if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
+    } catch (e) { if (!wantOl && !wantHc) throw e; }
+  }
+  if (wantOl) {
+    const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
+      '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
     const d = await r.json();
-    if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
-  } catch (e) { /* fall through to Open Library */ }
-  const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
-    '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
-  const d = await r.json();
-  // v138: Open Library's full-text search returns junk for multi-word queries
-  // ("run little killer" → James Patterson novels). Only its relevant hits
-  // count — otherwise the search falls through to Hardcover instead of
-  // showing a page of wrong books.
-  const toks = queryTokens(q);
-  const ol = (d.docs || []).map(olDocToBook).filter(b => resultMatchesQuery(b, toks));
-  if (ol.length) return ol;
-  // v137: indie titles (KU romance especially) are often in neither catalog —
-  // ask Hardcover before giving up.
-  return hcSearchBooks(q);
+    let ol = (d.docs || []).map(olDocToBook);
+    if (source === 'all') { const toks = queryTokens(q); ol = ol.filter(b => resultMatchesQuery(b, toks)); }
+    if (ol.length || !wantHc) return ol;
+  }
+  if (wantHc) return hcSearchBooks(q);
+  return [];
 }
 
 // Significant words in the query (v138): 3+ chars, minus stopwords.

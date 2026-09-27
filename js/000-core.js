@@ -33,5 +33,6 @@ let editingId = null;
 let editingDraft = null; // live draft of the open book modal (for background fills)
 let refreshProgressSection = null; // re-render fn for the open modal's progress section
 let searchResults = [];
+let searchSource = 'all'; // v139: Add → Search source filter (all/gbooks/openlibrary/hardcover)
 let scanState = { stream: null, timer: null, active: false, quagga: false };
 

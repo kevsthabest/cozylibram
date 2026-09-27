@@ -205,9 +205,16 @@ async function isbnLookupUI(isbn, mount, source) {
 
 function renderSearchTab() {
   const body = document.getElementById('add-body');
+  // v139: source filter chips — target one catalog or search them all.
+  const srcs = [['all', 'All'], ['gbooks', 'Google Books'], ['openlibrary', 'Open Library']];
+  if (typeof hcReady === 'function' && hcReady()) srcs.push(['hardcover', 'Hardcover']);
+  if (!srcs.some(s => s[0] === searchSource)) searchSource = 'all';
   body.innerHTML =
     '<div class="search-row"><input id="s-q" class="text-input" placeholder="Title or author…" enterkeyhint="search">' +
-    '<button class="btn" id="s-go">Go</button></div><div id="s-results" style="margin-top:12px"></div>';
+    '<button class="btn" id="s-go">Go</button></div>' +
+    '<div class="chips" id="s-src" style="margin-top:10px">' +
+    srcs.map(s => '<button class="chip' + (searchSource === s[0] ? ' active' : '') + '" data-s="' + s[0] + '">' + s[1] + '</button>').join('') +
+    '</div><div id="s-results" style="margin-top:12px"></div>';
   const input = document.getElementById('s-q');
   const run = async () => {
     const q = input.value.trim();
@@ -216,7 +223,7 @@ function renderSearchTab() {
     const box = document.getElementById('s-results');
     box.innerHTML = '<p class="note">Searching…</p>';
     try {
-      searchResults = await searchBooks(q);
+      searchResults = await searchBooks(q, searchSource);
       if (!searchResults.length) {
         box.innerHTML = '<p class="note">No matches. Try different words, or add it yourself:</p>' +
           '<button class="btn small ghost" id="s-manual">Add it manually</button>';
@@ -249,6 +256,12 @@ function renderSearchTab() {
   };
   document.getElementById('s-go').addEventListener('click', run);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+  body.querySelectorAll('#s-src .chip').forEach(c =>
+    c.addEventListener('click', () => {
+      searchSource = c.dataset.s;
+      body.querySelectorAll('#s-src .chip').forEach(x => x.classList.toggle('active', x === c));
+      if (input.value.trim().length >= 2) run(); // re-run under the new source
+    }));
 }
 
 function renderIsbnTab() {

@@ -47,8 +47,9 @@ window.fetch = async (url) => {
   throw new Error('unexpected fetch: ' + u);
 };
 
-async function search(q) {
+async function search(q, source) {
   runInWindow('window.__res = null; window.__err = null; searchBooks(' + JSON.stringify(q) +
+    (source === undefined ? '' : ', ' + JSON.stringify(source)) +
     ').then(r => { window.__res = r; }).catch(e => { window.__err = String(e && e.message); });');
   await new Promise(r => setTimeout(r, 50));
   return { res: window.__res, err: window.__err };
@@ -138,6 +139,49 @@ async function search(q) {
   ok('one-word overlap is not a match', window.__m === false);
   runInWindow('window.__m2 = resultMatchesQuery({ title: "Little Killer", authors: ["Darma Day"] }, ["run","little","killer"]);');
   ok('two-word overlap is a match', window.__m2 === true);
+
+  // --- v139: source filter ---
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
+  // 'hardcover' skips Google Books entirely, even when it has hits.
+  gbItems = [{ volumeInfo: { title: 'Google Book', authors: ['G Author'] } }];
+  olDocs = []; hcDocs = [HC_DOC]; hcCalls = 0;
+  ({ res, err } = await search('run little killer', 'hardcover'));
+  ok('hardcover source: no error', err === null);
+  ok('hardcover source: returns the HC book, not the GB hit',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+  ok('hardcover source: HC queried', hcCalls === 1);
+
+  // 'gbooks' never touches Hardcover or Open Library.
+  gbItems = [{ volumeInfo: { title: 'Google Book', authors: ['G Author'] } }];
+  hcCalls = 0;
+  let olCalls = 0;
+  const prevFetch = window.fetch;
+  window.fetch = async (url) => { if (String(url).includes('openlibrary')) olCalls++; return prevFetch(url); };
+  ({ res } = await search('something', 'gbooks'));
+  ok('gbooks source: GB hit returned', Array.isArray(res) && res.length === 1 && res[0].title === 'Google Book');
+  ok('gbooks source: HC untouched', hcCalls === 0);
+  ok('gbooks source: OL untouched', olCalls === 0);
+  // 'gbooks' with no GB hits → clean empty, no waterfall.
+  gbItems = [];
+  ({ res } = await search('something', 'gbooks'));
+  ok('gbooks source: empty when GB misses', Array.isArray(res) && res.length === 0);
+  ok('gbooks source: still no HC/OL on miss', hcCalls === 0 && olCalls === 0);
+  window.fetch = prevFetch;
+
+  // 'openlibrary' shows what OL returns, unfiltered (explicit choice).
+  gbItems = [];
+  olDocs = [{ key: '/works/OL1W', title: 'Run for your life', author_name: ['James Patterson'] }];
+  hcCalls = 0;
+  ({ res } = await search('run little killer', 'openlibrary'));
+  ok('openlibrary source: OL results shown unfiltered',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Run for your life');
+  ok('openlibrary source: HC untouched', hcCalls === 0);
+
+  // No source → the v137/v138 waterfall still applies.
+  gbItems = []; olDocs = []; hcDocs = [HC_DOC]; hcCalls = 0;
+  ({ res } = await search('run little killer darma day'));
+  ok('default: waterfall reaches hardcover',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
