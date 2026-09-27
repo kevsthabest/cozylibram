@@ -316,7 +316,7 @@ function renderSettings() {
   if (ggBtn) ggBtn.addEventListener('click', cloudGoogle);
   document.getElementById('ac-logout').addEventListener('click', cloudSignOut);
   document.getElementById('ac-sync').addEventListener('click', async () => {
-    toast('Syncing…'); await cloudFirstSync();
+    await cloudFirstSync({ announce: true }); // v144: quiet unless it changed something
   });
   refreshAccountUI();
   // v117: profile + privacy shortcuts

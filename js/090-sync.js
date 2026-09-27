@@ -74,6 +74,7 @@ async function cloudPushNow() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser || cloudSyncing) return false;
   cloudSyncing = true;
+  syncBegin(); // v144: the dot covers push activity too
   try {
     const rows = library.map(b => bookToRow(b, cloudUser.id));
     if (rows.length) {
@@ -93,6 +94,7 @@ async function cloudPushNow() {
     return false;
   } finally {
     cloudSyncing = false;
+    syncEnd(false); // v144
     refreshAccountUI();
   }
 }
@@ -182,20 +184,46 @@ async function cloudPullRows() {
   if (error) throw error;
   return data || [];
 }
-async function cloudFirstSync() {
+async function cloudFirstSync(opts) {
   // After sign-in (or on boot with a session): pull tombstones, apply them,
   // then pull books, merge, and push. Tombstones go first so a deletion that
   // happened on another device can't be undone by this device's push.
-  if (!cloudUser) return;
+  // v144: quiet by default — background syncs surface through the sync dot,
+  // not a toast. Pass { announce: true } for user-tapped syncs.
+  if (!cloudUser) return { changed: false };
+  const announce = !!(opts && opts.announce);
+  let changed = false;
+  syncBegin();
   try {
     await syncCloudProfile();
-    if (applyTombstones(await cloudPullTombstones())) render();
+    if (applyTombstones(await cloudPullTombstones())) { render(); changed = true; }
     const remote = await cloudPullRows();
-    if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); }
+    if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); changed = true; }
     await cloudPushNow();
     await repairFriendPollution();
-    toast('☁️ Library synced');
+    if (announce) toast(changed ? '☁️ Library updated' : '☁️ Already up to date');
   } catch (e) { toast(cloudErrMsg(e)); }
+  syncEnd(changed);
+  return { changed };
+}
+
+/* ---------------- quiet-sync activity dot (v144) ---------------- */
+// One passive indicator for every kind of cloud activity (push, pull,
+// realtime). Nested syncs share a counter so an outer sync's "done" state
+// isn't clobbered by an inner push finishing first.
+let syncActive = 0, syncDotTimer = null;
+function syncBegin() { syncActive++; setSyncDot('syncing'); }
+function syncEnd(changed) {
+  syncActive = Math.max(0, syncActive - 1);
+  if (!syncActive) setSyncDot(changed ? 'done' : 'idle');
+}
+function setSyncDot(state) {
+  const d = document.getElementById('sync-dot');
+  if (syncDotTimer) { clearTimeout(syncDotTimer); syncDotTimer = null; }
+  if (!d) return;
+  d.classList.toggle('on', state === 'syncing');
+  d.classList.toggle('done', state === 'done');
+  if (state === 'done') syncDotTimer = setTimeout(() => setSyncDot('idle'), 2500);
 }
 
 /* ---------------- realtime sync (v143) ---------------- */
@@ -260,13 +288,15 @@ async function cloudRealtimePull() {
   // never pushes — the cloud already holds whatever triggered this event, so
   // pushing here would echo our own writes back at us in a loop.
   if (!cloudUser) return;
+  syncBegin(); // v144
   try {
     let changed = applyTombstones(await cloudPullTombstones());
     if (mergeCloudBooks(library, await cloudPullRows())) { saveLibrary({ noCloud: true }); changed = true; }
     if (changed) render();
     cloudLastSync = Date.now();
     refreshAccountUI();
-  } catch (e) { /* transient — the next event or boot retries */ }
+    syncEnd(changed);
+  } catch (e) { syncEnd(false); /* transient — the next event or boot retries */ }
 }
 // v101: one-time repair for libraries polluted by the pre-fix unfiltered
 // pull (v96–v100). Once RLS let friends read each other's books, a sync after

@@ -156,6 +156,24 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   font-size: 12px;
 }
 
+/* v144: quiet-sync activity dot — a passive indicator on the account button.
+   Pulses while the app is talking to the cloud, flashes a brief check when a
+   sync actually changed something, otherwise stays out of the way. */
+.sync-dot {
+  position: absolute; top: -1px; right: -1px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg);
+  opacity: 0; transform: scale(.5); pointer-events: none; z-index: 6;
+  transition: opacity .25s ease, transform .25s ease, background-color .25s ease;
+}
+.sync-dot.on { opacity: 1; transform: scale(1); animation: sync-pulse 1.2s ease-in-out infinite; }
+.sync-dot.done { opacity: 1; transform: scale(1); background: var(--ok); animation: none; }
+@keyframes sync-pulse { 50% { transform: scale(.72); opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .sync-dot.on { animation: none; }
+  .sync-dot { transition: none; }
+}
+
 /* account menu button, top right — out of the flex flow so the title stays centered */
 .topbar-menu-wrap { position: absolute; top: 14px; right: 16px; }
 .menu-avatar {
