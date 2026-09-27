@@ -21,7 +21,7 @@ function renderGate() {
     '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
     '<input id="gate-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password">' +
     '<button class="btn block" id="gate-signin">Sign in</button>' +
-    '<button class="btn ghost block" id="gate-signup">Create account</button>' +
+    '<button class="btn ghost block" id="gate-show-signup">New here? Create account</button>' +
     (window.isSecureContext
       ? '<button class="btn ghost block" id="gate-google">Sign in with Google</button>'
       : '') +
@@ -40,11 +40,7 @@ function renderGate() {
     busy('Signing in…');
     cloudSignIn(em(), pw());
   });
-  document.getElementById('gate-signup').addEventListener('click', () => {
-    if (!em() || pw().length < 6) { busy('Enter an email and a password (6+ characters).'); return; }
-    busy('Creating account…');
-    cloudSignUp(em(), pw());
-  });
+  document.getElementById('gate-show-signup').addEventListener('click', renderGateSignup);
   const g = document.getElementById('gate-google');
   if (g) g.addEventListener('click', () => { busy('Redirecting to Google…'); cloudGoogle(); });
   document.getElementById('gate-offline').addEventListener('click', () => {
@@ -53,6 +49,43 @@ function renderGate() {
     render();
   });
   document.getElementById('gate-forgot').addEventListener('click', renderGateReset);
+}
+
+// "Create account" view (v90): the gate itself is sign-in only; tapping the
+// "New here? Create account" option opens this form. First/last name travel
+// in Supabase user_metadata and are adopted into the local profile (then the
+// profiles table) on sign-in — see enterApp.
+function renderGateSignup() {
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.style.display = 'none';
+  setView(
+    '<div class="gate-wrap"><div class="gate-card">' +
+    '<h1 class="serif">Create account</h1>' +
+    '<p class="note" id="gs-status">Your shelves, on every device.</p>' +
+    '<input id="gs-first" type="text" class="text-input" placeholder="First name" autocomplete="given-name">' +
+    '<input id="gs-last" type="text" class="text-input" placeholder="Last name" autocomplete="family-name">' +
+    '<input id="gs-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
+    '<input id="gs-pass" type="password" class="text-input" placeholder="Password (6+ characters)" autocomplete="new-password">' +
+    '<input id="gs-pass2" type="password" class="text-input" placeholder="Confirm password" autocomplete="new-password">' +
+    '<button class="btn block" id="gs-create">Create account</button>' +
+    '<button class="btn ghost block" id="gs-back">← Back to sign in</button>' +
+    '</div></div>'
+  );
+  const busy = (msg) => { const st = document.getElementById('gs-status'); if (st) st.textContent = msg; };
+  document.getElementById('gs-back').addEventListener('click', renderGate);
+  document.getElementById('gs-create').addEventListener('click', () => {
+    const first = document.getElementById('gs-first').value.trim();
+    const last = document.getElementById('gs-last').value.trim();
+    const em = document.getElementById('gs-email').value.trim();
+    const pw = document.getElementById('gs-pass').value;
+    const pw2 = document.getElementById('gs-pass2').value;
+    if (!first || !last) { busy('Tell us your first and last name.'); return; }
+    if (!em) { busy('Enter your email.'); return; }
+    if (pw.length < 6) { busy('Use a password with at least 6 characters.'); return; }
+    if (pw !== pw2) { busy('Those passwords don\'t match — try again.'); return; }
+    busy('Creating account…');
+    cloudSignUp(em, pw, first, last);
+  });
 }
 
 // "Forgot password?" view: sends a Supabase reset email. The link returns to
@@ -122,6 +155,17 @@ async function enterApp(user) {
   gateEnteredUid = user.id;
   try { localStorage.removeItem(OFFLINE_KEY); } catch (e) {}
   setLocalUser(user.id);
+  // Names captured on the "Create account" form travel in user_metadata —
+  // adopt them into the local profile so syncCloudProfile pushes them to
+  // the profiles table. Never overwrites names already set on the device.
+  try {
+    const md = (user && user.user_metadata) || {};
+    const p = loadProfile();
+    let touched = false;
+    if (!p.firstName && md.first_name) { p.firstName = String(md.first_name); touched = true; }
+    if (!p.lastName && md.last_name) { p.lastName = String(md.last_name); touched = true; }
+    if (touched) touchProfile(p);
+  } catch (e) {}
   hideGate();
   view = 'library';
   render();

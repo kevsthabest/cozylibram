@@ -18,7 +18,7 @@ function makeFake() {
     store, deleted, user: null, _cb: null,
     auth: {
       getSession: async () => ({ data: { session: fake.user ? { user: fake.user } : null } }),
-      signUp: async ({ email }) => { fake.user = { id: 'u-' + email, email }; return { data: { session: { user: fake.user } }, error: null }; },
+      signUp: async ({ email, options }) => { fake.user = { id: 'u-' + email, email }; fake.signupMeta = (options && options.data) || {}; return { data: { session: { user: fake.user } }, error: null }; },
       signInWithPassword: async ({ email }) => { fake.user = { id: 'u-' + email, email }; return { data: { session: { user: fake.user } }, error: null }; },
       signOut: async () => { fake.user = null; return { error: null }; },
       signInWithOAuth: async () => ({ data: {}, error: null }),
@@ -69,7 +69,41 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
 (async () => {
   await tick();
 
-  ok('gate shown when signed out', !!q('#gate-signin') && !!q('#gate-signup') && !!q('#gate-email'));
+  ok('gate is sign-in only with a create-account option',
+    !!q('#gate-signin') && !!q('#gate-show-signup') && !q('#gate-signup') && !!q('#gate-email'));
+
+  // v90: "Create account" opens its own form: first/last name, email,
+  // password + confirm password.
+  q('#gate-show-signup').click();
+  await tick();
+  ok('create-account option opens the signup form',
+    !!q('#gs-first') && !!q('#gs-last') && !!q('#gs-email') && !!q('#gs-pass') && !!q('#gs-pass2') && !!q('#gs-create'));
+  ok('sign-in fields hidden on the signup form', !q('#gate-signin'));
+  q('#gs-first').value = 'Wifey';
+  q('#gs-last').value = 'Reader';
+  q('#gs-email').value = 'new@example.com';
+  q('#gs-pass').value = 'secret12';
+  q('#gs-pass2').value = 'mismatch';
+  q('#gs-create').click();
+  await tick(2);
+  ok('mismatched passwords rejected',
+    q('#gs-status').textContent.indexOf("don't match") >= 0 && !window.__sbStub.signupMeta);
+  q('#gs-first').value = '';
+  q('#gs-pass2').value = 'secret12';
+  q('#gs-create').click();
+  await tick(2);
+  ok('missing name rejected',
+    q('#gs-status').textContent.indexOf('first and last name') >= 0 && !window.__sbStub.signupMeta);
+  q('#gs-first').value = 'Wifey';
+  q('#gs-create').click();
+  await tick(4);
+  ok('names travel in signup user_metadata',
+    !!window.__sbStub.signupMeta &&
+    window.__sbStub.signupMeta.first_name === 'Wifey' &&
+    window.__sbStub.signupMeta.last_name === 'Reader');
+  q('#gs-back').click();
+  await tick();
+  ok('back returns to the sign-in gate', !!q('#gate-signin') && !q('#gs-create'));
   ok('gate has Google button on secure localhost', !!q('#gate-google'));
   ok('bottom nav hidden on gate', q('.bottom-nav').style.display === 'none');
   ok('legacy storage key while signed out', probe('libKey()') === 'spicyshelves.library.v1');
@@ -177,6 +211,15 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await window.handlePasswordRecovery(window.__sbStub, 'bad-code');
   await tick(2);
   ok('expired reset code returns to the gate', !!q('#gate-signin'));
+
+  // v90: names from signup user_metadata are adopted into the local profile
+  // (and from there to the profiles table on sync).
+  window.__sbStub.fire('SIGNED_IN', { id: 'user-9', email: 'new@example.com', user_metadata: { first_name: 'New', last_name: 'Kid' } });
+  await tick(6);
+  const prof9 = JSON.parse(lsGet('spicyshelves.profile.user-9') || '{}');
+  ok('signup names adopted into the profile', prof9.firstName === 'New' && prof9.lastName === 'Kid');
+  await window.cloudSignOut();
+  await tick(2);
 
   // No backend configured → no gate, classic behavior.
   await window.cloudSignOut();

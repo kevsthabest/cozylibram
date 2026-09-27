@@ -155,10 +155,13 @@ async function cloudWipe() {
   if (error) toast('Cloud wipe failed: ' + error.message);
 }
 
-async function cloudSignUp(email, password) {
+async function cloudSignUp(email, password, firstName, lastName) {
   const sb = await cloudClient().catch(() => null);
   if (!sb) { toast('Cloud sync is not configured — add it to server-config.json on your home PC'); return; }
-  const { data, error } = await sb.auth.signUp({ email: email, password: password });
+  const meta = {};
+  if (firstName) meta.first_name = firstName;
+  if (lastName) meta.last_name = lastName;
+  const { data, error } = await sb.auth.signUp({ email: email, password: password, options: { data: meta } });
   if (error) { toast('Sign up failed: ' + error.message); return; }
   if (data && data.session) toast('☁️ Account created — signed in');
   else toast('Account created — check your email to confirm, then sign in.');
