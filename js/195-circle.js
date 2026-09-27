@@ -228,6 +228,7 @@ function renderCircle() {
     .then(([code, lists, priv]) => {
       renderCircleMain(code, lists, priv);
       circleUpgradeAvatars(document.getElementById('view'));
+      if (typeof refreshRecos === 'function') refreshRecos();
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Circle</h2></div>' +
@@ -257,6 +258,8 @@ function renderCircleMain(code, lists, priv) {
         '<button class="btn" id="cc-send">Send request</button></div></div>' +
       '<p class="note" id="cc-msg"></p>' +
     '</div>';
+
+  html += '<div id="reco-slot"></div>';
 
   // Requests
   if (lists.received.length || lists.sent.length) {

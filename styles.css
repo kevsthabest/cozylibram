@@ -1203,3 +1203,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .cf-sub .note { margin: 0; }
 .cb-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
 .cb-head .cover-wrap { width: 96px; flex: 0 0 auto; }
+
+/* ---- Circle recommendations (v97) ---- */
+.cover-wrap.reco-cover { flex-basis: 44px; width: 44px; height: 66px; border-radius: 6px; }
