@@ -19,6 +19,8 @@ const ICONS = {
     '<circle cx="4.8" cy="18" r="1.15" fill="currentColor" stroke="none"/>',
   // three book spines on a shelf (series)
   series: '<path d="M4.5 16.5v-8a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v8"/><path d="M10.5 16.5v-11a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v11"/><path d="M16.5 16.5v-6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v6"/><line x1="3" y1="20" x2="21" y2="20"/>',
+  // upright book spines (favorites shelf style)
+  spines: '<rect x="3.5" y="4" width="3.5" height="16" rx="1"/><rect x="8.5" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="3" height="16" rx="1"/><rect x="18.5" y="4" width="3" height="16" rx="1"/>',
   // quotation mark (quotes)
   quotes: '<path d="M9.5 6.5C6.7 6.5 5 8.6 5 11.4v5.1h5.5V11H7.8"/><path d="M19 6.5c-2.8 0-4.5 2.1-4.5 4.9v5.1H20V11h-2.7"/>',
 };

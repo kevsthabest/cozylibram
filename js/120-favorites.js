@@ -78,7 +78,7 @@ function favShelfHTML() {
   // v61: style toggle — spines or covers. Covers mode shows every favorite
   // in one grid (no collapse needed); spines keep the old rows + show-all.
   const styleBtn = '<button class="btn ghost sm" id="fav-style" title="Switch shelf style">' +
-    (favStyle === 'spines' ? '🖼️ Covers' : '📚 Spines') + '</button>';
+    (favStyle === 'spines' ? icon('covers') + ' Covers' : icon('spines') + ' Spines') + '</button>';
   let html = '<div class="fav-shelf"><div class="fav-head"><h3 class="serif">❤️ Favorites</h3>' +
     '<span class="fav-btns">' + styleBtn +
     (rows.length > 1 && favStyle === 'spines'

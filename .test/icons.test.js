@@ -20,7 +20,7 @@ const runInWindow = (js) => {
   window.document.body.appendChild(s);
 };
 
-['covers', 'list', 'series', 'quotes'].forEach(n => {
+['covers', 'list', 'series', 'quotes', 'spines'].forEach(n => {
   const svg = window.icon(n);
   ok(n + ' renders an inline svg', /<svg[^>]*class="ticon"/.test(svg) && svg.includes('</svg>'));
   ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
