@@ -65,6 +65,13 @@ function renderSettings() {
     'checked via Google Books first, then Open Library.</p>' +
     '<button class="btn ghost block" id="pc-backfill">📄 Fill missing page counts</button>' +
     '<p class="note" id="pc-backfill-note"></p>' +
+    '<h2 class="section serif" style="margin-top:26px">Reading log</h2>' +
+    '<div class="field"><label>“Remove today’s entry” button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
+    ['off', 'on'].map(t =>
+      '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
+      (t === 'on' ? '👁️ Show' : '🙈 Hide') + '</button>').join('') +
+    '</div></div>' +
+    '<p class="note">When shown, a book’s detail sheet gets a “Remove today’s entry” button on days with logged pages — handy for cleaning up mistaken entries.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Metadata check</h2>' +
     '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
     'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
@@ -136,6 +143,12 @@ function renderSettings() {
     btn.addEventListener('click', () => {
       try { localStorage.setItem('spicyshelves.animation', btn.dataset.t); } catch (e) {}
       document.querySelectorAll('#th-anim button').forEach(x => x.classList.toggle('active', x === btn));
+    }));
+  document.querySelectorAll('#th-rmentry button').forEach(btn =>
+    btn.addEventListener('click', () => {
+      try { localStorage.setItem('spicyshelves.logremove', btn.dataset.t); } catch (e) {}
+      document.querySelectorAll('#th-rmentry button').forEach(x => x.classList.toggle('active', x === btn));
+      toast(btn.dataset.t === 'on' ? '“Remove today’s entry” visible 👁️' : '“Remove today’s entry” hidden 🙈');
     }));
   document.querySelectorAll('#th-region button').forEach(btn =>
     btn.addEventListener('click', () => {

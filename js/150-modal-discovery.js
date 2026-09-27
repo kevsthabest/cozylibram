@@ -409,7 +409,7 @@ function renderDetailModal(b, viaBook) {
   if (draft.previouslyRead == null) {
     draft.previouslyRead = !!(draft.dateFinished && Date.now() - new Date(draft.dateFinished).getTime() > 60 * 864e5);
   }
-  const startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
+  let startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
 
   // rating-type toggle chips + per-axis emoji pickers
   const axRowsHTML = () => draft.axes.map(k => {
@@ -506,6 +506,13 @@ function renderDetailModal(b, viaBook) {
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">🔍</button>' : '') + '</div></div>' +
     '<div class="field"><label>Current page</label>' +
     '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
+    (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
+      if (!logRemoveEnabled()) return '';
+      const tk = dayKey(new Date());
+      const n = pagesOnDay(b, tk);
+      if (!n) return '';
+      return '<div class="field"><button class="btn ghost danger" id="m-rmlog">🗑️ Remove today’s entry (' + n + ' pages)</button></div>';
+    })() +
 
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
@@ -624,6 +631,25 @@ function renderDetailModal(b, viaBook) {
       renderProgressSection();
       toast('📄 Found: ' + n + ' pages');
     } else toast('No page count found for this ISBN');
+  });
+
+  const rmlog = document.getElementById('m-rmlog');
+  if (rmlog) rmlog.addEventListener('click', () => {
+    const tk = dayKey(new Date());
+    const e = (b.log || []).find(x => x.d === tk);
+    const n = e ? Math.max(0, e.to - e.from) : 0;
+    if (!n) return;
+    if (!confirm('Remove today’s log entry (' + n + ' pages) for “' + b.title + '”?')) return;
+    b.log = (b.log || []).filter(x => x.d !== tk);
+    draft.log = b.log;
+    b.progress = draft.progress = e.from; // roll progress back to where the day started
+    startProgress = e.from; // keep Save from re-logging the removed entry
+    const pi = document.getElementById('f-progress');
+    if (pi) pi.value = draft.progress;
+    saveLibrary();
+    rmlog.closest('.field').remove();
+    renderProgressSection();
+    toast('Today’s entry removed 🗑️');
   });
 
   document.getElementById('m-save').addEventListener('click', () => {

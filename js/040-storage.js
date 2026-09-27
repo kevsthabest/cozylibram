@@ -71,6 +71,10 @@ function logPages(b, oldP, newP) {
 function pagesOnDay(b, k) {
   return (b.log || []).filter(e => e.d === k).reduce((s, e) => s + Math.max(0, e.to - e.from), 0);
 }
+// v68: Settings toggle gating the "remove today's entry" button in the book modal.
+function logRemoveEnabled() {
+  try { return localStorage.getItem('spicyshelves.logremove') === 'on'; } catch (e) { return false; }
+}
 function readingStreak() {
   const days = new Set();
   library.forEach(b => {
