@@ -105,6 +105,26 @@ async function cloudPullTombstones() {
   return (data || []).map(r => r.book_id).filter(Boolean);
 }
 
+// v141: explicit un-delete — used by "Download into this library". Clears
+// tombstones (local + cloud) for these ids so the merge can't skip them,
+// then merges the rows in. Returns how many books were added.
+async function resurrectCloudBooks(rows) {
+  const ids = (rows || []).map(r => r && r.book_id).filter(Boolean);
+  ids.forEach(id => untombstone(id));
+  try { await cloudDeleteTombstones(ids); } catch (e) { /* merge anyway */ }
+  const before = library.length;
+  if (mergeCloudBooks(library, rows)) { saveLibrary(); render(); }
+  return library.length - before;
+}
+
+// v141: rescind deletions — drop tombstone rows so no device re-applies them.
+async function cloudDeleteTombstones(ids) {
+  const sb = await cloudClient().catch(() => null);
+  if (!sb || !cloudUser || !ids.length) return;
+  const { error } = await sb.from('deleted_books').delete().eq('user_id', cloudUser.id).in('book_id', ids);
+  if (error) toast(cloudErrMsg(error));
+}
+
 // Apply remote tombstones: drop matching local books and record the
 // tombstones locally so this device never re-pushes them.
 function applyTombstones(ids) {

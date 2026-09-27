@@ -404,9 +404,12 @@ function renderSettings() {
         if (!rows.length) { cbox.innerHTML = '<p class="note">Cloud library is empty.</p>'; return; }
         cbox.innerHTML = '<p class="note">Cloud has ' + rows.length + ' books.</p>' +
           '<button class="btn small" id="bk-cloud-dl">Download into this library</button>';
-        document.getElementById('bk-cloud-dl').addEventListener('click', () => {
-          if (mergeCloudBooks(library, rows)) { saveLibrary(); render(); }
-          toast('Cloud books merged ✓');
+        document.getElementById('bk-cloud-dl').addEventListener('click', async () => {
+          // v141: downloading is an explicit un-delete (see resurrectCloudBooks).
+          const added = await resurrectCloudBooks(rows);
+          toast(added > 0
+            ? 'Restored ' + added + ' book' + (added === 1 ? '' : 's') + ' from cloud ✓'
+            : 'Already up to date ✓');
           document.getElementById('bk-find').click();
         });
       } catch (e) { cbox.innerHTML = '<p class="note">Cloud check failed: ' + esc(cloudErrMsg(e)) + '</p>'; }

@@ -34,6 +34,20 @@ function makeSyncStub() {
           return { error: null };
         },
         select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id })), error: null }),
+        delete: () => {
+          const filters = [];
+          const chain = {
+            eq: (col, val) => { filters.push(r => r[col] === val); return chain; },
+            in: (col, vals) => { filters.push(r => vals.includes(r[col])); return chain; },
+            then: (resolve) => {
+              for (let i = deleted.length - 1; i >= 0; i--) {
+                if (filters.every(f => f(deleted[i]))) deleted.splice(i, 1);
+              }
+              resolve({ error: null });
+            },
+          };
+          return chain;
+        },
       };
       throw new Error('unexpected table: ' + table);
     }
@@ -119,6 +133,37 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   ok('remote deletion applied locally', window.eval(`library.map(b => b.id)`).join(',') === 'r2');
   ok('remote tombstone recorded locally', window.eval(`tombstones.map(t => t.id)`).join(',') === 'r1');
   ok('remote tombstone re-pushed (converges)', stub2.deleted.some(r => r.book_id === 'r1'));
+
+  // 8. v141: resurrectCloudBooks — explicit "Download into this library" is an
+  // un-delete. Reproduces the "books vanish on refresh" bug: stale cloud
+  // tombstones re-applied on every boot, so a plain merge could never bring
+  // the books back.
+  const stub3 = makeSyncStub();
+  window.__sbStub = stub3;
+  runInWindow(`cloudUser = { id: 'u1' };`);
+  stub3.books.push(
+    { user_id: 'u1', book_id: 'z1', isbn: null, data: { id: 'z1', title: 'Z1', _mtime: 10 } },
+    { user_id: 'u1', book_id: 'z2', isbn: null, data: { id: 'z2', title: 'Z2', _mtime: 10 } });
+  stub3.deleted.push(
+    { user_id: 'u1', book_id: 'z1', deleted_at: new Date().toISOString() },
+    { user_id: 'u1', book_id: 'z2', deleted_at: new Date().toISOString() });
+  runInWindow(`library = []; tombstones = [{ id: 'z1', at: 1 }, { id: 'z2', at: 2 }]; saveTombstones(); saveLibrary({noCloud:true});`);
+  const zrows = stub3.books.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data }));
+  const skipped = window.mergeCloudBooks([], zrows);
+  ok('bug reproduced: plain merge skips tombstoned rows', skipped === false);
+  const added = await window.resurrectCloudBooks(zrows);
+  await tick(100);
+  ok('resurrect returns the added count', added === 2);
+  ok('tombstoned books merged into the library',
+    window.eval(`library.map(b => b.id).sort().join(',')`) === 'z1,z2');
+  ok('local tombstones cleared', window.eval(`tombstones.length`) === 0);
+  ok('cloud tombstone rows deleted', stub3.deleted.length === 0);
+  ok('cloud book rows untouched', stub3.books.length === 2);
+  // A later boot no longer re-applies the deletion.
+  runInWindow(`library = [];`); // simulate a fresh boot load
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('books survive a reboot sync', window.eval(`library.map(b => b.id).sort().join(',')`) === 'z1,z2');
 
   // 7. tombstones partition per user via setLocalUser (with first-sign-in adoption)
   runInWindow(`localStorage.removeItem('spicyshelves.tombstones.v1');`);
