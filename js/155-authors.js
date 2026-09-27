@@ -58,8 +58,11 @@ function renderAuthors() {
     '<p class="note">' + list.length + ' author' + (list.length === 1 ? '' : 's') +
     ' on your shelves</p></div>';
   if (!list.length) {
-    html += '<div class="empty"><div class="big">' + icon('pencil') + '</div><h2 class="serif">No authors yet</h2>' +
-      '<p>Add some books and your authors<br>will gather here.</p></div>';
+    html += emptyState({
+      icon: 'pencil', title: 'No authors yet',
+      body: 'Add some books and your authors<br>will gather here.',
+      cta: { label: 'Add your first book', go: 'add' },
+    });
   } else {
     html += '<div class="collection-list">' + list.map(authorRowHTML).join('') + '</div>';
   }

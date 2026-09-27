@@ -140,8 +140,11 @@ function renderUpNext() {
   let html = '<button class="btn ghost" id="un-back">← Shelves</button>' +
     '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('upnext') + ' Up Next</h2>';
   if (!books.length) {
-    html += '<div class="empty"><div class="big">' + icon('upnext') + '</div><h2 class="serif">Nothing queued</h2>' +
-      '<p>Open any book and tap <b>' + icon('upnext') + ' Up Next</b><br>to build your reading shortlist.</p></div>';
+    html += emptyState({
+      icon: 'upnext', title: 'Nothing queued',
+      body: 'Open any book and tap <b>' + icon('upnext') + ' Up Next</b><br>to build your reading shortlist.',
+      cta: { label: 'Browse your library', go: 'library' },
+    });
   } else {
     html += '<p class="note">Your reading shortlist, in order — start at the top.</p><div class="un-list">' +
       books.map((b, i) =>
@@ -391,9 +394,7 @@ function renderLibrary() {
     '</div>';
 
   if (!books.length) {
-    html += '<div class="empty"><div class="big">' + icon('covers') + '</div><h2 class="serif">No books here yet</h2>' +
-      '<p>Tap <b>Add</b> below to scan a barcode<br>or search by title.</p>' +
-      '<button class="btn" data-nav="add">Add your first book</button></div>';
+    html += libraryEmptyHTML();
   } else if (layout === 'grid') {
     html += '<div class="book-grid">' + books.map((b, i) => bookTile(b, i)).join('') + '</div>';
   } else {
@@ -456,6 +457,40 @@ function renderLibrary() {
   paintSpineColors();
   const addBtn = document.querySelector('#view [data-nav="add"]');
   if (addBtn) addBtn.addEventListener('click', () => go('add'));
+}
+
+/* v126: empathetic, actionable empty states for the library — the copy
+   acknowledges the situation instead of just reporting zero results. */
+function libraryEmptyHTML() {
+  const q = query.trim();
+  if (!library.length) return emptyState({
+    icon: 'covers', title: 'Your shelves are waiting',
+    body: 'Every great library starts with a single<br>“just one more chapter.”',
+    cta: { label: 'Add your first book', go: 'add' },
+  });
+  if (q) return emptyState({
+    icon: 'search', title: 'No matches for “' + q + '”',
+    body: 'Try a different spelling — or add it<br>to your shelves anyway.',
+    cta: { label: 'Add a book', go: 'add' },
+  });
+  if (ownFilter !== 'all') return emptyState({
+    icon: 'covers', title: 'Nothing under this filter',
+    body: 'Try widening the Ownership filter above.',
+  });
+  const per = {
+    tbr: { icon: 'tbr', title: 'A deliciously empty TBR',
+      body: 'Suspiciously responsible. Discover is full<br>of tempting trouble, if you want it.',
+      cta: { label: 'Discover books', go: 'discover' } },
+    reading: { icon: 'reading', title: 'Nothing on the nightstand',
+      body: 'Pick something from your TBR<br>and settle in for a chapter.',
+      cta: { label: 'Discover books', go: 'discover' } },
+    read: { icon: 'read', title: 'No finished books yet',
+      body: 'Every finished book starts with page one.',
+      cta: { label: 'Add your first book', go: 'add' } },
+    dnf: { icon: 'dnf', title: 'No mercy kills yet',
+      body: 'DNF isn’t failure — it’s curation.' },
+  };
+  return emptyState(per[filter] || per.tbr);
 }
 
 function renderLibraryKeepFocus(pos) {

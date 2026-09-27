@@ -16,8 +16,11 @@ function renderWishlist() {
     '<div class="rel-check-row"><button class="btn ghost" id="rel-check">' + icon('sparkles') + ' Check for new releases</button></div>' +
     '<div id="release-results"></div>';
   if (!books.length) {
-    html += '<div class="empty"><div class="big">' + icon('gift') + '</div><h2 class="serif">Nothing on the wishlist</h2>' +
-      '<p>Open any book and choose <b>' + icon('tobuy') + ' To buy</b><br>under Ownership to add it here.</p></div>';
+    html += emptyState({
+      icon: 'gift', title: 'Nothing on the wishlist… yet',
+      body: 'Open any book and choose <b>' + icon('tobuy') + ' To buy</b><br>under Ownership to add it here.',
+      cta: { label: 'Discover books', go: 'discover' },
+    });
   } else {
     if (upcoming.length) {
       html += '<h3 class="wish-section">' + icon('calendar') + ' Coming soon</h3>' +

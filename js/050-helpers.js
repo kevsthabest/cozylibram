@@ -130,6 +130,21 @@ function fmtDate(iso) {
   try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch (e) { return ''; }
 }
+
+/* v126: one consistent empty-state block — empathetic title, gentle guidance,
+   and a single contextual action. `body` is trusted HTML from the call site;
+   `cta` navigates to a view via go(). */
+function emptyState(o) {
+  return '<div class="empty"><div class="big">' + icon(o.icon || 'covers') + '</div>' +
+    '<h2 class="serif">' + esc(o.title) + '</h2>' +
+    (o.body ? '<p>' + o.body + '</p>' : '') +
+    (o.cta ? '<button class="btn" data-empty-go="' + esc(o.cta.go) + '">' + esc(o.cta.label) + '</button>' : '') +
+    '</div>';
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-empty-go]');
+  if (el && typeof go === 'function') go(el.dataset.emptyGo);
+});
 // v113: days from today (local) until a YYYY-MM-DD date; null when unparsable.
 function daysUntil(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;

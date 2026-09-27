@@ -1379,3 +1379,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .bt-statusbar.status-read { background: var(--ok); }
 .bt-statusbar.status-dnf { background: var(--danger); }
 .bt-statusbar .bt-fill { display: block; height: 100%; background: rgba(255, 255, 255, 0.85); }
+
+/* ================= v126: empty-state CTA ================= */
+.empty .btn { margin-top: 14px; }

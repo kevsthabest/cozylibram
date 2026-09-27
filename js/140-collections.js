@@ -83,13 +83,18 @@ function renderSeries() {
     chip('completed', 'Completed · ' + all.filter(s => s.completed).length, seriesFilter === 'completed') +
     '</div>';
   if (!all.length) {
-    html += '<div class="empty"><div class="big">' + icon('series') + '</div><h2 class="serif">No series yet</h2>' +
-      '<p>Series info arrives automatically<br>with Hardcover enrichment.</p></div>';
+    html += emptyState({
+      icon: 'series', title: 'No series yet',
+      body: 'Series info arrives automatically<br>with Hardcover enrichment.',
+      cta: { label: 'Browse your library', go: 'library' },
+    });
   } else if (!shown.length) {
-    html += '<div class="empty"><div class="big">' + icon('series') + '</div><h2 class="serif">Nothing here yet</h2>' +
-      '<p>' + (seriesFilter === 'completed'
+    html += emptyState({
+      icon: 'series', title: 'Nothing here yet',
+      body: seriesFilter === 'completed'
         ? 'No finished series — the shelf<br>grows as you complete them.'
-        : 'No series in progress right now.') + '</p></div>';
+        : 'No series in progress right now.',
+    });
   } else {
     html += '<div class="sr-list">' + shown.map(s => {
       const key = String(s.name).trim().toLowerCase();

@@ -92,7 +92,7 @@ ok('home: sections return on the unfiltered view', !!q('.home-sec'));
 // --- 5. Empty library keeps the original empty state ---
 run(`library = []; filter = 'all'; ownFilter = 'all'; query = ''; view = 'library'; renderLibrary();`);
 ok('home: empty library shows the add-first-book state',
-  q('#view .empty').textContent.includes('No books here yet') && !q('.home-sec'));
+  q('#view .empty').textContent.includes('Your shelves are waiting') && !q('.home-sec'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

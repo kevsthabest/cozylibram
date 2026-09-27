@@ -32,12 +32,12 @@ function renderPick() {
     '<p class="note">Can\'t decide what to read next? Set your mood, spin the wheel, and let fate choose.</p>';
 
   if (!tbr.length) {
-    html += '<div class="empty"><div class="big">' + icon('dice') + '</div><h2 class="serif">Your TBR is empty</h2>' +
-      '<p>Add some books first,<br>then come back and spin.</p>' +
-      '<button class="btn" data-nav="add">Add books</button></div>';
+    html += emptyState({
+      icon: 'dice', title: 'Your TBR is empty',
+      body: 'Add some books first,<br>then come back and spin.',
+      cta: { label: 'Add books', go: 'add' },
+    });
     setView(html);
-    const btn = document.querySelector('#view [data-nav="add"]');
-    if (btn) btn.addEventListener('click', () => go('add'));
     return;
   }
 
