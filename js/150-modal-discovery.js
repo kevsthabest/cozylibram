@@ -7,15 +7,75 @@ const seriesCache = new Map(); // series key -> { rows } or { needsToken: true }
 function normISBN(s) { return String(s || '').replace(/[^0-9X]/gi, ''); }
 
 // true when an external result is already on her shelves (ISBN or title+author match)
+// v116: title comparison uses the loose key so "Hallowed Ground - Flight &
+// Glory #4" matches a shelf entry titled just "Hallowed Ground".
 function inLibrary(x) {
   const isbn = normISBN(x.isbn);
-  const xt = String(x.title || '').trim().toLowerCase();
+  const xt = looseTitleKey(x.title);
   const xa = String(x.author || '').trim().toLowerCase();
   return library.some(b => {
     if (isbn && normISBN(b.isbn) === isbn) return true;
-    return !!xt && String(b.title || '').trim().toLowerCase() === xt &&
+    return !!xt && looseTitleKey(b.title) === xt &&
       String((b.authors || [])[0] || '').trim().toLowerCase() === xa;
   });
+}
+
+// v116: loose title key for messy Open Library work titles — "(…)"
+// qualifiers, " - Series #N" suffixes and a leading "The " are noise when
+// deciding whether two rows are the same book.
+function looseTitleKey(t, keepThe) {
+  const k = String(t || '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s+-\s+.*$/, '')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return keepThe ? k : k.replace(/^the /, '');
+}
+
+// v116: dedupe that collapses subtitle/special-edition variants of the same
+// book ("Hallowed Ground - Flight & Glory #4" vs "Hallowed ground").
+function dedupeLoose(rows) {
+  const seenTitle = new Set();
+  const seenIsbn = new Set();
+  return rows.filter(x => {
+    const t = looseTitleKey(x.title) + '|' + String(x.author || '').trim().toLowerCase();
+    const isbn = normISBN(x.isbn);
+    if ((t !== '|' && seenTitle.has(t)) || (isbn && seenIsbn.has(isbn))) return false;
+    if (t !== '|') seenTitle.add(t);
+    if (isbn) seenIsbn.add(isbn);
+    return true;
+  });
+}
+
+// v116: works Open Library only lists in another language — noise on an English shelf.
+function isForeignOnly(x) {
+  const langs = x.languages || [];
+  return langs.length > 0 && !langs.some(l => String(l).toLowerCase() === 'eng');
+}
+
+// v116: placeholder records, box sets and merch are not books she's missing.
+function isJunkTitle(x) {
+  const t = String(x.title || '');
+  return t.indexOf(' / ') !== -1 ||
+    /^untitled\b/i.test(t) ||
+    /box set|collection set/i.test(t) ||
+    /\btarot\b/i.test(t);
+}
+
+// v116: "Great and Precious Things The Last Letter" — two titles mashed into
+// one bad work record. Drop it when it decomposes into two other rows.
+function isMashedTitle(x, all) {
+  const k = looseTitleKey(x.title, true);
+  if (!k) return false;
+  const keys = new Set(all.map(y => looseTitleKey(y.title, true)));
+  for (const other of keys) {
+    if (!other || other === k || !k.startsWith(other)) continue;
+    const rest = k.slice(other.length).trim();
+    if (rest && keys.has(rest)) return true;
+  }
+  return false;
 }
 
 function dedupeExternal(rows) {
@@ -51,9 +111,14 @@ async function fetchMoreByAuthor(author) {
     languages: doc.language || [] // v115
   }));
   await repairTranslatedTitles(raw); // v115: before dedupe so dupes collapse
+  await resolveForeignTitles(raw); // v116: Hardcover canonical title via ISBN
+  const deduped = dedupeLoose(raw); // v116: collapse subtitle/edition variants
   // Skip omnibus/box-set editions ("Book A / Book B / ...") — clutter in an author list.
-  const rows = dedupeExternal(raw).filter(x =>
-    x.title && x.title.indexOf(' / ') === -1 && !inLibrary(x)).slice(0, 30);
+  const rows = deduped.filter(x =>
+    x.title && !isForeignOnly(x) && !isJunkTitle(x) && !inLibrary(x))
+    .filter((x, i, a) => !isMashedTitle(x, a)) // v116: "Book ABook B" mashups
+    .slice(0, 30);
+  await backfillCovers(rows); // v116: edition covers for coverless survivors
   authorCache.set(key, rows);
   return rows;
 }
@@ -72,8 +137,52 @@ async function repairTranslatedTitles(rows) {
       const d = await (await fetch('https://openlibrary.org' + r.workKey + '/editions.json?limit=50')).json();
       const eng = ((d || {}).entries || []).find(e =>
         (e.languages || []).some(l => String(l.key || '').endsWith('/eng')) && e.title);
-      if (eng && eng.title && eng.title !== r.title) r.title = eng.title;
+      if (eng) {
+        if (eng.title && eng.title !== r.title) r.title = eng.title;
+        if (!r.cover && (eng.covers || []).length) // v116: editions often have art the work lacks
+          r.cover = 'https://covers.openlibrary.org/b/id/' + eng.covers[0] + '-M.jpg';
+      }
     } catch (e) { /* keep the original title */ }
+  }
+}
+
+// v116: some works only exist in Open Library as a translation ("Alas de
+// sangre (Empíreo 1)" is really Fourth Wing). When the Hardcover token is
+// available, resolve the edition ISBN to Hardcover's canonical book so the row
+// shows the real title — and matches her shelf instead of looking "missing".
+async function resolveForeignTitles(rows) {
+  if (typeof hcReady !== 'function' || !hcReady()) return;
+  const targets = rows.filter(r =>
+    /[^\x00-\x7F]/.test(r.title) && /^\d{13}$/.test(normISBN(r.isbn)));
+  if (!targets.length) return;
+  const isbns = [...new Set(targets.map(r => normISBN(r.isbn)))];
+  try {
+    const q = 'query { books(where: {editions: {isbn_13: {_in: [' +
+      isbns.map(s => JSON.stringify(s)).join(',') + ']}}, limit: 25) ' +
+      '{ title image { url } editions { isbn_13 } } }';
+    const data = await hcGraphQL(q);
+    const byIsbn = {};
+    ((data || {}).books || []).forEach(b => {
+      (b.editions || []).forEach(e => { if (e.isbn_13) byIsbn[normISBN(e.isbn_13)] = b; });
+    });
+    targets.forEach(r => {
+      const b = byIsbn[normISBN(r.isbn)];
+      if (b && b.title) {
+        r.title = b.title;
+        if (!r.cover && b.image && b.image.url) r.cover = b.image.url;
+      }
+    });
+  } catch (e) { /* keep the Open Library titles */ }
+}
+
+// v116: some works have no cover at the work level but their editions do.
+async function backfillCovers(rows) {
+  for (const r of rows.filter(x => !x.cover && x.workKey)) {
+    try {
+      const d = await (await fetch('https://openlibrary.org' + r.workKey + '/editions.json?limit=20')).json();
+      const withCover = ((d || {}).entries || []).find(e => (e.covers || []).length);
+      if (withCover) r.cover = 'https://covers.openlibrary.org/b/id/' + withCover.covers[0] + '-M.jpg';
+    } catch (e) { /* stays coverless */ }
   }
 }
 

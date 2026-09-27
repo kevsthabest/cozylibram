@@ -22,7 +22,7 @@ const olDocs = [
   { key: '/works/OL41943074W', title: 'Alas de ónix', author_name: ['Rebecca Yarros'], isbn: ['9788408278848'], cover_i: 1, language: ['spa', 'ger', 'eng', 'dut'] },
   { key: '/works/OL44311526W', title: 'Onyx Storm', author_name: ['Rebecca Yarros'], isbn: ['9781649374189'], cover_i: 2, language: ['tur'] },
   { key: '/works/OL999', title: 'The Last Letter', author_name: ['Rebecca Yarros'], isbn: ['9781635764333'], cover_i: 3, language: ['eng'] },
-  { key: '/works/OL1000', title: 'Cien años', author_name: ['Rebecca Yarros'], isbn: ['9788408000000'], cover_i: 4, language: ['spa'] },
+  { key: '/works/OL1000', title: 'Cien años', author_name: ['Rebecca Yarros'], isbn: ['9788408000000'], cover_i: 4, language: ['eng'] },
 ];
 const editions = {
   '/works/OL41943074W': { entries: [
@@ -51,7 +51,7 @@ window.fetch = async (url) => {
     titles.filter(t => t === 'Onyx Storm').length === 1);
   ok('plain-English titles untouched', titles.includes('The Last Letter'));
   ok('non-ASCII title with no English edition keeps its title', titles.includes('Cien años'));
-  ok('editions fetched only for the repairable suspect', editionFetches === 1);
+  ok('editions fetched only for non-ASCII-titled suspects', editionFetches === 2);
 
   // inLibrary now matches on the repaired title
   runInWindow(`
