@@ -92,5 +92,39 @@ ok('text summary has the essentials',
 runInWindow(`library.length = 0; renderYearInBooks();`);
 ok('empty year shows a friendly note', /No finished books/.test(window.document.body.textContent));
 
+// 7. previous years (v71)
+runInWindow(`(function(){
+  library.length = 0;
+  const Y = new Date().getFullYear();
+  const fin = (y, m, day) => y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0') + 'T12:00:00';
+  const M = (id, title, y) => ({ id, isbn: '', title, authors: ['A'], cover: '', description: '',
+    pageCount: 300, publishedDate: '', categories: ['Fiction / Romance / General'], publicRating: null,
+    ratingsCount: 0, status: 'read', ratings: {}, axes: [], myRating: 5, tropes: [], progress: 300,
+    log: [], dateAdded: fin(y, 1, 5), dateFinished: fin(y, 6, 15), notes: '' });
+  library.push(M('c1', 'This Year Book', Y));
+  library.push(M('p1', 'Last Year Book', Y - 1));
+  window.__Y = Y;
+})();`);
+const Y = window.__Y;
+const yrs = window.yearInBooksYears();
+ok('year list includes current and previous year', yrs[0] === Y && yrs.includes(Y - 1));
+const pd = window.yearInBooksData(Y - 1);
+ok('previous-year data is scoped', pd.n === 1 && pd.pages === 300 && pd.yr === Y - 1);
+runInWindow(`renderYearInBooks();`);
+ok('year pills render', qa('#yib-years .chip').length >= 2);
+const prevChip = qa('#yib-years .chip').find(c => +c.dataset.yr === Y - 1);
+prevChip.click();
+ok('switching year re-renders that year',
+  q('.yib-hero').textContent.includes(String(Y - 1)) && q('.now-reading').textContent.includes('Last Year Book'));
+const cvPrev = window.drawYearImage(window.yearInBooksData());
+ok('canvas export uses the selected year', cvPrev && cvPrev.width === 1080);
+const txtPrev = window.yearTextSummary(window.yearInBooksData());
+ok('text summary uses the selected year', txtPrev.includes('My ' + (Y - 1) + ' in Books'));
+ok('stats button resets to the current year', (() => {
+  q('#yib-back').click();
+  q('#st-yib').click();
+  return q('.yib-hero').textContent.includes(String(Y)) && !q('.yib-hero').textContent.includes(String(Y - 1));
+})());
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

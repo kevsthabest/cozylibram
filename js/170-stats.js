@@ -524,8 +524,18 @@ function seriesHTML() {
 
 /* ---- Your Year in Books (v70): a Wrapped-style visual summary of the year,
    with share-as-image (1080x1920 story format) and copy-as-text export. ---- */
-function yearInBooksData() {
-  const yr = new Date().getFullYear();
+let yibYear = new Date().getFullYear();
+
+function yearInBooksYears() {
+  const yrs = new Set([new Date().getFullYear()]);
+  library.forEach(b => {
+    if (b.status === 'read' && b.dateFinished) yrs.add(new Date(b.dateFinished).getFullYear());
+  });
+  return [...yrs].sort((a, b) => b - a);
+}
+
+function yearInBooksData(yr) {
+  yr = yr || yibYear;
   const readYr = library.filter(b => b.status === 'read' && b.dateFinished &&
     new Date(b.dateFinished).getFullYear() === yr);
   const pages = readYr.reduce((s, b) => s + (b.pageCount || 0), 0);
@@ -551,23 +561,40 @@ function yearInBooksData() {
     if (b.dateFinished) daySet.add(dayKey(new Date(b.dateFinished)));
   });
   const big = Object.entries(dayPages).sort((a, b) => b[1] - a[1])[0] || null;
+  // longest streak scoped to this year (UTC day math, DST-proof)
+  const dayNums = [...daySet].map(k => {
+    const p = k.split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]);
+  }).sort((a, b) => a - b);
+  let streak = 0, run = 0, prev = null;
+  dayNums.forEach(t => {
+    run = (prev !== null && t - prev === 86400000) ? run + 1 : 1;
+    if (run > streak) streak = run;
+    prev = t;
+  });
   return {
     yr, n: readYr.length, pages, avg, topGenres, topBooks, longest, topAuthor,
-    days: daySet.size, streak: longestStreak(),
+    days: daySet.size, streak,
     bigDay: big ? { k: big[0], pages: big[1] } : null,
     five: rated.filter(b => b.myRating >= 4.5).length
   };
 }
 
-function renderYearInBooks() {
+function renderYearInBooks(yr) {
+  const years = yearInBooksYears();
+  yibYear = (yr != null && years.includes(yr)) ? yr : (years.includes(yibYear) ? yibYear : years[0]);
   const d = yearInBooksData();
   const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Stats</button>';
+  const pills = '<div class="chips" id="yib-years" style="margin:8px 0">' +
+    years.map(y => '<button class="chip' + (y === yibYear ? ' active' : '') + '" data-yr="' + y + '">' + y + '</button>').join('') +
+    '</div>';
   if (!d.n) {
-    setView(back + '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
+    setView(back + pills + '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
       '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2></div>' +
       '<p class="note" style="text-align:center">No finished books in ' + d.yr +
       ' yet — your wrapped summary will appear here.</p>');
     document.getElementById('yib-back').addEventListener('click', renderStats);
+    document.querySelectorAll('#yib-years .chip').forEach(c =>
+      c.addEventListener('click', () => renderYearInBooks(+c.dataset.yr)));
     return;
   }
   const stat = (n, l) => '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
@@ -588,7 +615,7 @@ function renderYearInBooks() {
   if (d.bigDay) recs.push(stat(d.bigDay.pages, '📄 Biggest day'));
   if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' 📚', '✍️ ' + d.topAuthor[0].slice(0, 22)));
   if (d.five) recs.push(stat('♥ ' + d.five, '5-star reads'));
-  setView(back +
+  setView(back + pills +
     '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
     '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2>' +
     '<div class="yib-sub">' + d.n + ' books · ' + fmtBig(d.pages) + ' pages · ' + d.days + ' reading days</div></div>' +
@@ -604,6 +631,8 @@ function renderYearInBooks() {
     (books ? '<div class="stat-sub yib-sec">Highest rated</div><div class="now-reading">' + books + '</div>' : '') +
     (recs.length ? '<div class="stat-sub yib-sec">Year records</div><div class="stat-row">' + recs.join('') + '</div>' : ''));
   document.getElementById('yib-back').addEventListener('click', renderStats);
+  document.querySelectorAll('#yib-years .chip').forEach(c =>
+    c.addEventListener('click', () => renderYearInBooks(+c.dataset.yr)));
   document.getElementById('yib-share').addEventListener('click', shareYearImage);
   document.getElementById('yib-copy').addEventListener('click', copyYearSummary);
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
@@ -679,7 +708,7 @@ function shareYearImage() {
   if (!cv) { toast('Image export isn’t supported on this device'); return; }
   cv.toBlob(async (blob) => {
     if (!blob) { toast('Could not create the image'); return; }
-    const name = 'my-' + new Date().getFullYear() + '-in-books.png';
+    const name = 'my-' + yibYear + '-in-books.png';
     const file = new File([blob], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'My Year in Books' }); return; }
@@ -824,7 +853,7 @@ function renderStats() {
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   });
-  document.getElementById('st-yib').addEventListener('click', renderYearInBooks);
+  document.getElementById('st-yib').addEventListener('click', () => renderYearInBooks(new Date().getFullYear()));
   document.querySelectorAll('#evo-gran button').forEach(b2 =>
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));
   document.querySelectorAll('.kv-row.tap').forEach(r =>
