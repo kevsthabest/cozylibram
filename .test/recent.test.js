@@ -51,6 +51,25 @@ const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); re
   ok('reading without log still included', probe(`recentBooks(20).some(b=>b.id==='r5')`));
   ok('default limit is 8', probe(`recentBooks().length`) === 8);
 
+  // 1b. v59: page updates stamp lastPagedAt; the just-touched book jumps first
+  // even when several books were read on the same day.
+  ok('logPages stamps lastPagedAt on a real change', probe(
+    `const tb = {}; logPages(tb, 50, 60); !!tb.lastPagedAt`));
+  ok('logPages no-op does not stamp', probe(
+    `const b2 = { progress: 10 }; logPages(b2, 10, 10); !b2.lastPagedAt`));
+  probe(`const ra = library.find(x=>x.id==='r1'), rb = library.find(x=>x.id==='r2');
+    rb.log.push({ d: '${dayK(0)}', from: 50, to: 55 }); // temp: force a same-day tie
+    ra.lastPagedAt = new Date(Date.now() - 3600000).toISOString(); // touched an hour ago
+    rb.lastPagedAt = new Date().toISOString(); // touched just now`);
+  const sameDayOrder = probe(`recentBooks(20).map(b=>b.id).join(',')`);
+  ok('same-day tie broken by most recent page touch',
+    sameDayOrder.indexOf('r2') < sameDayOrder.indexOf('r1'));
+  probe(`renderLibrary();`);
+  ok('strip reflects the new order', qa('.recent-card')[0].dataset.id === 'r2');
+  // restore r1/r2 to their original state for the sections below
+  probe(`const ra2 = library.find(x=>x.id==='r1'), rb2 = library.find(x=>x.id==='r2');
+    rb2.log.pop(); delete ra2.lastPagedAt; delete rb2.lastPagedAt;`);
+
   // 2. strip renders above the favorites shelf
   probe(`localStorage.setItem('spicyshelves.animation','off'); renderLibrary();`);
   const strip = q('.recent-strip');

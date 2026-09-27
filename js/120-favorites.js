@@ -38,6 +38,10 @@ function recentBooks(limit) {
     .sort((a, b) => {
       const ka = lastReadActivity(a), kb = lastReadActivity(b);
       if (ka !== kb) return ka < kb ? 1 : -1;
+      // v59: same-day tie? the book whose pages were touched most recently
+      // goes first — updating pages bumps the book to the front of the shelf.
+      const ta = a.lastPagedAt || '', tb = b.lastPagedAt || '';
+      if (ta !== tb) return ta < tb ? 1 : -1;
       return String(b.dateAdded || '') < String(a.dateAdded || '') ? 1 : -1;
     })
     .slice(0, limit || 8);

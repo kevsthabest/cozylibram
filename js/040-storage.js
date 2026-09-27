@@ -64,6 +64,9 @@ function logPages(b, oldP, newP) {
   if (!e) { e = { d: k, from: Math.min(oldP, newP), to: Math.max(oldP, newP) }; b.log.push(e); }
   else { e.from = Math.min(e.from, newP); e.to = Math.max(e.to, newP); }
   if (b.log.length > 730) b.log = b.log.slice(-730); // ~2 years cap
+  b.lastPagedAt = new Date().toISOString(); // v59: exact touch time, so the
+  // Recently read shelf can put the just-updated book first even when several
+  // books were read on the same day.
 }
 function pagesOnDay(b, k) {
   return (b.log || []).filter(e => e.d === k).reduce((s, e) => s + Math.max(0, e.to - e.from), 0);
