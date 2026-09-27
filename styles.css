@@ -1136,6 +1136,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sr-name { font-weight: 800; font-size: 17px; }
 .sr-author { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .sr-count { color: var(--gold); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.sr-nums { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.sr-total { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .sr-covers { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
 .sr-covers img { width: 44px; height: 66px; object-fit: cover; border-radius: 5px; }
 /* v78: series covers tap open like the grid */

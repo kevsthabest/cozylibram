@@ -63,6 +63,13 @@ function seriesData() {
 function visibleSeries() {
   return seriesData().filter(s => s.books.length > 1 || s.next);
 }
+// v108: owned-vs-full-series total. Hardcover's series listing is the honest
+// total; owned books are unioned in (deduped by title+author/ISBN) so a thin
+// Hardcover listing can never undercount what she owns.
+function seriesFullTotal(ownedBooks, hcRows) {
+  const asRow = b => ({ title: b.title, author: ((b.authors || [])[0]) || '', isbn: b.isbn });
+  return dedupeExternal(ownedBooks.map(asRow).concat(hcRows || [])).length;
+}
 function renderSeries() {
   const all = visibleSeries();
   const shown = all.filter(s => seriesFilter === 'started' ? s.started
@@ -85,6 +92,7 @@ function renderSeries() {
         : 'No series in progress right now.') + '</p></div>';
   } else {
     html += '<div class="sr-list">' + shown.map(s => {
+      const key = String(s.name).trim().toLowerCase();
       const pct = Math.round(s.read / s.books.length * 100);
       const covers = s.books.slice(0, 6).map(b =>
         '<button class="sr-cover" data-id="' + b.id + '" aria-label="' + esc(b.title) + '">' +
@@ -92,9 +100,10 @@ function renderSeries() {
                  : '<span class="sr-nocover">' + icon('covers') + '</span>') + '</button>').join('');
       const posTag = (s.next && s.next.series && s.next.series.position != null && s.next.series.position !== '')
         ? ' <span class="note-inline">#' + esc(String(s.next.series.position)) + '</span>' : '';
-      return '<div class="sr-card"><div class="sr-head"><div><div class="sr-name">' + esc(s.name) + '</div>' +
+      return '<div class="sr-card" data-skey="' + esc(key) + '"><div class="sr-head"><div><div class="sr-name">' + esc(s.name) + '</div>' +
         (s.authorLine ? '<div class="sr-author">' + esc(s.authorLine) + '</div>' : '') + '</div>' +
-        '<span class="sr-count">' + s.read + ' / ' + s.books.length + ' read</span></div>' +
+        '<div class="sr-nums"><span class="sr-count">' + s.read + ' / ' + s.books.length + ' read</span>' +
+        '<span class="sr-total" data-stotal="' + esc(key) + '"></span></div></div>' +
         '<div class="sr-covers">' + covers +
         (s.books.length > 6 ? '<span class="sr-more">+' + (s.books.length - 6) + '</span>' : '') + '</div>' +
         '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
@@ -119,4 +128,23 @@ function renderSeries() {
     btn.addEventListener('click', () => openDetail(btn.dataset.id)));
   document.querySelectorAll('.sr-next').forEach(btn =>
     btn.addEventListener('click', () => openDetail(btn.dataset.id)));
+  // v108: fill "owns X of Y" totals from Hardcover's full series listing
+  // (cached per series). Shown only when the series runs beyond her shelf.
+  if (typeof hcReady === 'function' && hcReady()) (async () => {
+    for (const s of shown) {
+      const key = String(s.name).trim().toLowerCase();
+      let total = 0;
+      try {
+        const r = await fetchSeriesBooks(s.name, (s.books[0].authors || [])[0]);
+        if (r && !r.needsToken) total = seriesFullTotal(s.books, r.rows);
+      } catch (e) { /* leave the card as-is */ }
+      if (total > s.books.length) {
+        document.querySelectorAll('[data-stotal]').forEach(el => {
+          if (el.getAttribute('data-stotal') === key)
+            el.textContent = 'owns ' + s.books.length + ' of ' + total;
+        });
+      }
+      await new Promise(r => setTimeout(r, 300)); // be polite to Hardcover
+    }
+  })();
 }
