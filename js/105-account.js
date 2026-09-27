@@ -90,8 +90,18 @@ async function pushCloudProfile(p) {
     if (p.avatar.type === 'upload' && p.avatar.dataUrl && sb.storage) {
       if (!cloudPath) {
         cloudPath = cloudUser.id + '/avatar.jpg';
-        const up = await sb.storage.from('avatars').upload(cloudPath, dataUrlToBlob(p.avatar.dataUrl), { upsert: true, contentType: 'image/jpeg' });
-        if (up.error) throw up.error;
+        try {
+          const up = await sb.storage.from('avatars').upload(cloudPath, dataUrlToBlob(p.avatar.dataUrl), { upsert: true, contentType: 'image/jpeg' });
+          if (up.error) throw up.error;
+        } catch (ue) {
+          // v95: surface setup problems (missing bucket / storage policies)
+          // instead of swallowing them — network blips stay quiet and retry.
+          const m = String((ue && ue.message) || ue || '');
+          if (/bucket|not found|policy|permission|denied|row-level|rls/i.test(m)) {
+            toast('Profile photo backup failed: ' + m);
+          }
+          throw ue;
+        }
         p.avatarCloudPath = cloudPath;
         saveProfile(p);
       }

@@ -249,6 +249,20 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   const fellBack = JSON.parse(lsGet('spicyshelves.profile.u34'));
   ok('missing cloud photo falls back to the themed avatar', fellBack.avatar.type === 'default' && fellBack.avatar.id === 'raven');
 
+  // v95: a missing `avatars` bucket (schema.sql not rerun) surfaces a toast
+  // instead of failing silently, and the local photo is kept.
+  const noBucket = mkFullStub();
+  noBucket.storage = { from: (bucket) => ({
+    upload: async () => ({ error: { message: 'Bucket not found' } }),
+    download: async () => ({ data: null, error: { message: 'not found' } }),
+  }) };
+  window.__sbStub = noBucket;
+  useAs('u35'); wipeLocal('u35');
+  runInWindow('touchProfile({ firstName: "Nope", lastName: "", avatar: { type: "upload", dataUrl: "' + PHOTO + '" }, avatarCloudPath: "", updatedAt: 0 });');
+  await probe('pushCloudProfile(loadProfile())'); await tick(2);
+  const toastText = (q('#toast-root') && q('#toast-root').textContent) || '';
+  ok('missing bucket surfaces a backup-failed toast', toastText.indexOf('Profile photo backup failed') !== -1);
+  ok('failed upload keeps the local photo', JSON.parse(lsGet('spicyshelves.profile.u35')).avatar.type === 'upload');
   window.__sbStub = null;
 
   // Empty everywhere → nothing pushed.
