@@ -1,4 +1,4 @@
-// Circle (v96): friend links via invite codes, request inbox, privacy, and
+// Coven (v96): friend links via invite codes, request inbox, privacy, and
 // read-only shared shelves. Supabase RLS itself is server-side (see
 // supabase/schema.sql); these tests cover the app's queries and UI flows
 // against a stub client.
@@ -8,7 +8,7 @@ const fs = require('fs');
 const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
-window.fetch = async () => { throw new Error('no network in circle tests'); };
+window.fetch = async () => { throw new Error('no network in coven tests'); };
 window.confirm = () => true;
 
 require('./harness').loadApp(window);
@@ -234,21 +234,21 @@ const stub = mkStub();
 
   // ---- rendering: signed out ----
   useAs(null);
-  await probe('renderCircle()'); await tick(5);
+  await probe('renderCoven()'); await tick(5);
   ok('signed out shows the sign-in prompt', (q('#view') || {}).textContent.indexOf('lives in the cloud') !== -1);
 
   // ---- rendering: signed in ----
   useAs(A);
-  await probe('renderCircle()'); await tick(5);
+  await probe('renderCoven()'); await tick(5);
   const viewText = q('#view').textContent;
-  ok('circle shows the invite code', (q('#cc-code') || {}).textContent === codeA);
-  ok('circle shows the privacy section', viewText.indexOf('Privacy') !== -1);
-  ok('nav has a circle tab', !!window.document.querySelector('.bottom-nav [data-nav="circle"]'));
+  ok('coven shows the invite code', (q('#cc-code') || {}).textContent === codeA);
+  ok('coven shows the privacy section', viewText.indexOf('Privacy') !== -1);
+  ok('nav has a coven tab', !!window.document.querySelector('.bottom-nav [data-nav="coven"]'));
 
   // ---- friend shelf view ----
   stub.db.profiles[B] = { user_id: B, first_name: 'Ben', last_name: '', avatar_id: 'moon', avatar_path: '' };
   runInWindow('circFriend = { id: ' + JSON.stringify(B) + ', name: "Ben" };');
-  await probe('renderCircleFriend()'); await tick(5);
+  await probe('renderCovenFriend()'); await tick(5);
   const fvText = q('#view').textContent;
   ok('friend shelf shows their books', fvText.indexOf('Shared Tome') !== -1);
   ok('friend shelf does not leak my books', fvText.indexOf('Mine') === -1);

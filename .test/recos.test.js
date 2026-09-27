@@ -83,10 +83,10 @@ const bookRow = (user_id, book_id, data) => ({ user_id, book_id, isbn: data.isbn
   // my library already has Owned Book
   runInWindow('library.length = 0;');
   runInWindow('library.push({ id: "m1", title: "Owned Book", authors: ["Me"], status: "read", _mtime: 1 });');
-  // capture addBook + renderCircle instead of running the real ones
+  // capture addBook + renderCoven instead of running the real ones
   runInWindow('var recoCapturedAdd = null, recoRenderCalls = 0;');
   runInWindow('addBook = function(b, open) { recoCapturedAdd = b; library.unshift(b); return b; };');
-  runInWindow('renderCircle = function() { recoRenderCalls++; };');
+  runInWindow('renderCoven = function() { recoRenderCalls++; };');
 
   // ---- recoKey ----
   ok('recoKey normalizes ISBN dashes', probe('recoKey({ isbn: "978-1-23" })') === 'isbn:978123');
@@ -119,7 +119,7 @@ const bookRow = (user_id, book_id, data) => ({ user_id, book_id, isbn: data.isbn
   ok('add builds a clean TBR book', added && added.status === 'tbr' && added.title === 'Great Book');
   ok('friend personal data is not copied', added && !('myRating' in added));
   ok('new id, not the friend\u2019s book id', added && added.id !== 'g1' && added.id !== 'g1b');
-  ok('circle re-renders after add', probe('recoRenderCalls') >= 1);
+  ok('coven re-renders after add', probe('recoRenderCalls') >= 1);
   const recos2 = await probe('loadRecos()'); await tick();
   ok('added book leaves the recommendations', recos2.length === 0);
 

@@ -71,7 +71,7 @@ function recoSectionHTML(recos) {
   return html;
 }
 
-// Fill the #reco-slot left by renderCircleMain; safe to call repeatedly.
+// Fill the #reco-slot left by renderCovenMain; safe to call repeatedly.
 function refreshRecos() {
   const slot = document.getElementById('reco-slot');
   if (!slot) return;
@@ -106,5 +106,5 @@ function recoAddToTBR(idx) {
     publishedDate: src.publishedDate || '',
     _mtime: Date.now(),
   };
-  if (addBook(nb, false)) renderCircle(); // re-render picks up the now-owned book
+  if (addBook(nb, false)) renderCoven(); // re-render picks up the now-owned book
 }

@@ -62,7 +62,7 @@ ok('swatch styles exist', css.includes('.swatches') && css.includes('.sw.active'
 
 // 6. Nav uses custom SVG icons, not emoji (v37: Settings moved to the account menu)
 const navBtns = qa('.bottom-nav button');
-ok('seven nav buttons (circle added v96; settings lives in the account menu)', navBtns.length === 7);
+ok('seven nav buttons (coven added v96; settings lives in the account menu)', navBtns.length === 7);
 ok('every nav button has an inline svg', navBtns.every(b => b.querySelector('svg')));
 ok('no emoji left in nav', !navBtns.some(b => /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(b.textContent)));
 ok('nav svgs are aria-hidden (labels on buttons)', navBtns.every(b => b.querySelector('svg').getAttribute('aria-hidden') === 'true'));

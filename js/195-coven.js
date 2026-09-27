@@ -1,9 +1,9 @@
 'use strict';
 
-/* ---------------- Circle (v96): friends + shared shelves ---------------- */
-// Your private reading circle: invite friends with a short code, answer
+/* ---------------- Coven (v96): friends + shared shelves ---------------- */
+// Your private reading coven: invite friends with a short code, answer
 // requests, browse each other's shelves (read-only). All sharing is enforced
-// by Supabase RLS — see supabase/schema.sql. Circle needs the cloud; the
+// by Supabase RLS — see supabase/schema.sql. The coven needs the cloud; the
 // section prompts for sign-in when offline or signed out.
 
 let circFriend = null;   // { id, name } — friend whose shelves are open
@@ -38,7 +38,7 @@ async function ensureInviteCode() {
       // Code collision with someone else's → try another; other errors bail.
       if (!/duplicate|unique|conflict/i.test(String((up.error && up.error.message) || ''))) throw up.error;
     }
-  } catch (e) { /* offline — circle needs the cloud */ }
+  } catch (e) { /* offline — the coven needs the cloud */ }
   return '';
 }
 
@@ -65,7 +65,7 @@ async function circleSendRequest(rawCode) {
   if (them === cloudUser.id) throw new Error('That’s your own code — share it with a friend instead.');
   const existing = await circleLinkBetween(cloudUser.id, them);
   if (existing) {
-    if (existing.status === 'accepted') throw new Error('You’re already in each other’s circle.');
+    if (existing.status === 'accepted') throw new Error('You’re already in each other’s coven.');
     if (existing.status === 'pending') throw new Error('A request between you is already pending.');
     // declined before → clear the old row and start fresh
     const del = await sb.from('circle_links').delete()
@@ -211,31 +211,31 @@ async function circleUpgradeAvatars(scopeEl) {
   }));
 }
 
-/* ---------- Circle section ---------- */
-function renderCircle() {
+/* ---------- Coven section ---------- */
+function renderCoven() {
   if (!cloudUser) {
-    setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Circle</h2></div>' +
+    setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
       '<div class="empty"><div class="big">' + icon('friends') + '</div>' +
-      '<h2 class="serif">Your circle lives in the cloud</h2>' +
+      '<h2 class="serif">Your coven lives in the cloud</h2>' +
       '<p>Sign in to add friends and browse each other’s shelves.</p>' +
       '<button class="btn" id="cc-signin">Sign in</button></div>');
     document.getElementById('cc-signin').addEventListener('click', () => go('settings'));
     return;
   }
-  setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Circle</h2></div>' +
-    '<p class="note" style="text-align:center">Loading your circle…</p>');
+  setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
+    '<p class="note" style="text-align:center">Loading your coven…</p>');
   Promise.all([ensureInviteCode(), circleLists(), circlePrivacy()])
     .then(([code, lists, priv]) => {
-      renderCircleMain(code, lists, priv);
+      renderCovenMain(code, lists, priv);
       circleUpgradeAvatars(document.getElementById('view'));
       if (typeof refreshRecos === 'function') refreshRecos();
     })
     .catch(e => {
-      setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Circle</h2></div>' +
-        '<div class="empty"><h2 class="serif">Couldn’t load your circle</h2>' +
+      setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
+        '<div class="empty"><h2 class="serif">Couldn’t load your coven</h2>' +
         '<p>' + esc((e && e.message) || e) + '</p>' +
         '<button class="btn" id="cc-retry">Try again</button></div>');
-      document.getElementById('cc-retry').addEventListener('click', renderCircle);
+      document.getElementById('cc-retry').addEventListener('click', renderCoven);
     });
 }
 function circleRowHTML(p, name, actions, sub) {
@@ -243,10 +243,10 @@ function circleRowHTML(p, name, actions, sub) {
     '<div class="circle-meta"><b>' + esc(name) + '</b>' + (sub ? '<span class="note">' + sub + '</span>' : '') + '</div>' +
     '<div class="circle-actions">' + actions + '</div></div>';
 }
-function renderCircleMain(code, lists, priv) {
+function renderCovenMain(code, lists, priv) {
   const shelves = ['tbr', 'reading', 'read', 'dnf'];
-  let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' Circle</h2></div>' +
-    '<p class="note" style="text-align:center">Your private reading circle — add people you trust,<br>browse each other’s shelves.</p>' +
+  let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
+    '<p class="note" style="text-align:center">Your private reading coven — add people you trust,<br>browse each other’s shelves.</p>' +
     '<div class="circle-card">' +
       '<div class="field"><label>Your invite code</label>' +
         '<div class="search-row"><b class="invite-code" id="cc-code">' + esc(code || '…') + '</b>' +
@@ -267,7 +267,7 @@ function renderCircleMain(code, lists, priv) {
     lists.received.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '">Accept</button>' +
-        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>', 'wants to join your circle');
+        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>', 'wants to join your coven');
     });
     lists.sent.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
@@ -277,7 +277,7 @@ function renderCircleMain(code, lists, priv) {
   }
 
   // Friends
-  html += '<h2 class="section serif">My circle' + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
+  html += '<h2 class="section serif">My coven' + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
   if (!lists.friends.length) {
     html += '<p class="note" style="text-align:center">No friends yet — share your invite code above.</p>';
   } else {
@@ -292,12 +292,12 @@ function renderCircleMain(code, lists, priv) {
 
   // Privacy
   html += '<h2 class="section serif">Privacy</h2><div class="circle-card">' +
-    '<div class="field"><label>Share my shelves with my circle</label>' +
+    '<div class="field"><label>Share my shelves with my coven</label>' +
     '<div class="seg" id="cc-share">' +
       '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
       '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
-    '<p class="note">When off, friends still see you in their circle, but none of your books.</p></div>' +
-    '<div class="field"><label>Hide these shelves from my circle</label>' +
+    '<p class="note">When off, friends still see you in their coven, but none of your books.</p></div>' +
+    '<div class="field"><label>Hide these shelves from my coven</label>' +
     '<div class="chips" id="cc-hide">' +
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
         STATUS[s] + '</button>').join('') +
@@ -306,7 +306,7 @@ function renderCircleMain(code, lists, priv) {
   setView(html);
 
   // Wire up
-  const rerender = () => renderCircle();
+  const rerender = () => renderCoven();
   document.getElementById('cc-copy').addEventListener('click', () => {
     const c = document.getElementById('cc-code').textContent;
     const done = () => toast('Invite code copied');
@@ -323,7 +323,7 @@ function renderCircleMain(code, lists, priv) {
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {
-    try { await circleAnswer(b.dataset.accept, true); toast('You’re in each other’s circle now'); rerender(); }
+    try { await circleAnswer(b.dataset.accept, true); toast('You’re in each other’s coven now'); rerender(); }
     catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
@@ -337,7 +337,7 @@ function renderCircleMain(code, lists, priv) {
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     circFriend = { id: b.dataset.view, name: b.dataset.name };
     circShelf = 'all';
-    go('circle-friend');
+    go('coven-friend');
   }));
   document.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', async () => {
     if (!window.confirm('Remove this friend? They’ll lose access to your shelves.')) return;
@@ -349,7 +349,7 @@ function renderCircleMain(code, lists, priv) {
     try {
       await circleSavePrivacy(share, priv.hidden);
       document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
-      toast(share ? 'Your shelves are shared with your circle' : 'Your shelves are hidden from your circle');
+      toast(share ? 'Your shelves are shared with your coven' : 'Your shelves are hidden from your coven');
     } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
@@ -366,27 +366,27 @@ function renderCircleMain(code, lists, priv) {
 }
 
 /* ---------- friend shelf browser (read-only) ---------- */
-function renderCircleFriend() {
+function renderCovenFriend() {
   const f = circFriend;
-  if (!f || !cloudUser) { go('circle'); return; }
+  if (!f || !cloudUser) { go('coven'); return; }
   setView('<div class="view-head"><button class="btn ghost sm" id="cf-back">← Back</button>' +
     '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
     '<p class="note" style="text-align:center">Opening their shelves…</p>');
-  document.getElementById('cf-back').addEventListener('click', () => go('circle'));
+  document.getElementById('cf-back').addEventListener('click', () => go('coven'));
   Promise.all([circleFriendProfile(f.id), circleFriendBooks(f.id)])
     .then(([prof, books]) => {
       if (prof) { circProfiles[f.id] = prof; f.name = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || f.name; }
       circBooks = books.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
-      renderCircleFriendMain();
+      renderCovenFriendMain();
     })
     .catch(e => {
       setView('<div class="view-head"><button class="btn ghost sm" id="cf-back2">← Back</button>' +
         '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
         '<div class="empty"><h2 class="serif">Couldn’t open their shelves</h2><p>' + esc((e && e.message) || e) + '</p></div>');
-      document.getElementById('cf-back2').addEventListener('click', () => go('circle'));
+      document.getElementById('cf-back2').addEventListener('click', () => go('coven'));
     });
 }
-function renderCircleFriendMain() {
+function renderCovenFriendMain() {
   const f = circFriend;
   const prof = circProfiles[f.id];
   const counts = { all: circBooks.length };
@@ -413,20 +413,20 @@ function renderCircleFriendMain() {
     html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
   }
   setView(html);
-  document.getElementById('cf-back').addEventListener('click', () => go('circle'));
+  document.getElementById('cf-back').addEventListener('click', () => go('coven'));
   document.querySelectorAll('[data-cf]').forEach(c => c.addEventListener('click', () => {
     circShelf = c.dataset.cf;
     animateIn = false;
-    renderCircleFriendMain();
+    renderCovenFriendMain();
   }));
   document.querySelectorAll('#view .book-card').forEach(c => c.addEventListener('click', () => {
     const b = circBookMap[c.dataset.id];
-    if (b) openCircleBook(b);
+    if (b) openCovenBook(b);
   }));
   circleUpgradeAvatars(document.getElementById('view'));
 }
 let circBookMap = {};
-function openCircleBook(b) {
+function openCovenBook(b) {
   const close = () => ov.remove();
   const badges = ['<span class="badge status-' + b.status + '">' + esc(STATUS[b.status] || b.status) + '</span>', ownedBadge(b)];
   if (b.publicRating) badges.push('<span class="badge">★ ' + Number(b.publicRating).toFixed(1) + '</span>');
