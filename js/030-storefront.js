@@ -6,14 +6,13 @@
 // unreliable everywhere else — Indigo and B&N return zero results for valid
 // ISBNs, Booktopia 404s on ISBN queries — while title + author finds the book
 // as the top result on every store tested. So: Amazon searches by ISBN (exact
-// edition), every other store searches by title + author (forgiving). Kobo
-// could not be live-verified (Cloudflare bot check), pattern kept as-is.
-// No APIs or keys needed.
+// edition), every other store searches by title + author (forgiving). No APIs
+// or keys needed. (Kobo was dropped in v146 — unverifiable behind its bot
+// check, and Indigo covers the Canadian market.)
 const STORE_REGIONS = {
   CA: { label: 'Canada', stores: [
     { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
     { name: 'Indigo', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
-    { name: 'Kobo', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
   ] },
   US: { label: 'United States', stores: [
     { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.com/s?k=' + encodeURIComponent(q) },

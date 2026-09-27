@@ -51,18 +51,14 @@ ok('query falls back to title+author',
 // 4. per-region URLs
 setRegion('CA');
 const ca = window.storeLinks({ isbn: '9780123456789', title: 'T', authors: [] });
-ok('CA has 3 stores', ca.length === 3 && ca[0].name === 'Amazon');
+ok('CA has 2 stores (v146: Kobo dropped)', ca.length === 2 && ca[0].name === 'Amazon' && ca[1].name === 'Indigo');
 ok('CA amazon link', ca[0].url === 'https://www.amazon.ca/s?k=9780123456789');
 ok('CA indigo link uses title+author (ISBN unreliable there)',
   ca[1].url === 'https://www.indigo.ca/search?q=' + encodeURIComponent('T'));
-ok('CA kobo link uses title+author (ISBN unreliable there)',
-  ca[2].url === 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent('T'));
 // title+author mode with a real title/author pair
 const ca2 = window.storeLinks({ isbn: '9780123456789', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
 ok('indigo title+author query', ca2[1].url ===
   'https://www.indigo.ca/search?q=' + encodeURIComponent('Iron Flame Rebecca Yarros'));
-ok('kobo title+author query', ca2[2].url ===
-  'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent('Iron Flame Rebecca Yarros'));
 ok('amazon still prefers ISBN', ca2[0].url === 'https://www.amazon.ca/s?k=9780123456789');
 setRegion('US');
 const us = window.storeLinks({ isbn: '', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
@@ -90,7 +86,7 @@ runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.storeRegio
   library.push(${mk('s1', false)}); library.push(${mk('s2', true)});`);
 runInWindow(`openDetail('s1');`);
 ok('buy row visible for wishlist book', q('#m-buywrap').style.display !== 'none');
-ok('buy row has 3 retailer links', qa('#m-buywrap a').length === 3);
+ok('buy row has 2 retailer links', qa('#m-buywrap a').length === 2);
 ok('buy links open in new tab', qa('#m-buywrap a').every(a => a.target === '_blank' && a.rel.includes('noopener')));
 ok('region label shown', q('#m-buywrap').textContent.includes('Canada'));
 ok('isbn used in link', q('#m-buywrap a').href.includes('9780123456789'));
