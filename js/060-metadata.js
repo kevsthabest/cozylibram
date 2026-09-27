@@ -26,6 +26,7 @@ function normalizeVolume(item, isbnHint) {
     ratings: {},
     myRating: 0,
     tropes: [],
+    tropesAuto: [], // v81: auto-suggested tropes (never overwrites tropes)
     progress: 0,
     dateAdded: new Date().toISOString(),
     dateFinished: null,

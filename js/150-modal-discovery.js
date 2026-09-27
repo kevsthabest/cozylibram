@@ -459,7 +459,6 @@ function renderDetailModal(b, viaBook) {
         const inp = document.getElementById('f-progress');
         if (inp) inp.value = draft.progress;
         renderProgressSection();
-
       }));
   };
   refreshProgressSection = renderProgressSection;
@@ -506,7 +505,8 @@ function renderDetailModal(b, viaBook) {
     '<div class="field"><label>My rating</label><div class="picker" id="f-myrating">' + hearts + '</div></div>' +
 
     '<div class="field"><label>Tropes (comma separated)</label>' +
-    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '"></div>' +
+    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
+    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
 
     '<div class="field"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
@@ -619,6 +619,37 @@ function renderDetailModal(b, viaBook) {
   root.querySelectorAll('[data-series]').forEach(el =>
     el.addEventListener('click', () => openCollection('series', el.dataset.series, id)));
   renderProgressSection();
+
+  // v81: trope suggestions — tappable chips under the tropes input. Tap to add
+  // to her list; suggestions never overwrite what she typed. Refreshes when the
+  // Settings source changed since they were computed.
+  const renderTropeSuggestions = () => {
+    const box = document.getElementById('f-tropesugg');
+    if (!box) return;
+    const inp = document.getElementById('f-tropes');
+    const mine = new Set((inp ? inp.value : '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean));
+    const sugg = (b.tropesAuto || []).filter(t => !mine.has(String(t).toLowerCase()));
+    box.innerHTML = sugg.length
+      ? '<span class="note">Suggested — tap to add:</span> ' + sugg.map(t =>
+        '<button class="chip sugg" data-tsugg="' + esc(t) + '">+ ' + esc(t) + '</button>').join('')
+      : '';
+    box.querySelectorAll('[data-tsugg]').forEach(btn => btn.addEventListener('click', () => {
+      const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+      if (!cur.map(t => t.toLowerCase()).includes(btn.dataset.tsugg.toLowerCase())) {
+        cur.push(btn.dataset.tsugg);
+        inp.value = cur.join(', ');
+      }
+      renderTropeSuggestions();
+    }));
+  };
+  if ((b.tropeSrc || '') !== tropeSourceKey()) {
+    refreshTropeSuggestions(b).then(() => {
+      try { delete b._hcTagsFetched; } catch (e) {}
+      saveLibrary();
+      renderTropeSuggestions();
+    });
+  }
+  renderTropeSuggestions();
 
   // v75: quotes save immediately (like the progress steppers), independent of
   // the draft — Save syncs draft.quotes from the book so they aren't clobbered.

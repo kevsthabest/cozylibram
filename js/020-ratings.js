@@ -38,6 +38,7 @@ function migrateBook(b) {
   delete b.spice;
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
+  if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81
   if (!Array.isArray(b.axes) || !b.axes.length) b.axes = autoDetectAxes(b);
   if (!Array.isArray(b.contentWarnings)) b.contentWarnings = [];
   if (!Array.isArray(b.moods)) b.moods = [];

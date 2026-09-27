@@ -66,6 +66,15 @@ async function enrichHardcover(book) {
     }
     if (!doc) return false;
     applyHardcoverDoc(book, doc);
+    // v81: trope suggestions ride along with enrichment (best-effort; never
+    // fails the enrichment). Pace the extra tags request under the rate limit.
+    try {
+      await refreshTropeSuggestions(book);
+      if (book._hcTagsFetched) {
+        delete book._hcTagsFetched;
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    } catch (e) {}
     return true;
   } catch (e) { return false; }
 }
@@ -100,6 +109,10 @@ function applyHardcoverDoc(book, doc) {
     }
   }
   if (!book.description && doc.description) book.description = String(doc.description);
+  // v81: stash the Hardcover id + any tags the search document carries so the
+  // trope suggester can pull community tags without another search.
+  if (doc.id != null && book.hcId == null) book.hcId = doc.id;
+  if (Array.isArray(doc.tags) && doc.tags.length) book._hcDocTags = doc.tags.slice(0, 20);
   book.hcEnriched = true;
 }
 

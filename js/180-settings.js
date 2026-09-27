@@ -81,7 +81,7 @@ function renderSettings() {
     library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
     ' books have ISBNs to check.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
-    '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, and moods. ' +
+    '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags. ' +
     'The token lives in server-config.json on your home PC and is shared with this device automatically over your home network. ' +
     'Get one at hardcover.app → Account settings → API.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
@@ -92,6 +92,12 @@ function renderSettings() {
       (t === 'on' ? '✨ On' : '⏸️ Off') + '</button>').join('') +
     '</div></div>' +
     '<p class="note">When on, unenriched books are quietly enriched from Hardcover a few seconds after the app opens — no need to tap “Enrich all books”.</p>' +
+    '<div class="field"><label>Trope suggestions</label><div class="seg" id="trope-srcseg" style="grid-template-columns:repeat(4,1fr)">' +
+    TROPE_SOURCES.map(t =>
+      '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '">' +
+      TROPE_SRC_LABELS[t] + '</button>').join('') +
+    '</div></div>' +
+    '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>' +
     '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
     '<p class="note">Google Books lookups share one anonymous quota that can run out. ' +
@@ -277,6 +283,13 @@ function renderSettings() {
       try { localStorage.setItem(HC_AUTO_KEY, btn.dataset.t === 'on' ? '1' : '0'); } catch (e) {}
       document.querySelectorAll('#hc-autoseg button').forEach(x => x.classList.toggle('active', x === btn));
       toast(btn.dataset.t === 'on' ? 'Background auto-enrich on ✨' : 'Background auto-enrich off ⏸️');
+    }));
+  // v81: trope suggestion source
+  document.querySelectorAll('#trope-srcseg button').forEach(btn =>
+    btn.addEventListener('click', () => {
+      setTropeSource(btn.dataset.t);
+      document.querySelectorAll('#trope-srcseg button').forEach(x => x.classList.toggle('active', x === btn));
+      toast('Trope suggestions: ' + TROPE_SRC_LABELS[btn.dataset.t]);
     }));
   // App version + updates
   runningAppVersion().then(v => {
