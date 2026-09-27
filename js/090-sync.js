@@ -197,6 +197,77 @@ async function cloudFirstSync() {
     toast('☁️ Library synced');
   } catch (e) { toast(cloudErrMsg(e)); }
 }
+
+/* ---------------- realtime sync (v143) ---------------- */
+// Devices subscribe to each other's book + tombstone changes, so a deletion
+// (or add/edit) on one device lands on the others within seconds instead of
+// waiting for the next boot or a manual Sync. Requires the tables to be in
+// the supabase_realtime publication — see supabase/realtime.sql (one-time).
+// Event payloads are ignored on purpose: the handler re-runs the same
+// pull/merge path as a boot sync (debounced), so semantics never drift.
+let rtChannel = null, rtTimer = null, rtStatus = 'off'; // off|connecting|live|error
+let rtErrToastShown = false;
+const RT_DEBOUNCE_MS = 1500;
+
+async function cloudRealtimeStart() {
+  await cloudRealtimeStop();
+  const sb = await cloudClient().catch(() => null);
+  if (!sb || !cloudUser || typeof sb.channel !== 'function') return;
+  rtStatus = 'connecting'; refreshAccountUI();
+  try {
+    const ch = sb.channel('libram-' + cloudUser.id);
+    ch.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'books', filter: 'user_id=eq.' + cloudUser.id },
+      () => scheduleRealtimePull());
+    ch.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'deleted_books', filter: 'user_id=eq.' + cloudUser.id },
+      () => scheduleRealtimePull());
+    rtChannel = ch;
+    ch.subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') { rtStatus = 'live'; }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        rtStatus = 'error';
+        if (!rtErrToastShown) {
+          rtErrToastShown = true;
+          toast('Realtime sync unavailable — sync still works when the app opens. See supabase/realtime.sql');
+        }
+      }
+      refreshAccountUI();
+    });
+  } catch (e) { rtChannel = null; rtStatus = 'error'; refreshAccountUI(); }
+}
+
+async function cloudRealtimeStop() {
+  if (rtTimer) { clearTimeout(rtTimer); rtTimer = null; }
+  rtStatus = 'off'; rtErrToastShown = false;
+  if (rtChannel) {
+    const ch = rtChannel; rtChannel = null;
+    try {
+      const sb = await cloudClient().catch(() => null);
+      if (sb && typeof sb.removeChannel === 'function') await sb.removeChannel(ch);
+    } catch (e) { /* already gone */ }
+  }
+  refreshAccountUI();
+}
+
+function scheduleRealtimePull() {
+  if (!cloudUser || rtTimer) return; // batch rapid events into one pull
+  rtTimer = setTimeout(() => { rtTimer = null; cloudRealtimePull(); }, RT_DEBOUNCE_MS);
+}
+
+async function cloudRealtimePull() {
+  // Same order as cloudFirstSync: tombstones first, then books. Deliberately
+  // never pushes — the cloud already holds whatever triggered this event, so
+  // pushing here would echo our own writes back at us in a loop.
+  if (!cloudUser) return;
+  try {
+    let changed = applyTombstones(await cloudPullTombstones());
+    if (mergeCloudBooks(library, await cloudPullRows())) { saveLibrary({ noCloud: true }); changed = true; }
+    if (changed) render();
+    cloudLastSync = Date.now();
+    refreshAccountUI();
+  } catch (e) { /* transient — the next event or boot retries */ }
+}
 // v101: one-time repair for libraries polluted by the pre-fix unfiltered
 // pull (v96–v100). Once RLS let friends read each other's books, a sync after
 // adding a friend merged their shared books into your local library and then
@@ -333,8 +404,14 @@ function refreshAccountUI() {
     if (inEl) inEl.style.display = '';
     if (outEl) outEl.style.display = 'none';
     const last = document.getElementById('ac-last');
-    if (last) last.textContent = cloudSyncing ? 'Syncing…' :
-      (cloudLastSync ? 'Last synced ' + new Date(cloudLastSync).toLocaleString() : 'Not synced yet');
+    if (last) {
+      const base = cloudSyncing ? 'Syncing…' :
+        (cloudLastSync ? 'Last synced ' + new Date(cloudLastSync).toLocaleString() : 'Not synced yet');
+      const rt = rtStatus === 'live' ? ' · Realtime on' : // v143
+        rtStatus === 'connecting' ? ' · Realtime connecting…' :
+        rtStatus === 'error' ? ' · Realtime unavailable' : '';
+      last.textContent = base + rt;
+    }
   } else {
     st.textContent = 'Not signed in.';
     if (inEl) inEl.style.display = 'none';

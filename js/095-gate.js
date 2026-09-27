@@ -175,6 +175,7 @@ async function enterApp(user) {
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   await cloudFirstSync();
+  cloudRealtimeStart(); // v143: live sync while signed in (fire and forget)
   maybeOnboard(); // v127: library is settled — welcome brand-new accounts
   // v119: resolve admin status for the Observatory menu entry, then honor
   // #admin deep links (e.g. cozylibram.pages.dev/#admin).
@@ -193,6 +194,7 @@ async function enterApp(user) {
 
 function leaveApp() {
   gateEnteredUid = null;
+  cloudRealtimeStop(); // v143
   setLocalUser(null);
   isAppAdmin = false; // v119: drop admin state + cached analytics on sign-out
   adminRowsCache = {}; adminAggCache = {};
