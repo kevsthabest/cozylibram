@@ -58,7 +58,7 @@ ok('rows use segmented bars, not icon buttons', qa('#f-axrows .segbar i').length
 ok('spice bar shows 4 filled segments', qa('#f-axrows [data-ax="spice"] .segbar i.f').length === 4);
 ok('numeric readout shown', q('#f-axrows [data-ax="spice"] .segnum').textContent === '4');
 ok('unrated axis shows dash', q('#f-axrows [data-ax="adventure"] .segnum').textContent === '–');
-ok('unapplied axes offered as + chips', qa('#f-axadd [data-axadd]').length === 2); // scare, suspense
+ok('unapplied axes offered as + chips', qa('#f-axadd [data-axadd]').length === 9); // 11 - 2 applied
 
 const advBar = q('#f-axrows [data-ax="adventure"] .segbar');
 advBar.querySelectorAll('i')[2].click(); // 3rd segment
@@ -70,7 +70,7 @@ ok('readout resets to dash', q('#f-axrows [data-ax="adventure"] .segnum').textCo
 
 q('#f-axrows [data-ax="spice"] [data-axrm]').click();
 ok('× removes the axis row', qa('#f-axrows .axrow').length === 1 && !q('#f-axrows [data-ax="spice"]'));
-ok('removed axis returns to + chips', qa('#f-axadd [data-axadd]').length === 3);
+ok('removed axis returns to + chips', qa('#f-axadd [data-axadd]').length === 10);
 q('#f-axadd [data-axadd="spice"]').click();
 ok('+ chip re-adds the axis', qa('#f-axrows .axrow').length === 2 && !!q('#f-axrows [data-ax="spice"]'));
 
@@ -83,6 +83,51 @@ ok('save persists header rating', runInWindow2('library[0].myRating') === 3);
 ok('save persists axis rating', runInWindow2('library[0].ratings.spice') === 2);
 
 function runInWindow2(js) { return window.eval(js); }
+
+// --- v132: expanded catalog, colors, level words, fit-to-book axes ---
+ok('catalog has 11 axes', runInWindow2('RATING_AXES.length') === 11);
+ok('every axis has color + 5 level words',
+  runInWindow2(`RATING_AXES.every(a => /^#[0-9a-f]{6}$/i.test(a.color) && Array.isArray(a.levels) && a.levels.length === 5)`));
+ok('every axis icon resolves to line-art svg',
+  runInWindow2(`RATING_AXES.every(a => icon(a.icon).includes('</svg>'))`));
+
+const axesFor = (book) => runInWindow2(`autoDetectAxes(${JSON.stringify(book)})`);
+ok('dark romance gets Darkness (trope match)',
+  axesFor({ title: 'T', categories: [], tropes: ['dark romance', 'morally grey'], }).includes('darkness'));
+ok('romance gets Spice + Feels, not Depth',
+  (() => { const h = axesFor({ title: 'T', categories: ['Fiction / Romance'], tropes: [] });
+    return h.includes('spice') && h.includes('feels') && !h.includes('depth'); })());
+ok('history book gets Insight + Readability + Depth, not Spice',
+  (() => { const h = axesFor({ title: 'The Guns of August', categories: ['History / Military'], tropes: [] });
+    return h.includes('insight') && h.includes('readability') && h.includes('depth') && !h.includes('spice'); })());
+ok('tech book gets Insight + Practical',
+  (() => { const h = axesFor({ title: 'T', categories: ['Computers / Programming'], tropes: [] });
+    return h.includes('insight') && h.includes('practical'); })());
+ok('romcom gets Humor', axesFor({ title: 'T', categories: [], tropes: ['witty banter'] }).includes('humor'));
+ok('unknown book falls back to spice', axesFor({ title: 'Xyzzy', categories: [], tropes: [] }).join() === 'spice');
+
+// modal: color + word rendering, fit-to-book display
+seed('r4', { categories: ['History / Military'], tropes: [], axes: [], ratings: {} });
+ok('history modal shows nonfiction axes only',
+  (() => { const keys = qa('#f-axrows .axrow').map(r => r.dataset.ax);
+    return keys.includes('insight') && keys.includes('depth') && !keys.includes('spice'); })());
+ok('row carries the axis color var',
+  q('#f-axrows [data-ax="insight"]').getAttribute('style').includes('#4dd0e1'));
+ok('unrated row word is Tap to rate',
+  q('#f-axrows [data-ax="insight"] .axword').textContent === 'Tap to rate');
+
+seed('r5', {});
+ok('spice 4 shows level word Explicit',
+  q('#f-axrows [data-ax="spice"] .axword').textContent === 'Explicit');
+ok('spice row uses spice color',
+  q('#f-axrows [data-ax="spice"]').getAttribute('style').includes('#ff5d6d'));
+const spiceBar = q('#f-axrows [data-ax="spice"] .segbar');
+spiceBar.querySelectorAll('i')[4].click();
+ok('word updates with new value (Filthy)',
+  q('#f-axrows [data-ax="spice"] .axword').textContent === 'Filthy');
+spiceBar.querySelectorAll('i')[4].click();
+ok('word resets when cleared',
+  q('#f-axrows [data-ax="spice"] .axword').textContent === 'Tap to rate');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

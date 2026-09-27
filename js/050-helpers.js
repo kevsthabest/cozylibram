@@ -59,6 +59,9 @@ const ICONS = {
   shock: '<circle cx="12" cy="12" r="8.5"/><circle cx="9.4" cy="10" r=".95" fill="currentColor" stroke="none"/><circle cx="14.6" cy="10" r=".95" fill="currentColor" stroke="none"/><ellipse cx="12" cy="15.2" rx="2.1" ry="2.7"/>',
   // crossed swords (adventure)
   swords: '<path d="M6.8 6.8l9.5 9.5"/><path d="M4.6 4.6l2.9-.7-.7 2.9z"/><path d="M17.2 6.8l-9.5 9.5"/><path d="M19.4 4.6l-2.9-.7.7 2.9z"/>',
+  // v132: smile (humor axis), layers (depth axis)
+  smile: '<circle cx="12" cy="12" r="8.5"/><circle cx="9.2" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 14.2c1 1.7 2.4 2.6 4 2.6s3-0.9 4-2.6"/>',
+  layers: '<path d="M12 3.5l9 4.8-9 4.8-9-4.8z"/><path d="M4.2 12.4l7.8 4.2 7.8-4.2"/><path d="M4.2 16.4L12 20.5l7.8-4.1"/>',
   // ---- v85: full-UI line-art sweep ----
   // overflow menu (vertical ellipsis)
   dots: '<circle cx="12" cy="5.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none"/>',

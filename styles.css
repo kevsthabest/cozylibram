@@ -866,12 +866,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .hrate-row { display: flex; align-items: center; gap: 10px; }
 .hrate .picker button { padding: 7px 9px; font-size: 19px; }
 .rate-word { font-size: 13.5px; font-weight: 700; color: var(--accent); }
-.axrow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.axrow { display: flex; flex-direction: column; gap: 7px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .axrow:last-child { border-bottom: none; }
-.axrow .axlab { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; min-width: 108px; }
+.axhead { display: flex; align-items: center; gap: 8px; }
+.axhead .axlab { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; }
+.axword { margin-left: auto; font-size: 12.5px; font-weight: 700; color: var(--axc, var(--accent)); }
+.axbar-row { display: flex; align-items: center; gap: 10px; }
 .segbar { display: flex; gap: 5px; flex: 1; cursor: pointer; }
 .segbar i { height: 24px; flex: 1; border-radius: 6px; background: var(--bg2); border: 1px solid var(--line); font-style: normal; }
-.segbar i.f { background: var(--accent); border-color: var(--accent); }
+.segbar i.f { background: var(--axc, var(--accent)); border-color: var(--axc, var(--accent)); }
 .segnum { font-size: 13px; font-weight: 700; color: var(--muted); min-width: 16px; text-align: right; }
 .axrm { background: none; border: none; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; }
 .axrm:hover { color: var(--danger); }

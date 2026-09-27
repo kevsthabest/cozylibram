@@ -615,16 +615,20 @@ function renderDetailModal(b, viaBook) {
   // v131: mood ratings as segmented bars — icon + label, 5 tap segments,
   // numeric readout, × removes the axis; unapplied axes offered as + chips.
   const RATING_WORDS = ['Tap to rate', 'Not for me', 'Meh', 'Liked it', 'Really liked it', 'Loved it'];
+  // v132: per-axis color + level word (e.g. Spice 4 = "Explicit").
+  const axWord = (a, v) => v ? a.levels[v - 1] : 'Tap to rate';
   const axRowHTML = (k) => {
     const a = axisByKey(k);
     const v = draft.ratings[k] || 0;
     const segs = [1, 2, 3, 4, 5].map(n =>
       '<i data-v="' + n + '" class="' + (v >= n ? 'f' : '') + '"></i>').join('');
-    return '<div class="axrow" data-ax="' + k + '">' +
-      '<span class="axlab">' + icon(a.icon || 'pepper') + ' ' + esc(a.label) + '</span>' +
-      '<div class="segbar" role="slider" aria-label="' + esc(a.label) + ' rating" aria-valuemin="0" aria-valuemax="5" aria-valuenow="' + v + '">' + segs + '</div>' +
+    return '<div class="axrow" data-ax="' + k + '" style="--axc:' + a.color + '">' +
+      '<div class="axhead"><span class="axlab">' + icon(a.icon || 'pepper') + ' ' + esc(a.label) + '</span>' +
+      '<span class="axword">' + esc(axWord(a, v)) + '</span></div>' +
+      '<div class="axbar-row"><div class="segbar" role="slider" aria-label="' + esc(a.label) + ' rating" ' +
+      'aria-valuemin="0" aria-valuemax="5" aria-valuenow="' + v + '">' + segs + '</div>' +
       '<span class="segnum">' + (v || '–') + '</span>' +
-      '<button class="axrm" data-axrm="' + k + '" aria-label="Remove ' + esc(a.label) + ' rating">×</button></div>';
+      '<button class="axrm" data-axrm="' + k + '" aria-label="Remove ' + esc(a.label) + ' rating">×</button></div></div>';
   };
   const axAddHTML = () => RATING_AXES.filter(a => !draft.axes.includes(a.key)).map(a =>
     '<button class="chip" data-axadd="' + a.key + '">+ ' + esc(a.label) + '</button>').join('');
@@ -850,6 +854,8 @@ function renderDetailModal(b, viaBook) {
         bar.querySelectorAll('i').forEach((x, i) => x.classList.toggle('f', i < nv));
         bar.setAttribute('aria-valuenow', nv);
         row.querySelector('.segnum').textContent = nv || '–';
+        const a = axisByKey(k); // v132: level word follows the value
+        row.querySelector('.axword').textContent = nv ? a.levels[nv - 1] : 'Tap to rate';
       }));
       const rm = row.querySelector('[data-axrm]');
       if (rm) rm.addEventListener('click', () => {
