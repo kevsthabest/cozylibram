@@ -119,13 +119,15 @@ function readingCalHTML() {
     const k = kk(d);
     const acts = byDay[k] || [];
     const n = acts.length;
+    const dp = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
     const cls = 'cal-day l' + level(k) + (n ? ' has' : '') + (k === todayK ? ' today' : '') + (k === calSel ? ' sel' : '');
     cells += '<div class="' + cls + '" data-day="' + k + '"><span class="d">' + d + '</span>' +
       (n ? '<span class="ccover">' +
         (acts[0].b.cover
           ? '<img src="' + esc(acts[0].b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
           : '📕') +
-        (n > 1 ? '<span class="cdot">' + n + '</span>' : '') + '</span>' : '') + '</div>';
+        (n > 1 ? '<span class="cdot">' + n + '</span>' : '') + '</span>' : '') +
+      (dp > 0 ? '<span class="cday-pages">📄' + dp + '</span>' : '') + '</div>';
   }
   const dow = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-dow">' + x + '</div>').join('');
 

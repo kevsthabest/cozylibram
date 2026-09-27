@@ -137,6 +137,9 @@ ok('2-book day shows cover + count badge',
 ok('1-book day shows cover, no badge',
   !!cc('2026-09-16').querySelector('.ccover') && !cc('2026-09-16').querySelector('.cdot'));
 ok('empty day has no cover', !cc('2026-09-17').querySelector('.ccover'));
+ok('day cell shows pages read', cc('2026-09-15').querySelector('.cday-pages').textContent.includes('260'));
+ok('light day cell shows its pages', cc('2026-09-16').querySelector('.cday-pages').textContent.includes('20'));
+ok('empty day shows no page count', !cc('2026-09-17').querySelector('.cday-pages'));
 ok('heavy day tinted brighter than light day', clvl('2026-09-15') > clvl('2026-09-16'));
 ok('finish-only day is lit', clvl('2026-09-10') === 1);
 ok('empty day has no tint', clvl('2026-09-17') === 0);

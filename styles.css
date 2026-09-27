@@ -569,6 +569,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .cal-day.sel .cdot { background: rgba(255, 255, 255, .25); }
 .cdot { font-size: 10px; font-weight: 700; background: var(--accent); color: #fff; border-radius: 99px;
   min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.cday-pages { font-size: 10px; color: var(--muted); line-height: 1.2; }
+.cal-day.l3 .cday-pages, .cal-day.l4 .cday-pages { color: #f3c6d8; }
 /* reading activity heatmap (v62) */
 .heat-scroll { overflow-x: auto; padding: 2px 0 6px; }
 .heat { display: flex; gap: 3px; width: max-content; }
