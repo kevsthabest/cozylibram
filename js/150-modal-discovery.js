@@ -413,6 +413,32 @@ function playBookOpen(b, from, dropEl, done) {
 function openBookFromEl(el, id) {
   openDetail(id, el ? { fromEl: el } : null);
 }
+/* ---- v110: "More like this" — similar books from her own shelves ---- */
+// Ranked by shared tropes (3 pts), shared genres (2 pts), same author (4 pts),
+// spice-level closeness, with a nudge for books she rated 4★+. Purely local.
+function similarBooks(book, limit) {
+  const norm = s => String(s || '').trim().toLowerCase();
+  const bTropes = new Set((book.tropes || []).map(norm));
+  const bCats = new Set((book.categories || []).map(norm));
+  const bAuthors = new Set((book.authors || []).map(norm));
+  const bSpice = Number((book.ratings || {}).spice) || 0;
+  const scored = [];
+  library.forEach(o => {
+    if (!o || o.id === book.id) return;
+    let score = 0;
+    (o.tropes || []).forEach(t => { if (bTropes.has(norm(t))) score += 3; });
+    (o.categories || []).forEach(c => { if (bCats.has(norm(c))) score += 2; });
+    if ((o.authors || []).some(a => bAuthors.has(norm(a)))) score += 4;
+    const oSpice = Number((o.ratings || {}).spice) || 0;
+    if (bSpice && oSpice) score += Math.max(0, 3 - Math.abs(bSpice - oSpice));
+    if (score <= 0) return;
+    if ((o.myRating || 0) >= 4) score += 1;
+    scored.push({ book: o, score: score });
+  });
+  scored.sort((x, y) => y.score - x.score ||
+    String(x.book.title || '').localeCompare(String(y.book.title || '')));
+  return scored.slice(0, limit || 6).map(s => s.book);
+}
 function openDetail(id, opts) {
   const b = library.find(x => x.id === id);
   if (!b) return;
@@ -518,6 +544,16 @@ function renderDetailModal(b, viaBook) {
     (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div id="m-progress"></div>' +
+    '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
+    (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
+      const sims = similarBooks(b, 6);
+      if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
+      return '<div class="sim-row">' + sims.map(o =>
+        '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
+        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+                 : '<span class="sim-nocover">' + icon('covers') + '</span>') +
+        '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
+    })() + '</div>' +
 
     '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
     '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
@@ -650,6 +686,8 @@ function renderDetailModal(b, viaBook) {
   }));
 
   const close = () => { root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null; };
+  root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
+    el.addEventListener('click', () => openDetail(el.dataset.sim)));
   document.getElementById('m-x').addEventListener('click', close);
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
