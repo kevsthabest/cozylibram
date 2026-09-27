@@ -518,6 +518,7 @@ function renderDetailModal(b, viaBook) {
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
 
     '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
+    '<button class="btn ghost" id="m-share">📤 Share</button>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
 
@@ -652,6 +653,7 @@ function renderDetailModal(b, viaBook) {
     toast('Today’s entry removed 🗑️');
   });
 
+  document.getElementById('m-share').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);

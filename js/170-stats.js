@@ -705,13 +705,53 @@ function drawYearImage(d) {
 
 function shareYearImage() {
   const cv = drawYearImage(yearInBooksData());
-  if (!cv) { toast('Image export isn’t supported on this device'); return; }
+  shareCanvasFile(cv, 'my-' + yibYear + '-in-books.png', 'My Year in Books');
+}
+
+/* ---- Shareable book cards (v73): 1080x1920 story-format cards per book. ---- */
+function cvRoundRect(x, X, Y, W, H, R) {
+  x.beginPath();
+  x.moveTo(X + R, Y);
+  x.arcTo(X + W, Y, X + W, Y + H, R);
+  x.arcTo(X + W, Y + H, X, Y + H, R);
+  x.arcTo(X, Y + H, X, Y, R);
+  x.arcTo(X, Y, X + W, Y, R);
+  x.closePath();
+}
+function cvWrap(x, text, maxW) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    const t = line ? line + ' ' + w : w;
+    if (line && x.measureText(t).width > maxW) { lines.push(line); line = w; }
+    else line = t;
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+function loadCoverImage(url) {
+  return new Promise(resolve => {
+    let done = false;
+    const fin = (img) => { if (!done) { done = true; resolve(img); } };
+    if (!url) return fin(null);
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => fin(img);
+      img.onerror = () => fin(null);
+      img.src = url;
+      setTimeout(() => fin(null), 8000);
+    } catch (e) { fin(null); }
+  });
+}
+function shareCanvasFile(cv, name, title) {
+  if (!cv || !cv.toBlob) { toast('Image export isn’t supported on this device'); return; }
   cv.toBlob(async (blob) => {
     if (!blob) { toast('Could not create the image'); return; }
-    const name = 'my-' + yibYear + '-in-books.png';
     const file = new File([blob], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'My Year in Books' }); return; }
+      try { await navigator.share({ files: [file], title: title || name }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
     const a = document.createElement('a');
@@ -721,6 +761,109 @@ function shareYearImage() {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Image saved 📥');
   }, 'image/png');
+}
+async function drawBookCard(b) {
+  const W = 1080, H = 1920;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  if (!x) return null;
+  const ink = '#f6eff8', mut = '#b9a8c6', acc = '#e5648e', gold = '#e5b86a';
+  const img = await loadCoverImage(b.cover);
+  // paint() draws the whole card; withCover=false is the taint fallback when a
+  // remote cover isn't CORS-clean (tainted canvases can't export).
+  const paint = (withCover) => {
+    const bg = x.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#2b1535'); bg.addColorStop(1, '#100a16');
+    x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    const glow = x.createRadialGradient(W / 2, 320, 40, W / 2, 320, 720);
+    glow.addColorStop(0, 'rgba(229,100,142,.20)'); glow.addColorStop(1, 'rgba(229,100,142,0)');
+    x.fillStyle = glow; x.fillRect(0, 0, W, H);
+    x.textAlign = 'center';
+    try { x.letterSpacing = '14px'; } catch (e) {}
+    x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
+    x.fillText('SPICY SHELVES', W / 2, 140);
+    try { x.letterSpacing = '0px'; } catch (e) {}
+    let y;
+    if (withCover && img) {
+      const cw = 620, ch = 930, cx = (W - cw) / 2, cy = 200;
+      x.save();
+      x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 60; x.shadowOffsetY = 24;
+      cvRoundRect(x, cx, cy, cw, ch, 28);
+      x.clip();
+      const s = Math.max(cw / img.width, ch / img.height);
+      const dw = img.width * s, dh = img.height * s;
+      x.drawImage(img, cx - (dw - cw) / 2, cy - (dh - ch) / 2, dw, dh);
+      x.restore();
+      y = cy + ch + 96;
+    } else {
+      x.fillStyle = 'rgba(229,100,142,.16)'; x.font = '300px Georgia, serif';
+      x.fillText('❝', W / 2, 580);
+      y = 730;
+    }
+    x.fillStyle = ink; x.font = 'bold 72px Georgia, serif';
+    cvWrap(x, b.title, W - 180).slice(0, 3).forEach(t => { x.fillText(t, W / 2, y); y += 88; });
+    const au = (b.authors || []).join(', ') || 'Unknown author';
+    x.fillStyle = mut; x.font = '44px system-ui, sans-serif';
+    cvWrap(x, au, W - 220).slice(0, 2).forEach(t => { x.fillText(t, W / 2, y); y += 58; });
+    y += 34;
+    if (b.series && b.series.name) {
+      x.fillStyle = acc; x.font = '40px system-ui, sans-serif';
+      let sl = '📚 ' + b.series.name +
+        ((b.series.position != null && b.series.position !== '') ? ' · Book ' + b.series.position : '');
+      if (sl.length > 44) sl = sl.slice(0, 43) + '…';
+      x.fillText(sl, W / 2, y); y += 72;
+    }
+    const bits = [];
+    if ((b.myRating || 0) > 0) bits.push('♥ ' + Number(b.myRating).toFixed(1));
+    const spice = (b.ratings && b.ratings.spice) || 0;
+    if (spice > 0) bits.push('🌶️'.repeat(Math.min(5, Math.round(spice))));
+    if (bits.length) {
+      x.fillStyle = gold; x.font = '48px system-ui, sans-serif';
+      x.fillText(bits.join('   '), W / 2, y); y += 84;
+    }
+    x.fillStyle = ink; x.font = '44px system-ui, sans-serif';
+    if (b.status === 'reading' && b.pageCount) {
+      const pct = Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100));
+      x.fillText('📘 ' + pct + '% · page ' + (b.progress || 0) + ' of ' + b.pageCount, W / 2, y);
+      y += 42;
+      const bw = 560, bx = (W - bw) / 2;
+      x.fillStyle = 'rgba(255,255,255,.14)';
+      cvRoundRect(x, bx, y, bw, 26, 13); x.fill();
+      if (pct > 0) {
+        x.fillStyle = acc;
+        cvRoundRect(x, bx, y, Math.max(26, bw * pct / 100), 26, 13); x.fill();
+      }
+      y += 64;
+    } else if (b.status === 'read') {
+      x.fillText('✅ Finished' + (b.dateFinished ? ' · ' + fmtDate(b.dateFinished) : ''), W / 2, y); y += 72;
+    } else if (b.status === 'tbr') {
+      x.fillText('📖 On my TBR', W / 2, y); y += 72;
+    } else if (b.status === 'dnf') {
+      x.fillText('🚫 DNF', W / 2, y); y += 72;
+    }
+    x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
+    x.fillText('Tracked with Spicy Shelves 🌶️🖤', W / 2, H - 80);
+  };
+  paint(!!img);
+  if (img) {
+    // Remote covers taint the canvas unless they're CORS-clean — detect and
+    // fall back to the typographic card so export never fails.
+    let tainted = false;
+    try { cv.toDataURL(); } catch (e) { tainted = e && e.name === 'SecurityError'; }
+    if (tainted) paint(false);
+  }
+  return cv;
+}
+async function shareBookCard(id) {
+  const b = library.find(x => x.id === id);
+  if (!b) return;
+  toast('Making your card… ✨');
+  const cv = await drawBookCard(b);
+  if (!cv) { toast('Image export isn’t supported on this device'); return; }
+  const safe = String(b.title || 'book').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'book';
+  shareCanvasFile(cv, 'spicy-shelves-' + safe + '.png', b.title);
 }
 
 function yearTextSummary(d) {
