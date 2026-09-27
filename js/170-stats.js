@@ -226,16 +226,134 @@ function dailyStatsHTML() {
     '</div>';
 }
 
+/* ---- reading profile (v65): per-axis intensity meters + one plain-spoken
+   line about what she reaches for. Descriptive, not judgmental. ---- */
+function spiceProfileHTML() {
+  const read = library.filter(b => b.status === 'read');
+  const rows = RATING_AXES.map(a => {
+    const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
+    return vals.length ? { a: a, avg: vals.reduce((s, v) => s + v, 0) / vals.length, n: vals.length } : null;
+  }).filter(Boolean).sort((x, y) => y.n - x.n);
+  if (!rows.length)
+    return '<div class="stat-sub">Reading profile</div>' +
+      '<p class="note">Rate the intensity axes on your books and your profile will appear here.</p>';
+  const meter = avg => {
+    const f = Math.round(avg / 5 * 10);
+    return '<span class="mfill">' + '█'.repeat(f) + '</span><span class="mdim">' + '░'.repeat(10 - f) + '</span>';
+  };
+  const spice = rows.find(r => r.a.key === 'spice');
+  const line = spice
+    ? (spice.avg >= 4 ? '🌶️ You tend to reach for high-spice books.'
+      : spice.avg >= 2.5 ? '🌶️ Your shelf runs medium-spice overall.'
+      : '🌶️ You keep things fairly low-key on the spice front.')
+    : rows[0].a.emoji + ' ' + rows[0].a.label + ' is your strongest pull.';
+  return '<div class="stat-sub">Reading profile</div><div class="kv">' +
+    rows.map(r => '<div class="kv-row"><span>' + r.a.emoji + ' ' + r.a.label +
+      ' <i style="font-style:normal;color:var(--faint)">· ' + r.n + '</i></span><b><span class="meter">' +
+      meter(r.avg) + '</span> ' + r.avg.toFixed(1) + '</b></div>').join('') +
+    '</div><p class="note">' + line + '</p>';
+}
+
+/* ---- rating distribution (v65): histogram + the interesting read ---- */
+function ratingDistHTML() {
+  const read = library.filter(b => b.status === 'read' && (b.myRating || 0) > 0);
+  if (!read.length)
+    return '<div class="stat-sub">Ratings</div>' +
+      '<p class="note">Rate your finished books and the distribution will show up here.</p>';
+  const bins = [0, 0, 0, 0, 0];
+  read.forEach(b => { bins[Math.min(5, Math.max(1, Math.round(b.myRating))) - 1]++; });
+  const max = Math.max.apply(null, bins.concat([1]));
+  const avg = read.reduce((s, b) => s + b.myRating, 0) / read.length;
+  const fiveShare = bins[4] / read.length;
+  const rows = [5, 4, 3, 2, 1].map(s =>
+    '<div class="dist-row"><span class="lbl">' + s + ' ⭐</span>' +
+    '<div class="bar"><div class="fill" style="width:' + Math.round(bins[s - 1] / max * 100) +
+    '%;background:var(--gold)"></div></div>' +
+    '<span class="num">' + bins[s - 1] + '</span></div>').join('');
+  const take = fiveShare >= 0.2
+    ? 'You finish books you like — 5-star reads make up <b style="color:var(--ink)">' +
+      Math.round(fiveShare * 100) + '%</b> of your completed books.'
+    : avg >= 4 ? 'A generous rater — your average sits at <b style="color:var(--ink)">' + avg.toFixed(2) + ' ⭐</b>.'
+    : avg < 3 ? 'A tough critic — your average is <b style="color:var(--ink)">' + avg.toFixed(2) + ' ⭐</b>.'
+    : 'Your average rating: <b style="color:var(--ink)">' + avg.toFixed(2) + ' ⭐</b>.';
+  return '<div class="stat-sub">Ratings</div><div class="dist">' + rows + '</div>' +
+    '<p class="note">' + take + '</p>';
+}
+
+/* ---- reading patterns (v65): calculated observations, each gated on enough
+   data to mean something. No AI — just her library talking back. ---- */
+function patternsHTML() {
+  const obs = [];
+  const read = library.filter(b => b.status === 'read');
+  const rated = read.filter(b => (b.myRating || 0) > 0);
+  const avgOf = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+
+  // genre rating gap
+  const byGenre = {};
+  rated.forEach(b => bookGenres(b).forEach(g => { (byGenre[g] = byGenre[g] || []).push(b.myRating); }));
+  const gk = Object.keys(byGenre).filter(g => byGenre[g].length >= 3)
+    .sort((a, b) => byGenre[b].length - byGenre[a].length).slice(0, 2);
+  if (gk.length === 2) {
+    const a1 = avgOf(byGenre[gk[0]]), a2 = avgOf(byGenre[gk[1]]);
+    const gap = Math.abs(a1 - a2);
+    if (gap >= 0.15) {
+      const hi = a1 >= a2 ? gk[0] : gk[1], lo = a1 >= a2 ? gk[1] : gk[0];
+      obs.push('You rate <b>' + esc(hi) + '</b> books ' + gap.toFixed(1) + ' ⭐ higher than <b>' + esc(lo) + '</b> books.');
+    }
+  }
+
+  // highest-rated books' average length
+  const top = rated.filter(b => b.myRating >= 4.5 && (b.pageCount || 0) > 0);
+  if (top.length >= 3)
+    obs.push('Your highest-rated books average <b>' + Math.round(avgOf(top.map(b => b.pageCount))) + ' pages</b>.');
+
+  // finish likelihood by length bucket
+  const buckets = [['under 250', 0, 249], ['250–450', 250, 450], ['451–650', 451, 650], ['over 650', 651, Infinity]];
+  const done = library.filter(b => (b.status === 'read' || b.status === 'dnf') && (b.pageCount || 0) > 0);
+  const rates = buckets.map(bk => {
+    const bs = done.filter(b => b.pageCount >= bk[1] && b.pageCount <= bk[2]);
+    return bs.length >= 3 ? { label: bk[0], rate: bs.filter(b => b.status === 'read').length / bs.length } : null;
+  }).filter(Boolean);
+  if (rates.length >= 2) {
+    const best = rates.slice().sort((a, b) => b.rate - a.rate)[0];
+    if (best.rate >= 0.6)
+      obs.push('You\'re most likely to finish books between <b>' + best.label + ' pages</b>.');
+  }
+
+  // trope rating
+  const byTrope = {};
+  rated.forEach(b => (b.tropes || []).forEach(t => { (byTrope[t] = byTrope[t] || []).push(b.myRating); }));
+  const tk = Object.keys(byTrope).filter(t => byTrope[t].length >= 3)
+    .sort((a, b) => avgOf(byTrope[b]) - avgOf(byTrope[a]))[0];
+  if (tk)
+    obs.push('Books tagged <b>' + esc(tk) + '</b> average <b>' + avgOf(byTrope[tk]).toFixed(1) + ' ⭐</b> for you.');
+
+  // rating trend: last 6 months vs prior 6
+  const now = Date.now(), M = 30.44 * 864e5;
+  const finAge = b => b.dateFinished ? now - new Date(b.dateFinished).getTime() : Infinity;
+  const recent = rated.filter(b => finAge(b) < 6 * M);
+  const prior = rated.filter(b => finAge(b) >= 6 * M && finAge(b) < 12 * M);
+  if (recent.length >= 2 && prior.length >= 2) {
+    const r = avgOf(recent.map(b => b.myRating)), p = avgOf(prior.map(b => b.myRating));
+    if (Math.abs(r - p) >= 0.2)
+      obs.push('Your average rating has ' + (r > p ? 'risen' : 'dipped') + ' from <b>' +
+        p.toFixed(1) + ' ⭐</b> to <b>' + r.toFixed(1) + ' ⭐</b> over the last 6 months.');
+  }
+
+  if (!obs.length)
+    return '<div class="stat-sub">🔮 Reading patterns</div>' +
+      '<p class="note">Finish and rate a few more books and your patterns will start showing here.</p>';
+  return '<div class="stat-sub">🔮 Reading patterns</div><div class="patterns">' +
+    obs.slice(0, 6).map(o => '<div class="pattern"><span class="pi">💡</span><p>' + o + '</p></div>').join('') +
+    '</div>';
+}
+
 function renderStats() {
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
   const pagesYr = readYr.reduce((s, b) => s + (b.pageCount || 0), 0);
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
-  const axisAvgs = RATING_AXES.map(a => {
-    const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
-    return { a: a, avg: avgOf(vals), n: vals.length };
-  }).filter(x => x.avg != null);
   const ratedYr = readYr.filter(b => b.myRating > 0);
   const avgMine = avgOf((ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0).map(b => b.myRating));
   const streak = readingStreak();
@@ -280,15 +398,15 @@ function renderStats() {
     heatmapHTML() +
     readingCalHTML() +
     paceHTML() +
+    spiceProfileHTML() +
+    ratingDistHTML() +
+    patternsHTML() +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>' +
     (topTropes.length
       ? '<div class="stat-sub">Top tropes</div><div class="trope-cloud">' +
         topTropes.map(([t, n]) => '<span class="trope-pill">' + esc(t) + '<span class="c">' + n + '</span></span>').join('') +
         '</div>'
       : '<p class="note">Tag tropes on your books and they\'ll show up here.</p>') +
-    (avgMine != null ? '<p class="note">Your average personal rating: <b style="color:var(--ink)">♥ ' + avgMine.toFixed(1) + ' / 5</b></p>' : '') +
-    (axisAvgs.length > 1 ? '<p class="note">Average intensity: ' +
-      axisAvgs.map(x => '<b style="color:var(--ink)">' + x.a.emoji + ' ' + x.avg.toFixed(1) + '</b>').join(' · ') + '</p>' : '') +
     nowReading
   );
 
