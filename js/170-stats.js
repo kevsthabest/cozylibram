@@ -22,21 +22,38 @@ function dayActivity() {
   return map;
 }
 
+function pagesByDayMap() {
+  const byDay = dayActivity();
+  const out = {};
+  Object.keys(byDay).forEach(k => {
+    out[k] = {
+      pages: byDay[k].reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0),
+      n: byDay[k].length
+    };
+  });
+  return out;
+}
+function biggestDay() {
+  const m = pagesByDayMap();
+  let best = null;
+  Object.keys(m).forEach(k => {
+    if (m[k].pages > 0 && (!best || m[k].pages > best.pages)) best = { k: k, pages: m[k].pages, n: m[k].n };
+  });
+  return best;
+}
+
 /* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
    own quartiles, so both the heatmap and the month calendar tint alike ---- */
 function activityLevels() {
   const byDay = dayActivity();
-  const pagesByDay = {};
-  Object.keys(byDay).forEach(k => {
-    pagesByDay[k] = byDay[k].reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
-  });
-  const vals = Object.values(pagesByDay).filter(v => v > 0).sort((a, b) => a - b);
+  const pmap = pagesByDayMap();
+  const vals = Object.keys(pmap).map(k => pmap[k].pages).filter(v => v > 0).sort((a, b) => a - b);
   const qt = p => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : 0;
   const t1 = qt(0.25), t2 = qt(0.5), t3 = qt(0.75);
   return {
     byDay,
     level(k) {
-      const p = pagesByDay[k] || 0;
+      const p = (pmap[k] || { pages: 0 }).pages;
       if (p > t3) return 4;
       if (p > t2) return 3;
       if (p > t1) return 2;
@@ -168,8 +185,6 @@ function paceHTML() {
     .filter(b => b.dateAdded && b.dateFinished)
     .map(b => (new Date(b.dateFinished) - new Date(b.dateAdded)) / 864e5)
       .filter(d => d >= 0 && d < 3650));
-  const longest = withPages.slice().sort((a, b) => b.pageCount - a.pageCount)[0];
-  const shortest = withPages.slice().sort((a, b) => a.pageCount - b.pageCount)[0];
   const streak = readingStreak(), best = longestStreak();
 
   let html = '<div class="stat-sub">Reading pace</div>';
@@ -183,16 +198,11 @@ function paceHTML() {
     : '<p class="note">Log pages for a few days and your pace will show up here.</p>';
   const kv = (label, val) =>
     '<div class="kv-row"><span>' + label + '</span><b>' + val + '</b></div>';
-  const kvTap = (label, b, suffix) =>
-    '<div class="kv-row tap" data-id="' + b.id + '"><span>' + label + '</span><b>' +
-    esc(b.title) + ' · ' + suffix + ' ›</b></div>';
   html += '<div class="kv">' +
     (avgLen != null ? kv('📖 Average book', Math.round(avgLen) + ' pages') : '') +
     (avgDays != null ? kv('⏳ Average time to finish', Math.max(1, Math.round(avgDays)) + ' days') : '') +
     kv('🔥 Current streak', streak > 0 ? streak + '-day' : '–') +
     kv('🏅 Longest streak', best > 0 ? best + '-day' : '–') +
-    (longest ? kvTap('📕 Longest book', longest, fmtBig(longest.pageCount) + ' pages') : '') +
-    (shortest && shortest !== longest ? kvTap('📗 Shortest book', shortest, fmtBig(shortest.pageCount) + ' pages') : '') +
     '</div>';
   return html;
 }
@@ -348,6 +358,72 @@ function patternsHTML() {
     '</div>';
 }
 
+/* ---- personal records (v66): the fun achievements wall. Every card taps
+   through to the book; Biggest day jumps to that day in the calendar. ---- */
+function recordsHTML() {
+  const read = library.filter(b => b.status === 'read');
+  const withPages = read.filter(b => (b.pageCount || 0) > 0);
+  const rated = read.filter(b => (b.myRating || 0) > 0);
+  const spiced = read.filter(b => ((b.ratings || {}).spice || 0) > 0);
+  const cards = [];
+  const card = (icon, label, b, stat) => {
+    if (!b) return;
+    cards.push('<div class="record-card" data-id="' + b.id + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
+      coverHTML(b) + '<div class="rtitle">' + esc(b.title) + '</div>' +
+      '<div class="rstat">' + stat + '</div></div>');
+  };
+  if (withPages.length) {
+    const s = withPages.slice().sort((a, b) => b.pageCount - a.pageCount);
+    card('📕', 'Longest', s[0], fmtBig(s[0].pageCount) + ' pages');
+    card('📗', 'Shortest', s[s.length - 1], fmtBig(s[s.length - 1].pageCount) + ' pages');
+  }
+  if (rated.length) {
+    const s = rated.slice().sort((a, b) =>
+      b.myRating - a.myRating || String(b.dateFinished || '').localeCompare(String(a.dateFinished || '')));
+    card('⭐', 'Highest rated', s[0], '♥ ' + s[0].myRating.toFixed(1) + ' / 5');
+    card('💔', 'Lowest rated', s[s.length - 1], '♥ ' + s[s.length - 1].myRating.toFixed(1) + ' / 5');
+  }
+  if (spiced.length) {
+    const s = spiced.slice().sort((a, b) => b.ratings.spice - a.ratings.spice);
+    card('🌶️', 'Spiciest', s[0], '🌶️ ' + s[0].ratings.spice + ' / 5');
+  }
+  const bd = biggestDay();
+  if (bd) cards.push('<div class="record-card" id="bigday" data-day="' + bd.k + '"><div class="rlbl">📄 Biggest day</div>' +
+    '<div class="bigday-num">' + bd.pages + '</div>' +
+    '<div class="rtitle">' + fmtDate(new Date(bd.k + 'T12:00:00').toISOString()) + '</div>' +
+    '<div class="rstat">' + bd.pages + ' pages · ' + bd.n + ' session' + (bd.n === 1 ? '' : 's') + '</div></div>');
+  if (!cards.length)
+    return '<div class="stat-sub">🏆 Personal records</div>' +
+      '<p class="note">Finish some books and your records will land here.</p>';
+  return '<div class="stat-sub">🏆 Personal records</div><div class="records">' + cards.join('') + '</div>';
+}
+
+/* ---- series statistics (v66): books read per series + next-up from her
+   TBR. No totals exist in the metadata, so progress is stated honestly. ---- */
+function seriesHTML() {
+  const byName = {};
+  library.forEach(b => {
+    const sn = b.series && b.series.name;
+    if (sn) (byName[sn] = byName[sn] || []).push(b);
+  });
+  const names = Object.keys(byName).sort((a, b) => byName[b].length - byName[a].length);
+  if (!names.length)
+    return '<div class="stat-sub">📚 Series</div>' +
+      '<p class="note">Books with series info will group here.</p>';
+  const rows = names.slice(0, 10).map(sn => {
+    const books = byName[sn];
+    const readN = books.filter(b => b.status === 'read').length;
+    const next = books.filter(b => b.status !== 'read' && b.status !== 'dnf')
+      .sort((a, b) => ((a.series && a.series.position) || 99) - ((b.series && b.series.position) || 99))[0];
+    return '<div class="series-row"><div class="sinfo"><span class="sname">' + esc(sn) + '</span>' +
+      '<span class="scount">' + readN + ' read</span></div>' +
+      (next ? '<div class="snext">Next up: <button class="taplink" data-id="' + next.id + '">' +
+        esc(next.title) + '</button></div>' : '') + '</div>';
+  }).join('');
+  return '<div class="stat-sub">📚 Series</div><div class="series-list">' + rows + '</div>' +
+    (names.length > 10 ? '<p class="note">+' + (names.length - 10) + ' more series in your library.</p>' : '');
+}
+
 function renderStats() {
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
@@ -401,6 +477,8 @@ function renderStats() {
     spiceProfileHTML() +
     ratingDistHTML() +
     patternsHTML() +
+    recordsHTML() +
+    seriesHTML() +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>' +
     (topTropes.length
       ? '<div class="stat-sub">Top tropes</div><div class="trope-cloud">' +
@@ -429,8 +507,19 @@ function renderStats() {
       calSel = (calSel === c.dataset.day) ? null : c.dataset.day;
       renderStats();
     }));
-  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book').forEach(c =>
+  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .series-row [data-id]').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
+  const big = document.getElementById('bigday');
+  if (big) big.addEventListener('click', () => {
+    const parts = big.dataset.day.split('-');
+    calY = parseInt(parts[0], 10); calM = parseInt(parts[1], 10) - 1;
+    calSel = big.dataset.day; heatSel = null;
+    renderStats();
+    setTimeout(() => {
+      const el = document.getElementById('readcal');
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  });
   document.querySelectorAll('.kv-row.tap').forEach(r =>
     r.addEventListener('click', () => openDetail(r.dataset.id)));
 }

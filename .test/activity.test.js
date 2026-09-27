@@ -94,13 +94,9 @@ ok('pace grid has day/week/month', qa('.pace').length === 3 &&
   qa('.pace')[1].textContent.includes('70') && qa('.pace')[2].textContent.includes('304'));
 ok('average book length shown', q('.kv').textContent.includes('532 pages')); // (300 + 1200 + 96) / 3
 ok('average time to finish shown', q('.kv').textContent.includes('6 days'));
-ok('longest book row', q('.kv').textContent.includes('Longest Read') && q('.kv').textContent.includes('1.2k pages'));
-ok('shortest book row', q('.kv').textContent.includes('Shortest Read') && q('.kv').textContent.includes('96 pages'));
+// longest/shortest now live in Personal records (v66), not in pace
 
-// 6. record row tap opens the book
-qa('.kv-row.tap')[0].click();
-ok('record tap opens modal', !!q('#m-back') && q('#m-back').textContent.includes('Longest Read'));
-window.document.getElementById('m-x').click();
+// 6. (removed: pace no longer has tappable record rows; see records.test.js)
 
 // 7. overview cards
 const cards = qa('.stat-row .stat');

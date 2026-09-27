@@ -613,6 +613,23 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .pattern .pi { flex: none; }
 .pattern p { margin: 0; }
 .pattern p b { color: var(--ink); }
+/* personal records + series (v66) */
+.records { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.record-card { background: var(--card); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; }
+.record-card .rlbl { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.record-card .cover-wrap { width: 100%; height: 118px; flex: none; margin: 0 auto 8px; }
+.record-card .rtitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-card .rstat { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.bigday-num { height: 118px; display: flex; align-items: center; justify-content: center;
+  font-size: 38px; font-weight: 800; color: var(--accent);
+  background: linear-gradient(140deg, var(--card2), var(--bg2)); border-radius: 8px; margin-bottom: 8px; }
+.series-list { background: var(--card); border-radius: 14px; padding: 4px 14px; margin-bottom: 14px; }
+.series-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.series-row:last-child { border-bottom: none; }
+.sinfo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sname { font-weight: 700; font-size: 14px; }
+.scount { font-size: 12px; color: var(--muted); flex: none; }
+.snext { font-size: 13px; color: var(--muted); margin-top: 2px; }
 /* daily stats card */
 .dstat-card { background: var(--card); border-radius: 14px; padding: 12px; }
 .dstat-head { display: flex; justify-content: space-between; align-items: center;
