@@ -14,6 +14,10 @@ const ACCENTS = [
   { key: 'violet', name: 'Violet', color: '#8b5cf6' },
   { key: 'gold',   name: 'Gold',   color: '#c08a24' },
   { key: 'teal',   name: 'Teal',   color: '#2fa39a' },
+  { key: 'crimson', name: 'Crimson', color: '#d43a55' },
+  { key: 'ember',   name: 'Ember',   color: '#e0722a' },
+  { key: 'ocean',   name: 'Ocean',   color: '#3f8fd6' },
+  { key: 'sage',    name: 'Sage',    color: '#8aa864' },
 ];
 function getTheme() {
   const t = localStorage.getItem('theme') || 'dark';

@@ -38,8 +38,8 @@ const swatches = qa('#th-accent .sw');
 ok('six theme buttons', themeBtns.length === 6);
 ok('theme keys', themeBtns.map(b => b.dataset.t).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant');
 ok('theme dots have colors', themeBtns.every(b => { const d = b.querySelector('.th-dot'); return d && d.style.background.startsWith('rgb'); }));
-ok('four accent swatches', swatches.length === 4);
-ok('swatch keys', swatches.map(b => b.dataset.a).join(',') === 'rose,violet,gold,teal');
+ok('eight accent swatches', swatches.length === 8);
+ok('swatch keys', swatches.map(b => b.dataset.a).join(',') === 'rose,violet,gold,teal,crimson,ember,ocean,sage');
 ok('light button active', themeBtns.find(b => b.dataset.t === 'light').classList.contains('active'));
 ok('violet swatch active', swatches.find(b => b.dataset.a === 'violet').classList.contains('active'));
 ok('swatch colors set', swatches.every(b => b.style.getPropertyValue('--sw').startsWith('#')));
@@ -56,7 +56,7 @@ ok('click teal: applied live', window.document.documentElement.dataset.accent ==
 // 5. CSS carries both themes, all accents, and no stale --rose vars
 const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
 ok('all theme blocks exist', ['dark', 'light', 'hearthside', 'candlelight', 'twilight', 'verdant'].every(t => css.includes('[data-theme="' + t + '"]')));
-ok('all accent blocks exist', ['violet', 'gold', 'teal'].every(a => css.includes('[data-accent="' + a + '"]')));
+ok('all accent blocks exist', ['violet', 'gold', 'teal', 'crimson', 'ember', 'ocean', 'sage'].every(a => css.includes('[data-accent="' + a + '"]')));
 ok('no var(--rose) references remain', !css.includes('var(--rose'));
 ok('swatch styles exist', css.includes('.swatches') && css.includes('.sw.active'));
 
