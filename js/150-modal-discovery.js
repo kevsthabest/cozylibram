@@ -38,19 +38,43 @@ async function fetchMoreByAuthor(author) {
   const key = String(author).trim().toLowerCase();
   if (authorCache.has(key)) return authorCache.get(key);
   const url = 'https://openlibrary.org/search.json?author=' + encodeURIComponent(author) +
-    '&limit=40&fields=key,title,author_name,isbn,cover_i';
+    '&limit=40&fields=key,title,author_name,isbn,cover_i,language';
   const d = await (await fetch(url)).json();
-  const rows = dedupeExternal(((d || {}).docs || []).map(doc => ({
+  const raw = ((d || {}).docs || []).map(doc => ({
     title: doc.title || '',
     author: ((doc.author_name || [])[0]) || author,
     cover: doc.cover_i ? 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-M.jpg' : '',
     isbn: normISBN((doc.isbn || [])[0]),
     position: null,
     seriesName: null,
+    workKey: doc.key || '',      // v115: /works/OL…W, for translated-title repair
+    languages: doc.language || [] // v115
+  }));
+  await repairTranslatedTitles(raw); // v115: before dedupe so dupes collapse
   // Skip omnibus/box-set editions ("Book A / Book B / ...") — clutter in an author list.
-  })).filter(x => x.title && x.title.indexOf(' / ') === -1 && !inLibrary(x))).slice(0, 30);
+  const rows = dedupeExternal(raw).filter(x =>
+    x.title && x.title.indexOf(' / ') === -1 && !inLibrary(x)).slice(0, 30);
   authorCache.set(key, rows);
   return rows;
+}
+
+// v115: Open Library work records are sometimes created from a translated
+// edition, so the work's canonical title can be non-English ("Alas de ónix"
+// instead of "Onyx Storm") even when English editions exist. For suspicious
+// titles, pull the work's editions and take the first English one's title.
+async function repairTranslatedTitles(rows) {
+  const suspects = rows.filter(r =>
+    /[^\x00-\x7F]/.test(r.title) && // non-ASCII in the title…
+    (r.languages || []).some(l => l === 'eng') && // …but English editions exist
+    r.workKey);
+  for (const r of suspects) {
+    try {
+      const d = await (await fetch('https://openlibrary.org' + r.workKey + '/editions.json?limit=50')).json();
+      const eng = ((d || {}).entries || []).find(e =>
+        (e.languages || []).some(l => String(l.key || '').endsWith('/eng')) && e.title);
+      if (eng && eng.title && eng.title !== r.title) r.title = eng.title;
+    } catch (e) { /* keep the original title */ }
+  }
 }
 
 // Every book in a series via Hardcover (needs the token).
