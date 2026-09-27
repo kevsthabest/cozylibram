@@ -20,4 +20,19 @@ function loadApp(window) {
   }
 }
 
-module.exports = { loadApp, jsFiles, APP_DIR };
+module.exports = { loadApp, jsFiles, APP_DIR, chainableSelect };
+
+// Minimal PostgREST-style select builder for Supabase fakes: chainable
+// .eq() filters, thenable so a bare `await select()` also resolves.
+// `rows` are the full stored records; `project` maps one to the shape the
+// real column projection would return (filter-only columns stay out).
+function chainableSelect(rows, project) {
+  const builder = {
+    _rows: rows.slice(),
+    eq(col, val) { this._rows = this._rows.filter(r => r[col] === val); return this; },
+    then(resolve, reject) {
+      return Promise.resolve({ data: this._rows.map(project), error: null }).then(resolve, reject);
+    },
+  };
+  return builder;
+}

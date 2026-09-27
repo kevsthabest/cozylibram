@@ -44,7 +44,9 @@ function makeFake() {
         return { error: null };
       },
       // RLS-faithful: a signed-in user only ever sees their own rows.
-      select: async () => ({ data: store.filter(r => fake.user && r.user_id === fake.user.id).map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })), error: null }),
+      select: (cols) => require('./harness').chainableSelect(
+        store.filter(r => fake.user && r.user_id === fake.user.id),
+        r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })),
       delete: () => ({ eq: async (col, val) => { for (let i = store.length - 1; i >= 0; i--) if (store[i][col] === val) store.splice(i, 1); return { error: null }; } }),
       };
     },

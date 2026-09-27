@@ -130,7 +130,11 @@ function scheduleCloudPush() {
 async function cloudPullRows() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return [];
-  const { data, error } = await sb.from('books').select('book_id,isbn,data');
+  // v101: always scope to our own rows. The unfiltered select was safe while
+  // RLS only exposed your own books, but v96's friend-readable policies meant
+  // a sync after adding a friend merged their shared books into your library
+  // (and pushed them back as your own rows).
+  const { data, error } = await sb.from('books').select('book_id,isbn,data').eq('user_id', cloudUser.id);
   if (error) throw error;
   return data || [];
 }
@@ -145,8 +149,37 @@ async function cloudFirstSync() {
     const remote = await cloudPullRows();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); }
     await cloudPushNow();
+    await repairFriendPollution();
     toast('☁️ Library synced');
   } catch (e) { toast(cloudErrMsg(e)); }
+}
+// v101: one-time repair for libraries polluted by the pre-fix unfiltered
+// pull (v96–v100). Once RLS let friends read each other's books, a sync after
+// adding a friend merged their shared books into your local library and then
+// pushed them back as your own rows. A polluted book is identifiable by its id:
+// it's identical to a book id in a friend's shared library, and genuine copies
+// (the + TBR button, manual adds) always get fresh ids via uid().
+async function repairFriendPollution() {
+  const FLAG = 'spicyshelves.depollute.v1';
+  try { if (localStorage.getItem(FLAG) === '1') return; } catch (e) { return; }
+  const done = () => { try { localStorage.setItem(FLAG, '1'); } catch (e) {} };
+  if (!cloudUser || typeof circleLists !== 'function' || typeof circleFriendBooks !== 'function') { done(); return; }
+  let friends = [];
+  try { friends = ((await circleLists()).friends) || []; } catch (e) { done(); return; }
+  if (!friends.length) { done(); return; }
+  const friendIds = new Set();
+  for (const f of friends) {
+    try { (await circleFriendBooks(f.id)).forEach(b => { if (b && b.id) friendIds.add(b.id); }); }
+    catch (e) { /* one friend's shelves failing shouldn't block the repair */ }
+  }
+  const polluted = (typeof library !== 'undefined' ? library : []).filter(b => b && friendIds.has(b.id));
+  if (polluted.length) {
+    polluted.forEach(b => { try { removeBook(b.id); } catch (e) {} });
+    render();
+    toast('🧹 Removed ' + polluted.length + ' friend ' + (polluted.length === 1 ? 'book' : 'books') +
+      ' that had leaked into your library');
+  }
+  done();
 }
 async function cloudWipe() {
   const sb = await cloudClient().catch(() => null);

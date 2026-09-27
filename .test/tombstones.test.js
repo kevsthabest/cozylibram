@@ -22,7 +22,8 @@ function makeSyncStub() {
           }
           return { error: null };
         },
-        select: async () => ({ data: books.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })), error: null }),
+        select: (cols) => require('./harness').chainableSelect(books,
+          r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })),
       };
       if (table === 'deleted_books') return {
         upsert: async (rows) => {

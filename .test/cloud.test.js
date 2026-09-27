@@ -59,7 +59,8 @@ function makeFake() {
         }
         return { error: null };
       },
-      select: async () => ({ data: store.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })), error: null }),
+      select: (cols) => require('./harness').chainableSelect(store,
+        r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })),
       delete: () => ({
         eq: async (col, val) => {
           for (let i = store.length - 1; i >= 0; i--) if (store[i][col] === val) store.splice(i, 1);
@@ -165,6 +166,54 @@ function makeFake() {
   ok('pull merges remote books', r.afterSyncLen === 2 && r.remoteAdded === true);
   ok('newer remote wins conflict', r.conflictTitle === 'REMOTE EDIT');
   ok('wipe clears cloud rows', r.storeAfterWipe === 0);
+
+  // 5b. v101: the pull is scoped to the signed-in user. v96's friend-readable
+  // RLS plus the old unfiltered select merged friends' shared books into the
+  // local library after adding a friend (and pushed them back as own rows).
+  window.__sbStub.store.push({ user_id: 'user-1', book_id: 'own1', isbn: null,
+    data: { id: 'own1', title: 'Mine', _mtime: 1 } });
+  window.__sbStub.store.push({ user_id: 'user-2', book_id: 'fr1', isbn: null,
+    data: { id: 'fr1', title: 'Friend Book', _mtime: 1 } });
+  runInWindow(`(async () => { try { window.__pulled = (await cloudPullRows()).map(r => r.book_id); } catch (e) { window.__pulled = 'ERR:' + e; } })();`);
+  await waitFor('__pulled');
+  ok('pull scoped to own user_id', JSON.stringify(window.__pulled) === '["own1"]');
+
+  // 5c. v101: one-time repair removes books leaked from friends' shelves.
+  // A polluted book shares its id with a friend's book; genuine copies
+  // (+ TBR, manual adds) always get fresh ids, so same-title books survive.
+  runInWindow(`(async () => {
+    try {
+      window.__origCircleLists = circleLists;
+      window.__origCircleFriendBooks = circleFriendBooks;
+      circleLists = async () => ({ friends: [{ id: 'friend-1', name: 'Pal' }] });
+      circleFriendBooks = async () => [{ id: 'f1', title: 'Friend Book', _mtime: 5 }];
+      localStorage.removeItem('spicyshelves.depollute.v1');
+      library = [
+        { id: 'f1', title: 'Friend Book', _mtime: 5 },
+        { id: 'mine1', title: 'My Only Book', _mtime: 50 },
+        { id: 'mine2', title: 'Friend Book', _mtime: 60 },
+      ];
+      bookSnapshots.clear(); tombstones = [];
+      await repairFriendPollution();
+      window.__repairLib = library.map(b => b.id);
+      window.__repairTomb = tombstones.map(t => t.id);
+      window.__repairFlag = localStorage.getItem('spicyshelves.depollute.v1');
+      // second run is a no-op even with a new leaked id present
+      library.push({ id: 'f2', title: 'Another Leak', _mtime: 5 });
+      await repairFriendPollution();
+      window.__repairLib2 = library.map(b => b.id);
+      circleLists = window.__origCircleLists;
+      circleFriendBooks = window.__origCircleFriendBooks;
+      library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true });
+    } catch (e) { window.__repairErr = String((e && e.stack) || e); }
+  })();`);
+  await waitFor('__repairLib2');
+  ok('repair ran without errors', !window.__repairErr);
+  if (window.__repairErr) console.log('   ' + window.__repairErr);
+  ok('repair removes leaked friend book', JSON.stringify(window.__repairLib) === '["mine1","mine2"]');
+  ok('repair tombstones the removal', JSON.stringify(window.__repairTomb) === '["f1"]');
+  ok('repair sets the done flag', window.__repairFlag === '1');
+  ok('repair runs only once', JSON.stringify(window.__repairLib2) === '["mine1","mine2","f2"]');
 
   // 6. account UI states
   window.isSecureContext = true; // jsdom lacks webcrypto; real localhost browsers are secure contexts
