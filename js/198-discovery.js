@@ -180,8 +180,7 @@ function renderDiscover() {
     '<p class="note">What are you in the mood for?</p></div>' +
     '<div class="disc-list">' +
     discCard('dice', 'Surprise Me', 'Can\u2019t decide what to read? Let Cozy Libram pick something from your TBR.', 'pick') +
-    '<div class="disc-card disc-wide"><span class="disc-ic">' + icon('calendar') + '</span>' +
-    '<span class="disc-tx"><b>New Releases</b><small>Fresh and upcoming books from your favorite authors.</small></span></div>' +
+    discCard('calendar', 'New Releases', 'Fresh and upcoming books from your favorite authors.', 'releases') +
     discCard('user', 'Authors You Might Like', 'Find missing books from authors you already love.', 'authors') +
     discCard('friends', 'From Friends', 'Books your coven couldn\u2019t put down.', 'coven') +
     discCard('search', 'Search Books', 'Search millions of titles to add to your library.', 'search') +
@@ -194,6 +193,10 @@ function renderDiscover() {
     if (t === 'pick') go('pick');
     else if (t === 'authors') go('authors');
     else if (t === 'coven') go('coven');
+    else if (t === 'releases') { // v134: the card itself runs the release check
+      const b = document.getElementById('rel-check');
+      if (b) b.click();
+    }
     else if (t === 'search') { addTab = 'search'; go('add'); }
   }));
 }

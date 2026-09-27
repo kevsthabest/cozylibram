@@ -83,6 +83,22 @@ ok('authors ranked by shelf count then rating',
   const pills = [...window.document.querySelectorAll('.up-pill')].map(p => p.textContent);
   ok('a book releasing today counts as upcoming', pills.some(p => /today/.test(p)));
 
+  // v134: the New Releases card itself runs the check (it used to be a dead div)
+  runInWindow(`
+    view = 'discover'; renderDiscover();
+    window.__realCheck = checkNewReleases;
+    checkNewReleases = async () => [{ hcId: 99, title: 'Card Book', authors: ['Ann Author'],
+      releaseDate: '${isoIn(20)}', cover: '', description: '', pages: 100, isbns: [] }];
+  `);
+  const relCard = window.document.querySelector('[data-disc="releases"]');
+  ok('New Releases is a real tappable card', !!relCard && relCard.tagName === 'BUTTON');
+  relCard.click();
+  await new Promise(r => setTimeout(r, 300));
+  ok('card click runs the check and renders results',
+    !!window.document.querySelector('#release-results .rel-card') &&
+    window.document.getElementById('release-results').textContent.includes('Card Book'));
+  runInWindow(`checkNewReleases = window.__realCheck;`);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

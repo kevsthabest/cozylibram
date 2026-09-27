@@ -71,24 +71,24 @@ const viewHTML = q('#view').innerHTML;
 ok('discover: asks the mood question',
   viewHTML.indexOf('What are you in the mood for?') !== -1);
 const cards = qa('#view [data-disc]').map(c => c.dataset.disc).sort();
-ok('discover: four routing cards present',
-  JSON.stringify(cards) === JSON.stringify(['authors', 'coven', 'pick', 'search']));
+ok('discover: five routing cards present',
+  JSON.stringify(cards) === JSON.stringify(['authors', 'coven', 'pick', 'releases', 'search']));
 ok('discover: every card has a plain-language explanation',
   qa('#view [data-disc]').every(c => (c.querySelector('.disc-tx small') || { textContent: '' }).textContent.trim().length > 10));
 ok('discover: release check button + results box present',
   !!q('#rel-check') && !!q('#release-results'));
 
 // Card routing — each target is a real feature, never a dead end.
-qa('#view [data-disc]')[0].click(); // pick
+q('#view [data-disc="pick"]').click(); // pick
 ok('discover: Surprise Me opens roulette', run("view") === 'pick');
 run("go('discover')");
-qa('#view [data-disc]')[1].click(); // authors
+q('#view [data-disc="authors"]').click(); // authors
 ok('discover: Authors card opens author discovery', run("view") === 'authors');
 run("go('discover')");
-qa('#view [data-disc]')[2].click(); // coven
+q('#view [data-disc="coven"]').click(); // coven
 ok('discover: From Friends opens coven', run("view") === 'coven');
 run("go('discover')");
-qa('#view [data-disc]')[3].click(); // search
+q('#view [data-disc="search"]').click(); // search
 ok('discover: Search opens add on the search tab',
   run("view") === 'add' && run("addTab") === 'search');
 
