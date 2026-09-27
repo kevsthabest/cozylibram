@@ -80,6 +80,13 @@ function renderSettings() {
     '<p class="note" id="meta-verify-note">' +
     library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
     ' books have ISBNs to check.</p>' +
+    '<h2 class="section serif" style="margin-top:26px">Covers</h2>' +
+    '<p class="note">Fetch covers for every book that doesn\'t have one yet — same sources as the cover picker ' +
+    '(Google Books, Open Library, Apple Books, Hardcover). Each candidate is checked to make sure it actually loads before it\'s saved.</p>' +
+    '<button class="btn ghost block" id="cover-bulk">' + icon('download') + ' Download missing covers</button>' +
+    '<p class="note" id="cover-bulk-note">' +
+    library.filter(b => !b.cover).length + ' of ' + library.length +
+    ' books are missing covers.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
     '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
@@ -267,6 +274,23 @@ function renderSettings() {
       document.querySelectorAll('#hc-autoseg button').forEach(x => x.classList.toggle('active', x === btn));
       toast(btn.dataset.t === 'on' ? 'Background auto-enrich on ✨' : 'Background auto-enrich off ⏸️');
     }));
+  // v107: bulk cover download
+  let coverBulkBusy = false;
+  document.getElementById('cover-bulk').addEventListener('click', async () => {
+    const btn = document.getElementById('cover-bulk');
+    if (btn.disabled || coverBulkBusy) return;
+    if (!library.some(b => !b.cover)) { toast('Every book already has a cover ✨'); return; }
+    btn.disabled = true; coverBulkBusy = true;
+    const res = await downloadMissingCovers((i, n) => { btn.textContent = 'Downloading ' + i + '/' + n + '…'; });
+    coverBulkBusy = false; btn.disabled = false;
+    btn.innerHTML = icon('download') + ' Download missing covers';
+    const left = library.filter(b => !b.cover).length;
+    document.getElementById('cover-bulk-note').textContent =
+      left + ' of ' + library.length + ' books are missing covers.';
+    toast(res.done
+      ? 'Downloaded ' + res.done + ' cover' + (res.done === 1 ? '' : 's') + ' ✨'
+      : 'No covers found this time');
+  });
   // v81: trope suggestion source
   document.querySelectorAll('#trope-srcseg button').forEach(btn =>
     btn.addEventListener('click', () => {

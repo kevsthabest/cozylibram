@@ -191,3 +191,44 @@ function openCoverPicker(bookId) {
       btn.addEventListener('click', () => chooseCover(bookId, btn.dataset.cpurl)));
   });
 }
+
+// Bulk cover fill (v107): give every coverless book its first loadable cover
+// candidate. Candidates come from the same sources as the picker; each URL is
+// verified with a real image load (8s timeout) before it is saved, so a dead
+// link can never be stamped onto a book. Re-runnable — it always targets
+// whatever is still missing a cover.
+function coverURLLoads(url) {
+  return new Promise(resolve => {
+    let settled = false;
+    const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+    try {
+      const img = new Image();
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      setTimeout(() => done(false), 8000);
+      img.src = url;
+    } catch (e) { done(false); }
+  });
+}
+
+async function downloadMissingCovers(onProgress, fns) {
+  const getCands = (fns && fns.candidates) || fetchCoverCandidates;
+  const verify = (fns && fns.verify) || coverURLLoads;
+  const targets = library.filter(b => !b.cover);
+  let done = 0;
+  for (let i = 0; i < targets.length; i++) {
+    const b = targets[i];
+    try { if (onProgress) onProgress(i + 1, targets.length); } catch (e) {}
+    try {
+      const cands = await getCands(b);
+      const list = Array.isArray(cands) ? cands.slice(0, 4) : [];
+      for (const c of list) {
+        const url = c && c.url;
+        if (url && await verify(url)) { b.cover = url; done++; break; }
+      }
+    } catch (e) { /* skip this book */ }
+    await new Promise(r => setTimeout(r, 400)); // be polite to the cover sources
+  }
+  if (done) { saveLibrary(); render(); }
+  return { total: targets.length, done: done };
+}
