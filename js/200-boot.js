@@ -38,6 +38,7 @@ function boot() {
   try { offline = localStorage.getItem(OFFLINE_KEY) === '1'; } catch (e) {}
   if (!cloudConfigured() || offline) {
     render();
+    maybeOnboard(); // v127: welcome brand-new libraries
     // No sign-in gate on this path — kick off the Hardcover auto-sweep directly.
     setTimeout(autoEnrichSweep, 5000);
   } else renderGate();

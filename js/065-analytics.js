@@ -63,6 +63,9 @@ const EVENT_DEFS = {
   library_opened:        { c: 'onboarding', p: [] },
   first_book_added:      { c: 'onboarding', p: [] },
   first_book_rated:      { c: 'onboarding', p: [] },
+  onboarding_started:    { c: 'onboarding', p: [] },
+  onboarding_completed:  { c: 'onboarding', p: [] },
+  onboarding_skipped:    { c: 'onboarding', p: [] },
   returned_within_7_days:{ c: 'onboarding', p: [] },
   // session (powers active-today/week/month)
   session_started: { c: 'session', p: [] },

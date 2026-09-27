@@ -1382,3 +1382,35 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ================= v126: empty-state CTA ================= */
 .empty .btn { margin-top: 14px; }
+
+/* ================= v127: onboarding ================= */
+#onb-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.onb-sheet {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  max-width: 380px; width: 100%; padding: 28px 24px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.onb-sheet h2 { margin: 0 0 4px; font-size: 24px; }
+.onb-sheet > p { color: var(--muted); margin: 8px 0 16px; }
+.onb-tag { font-size: 15px; }
+.onb-icon .ticon { width: 64px; height: 64px; opacity: 0.8; margin-bottom: 8px; }
+.onb-sheet .btn.block { margin-top: 10px; }
+.onb-shelf {
+  display: flex; gap: 12px; align-items: center; text-align: left;
+  padding: 10px 4px; border-bottom: 1px solid var(--line);
+}
+.onb-shelf:last-of-type { border-bottom: none; }
+.onb-shelf-ic { flex: none; width: 36px; height: 36px; border-radius: 10px;
+  background: var(--bg2); display: flex; align-items: center; justify-content: center; }
+.onb-shelf-ic .ticon { width: 20px; height: 20px; }
+.onb-shelf b { display: block; font-size: 14.5px; }
+.onb-shelf div span { color: var(--muted); font-size: 13px; }
+.onb-dots { display: flex; gap: 8px; justify-content: center; margin: 20px 0 10px; }
+.onb-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.onb-dots span.on { background: var(--accent); }
+.onb-skip { background: none; border: none; color: var(--muted); font: inherit;
+  font-size: 13.5px; cursor: pointer; padding: 6px; }

@@ -163,7 +163,7 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   const forbidden = ['title', 'author', 'authors', 'isbn', 'rating', 'myRating', 'notes', 'shelf', 'cover'];
   const leaked = Object.entries(defs).filter(([n, d]) => (d.p || []).some(k => forbidden.includes(k)));
   ok('no event declares a book-content property', leaked.length === 0);
-  ok('event count stays in the 20–30 range', Object.keys(defs).length >= 20 && Object.keys(defs).length <= 36);
+  ok('event count stays in the 20–40 range', Object.keys(defs).length >= 20 && Object.keys(defs).length <= 40);
 
   // 16. SQL security model.
   const sql = fs.readFileSync('/home/hatch/workspace/booktok/supabase/analytics.sql', 'utf8');

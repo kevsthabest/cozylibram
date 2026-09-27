@@ -47,6 +47,7 @@ function renderGate() {
     try { localStorage.setItem(OFFLINE_KEY, '1'); } catch (e) {}
     hideGate();
     render();
+    maybeOnboard(); // v127: welcome brand-new libraries
   });
   document.getElementById('gate-forgot').addEventListener('click', renderGateReset);
 }
@@ -174,6 +175,7 @@ async function enterApp(user) {
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   await cloudFirstSync();
+  maybeOnboard(); // v127: library is settled — welcome brand-new accounts
   // v119: resolve admin status for the Observatory menu entry, then honor
   // #admin deep links (e.g. cozylibram.pages.dev/#admin).
   refreshAdminStatus().then(() => {
