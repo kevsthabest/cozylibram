@@ -56,12 +56,12 @@ async function search(q, source) {
 }
 
 (async () => {
-  // Hardcover configured: GB + OL empty → Hardcover finds the indie book.
+  // Hardcover configured: asked first, finds the indie book.
   runInWindow('window.SPICY_CONFIG = { hardcover: true };');
   gbItems = []; olDocs = []; hcDocs = [HC_DOC]; hcCalls = 0;
   let { res, err } = await search('run little killer darma day');
   ok('no error', err === null);
-  ok('hardcover fallback returns the book', Array.isArray(res) && res.length === 1);
+  ok('hardcover first returns the book', Array.isArray(res) && res.length === 1);
   const b = res[0];
   ok('title mapped', b.title === 'Run Little Killer');
   ok('authors mapped', JSON.stringify(b.authors) === '["Darma Day"]');
@@ -85,21 +85,21 @@ async function search(q, source) {
   ok('empty when nothing configured and catalogs miss', Array.isArray(res) && res.length === 0);
   ok('hardcover not queried when unconfigured', hcCalls === 0);
 
-  // Google Books hit → Hardcover never asked.
+  // Google Books hit → returned when Hardcover misses (HC asked first now).
   runInWindow('window.SPICY_CONFIG = { hardcover: true };');
   gbItems = [{ volumeInfo: { title: 'Run Little Killer', authors: ['Darma Day'] } }];
-  olDocs = []; hcDocs = [HC_DOC]; hcCalls = 0;
+  olDocs = []; hcDocs = []; hcCalls = 0;
   ({ res, err } = await search('run little killer'));
-  ok('google books hit wins', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
-  ok('hardcover skipped on google hit', hcCalls === 0);
+  ok('google books hit wins when hardcover misses', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+  ok('hardcover was asked first', hcCalls === 1);
 
-  // Open Library hit → Hardcover never asked.
-  gbItems = [];
+  // Open Library hit → returned when Hardcover and GB miss.
+  gbItems = []; hcDocs = [];
   olDocs = [{ key: '/works/OL1W', title: 'Run Little Killer', author_name: ['Darma Day'], first_publish_year: 2025 }];
   hcCalls = 0;
   ({ res, err } = await search('run little killer'));
-  ok('open library hit wins', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
-  ok('hardcover skipped on OL hit', hcCalls === 0);
+  ok('open library hit wins when HC and GB miss', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+  ok('hardcover asked before OL', hcCalls === 1);
 
   // hcDocToBook tolerates a sparse doc.
   runInWindow('window.__sparse = hcDocToBook({ title: "Mystery Book" });');
@@ -119,16 +119,17 @@ async function search(q, source) {
   hcDocs = [HC_DOC]; hcCalls = 0;
   ({ res, err } = await search('run little killer darma day'));
   ok('no error on OL junk', err === null);
-  ok('OL junk filtered out, hardcover finds the book',
+  ok('hardcover asked first, finds the book despite OL junk',
     Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
-  ok('hardcover was asked after OL junk', hcCalls === 1);
+  ok('hardcover was asked first', hcCalls === 1);
 
-  // A genuinely relevant OL hit still wins without bothering Hardcover.
+  // A genuinely relevant OL hit still wins when Hardcover and GB miss.
+  gbItems = []; hcDocs = [];
   olDocs = [{ key: '/works/OL9W', title: 'Run Little Killer', author_name: ['Darma Day'], first_publish_year: 2025 }];
   hcCalls = 0;
   ({ res } = await search('run little killer'));
   ok('relevant OL hit returned', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
-  ok('hardcover skipped on relevant OL hit', hcCalls === 0);
+  ok('hardcover asked before OL', hcCalls === 1);
 
   // Relevance helper edge cases.
   runInWindow('window.__t1 = queryTokens("Run Little Killer");');
@@ -177,10 +178,38 @@ async function search(q, source) {
     Array.isArray(res) && res.length === 1 && res[0].title === 'Run for your life');
   ok('openlibrary source: HC untouched', hcCalls === 0);
 
-  // No source → the v137/v138 waterfall still applies.
+  // No source → the v140 waterfall (hardcover first).
   gbItems = []; olDocs = []; hcDocs = [HC_DOC]; hcCalls = 0;
   ({ res } = await search('run little killer darma day'));
-  ok('default: waterfall reaches hardcover',
+  ok('default: hardcover first',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+
+  // --- v140: hardcover-first ordering ---
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
+  // Hardcover junk (irrelevant to the query) doesn't block Google Books.
+  gbItems = [{ volumeInfo: { title: 'Google Book', authors: ['G Author'] } }];
+  olDocs = []; hcCalls = 0;
+  hcDocs = [{ id: 1, title: 'Completely Unrelated', author_names: ['Nobody Else'],
+    image: {}, description: '', pages: 0, release_date: '', rating: 0, ratings_count: 0,
+    genres: [], cached_tags: [], content_warnings: [] }];
+  ({ res, err } = await search('run little killer darma day'));
+  ok('no error on HC junk', err === null);
+  ok('HC junk filtered, google books hit returned',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Google Book');
+
+  // Hardcover unconfigured → old GB → OL order, no throw.
+  runInWindow('window.SPICY_CONFIG = {};');
+  gbItems = [{ volumeInfo: { title: 'Google Book', authors: ['G Author'] } }];
+  olDocs = [{ key: '/works/OL1W', title: 'OL Book', author_name: ['O Author'] }];
+  hcCalls = 0;
+  ({ res, err } = await search('run little killer'));
+  ok('unconfigured: google books still first',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Google Book');
+  ok('unconfigured: hardcover never queried', hcCalls === 0);
+  gbItems = [];
+  olDocs = [{ key: '/works/OL1W', title: 'Run Little Killer', author_name: ['Darma Day'] }];
+  ({ res } = await search('run little killer'));
+  ok('unconfigured: falls through to open library',
     Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

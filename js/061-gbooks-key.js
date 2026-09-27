@@ -63,29 +63,33 @@ async function lookupISBNFromAPIs(isbn) {
 }
 
 async function searchBooks(q, source) {
-  // v139: source filter — 'all' (default waterfall), 'gbooks', 'openlibrary',
-  // 'hardcover'. The v138 relevance gate applies to the automatic waterfall
-  // only; an explicitly chosen source shows what it returns.
+  // v140: "All" tries Hardcover first (strongest catalog for these shelves),
+  // then Google Books, then Open Library. In "All" mode only results that
+  // resemble the query count — junk from one source never blocks the next.
+  // Explicit single-source picks are unfiltered. Backward compatible:
+  // existing callers pass no source and get the "All" waterfall.
   source = source || 'all';
-  const wantGb = source === 'all' || source === 'gbooks';
-  const wantOl = source === 'all' || source === 'openlibrary';
-  const wantHc = source === 'all' || source === 'hardcover';
-  if (wantGb) {
+  const toks = queryTokens(q);
+  const gate = (books) => source === 'all' ? books.filter(b => resultMatchesQuery(b, toks)) : books;
+  if (source === 'all' || source === 'hardcover') {
+    const hc = gate(await hcSearchBooks(q));
+    if (hc.length || source === 'hardcover') return hc;
+  }
+  if (source === 'all' || source === 'gbooks') {
     try {
       const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
       const d = await r.json();
       if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
-    } catch (e) { if (!wantOl && !wantHc) throw e; }
+    } catch (e) { if (source === 'gbooks') throw e; /* fall through to Open Library */ }
+    if (source === 'gbooks') return [];
   }
-  if (wantOl) {
+  if (source === 'all' || source === 'openlibrary') {
     const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
       '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
     const d = await r.json();
-    let ol = (d.docs || []).map(olDocToBook);
-    if (source === 'all') { const toks = queryTokens(q); ol = ol.filter(b => resultMatchesQuery(b, toks)); }
-    if (ol.length || !wantHc) return ol;
+    const ol = gate((d.docs || []).map(olDocToBook));
+    if (ol.length || source === 'openlibrary') return ol;
   }
-  if (wantHc) return hcSearchBooks(q);
   return [];
 }
 
