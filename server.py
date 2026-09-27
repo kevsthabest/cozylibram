@@ -130,28 +130,19 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def handle_api_hardcover(self):
-        """POST {query, token?} → Hardcover GraphQL with the server-side token.
+        """POST {query} → Hardcover GraphQL with the server-side token.
 
-        Mirrors functions/api/hardcover.js. An optional `token` in the body
-        (v103: the user's personal Hardcover token for library import) is used
-        instead of the server token when present; it is only forwarded
-        upstream, never stored. Hardcover's own HTTP status is
+        Mirrors functions/api/hardcover.js. Hardcover's own HTTP status is
         forwarded so the client's 401/403 handling keeps working.
         """
         try:
             length = int(self.headers.get('Content-Length') or 0)
             raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
-            payload = json.loads(raw)
-            query = payload.get('query') or ''
+            query = json.loads(raw).get('query') or ''
             if not isinstance(query, str) or not query or len(query) > 8000:
                 self.send_error(400, 'bad request')
                 return
-            user_token = (payload.get('token') or '')
-            if not isinstance(user_token, str):
-                self.send_error(400, 'bad request')
-                return
-            user_token = user_token.strip()[:512]
-            token = user_token or load_token()
+            token = load_token()
             if not token:
                 body = b'{"errors":[{"message":"hardcover not configured on this server"}]}'
                 self.send_response(503)
