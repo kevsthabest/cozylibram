@@ -116,5 +116,40 @@ runInWindow(`(function(){
 })();`);
 ok('empty state without series', q('#view .empty') && q('#view').textContent.includes('No series yet'));
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+// 8. v82: Hardcover series discovery — the query must match Hardcover's
+// documented GettingBooksInSeries shape: books_count/canonical_id are filters
+// INSIDE where, not sibling arguments (the old shape failed GraphQL
+// validation, which is why discovery failed while enrichment worked).
+(async () => {
+  runInWindow('window.SPICY_CONFIG = { hardcoverToken: "tok" };');
+  runInWindow(`window.__queries = [];
+    window.hcGraphQL = async (qq) => {
+      window.__queries.push(qq);
+      return { series: [{ id: 7, name: 'ACOTAR', author: { name: 'Sarah J. Maas' },
+        book_series: [
+          { position: 1, details: null, book: { id: 11, title: 'A Court of Thorns and Roses',
+            image: { url: 'http://img/1.jpg' }, default_physical_edition: { isbn_13: '9781619634442' } } },
+          { position: 2, details: null, book: { id: 12, title: 'A Court of Mist and Fury',
+            image: null, default_physical_edition: null } },
+        ] }] };
+    };`);
+  runInWindow('fetchSeriesBooks("ACOTAR Test", "Sarah J. Maas").then(r => { window.__sr = r; });');
+  await new Promise(r => setTimeout(r, 50));
+  const qq = window.__queries[0] || '';
+  ok('discovery query sent', window.__queries.length === 1);
+  ok('filters live inside where',
+    /where:\s*\{name:\s*\{_ilike:[^}]*\},\s*books_count:\s*\{_gt:\s*0\},\s*canonical_id:\s*\{_is_null:\s*true\}\}/.test(qq));
+  ok('no sibling filter args (the v82 bug)', !/}}, books_count:/.test(qq));
+  const sr = window.__sr;
+  ok('discovery returns rows', sr && sr.rows.length === 2);
+  ok('row maps position/title/isbn/cover', sr.rows[0].position === 1 &&
+    sr.rows[0].title === 'A Court of Thorns and Roses' &&
+    sr.rows[0].isbn === '9781619634442' && sr.rows[0].cover === 'http://img/1.jpg');
+  ok('row without edition data still maps', sr.rows[1].position === 2 && sr.rows[1].isbn === '');
+  runInWindow('fetchSeriesBooks("ACOTAR Test", "Sarah J. Maas").then(r => { window.__sr2 = r; });');
+  await new Promise(r => setTimeout(r, 30));
+  ok('discovery result cached', window.__queries.length === 1 && window.__sr2.rows.length === 2);
+
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error('FATAL', e); process.exit(1); });

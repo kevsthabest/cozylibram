@@ -62,6 +62,10 @@ async function fetchSeriesBooks(seriesName, authorName) {
     ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
     ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +
     ' position details book { id title image { url } default_physical_edition { isbn_13 } } }';
+  // v82 fix: books_count/canonical_id are *filters* — they belong inside the
+  // where clause (Hardcover's documented GettingBooksInSeries query). As
+  // sibling arguments they were rejected by GraphQL validation, which is why
+  // series discovery failed while enrichment (a different query) worked.
   const qFor = pattern => 'query { series(where: {name: {_ilike: ' + JSON.stringify(pattern) +
     '}, books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) { ' + seriesFields + ' } }';
   const noData = () => { throw new Error('Hardcover returned no data — the token may be invalid or revoked.'); };
