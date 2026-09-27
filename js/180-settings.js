@@ -96,9 +96,6 @@ function renderSettings() {
       TROPE_SRC_LABELS[t] + '</button>').join('') +
     '</div></div>' +
     '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>' +
-    '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
-    '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
-    '<p class="note" id="gb-status">' + gbKeyStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Account & cloud sync</h2>' +
     '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
     'The app works fine without it — everything stays on this device.</p>' +
@@ -117,7 +114,6 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p>' +
     '</div>' +
-    '<p class="note" id="ac-cfg">' + (cloudCfg().url ? icon('owned') + ' Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">App</h2>' +
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
     '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
@@ -239,18 +235,16 @@ function renderSettings() {
   });
 
   // Hardcover wiring
-  const hcStatus = () => document.getElementById('hc-status');
   document.getElementById('pc-backfill').addEventListener('click', () => backfillPageCounts());
   document.getElementById('meta-verify').addEventListener('click', () => runMetadataCheck());
   document.getElementById('hc-test').addEventListener('click', async () => {
-    const st = hcStatus(); if (!st) return;
-    if (!hcReady()) { st.textContent = 'No key — set HARDCOVER_TOKEN (Pages) or hardcover_token (server-config.json).'; return; }
-    st.textContent = 'Testing…';
+    if (!hcReady()) { toast('No Hardcover key on this server'); return; }
+    toast('Testing Hardcover…');
     try {
       const data = await hcGraphQL('query { search(query: "Dune", query_type: "Book", per_page: 1) { results } }');
       const hits = hcHits(data);
-      st.textContent = hits.length ? 'Connected ✓ — found "' + hits[0].document.title + '"' : 'Connected, but got no results.';
-    } catch (e) { st.textContent = 'Failed: ' + e.message; }
+      toast(hits.length ? 'Connected ✓ — found "' + hits[0].document.title + '"' : 'Connected, but got no results.');
+    } catch (e) { toast('Failed: ' + e.message); }
   });
   document.getElementById('hc-bulk').addEventListener('click', async () => {
     const btn = document.getElementById('hc-bulk');
@@ -260,13 +254,13 @@ function renderSettings() {
     const targets = library.filter(b => !b.hcEnriched);
     let ok = 0;
     for (let i = 0; i < targets.length; i++) {
-      const st = hcStatus(); if (st) st.textContent = 'Enriching ' + (i + 1) + '/' + targets.length + '… (' + ok + ' matched)';
+      btn.textContent = 'Enriching ' + (i + 1) + '/' + targets.length + '…';
       try { if (await enrichHardcover(targets[i])) ok++; } catch (e) { /* skip */ }
       await new Promise(r => setTimeout(r, 1100)); // stay under the 60 req/min limit
     }
     saveLibrary(); render();
     hcEnrichBusy = false;
-    const st2 = hcStatus(); if (st2) st2.textContent = 'Done — ' + ok + ' of ' + targets.length + ' books enriched ✨';
+    btn.textContent = 'Enrich all books';
     toast('Hardcover enrichment complete ✨');
   });
   document.querySelectorAll('#hc-autoseg button').forEach(btn =>

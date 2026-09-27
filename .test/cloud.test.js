@@ -175,6 +175,7 @@ function makeFake() {
   ok('signed-in status shows email', q('#ac-status').textContent.includes('wife@example.com'));
   ok('signed-in panel visible', q('#ac-signedin').style.display !== 'none');
   ok('google button on secure context', !!q('#ac-google'));
+  ok('no api-key status lines in settings', !q('#hc-status') && !q('#gb-status') && !q('#ac-cfg'));
 
   // 7. regression: boot with a non-empty library (TDZ guards)
   // - v9 ship bug: forEach over bookSnapshots before its const declaration crashed the whole app
