@@ -112,7 +112,7 @@ function addReleaseBook(c) {
     title: c.title, authors: c.authors, cover: c.cover, description: c.description,
     pageCount: c.pages, publishedDate: '', releaseDate: c.releaseDate,
     categories: [], publicRating: null, ratingsCount: 0,
-    status: 'tbr', owned: false, ratings: {}, myRating: 0,
+    status: 'tbr', owned: 'tobuy', ratings: {}, myRating: 0,
     tropes: [], tropesAuto: [], progress: 0,
     dateAdded: new Date().toISOString(), dateFinished: null, notes: '',
     hcId: c.hcId, hcEnriched: true // already holds this Hardcover doc's data

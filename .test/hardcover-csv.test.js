@@ -60,14 +60,14 @@ const runInWindow = (js) => {
   ok('dateFinished parsed', String(rules.dateFinished).startsWith('2026-07-17'));
   ok('publisher + publishDate kept', rules.publisher === 'Berkley Books' && String(rules.publishedDate).startsWith('1989-07-24'));
   ok('review + private notes joined', rules.notes === 'Gripping.\n\nreread?');
-  ok('Owned=false → owned false', rules.owned === false);
+  ok('Owned=false → tobuy', rules.owned === 'tobuy');
 
   const dragon = byTitle['The Girl with the Dragon Tattoo'];
   ok('status Want to Read → tbr', dragon.status === 'tbr');
   ok('authors split on comma', JSON.stringify(dragon.authors) === JSON.stringify(['Reg Keeland', 'Stieg Larsson']));
   ok('moods + tags merge into tropes', JSON.stringify(dragon.tropes.slice().sort()) === JSON.stringify(['dark', 'mystery', 'nordic-noir', 'tense']));
   ok('content warnings kept', JSON.stringify(dragon.contentWarnings) === JSON.stringify(['violence']));
-  ok('Owned=true → owned true', dragon.owned === true);
+  ok('Owned=true → owned', dragon.owned === 'owned');
   ok('unread book has no progress', dragon.progress === 0);
 
   const chase = byTitle['The Chase'];

@@ -5,8 +5,9 @@ function filteredBooks() {
   const q = query.trim().toLowerCase();
   return library.filter(b => {
     if (filter !== 'all' && b.status !== filter) return false;
-    if (ownFilter === 'owned' && !b.owned) return false;
-    if (ownFilter === 'tobuy' && b.owned) return false;
+    if (ownFilter === 'owned' && b.owned !== 'owned') return false;
+    if (ownFilter === 'tobuy' && b.owned !== 'tobuy') return false;
+    if (ownFilter === 'borrowed' && b.owned !== 'borrowed') return false;
     if (!q) return true;
     return (b.title + ' ' + b.authors.join(' ') + ' ' + b.tropes.join(' '))
       .toLowerCase().includes(q);

@@ -385,12 +385,13 @@ function renderLibrary() {
     chip('read', icon('read') + ' Read · ' + counts.read, filter === 'read') +
     chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') +
     '</div>';
-  const ownCounts = { owned: 0, tobuy: 0 };
-  library.forEach(b => { b.owned ? ownCounts.owned++ : ownCounts.tobuy++; });
+  const ownCounts = { owned: 0, tobuy: 0, borrowed: 0 };
+  library.forEach(b => { const k = b.owned === 'tobuy' ? 'tobuy' : b.owned === 'borrowed' ? 'borrowed' : 'owned'; ownCounts[k]++; });
   html += '<div class="chips">' +
     '<button class="chip' + (ownFilter === 'all' ? ' active' : '') + '" data-of="all">Ownership: All</button>' +
     '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">' + icon('owned') + ' Owned · ' + ownCounts.owned + '</button>' +
     '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' To buy · ' + ownCounts.tobuy + '</button>' +
+    '<button class="chip' + (ownFilter === 'borrowed' ? ' active' : '') + '" data-of="borrowed">' + icon('borrowed') + ' Borrowed · ' + ownCounts.borrowed + '</button>' +
     '</div>';
 
   if (!books.length) {

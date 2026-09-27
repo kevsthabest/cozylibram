@@ -53,7 +53,7 @@ const probe = (js) => window.eval(js);
   // 3. + Wishlist adds the enriched book
   q('#x-wish').click();
   const added = probe(`library.find(b => b.title === 'Missing Book')`);
-  ok('wishlist adds the book as not-owned', !!added && added.owned === false);
+  ok('wishlist adds the book as not-owned', !!added && added.owned === 'tobuy');
   ok('enriched fields are kept', !!added && added.pageCount === 320 &&
     added.description.includes('thrilling tale'));
   ok('button becomes a confirmation', !q('#x-wish') &&
@@ -76,7 +76,7 @@ const probe = (js) => window.eval(js);
   runInWindow(`library.length = 0;
     library.push({ id: 'a1', isbn: '', title: 'Owned Book', authors: ['Jane Doe'], cover: '',
       description: '', pageCount: 200, publishedDate: '', categories: [], publicRating: null,
-      ratingsCount: 0, status: 'read', owned: true, ratings: {}, axes: [], myRating: 0,
+      ratingsCount: 0, status: 'read', owned: 'owned', ratings: {}, axes: [], myRating: 0,
       tropes: [], progress: 200, dateAdded: new Date().toISOString(), dateFinished: null,
       notes: '', favorite: false, log: [] });
     openAuthor('Jane Doe');`);
@@ -93,7 +93,7 @@ const probe = (js) => window.eval(js);
   await tick(30);
   ok('wishlist button does not open the sheet', !q('.collection-overlay .ext-detail'));
   ok('wishlist button adds the book',
-    probe(`library.some(b => b.title === 'Missing Book Two' && b.owned === false)`));
+    probe(`library.some(b => b.title === 'Missing Book Two' && b.owned === 'tobuy')`));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

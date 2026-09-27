@@ -27,7 +27,7 @@ function authorIndex() {
       if (!map.has(key)) map.set(key, { name: name, names: {}, owned: [], wanted: [] });
       const e = map.get(key);
       e.names[name] = (e.names[name] || 0) + 1;
-      if (b.owned) e.owned.push(b); else e.wanted.push(b);
+      if (b.owned === 'tobuy') e.wanted.push(b); else e.owned.push(b); // v148: borrowed counts as on-shelf
     });
   });
   // only authors she owns at least one book by
@@ -126,8 +126,8 @@ function renderAuthorDetail() {
   const key = authorKey(name);
   const match = b => (b.authors || []).some(a => authorKey(a) === key);
   const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''));
-  const owned = library.filter(b => match(b) && b.owned).sort(byTitle);
-  const wanted = library.filter(b => match(b) && !b.owned).sort(byTitle);
+  const owned = library.filter(b => match(b) && b.owned !== 'tobuy').sort(byTitle);
+  const wanted = library.filter(b => match(b) && b.owned === 'tobuy').sort(byTitle);
   let html = '<div class="view-head"><button class="btn ghost sm" id="a-back">← Back</button></div>' +
     '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' ' + esc(name) + '</h2>' +
     '<p class="note">' + owned.length + ' owned' +

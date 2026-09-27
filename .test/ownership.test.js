@@ -1,4 +1,5 @@
-// Ownership tests: owned vs to-buy badges, modal toggle, filters.
+// Ownership tests: owned vs to-buy vs borrowed badges, modal toggle, filters.
+// v148: ownership is 'owned' | 'tobuy' | 'borrowed' (legacy booleans migrate).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -23,23 +24,29 @@ const mk = (id, owned) =>
   `({ id: '${id}', isbn: '', title: 'Own ${id}', authors: ['Jane Doe'], cover: '', ` +
   `description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null, ratingsCount: 0, ` +
   `status: 'tbr', ratings: {}, axes: ['spice'], myRating: 0, tropes: [], progress: 0, ` +
-  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: ${owned} })`;
+  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: '${owned}' })`;
 
-// 1. migration defaults old books to owned
+// 1. migration: legacy booleans become the enum, strings pass through
 runInWindow(`migrateBook(window.__old = { id: 'old1', title: 'Old' });`);
-ok('migration defaults owned=true', window.__old.owned === true);
+ok('migration defaults missing to owned', window.__old.owned === 'owned');
+runInWindow(`migrateBook(window.__t = { id: 't1', title: 'T', owned: true });`);
+ok('migration true -> owned', window.__t.owned === 'owned');
 runInWindow(`migrateBook(window.__wl = { id: 'wl1', title: 'WL', owned: false });`);
-ok('migration keeps owned=false', window.__wl.owned === false);
+ok('migration false -> tobuy', window.__wl.owned === 'tobuy');
+runInWindow(`migrateBook(window.__b = { id: 'b1', title: 'B', owned: 'borrowed' });`);
+ok('migration keeps borrowed', window.__b.owned === 'borrowed');
 
 // 2. new-book factories default to owned
-ok('google factory defaults owned', window.normalizeVolume({ volumeInfo: { title: 'T' } }).owned === true);
-ok('openlibrary factory defaults owned', window.olDocToBook({ title: 'T', key: '/works/1' }).owned === true);
+ok('google factory defaults owned', window.normalizeVolume({ volumeInfo: { title: 'T' } }).owned === 'owned');
+ok('openlibrary factory defaults owned', window.olDocToBook({ title: 'T', key: '/works/1' }).owned === 'owned');
 
 // 3. badges on list cards
 runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.animation', 'off');
-  layout = 'list'; library.push(${mk('o1', true)}); library.push(${mk('o2', false)}); renderLibrary();`);
+  layout = 'list'; library.push(${mk('o1', 'owned')}); library.push(${mk('o2', 'tobuy')});
+  library.push(${mk('o3', 'borrowed')}); renderLibrary();`);
 ok('owned badge on card', q('.book-card[data-id="o1"] .badge.owned').textContent.includes('Owned'));
 ok('to-buy badge on card', q('.book-card[data-id="o2"] .badge.tobuy').textContent.includes('To buy'));
+ok('borrowed badge on card', q('.book-card[data-id="o3"] .badge.borrowed').textContent.includes('Borrowed'));
 
 // 4. v57: Bookmory-style grid tiles render (cover box + title)
 runInWindow(`layout = 'grid'; renderLibrary();`);
@@ -48,41 +55,48 @@ ok('tile shows the title', q('.book-tile[data-id="o2"] .bt-title').textContent =
 ok('no old cover tiles', !q('.cover-tile'));
 runInWindow(`layout = 'list'; renderLibrary();`);
 
-// 5. modal toggle flips ownership, Save persists
+// 5. modal toggle flips ownership, Save persists (incl. borrowed)
 runInWindow(`openDetail('o1');`);
-ok('modal shows Owned active', q('#f-owned button[data-o="1"]').classList.contains('active'));
-q('#f-owned button[data-o="0"]').click();
-ok('clicking To buy flips active', q('#f-owned button[data-o="0"]').classList.contains('active'));
+ok('modal shows Owned active', q('#f-owned button[data-o="owned"]').classList.contains('active'));
+q('#f-owned button[data-o="tobuy"]').click();
+ok('clicking To buy flips active', q('#f-owned button[data-o="tobuy"]').classList.contains('active'));
 q('#m-save').click();
 runInWindow(`window.__o1owned = library.find(b => b.id === 'o1').owned;`);
-ok('save persists owned=false', window.__o1owned === false);
-runInWindow(`renderLibrary();`);
-ok('card badge updates after save', !!q('.book-card[data-id="o1"] .badge.tobuy'));
+ok('save persists tobuy', window.__o1owned === 'tobuy');
+runInWindow(`openDetail('o1');`);
+q('#f-owned button[data-o="borrowed"]').click();
+q('#m-save').click();
+runInWindow(`window.__o1b = library.find(b => b.id === 'o1').owned; renderLibrary();`);
+ok('save persists borrowed', window.__o1b === 'borrowed');
+ok('card badge updates after save', !!q('.book-card[data-id="o1"] .badge.borrowed'));
 
 // 6. ownership filter chips
-ok('ownership chips rendered', qa('[data-of]').length === 3);
+ok('ownership chips rendered (4)', qa('[data-of]').length === 4);
 q('[data-of="tobuy"]').click();
 const shown = qa('.book-card').map(el => el.dataset.id);
-ok('to-buy filter shows only unowned', shown.length === 2 && shown.includes('o1') && shown.includes('o2'));
+ok('to-buy filter shows only tobuy', shown.length === 1 && shown[0] === 'o2');
+q('[data-of="borrowed"]').click();
+const shownB = qa('.book-card').map(el => el.dataset.id);
+ok('borrowed filter shows only borrowed', shownB.length === 2 && shownB.includes('o1') && shownB.includes('o3'));
 q('[data-of="owned"]').click();
 ok('owned filter shows none now', qa('.book-card').length === 0);
 q('[data-of="all"]').click();
-ok('all restores both', qa('.book-card').length === 2);
+ok('all restores all three', qa('.book-card').length === 3);
 
-// 7. wishlist (reached from the Library toolbar)
+// 7. wishlist (reached from the Library toolbar): only to-buy, never borrowed
 runInWindow(`go('library')`);
 ok('library toolbar links to wishlist', !!q('#lib-wishlist'));
 q('#lib-wishlist').click();
 ok('wishlist view renders', !!q('.wish-head'));
-ok('wishlist shows only to-buy', qa('#view .book-card').length === 2);
+ok('wishlist shows only to-buy', qa('#view .book-card').length === 1);
 ok('wishlist cards have to-buy badges',
-  qa('#view .book-card .badge.tobuy').length === 2);
+  qa('#view .book-card .badge.tobuy').length === 1);
 q('#view .book-card').click();
 ok('wishlist card opens detail', !!q('#f-owned'));
 window.document.getElementById('m-x').click();
 
 // 8. empty wishlist state
-runInWindow(`library.forEach(b => b.owned = true); renderWishlist();`);
+runInWindow(`library.forEach(b => b.owned = 'owned'); renderWishlist();`);
 ok('empty wishlist message', q('#view .empty').textContent.includes('Nothing on the wishlist'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

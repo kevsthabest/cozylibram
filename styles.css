@@ -1051,6 +1051,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* ownership badges */
 .badge.owned { background: rgba(123, 201, 138, .16); border-color: rgba(123, 201, 138, .45); }
 .badge.tobuy { background: rgba(212, 162, 78, .16); border-color: rgba(212, 162, 78, .5); }
+.badge.borrowed { background: rgba(126, 166, 214, .16); border-color: rgba(126, 166, 214, .5); }
 .tile-buy { position: absolute; top: 6px; right: 6px; font-size: 15px;
   background: rgba(10, 6, 14, .72); border-radius: 8px; padding: 2px 5px; }
 

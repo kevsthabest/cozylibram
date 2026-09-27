@@ -84,15 +84,16 @@ function migrateBook(b) {
   if (!Array.isArray(b.log)) b.log = []; // daily reading log { d, from, to }
   if (!Array.isArray(b.quotes)) b.quotes = []; // v75: saved quotes { t, p, at }
   b.favorite = !!b.favorite; // pinned to the favorites bookshelf
-  if (b.owned === undefined) b.owned = true; // owned vs wishlist ("to buy")
+  if (b.owned === undefined || b.owned === true) b.owned = 'owned'; // v148: ownership is now
+  else if (b.owned === false) b.owned = 'tobuy'; // 'owned' | 'tobuy' | 'borrowed' (legacy booleans migrate)
   if (b._mtime == null) b._mtime = 0; // last-modified stamp, used for cloud conflict resolution
   return b;
 }
 
-// Ownership badge: line-art home vs cart (v84)
+// Ownership badge: line-art home vs cart vs lent-out book (v84, v148)
 function ownedBadge(b) {
-  return b.owned
-    ? '<span class="badge owned">' + icon('owned') + ' Owned</span>'
-    : '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';
+  if (b.owned === 'tobuy') return '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';
+  if (b.owned === 'borrowed') return '<span class="badge borrowed">' + icon('borrowed') + ' Borrowed</span>';
+  return '<span class="badge owned">' + icon('owned') + ' Owned</span>';
 }
 

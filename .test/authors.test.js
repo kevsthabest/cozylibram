@@ -32,17 +32,17 @@ const runInWindow = (js) => {
 const mk = (id, title, author, owned) =>
   `({ id: '${id}', isbn: '9780000000000', title: '${title}', authors: ${JSON.stringify(author)}, cover: '', ` +
   `description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null, ratingsCount: 0, ` +
-  `status: '${owned ? 'read' : 'tbr'}', ratings: {}, axes: ['spice'], myRating: 0, tropes: [], progress: 0, ` +
-  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: ${owned}, ` +
+  `status: '${owned === 'owned' ? 'read' : 'tbr'}', ratings: {}, axes: ['spice'], myRating: 0, tropes: [], progress: 0, ` +
+  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: '${owned}', ` +
   `series: null, log: [], _mtime: 0 })`;
 const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
 
 (async () => {
   runInWindow(`localStorage.clear();
-    library.push(${mk('a1', 'Owned Book', ['Jane Doe'], true)});
-    library.push(${mk('a2', 'Wanted Book', ['Jane Doe'], false)});
-    library.push(${mk('a3', 'Smith Book', ['John Smith'], true)});
-    library.push(${mk('a4', 'Co-written', ['Jane Doe', 'John Smith'], true)});`);
+    library.push(${mk('a1', 'Owned Book', ['Jane Doe'], 'owned')});
+    library.push(${mk('a2', 'Wanted Book', ['Jane Doe'], 'tobuy')});
+    library.push(${mk('a3', 'Smith Book', ['John Smith'], 'owned')});
+    library.push(${mk('a4', 'Co-written', ['Jane Doe', 'John Smith'], 'owned')});`);
 
   // index: dedupes, counts, only authors with >= 1 owned book, sorted A-Z
   const idx = window.eval(`authorIndex().map(e => e.name + ':' + e.owned.length + ':' + e.wanted.length).join('|')`);
@@ -77,7 +77,7 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const before = window.eval(`library.length`);
   qa('#a-missing [data-madd]')[0].click();
   ok('wishlist button adds the missing book', window.eval(`library.length`) === before + 1 &&
-    window.eval(`library[0].owned`) === false && window.eval(`library[0].status`) === 'tbr');
+    window.eval(`library[0].owned`) === 'tobuy' && window.eval(`library[0].status`) === 'tbr');
   ok('row marked as in wishlist after add', q('#a-missing .c-added') && q('#a-missing .c-added').textContent.includes('In wishlist'));
 
   // back button returns to the authors list
@@ -87,12 +87,12 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   // spelling variants merge: "H. D. Carlton" / "H D Carlton" / "H.D. Carlton"
   // and stray whitespace ("James Patterson " vs "James Patterson") are one author
   runInWindow(`localStorage.clear(); library.length = 0;
-    library.push(${mk('c1', 'B1', ['H. D. Carlton'], true)});
-    library.push(${mk('c2', 'B2', ['H D Carlton'], true)});
-    library.push(${mk('c3', 'B3', ['H.D. Carlton'], true)});
-    library.push(${mk('c4', 'B4', ['H. D. Carlton'], true)});
-    library.push(${mk('c5', 'B5', ['James Patterson'], true)});
-    library.push(${mk('c6', 'B6', ['James Patterson '], true)});`);
+    library.push(${mk('c1', 'B1', ['H. D. Carlton'], 'owned')});
+    library.push(${mk('c2', 'B2', ['H D Carlton'], 'owned')});
+    library.push(${mk('c3', 'B3', ['H.D. Carlton'], 'owned')});
+    library.push(${mk('c4', 'B4', ['H. D. Carlton'], 'owned')});
+    library.push(${mk('c5', 'B5', ['James Patterson'], 'owned')});
+    library.push(${mk('c6', 'B6', ['James Patterson '], 'owned')});`);
   const idx2 = window.eval(`authorIndex().map(e => e.name + ':' + e.owned.length).join('|')`);
   ok('punctuation variants merge into one author', idx2 === 'H. D. Carlton:4|James Patterson:2');
   runInWindow(`openAuthor('H D Carlton')`); // any variant opens the merged detail

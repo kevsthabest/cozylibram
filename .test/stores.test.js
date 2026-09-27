@@ -90,7 +90,7 @@ ok('buy row has 2 retailer links', qa('#m-buywrap a').length === 2);
 ok('buy links open in new tab', qa('#m-buywrap a').every(a => a.target === '_blank' && a.rel.includes('noopener')));
 ok('region label shown', q('#m-buywrap').textContent.includes('Canada'));
 ok('isbn used in link', q('#m-buywrap a').href.includes('9780123456789'));
-q('#f-owned button[data-o="1"]').click();
+q('#f-owned button[data-o="owned"]').click();
 ok('flipping to owned hides buy row', q('#m-buywrap').style.display === 'none');
 window.document.getElementById('m-x').click();
 runInWindow(`openDetail('s2');`);

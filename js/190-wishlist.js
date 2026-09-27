@@ -2,7 +2,7 @@
 
 /* ---- wishlist tab: books marked "to buy" ---- */
 function renderWishlist() {
-  const books = library.filter(b => !b.owned)
+  const books = library.filter(b => b.owned === 'tobuy')
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')));
   // v113: announced books with a future release date surface first, by date.
   // v114: a release *today* counts too (daysUntil 0 is not falsy-safe).

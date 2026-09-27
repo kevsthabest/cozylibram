@@ -313,7 +313,7 @@ function mapBookmoryBook(key, bm) {
     pageCount: total,
     publishedDate: pub,
     status: status,
-    owned: true, // the export carries no owned-vs-wanted signal
+    owned: 'owned', // the export carries no owned-vs-wanted signal
     myRating: star,
     tropes: Array.from(new Set(tags)),
     progress: status === 'read' && total ? total : (status === 'tbr' ? 0 : scale(bm.cur_page)),
@@ -460,7 +460,7 @@ function importBookmoryBooks(books, skippedTitles) {
       cover: '', description: '', publishedDate: '', categories: [],
       publicRating: null, ratingsCount: 0, ratings: {}, axes: ['spice'],
       myRating: 0, progress: 0, dateFinished: null, notes: '',
-      status: 'tbr', owned: true, favorite: false,
+      status: 'tbr', owned: 'owned', favorite: false,
     }, raw));
     if (!b.title || alreadyHave(b)) { skipped++; continue; }
     untombstone(b.id);

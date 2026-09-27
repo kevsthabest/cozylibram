@@ -156,7 +156,7 @@ function hcDocToBook(doc) {
     publicRating: null,
     ratingsCount: 0,
     status: 'tbr',
-    owned: true,
+    owned: 'owned',
     ratings: {},
     myRating: 0,
     tropes: [],

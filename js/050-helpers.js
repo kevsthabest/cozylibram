@@ -38,6 +38,8 @@ const ICONS = {
   owned: '<path d="M4 11l8-7 8 7"/><path d="M6.2 9.3V20h11.6V9.3"/>',
   // to buy: cart
   tobuy: '<path d="M3 4.5h2l2.4 11.5h10.8L21 8H7"/><circle cx="9.6" cy="19.6" r="1.3" fill="currentColor" stroke="none"/><circle cx="16.4" cy="19.6" r="1.3" fill="currentColor" stroke="none"/>',
+  // borrowed: book with an outgoing arrow (read elsewhere — Kindle, library loan)
+  borrowed: '<path d="M6 3.5h11a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2z"/><path d="M6 3.5v14"/><path d="M10 10h5"/><path d="M13.2 8.2L15 10l-1.8 1.8"/>',
   // external link
   external: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5L11 13"/><path d="M18.5 13.5V19a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1H11"/>',
   // previously read: clock

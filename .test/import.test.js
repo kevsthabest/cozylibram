@@ -20,7 +20,7 @@ const runInWindow = (js) => {
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 30));
 const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', authors: ['A'], cover: '',
   description: '', pageCount: 100, publishedDate: '', categories: [], publicRating: null,
-  ratingsCount: 0, status: 'tbr', owned: true, ratings: {}, axes: ['spice'], myRating: 0,
+  ratingsCount: 0, status: 'tbr', owned: 'owned', ratings: {}, axes: ['spice'], myRating: 0,
   tropes: [], progress: 0, dateAdded: new Date().toISOString(), dateFinished: null, notes: '' })`;
 
 const GR_CSV = 'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Average Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Owned Copies\r\n' +
@@ -53,7 +53,7 @@ const SG_CSV = 'Title,Authors,Contributors,ISBN/UID,Format,Read Status,Date Adde
   ok('GR author Last, First → First Last', gr[0].authors.join(',') === 'Rebecca Yarros');
   ok('GR shelf read → read + progress filled', gr[0].status === 'read' && gr[0].progress === 623);
   ok('GR shelf to-read → tbr', gr[1].status === 'tbr' && gr[1].progress === 0);
-  ok('GR rating + pages + owned', gr[0].myRating === 5 && gr[0].pageCount === 623 && gr[0].owned === true);
+  ok('GR rating + pages + owned', gr[0].myRating === 5 && gr[0].pageCount === 623 && gr[0].owned === 'owned');
   ok('GR dates parsed', gr[0].dateFinished.startsWith('2024-03-15') && gr[0].dateAdded.startsWith('2024-01-10'));
   ok('GR review + private notes joined', gr[0].notes === 'Loved it!\n\nreread soon');
   ok('GR unrated → 0', gr[1].myRating === 0);
@@ -61,7 +61,7 @@ const SG_CSV = 'Title,Authors,Contributors,ISBN/UID,Format,Read Status,Date Adde
   // 4. StoryGraph mapping
   const sg = window.parseStoryGraphCSV(SG_CSV);
   ok('StoryGraph parses 2 rows', sg.length === 2);
-  ok('SG status + rating + owned', sg[0].status === 'read' && sg[0].myRating === 5 && sg[0].owned === true);
+  ok('SG status + rating + owned', sg[0].status === 'read' && sg[0].myRating === 5 && sg[0].owned === 'owned');
   ok('SG moods+tags → tropes', sg[0].tropes.includes('adventurous') && sg[0].tropes.includes('dragons'));
   ok('SG review → notes', sg[0].notes === 'Great read!');
   ok('SG non-ISBN UID dropped', sg[1].isbn === '');

@@ -51,9 +51,9 @@ runInWindow(`
   window.SPICY_CONFIG = { hardcover: 'test-token' };
   localStorage.removeItem('spicyshelves.dismissed_releases');
   library = [
-    { id: 'a1', title: 'Ann One', authors: ['Ann Author'], status: 'read', owned: true, cover: '', tropes: [], myRating: 5, isbn: '9781111111111' },
-    { id: 'a2', title: 'Already Have', authors: ['Ann Author'], status: 'tbr', owned: false, cover: '', tropes: [], myRating: 4 },
-    { id: 'z1', title: 'Zed One', authors: ['Zed'], status: 'read', owned: true, cover: '', tropes: [], myRating: 0 },
+    { id: 'a1', title: 'Ann One', authors: ['Ann Author'], status: 'read', owned: 'owned', cover: '', tropes: [], myRating: 5, isbn: '9781111111111' },
+    { id: 'a2', title: 'Already Have', authors: ['Ann Author'], status: 'tbr', owned: 'tobuy', cover: '', tropes: [], myRating: 4 },
+    { id: 'z1', title: 'Zed One', authors: ['Zed'], status: 'read', owned: 'owned', cover: '', tropes: [], myRating: 0 },
   ];
   dismissRelease(5);
 `);
@@ -80,7 +80,7 @@ ok('authors ranked by shelf count then rating',
   runInWindow(`window.__inLib = library.find(b => b.title === 'Future Book') || null;`);
   const inLib = window.__inLib;
   ok('add lands an unowned TBR book with the release date',
-    !!added && !!inLib && inLib.owned === false && inLib.status === 'tbr' && inLib.releaseDate === isoIn(30));
+    !!added && !!inLib && inLib.owned === 'tobuy' && inLib.status === 'tbr' && inLib.releaseDate === isoIn(30));
   ok('added book carries the Hardcover id and skips re-enrichment',
     inLib.hcId === 1 && inLib.hcEnriched === true);
 
@@ -90,7 +90,7 @@ ok('authors ranked by shelf count then rating',
   // wishlist: check button + today-release fix
   runInWindow(`
     library.push({ id: 't1', title: 'Today Book', authors: ['Ann Author'], status: 'tbr',
-      owned: false, cover: '', tropes: [], releaseDate: '${isoIn(0)}', dateAdded: '2026-01-01T00:00:00.000Z' });
+      owned: 'tobuy', cover: '', tropes: [], releaseDate: '${isoIn(0)}', dateAdded: '2026-01-01T00:00:00.000Z' });
     view = 'wishlist'; renderWishlist();
   `);
   ok('check-for-new-releases button rendered', !!window.document.getElementById('rel-check'));

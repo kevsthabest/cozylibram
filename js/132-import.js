@@ -76,7 +76,7 @@ function parseGoodreadsCSV(text) {
       status: status,
       progress: status === 'read' && pages ? pages : 0,
       myRating: rating,
-      owned: (parseInt(r['Owned Copies'], 10) || 0) > 0,
+      owned: (parseInt(r['Owned Copies'], 10) || 0) > 0 ? 'owned' : 'tobuy',
       dateFinished: parseLooseDate(r['Date Read']),
       dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
       notes: notes,
@@ -98,7 +98,7 @@ function parseStoryGraphCSV(text) {
       authors: splitNames(r['Authors']),
       status: status,
       myRating: rating,
-      owned: /^(yes|true|1|y)$/i.test(String(r['Owned?'] || '').trim()),
+      owned: /^(yes|true|1|y)$/i.test(String(r['Owned?'] || '').trim()) ? 'owned' : 'tobuy',
       dateFinished: parseLooseDate(r['Last Date Read']),
       dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
       notes: r['Review'] || '',
@@ -147,7 +147,7 @@ function parseHardcoverCSV(text) {
       status: status,
       progress: status === 'read' && pages ? pages : 0,
       myRating: rating,
-      owned: /^(true|yes|1|y)$/i.test(String(r['Owned'] || '').trim()),
+      owned: /^(true|yes|1|y)$/i.test(String(r['Owned'] || '').trim()) ? 'owned' : 'tobuy',
       dateFinished: parseLooseDate(r['Date Finished']),
       dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
       notes: notes,
@@ -207,7 +207,7 @@ function importForeignBooks(books, label, source) {
       id: uid(), cover: '', description: '', publishedDate: '', categories: [],
       publicRating: null, ratingsCount: 0, ratings: {}, axes: ['spice'],
       myRating: 0, progress: 0, dateFinished: null, notes: '',
-      status: 'tbr', owned: true, favorite: false,
+      status: 'tbr', owned: 'owned', favorite: false,
     }, raw));
     if (!b.title || alreadyHave(b)) { skipped++; continue; }
     untombstone(b.id);

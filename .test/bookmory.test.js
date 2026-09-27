@@ -61,7 +61,7 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const m = parsed.books.find(b => b.title === 'Haunting Adeline');
   ok('status DONE maps to read', m && m.status === 'read');
   ok('stable bm- id', m && m.id.startsWith('bm-'));
-  ok('owned defaults true', parsed.books.every(b => b.owned === true));
+  ok('owned defaults to owned', parsed.books.every(b => b.owned === 'owned'));
   ok('favorites mapped (4)', parsed.books.filter(b => b.favorite).length === 4);
   const tagged = parsed.books.find(b => b.tropes.length > 0);
   ok('tags map to tropes without #', tagged && tagged.tropes.every(t => !t.includes('#')));

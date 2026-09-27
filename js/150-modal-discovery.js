@@ -281,7 +281,7 @@ function addExternalBook(x) {
     publicRating: null,
     ratingsCount: 0,
     status: 'tbr',
-    owned: false, // discovered = wanted
+    owned: 'tobuy', // discovered = wanted
     ratings: {},
     myRating: 0,
     tropes: [],
@@ -639,6 +639,8 @@ function renderDetailModal(b, viaBook) {
     ratings: Object.assign({}, b.ratings),
     axes: (b.axes || []).slice()
   });
+  if (draft.owned === true) draft.owned = 'owned'; // v148: tolerate legacy booleans
+  else if (draft.owned === false) draft.owned = 'tobuy';
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
 
@@ -802,10 +804,11 @@ function renderDetailModal(b, viaBook) {
     '</details>' +
 
     '<details class="m-collapsible" id="m-sec-owned"><summary>' + icon('gift') + ' Ownership</summary>' +
-    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
-    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
-    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button></div></div>' +
-    '<div class="field" id="m-buywrap" style="display:' + (draft.owned ? 'none' : '') + '">' +
+    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr 1fr">' +
+    '<button data-o="owned" class="' + (draft.owned === 'owned' ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
+    '<button data-o="tobuy" class="' + (draft.owned === 'tobuy' ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button>' +
+    '<button data-o="borrowed" class="' + (draft.owned === 'borrowed' ? 'active' : '') + '">' + icon('borrowed') + ' Borrowed</button></div></div>' +
+    '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
@@ -943,10 +946,10 @@ function renderDetailModal(b, viaBook) {
 
   root.querySelectorAll('#f-owned button').forEach(btn =>
     btn.addEventListener('click', () => {
-      draft.owned = btn.dataset.o === '1';
+      draft.owned = btn.dataset.o; // v148: 'owned' | 'tobuy' | 'borrowed'
       root.querySelectorAll('#f-owned button').forEach(x => x.classList.toggle('active', x === btn));
       const bw = document.getElementById('m-buywrap');
-      if (bw) bw.style.display = draft.owned ? 'none' : '';
+      if (bw) bw.style.display = draft.owned === 'owned' ? 'none' : '';
     }));
 
   const wirePicker = (sel, key) => {

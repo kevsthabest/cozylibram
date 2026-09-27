@@ -22,7 +22,7 @@ function normalizeVolume(item, isbnHint) {
     publicRating: v.averageRating || null,
     ratingsCount: v.ratingsCount || 0,
     status: 'tbr',
-    owned: true,
+    owned: 'owned',
     ratings: {},
     myRating: 0,
     tropes: [],

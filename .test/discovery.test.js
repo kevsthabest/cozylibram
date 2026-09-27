@@ -48,7 +48,7 @@ const mk = (id, title, series) =>
   `({ id: '${id}', isbn: '9781111111111', title: '${title}', authors: ['Jane Doe'], cover: '', ` +
   `description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null, ratingsCount: 0, ` +
   `status: 'read', ratings: {}, axes: ['spice'], myRating: 0, tropes: [], progress: 0, ` +
-  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: true, ` +
+  `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, owned: 'owned', ` +
   (series ? `series: { name: 'Test Saga', position: 1 }, ` : `series: null, `) +
   `log: [], _mtime: 0 })`;
 
@@ -72,7 +72,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   extRows[0].querySelector('[data-extadd]').click();
   runInWindow(`window.__added = library[0];`);
   ok('added to library', window.__added.title === 'Missing Book One');
-  ok('added as to-buy (wishlist)', window.__added.owned === false);
+  ok('added as to-buy (wishlist)', window.__added.owned === 'tobuy');
   ok('added as tbr', window.__added.status === 'tbr');
   ok('button becomes confirmation', q('#c-more').textContent.includes('In wishlist'));
   q('#c-x').click();
@@ -91,7 +91,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   runInWindow(`window.__sadded = library[0];`);
   ok('series book keeps series+position', window.__sadded.series &&
     window.__sadded.series.name === 'Test Saga' && window.__sadded.series.position === 2);
-  ok('series book goes to wishlist', window.__sadded.owned === false);
+  ok('series book goes to wishlist', window.__sadded.owned === 'tobuy');
   q('#c-x').click();
 
   // 4. series without token -> hint

@@ -50,9 +50,9 @@ ok('existing releaseDate never overwritten', window.__hb2 === '2026-01-01');
 
 // --- modal: release line, date input, save round-trip ---
 runInWindow(`library = [
-  { id: 'u1', title: 'Soon Book', authors: ['Ann Author'], status: 'tbr', owned: false, cover: '',
+  { id: 'u1', title: 'Soon Book', authors: ['Ann Author'], status: 'tbr', owned: 'tobuy', cover: '',
     tropes: [], releaseDate: '${isoIn(12)}', dateAdded: '2026-09-01T00:00:00.000Z' },
-  { id: 'u2', title: 'Old Book', authors: ['Ann Author'], status: 'tbr', owned: false, cover: '',
+  { id: 'u2', title: 'Old Book', authors: ['Ann Author'], status: 'tbr', owned: 'tobuy', cover: '',
     tropes: [], dateAdded: '2026-09-02T00:00:00.000Z' },
 ];`);
 runInWindow(`openDetail('u1');`);
@@ -70,7 +70,7 @@ ok('save persists the release date', window.__savedRD === isoIn(20));
 
 // --- wishlist: Coming soon section, sorted by date ---
 runInWindow(`library.find(b => b.id === 'u1').releaseDate = '${isoIn(20)}';
-  library.push({ id: 'u3', title: 'Sooner Book', authors: ['Zed'], status: 'tbr', owned: false,
+  library.push({ id: 'u3', title: 'Sooner Book', authors: ['Zed'], status: 'tbr', owned: 'tobuy',
     cover: '', tropes: [], releaseDate: '${isoIn(5)}', dateAdded: '2026-09-03T00:00:00.000Z' });
   view = 'wishlist'; renderWishlist();`);
 const section = window.document.querySelector('.wish-section');

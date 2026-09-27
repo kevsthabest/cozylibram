@@ -16,7 +16,7 @@ const STATUS = {
 
 let view = 'library';
 let filter = 'all';
-let ownFilter = 'all'; // all | owned | tobuy
+let ownFilter = 'all'; // all | owned | tobuy | borrowed (v148)
 let query = '';
 let heatSel = null; // selected heatmap day 'YYYY-MM-DD' (v62)
 let calY = new Date().getFullYear(); // v63: month calendar restored
