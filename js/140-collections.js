@@ -68,7 +68,7 @@ function renderSeries() {
   const shown = all.filter(s => seriesFilter === 'started' ? s.started
     : seriesFilter === 'completed' ? s.completed : true);
   let html = '<button class="btn ghost" id="sr-back">← Back</button>' +
-    '<h2 class="section serif" style="font-size:26px;margin-top:10px">📚 Series' +
+    '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('series') + ' Series' +
     (all.length ? ' <span class="note-inline">· ' + all.length + '</span>' : '') + '</h2>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + all.length, seriesFilter === 'all') +

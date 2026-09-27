@@ -318,10 +318,10 @@ function renderLibrary() {
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
 
   let html = recentStripHTML() + favShelfHTML() + upNextShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
-    '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
-    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div>' +
-    '<button class="btn ghost sm" id="lib-quotes" title="Browse saved quotes">❝ Quotes</button>' +
-    '<button class="btn ghost sm" id="lib-series" title="Series overview">📚 Series</button></div>';
+    '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">' + icon('list') + '</button>' +
+    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">' + icon('covers') + '</button></div>' +
+    '<button class="btn ghost sm" id="lib-quotes" title="Browse saved quotes">' + icon('quotes') + ' Quotes</button>' +
+    '<button class="btn ghost sm" id="lib-series" title="Series overview">' + icon('series') + ' Series</button></div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
     chip('tbr', '📖 TBR · ' + counts.tbr, filter === 'tbr') +

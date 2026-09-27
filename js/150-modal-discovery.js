@@ -524,7 +524,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
 
-    '<div class="field"><label>❝ Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
+    '<div class="field"><label>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
     '<div id="m-quotes"></div></div>' +
 
     '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
@@ -772,7 +772,7 @@ function quoteCardHTML(book, qt, feat) {
 function renderQuotes() {
   const all = allQuotes();
   let html = '<button class="btn ghost" id="q-back">← Shelves</button>' +
-    '<h2 class="section serif" style="font-size:26px;margin-top:10px">❝ Quotes' +
+    '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('quotes') + ' Quotes' +
     (all.length ? ' <span class="note-inline">· ' + all.length + '</span>' : '') + '</h2>';
   if (!all.length) {
     html += '<div class="empty"><div class="big">❝</div><h2 class="serif">No quotes yet</h2>' +

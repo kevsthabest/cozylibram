@@ -1072,3 +1072,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   display: flex; align-items: center; gap: 6px; }
 .sr-next b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sr-done { color: var(--muted); font-size: 14px; padding: 4px 2px; }
+/* v79: line-art toolbar/view icons scale with the surrounding text */
+.ticon { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
+.view-toggle .ticon { width: 20px; height: 20px; vertical-align: -4px; }
