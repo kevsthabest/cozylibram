@@ -62,15 +62,15 @@ e = window.__b.log;
 ok('mark-as-read extends log to total', e[0].to === 400);
 ok('book finished', window.__b.status === 'read' && window.__b.progress === 400);
 
-// 5. calendar shows cover on logged days; day list shows page ranges
-runInWindow(`calY = new Date().getFullYear(); calM = new Date().getMonth(); calSel = null; renderStats();`);
-const cell = q('#readcal [data-day="' + todayK + '"]');
-ok('logged day shows cover', !!cell.querySelector('.ccover img'));
+// 5. heatmap lights up logged days; day list shows page ranges
+runInWindow(`heatSel = null; renderStats();`);
+const cell = q('#heatmap [data-day="' + todayK + '"]');
+ok('logged day is lit', /l[1-4]/.test(cell.className));
 cell.click();
-const listTxt = q('#cal-books').textContent;
+const listTxt = q('#heat-books').textContent;
 ok('day list shows page range', /p\.\s*100\s*→\s*p\.\s*400/.test(listTxt));
 ok('day list shows pages read', listTxt.includes('+300 pages'));
-ok('finished book not duplicated in day list', qa('#cal-books .cal-book').length === 1);
+ok('finished book not duplicated in day list', qa('#heat-books .cal-book').length === 1);
 
 // 6. daily stats card
 const dstat = q('.dstat-card').textContent;
@@ -93,8 +93,8 @@ runInWindow(`
     dateAdded: new Date().toISOString(), dateFinished: new Date(new Date().setDate(new Date().getDate() - 3)).toISOString(), notes: '' });
   renderStats();`);
 const oldK = (() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
-q('#readcal [data-day="' + oldK + '"]').click();
-ok('finish-only day shows Finished row', q('#cal-books').textContent.includes('Finished 🎉'));
+q('#heatmap [data-day="' + oldK + '"]').click();
+ok('finish-only day shows Finished row', q('#heat-books').textContent.includes('Finished 🎉'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -543,19 +543,37 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .stepper-row .step { flex: 1; padding: 10px 0; font-size: 15px; }
 .card-progress { font-size: 12px; color: var(--muted); margin: 0 0 2px; }
 
-/* reading calendar */
-.cal-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 8px; }
-.cal-head h3 { margin: 0; font-size: 16px; }
-.cal-head .btn { padding: 6px 16px; font-size: 18px; line-height: 1; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal-dow { text-align: center; font-size: 11px; color: var(--faint); padding: 2px 0; }
-.cal-day { min-height: 66px; border-radius: 10px; background: var(--card); border: 1px solid transparent;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  font-size: 13px; cursor: pointer; padding: 4px 2px; }
-.ccover { width: 34px; height: 48px; border-radius: 5px; overflow: hidden; position: relative;
-  background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.ccover img { width: 100%; height: 100%; object-fit: cover; }
-.ccover .cdot { position: absolute; top: 2px; right: 2px; }
+/* reading activity heatmap (v62) */
+.heat-scroll { overflow-x: auto; padding: 2px 0 6px; }
+.heat { display: flex; gap: 3px; width: max-content; }
+.heat-col { display: flex; flex-direction: column; gap: 3px; }
+.heat-dows span { height: 13px; font-size: 9px; color: var(--faint); line-height: 13px; }
+.heat-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--card);
+  border: 1px solid var(--line); cursor: pointer; }
+.heat-cell.l1 { background: #5c2b41; border-color: transparent; }
+.heat-cell.l2 { background: #93355c; border-color: transparent; }
+.heat-cell.l3 { background: #c74a78; border-color: transparent; }
+.heat-cell.l4 { background: #e5488f; border-color: transparent; }
+.heat-cell.future { opacity: .2; cursor: default; }
+.heat-cell.today { outline: 1px solid var(--gold); outline-offset: 1px; }
+.heat-cell.sel { outline: 2px solid #fff; outline-offset: 1px; }
+.heat-legend { display: flex; align-items: center; gap: 4px; font-size: 11px;
+  color: var(--faint); margin: 2px 0 4px; }
+.heat-legend .heat-cell { cursor: default; }
+/* reading pace (v62) */
+.pace-hero { font-size: 15px; margin: 2px 0 10px; color: var(--muted); }
+.pace-hero b { color: var(--ink); }
+.pace-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.pace { background: var(--card); border-radius: 12px; padding: 10px 6px; text-align: center; }
+.pace .n { font-size: 20px; font-weight: 700; }
+.pace .l { font-size: 11px; color: var(--muted); }
+.kv { background: var(--card); border-radius: 14px; padding: 4px 14px; margin-bottom: 14px; }
+.kv-row { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.kv-row:last-child { border-bottom: none; }
+.kv-row > span { color: var(--muted); flex: none; }
+.kv-row b { font-weight: 600; text-align: right; }
+.kv-row.tap { cursor: pointer; }
 /* daily stats card */
 .dstat-card { background: var(--card); border-radius: 14px; padding: 12px; }
 .dstat-head { display: flex; justify-content: space-between; align-items: center;
@@ -563,15 +581,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .dstat-head .streak { color: var(--gold); font-weight: 700; }
 .dstat-total { font-size: 22px; font-weight: 700; margin: 2px 0 4px; }
 .dstat-card .cal-book { background: var(--bg); }
-.cal-day.blank { background: transparent; cursor: default; }
-.cal-day.has { border-color: var(--accent); }
-.cal-day .d { line-height: 1; }
-.cal-day.today .d { color: var(--accent); font-weight: 700; }
-.cal-day.sel { background: var(--accent); border-color: var(--accent); }
-.cal-day.sel .d { color: #fff; font-weight: 700; }
-.cal-day.sel .cdot { background: rgba(255, 255, 255, .25); }
-.cdot { font-size: 10px; font-weight: 700; background: var(--accent); color: #fff; border-radius: 99px;
-  min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
 .cal-book { display: flex; gap: 10px; align-items: center; background: var(--card);
   border-radius: 12px; padding: 8px; margin-top: 8px; cursor: pointer; }
 .cal-book .cover-wrap { width: 44px; height: 66px; flex: none; font-size: 20px; }

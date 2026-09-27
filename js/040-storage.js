@@ -83,6 +83,23 @@ function readingStreak() {
   while (days.has(dayKey(d))) { s++; d.setDate(d.getDate() - 1); }
   return s;
 }
+// Longest-ever run of consecutive reading days (v62).
+function longestStreak() {
+  const days = new Set();
+  library.forEach(b => {
+    (b.log || []).forEach(e => { if (e.to > e.from) days.add(e.d); });
+    if (b.status === 'read' && b.dateFinished) days.add(dayKey(new Date(b.dateFinished)));
+  });
+  const sorted = Array.from(days).sort();
+  let best = 0, run = 0, prev = null;
+  sorted.forEach(k => {
+    const t = new Date(k + 'T12:00:00').getTime(); // local noon dodges DST edges
+    run = (prev != null && t - prev === 864e5) ? run + 1 : 1;
+    if (run > best) best = run;
+    prev = t;
+  });
+  return best;
+}
 function saveLibrary(opts) {
   opts = opts || {};
   const now = Date.now();
