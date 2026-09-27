@@ -114,7 +114,7 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; overflow-x: clip; } /* v137: a page should never scroll sideways — one wide quote/series name used to shrink the whole app */
 
 body {
   background: radial-gradient(120% 60% at 50% -10%, var(--glow) 0%, var(--bg) 55%) fixed, var(--bg);
@@ -323,7 +323,7 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 .btn:disabled { opacity: 0.5; }
 
 .field { margin: 14px 0; }
-.field label { display: block; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.field label { display: block; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; overflow-wrap: break-word; } /* v137: long series names wrap instead of widening the modal */
 .text-input, textarea.text-input {
   width: 100%;
   background: var(--bg2);
@@ -407,7 +407,7 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .result-card .book-meta h3 { font-size: 15px; }
 
 .search-row { display: flex; gap: 8px; }
-.search-row .text-input { flex: 1; }
+.search-row .text-input { flex: 1; min-width: 0; } /* v137: let the search box shrink on narrow phones */
 
 /* ---------- modal (bottom sheet) ---------- */
 #modal-root:empty { display: none; }
@@ -1135,14 +1135,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
 .quote-mark { color: var(--accent); font-size: 22px; line-height: 1; }
 .quote-body { flex: 1; min-width: 0; }
-.quote-body p { margin: 0 0 4px; font-style: italic; }
+.quote-body p { margin: 0 0 4px; font-style: italic; overflow-wrap: break-word; } /* v137: long unbroken quotes can't force the page wide */
 .quote-page { color: var(--muted); font-size: 13px; }
 #m-qform { margin: 8px 0; }
 #m-qform .row-flex { display: flex; gap: 8px; margin-top: 8px; }
 #m-qform .row-flex .text-input { flex: 1; min-width: 0; }
 .q-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .q-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 14px 16px; cursor: pointer; }
+  padding: 14px 16px; cursor: pointer; overflow-wrap: break-word; } /* v137 */
 .q-card.feat { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .q-text { margin: 0 0 10px; font-size: 17px; line-height: 1.5; font-style: italic;
   display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }

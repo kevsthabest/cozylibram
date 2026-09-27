@@ -75,7 +75,11 @@ function renderSettings() {
 
   const htmlData =
     '<p class="note">Delete everything on this device and in your cloud account. <b>This cannot be undone</b> — export a backup first.</p>' +
-    '<button class="btn danger block" id="bk-wipe">Delete everything</button>';
+    '<button class="btn danger block" id="bk-wipe">Delete everything</button>' +
+    '<p class="note" style="margin-top:14px"><b>Missing books?</b> The app keeps a separate shelf per sign-in. ' +
+    'If your library looks empty after signing out, your books are usually still on this device under your account.</p>' +
+    '<button class="btn ghost block" id="bk-find">' + icon('search') + ' Find my library</button>' +
+    '<div id="bk-found"></div>';
 
   /* ---- Appearance ---- */
   const htmlTheme =
@@ -358,6 +362,55 @@ function renderSettings() {
     library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true }); render();
     await cloudWipe();
     toast('Shelves cleared');
+  });
+
+  // v136: "Find my library" — lists every on-device library partition (one
+  // per sign-in plus the offline shelf) with book counts, restores any of
+  // them into the open library, and can pull the cloud copy when signed in.
+  document.getElementById('bk-find').addEventListener('click', () => {
+    const box = document.getElementById('bk-found');
+    const parts = libraryPartitions();
+    if (!parts.length) {
+      box.innerHTML = '<p class="note">No saved libraries found on this device.</p>';
+      return;
+    }
+    box.innerHTML = parts.map((p, i) =>
+      '<div class="row-flex" style="align-items:center;gap:10px;margin:8px 0">' +
+      '<div style="flex:1;min-width:0"><b>' + esc(partitionLabel(p)) + '</b><br>' +
+      '<span class="note">' + p.n + ' book' + (p.n === 1 ? '' : 's') +
+      (p.current ? ' · currently open' : '') + '</span></div>' +
+      ((!p.current && p.n > 0)
+        ? '<button class="btn small" data-restore="' + i + '">Restore</button>' : '') +
+      '</div>').join('') +
+      ((typeof cloudUser !== 'undefined' && cloudUser && cloudConfigured())
+        ? '<button class="btn ghost block" id="bk-cloud-check" style="margin-top:8px">' + icon('cloud') +
+          ' Check my cloud library</button><div id="bk-cloud"></div>'
+        : '<p class="note">Sign in to also check your cloud library.</p>');
+    box.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', () => {
+      const p = parts[Number(btn.dataset.restore)];
+      if (!p || !confirm('Restore ' + p.n + ' books from "' + partitionLabel(p) +
+        '"? This replaces the ' + library.length + ' books currently open.')) return;
+      const n = restorePartition(p.key);
+      render();
+      toast(n ? 'Restored ' + n + ' books ✓' : 'Nothing to restore');
+      document.getElementById('bk-find').click(); // refresh the list
+    }));
+    const cc = document.getElementById('bk-cloud-check');
+    if (cc) cc.addEventListener('click', async () => {
+      const cbox = document.getElementById('bk-cloud');
+      cbox.innerHTML = '<p class="note">Checking cloud…</p>';
+      try {
+        const rows = await cloudPullRows();
+        if (!rows.length) { cbox.innerHTML = '<p class="note">Cloud library is empty.</p>'; return; }
+        cbox.innerHTML = '<p class="note">Cloud has ' + rows.length + ' books.</p>' +
+          '<button class="btn small" id="bk-cloud-dl">Download into this library</button>';
+        document.getElementById('bk-cloud-dl').addEventListener('click', () => {
+          if (mergeCloudBooks(library, rows)) { saveLibrary(); render(); }
+          toast('Cloud books merged ✓');
+          document.getElementById('bk-find').click();
+        });
+      } catch (e) { cbox.innerHTML = '<p class="note">Cloud check failed: ' + esc(cloudErrMsg(e)) + '</p>'; }
+    });
   });
 
   document.getElementById('im-pick').addEventListener('click', () =>

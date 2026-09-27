@@ -129,7 +129,8 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
     window.eval(`tombstones.some(t => t.id === 'adopted')`));
   runInWindow(`tombstones.push({ id: 'u9dead', at: 2 }); saveTombstones();`);
   runInWindow(`setLocalUser(null);`);
-  ok('signed-out shelf sees no user tombstones', window.eval(`tombstones.length`) === 0);
+  ok('signed-out shelf keeps the handed-back tombstones (v136)',
+    window.eval(`tombstones.some(t => t.id === 'u9dead') && tombstones.some(t => t.id === 'adopted')`));
   runInWindow(`setLocalUser('user-9');`);
   ok('user tombstones restored on return',
     window.eval(`tombstones.some(t => t.id === 'u9dead') && tombstones.some(t => t.id === 'adopted')`));

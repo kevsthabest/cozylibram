@@ -140,27 +140,51 @@ function saveLibrary(opts) {
 // Switch the on-device library between users (null = signed out). On the
 // first sign-in on a device, an existing offline library is adopted into the
 // new per-user slot instead of being abandoned.
+//
+// v136: marks whose sign-out hand-back the offline shelf currently holds, so
+// a *different* user signing in later won't adopt someone else's books.
+const OFFLINE_OWNER_KEY = 'spicyshelves.offline.owner';
+function offlineOwner() {
+  try { return localStorage.getItem(OFFLINE_OWNER_KEY); } catch (e) { return null; }
+}
 function setLocalUser(uid) {
   if (uid === localUid) return;
+  const prevUid = localUid;
   try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
   try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
   try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {} // v74
   const hadBooks = library.length > 0;
   const hadTombs = tombstones.length > 0;
+  const owner = offlineOwner();
   localUid = uid || null;
   bookSnapshots.clear();
   let next = loadLibrary();
-  if (uid && next.length === 0 && hadBooks) {
+  // The offline shelf is adoptable unless it's another user's hand-back.
+  const adoptable = !owner || owner === uid;
+  if (uid && next.length === 0 && hadBooks && adoptable) {
     next = library;
     try {
       localStorage.setItem(libKey(), JSON.stringify(next));
       localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(OFFLINE_OWNER_KEY);
+    } catch (e) {}
+  } else if (!uid && next.length === 0 && hadBooks) {
+    // v136: signing out hands the library back to the shared offline slot
+    // instead of stranding it in the per-user slot (which made the library
+    // look deleted after sign-out / "Continue offline"). The per-user slot
+    // keeps its copy too, so signing back in still finds it there.
+    next = library;
+    try {
+      localStorage.setItem(libKey(), JSON.stringify(next));
+      localStorage.setItem(tombKey(), JSON.stringify(tombstones));
+      localStorage.setItem(upNextKey(), JSON.stringify(upNext));
+      if (prevUid) localStorage.setItem(OFFLINE_OWNER_KEY, prevUid);
     } catch (e) {}
   }
   library = next;
   library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
   let nextTombs = loadTombstones();
-  if (uid && nextTombs.length === 0 && hadTombs) {
+  if (uid && nextTombs.length === 0 && hadTombs && adoptable) {
     nextTombs = tombstones;
     try {
       localStorage.setItem(tombKey(), JSON.stringify(nextTombs));
@@ -169,5 +193,40 @@ function setLocalUser(uid) {
   }
   tombstones = nextTombs;
   upNext = loadUpNext(); // v74: queue is per-user too
+}
+
+/* ---------------- library recovery (v136) ---------------- */
+// Every on-device library partition: the shared offline slot plus one per
+// signed-in user. Settings → "Find my library" lists them so a library that
+// looks empty (e.g. after signing out) can be found and restored.
+function libraryPartitions() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k !== 'spicyshelves.library.v1' && k.indexOf('spicyshelves.library.v2.') !== 0) continue;
+      let n = -1;
+      try { const a = JSON.parse(localStorage.getItem(k)); n = Array.isArray(a) ? a.length : -1; } catch (e) {}
+      out.push({ key: k, n: n, current: k === libKey() });
+    }
+  } catch (e) {}
+  out.sort((a, b) => b.n - a.n);
+  return out;
+}
+function partitionLabel(p) {
+  if (p.key === 'spicyshelves.library.v1') return 'Offline shelf (signed out)';
+  if (localUid && p.key === 'spicyshelves.library.v2.' + localUid) return 'This account';
+  return 'Another sign-in on this device';
+}
+// Restore a partition's books into the currently open library slot.
+function restorePartition(key) {
+  let arr = null;
+  try { const a = JSON.parse(localStorage.getItem(key)); if (Array.isArray(a)) arr = a; } catch (e) {}
+  if (!arr) return 0;
+  library = arr.map(migrateBook);
+  bookSnapshots.clear();
+  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
+  saveLibrary();
+  return library.length;
 }
 

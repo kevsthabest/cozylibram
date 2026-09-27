@@ -160,19 +160,26 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await tick(2);
   ok('logout menu item signs out to the gate', !!q('#gate-signin') && probe('cloudUser') === null);
 
-  // Sign out → gate, memory cleared, per-user data kept on device.
+  // Sign out → gate; the library is handed back to the offline shelf (v136:
+  // signing out must not make the library look deleted).
   await window.cloudSignOut();
   await tick();
   ok('gate shown after sign-out', !!q('#gate-signin'));
-  ok('in-memory library cleared', probe('library.length') === 0);
+  ok('library handed back to the offline shelf',
+    probe('library.some(b => b.id === "b1")') === true &&
+    lsBooks('spicyshelves.library.v1').some(b => b.id === 'b1'));
+  ok('offline shelf marked as a user-1 hand-back',
+    lsGet('spicyshelves.offline.owner') === 'user-1');
   ok('per-user books kept on device', lsBooks('spicyshelves.library.v2.user-1').some(b => b.id === 'b1'));
 
-  // Second user → clean shelf; first user's data untouched.
+  // Second user → clean shelf; the first user's hand-back is NOT adopted.
   window.__sbStub.fire('SIGNED_IN', { id: 'user-2', email: 'friend@example.com' });
   await tick(6);
   ok('second user starts with empty shelf', probe('library.length') === 0);
   ok('second user has own storage key', probe('libKey()') === 'spicyshelves.library.v2.user-2');
   ok('first user shelf untouched', lsBooks('spicyshelves.library.v2.user-1').some(b => b.id === 'b1'));
+  ok('hand-back not absorbed into the second user shelf',
+    !lsBooks('spicyshelves.library.v2.user-2').some(b => b.id === 'b1'));
 
   // Sign back in as user-1 → shelf restored from the per-user slot.
   await window.cloudSignOut();
