@@ -124,6 +124,11 @@ function applyHardcoverDoc(book, doc) {
     }
   }
   if (!book.description && doc.description) book.description = String(doc.description);
+  // v113: adopt a release date when the book has none (powers Coming soon).
+  if (!book.releaseDate && doc.release_date) {
+    const d = String(doc.release_date).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) book.releaseDate = d;
+  }
   // v81: stash the Hardcover id + any tags the search document carries so the
   // trope suggester can pull community tags without another search.
   if (doc.id != null && book.hcId == null) book.hcId = doc.id;

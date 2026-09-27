@@ -539,6 +539,7 @@ function renderDetailModal(b, viaBook) {
       : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
     (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
+    (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
     '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
     (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
@@ -588,6 +589,9 @@ function renderDetailModal(b, viaBook) {
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
     '<div class="field"><label>Current page</label>' +
     '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
+    '<div class="field"><label>' + icon('calendar') + ' Release date</label>' +
+    '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
+    '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
     (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
       if (!logRemoveEnabled()) return '';
       const tk = dayKey(new Date());
@@ -824,6 +828,7 @@ function renderDetailModal(b, viaBook) {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);
     draft.notes = document.getElementById('f-notes').value;
+    draft.releaseDate = document.getElementById('f-releasedate').value || '';
     draft.previouslyRead = document.getElementById('f-prevread').checked;
     const totalEl = document.getElementById('f-pagecount');
     draft.pageCount = Math.max(0, Number(totalEl.value) || 0) || null;

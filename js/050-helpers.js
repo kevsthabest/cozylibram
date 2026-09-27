@@ -128,6 +128,20 @@ function fmtDate(iso) {
   try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch (e) { return ''; }
 }
+// v113: days from today (local) until a YYYY-MM-DD date; null when unparsable.
+function daysUntil(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const t = new Date(iso + 'T00:00:00');
+  if (isNaN(t)) return null;
+  return Math.round((t - now) / 86400000);
+}
+// v113: human countdown for a release date ('' when past/unparsable).
+function releaseCountdown(iso) {
+  const n = daysUntil(iso);
+  if (n == null || n < 0) return '';
+  return n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days';
+}
 function toast(msg) {
   const root = document.getElementById('toast-root');
   const el = document.createElement('div');

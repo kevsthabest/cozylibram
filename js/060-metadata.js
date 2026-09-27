@@ -32,6 +32,8 @@ function normalizeVolume(item, isbnHint) {
     dateFinished: null,
     notes: ''
   };
+  // v113: a full publishedDate doubles as the release date (powers Coming soon).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v.publishedDate || '')) book.releaseDate = v.publishedDate.slice(0, 10);
   book.axes = autoDetectAxes(book);
   seedTropes(book);
   return book;

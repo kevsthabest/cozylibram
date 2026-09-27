@@ -1239,3 +1239,9 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .set-group[open] > summary::after { transform: rotate(-90deg); }
 .set-group > :not(summary) { margin-left: 16px; margin-right: 16px; }
 .set-group > :last-child { margin-bottom: 16px; }
+/* v113: upcoming releases */
+.release-line { color: var(--accent, #e8a0bf); font-weight: 600; }
+.wish-section { display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 18px 0 10px; }
+.up-wrap { position: relative; }
+.up-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--bg); background: var(--accent, #e8a0bf); border-radius: 999px; padding: 4px 10px; margin-bottom: 6px; }
+.up-pill svg { width: 13px; height: 13px; }
