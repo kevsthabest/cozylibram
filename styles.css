@@ -437,13 +437,6 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .modal-head h2 { margin: 0 0 4px; font-size: 20px; line-height: 1.25; }
 .modal-head .author { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
 .pub-rating { color: var(--gold); font-size: 13px; }
-.desc {
-  font-size: 13.5px; color: var(--muted);
-  max-height: 120px; overflow-y: auto;
-  background: var(--bg); border: 1px solid var(--line);
-  border-radius: 10px; padding: 10px 12px;
-  margin: 12px 0 4px;
-}
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal-actions .btn { flex: 1; }
 /* v111: the Save/Delete/Share bar sticks to the bottom of the sheet */
@@ -1436,3 +1429,18 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ================= v130: modal description + page tracker ================= */
+.m-desc { margin: 8px 0 4px; font-size: 13.5px; color: var(--muted); }
+.m-desc p {
+  margin: 0; white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m-desc.open p { display: block; -webkit-line-clamp: unset; }
+.m-desc .taplink { margin-top: 4px; font-size: 13px; }
+.pq-manual { display: flex; gap: 8px; margin: 10px 0; }
+.pq-manual .text-input { flex: 1; min-width: 0; }
+.pq-manual .btn { flex: none; }
+.stepper-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stepper-row .step { min-height: 44px; font-size: 15px; }

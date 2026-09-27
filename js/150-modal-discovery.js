@@ -625,7 +625,20 @@ function renderDetailModal(b, viaBook) {
     '<button class="chip' + (draft.axes.includes(a.key) ? ' active' : '') + '" data-axchip="' + a.key + '">' +
     icon(a.icon || 'pepper') + ' ' + a.label + '</button>').join('');
 
-  // Quick page tracker for books being read: steppers save immediately.
+  // Quick page tracker for books being read: steppers + manual entry save
+  // immediately — no need to dig into Details or hit Save.
+  const applyProgress = (next) => {
+    const total = draft.pageCount || 0;
+    const oldP = draft.progress || 0;
+    draft.progress = total ? Math.max(0, Math.min(total, next)) : Math.max(0, next);
+    logPages(b, oldP, draft.progress);
+    draft.log = b.log; // logPages may have created the array on b
+    b.progress = draft.progress; // immediate save — no need to hit Save
+    saveLibrary();
+    const inp = document.getElementById('f-progress');
+    if (inp) inp.value = draft.progress;
+    renderProgressSection();
+  };
   const progressQuickHTML = () => {
     if (draft.status !== 'reading') return '';
     const total = draft.pageCount || 0;
@@ -636,9 +649,12 @@ function renderDetailModal(b, viaBook) {
       '<p class="pq-label">' + (total
         ? 'Page <b>' + cur + '</b> of ' + total + ' · ' + pct + '%'
         : 'Page <b>' + cur + '</b> — set total pages below to see %') + '</p>' +
+      '<div class="pq-manual"><input id="pq-page" class="text-input" type="number" min="0" ' +
+      'inputmode="numeric" placeholder="Page number…" aria-label="Go to page">' +
+      '<button class="btn" id="pq-set">Set page</button></div>' +
       '<div class="stepper-row">' +
       ['−10', '−1', '+1', '+10'].map(d =>
-        '<button class="btn ghost step" data-step="' + d.replace('−', '-') + '">' + d + '</button>').join('') +
+        '<button class="btn ghost step" data-step="' + d.replace('−', '-') + '" aria-label="Adjust by ' + d + ' pages">' + d + '</button>').join('') +
       '</div></div>';
   };
   const renderProgressSection = () => {
@@ -646,19 +662,16 @@ function renderDetailModal(b, viaBook) {
     if (!el) return;
     el.innerHTML = progressQuickHTML();
     el.querySelectorAll('[data-step]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        const total = draft.pageCount || 0;
-        const oldP = draft.progress || 0;
-        const next = oldP + Number(btn.dataset.step);
-        draft.progress = total ? Math.max(0, Math.min(total, next)) : Math.max(0, next);
-        logPages(b, oldP, draft.progress);
-        draft.log = b.log; // logPages may have created the array on b
-        b.progress = draft.progress; // immediate save — no need to hit Save
-        saveLibrary();
-        const inp = document.getElementById('f-progress');
-        if (inp) inp.value = draft.progress;
-        renderProgressSection();
-      }));
+      btn.addEventListener('click', () => applyProgress((draft.progress || 0) + Number(btn.dataset.step))));
+    const setBtn = document.getElementById('pq-set');
+    const pageInp = document.getElementById('pq-page');
+    const setFromInput = () => {
+      const v = parseInt(pageInp.value, 10);
+      if (isNaN(v) || v < 0) { pageInp.focus(); return; }
+      applyProgress(v);
+    };
+    if (setBtn) setBtn.addEventListener('click', setFromInput);
+    if (pageInp) pageInp.addEventListener('keydown', e => { if (e.key === 'Enter') setFromInput(); });
   };
   refreshProgressSection = renderProgressSection;
 
@@ -674,6 +687,11 @@ function renderDetailModal(b, viaBook) {
     (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
     (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
+    // v130: description lives with the cover — clamped with a Read more toggle.
+    (b.description
+      ? '<div class="m-desc" id="m-desc"><p>' + esc(String(b.description).replace(/<[^>]*>/g, '')) + '</p>' +
+        '<button class="taplink" id="m-desc-toggle">Read more</button></div>'
+      : '') +
     '</div>' +
     '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
     // v124: priority first — progress, shelf, ratings. Everything else
@@ -691,7 +709,6 @@ function renderDetailModal(b, viaBook) {
     '<div class="field"><label>My rating</label><div class="picker" id="f-myrating">' + hearts + '</div></div>' +
 
     '<details class="m-collapsible" id="m-sec-details"><summary>' + icon('doc') + ' Details</summary>' +
-    (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
     '<div class="field"><label>Tropes (comma separated)</label>' +
     '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
     '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
@@ -899,6 +916,17 @@ function renderDetailModal(b, viaBook) {
   document.getElementById('m-x').addEventListener('click', close);
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
+  // v130: description read-more toggle — hidden when the text fits unclamped.
+  const dWrap = document.getElementById('m-desc');
+  if (dWrap) {
+    const dP = dWrap.querySelector('p');
+    const dT = document.getElementById('m-desc-toggle');
+    if (dP.scrollHeight <= dP.clientHeight + 2) dT.style.display = 'none';
+    dT.addEventListener('click', () => {
+      const open = dWrap.classList.toggle('open');
+      dT.textContent = open ? 'Show less' : 'Read more';
+    });
+  }
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
   root.querySelectorAll('[data-series]').forEach(el =>
