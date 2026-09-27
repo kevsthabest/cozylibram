@@ -152,11 +152,11 @@ function toast(msg) {
   root.appendChild(el);
   setTimeout(() => el.remove(), 2600);
 }
-function coverHTML(book, cls) {
+function coverHTML(book, cls, extra) {
   const inner = book.cover
     ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
     : icon('covers'); // v85: line-art no-cover placeholder
-  return '<div class="cover-wrap ' + (cls || '') + '">' + inner + '</div>';
+  return '<div class="cover-wrap ' + (cls || '') + '">' + inner + (extra || '') + '</div>';
 }
 function stars(n) {
   if (!n) return '';
