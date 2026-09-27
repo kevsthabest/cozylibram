@@ -599,8 +599,8 @@ function renderDetailModal(b, viaBook) {
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
 
-    '<div class="field"><label>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
-    '<div id="m-quotes"></div></div>' +
+    '<details class="m-collapsible"><summary>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></summary>' +
+    '<div id="m-quotes"></div></details>' +
 
     '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
     '<button class="btn ghost" id="m-share">' + icon('share') + ' Share</button>' +

@@ -446,6 +446,22 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal-actions .btn { flex: 1; }
+/* v111: the Save/Delete/Share bar sticks to the bottom of the sheet */
+.modal-actions {
+  position: sticky;
+  bottom: calc(-20px - env(safe-area-inset-bottom));
+  background: var(--bg2);
+  border-top: 1px solid var(--line);
+  margin: 18px -18px 0;
+  padding: 12px 18px 0;
+}
+/* v111: collapsible sections in the book modal */
+.m-collapsible { border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; }
+.m-collapsible > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-weight: 700; cursor: pointer; }
+.m-collapsible > summary::-webkit-details-marker { display: none; }
+.m-collapsible > summary::after { content: '›'; margin-left: auto; color: var(--muted); font-size: 18px; line-height: 1; transform: rotate(90deg); transition: transform .15s; }
+.m-collapsible[open] > summary::after { transform: rotate(-90deg); }
+.m-collapsible #m-quotes { padding: 2px 14px 14px; }
 .modal-close {
   position: sticky; top: 0; float: right;
   background: var(--card); border: 1px solid var(--line); color: var(--ink);
