@@ -1245,3 +1245,5 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .up-wrap { position: relative; }
 .up-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--bg); background: var(--accent, #e8a0bf); border-radius: 999px; padding: 4px 10px; margin-bottom: 6px; }
 .up-pill svg { width: 13px; height: 13px; }
+/* v114: new-release discovery */
+.rel-check-row { margin: 12px 0 4px; }
