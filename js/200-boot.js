@@ -29,8 +29,11 @@ try {
 function boot() {
   let offline = false;
   try { offline = localStorage.getItem(OFFLINE_KEY) === '1'; } catch (e) {}
-  if (!cloudConfigured() || offline) render();
-  else renderGate();
+  if (!cloudConfigured() || offline) {
+    render();
+    // No sign-in gate on this path — kick off the Hardcover auto-sweep directly.
+    setTimeout(autoEnrichSweep, 5000);
+  } else renderGate();
 }
 
 boot();

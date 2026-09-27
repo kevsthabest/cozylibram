@@ -86,6 +86,12 @@ function renderSettings() {
     'Get one at hardcover.app → Account settings → API.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
     '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
+    '<div class="field"><label>Background auto-enrich</label><div class="seg" id="hc-autoseg" style="grid-template-columns:1fr 1fr">' +
+    ['off', 'on'].map(t =>
+      '<button data-t="' + t + '" class="' + (hcAutoEnabled() === (t === 'on') ? 'active' : '') + '">' +
+      (t === 'on' ? '✨ On' : '⏸️ Off') + '</button>').join('') +
+    '</div></div>' +
+    '<p class="note">When on, unenriched books are quietly enriched from Hardcover a few seconds after the app opens — no need to tap “Enrich all books”.</p>' +
     '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
     '<p class="note">Google Books lookups share one anonymous quota that can run out. ' +
@@ -252,8 +258,8 @@ function renderSettings() {
   document.getElementById('hc-bulk').addEventListener('click', async () => {
     const btn = document.getElementById('hc-bulk');
     if (!hcToken()) { toast('Save a Hardcover token first'); return; }
-    if (btn.disabled) return;
-    btn.disabled = true;
+    if (btn.disabled || hcEnrichBusy) return;
+    btn.disabled = true; hcEnrichBusy = true;
     const targets = library.filter(b => !b.hcEnriched);
     let ok = 0;
     for (let i = 0; i < targets.length; i++) {
@@ -262,9 +268,16 @@ function renderSettings() {
       await new Promise(r => setTimeout(r, 1100)); // stay under the 60 req/min limit
     }
     saveLibrary(); render();
+    hcEnrichBusy = false;
     const st2 = hcStatus(); if (st2) st2.textContent = 'Done — ' + ok + ' of ' + targets.length + ' books enriched ✨';
     toast('Hardcover enrichment complete ✨');
   });
+  document.querySelectorAll('#hc-autoseg button').forEach(btn =>
+    btn.addEventListener('click', () => {
+      try { localStorage.setItem(HC_AUTO_KEY, btn.dataset.t === 'on' ? '1' : '0'); } catch (e) {}
+      document.querySelectorAll('#hc-autoseg button').forEach(x => x.classList.toggle('active', x === btn));
+      toast(btn.dataset.t === 'on' ? 'Background auto-enrich on ✨' : 'Background auto-enrich off ⏸️');
+    }));
   // App version + updates
   runningAppVersion().then(v => {
     const el = document.getElementById('ap-ver');

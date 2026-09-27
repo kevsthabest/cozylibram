@@ -87,6 +87,43 @@ function applyHardcoverDoc(book, doc) {
   book.hcEnriched = true;
 }
 
+// Automatic background sweep (v72): enriches books Hardcover hasn't seen yet a
+// few seconds after the app boots, so "Enrich all books" never needs a manual
+// tap. Shares the rate-limit pacing (60 req/min) and a busy flag with the
+// manual bulk run. Books Hardcover doesn't know get hcCheckedAt so misses
+// aren't re-hammered every boot (retried after 7 days); the manual button
+// always retries everything.
+let hcEnrichBusy = false;
+const HC_AUTO_KEY = 'spicyshelves.hc_auto';
+function hcAutoEnabled() {
+  try { return localStorage.getItem(HC_AUTO_KEY) !== '0'; } catch (e) { return true; }
+}
+function hcSweepTargets() {
+  const weekAgo = Date.now() - 7 * 86400000;
+  return library.filter(b => !b.hcEnriched && !(b.hcCheckedAt > weekAgo));
+}
+async function autoEnrichSweep() {
+  if (hcEnrichBusy || !hcToken() || !hcAutoEnabled()) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  const targets = hcSweepTargets();
+  if (!targets.length) return;
+  hcEnrichBusy = true;
+  let ok = 0;
+  try {
+    for (const b of targets) {
+      let hit = false;
+      try { hit = await enrichHardcover(b); } catch (e) { hit = false; }
+      if (hit) ok++; else b.hcCheckedAt = Date.now();
+      saveLibrary();
+      await new Promise(r => setTimeout(r, 1100));
+    }
+  } finally { hcEnrichBusy = false; }
+  if (ok > 0) {
+    if (!editingId) render();
+    toast('✨ Auto-enriched ' + ok + ' book' + (ok === 1 ? '' : 's') + ' from Hardcover');
+  }
+}
+
 // Display-only Hardcover sections for the detail modal (series, moods, warnings).
 function hcDetailHTML(b) {
   let h = '';

@@ -129,6 +129,8 @@ async function enterApp(user) {
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   await cloudFirstSync();
+  // Library is settled now — let the Hardcover auto-sweep backfill the rest.
+  setTimeout(autoEnrichSweep, 5000);
 }
 
 function leaveApp() {
