@@ -676,9 +676,37 @@ function renderDetailModal(b, viaBook) {
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
     '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
-    (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
-    '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
+    // v124: priority first — progress, shelf, ratings. Everything else
+    // collapses into labeled sections (simple by default, powerful when needed).
     '<div id="m-progress"></div>' +
+
+    '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
+    '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
+    '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
+    '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
+
+    '<div class="field"><label>Ratings</label>' +
+    '<div class="chips" id="f-axes">' + axChipsHTML + '</div>' +
+    '<div id="f-axrows">' + axRowsHTML() + '</div></div>' +
+    '<div class="field"><label>My rating</label><div class="picker" id="f-myrating">' + hearts + '</div></div>' +
+
+    '<details class="m-collapsible" id="m-sec-details"><summary>' + icon('doc') + ' Details</summary>' +
+    (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
+    '<div class="field"><label>Tropes (comma separated)</label>' +
+    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
+    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
+    '<div class="field"><label>Total pages</label>' +
+    '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
+    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
+    '<div class="field"><label>Current page</label>' +
+    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
+    '<div class="field"><label>' + icon('calendar') + ' Release date</label>' +
+    '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
+    '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
+    '</details>' +
+
+    '<details class="m-collapsible" id="m-sec-discovery"><summary>' + icon('sparkles') + ' Series & Discovery</summary>' +
+    '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
       const sims = similarBooks(b, 6);
@@ -690,43 +718,14 @@ function renderDetailModal(b, viaBook) {
                  : '<span class="sim-nocover">' + icon('covers') + '</span>') +
         '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
     })() + '</div>' +
+    '</details>' +
 
-    '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
-    '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
-    '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
-    '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
-
+    '<details class="m-collapsible" id="m-sec-personal"><summary>' + icon('pencil') + ' Personal</summary>' +
     '<div class="field"><button class="btn ghost block" id="m-upnext">' +
     (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next') +
     '</button></div>' +
-
-    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
-    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
-    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button></div></div>' +
-
-    '<div class="field" id="m-buywrap" style="display:' + (draft.owned ? 'none' : '') + '">' +
-    '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
-    '<div class="buy-row">' + storeLinks(draft).map(l =>
-      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
-    '</div></div>' +
-
-    '<div class="field"><label>Ratings</label>' +
-    '<div class="chips" id="f-axes">' + axChipsHTML + '</div>' +
-    '<div id="f-axrows">' + axRowsHTML() + '</div></div>' +
-    '<div class="field"><label>My rating</label><div class="picker" id="f-myrating">' + hearts + '</div></div>' +
-
-    '<div class="field"><label>Tropes (comma separated)</label>' +
-    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
-    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
-
-    '<div class="field"><label>Total pages</label>' +
-    '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
-    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
-    '<div class="field"><label>Current page</label>' +
-    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
-    '<div class="field"><label>' + icon('calendar') + ' Release date</label>' +
-    '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
-    '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
+    '<div class="field"><label>My notes</label>' +
+    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
     (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
       if (!logRemoveEnabled()) return '';
       const tk = dayKey(new Date());
@@ -734,9 +733,18 @@ function renderDetailModal(b, viaBook) {
       if (!n) return '';
       return '<div class="field"><button class="btn ghost danger" id="m-rmlog">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button></div>';
     })() +
+    '</details>' +
 
-    '<div class="field"><label>My notes</label>' +
-    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
+    '<details class="m-collapsible" id="m-sec-owned"><summary>' + icon('gift') + ' Ownership</summary>' +
+    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
+    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
+    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button></div></div>' +
+    '<div class="field" id="m-buywrap" style="display:' + (draft.owned ? 'none' : '') + '">' +
+    '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
+    '<div class="buy-row">' + storeLinks(draft).map(l =>
+      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
+    '</div></div>' +
+    '</details>' +
 
     '<details class="m-collapsible"><summary>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></summary>' +
     '<div id="m-quotes"></div></details>' +
@@ -780,6 +788,8 @@ function renderDetailModal(b, viaBook) {
   const scrollToField = (fid) => {
     const el = document.getElementById(fid);
     if (!el) return;
+    let d = el.closest('details'); // v124: open collapsed ancestors first
+    while (d) { d.open = true; d = d.parentElement ? d.parentElement.closest('details') : null; }
     el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);

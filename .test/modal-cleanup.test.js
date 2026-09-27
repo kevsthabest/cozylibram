@@ -35,7 +35,8 @@ ok('Save / Share / Remove buttons intact',
 ok('action bar is sticky-bottom via CSS',
   /\.modal-actions\s*\{[^}]*position:\s*sticky[^}]*bottom:/s.test(css));
 
-const det = window.document.querySelector('details.m-collapsible');
+const det = Array.from(window.document.querySelectorAll('details.m-collapsible'))
+  .find(d => /Quotes/.test(d.querySelector('summary').textContent));
 ok('Quotes live in a collapsed details section',
   !!det && det.open === false && !!det.querySelector('#m-quotes'));
 ok('quote count shown on the collapsed header',
