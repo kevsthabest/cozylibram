@@ -18,10 +18,11 @@ const gbVol = (isbn, title, pages) => ({ items: [{ volumeInfo: {
 }}]});
 window.fetch = async (url) => {
   fetchCalls++;
-  const u = String(url);
-  if (u.includes('googleapis.com') && u.includes('isbn:9780000000001')) return jok(gbVol('9780000000001', 'Cached Book', 321));
-  if (u.includes('googleapis.com') && u.includes('isbn:9780000000002')) return jok(gbVol('9780000000002', 'Second Book', 200));
-  if (u.includes('googleapis.com')) return jok({ items: [] });
+  const u = decodeURIComponent(String(url)); // gbProxyUrl percent-encodes ':' in q=isbn:…
+  const isGb = u.includes('googleapis.com') || u.includes('/api/gbooks'); // v89: same-origin proxy
+  if (isGb && u.includes('isbn:9780000000001')) return jok(gbVol('9780000000001', 'Cached Book', 321));
+  if (isGb && u.includes('isbn:9780000000002')) return jok(gbVol('9780000000002', 'Second Book', 200));
+  if (isGb) return jok({ items: [] });
   if (u.includes('openlibrary.org')) return jok({ docs: [] }); // no rating blend
   throw new Error('unexpected fetch in metacache tests: ' + u);
 };

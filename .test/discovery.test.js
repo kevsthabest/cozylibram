@@ -26,7 +26,7 @@ const hcSeries = { data: { series: [ { id: 7, name: 'Test Saga', author: { name:
 window.fetch = async (url) => {
   const u = String(url);
   if (u.includes('openlibrary.org/search.json?author=')) return { json: async () => ({ docs: olDocs }) };
-  if (u.includes('api.hardcover.app')) {
+  if (u.includes('api.hardcover.app') || u.includes('/api/hardcover')) {
     if (window.__hcDead) return { status: 401, json: async () => ({ message: 'unauthorized' }) }; // revoked token
     return { json: async () => hcSeries };
   }
@@ -110,7 +110,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
     seriesCache.clear(); authorCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
   ok('dead token shows token-rejected reason, not empty-shelf',
-    q('#c-more').textContent.includes('rejected the token') &&
+    q('#c-more').textContent.includes('rejected the server token') &&
     !q('#c-more').textContent.includes('Nothing missing'));
   q('#c-x').click();
 
