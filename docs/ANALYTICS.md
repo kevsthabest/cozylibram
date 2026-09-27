@@ -131,7 +131,7 @@ admins only). It shows, for the selected date range:
   imports (started → completed, with failures as the leak).
 - **Import sources** (started/completed/failed + books) and **book-add
   sources**.
-- **User activity**: anonymized user IDs (first 8 chars), last active, event
+- **User activity**: truncated account IDs (first 8 characters — still linked to accounts, shown short for readability), last active, event
   count, top area — activity only, never library contents.
 
 Aggregation is client-side over a capped raw fetch (20,000 most recent

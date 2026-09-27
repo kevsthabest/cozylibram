@@ -283,7 +283,7 @@ async function renderAdminBody() {
       '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Last active</th>' +
       '<th class="num">Events</th><th>Top area</th></tr></thead>' +
       '<tbody>' + userRows + '</tbody></table></div>' +
-      '<p class="note">Users are anonymized IDs — activity only, never library contents.</p></div>';
+      '<p class="note">Users shown as truncated account IDs — activity only, never library contents.</p></div>';
   } catch (e) {
     body.innerHTML = '<div class="empty"><div class="big">' + icon('warn') + '</div>' +
       '<h2 class="serif">Couldn\u2019t load analytics</h2><p>' +

@@ -169,7 +169,7 @@ function renderSettings() {
     (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Usage analytics' +
     '<span class="chk-hint">Helps improve the app. Counts how features are used — never what books you own.</span></label>' +
     '<p class="note" style="margin-top:6px"><a href="#" id="st-analytics-what">What exactly is collected?</a></p>' +
-    '<p class="note" id="st-analytics-detail" hidden>Only anonymous usage counts — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. Never titles, authors, ISBNs, ratings, notes, shelf contents, or messages. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
+    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
 
   /* ---- About ---- */
   const htmlAbout =
