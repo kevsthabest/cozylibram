@@ -1060,6 +1060,9 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sr-count { color: var(--gold); font-weight: 700; font-size: 14px; white-space: nowrap; }
 .sr-covers { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
 .sr-covers img { width: 44px; height: 66px; object-fit: cover; border-radius: 5px; }
+/* v78: series covers tap open like the grid */
+.sr-cover { background: none; border: 0; padding: 0; cursor: pointer; line-height: 0; }
+.sr-cover:active { transform: scale(.93); }
 .sr-nocover { width: 44px; height: 66px; display: flex; align-items: center; justify-content: center;
   background: var(--card2); border-radius: 5px; font-size: 20px; }
 .sr-more { color: var(--muted); font-size: 13px; margin-left: 4px; }
