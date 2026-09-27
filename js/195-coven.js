@@ -6,6 +6,26 @@
 // by Supabase RLS — see supabase/schema.sql. The coven needs the cloud; the
 // section prompts for sign-in when offline or signed out.
 
+/* v99: the social section takes its name from the active theme. */
+const COVEN_NAMES = {
+  dark:        'Coven',       // dark romance default
+  light:       'Book Club',
+  hearthside:  'Fireside',
+  candlelight: 'Salon',
+  twilight:    'Night Court',
+  verdant:     'Grove',
+};
+function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
+function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }
+function refreshCovenNav() {
+  const btn = document.querySelector('.bottom-nav [data-nav="coven"]');
+  if (!btn) return;
+  const name = covenName();
+  btn.setAttribute('aria-label', name);
+  const label = btn.querySelector('span');
+  if (label) label.textContent = name;
+}
+
 let circFriend = null;   // { id, name } — friend whose shelves are open
 let circShelf = 'all';   // shelf filter in the friend view
 let circBooks = [];      // friend's visible books (this session's view)
@@ -65,7 +85,7 @@ async function circleSendRequest(rawCode) {
   if (them === cloudUser.id) throw new Error('That’s your own code — share it with a friend instead.');
   const existing = await circleLinkBetween(cloudUser.id, them);
   if (existing) {
-    if (existing.status === 'accepted') throw new Error('You’re already in each other’s coven.');
+    if (existing.status === 'accepted') throw new Error('You’re already in each other’s ' + covenName().toLowerCase() + '.');
     if (existing.status === 'pending') throw new Error('A request between you is already pending.');
     // declined before → clear the old row and start fresh
     const del = await sb.from('circle_links').delete()
@@ -213,17 +233,18 @@ async function circleUpgradeAvatars(scopeEl) {
 
 /* ---------- Coven section ---------- */
 function renderCoven() {
+  refreshCovenNav(); // theme may have changed since the nav was drawn
   if (!cloudUser) {
-    setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
+    setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
       '<div class="empty"><div class="big">' + icon('friends') + '</div>' +
-      '<h2 class="serif">Your coven lives in the cloud</h2>' +
+      '<h2 class="serif">Your ' + covenName().toLowerCase() + ' lives in the cloud</h2>' +
       '<p>Sign in to add friends and browse each other’s shelves.</p>' +
       '<button class="btn" id="cc-signin">Sign in</button></div>');
     document.getElementById('cc-signin').addEventListener('click', () => go('settings'));
     return;
   }
-  setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
-    '<p class="note" style="text-align:center">Loading your coven…</p>');
+  setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
+    '<p class="note" style="text-align:center">Loading your ' + covenName().toLowerCase() + '…</p>');
   Promise.all([ensureInviteCode(), circleLists(), circlePrivacy()])
     .then(([code, lists, priv]) => {
       renderCovenMain(code, lists, priv);
@@ -231,8 +252,8 @@ function renderCoven() {
       if (typeof refreshRecos === 'function') refreshRecos();
     })
     .catch(e => {
-      setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
-        '<div class="empty"><h2 class="serif">Couldn’t load your coven</h2>' +
+      setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
+        '<div class="empty"><h2 class="serif">Couldn’t load your ' + covenName().toLowerCase() + '</h2>' +
         '<p>' + esc((e && e.message) || e) + '</p>' +
         '<button class="btn" id="cc-retry">Try again</button></div>');
       document.getElementById('cc-retry').addEventListener('click', renderCoven);
@@ -245,8 +266,8 @@ function circleRowHTML(p, name, actions, sub) {
 }
 function renderCovenMain(code, lists, priv) {
   const shelves = ['tbr', 'reading', 'read', 'dnf'];
-  let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' Coven</h2></div>' +
-    '<p class="note" style="text-align:center">Your private reading coven — add people you trust,<br>browse each other’s shelves.</p>' +
+  let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
+    '<p class="note" style="text-align:center">Your private reading ' + covenName().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
     '<div class="circle-card">' +
       '<div class="field"><label>Your invite code</label>' +
         '<div class="search-row"><b class="invite-code" id="cc-code">' + esc(code || '…') + '</b>' +
@@ -267,7 +288,7 @@ function renderCovenMain(code, lists, priv) {
     lists.received.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '">Accept</button>' +
-        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>', 'wants to join your coven');
+        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>', 'wants to join your ' + covenName().toLowerCase());
     });
     lists.sent.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
@@ -277,7 +298,7 @@ function renderCovenMain(code, lists, priv) {
   }
 
   // Friends
-  html += '<h2 class="section serif">My coven' + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
+  html += '<h2 class="section serif">My ' + covenName() + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
   if (!lists.friends.length) {
     html += '<p class="note" style="text-align:center">No friends yet — share your invite code above.</p>';
   } else {
@@ -292,12 +313,12 @@ function renderCovenMain(code, lists, priv) {
 
   // Privacy
   html += '<h2 class="section serif">Privacy</h2><div class="circle-card">' +
-    '<div class="field"><label>Share my shelves with my coven</label>' +
+    '<div class="field"><label>Share my shelves with my ' + covenName().toLowerCase() + '</label>' +
     '<div class="seg" id="cc-share">' +
       '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
       '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
-    '<p class="note">When off, friends still see you in their coven, but none of your books.</p></div>' +
-    '<div class="field"><label>Hide these shelves from my coven</label>' +
+    '<p class="note">When off, friends still see you in their ' + covenName().toLowerCase() + ', but none of your books.</p></div>' +
+    '<div class="field"><label>Hide these shelves from my ' + covenName().toLowerCase() + '</label>' +
     '<div class="chips" id="cc-hide">' +
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
         STATUS[s] + '</button>').join('') +
@@ -323,7 +344,7 @@ function renderCovenMain(code, lists, priv) {
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {
-    try { await circleAnswer(b.dataset.accept, true); toast('You’re in each other’s coven now'); rerender(); }
+    try { await circleAnswer(b.dataset.accept, true); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); }
     catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
@@ -349,7 +370,7 @@ function renderCovenMain(code, lists, priv) {
     try {
       await circleSavePrivacy(share, priv.hidden);
       document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
-      toast(share ? 'Your shelves are shared with your coven' : 'Your shelves are hidden from your coven');
+      toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase() : 'Your shelves are hidden from your ' + covenName().toLowerCase());
     } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {

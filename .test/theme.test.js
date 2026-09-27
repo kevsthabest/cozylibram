@@ -31,24 +31,32 @@ ok('light theme applied', window.document.documentElement.dataset.theme === 'lig
 ok('violet accent applied', window.document.documentElement.dataset.accent === 'violet');
 ok('meta theme-color light', q('meta[name="theme-color"]').getAttribute('content') === '#faf5ec');
 
-// 3. Backup view renders the picker with correct state
+// 3. Settings renders the theme picker as a dropdown (v99: settings was getting crowded)
 window.renderSettings();
-const themeBtns = qa('#th-theme button');
+const themeSel = q('#th-theme');
+const themeOpts = qa('#th-theme option');
 const swatches = qa('#th-accent .sw');
-ok('six theme buttons', themeBtns.length === 6);
-ok('theme keys', themeBtns.map(b => b.dataset.t).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant');
-ok('theme dots have colors', themeBtns.every(b => { const d = b.querySelector('.th-dot'); return d && d.style.background.startsWith('rgb'); }));
+ok('theme picker is a select dropdown', themeSel && themeSel.tagName === 'SELECT');
+ok('six theme options', themeOpts.length === 6);
+ok('theme option values', themeOpts.map(o => o.value).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant');
+ok('options show the per-theme social name', themeOpts.every(o => o.textContent.includes('·')));
+ok('dark option names the coven', themeOpts.find(o => o.value === 'dark').textContent.includes('Coven'));
+ok('twilight option names the night court', themeOpts.find(o => o.value === 'twilight').textContent.includes('Night Court'));
+ok('light option is selected', themeOpts.find(o => o.value === 'light').hasAttribute('selected'));
 ok('eight accent swatches', swatches.length === 8);
 ok('swatch keys', swatches.map(b => b.dataset.a).join(',') === 'rose,violet,gold,teal,crimson,ember,ocean,sage');
-ok('light button active', themeBtns.find(b => b.dataset.t === 'light').classList.contains('active'));
 ok('violet swatch active', swatches.find(b => b.dataset.a === 'violet').classList.contains('active'));
 ok('swatch colors set', swatches.every(b => b.style.getPropertyValue('--sw').startsWith('#')));
 
-// 4. Clicking updates storage + live theme
-themeBtns.find(b => b.dataset.t === 'dark').click();
-ok('click dark: stored', window.localStorage.getItem('theme') === 'dark');
-ok('click dark: applied live', window.document.documentElement.dataset.theme === 'dark');
-ok('click dark: active class moved', themeBtns.find(b => b.dataset.t === 'dark').classList.contains('active'));
+// 4. Changing the dropdown updates storage + live theme
+themeSel.value = 'dark';
+themeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+ok('select dark: stored', window.localStorage.getItem('theme') === 'dark');
+ok('select dark: applied live', window.document.documentElement.dataset.theme === 'dark');
+ok('select dark: nav label follows theme', q('.bottom-nav [data-nav="coven"] span').textContent === 'Coven');
+themeSel.value = 'twilight';
+themeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+ok('select twilight: nav label becomes Night Court', q('.bottom-nav [data-nav="coven"] span').textContent === 'Night Court');
 swatches.find(b => b.dataset.a === 'teal').click();
 ok('click teal: stored', window.localStorage.getItem('accent') === 'teal');
 ok('click teal: applied live', window.document.documentElement.dataset.accent === 'teal');
@@ -72,10 +80,12 @@ window.localStorage.setItem('theme', 'hearthside');
 window.applyTheme();
 ok('hearthside applied', window.document.documentElement.dataset.theme === 'hearthside');
 ok('meta theme-color hearthside', q('meta[name="theme-color"]').getAttribute('content') === '#17100a');
-themeBtns.find(b => b.dataset.t === 'twilight').click();
-ok('click twilight: stored', window.localStorage.getItem('theme') === 'twilight');
-ok('click twilight: applied live', window.document.documentElement.dataset.theme === 'twilight');
-ok('click twilight: active class moved', themeBtns.find(b => b.dataset.t === 'twilight').classList.contains('active'));
+ok('hearthside names the fireside', q('.bottom-nav [data-nav="coven"] span').textContent === 'Fireside');
+themeSel.value = 'twilight';
+themeSel.dispatchEvent(new window.Event('change', { bubbles: true }));
+ok('select twilight: stored', window.localStorage.getItem('theme') === 'twilight');
+ok('select twilight: applied live', window.document.documentElement.dataset.theme === 'twilight');
+ok('select twilight: dropdown reflects it', themeSel.value === 'twilight');
 window.localStorage.setItem('theme', 'nope');
 ok('unknown theme falls back to dark', window.getTheme() === 'dark');
 window.applyTheme();

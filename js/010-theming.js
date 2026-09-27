@@ -34,4 +34,10 @@ function applyTheme() {
   document.documentElement.dataset.accent = a;
   const mc = document.querySelector('meta[name="theme-color"]');
   if (mc) mc.setAttribute('content', themeMeta(t));
+  // v99: the social section is named per theme — keep the nav label in sync,
+  // and re-render the coven views if that's where the user is standing.
+  try {
+    if (typeof refreshCovenNav === 'function') refreshCovenNav();
+    if ((view === 'coven' || view === 'coven-friend') && typeof render === 'function') render();
+  } catch (e) {}
 }

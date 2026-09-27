@@ -253,6 +253,26 @@ const stub = mkStub();
   ok('friend shelf shows their books', fvText.indexOf('Shared Tome') !== -1);
   ok('friend shelf does not leak my books', fvText.indexOf('Mine') === -1);
 
+  // ---- v99: per-theme naming ----
+  const names = probe('JSON.stringify({ ' +
+    'dark: covenNameFor("dark"), light: covenNameFor("light"), hearthside: covenNameFor("hearthside"), ' +
+    'candlelight: covenNameFor("candlelight"), twilight: covenNameFor("twilight"), verdant: covenNameFor("verdant"), ' +
+    'bogus: covenNameFor("nope") })');
+  const nm = JSON.parse(names);
+  ok('every theme has a social name', nm.dark === 'Coven' && nm.light === 'Book Club' &&
+    nm.hearthside === 'Fireside' && nm.candlelight === 'Salon' &&
+    nm.twilight === 'Night Court' && nm.verdant === 'Grove');
+  ok('unknown theme falls back to Coven', nm.bogus === 'Coven');
+
+  window.localStorage.setItem('theme', 'twilight');
+  useAs(A);
+  await probe('renderCoven()'); await tick(5);
+  ok('heading follows the theme', q('#view').textContent.indexOf('Night Court') !== -1);
+  ok('nav label follows the theme', window.document.querySelector('.bottom-nav [data-nav="coven"] span').textContent === 'Night Court');
+  window.localStorage.setItem('theme', 'dark');
+  await probe('renderCoven()'); await tick(5);
+  ok('heading returns to Coven on dark', q('#view h2').textContent.indexOf('Coven') !== -1);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });
