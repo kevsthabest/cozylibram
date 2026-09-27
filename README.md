@@ -22,6 +22,16 @@ Microsoft Store, then double-click `start-server.bat`. It opens the app at
 HTTPS or localhost, so on the phone over plain HTTP use the "Snap a barcode photo"
 button or title search instead.
 
+## Cloudflare Pages hosting
+
+The repo also deploys to Cloudflare Pages (no build step, root output directory):
+
+- `functions/config.js.js` serves `/config.js` from Pages environment variables
+  (`HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`).
+- `functions/cover-proxy.js` serves `/cover-proxy`, restricted to known cover hosts.
+- `_headers` keeps `/sw.js` out of edge caching so updates propagate.
+- `server.py` stays for local development; it is not used on Pages.
+
 ### Hardcover token auto-sharing (optional, home network only)
 
 The server can hand your Hardcover token to devices on your home network automatically,

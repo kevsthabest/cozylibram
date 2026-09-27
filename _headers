@@ -1,0 +1,5 @@
+# Cloudflare Pages headers.
+# The service worker must never sit behind edge caching, or clients would
+# keep the old worker (and old cache name) after a deploy.
+/sw.js
+  Cache-Control: no-store
