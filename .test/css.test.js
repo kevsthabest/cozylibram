@@ -57,5 +57,13 @@ ok('book grid uses fluid auto-fill columns',
 ok('no dead .covers rules left behind',
   !/\.covers/.test(clean));
 
+// 5. rating pickers (v103): .picker button must set an explicit theme-aware
+// color — without it, currentColor falls back to the UA default (black), so
+// selected glyphs (.picker button.on .ticon { fill: currentColor }) render as
+// black blobs on dark themes.
+const pickerBtn = clean.match(/\.picker button\s*\{[^}]*\}/);
+ok('.picker button sets a theme-aware text color',
+  !!pickerBtn && /color\s*:\s*var\(--(ink|muted|text)\)/.test(pickerBtn[0]));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
