@@ -32,6 +32,17 @@ async function hcGraphQL(query) {
     throw new Error('Network error — couldn\'t reach Hardcover. Check your connection and try again.');
   }
   if (r.status === 401 || r.status === 403) {
+    // v83: a 403 isn't always the token — Hardcover also answers 403 when the
+    // query itself uses a blocked operation. Surface the server's own message
+    // in that case instead of blaming the token.
+    let detail = '';
+    try {
+      const dj = await r.json();
+      detail = (dj && dj.errors && dj.errors[0] && dj.errors[0].message) || dj.message || '';
+    } catch (e) {}
+    if (r.status === 403 && detail && /not permitted|forbidden|blocked|ilike/i.test(detail)) {
+      throw new Error('Hardcover blocked this query (HTTP 403): ' + detail);
+    }
     throw new Error('Hardcover rejected the token (HTTP ' + r.status + '). It may be expired or revoked — ' +
       'Hardcover tokens expire every Jan 1. Grab a fresh one at hardcover.app → Account settings → API, ' +
       'then update hardcover_token in server-config.json on your home PC.');

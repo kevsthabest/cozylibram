@@ -116,30 +116,44 @@ runInWindow(`(function(){
 })();`);
 ok('empty state without series', q('#view .empty') && q('#view').textContent.includes('No series yet'));
 
-// 8. v82: Hardcover series discovery — the query must match Hardcover's
-// documented GettingBooksInSeries shape: books_count/canonical_id are filters
-// INSIDE where, not sibling arguments (the old shape failed GraphQL
-// validation, which is why discovery failed while enrichment worked).
+// 8. v83: Hardcover series discovery — no _ilike (blocked server-side, HTTP
+// 403). Exact name lookup uses _eq; on a miss the Typesense search endpoint
+// resolves the series id, then detail is fetched by id. A depth rejection
+// retries with the slim field set.
 (async () => {
   runInWindow('window.SPICY_CONFIG = { hardcoverToken: "tok" };');
   runInWindow(`window.__queries = [];
+    window.__fullDetail = { id: 7, name: 'ACOTAR', author: { name: 'Sarah J. Maas' },
+      book_series: [
+        { position: 1, details: null, book: { id: 11, title: 'A Court of Thorns and Roses',
+          image: { url: 'http://img/1.jpg' }, default_physical_edition: { isbn_13: '9781619634442' } } },
+        { position: 2, details: null, book: { id: 12, title: 'A Court of Mist and Fury',
+          image: null, default_physical_edition: null } },
+      ] };
+    window.__slimDetail = { id: 7, name: 'Deep Cut', author: { name: 'Sarah J. Maas' },
+      book_series: [ { position: 1, details: null, book: { id: 21, title: 'Deep Cut One' } } ] };
     window.hcGraphQL = async (qq) => {
       window.__queries.push(qq);
-      return { series: [{ id: 7, name: 'ACOTAR', author: { name: 'Sarah J. Maas' },
-        book_series: [
-          { position: 1, details: null, book: { id: 11, title: 'A Court of Thorns and Roses',
-            image: { url: 'http://img/1.jpg' }, default_physical_edition: { isbn_13: '9781619634442' } } },
-          { position: 2, details: null, book: { id: 12, title: 'A Court of Mist and Fury',
-            image: null, default_physical_edition: null } },
-        ] }] };
+      if (window.__depthBlock && qq.indexOf('image { url }') !== -1)
+        throw new Error('Hardcover error: query exceeds max depth');
+      if (qq.indexOf('query_type: "Series"') !== -1)
+        return { search: { results: { hits: [
+          { document: { id: 7, name: 'ACOTAR', author_name: 'Sarah J. Maas' } },
+          { document: { id: 9, name: 'ACOTAR-ish', author_name: 'Someone Else' } },
+        ] } } };
+      if (/id:\\s*\\{_eq:\\s*7\\}/.test(qq)) return { series: [window.__fullDetail] };
+      if (window.__depthBlock) return { series: [window.__slimDetail] };
+      return { series: [] }; // exact-name miss -> search fallback
     };`);
   runInWindow('fetchSeriesBooks("ACOTAR Test", "Sarah J. Maas").then(r => { window.__sr = r; });');
   await new Promise(r => setTimeout(r, 50));
-  const qq = window.__queries[0] || '';
-  ok('discovery query sent', window.__queries.length === 1);
-  ok('filters live inside where',
-    /where:\s*\{name:\s*\{_ilike:[^}]*\},\s*books_count:\s*\{_gt:\s*0\},\s*canonical_id:\s*\{_is_null:\s*true\}\}/.test(qq));
-  ok('no sibling filter args (the v82 bug)', !/}}, books_count:/.test(qq));
+  const qs = window.__queries;
+  ok('name miss -> search -> id detail (3 queries)', qs.length === 3);
+  ok('no _ilike anywhere (blocked by Hardcover)', !qs.some(qq => /_ilike|_like/.test(qq)));
+  ok('exact name lookup uses _eq', /name:\s*\{_eq:/.test(qs[0]));
+  ok('filters still live inside where',
+    /where:\s*\{name:\s*\{_eq:[^}]*\},\s*books_count:\s*\{_gt:\s*0\},\s*canonical_id:\s*\{_is_null:\s*true\}\}/.test(qs[0]));
+  ok('id detail targets the author-matched hit', /id:\s*\{_eq:\s*7\}/.test(qs[2]));
   const sr = window.__sr;
   ok('discovery returns rows', sr && sr.rows.length === 2);
   ok('row maps position/title/isbn/cover', sr.rows[0].position === 1 &&
@@ -148,7 +162,19 @@ ok('empty state without series', q('#view .empty') && q('#view').textContent.inc
   ok('row without edition data still maps', sr.rows[1].position === 2 && sr.rows[1].isbn === '');
   runInWindow('fetchSeriesBooks("ACOTAR Test", "Sarah J. Maas").then(r => { window.__sr2 = r; });');
   await new Promise(r => setTimeout(r, 30));
-  ok('discovery result cached', window.__queries.length === 1 && window.__sr2.rows.length === 2);
+  ok('discovery result cached', qs.length === 3 && window.__sr2.rows.length === 2);
+
+  // depth rejection -> slim retry, rows come back cover-less
+  runInWindow('window.__depthBlock = true; window.__queries = [];');
+  runInWindow('fetchSeriesBooks("Deep Cut", "Sarah J. Maas").then(r => { window.__sr3 = r; });');
+  await new Promise(r => setTimeout(r, 50));
+  const qd = window.__queries;
+  ok('depth error retried with slim fields', qd.length === 2 &&
+    qd[0].indexOf('image { url }') !== -1 && qd[1].indexOf('image { url }') === -1);
+  const sr3 = window.__sr3;
+  ok('slim rows map without cover/isbn', sr3 && sr3.rows.length === 1 &&
+    sr3.rows[0].title === 'Deep Cut One' && sr3.rows[0].cover === '' && sr3.rows[0].isbn === '');
+  runInWindow('window.__depthBlock = false;');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

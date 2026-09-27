@@ -58,25 +58,41 @@ async function fetchSeriesBooks(seriesName, authorName) {
   const key = String(seriesName).trim().toLowerCase();
   if (seriesCache.has(key)) return seriesCache.get(key);
   if (!hcToken()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
-  const seriesFields = 'id name author { name }' +
+  const fullFields = 'id name author { name }' +
     ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
     ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +
     ' position details book { id title image { url } default_physical_edition { isbn_13 } } }';
+  // Slim variant (no nested image/edition objects) in case the server enforces
+  // a shallower max query depth — rows come back cover-less rather than
+  // failing outright. The row mapper below is already null-safe for this.
+  const slimFields = fullFields.replace(' image { url } default_physical_edition { isbn_13 }', '');
   // v82 fix: books_count/canonical_id are *filters* — they belong inside the
   // where clause (Hardcover's documented GettingBooksInSeries query). As
-  // sibling arguments they were rejected by GraphQL validation, which is why
-  // series discovery failed while enrichment (a different query) worked.
-  const qFor = pattern => 'query { series(where: {name: {_ilike: ' + JSON.stringify(pattern) +
-    '}, books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) { ' + seriesFields + ' } }';
+  // sibling arguments they were rejected by GraphQL validation.
+  const qDetail = (whereInner, fields) => 'query { series(where: {' + whereInner +
+    ', books_count: {_gt: 0}, canonical_id: {_is_null: true}}, limit: 5) { ' + fields + ' } }';
   const noData = () => { throw new Error('Hardcover returned no data — the token may be invalid or revoked.'); };
-  let data = await hcGraphQL(qFor(seriesName));
-  if (!data) noData();
-  let list = data.series || [];
+  // Runs the detail query, retrying once with the slim field set if the
+  // server rejects the nesting depth.
+  async function detail(whereInner) {
+    try {
+      const d = await hcGraphQL(qDetail(whereInner, fullFields));
+      if (!d) noData();
+      return d.series || [];
+    } catch (e) {
+      if (!/depth/i.test(e.message || '')) throw e;
+      const d = await hcGraphQL(qDetail(whereInner, slimFields));
+      if (!d) noData();
+      return d.series || [];
+    }
+  }
+  // v83: pattern operators (_ilike and friends) are blocked server-side (HTTP
+  // 403), so the name lookup uses _eq; anything fuzzier goes through the
+  // Typesense search endpoint to resolve the series id first.
+  let list = await detail('name: {_eq: ' + JSON.stringify(seriesName) + '}');
   if (!list.length) {
-    // retry with a contains-match in case of minor name differences
-    data = await hcGraphQL(qFor('%' + seriesName + '%'));
-    if (!data) noData();
-    list = data.series || [];
+    const sid = await searchSeriesId(seriesName, authorName);
+    if (sid) list = await detail('id: {_eq: ' + sid + '}');
   }
   const want = String(authorName || '').trim().toLowerCase();
   const hit = list.find(s => want && String((s.author || {}).name || '').trim().toLowerCase() === want) || list[0];
@@ -99,6 +115,22 @@ async function fetchSeriesBooks(seriesName, authorName) {
   const out = { rows };
   seriesCache.set(key, out);
   return out;
+}
+
+// Resolve a Hardcover series id via the Typesense search endpoint, since
+// pattern operators (_ilike and friends) are blocked by the API (HTTP 403).
+// Prefers the hit whose author matches, otherwise the top hit. Returns the
+// numeric id or null.
+async function searchSeriesId(seriesName, authorName) {
+  const q = 'query { search(query: ' + JSON.stringify(seriesName) +
+    ', query_type: "Series", per_page: 5, page: 1) { results } }';
+  const data = await hcGraphQL(q);
+  if (!data) return null;
+  const docs = hcHits(data).map(h => (h && h.document) || {}).filter(d => d.id != null);
+  const want = String(authorName || '').trim().toLowerCase();
+  const hit = docs.find(d => want && String(d.author_name || '').trim().toLowerCase() === want) || docs[0];
+  const sid = hit && Number(hit.id);
+  return sid || null;
 }
 
 // Add a discovered book straight to the wishlist (she doesn't own it yet).

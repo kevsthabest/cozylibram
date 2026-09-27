@@ -38,6 +38,10 @@ async function throwsWith(setup, needle) {
   ok('403 -> token rejected',
     await throwsWith(async () => ({ status: 403, json: async () => ({}) }),
       'rejected the token (HTTP 403)'));
+  ok('403 with blocked-operation body -> query blamed, not the token',
+    await throwsWith(async () => ({ status: 403,
+        json: async () => ({ message: 'ilike and related operations are not permitted on this server' }) }),
+      'blocked this query (HTTP 403)'));
   ok('network failure -> network error',
     await throwsWith(async () => { throw new Error('fetch failed'); }, 'Network error'));
   ok('GraphQL errors surfaced',
