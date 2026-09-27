@@ -87,6 +87,9 @@ function renderSettings() {
     '<p class="note" id="cover-bulk-note">' +
     library.filter(b => !b.cover).length + ' of ' + library.length +
     ' books are missing covers.</p>' +
+    '<button class="btn ghost block" id="cover-offline">' + icon('download') + ' Cache covers for offline</button>' +
+    '<p class="note">Saves every book\'s cover on this device so the library renders fully without internet. ' +
+    'Cached covers survive app updates.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
     '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
@@ -290,6 +293,31 @@ function renderSettings() {
     toast(res.done
       ? 'Downloaded ' + res.done + ' cover' + (res.done === 1 ? '' : 's') + ' ✨'
       : 'No covers found this time');
+  });
+  // v109: pre-cache every remote cover through an <img> load so the service
+  // worker's image cache picks it up (destination === 'image').
+  let coverOfflineBusy = false;
+  document.getElementById('cover-offline').addEventListener('click', async () => {
+    const btn = document.getElementById('cover-offline');
+    if (btn.disabled || coverOfflineBusy) return;
+    const targets = library.filter(b => b.cover && /^https?:\/\//i.test(b.cover));
+    if (!targets.length) { toast('No remote covers to cache'); return; }
+    btn.disabled = true; coverOfflineBusy = true;
+    const loadImg = (url) => new Promise(res => {
+      const img = new Image();
+      img.onload = () => res(true);
+      img.onerror = () => res(false);
+      setTimeout(() => res(false), 10000);
+      img.src = url;
+    });
+    let okc = 0;
+    for (let i = 0; i < targets.length; i++) {
+      btn.textContent = 'Caching ' + (i + 1) + '/' + targets.length + '…';
+      if (await loadImg(targets[i].cover)) okc++;
+    }
+    coverOfflineBusy = false; btn.disabled = false;
+    btn.innerHTML = icon('download') + ' Cache covers for offline';
+    toast('Cached ' + okc + ' of ' + targets.length + ' covers for offline 📴');
   });
   // v81: trope suggestion source
   document.querySelectorAll('#trope-srcseg button').forEach(btn =>

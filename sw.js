@@ -1,6 +1,8 @@
 /* Cozy Libram service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'cozy-libram-v108';
+const CACHE = 'cozy-libram-v109';
+const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
+const IMG_CACHE_MAX = 600; // trim oldest-first past this many covers
 const JS = ['000-core.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-tropes.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '136-coverpicker.js', '140-collections.js', '150-modal-discovery.js', '155-authors.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '200-boot.js'].map(f => './js/' + f);
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => './img/avatars/avatar-' + id + '.webp');
 const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg'].concat(JS, AVATARS);
@@ -11,15 +13,45 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
+
+// v109: keep the image cache bounded — Cache.keys() returns insertion order,
+// so the oldest covers are evicted first.
+function trimImageCache(cache) {
+  return cache.keys().then((keys) => {
+    if (keys.length <= IMG_CACHE_MAX) return;
+    return Promise.all(keys.slice(0, keys.length - IMG_CACHE_MAX).map((k) => cache.delete(k)));
+  });
+}
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.pathname.endsWith('/config.js')) return; // never cache: varies with server config
   if (url.pathname.startsWith('/api/')) return; // never cache: live API responses
+  // v109: cover art (usually cross-origin) gets a cache-first runtime cache so
+  // the library renders offline once covers have been seen or pre-cached from
+  // Settings → Covers. Opaque cross-origin responses are storable.
+  if (e.request.destination === 'image') {
+    e.respondWith((async () => {
+      const cache = await caches.open(IMG_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && (res.ok || res.type === 'opaque')) {
+          await cache.put(e.request, res.clone());
+          trimImageCache(cache).catch(() => {});
+        }
+        return res;
+      } catch (err) {
+        return Response.error();
+      }
+    })());
+    return;
+  }
   if (url.origin === location.origin) {
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
   }
