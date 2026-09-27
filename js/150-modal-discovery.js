@@ -612,18 +612,22 @@ function renderDetailModal(b, viaBook) {
   }
   let startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
 
-  // rating-type toggle chips + per-axis line-art pickers (v84)
-  const axRowsHTML = () => draft.axes.map(k => {
+  // v131: mood ratings as segmented bars — icon + label, 5 tap segments,
+  // numeric readout, × removes the axis; unapplied axes offered as + chips.
+  const RATING_WORDS = ['Tap to rate', 'Not for me', 'Meh', 'Liked it', 'Really liked it', 'Loved it'];
+  const axRowHTML = (k) => {
     const a = axisByKey(k);
     const v = draft.ratings[k] || 0;
-    const btns = [1, 2, 3, 4, 5].map(n =>
-      '<button data-v="' + n + '" class="' + (v >= n ? 'on' : '') + '">' + icon(a.icon || 'pepper') + '</button>').join('');
-    return '<div class="axrow"><span>' + icon(a.icon || 'pepper') + ' ' + a.label + '</span>' +
-      '<div class="picker" data-ax="' + k + '">' + btns + '</div></div>';
-  }).join('');
-  const axChipsHTML = RATING_AXES.map(a =>
-    '<button class="chip' + (draft.axes.includes(a.key) ? ' active' : '') + '" data-axchip="' + a.key + '">' +
-    icon(a.icon || 'pepper') + ' ' + a.label + '</button>').join('');
+    const segs = [1, 2, 3, 4, 5].map(n =>
+      '<i data-v="' + n + '" class="' + (v >= n ? 'f' : '') + '"></i>').join('');
+    return '<div class="axrow" data-ax="' + k + '">' +
+      '<span class="axlab">' + icon(a.icon || 'pepper') + ' ' + esc(a.label) + '</span>' +
+      '<div class="segbar" role="slider" aria-label="' + esc(a.label) + ' rating" aria-valuemin="0" aria-valuemax="5" aria-valuenow="' + v + '">' + segs + '</div>' +
+      '<span class="segnum">' + (v || '–') + '</span>' +
+      '<button class="axrm" data-axrm="' + k + '" aria-label="Remove ' + esc(a.label) + ' rating">×</button></div>';
+  };
+  const axAddHTML = () => RATING_AXES.filter(a => !draft.axes.includes(a.key)).map(a =>
+    '<button class="chip" data-axadd="' + a.key + '">+ ' + esc(a.label) + '</button>').join('');
 
   // Quick page tracker for books being read: steppers + manual entry save
   // immediately — no need to dig into Details or hit Save.
@@ -685,6 +689,10 @@ function renderDetailModal(b, viaBook) {
       ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
       : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
+    // v131: your rating lives in the header — visible the moment the modal opens.
+    '<div class="hrate"><span class="hrate-label">Your rating</span>' +
+    '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
+    '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
     (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     // v130: description lives with the cover — clamped with a Read more toggle.
@@ -703,10 +711,9 @@ function renderDetailModal(b, viaBook) {
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
-    '<div class="field"><label>Ratings</label>' +
-    '<div class="chips" id="f-axes">' + axChipsHTML + '</div>' +
-    '<div id="f-axrows">' + axRowsHTML() + '</div></div>' +
-    '<div class="field"><label>My rating</label><div class="picker" id="f-myrating">' + hearts + '</div></div>' +
+    '<div class="field"><label>Mood ratings</label>' +
+    '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
+    '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
 
     '<details class="m-collapsible" id="m-sec-details"><summary>' + icon('doc') + ' Details</summary>' +
     '<div class="field"><label>Tropes (comma separated)</label>' +
@@ -827,16 +834,34 @@ function renderDetailModal(b, viaBook) {
   });
 
   // wire controls (work on the draft copy until Save)
+  const renderAxSection = () => {
+    document.getElementById('f-axrows').innerHTML = draft.axes.map(axRowHTML).join('');
+    document.getElementById('f-axadd').innerHTML = axAddHTML();
+    wireAxRows();
+  };
   const wireAxRows = () => {
     root.querySelectorAll('#f-axrows [data-ax]').forEach(row => {
       const k = row.dataset.ax;
-      row.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-        const v = Number(btn.dataset.v);
+      const bar = row.querySelector('.segbar');
+      bar.querySelectorAll('i').forEach(seg => seg.addEventListener('click', () => {
+        const v = Number(seg.dataset.v);
         draft.ratings[k] = (draft.ratings[k] === v) ? 0 : v; // tap again to clear
-        row.querySelectorAll('button').forEach((x, i) =>
-          x.classList.toggle('on', i < draft.ratings[k]));
+        const nv = draft.ratings[k];
+        bar.querySelectorAll('i').forEach((x, i) => x.classList.toggle('f', i < nv));
+        bar.setAttribute('aria-valuenow', nv);
+        row.querySelector('.segnum').textContent = nv || '–';
       }));
+      const rm = row.querySelector('[data-axrm]');
+      if (rm) rm.addEventListener('click', () => {
+        draft.axes = draft.axes.filter(x => x !== k);
+        delete draft.ratings[k];
+        renderAxSection();
+      });
     });
+    root.querySelectorAll('#f-axadd [data-axadd]').forEach(c => c.addEventListener('click', () => {
+      draft.axes = draft.axes.concat(c.dataset.axadd);
+      renderAxSection();
+    }));
   };
 
   root.querySelectorAll('#f-status button').forEach(btn =>
@@ -887,23 +912,14 @@ function renderDetailModal(b, viaBook) {
         draft[key] = (draft[key] === v) ? 0 : v; // tap again to clear
         root.querySelectorAll(sel + ' button').forEach((x, i) =>
           x.classList.toggle('on', i < draft[key]));
+        if (key === 'myRating') { // v131: live word label in the header
+          const w = document.getElementById('f-myrating-word');
+          if (w) w.textContent = RATING_WORDS[draft[key] || 0];
+        }
       }));
   };
   wirePicker('#f-myrating', 'myRating');
   wireAxRows();
-
-  root.querySelectorAll('#f-axes [data-axchip]').forEach(c => c.addEventListener('click', () => {
-    const k = c.dataset.axchip;
-    if (draft.axes.includes(k)) {
-      draft.axes = draft.axes.filter(x => x !== k);
-      delete draft.ratings[k];
-    } else {
-      draft.axes = draft.axes.concat(k);
-    }
-    c.classList.toggle('active');
-    document.getElementById('f-axrows').innerHTML = axRowsHTML();
-    wireAxRows();
-  }));
 
   const escClose = e => { if (e.key === 'Escape') close(); }; // v129: escape closes
   const close = () => {

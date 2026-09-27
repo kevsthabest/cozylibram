@@ -67,8 +67,8 @@ ok('no emoji left in shelf buttons',
   !['📖','📘','✅','🚫'].some(e => q('#f-status').textContent.includes(e)));
 ok('up next button uses line icon', !!q('#m-upnext .ticon'));
 ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 2);
-ok('axis chips use line icons', qa('#f-axes .ticon').length === window.__axesCount);
-ok('axis pickers use line icons', qa('#f-axrows .picker .ticon').length === 5 * qa('#f-axrows .axrow').length);
+ok('axis rows use line icons', qa('#f-axrows .axlab .ticon').length === qa('#f-axrows .axrow').length && qa('#f-axrows .axrow').length > 0);
+ok('header rating hearts use line icons', qa('#f-myrating .ticon').length === 5);
 ok('favorite button uses line icon', !!q('#f-fav .ticon'));
 ok('change-cover button uses line icon', !!q('#m-changecover .ticon'));
 ok('previously-read uses line icon', !!q('#f-prevwrap .ticon'));

@@ -857,14 +857,26 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .winner-actions { display: flex; gap: 8px; margin-top: 14px; }
 .winner-actions .btn { flex: 1; padding: 12px 6px; font-size: 14px; }
 
-/* genre-aware rating rows in the book editor */
-#f-axes { margin-bottom: 4px; }
-.axrow {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-top: 10px;
+/* v131: header rating + segmented mood bars in the book modal */
+.hrate { margin-top: 10px; }
+.hrate-label {
+  display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--faint); font-weight: 700; margin-bottom: 4px;
 }
-.axrow > span { font-size: 14px; font-weight: 600; }
-.axrow .picker { margin: 0; }
+.hrate-row { display: flex; align-items: center; gap: 10px; }
+.hrate .picker button { padding: 7px 9px; font-size: 19px; }
+.rate-word { font-size: 13.5px; font-weight: 700; color: var(--accent); }
+.axrow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.axrow:last-child { border-bottom: none; }
+.axrow .axlab { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; min-width: 108px; }
+.segbar { display: flex; gap: 5px; flex: 1; cursor: pointer; }
+.segbar i { height: 24px; flex: 1; border-radius: 6px; background: var(--bg2); border: 1px solid var(--line); font-style: normal; }
+.segbar i.f { background: var(--accent); border-color: var(--accent); }
+.segnum { font-size: 13px; font-weight: 700; color: var(--muted); min-width: 16px; text-align: right; }
+.axrm { background: none; border: none; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; }
+.axrm:hover { color: var(--danger); }
+#f-axadd { margin-top: 10px; }
+#f-axadd:empty { display: none; }
 
 /* ---------- Hardcover: series / moods / content warnings ---------- */
 .series-line { color: var(--gold); margin: 8px 0 0; font-size: 0.95em; font-weight: 600; }
