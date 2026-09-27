@@ -117,7 +117,28 @@ flush once online. The app works identically offline — analytics failure
 never blocks adding/editing books, statuses, imports, sync, auth, or offline
 use. (Covered by tests: offline flush, failed-upload requeue + cooldown.)
 
-## Interpreting the data (dashboard guide, v119)
+## The Libram Observatory (v119)
+
+The dashboard lives in the app at `/#admin` (account menu → **Observatory**,
+admins only). It shows, for the selected date range:
+
+- **Overview**: active users, new signups, books added/completed/rated,
+  favorites, discovery uses, total events.
+- **Feature usage**: per-event users, uses, and adoption % (users ÷ active
+  users in the range).
+- **Funnels**: roulette (opened → spun → pick opened → pick started),
+  onboarding (account → library → first book → first rating → returned),
+  imports (started → completed, with failures as the leak).
+- **Import sources** (started/completed/failed + books) and **book-add
+  sources**.
+- **User activity**: anonymized user IDs (first 8 chars), last active, event
+  count, top area — activity only, never library contents.
+
+Aggregation is client-side over a capped raw fetch (20,000 most recent
+events). `aggregateAnalytics()` is pure and fully tested in
+`.test/admin.test.js`.
+
+## Interpreting the data
 
 - **Active users**: distinct `user_id`s with `session_started` in the window.
 - **Feature adoption**: distinct users per `event_name` ÷ total active users.

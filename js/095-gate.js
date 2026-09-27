@@ -174,6 +174,17 @@ async function enterApp(user) {
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   await cloudFirstSync();
+  // v119: resolve admin status for the Observatory menu entry, then honor
+  // #admin deep links (e.g. cozylibram.pages.dev/#admin).
+  refreshAdminStatus().then(() => {
+    renderTopbar();
+    try {
+      if (location.hash === '#admin') {
+        history.replaceState(null, '', location.pathname + location.search);
+        go('admin');
+      }
+    } catch (e) {}
+  });
   // Library is settled now — let the Hardcover auto-sweep backfill the rest.
   setTimeout(autoEnrichSweep, 5000);
 }
@@ -181,6 +192,8 @@ async function enterApp(user) {
 function leaveApp() {
   gateEnteredUid = null;
   setLocalUser(null);
+  isAppAdmin = false; // v119: drop admin state + cached analytics on sign-out
+  adminRowsCache = {}; adminAggCache = {};
   renderTopbar();
   renderGate();
 }

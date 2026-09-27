@@ -201,11 +201,19 @@ function renderTopbar() {
   closeMenu();
 }
 function menuItems() {
-  if (signedIn()) return [
-    { id: 'profile', icon: 'user', label: 'Profile' },
-    { id: 'settings', icon: 'gear', label: 'Settings' },
-    { id: 'logout', icon: 'logout', label: 'Logout' },
-  ];
+  if (signedIn()) {
+    const items = [
+      { id: 'profile', icon: 'user', label: 'Profile' },
+      { id: 'settings', icon: 'gear', label: 'Settings' },
+    ];
+    // v119: the Observatory menu entry appears only for admins (resolved
+    // per-session by refreshAdminStatus); the view itself re-gates anyway.
+    if (typeof isAppAdmin !== 'undefined' && isAppAdmin) {
+      items.push({ id: 'observatory', icon: 'chart', label: 'Observatory' });
+    }
+    items.push({ id: 'logout', icon: 'logout', label: 'Logout' });
+    return items;
+  }
   const items = [{ id: 'settings', icon: 'gear', label: 'Settings' }];
   // The gate itself is the sign-in screen — no need for a redundant item there.
   if (cloudConfigured() && !document.getElementById('gate-signin')) {
@@ -232,6 +240,7 @@ function menuAction(id) {
   closeMenu();
   if (id === 'profile') go('profile');
   else if (id === 'settings') go('settings');
+  else if (id === 'observatory') go('admin'); // v119: admin-gated in renderAdmin()
   else if (id === 'signin') {
     try { localStorage.removeItem(OFFLINE_KEY); } catch (e) {}
     renderGate();

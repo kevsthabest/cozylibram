@@ -18,6 +18,7 @@ function render() {
   else if (view === 'verify') renderVerify();
   else if (view === 'coven') renderCoven();
   else if (view === 'coven-friend') renderCovenFriend();
+  else if (view === 'admin') renderAdmin();
 }
 
 applyTheme();

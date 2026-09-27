@@ -75,7 +75,7 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   // 7. Every event carries the app version.
   runInWindow(`track('book_opened')`);
   const ver = runInWindow(`JSON.parse(localStorage.getItem('${qkey('u1')}') || '[]')[0].app_version`);
-  ok('event stamped with APP_VERSION', ver === 'v118' && ver === runInWindow(`APP_VERSION`));
+  ok('event stamped with APP_VERSION', ver === runInWindow(`APP_VERSION`) && typeof ver === 'string');
 
   // 8. Dedupe: same key inside the window is dropped.
   runInWindow(`localStorage.clear(); analyticsQueue = null;`);

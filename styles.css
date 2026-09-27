@@ -1257,3 +1257,22 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .up-pill svg { width: 13px; height: 13px; }
 /* v114: new-release discovery */
 .rel-check-row { margin: 12px 0 4px; }
+
+/* ================= v119: Libram Observatory ================= */
+.ob-ranges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 14px; }
+.ob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ob-card { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+.ob-card h3 { margin: 0 0 10px; font-size: 17px; }
+.ob-stat { text-align: center; margin-bottom: 0; }
+.ob-stat-val { font-size: 26px; font-weight: 800; color: var(--gold, #e8b4a0); }
+.ob-stat-label { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+.ob-scroll { overflow-x: auto; }
+.ob-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ob-table th, .ob-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.08)); }
+.ob-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.65; }
+.ob-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ob-table code { font-size: 12px; }
+.ob-funnel-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+.ob-funnel-label { flex: 0 0 150px; }
+.ob-funnel-barwrap { flex: 1; height: 10px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+.ob-funnel-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--accent, #e8a0bf), var(--gold, #e8b4a0)); border-radius: 6px; }
