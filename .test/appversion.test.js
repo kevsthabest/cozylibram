@@ -45,5 +45,12 @@ const missing = htmlScripts.filter(s => !precached.includes(s));
 ok('all index.html scripts are precached in sw.js', missing.length === 0);
 if (missing.length) console.log('  missing from sw.js: ' + missing.join(', '));
 
+// Reverse check (v106): every precached script must exist on disk. A stale
+// entry 404s, cache.addAll rejects, and the service worker never installs —
+// the device silently stays on the old version.
+const stale = precached.filter(f => !fs.existsSync('/home/hatch/workspace/booktok/js/' + f));
+ok('every precached script exists on disk', stale.length === 0);
+if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
