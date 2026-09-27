@@ -106,6 +106,39 @@ async function search(q) {
   ok('sparse doc: title kept', s.title === 'Mystery Book');
   ok('sparse doc: safe defaults', s.authors.length === 0 && s.isbn === '' && s.cover === '' && s.id);
 
+  // --- v138: Open Library junk must not block the Hardcover fallback ---
+  runInWindow('window.SPICY_CONFIG = { hardcover: true };');
+  gbItems = [];
+  // The real OL full-text response for "run little killer": 34 junk hits.
+  olDocs = [
+    { key: '/works/OL1W', title: 'Run for your life', author_name: ['James Patterson', 'Michael Ledwidge'] },
+    { key: '/works/OL2W', title: 'The little book of safe money', author_name: ['Jason Zweig'] },
+    { key: '/works/OL3W', title: 'Tick Tock', author_name: ['James Patterson'] }
+  ];
+  hcDocs = [HC_DOC]; hcCalls = 0;
+  ({ res, err } = await search('run little killer darma day'));
+  ok('no error on OL junk', err === null);
+  ok('OL junk filtered out, hardcover finds the book',
+    Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+  ok('hardcover was asked after OL junk', hcCalls === 1);
+
+  // A genuinely relevant OL hit still wins without bothering Hardcover.
+  olDocs = [{ key: '/works/OL9W', title: 'Run Little Killer', author_name: ['Darma Day'], first_publish_year: 2025 }];
+  hcCalls = 0;
+  ({ res } = await search('run little killer'));
+  ok('relevant OL hit returned', Array.isArray(res) && res.length === 1 && res[0].title === 'Run Little Killer');
+  ok('hardcover skipped on relevant OL hit', hcCalls === 0);
+
+  // Relevance helper edge cases.
+  runInWindow('window.__t1 = queryTokens("Run Little Killer");');
+  ok('tokens drop short words', JSON.stringify(window.__t1) === '["run","little","killer"]');
+  runInWindow('window.__t2 = queryTokens("the art of war");');
+  ok('tokens drop stopwords', JSON.stringify(window.__t2) === '["art","war"]');
+  runInWindow('window.__m = resultMatchesQuery({ title: "Run for your life", authors: ["James Patterson"] }, ["run","little","killer"]);');
+  ok('one-word overlap is not a match', window.__m === false);
+  runInWindow('window.__m2 = resultMatchesQuery({ title: "Little Killer", authors: ["Darma Day"] }, ["run","little","killer"]);');
+  ok('two-word overlap is a match', window.__m2 === true);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

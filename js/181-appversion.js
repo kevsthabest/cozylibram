@@ -8,7 +8,7 @@
 
 /* The version stamped onto every analytics event (v118+). Paired with the
    service-worker cache name by appversion.test.js — bump BOTH on release. */
-const APP_VERSION = 'v137';
+const APP_VERSION = 'v138';
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
 function parseSwVersion(text) {

@@ -71,11 +71,29 @@ async function searchBooks(q) {
   const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
     '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
   const d = await r.json();
-  const ol = (d.docs || []).map(olDocToBook);
+  // v138: Open Library's full-text search returns junk for multi-word queries
+  // ("run little killer" → James Patterson novels). Only its relevant hits
+  // count — otherwise the search falls through to Hardcover instead of
+  // showing a page of wrong books.
+  const toks = queryTokens(q);
+  const ol = (d.docs || []).map(olDocToBook).filter(b => resultMatchesQuery(b, toks));
   if (ol.length) return ol;
   // v137: indie titles (KU romance especially) are often in neither catalog —
   // ask Hardcover before giving up.
   return hcSearchBooks(q);
+}
+
+// Significant words in the query (v138): 3+ chars, minus stopwords.
+function queryTokens(q) {
+  const stop = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'by', 'in', 'on', 'to', 'for', 'with']);
+  return String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !stop.has(w));
+}
+// At least half the query's significant words must appear in the title/author.
+function resultMatchesQuery(b, toks) {
+  if (!toks.length) return true;
+  const hay = ((b.title || '') + ' ' + (b.authors || []).join(' ')).toLowerCase();
+  const hits = toks.filter(t => hay.indexOf(t) !== -1).length;
+  return hits / toks.length >= 0.5;
 }
 
 // Map an Open Library search doc to our book shape (used when Google Books is
