@@ -32,23 +32,16 @@ function bookCard(b, i) {
     '<div class="badges">' + badges.join('') + '</div>' + progHTML + '</div></div>';
 }
 
-function coverTile(b, i) {
-  const short = { tbr: 'TBR', reading: 'Reading', read: 'Read', dnf: 'DNF' };
+/* Bookmory-style grid tile (v57): tall rounded card, cover up top in a fixed
+   2:3 box, title below. The cover img is absolutely positioned so it can never
+   stretch the box, no matter the photo's real dimensions. */
+function bookTile(b, i) {
   const inner = b.cover
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-    : '<span class="tile-fallback">📕</span>';
+    : '<span class="bt-fallback">📕</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
-  const pk = primaryAxisKey(b);
-  const pv = (b.ratings || {})[pk] || 0;
-  const ratingOverlay = pv > 0
-    ? '<span class="tile-spice">' + axisByKey(pk).emoji + pv + '</span>' : '';
-  return '<div class="cover-tile' + anim + '" data-id="' + b.id + '">' +
-    '<div class="tile-cover">' + inner +
-    '<span class="tile-status s-' + b.status + '">' + short[b.status] + '</span>' +
-    (b.owned ? '' : '<span class="tile-buy" title="To buy">🛒</span>') +
-    ratingOverlay +
-    '</div>' +
-    '<div class="tile-title">' + esc(b.title) + '</div>' +
-    '<div class="tile-author">' + esc(b.authors.join(', ') || 'Unknown author') + '</div></div>';
+  return '<div class="book-tile' + anim + '" data-id="' + b.id + '">' +
+    '<div class="bt-cover">' + inner + '</div>' +
+    '<div class="bt-title">' + esc(b.title) + '</div></div>';
 }
 

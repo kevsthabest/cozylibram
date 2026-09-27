@@ -6,15 +6,15 @@ let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
 
 function makeWindow(ratios) {
-  // ratios: array of h/w for each fake .tile-cover
+  // ratios: array of h/w for each fake .bt-cover
   const dom = new JSDOM('<div id="view"></div>',
     { url: 'http://localhost:8000/', runScripts: 'dangerously' });
   const window = dom.window;
   require('./harness').loadApp(window);
   // Inject tiles AFTER loadApp: boot() renders on load and clears #view.
   window.document.getElementById('view').innerHTML =
-    ratios.map(() => '<div class="tile-cover"></div>').join('');
-  const tiles = window.document.querySelectorAll('#view .tile-cover');
+    ratios.map(() => '<div class="bt-cover"></div>').join('');
+  const tiles = window.document.querySelectorAll('#view .bt-cover');
   tiles.forEach((t, i) => {
     const w = 120, h = 120 * ratios[i];
     t.getBoundingClientRect = () => ({ width: w, height: h, top: 0, left: 0, right: w, bottom: h });
@@ -31,7 +31,7 @@ ok('tileGuard is defined', (() => {
 (() => {
   const w = makeWindow([1.5, 1.5, 1.5]);
   w.tileGuard();
-  const tiles = w.document.querySelectorAll('#view .tile-cover');
+  const tiles = w.document.querySelectorAll('#view .bt-cover');
   const untouched = Array.from(tiles).every(t => t.style.height === '');
   ok('no-op when tiles are already 2:3', untouched && w.tileGuardState === 'css-ok');
 })();
@@ -40,7 +40,7 @@ ok('tileGuard is defined', (() => {
 (() => {
   const w = makeWindow([2.1, 1.5, 0.9]);
   w.tileGuard();
-  const tiles = w.document.querySelectorAll('#view .tile-cover');
+  const tiles = w.document.querySelectorAll('#view .bt-cover');
   const fixed = Array.from(tiles).every(t => t.style.height === '180px'); // 120 * 1.5
   ok('forces 2:3 inline height when CSS is stale', fixed && w.tileGuardState === 'fixed');
 })();
@@ -58,8 +58,9 @@ ok('tileGuard is defined', (() => {
   const w = makeWindow([1.5]);
   const f = w.cssHasTileFix;
   ok('cssHasTileFix defined', typeof f === 'function');
-  ok('detects the v55 marker', f('/* v55-tile */ .x{}') === true);
-  ok('rejects old CSS', f('.cover-tile .tile-cover { aspect-ratio: 2/3; }') === false);
+  ok('detects the v57 marker', f('/* v57-tile */ .x{}') === true);
+  ok('detects the v55 marker too', f('/* v55-tile */ .x{}') === true);
+  ok('rejects old CSS', f('.book-tile .bt-cover { aspect-ratio: 2/3; }') === false);
   ok('handles empty', f('') === false && f(null) === false);
 })();
 

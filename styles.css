@@ -475,59 +475,40 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 }
 .rise { animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both; animation-delay: var(--d, 0ms); }
 
-/* cover grid */
-.covers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 10px; }
-.cover-tile { cursor: pointer; }
-.cover-tile .tile-cover {
-  /* v55-tile: single-mechanism 2:3 box. aspect-ratio alone sizes the box;
-     the image inside is absolutely positioned and can never change it. */
+/* Bookmory-style cover grid (v57): tall rounded dark cards, cover up top in a
+   fixed 2:3 box, title below. The box is sized by aspect-ratio alone and the
+   image is absolutely positioned, so tall phone photos can never stretch it. */
+.book-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
+.book-tile {
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px 10px 12px;
+  transition: transform 0.15s ease;
+}
+.book-tile:active { transform: scale(0.97); }
+.book-tile .bt-cover {
+  /* v57-tile: single-mechanism 2:3 box */
   position: relative;
   width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: linear-gradient(140deg, var(--card2), var(--bg2));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
-  transition: transform 0.15s ease;
 }
-.cover-tile:active .tile-cover { transform: scale(0.96); }
-/* The cover image is absolutely positioned so its natural dimensions can
-   never stretch the tile: the 2:3 box comes from the forced padding alone,
-   even for tall phone photos of physical books. */
-.cover-tile .tile-cover img {
+.book-tile .bt-cover img {
   position: absolute; inset: 0;
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
-/* No-cover fallback emoji, centered over the forced box. */
-.cover-tile .tile-fallback {
+.book-tile .bt-fallback {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 30px;
 }
-.tile-status {
-  position: absolute; top: 6px; left: 6px;
-  font-size: 10px; font-weight: 600;
-  padding: 3px 8px; border-radius: 999px;
-  background: rgba(10, 6, 14, 0.82);
-  border: 1px solid var(--line); color: var(--muted);
-}
-.tile-status.s-tbr { border-color: var(--gold); color: var(--gold); }
-.tile-status.s-reading { border-color: #6aa8e5; color: #6aa8e5; }
-.tile-status.s-read { border-color: var(--ok); color: var(--ok); }
-.tile-status.s-dnf { border-color: var(--danger); color: var(--danger); }
-.tile-spice {
-  position: absolute; bottom: 6px; right: 6px;
-  font-size: 11px; background: rgba(10, 6, 14, 0.82);
-  padding: 3px 8px; border-radius: 999px;
-  border: 1px solid var(--accent);
-}
-.cover-tile .tile-title {
-  font-size: 12px; margin: 7px 2px 0; line-height: 1.32;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; color: var(--ink); font-weight: 500;
-}
-.cover-tile .tile-author {
-  font-size: 11px; color: var(--faint); margin: 2px;
+.book-tile .bt-title {
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+  margin: 10px 2px 0; line-height: 1.3;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 

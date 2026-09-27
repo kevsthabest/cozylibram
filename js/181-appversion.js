@@ -25,7 +25,7 @@ async function runningAppVersion() {
 
 /* v55 marker: present only in the fixed grid CSS. Checked by cssGridStatus(). */
 function cssHasTileFix(cssText) {
-  return /v55-tile/.test(cssText || '');
+  return /v5[57]-tile/.test(cssText || '');
 }
 
 /* Cached CSS: fetched through the controlling service worker (cache-first),
