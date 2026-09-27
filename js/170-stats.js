@@ -358,6 +358,104 @@ function patternsHTML() {
     '</div>';
 }
 
+/* ---- genre evolution (v69): how her genre mix shifts over time, with
+   year / quarter / month views. Stacked shares per period from finish
+   dates; one deterministic observation, everything gated on enough data. ---- */
+function genreEvoHTML() {
+  const gran = genreGran;
+  const keyOf = d => gran === 'year' ? String(d.getFullYear())
+    : gran === 'quarter' ? d.getFullYear() + '-Q' + (Math.floor(d.getMonth() / 3) + 1)
+    : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const labelOf = k => gran === 'year' ? k
+    : gran === 'quarter' ? 'Q' + k.slice(6) + ' \u2019' + k.slice(2, 4)
+    : MONTHS[parseInt(k.slice(5), 10) - 1].slice(0, 3) + ' \u2019' + k.slice(2, 4);
+  const N = gran === 'year' ? 6 : gran === 'quarter' ? 8 : 12;
+  const keys = [];
+  const c = new Date(); c.setDate(1); c.setHours(12, 0, 0, 0);
+  for (let i = 0; i < N; i++) {
+    keys.unshift(keyOf(c));
+    if (gran === 'year') c.setFullYear(c.getFullYear() - 1);
+    else if (gran === 'quarter') c.setMonth(c.getMonth() - 3);
+    else c.setMonth(c.getMonth() - 1);
+  }
+  const per = {};
+  keys.forEach(k => { per[k] = []; });
+  const now = Date.now();
+  library.forEach(b => {
+    if (b.status !== 'read' || !b.dateFinished) return;
+    const t = new Date(b.dateFinished).getTime();
+    if (!t || t > now) return;
+    const k = keyOf(new Date(b.dateFinished));
+    if (per[k]) per[k].push(b);
+  });
+  const nonEmpty = keys.filter(k => per[k].length > 0);
+  const granBtns = [['year', '📅 Year'], ['quarter', '🗓️ Quarter'], ['month', '📆 Month']]
+    .map(([g, l]) => '<button data-g="' + g + '" class="' + (gran === g ? 'active' : '') + '">' + l + '</button>').join('');
+  const head = '<div class="stat-sub">📊 Genre evolution</div>' +
+    '<div class="seg" id="evo-gran" style="margin-bottom:10px">' + granBtns + '</div>';
+  if (nonEmpty.length < 2)
+    return head + '<p class="note">Finish books across at least two ' +
+      (gran === 'year' ? 'years' : gran === 'quarter' ? 'quarters' : 'months') +
+      ' and your genre evolution will appear here.</p>';
+
+  // top genres across the window (primary genre per book); the rest -> Other
+  const totals = {};
+  nonEmpty.forEach(k => per[k].forEach(b => {
+    const g = bookGenres(b)[0] || 'Other';
+    totals[g] = (totals[g] || 0) + 1;
+  }));
+  const topG = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+  const PAL = ['#e5648e', '#6aa8e5', '#e5b86a', '#8fd18f', '#b48ce5'];
+  const colorOf = g => {
+    const i = topG.indexOf(g);
+    return i >= 0 ? PAL[i] : '#5a5a6e'; // Other
+  };
+  const catOf = g => topG.includes(g) ? g : 'Other';
+
+  const rows = nonEmpty.map(k => {
+    const bs = per[k];
+    const counts = {};
+    bs.forEach(b => { const g = catOf(bookGenres(b)[0] || 'Other'); counts[g] = (counts[g] || 0) + 1; });
+    const order = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    const segs = order.map(g =>
+      '<div class="evo-seg" title="' + esc(g) + ': ' + counts[g] + '" style="width:' +
+      (counts[g] / bs.length * 100).toFixed(1) + '%;background:' + colorOf(g) + '"></div>').join('');
+    return '<div class="evo-row"><span class="evo-lbl">' + labelOf(k) + '</span>' +
+      '<div class="evo-bar">' + segs + '</div>' +
+      '<span class="evo-n">' + bs.length + '</span></div>';
+  }).join('');
+  const legend = topG.map(g =>
+    '<span><span class="evo-dot" style="background:' + colorOf(g) + '"></span>' + esc(g) + '</span>').join('') +
+    (Object.keys(totals).length > topG.length
+      ? '<span><span class="evo-dot" style="background:#5a5a6e"></span>Other</span>' : '');
+
+  // one deterministic observation: biggest share swing, first vs last period
+  let note = '';
+  const first = per[nonEmpty[0]], last = per[nonEmpty[nonEmpty.length - 1]];
+  if (first.length >= 3 && last.length >= 3) {
+    const share = bs => {
+      const m = {};
+      bs.forEach(b => { const g = catOf(bookGenres(b)[0] || 'Other'); m[g] = (m[g] || 0) + 1; });
+      Object.keys(m).forEach(g => { m[g] /= bs.length; });
+      return m;
+    };
+    const s0 = share(first), s1 = share(last);
+    let best = null, bestSwing = 0;
+    new Set([...Object.keys(s0), ...Object.keys(s1)]).forEach(g => {
+      const sw = (s1[g] || 0) - (s0[g] || 0);
+      if (Math.abs(sw) > Math.abs(bestSwing) ||
+          (Math.abs(sw) === Math.abs(bestSwing) && sw > bestSwing)) { bestSwing = sw; best = g; }
+    });
+    if (best && Math.abs(bestSwing) >= 0.15)
+      note = '<p class="note">💡 <b>' + esc(best) + '</b> went from <b>' +
+        Math.round((s0[best] || 0) * 100) + '%</b> to <b>' + Math.round((s1[best] || 0) * 100) +
+        '%</b> of your finishes between ' + labelOf(nonEmpty[0]) + ' and ' +
+        labelOf(nonEmpty[nonEmpty.length - 1]) + '.</p>';
+  }
+  return head + '<div class="evo">' + rows + '</div>' +
+    '<div class="evo-legend">' + legend + '</div>' + note;
+}
+
 /* ---- personal records (v66): the fun achievements wall. Every card taps
    through to the book; Biggest day jumps to that day in the calendar. ---- */
 function recordsHTML() {
@@ -477,6 +575,7 @@ function renderStats() {
     spiceProfileHTML() +
     ratingDistHTML() +
     patternsHTML() +
+    genreEvoHTML() +
     recordsHTML() +
     seriesHTML() +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>' +
@@ -520,6 +619,8 @@ function renderStats() {
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   });
+  document.querySelectorAll('#evo-gran button').forEach(b2 =>
+    b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));
   document.querySelectorAll('.kv-row.tap').forEach(r =>
     r.addEventListener('click', () => openDetail(r.dataset.id)));
 }

@@ -22,6 +22,7 @@ let heatSel = null; // selected heatmap day 'YYYY-MM-DD' (v62)
 let calY = new Date().getFullYear(); // v63: month calendar restored
 let calM = new Date().getMonth();
 let calSel = null; // selected calendar day 'YYYY-MM-DD'
+let genreGran = 'quarter'; // v69: genre evolution granularity (year|quarter|month)
 let layout = 'grid'; // v57: grid view restored (Bookmory-style); default grid
 try { layout = localStorage.getItem('spicyshelves.layout') || 'grid'; } catch (e) {}
 let animateIn = true; // staggered card entrance; disabled while typing in search
