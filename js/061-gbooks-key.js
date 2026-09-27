@@ -71,7 +71,11 @@ async function searchBooks(q) {
   const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
     '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
   const d = await r.json();
-  return (d.docs || []).map(olDocToBook);
+  const ol = (d.docs || []).map(olDocToBook);
+  if (ol.length) return ol;
+  // v137: indie titles (KU romance especially) are often in neither catalog —
+  // ask Hardcover before giving up.
+  return hcSearchBooks(q);
 }
 
 // Map an Open Library search doc to our book shape (used when Google Books is

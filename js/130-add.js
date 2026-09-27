@@ -217,7 +217,15 @@ function renderSearchTab() {
     box.innerHTML = '<p class="note">Searching…</p>';
     try {
       searchResults = await searchBooks(q);
-      if (!searchResults.length) { box.innerHTML = '<p class="note">No matches. Try different words.</p>'; return; }
+      if (!searchResults.length) {
+        box.innerHTML = '<p class="note">No matches. Try different words, or add it yourself:</p>' +
+          '<button class="btn small ghost" id="s-manual">Add it manually</button>';
+        document.getElementById('s-manual').addEventListener('click', () => {
+          const shell = normalizeVolume({ volumeInfo: { title: input.value.trim(), authors: [] } }, '');
+          const b = addBook(shell, false, 'search'); if (b) openDetail(b.id);
+        });
+        return;
+      }
       box.innerHTML = '<div class="grid">' + searchResults.map((b, i) =>
         '<div class="book-card" data-i="' + i + '">' + coverHTML(b) +
         '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +

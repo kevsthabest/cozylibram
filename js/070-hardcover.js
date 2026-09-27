@@ -136,6 +136,50 @@ function applyHardcoverDoc(book, doc) {
   book.hcEnriched = true;
 }
 
+/* ---------------- Hardcover search fallback (v137) ---------------- */
+// Indie titles (KU romance especially) are often in neither Google Books nor
+// Open Library. The Search tab asks Hardcover last before giving up, so those
+// books can still be added with full metadata instead of by hand.
+function hcDocToBook(doc) {
+  const isbns = ((doc.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean));
+  const isbn = isbns.find(s => s.length === 13) || isbns[0] || '';
+  const book = {
+    id: uid(),
+    isbn: isbn,
+    title: doc.title || 'Unknown title',
+    authors: (doc.author_names || []).map(String),
+    cover: (doc.image && doc.image.url) || '',
+    description: doc.description || '',
+    pageCount: doc.pages || null,
+    publishedDate: String(doc.release_date || '').slice(0, 10),
+    categories: (doc.genres || []).map(String),
+    publicRating: null,
+    ratingsCount: 0,
+    status: 'tbr',
+    owned: true,
+    ratings: {},
+    myRating: 0,
+    tropes: [],
+    tropesAuto: [],
+    progress: 0,
+    dateAdded: new Date().toISOString(),
+    dateFinished: null,
+    notes: ''
+  };
+  try { applyHardcoverDoc(book, doc); } catch (e) {} // moods, warnings, rating…
+  try { book.axes = autoDetectAxes(book); } catch (e) {}
+  return book;
+}
+
+async function hcSearchBooks(q) {
+  if (!hcReady()) return [];
+  try {
+    const data = await hcGraphQL('query { search(query: ' + JSON.stringify(q) + ', query_type: "Book", per_page: 8) { results } }');
+    const docs = hcHits(data).map(h => h.document).filter(d => d && d.title);
+    return docs.map(hcDocToBook);
+  } catch (e) { return []; }
+}
+
 // Automatic background sweep (v72): enriches books Hardcover hasn't seen yet a
 // few seconds after the app boots, so "Enrich all books" never needs a manual
 // tap. Shares the rate-limit pacing (60 req/min) and a busy flag with the
