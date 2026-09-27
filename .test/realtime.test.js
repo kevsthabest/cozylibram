@@ -50,9 +50,10 @@ function makeRealtimeStub() {
           }
           return { error: null };
         },
-        select: async () => {
+        select: (cols) => {
           selectCalls++;
-          return { data: deleted.map(r => ({ book_id: r.book_id, deleted_at: r.deleted_at })), error: null };
+          return require('./harness').chainableSelect(deleted,
+            r => ({ book_id: r.book_id, deleted_at: r.deleted_at }));
         },
       };
       throw new Error('unexpected table: ' + table);

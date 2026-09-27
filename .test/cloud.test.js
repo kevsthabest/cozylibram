@@ -48,7 +48,8 @@ function makeFake() {
           }
           return { error: null };
         },
-        select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id })), error: null }),
+        select: (cols) => require('./harness').chainableSelect(deleted,
+          r => ({ book_id: r.book_id, deleted_at: r.deleted_at })),
       };
       return {
       upsert: async (rows) => {
@@ -61,12 +62,20 @@ function makeFake() {
       },
       select: (cols) => require('./harness').chainableSelect(store,
         r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })),
-      delete: () => ({
-        eq: async (col, val) => {
-          for (let i = store.length - 1; i >= 0; i--) if (store[i][col] === val) store.splice(i, 1);
-          return { error: null };
-        }
-      }),
+      delete: () => {
+        const filters = [];
+        const chain = {
+          eq: (col, val) => { filters.push(r => r[col] === val); return chain; },
+          in: (col, vals) => { filters.push(r => vals.includes(r[col])); return chain; },
+          then: (resolve) => {
+            for (let i = store.length - 1; i >= 0; i--) {
+              if (filters.every(f => f(store[i]))) store.splice(i, 1);
+            }
+            resolve({ error: null });
+          },
+        };
+        return chain;
+      },
       };
     },
   };

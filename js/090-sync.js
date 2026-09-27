@@ -86,6 +86,13 @@ async function cloudPushNow() {
         deleted_at: new Date(t.at).toISOString() }));
       const { error } = await sb.from('deleted_books').upsert(trows, { onConflict: 'user_id,book_id' });
       if (error) throw error;
+      // v147: a tombstoned book is gone for good — drop its row from the cloud
+      // library too, so no pull/merge on any device can ever resurrect it.
+      // Only an explicit manual re-add (which untombstones the id) brings it back.
+      const deadIds = tombstones.map(t => t.id);
+      const { error: delError } = await sb.from('books').delete()
+        .eq('user_id', cloudUser.id).in('book_id', deadIds);
+      if (delError) throw delError;
     }
     cloudLastSync = Date.now();
     return true;
@@ -104,7 +111,8 @@ async function cloudPullTombstones() {
   if (!sb || !cloudUser) return [];
   // v142: also pull deleted_at so the tombstone floor can tell stale
   // deletions (older than the user's explicit un-delete) from fresh ones.
-  const { data, error } = await sb.from('deleted_books').select('book_id, deleted_at');
+  // v147: scope to this user (v101 parity with cloudPullRows).
+  const { data, error } = await sb.from('deleted_books').select('book_id, deleted_at').eq('user_id', cloudUser.id);
   if (error) throw error;
   return (data || [])
     .map(r => ({ id: r.book_id, at: r.deleted_at ? Date.parse(r.deleted_at) || 0 : 0 }))

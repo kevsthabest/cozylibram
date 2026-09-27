@@ -25,6 +25,21 @@ function makeSyncStub() {
         },
         select: (cols) => require('./harness').chainableSelect(books,
           r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data })),
+        // v147: push deletes cloud rows for tombstoned books
+        delete: () => {
+          const filters = [];
+          const chain = {
+            eq: (col, val) => { filters.push(r => r[col] === val); return chain; },
+            in: (col, vals) => { filters.push(r => vals.includes(r[col])); return chain; },
+            then: (resolve) => {
+              for (let i = books.length - 1; i >= 0; i--) {
+                if (filters.every(f => f(books[i]))) books.splice(i, 1);
+              }
+              resolve({ error: null });
+            },
+          };
+          return chain;
+        },
       };
       if (table === 'deleted_books') return {
         upsert: async (rows) => {
@@ -34,7 +49,8 @@ function makeSyncStub() {
           }
           return { error: null };
         },
-        select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id, deleted_at: r.deleted_at })), error: null }),
+        select: (cols) => require('./harness').chainableSelect(deleted,
+          r => ({ book_id: r.book_id, deleted_at: r.deleted_at })),
         delete: () => {
           const filters = [];
           const chain = {
@@ -124,6 +140,7 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   await tick(100);
   ok('deleted book not resurrected locally', window.eval(`library.map(b => b.id)`).join(',') === 's2');
   ok('tombstone pushed to cloud', stub.deleted.some(r => r.book_id === 's1' && r.user_id === 'u1'));
+  ok('v147 deleted book row dropped from cloud books', !stub.books.some(r => r.book_id === 's1'));
 
   // 6. full sync: remote deletion (from another device) applies here
   const stub2 = makeSyncStub();
@@ -245,6 +262,23 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   runInWindow(`setLocalUser('user-9');`);
   runInWindow(`setLocalUser(null);`);
   ok('floor survives user switching', window.eval(`tombstoneFloor`) === floorBefore);
+
+  // 12. v147 (Kevin's report): a deleted book's cloud row is dropped on push,
+  // so even if this device later loses its local tombstone (floor filtering,
+  // partition restore, fresh sign-in), a manual sync can never resurrect it.
+  const stub6 = makeSyncStub();
+  window.__sbStub = stub6;
+  runInWindow(`cloudUser = { id: 'u1' };`);
+  stub6.books.push({ user_id: 'u1', book_id: 'k1', isbn: null, data: { id: 'k1', title: 'K1', _mtime: 10 } });
+  runInWindow(`library = []; tombstones = [{ id: 'k1', at: 1 }]; saveTombstones(); saveLibrary({noCloud:true});`);
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('v147 push removes the deleted book row from the cloud', !stub6.books.some(r => r.book_id === 'k1'));
+  runInWindow(`tombstones = []; saveTombstones();`); // local tombstone lost
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('v147 deleted book cannot resurrect without its cloud row',
+    window.eval(`!library.some(b => b.id === 'k1')`));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
