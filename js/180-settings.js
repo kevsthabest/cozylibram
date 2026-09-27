@@ -1,6 +1,49 @@
 'use strict';
 
 /* ---------------- backup view ---------------- */
+/* ---------------- settings accordions (v112) ---------------- */
+// The settings page grew to 11 sections of scroll; each becomes a collapsible
+// card. Wrapping is DOM-based (no HTML restructuring), so future sections are
+// picked up automatically. Open/closed state persists per device.
+function settingsAccordions() {
+  const view = document.getElementById('view');
+  if (!view || view.querySelector('.set-group')) return; // already wrapped
+  let openIdx = [0];
+  try {
+    const saved = JSON.parse(localStorage.getItem('spicyshelves.setgroups') || 'null');
+    if (Array.isArray(saved)) openIdx = saved;
+  } catch (e) {}
+  const groups = [];
+  const collect = (first) => {
+    const nodes = [first];
+    let n = first.nextSibling;
+    while (n && !(n.nodeType === 1 && n.matches('h2.section'))) { nodes.push(n); n = n.nextSibling; }
+    return nodes;
+  };
+  const head = view.querySelector(':scope > .view-head');
+  if (head) groups.push({ title: head.querySelector('h2').innerHTML, nodes: collect(head) });
+  view.querySelectorAll(':scope > h2.section').forEach(h =>
+    groups.push({ title: h.innerHTML, nodes: collect(h) }));
+  const persist = () => {
+    const open = [];
+    view.querySelectorAll(':scope > .set-group').forEach((d, j) => { if (d.open) open.push(j); });
+    try { localStorage.setItem('spicyshelves.setgroups', JSON.stringify(open)); } catch (e) {}
+  };
+  groups.forEach((g, i) => {
+    const parent = g.nodes[0].parentNode;
+    const next = g.nodes[g.nodes.length - 1].nextSibling;
+    const det = document.createElement('details');
+    det.className = 'set-group';
+    if (openIdx.indexOf(i) !== -1) det.open = true;
+    const sum = document.createElement('summary');
+    sum.className = 'section serif';
+    sum.innerHTML = g.title;
+    det.appendChild(sum);
+    g.nodes.forEach(nd => det.appendChild(nd));
+    parent.insertBefore(det, next);
+    det.addEventListener('toggle', persist);
+  });
+}
 function renderSettings() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   const axTot = {};
@@ -131,7 +174,8 @@ function renderSettings() {
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
     '<p class="note" id="ap-status"></p>' +
     '<button class="btn danger block" id="bk-wipe" style="margin-top:26px">Delete everything</button>'
-  );
+  ); // end setView
+  settingsAccordions(); // v112: collapse the 11 sections (state persists)
 
   // Appearance wiring
   document.getElementById('st-back').addEventListener('click', () => go('library'));
