@@ -250,6 +250,7 @@ function renderCoven() {
       renderCovenMain(code, lists, priv);
       circleUpgradeAvatars(document.getElementById('view'));
       if (typeof refreshRecos === 'function') refreshRecos();
+      if (typeof refreshCovenStats === 'function') refreshCovenStats();
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
@@ -280,7 +281,7 @@ function renderCovenMain(code, lists, priv) {
       '<p class="note" id="cc-msg"></p>' +
     '</div>';
 
-  html += '<div id="reco-slot"></div>';
+  html += '<div id="reco-slot"></div><div id="stats-slot"></div>';
 
   // Requests
   if (lists.received.length || lists.sent.length) {

@@ -273,6 +273,30 @@ const stub = mkStub();
   await probe('renderCoven()'); await tick(5);
   ok('heading returns to Coven on dark', q('#view h2').textContent.indexOf('Coven') !== -1);
 
+  // ---- v100: stats slot integration (real refresh path, stub cloud) ----
+  useAs(A);
+  stub.db.circle_links.push({ requester_id: A, addressee_id: B, status: 'accepted', created_at: new Date().toISOString() });
+  runInWindow('library = ' + JSON.stringify([
+    { id: 'm1', title: 'Shared Tome', authors: ['A. Writer'], status: 'read', myRating: 5, categories: ['Fiction / Romance'] },
+    { id: 'm2', title: 'Second Shared', authors: ['A. Writer'], isbn: '9780000000002', status: 'read', myRating: 4, categories: ['Fiction / Romance'] },
+    { id: 'm3', title: 'Third Shared', authors: ['B. Scribe'], isbn: '9780000000003', status: 'read', myRating: 4, categories: ['Fiction / Fantasy'] },
+    { id: 'm4', title: 'Buddy Tome', authors: ['C. Pal'], isbn: '9780000000004', status: 'tbr' },
+  ]));
+  stub.db.books.push({ user_id: B, book_id: 'bk3', isbn: null,
+    data: { id: 'bk3', title: 'Second Shared', authors: ['A. Writer'], isbn: '9780000000002', status: 'read', myRating: 5, categories: ['Fiction / Romance'] } });
+  stub.db.books.push({ user_id: B, book_id: 'bk4', isbn: null,
+    data: { id: 'bk4', title: 'Third Shared', authors: ['B. Scribe'], isbn: '9780000000003', status: 'read', myRating: 4,
+      categories: ['Fiction / Fantasy'], dateStarted: '2026-09-20', dateFinished: new Date().toISOString(), pages: 320 } });
+  stub.db.books.push({ user_id: B, book_id: 'bk5', isbn: null,
+    data: { id: 'bk5', title: 'Buddy Tome', authors: ['C. Pal'], isbn: '9780000000004', status: 'tbr' } });
+  await probe('renderCoven()'); await tick(30);
+  const slotHTML = (q('#stats-slot') || {}).innerHTML || '';
+  ok('stats slot fills with the section', slotHTML.indexOf('stats</h2>') !== -1);
+  ok('soulmate block renders for 3+ shared ratings', slotHTML.indexOf('Book soulmates') !== -1);
+  ok('leaderboard renders the monthly finish', slotHTML.indexOf('This month') !== -1);
+  ok('superlatives are awarded', slotHTML.indexOf('Superlatives') !== -1);
+  ok('buddy read surfaces the shared TBR', slotHTML.indexOf('Buddy Tome') !== -1);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });
