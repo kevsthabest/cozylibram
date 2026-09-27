@@ -3,6 +3,9 @@
 /* ---------------- stats view ---------------- */
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
+// v128: dashboard-first. 'dash' shows this month's hero numbers + glanceable
+// sections; 'detail' is the full explorer behind one tap.
+let statsMode = 'dash';
 const dayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
   '-' + String(d.getDate()).padStart(2, '0');
 
@@ -635,6 +638,7 @@ function renderYearInBooks(yr) {
     c.addEventListener('click', () => renderYearInBooks(+c.dataset.yr)));
   document.getElementById('yib-share').addEventListener('click', shareYearImage);
   document.getElementById('yib-copy').addEventListener('click', copyYearSummary);
+
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
 }
@@ -908,6 +912,15 @@ function renderStats() {
   const avgMine = avgOf((ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0).map(b => b.myRating));
   const streak = readingStreak();
 
+  // v128: this month's numbers power the dashboard hero cards.
+  const nowD = new Date();
+  const mStart = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
+  const readMo = read.filter(b => { const d = b.dateFinished && new Date(b.dateFinished); return d && d >= mStart; });
+  const pagesMo = readMo.reduce((s, b) => s + (b.pageCount || 0), 0);
+  const avgMo = avgOf(readMo.filter(b => b.myRating > 0).map(b => b.myRating));
+  const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
+  const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
   const tropeCount = {};
   library.forEach(b => (b.tropes || []).forEach(t => { tropeCount[t] = (tropeCount[t] || 0) + 1; }));
   const topTropes = Object.entries(tropeCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -923,7 +936,7 @@ function renderStats() {
 
   const reading = library.filter(b => b.status === 'reading');
   const nowReading = reading.length
-    ? '<div class="stat-sub">Currently reading</div><div class="now-reading">' + reading.map(b => {
+    ? '<div class="stat-sub">' + icon('reading') + ' Currently reading</div><div class="now-reading">' + reading.map(b => {
         const pct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : 0;
         return '<div class="book-card" data-id="' + b.id + '">' + coverHTML(b) +
           '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
@@ -934,7 +947,41 @@ function renderStats() {
       }).join('') + '</div>'
     : '';
 
+  const heroCard = (ic, n, l) =>
+    '<div class="stat hero"><div class="n">' + icon(ic) + ' ' + n + '</div><div class="l">' + l + '</div></div>';
+
+  // v128: dashboard first — this month at a glance. The full explorer lives
+  // one tap behind "Explore detailed stats".
+  if (statsMode === 'dash') {
+    setView(
+      '<h2 class="section serif">Reading stats</h2>' +
+      '<div class="stat-sub">' + icon('calendar') + ' ' + esc(monthName) + '</div>' +
+      '<div class="stat-row">' +
+      heroCard('covers', readMo.length, 'Books finished') +
+      heroCard('doc', pagesMo > 999 ? (pagesMo / 1000).toFixed(1) + 'k' : pagesMo, 'Pages') +
+      heroCard('heart', avgMo != null ? '♥ ' + avgMo.toFixed(1) : '–', 'Avg rating') +
+      heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time') +
+      '</div>' +
+      (streak > 0
+        ? '<div class="stat-sub">' + icon('flame') + ' Streak</div><div class="stat-row">' +
+          heroCard('flame', streak, 'Day streak') + '</div>'
+        : '') +
+      nowReading +
+      '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
+      '<div class="search-row" style="margin:16px 0"><button class="btn ghost block" id="st-explore">' +
+      icon('chart') + ' Explore detailed stats →</button></div>'
+    );
+    document.querySelectorAll('.now-reading .book-card').forEach(c =>
+      c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
+    document.getElementById('st-explore').addEventListener('click', () => {
+      statsMode = 'detail';
+      renderStats();
+    });
+    return;
+  }
+
   setView(
+    '<button class="btn ghost sm" id="st-backdash" style="margin-bottom:10px">← Dashboard</button>' +
     '<h2 class="section serif">Reading stats</h2>' +
     '<div class="stat-sub">Overview</div>' +
     '<div class="stat-row">' +
@@ -997,6 +1044,10 @@ function renderStats() {
       const el = document.getElementById('readcal');
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
+  });
+  document.getElementById('st-backdash').addEventListener('click', () => {
+    statsMode = 'dash';
+    renderStats();
   });
   document.getElementById('st-yib').addEventListener('click', () => renderYearInBooks(new Date().getFullYear()));
   document.querySelectorAll('#evo-gran button').forEach(b2 =>

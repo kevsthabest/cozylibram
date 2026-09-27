@@ -1414,3 +1414,25 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .onb-dots span.on { background: var(--accent); }
 .onb-skip { background: none; border: none; color: var(--muted); font: inherit;
   font-size: 13.5px; cursor: pointer; padding: 6px; }
+
+/* ================= v128: stats dashboard ================= */
+.stat.hero { background: var(--card2); border: 1px solid var(--line); }
+.stat.hero .n { font-size: 22px; display: flex; align-items: center; gap: 6px; justify-content: center; }
+.stat.hero .n .ticon { width: 20px; height: 20px; color: var(--accent); }
+
+/* ================= v129: accessibility ================= */
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Honor reduced-motion globally (targeted rules above stay for precision). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

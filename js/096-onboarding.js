@@ -17,6 +17,7 @@ function maybeOnboard() {
   if (onboarded() || document.getElementById('onb-overlay')) return;
   if (library.length) { setOnboarded(); return; } // not new — don't ask again
   track('onboarding_started');
+  document.addEventListener('keydown', onbEsc); // v129
   showOnbStep(0);
 }
 
@@ -66,6 +67,9 @@ function showOnbStep(n) {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'onb-overlay';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-label', 'Welcome to Cozy Libram');
     document.body.appendChild(ov);
   }
   ov.innerHTML = onbHTML(n);
@@ -88,5 +92,9 @@ function onbDone(skipped) {
   setOnboarded();
   const ov = document.getElementById('onb-overlay');
   if (ov) ov.remove();
+  document.removeEventListener('keydown', onbEsc); // v129
   track(skipped ? 'onboarding_skipped' : 'onboarding_completed');
 }
+
+// v129: escape skips the tour.
+function onbEsc(e) { if (e.key === 'Escape') onbDone(true); }

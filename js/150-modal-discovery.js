@@ -663,8 +663,8 @@ function renderDetailModal(b, viaBook) {
   refreshProgressSection = renderProgressSection;
 
   root.innerHTML =
-    '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog">' +
-    '<button class="modal-close" id="m-x">✕</button>' +
+    '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog" aria-modal="true" aria-label="Book details">' +
+    '<button class="modal-close" id="m-x" aria-label="Close">✕</button>' +
     '<div class="modal-head"><div class="mcover-col">' + coverHTML(b) +
     '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
     '<div><h2>' + esc(b.title) + '</h2>' +
@@ -888,7 +888,12 @@ function renderDetailModal(b, viaBook) {
     wireAxRows();
   }));
 
-  const close = () => { root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null; };
+  const escClose = e => { if (e.key === 'Escape') close(); }; // v129: escape closes
+  const close = () => {
+    document.removeEventListener('keydown', escClose);
+    root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
+  };
+  document.addEventListener('keydown', escClose);
   root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
     el.addEventListener('click', () => openDetail(el.dataset.sim)));
   document.getElementById('m-x').addEventListener('click', close);

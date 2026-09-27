@@ -9,6 +9,10 @@ window.fetch = async () => { throw new Error('no network in genreevo tests'); };
 
 require('./harness').loadApp(window);
 
+// v128: these tests exercise the stats explorer, which now lives behind
+// the dashboard - opt into detail mode.
+window.eval(`statsMode = 'detail';`);
+
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
 const q = (s) => window.document.querySelector(s);
