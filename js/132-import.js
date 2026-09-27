@@ -107,6 +107,58 @@ function parseStoryGraphCSV(text) {
   });
 }
 
+// Hardcover CSV export (v105): hardcover.app → Settings → Export Your Data → CSV.
+// Columns include Title, Author, Series ("Name (#1.0)"), Status, ISBN 10/13,
+// Pages, Publisher, Publish Date, Genres, Moods, Tags, Content Warnings,
+// Date Added/Started/Finished, Rating, Review, Private Notes, Owned.
+function parseHardcoverSeries(s) {
+  const m = String(s || '').match(/^(.*)\s*\(#([\d.]+)\)\s*$/);
+  if (!m || !m[1].trim()) return null;
+  const pos = parseFloat(m[2]);
+  return { name: m[1].trim(), position: isNaN(pos) ? null : pos };
+}
+
+function parseHardcoverCSV(text) {
+  const statusMap = {
+    'want to read': 'tbr',
+    'currently reading': 'reading',
+    'read': 'read',
+    'paused': 'reading',
+    'did not finish': 'dnf',
+  };
+  return csvToObjects(text).filter(r => r['Title']).map(r => {
+    const st = String(r['Status'] || '').trim().toLowerCase();
+    if (st === 'ignored') return null; // Hardcover "Ignored" = not a library book
+    const status = statusMap[st] || 'tbr';
+    const rating = Math.max(0, Math.min(5, Math.round(parseFloat(r['Rating']) || 0)));
+    const pages = parseInt(r['Pages'], 10) || 0;
+    const authors = String(r['Author'] || '').split(/\s*,\s*/).map(a => a.trim()).filter(Boolean);
+    const tropes = Array.from(new Set(
+      String(r['Moods'] || '').split(/[,;]/).concat(String(r['Tags'] || '').split(/[,;]/))
+        .map(s => s.trim()).filter(Boolean)));
+    const notes = [r['Review'], r['Private Notes']].filter(Boolean).join('\n\n');
+    return {
+      isbn: cleanISBN(r['ISBN 13'] || r['ISBN 10']),
+      title: r['Title'],
+      authors: authors,
+      pageCount: pages,
+      publisher: r['Publisher'] || '',
+      publishedDate: parseLooseDate(r['Publish Date']) || '',
+      status: status,
+      progress: status === 'read' && pages ? pages : 0,
+      myRating: rating,
+      owned: /^(true|yes|1|y)$/i.test(String(r['Owned'] || '').trim()),
+      dateFinished: parseLooseDate(r['Date Finished']),
+      dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
+      notes: notes,
+      tropes: tropes,
+      categories: String(r['Genres'] || '').split(/[,;]/).map(s => s.trim()).filter(Boolean),
+      contentWarnings: String(r['Content Warnings'] || '').split(/[,;]/).map(s => s.trim()).filter(Boolean),
+      series: parseHardcoverSeries(r['Series']),
+    };
+  }).filter(Boolean);
+}
+
 const IMPORT_FORMATS = [
   {
     id: 'goodreads', name: 'Goodreads',
@@ -119,6 +171,12 @@ const IMPORT_FORMATS = [
     hint: 'StoryGraph → Manage Account → Export StoryGraph Library',
     detect: (text) => { const h = csvHeader(text); return h.includes('Title') && h.includes('Read Status') && h.includes('ISBN/UID'); },
     parse: parseStoryGraphCSV,
+  },
+  {
+    id: 'hardcover', name: 'Hardcover',
+    hint: 'hardcover.app → Settings → Export Your Data → CSV',
+    detect: (text) => { const h = csvHeader(text); return h.includes('Hardcover Book ID') && h.includes('Title'); },
+    parse: parseHardcoverCSV,
   },
   {
     id: 'isbn-list', name: 'ISBN list',
