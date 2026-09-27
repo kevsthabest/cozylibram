@@ -522,6 +522,210 @@ function seriesHTML() {
     (names.length > 10 ? '<p class="note">+' + (names.length - 10) + ' more series in your library.</p>' : '');
 }
 
+/* ---- Your Year in Books (v70): a Wrapped-style visual summary of the year,
+   with share-as-image (1080x1920 story format) and copy-as-text export. ---- */
+function yearInBooksData() {
+  const yr = new Date().getFullYear();
+  const readYr = library.filter(b => b.status === 'read' && b.dateFinished &&
+    new Date(b.dateFinished).getFullYear() === yr);
+  const pages = readYr.reduce((s, b) => s + (b.pageCount || 0), 0);
+  const rated = readYr.filter(b => (b.myRating || 0) > 0);
+  const avg = rated.length ? rated.reduce((s, b) => s + b.myRating, 0) / rated.length : null;
+  const byGenre = {};
+  readYr.forEach(b => { const g = bookGenres(b)[0] || 'Other'; byGenre[g] = (byGenre[g] || 0) + 1; });
+  const topGenres = Object.entries(byGenre).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topBooks = rated.slice().sort((a, b) => b.myRating - a.myRating).slice(0, 5);
+  const withPages = readYr.filter(b => (b.pageCount || 0) > 0);
+  const longest = withPages.slice().sort((a, b) => b.pageCount - a.pageCount)[0] || null;
+  const byAuthor = {};
+  readYr.forEach(b => { const a = (b.authors || [])[0] || 'Unknown'; byAuthor[a] = (byAuthor[a] || 0) + 1; });
+  const topAuthor = Object.entries(byAuthor).sort((a, b) => b[1] - a[1])[0] || null;
+  const dayPages = {}, daySet = new Set();
+  readYr.forEach(b => {
+    (b.log || []).forEach(e => {
+      if (e.to > e.from && String(e.d || '').slice(0, 4) === String(yr)) {
+        dayPages[e.d] = (dayPages[e.d] || 0) + (e.to - e.from);
+        daySet.add(e.d);
+      }
+    });
+    if (b.dateFinished) daySet.add(dayKey(new Date(b.dateFinished)));
+  });
+  const big = Object.entries(dayPages).sort((a, b) => b[1] - a[1])[0] || null;
+  return {
+    yr, n: readYr.length, pages, avg, topGenres, topBooks, longest, topAuthor,
+    days: daySet.size, streak: longestStreak(),
+    bigDay: big ? { k: big[0], pages: big[1] } : null,
+    five: rated.filter(b => b.myRating >= 4.5).length
+  };
+}
+
+function renderYearInBooks() {
+  const d = yearInBooksData();
+  const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Stats</button>';
+  if (!d.n) {
+    setView(back + '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
+      '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2></div>' +
+      '<p class="note" style="text-align:center">No finished books in ' + d.yr +
+      ' yet — your wrapped summary will appear here.</p>');
+    document.getElementById('yib-back').addEventListener('click', renderStats);
+    return;
+  }
+  const stat = (n, l) => '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
+  const gcols = ['#e5648e', '#6aa8e5', '#e5b86a'];
+  const maxG = Math.max(1, ...d.topGenres.map(g => g[1]));
+  const genres = d.topGenres.map(([g, n], i) =>
+    '<div class="dist-row"><span class="lbl">' + esc(g) + '</span>' +
+    '<div class="bar"><div class="fill" style="width:' + Math.round(n / maxG * 100) +
+    '%;background:' + gcols[i] + '"></div></div>' +
+    '<span class="num">' + n + '</span></div>').join('');
+  const books = d.topBooks.map((b, i) =>
+    '<div class="book-card" data-id="' + b.id + '">' + coverHTML(b) +
+    '<div class="book-meta"><h3>#' + (i + 1) + ' ' + esc(b.title) + '</h3>' +
+    '<p class="author">' + esc((b.authors || []).join(', ')) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
+    '</div></div>').join('');
+  const recs = [];
+  if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), '📕 Longest: ' + d.longest.title.slice(0, 22)));
+  if (d.bigDay) recs.push(stat(d.bigDay.pages, '📄 Biggest day'));
+  if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' 📚', '✍️ ' + d.topAuthor[0].slice(0, 22)));
+  if (d.five) recs.push(stat('♥ ' + d.five, '5-star reads'));
+  setView(back +
+    '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
+    '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2>' +
+    '<div class="yib-sub">' + d.n + ' books · ' + fmtBig(d.pages) + ' pages · ' + d.days + ' reading days</div></div>' +
+    '<div class="search-row" style="margin:12px 0"><button class="btn" id="yib-share">📤 Share image</button>' +
+    '<button class="btn ghost" id="yib-copy">📋 Copy text</button></div>' +
+    '<div class="stat-row">' +
+    stat(d.n, 'Books read') +
+    stat(fmtBig(d.pages), 'Pages') +
+    stat(d.avg != null ? '♥ ' + d.avg.toFixed(1) : '–', 'Avg rating') +
+    stat(d.streak > 0 ? '🔥 ' + d.streak : '–', 'Day streak') +
+    '</div>' +
+    (genres ? '<div class="stat-sub yib-sec">Top genres</div><div class="dist">' + genres + '</div>' : '') +
+    (books ? '<div class="stat-sub yib-sec">Highest rated</div><div class="now-reading">' + books + '</div>' : '') +
+    (recs.length ? '<div class="stat-sub yib-sec">Year records</div><div class="stat-row">' + recs.join('') + '</div>' : ''));
+  document.getElementById('yib-back').addEventListener('click', renderStats);
+  document.getElementById('yib-share').addEventListener('click', shareYearImage);
+  document.getElementById('yib-copy').addEventListener('click', copyYearSummary);
+  document.querySelectorAll('.now-reading .book-card').forEach(c =>
+    c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
+}
+
+function drawYearImage(d) {
+  const W = 1080, H = 1920;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  if (!x) return null;
+  const ink = '#f6eff8', mut = '#b9a8c6', acc = '#e5648e';
+  const bg = x.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#2b1535'); bg.addColorStop(1, '#120a18');
+  x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  x.textAlign = 'center';
+  try { x.letterSpacing = '14px'; } catch (e) {}
+  x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
+  x.fillText('SPICY SHELVES', W / 2, 150);
+  try { x.letterSpacing = '0px'; } catch (e) {}
+  x.fillStyle = ink; x.font = 'bold 118px Georgia, serif';
+  x.fillText('My ' + d.yr, W / 2, 300);
+  x.fillStyle = acc; x.font = 'italic 108px Georgia, serif';
+  x.fillText('in Books', W / 2, 425);
+  x.strokeStyle = 'rgba(229,100,142,.4)'; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(140, 490); x.lineTo(W - 140, 490); x.stroke();
+  const stats = [
+    [String(d.n), 'books read'],
+    [d.pages > 999 ? (d.pages / 1000).toFixed(1) + 'k' : String(d.pages), 'pages'],
+    [d.avg != null ? d.avg.toFixed(1) + ' ♥' : '–', 'avg rating'],
+    [d.streak > 0 ? '🔥 ' + d.streak : '–', 'day streak']
+  ];
+  stats.forEach(([n, l], i) => {
+    const cx = i % 2 ? W * 0.75 : W * 0.25, cy = i < 2 ? 650 : 890;
+    x.fillStyle = ink; x.font = 'bold 100px Georgia, serif';
+    x.fillText(n, cx, cy);
+    x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
+    x.fillText(l, cx, cy + 58);
+  });
+  x.textAlign = 'left';
+  if (d.topGenres.length) {
+    x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
+    x.fillText('TOP GENRES', 90, 1065);
+    const gc = ['#e5648e', '#6aa8e5', '#e5b86a'];
+    d.topGenres.forEach(([gg, n], i) => {
+      const y = 1135 + i * 100;
+      x.fillStyle = ink; x.font = '44px system-ui, sans-serif';
+      x.fillText(gg.length > 14 ? gg.slice(0, 13) + '…' : gg, 90, y);
+      x.fillStyle = gc[i];
+      x.fillRect(400, y - 32, Math.max(8, 420 * n / Math.max(1, d.topGenres[0][1])), 40);
+      x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
+      x.fillText(n + (n === 1 ? ' book' : ' books'), 850, y);
+    });
+  }
+  if (d.topBooks.length) {
+    x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
+    x.fillText('HIGHEST RATED', 90, 1485);
+    x.fillStyle = ink; x.font = '40px system-ui, sans-serif';
+    d.topBooks.forEach((b, i) => {
+      let t = (i + 1) + '. ' + b.title;
+      if (t.length > 40) t = t.slice(0, 39) + '…';
+      x.fillText(t, 90, 1555 + i * 66);
+    });
+  }
+  x.textAlign = 'center'; x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
+  x.fillText('Tracked with Spicy Shelves 🌶️🖤', W / 2, 1845);
+  return cv;
+}
+
+function shareYearImage() {
+  const cv = drawYearImage(yearInBooksData());
+  if (!cv) { toast('Image export isn’t supported on this device'); return; }
+  cv.toBlob(async (blob) => {
+    if (!blob) { toast('Could not create the image'); return; }
+    const name = 'my-' + new Date().getFullYear() + '-in-books.png';
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'My Year in Books' }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Image saved 📥');
+  }, 'image/png');
+}
+
+function yearTextSummary(d) {
+  const lines = [
+    '✨ My ' + d.yr + ' in Books ✨',
+    '📚 ' + d.n + ' books · 📄 ' + d.pages + ' pages' + (d.avg != null ? ' · ♥ ' + d.avg.toFixed(1) + ' avg' : '')
+  ];
+  if (d.topGenres.length)
+    lines.push('Top genres: ' + d.topGenres.map(([g, n]) => g + ' (' + n + ')').join(', '));
+  if (d.topBooks.length) {
+    lines.push('Highest rated:');
+    d.topBooks.forEach((b, i) =>
+      lines.push((i + 1) + '. ' + b.title + ' — ' + (b.authors || []).join(', ') + ' ♥' + b.myRating.toFixed(1)));
+  }
+  if (d.streak > 0) lines.push('🔥 Longest streak: ' + d.streak + ' days');
+  lines.push('Tracked with Spicy Shelves 🌶️🖤');
+  return lines.join('\n');
+}
+
+function copyYearSummary() {
+  const t = yearTextSummary(yearInBooksData());
+  const done = () => toast('Summary copied 📋');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t).then(done, () => fallbackCopy(t, done));
+  } else fallbackCopy(t, done);
+}
+function fallbackCopy(t, done) {
+  const ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed'); }
+  ta.remove();
+}
+
 function renderStats() {
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
@@ -567,6 +771,8 @@ function renderStats() {
     '<div class="stat"><div class="n">' + (avgMine != null ? '♥ ' + avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
     '<div class="stat"><div class="n">' + (streak > 0 ? '🔥 ' + streak : '–') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
+    '<div class="search-row" style="margin:10px 0 2px"><button class="btn ghost" id="st-yib">✨ My ' + yr + ' in Books</button></div>' +
+    nowReading +
     dailyStatsHTML() +
     '<div class="stat-sub">Explore</div>' +
     heatmapHTML() +
@@ -583,8 +789,7 @@ function renderStats() {
       ? '<div class="stat-sub">Top tropes</div><div class="trope-cloud">' +
         topTropes.map(([t, n]) => '<span class="trope-pill">' + esc(t) + '<span class="c">' + n + '</span></span>').join('') +
         '</div>'
-      : '<p class="note">Tag tropes on your books and they\'ll show up here.</p>') +
-    nowReading
+      : '<p class="note">Tag tropes on your books and they\'ll show up here.</p>')
   );
 
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
@@ -619,6 +824,7 @@ function renderStats() {
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   });
+  document.getElementById('st-yib').addEventListener('click', renderYearInBooks);
   document.querySelectorAll('#evo-gran button').forEach(b2 =>
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));
   document.querySelectorAll('.kv-row.tap').forEach(r =>
