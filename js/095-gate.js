@@ -15,7 +15,7 @@ function renderGate() {
   if (nav) nav.style.display = 'none';
   setView(
     '<div class="gate-wrap"><div class="gate-card">' +
-    '<h1 class="serif">Spicy Shelves</h1>' +
+    '<h1 class="serif">Cozy Libram</h1>' +
     '<p class="note">her dark little library</p>' +
     '<p class="note" id="gate-status">Sign in to sync your shelves across devices.</p>' +
     '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +

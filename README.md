@@ -1,4 +1,4 @@
-# Spicy Shelves 📚🌶️
+# Cozy Libram 📚🌶️
 
 Her dark little library — a mobile-first, installable web app (PWA) for tracking a
 dark-romance book collection. The library lives on-device in `localStorage`

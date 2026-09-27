@@ -15,8 +15,8 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
 const parse = window.parseSwVersion;
 ok('parseSwVersion is defined', typeof parse === 'function');
 ok('parses v54 from sw.js text',
-  parse("const CACHE = 'spicy-shelves-v54';") === 'v54');
-ok('parses other versions', parse('x spicy-shelves-v9 y') === 'v9');
+  parse("const CACHE = 'cozy-libram-v54';") === 'v54');
+ok('parses other versions', parse('x cozy-libram-v9 y') === 'v9');
 ok('returns null when absent', parse('no version here') === null);
 ok('handles empty string', parse('') === null);
 ok('handles null/undefined', parse(null) === null && parse(undefined) === null);
@@ -25,7 +25,7 @@ ok('handles null/undefined', parse(null) === null && parse(undefined) === null);
 const swText = fs.readFileSync('/home/hatch/workspace/booktok/sw.js', 'utf8');
 const cacheName = (/const CACHE = '([^']+)'/.exec(swText) || [])[1];
 ok('sw.js CACHE name matches parsed version',
-  cacheName === 'spicy-shelves-' + parse(swText));
+  cacheName === 'cozy-libram-' + parse(swText));
 
 // Settings view renders the App section with version + update controls.
 window.renderSettings();

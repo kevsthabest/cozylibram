@@ -8,7 +8,7 @@
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
 function parseSwVersion(text) {
-  const m = /spicy-shelves-(v\d+)/.exec(text || '');
+  const m = /cozy-libram-(v\d+)/.exec(text || '');
   return m ? m[1] : null;
 }
 

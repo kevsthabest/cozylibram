@@ -1,6 +1,6 @@
 'use strict';
 
-/* Spicy Shelves v1 — mobile-first personal library PWA.
+/* Cozy Libram v1 — mobile-first personal library PWA.
    Storage: localStorage (on-device). Metadata: Google Books API + Open Library covers.
    No backend, no account, works from any static host. */
 

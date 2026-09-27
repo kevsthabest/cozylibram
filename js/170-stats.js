@@ -588,7 +588,7 @@ function renderYearInBooks(yr) {
     years.map(y => '<button class="chip' + (y === yibYear ? ' active' : '') + '" data-yr="' + y + '">' + y + '</button>').join('') +
     '</div>';
   if (!d.n) {
-    setView(back + pills + '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
+    setView(back + pills + '<div class="yib-hero"><div class="yib-kicker">Cozy Libram</div>' +
       '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2></div>' +
       '<p class="note" style="text-align:center">No finished books in ' + d.yr +
       ' yet — your wrapped summary will appear here.</p>');
@@ -616,7 +616,7 @@ function renderYearInBooks(yr) {
   if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' ' + icon('series'), icon('pencil') + ' ' + d.topAuthor[0].slice(0, 22)));
   if (d.five) recs.push(stat('♥ ' + d.five, '5-star reads'));
   setView(back + pills +
-    '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
+    '<div class="yib-hero"><div class="yib-kicker">Cozy Libram</div>' +
     '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2>' +
     '<div class="yib-sub">' + d.n + ' books · ' + fmtBig(d.pages) + ' pages · ' + d.days + ' reading days</div></div>' +
     '<div class="search-row" style="margin:12px 0"><button class="btn" id="yib-share">' + icon('share') + ' Share image</button>' +
@@ -652,7 +652,7 @@ function drawYearImage(d) {
   x.textAlign = 'center';
   try { x.letterSpacing = '14px'; } catch (e) {}
   x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
-  x.fillText('SPICY SHELVES', W / 2, 150);
+  x.fillText('COZY LIBRAM', W / 2, 150);
   try { x.letterSpacing = '0px'; } catch (e) {}
   x.fillStyle = ink; x.font = 'bold 118px Georgia, serif';
   x.fillText('My ' + d.yr, W / 2, 300);
@@ -699,7 +699,7 @@ function drawYearImage(d) {
     });
   }
   x.textAlign = 'center'; x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-  x.fillText('Tracked with Spicy Shelves 🌶️🖤', W / 2, 1845);
+  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
   return cv;
 }
 
@@ -782,7 +782,7 @@ async function drawBookCard(b) {
     x.textAlign = 'center';
     try { x.letterSpacing = '14px'; } catch (e) {}
     x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
-    x.fillText('SPICY SHELVES', W / 2, 140);
+    x.fillText('COZY LIBRAM', W / 2, 140);
     try { x.letterSpacing = '0px'; } catch (e) {}
     let y;
     if (withCover && img) {
@@ -843,7 +843,7 @@ async function drawBookCard(b) {
       x.fillText('🚫 DNF', W / 2, y); y += 72;
     }
     x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-    x.fillText('Tracked with Spicy Shelves 🌶️🖤', W / 2, H - 80);
+    x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, H - 80);
   };
   paint(!!img);
   if (img) {
@@ -863,7 +863,7 @@ async function shareBookCard(id) {
   if (!cv) { toast('Image export isn’t supported on this device'); return; }
   const safe = String(b.title || 'book').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'book';
-  shareCanvasFile(cv, 'spicy-shelves-' + safe + '.png', b.title);
+  shareCanvasFile(cv, 'cozy-libram-' + safe + '.png', b.title);
 }
 
 function yearTextSummary(d) {
@@ -879,7 +879,7 @@ function yearTextSummary(d) {
       lines.push((i + 1) + '. ' + b.title + ' — ' + (b.authors || []).join(', ') + ' ♥' + b.myRating.toFixed(1)));
   }
   if (d.streak > 0) lines.push('🔥 Longest streak: ' + d.streak + ' days');
-  lines.push('Tracked with Spicy Shelves 🌶️🖤');
+  lines.push('Tracked with Cozy Libram 🌶️🖤');
   return lines.join('\n');
 }
 

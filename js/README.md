@@ -1,4 +1,4 @@
-# Spicy Shelves — client JS modules
+# Cozy Libram — client JS modules
 
 The app is plain, dependency-free JavaScript split into one file per feature.
 Files are classic scripts (no `import`/`export`, no build step) loaded in

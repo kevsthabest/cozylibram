@@ -1,4 +1,4 @@
-# Spicy Shelves Roadmap
+# Cozy Libram Roadmap
 
 ## v1.0 — "Share with loved ones" (private testers)
 Goal: stable, no data loss, easy for non-technical family to pick up.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spicy Shelves server.
+"""Cozy Libram server.
 
 Serves the app's static files, plus a dynamic /config.js that hands the
 configured secrets (Hardcover token, Google Books key, Supabase credentials)
@@ -162,17 +162,17 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     token = load_token()
     cc = load_cloud_cfg()
-    print('[Spicy Shelves] Serving at http://localhost:%d' % PORT)
-    print('[Spicy Shelves] On your home network, also reachable at this PC\'s LAN IP.')
+    print('[Cozy Libram] Serving at http://localhost:%d' % PORT)
+    print('[Cozy Libram] On your home network, also reachable at this PC\'s LAN IP.')
     if token:
-        print('[Spicy Shelves] Hardcover token loaded — served to every client (/config.js).')
+        print('[Cozy Libram] Hardcover token loaded — served to every client (/config.js).')
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
-        print('[Spicy Shelves] Supabase config loaded — served to every client (/config.js).')
+        print('[Cozy Libram] Supabase config loaded — served to every client (/config.js).')
     if not token and not (cc['supabaseUrl'] and cc['supabaseAnonKey']):
-        print('[Spicy Shelves] No secrets in server-config.json — each device must enter')
-        print('[Spicy Shelves] them in Settings. To auto-share with every device, copy')
-        print('[Spicy Shelves] server-config.example.json to server-config.json and fill it in.')
-    print('[Spicy Shelves] Keep this window open. Close it to stop.\n')
+        print('[Cozy Libram] No secrets in server-config.json — each device must enter')
+        print('[Cozy Libram] them in Settings. To auto-share with every device, copy')
+        print('[Cozy Libram] server-config.example.json to server-config.json and fill it in.')
+    print('[Cozy Libram] Keep this window open. Close it to stop.\n')
     ThreadingHTTPServer(('0.0.0.0', PORT), partial(Handler, directory=BASE_DIR)).serve_forever()
 
 

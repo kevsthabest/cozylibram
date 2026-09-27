@@ -1,4 +1,4 @@
-# Cloud sync setup (Supabase) — Spicy Shelves
+# Cloud sync setup (Supabase) — Cozy Libram
 
 Optional. The app works fully offline without this. Setting it up gives you
 per-user login (email/password + Google) and long-term cloud storage of the
@@ -70,7 +70,7 @@ Without confirmation, new accounts sign in immediately.
 
 ## 7. Test it
 
-1. Open Spicy Shelves → you'll land on a **sign-in gate** (it only appears
+1. Open Cozy Libram → you'll land on a **sign-in gate** (it only appears
    while signed out and only when the backend is configured).
 2. **Create account**, then add a book on one device.
 3. **Sign in** on another device → the book appears after the first sync.

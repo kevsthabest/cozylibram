@@ -1,10 +1,10 @@
-# Spicy Shelves — Agent Handoff Prompt
+# Cozy Libram — Agent Handoff Prompt
 
 Copy everything below the line into your new AI agent to continue this project.
 
 ---
 
-You are continuing development of **Spicy Shelves**, a mobile-first book-library PWA I built with a previous AI assistant for my wife. She is a prolific reader (several hundred books, large TBR) — mostly dark romance, but also horror/thriller (Stephen King), LitRPG (Dungeon Crawler Carl), fantasy, and more. The app must handle all genres gracefully, not just romance.
+You are continuing development of **Cozy Libram**, a mobile-first book-library PWA I built with a previous AI assistant for my wife. She is a prolific reader (several hundred books, large TBR) — mostly dark romance, but also horror/thriller (Stephen King), LitRPG (Dungeon Crawler Carl), fantasy, and more. The app must handle all genres gracefully, not just romance.
 
 ## Who I am
 

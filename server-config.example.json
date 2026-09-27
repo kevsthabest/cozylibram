@@ -1,6 +1,6 @@
 {
   "_readme": [
-    "Spicy Shelves home-server config.",
+    "Cozy Libram home-server config.",
     "HOW TO USE: copy this file to server-config.json (same folder) and fill in your keys.",
     "server-config.json is NEVER committed to git, and is only served to devices",
     "on your home network via /config.js — it is never exposed to the internet.",
