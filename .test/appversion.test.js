@@ -52,5 +52,10 @@ const stale = precached.filter(f => !fs.existsSync('/home/hatch/workspace/bookto
 ok('every precached script exists on disk', stale.length === 0);
 if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
 
+// v118: APP_VERSION (stamped on analytics events) is paired with the
+// service-worker cache name — bump both on release or events mislabel.
+// (const doesn't attach to window; resolve it through the global scope.)
+ok('APP_VERSION matches sw.js cache version', window.eval('APP_VERSION') === parse(swText));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

@@ -392,6 +392,7 @@ async function bmAttachLocalCovers(zipData, imageEntries, books) {
 /* ---- import flow ---- */
 async function handleBookmoryFile(file, mount) {
   mount.innerHTML = '<p class="note">Reading Bookmory export…</p>';
+  track('import_started', { source: 'bookmory' });
   try {
     const zipData = new Uint8Array(await file.arrayBuffer());
     if (!(zipData[0] === 0x50 && zipData[1] === 0x4b)) throw new Error('not a zip file');
@@ -399,6 +400,7 @@ async function handleBookmoryFile(file, mount) {
     const books = parsed.books;
     if (!books.length) {
       mount.innerHTML = '<p class="note">No books found in this Bookmory export.</p>';
+      track('import_failed', { source: 'bookmory' });
       return;
     }
     await bmAttachLocalCovers(parsed.zipData, parsed.imageEntries, books);
@@ -428,6 +430,7 @@ async function handleBookmoryFile(file, mount) {
   } catch (e) {
     mount.innerHTML = '<p class="note">Couldn\'t read this Bookmory file (' + esc(e.message || 'unknown error') +
       '). Make sure it\'s the <b>Database.bookmory</b> backup from the app.</p>';
+    track('import_failed', { source: 'bookmory' });
   }
 }
 
@@ -472,5 +475,6 @@ function importBookmoryBooks(books, skippedTitles) {
   if (skipped) bits.push(skipped + ' already on shelves');
   if (skippedTitles && skippedTitles.length) bits.push(skippedTitles.length + ' corrupted in the export');
   toast('Bookmory import: ' + bits.join(', ') + ' ✨');
+  track('import_completed', { source: 'bookmory', book_count: added });
   return { added: added, updated: updated, skipped: skipped };
 }

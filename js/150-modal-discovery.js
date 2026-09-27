@@ -575,6 +575,7 @@ function similarBooks(book, limit) {
 function openDetail(id, opts) {
   const b = library.find(x => x.id === id);
   if (!b) return;
+  track('book_opened', null, { dedupeKey: 'open-' + id, dedupeMs: 60000 });
   const from = opts && (opts.fromEl || opts.fromRect);
   if (from && !reducedMotion()) {
     playBookOpen(b, from, opts.dropEl, () => renderDetailModal(b, true));
@@ -682,6 +683,7 @@ function renderDetailModal(b, viaBook) {
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
       const sims = similarBooks(b, 6);
       if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
+      track('similar_books_opened', null, { dedupeKey: 'sim-' + b.id, dedupeMs: 60000 });
       return '<div class="sim-row">' + sims.map(o =>
         '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
         (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
@@ -915,6 +917,7 @@ function renderDetailModal(b, viaBook) {
     const fb = document.getElementById('f-fav');
     fb.classList.toggle('on', draft.favorite); // v84: line-art heart fills via CSS
     render(); // refresh the shelf behind the modal
+    track(draft.favorite ? 'book_favorited' : 'book_unfavorited');
     toast(draft.favorite ? 'Pinned to favorites ❤️' : 'Removed from favorites 🤍');
   });
 
@@ -976,11 +979,17 @@ function renderDetailModal(b, viaBook) {
     if (!draft.title.trim()) draft.title = 'Untitled';
     draft.log = b.log;
     draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
+    const _aBefore = { // v118: snapshot for analytics diff (never book content)
+      status: b.status, myRating: b.myRating || 0, title: b.title, notes: b.notes,
+      releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
+      pageCount: b.pageCount, ratings: Object.assign({}, b.ratings || {}),
+    };
     Object.assign(b, draft);
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
     if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
     saveLibrary(); close(); render();
+    trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events
     toast('Saved ✨');
   });
 

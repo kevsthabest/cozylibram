@@ -74,6 +74,7 @@ function openAuthor(name) {
   animateIn = true;
   document.querySelectorAll('.bottom-nav button').forEach(b =>
     b.classList.toggle('active', b.dataset.nav === 'authors'));
+  track('author_discovery_opened', null, { dedupeKey: 'author-' + name, dedupeMs: 60000 });
   render();
   window.scrollTo(0, 0);
 }

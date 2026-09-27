@@ -102,7 +102,7 @@ function addReleaseBook(c) {
     hcId: c.hcId, hcEnriched: true // already holds this Hardcover doc's data
   };
   book.axes = autoDetectAxes(book);
-  return addBook(book, false);
+  return addBook(book, false, 'discovery');
 }
 
 function renderReleaseResults(list) {
@@ -145,6 +145,7 @@ function wireReleaseCheck() {
   if (!btn) return;
   btn.addEventListener('click', async () => {
     if (!hcReady()) { toast('Connect Hardcover in Settings → Hardcover first'); return; }
+    track('release_discovery_opened');
     btn.disabled = true;
     const label = btn.innerHTML;
     try {

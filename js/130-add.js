@@ -126,7 +126,7 @@ function onBarcode(raw) {
   const isbn = String(raw).replace(/[^0-9X]/gi, '');
   if (isbn.length < 10) return;
   stopScan();
-  isbnLookupUI(isbn, document.getElementById('scan-result') || document.getElementById('add-body'));
+  isbnLookupUI(isbn, document.getElementById('scan-result') || document.getElementById('add-body'), 'barcode');
 }
 
 function stopScan() {
@@ -173,7 +173,8 @@ function stopQuagga() {
   scanState.quagga = false;
 }
 
-async function isbnLookupUI(isbn, mount) {
+async function isbnLookupUI(isbn, mount, source) {
+  const src = source || 'isbn';
   mount.innerHTML = '<p class="note">Looking up ' + esc(isbn) + '…</p>';
   try {
     const book = await lookupISBN(isbn);
@@ -185,8 +186,8 @@ async function isbnLookupUI(isbn, mount) {
         '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn small" id="rc-add">Add to TBR</button>' +
         '<button class="btn small ghost" id="rc-edit">Add & edit details</button></div></div></div>';
-      document.getElementById('rc-add').addEventListener('click', () => { addBook(book, false); mount.innerHTML = ''; });
-      document.getElementById('rc-edit').addEventListener('click', () => { const b = addBook(book, false); if (b) openDetail(b.id); mount.innerHTML = ''; });
+      document.getElementById('rc-add').addEventListener('click', () => { addBook(book, false, src); mount.innerHTML = ''; });
+      document.getElementById('rc-edit').addEventListener('click', () => { const b = addBook(book, false, src); if (b) openDetail(b.id); mount.innerHTML = ''; });
     } else {
       mount.innerHTML = '<div class="result-card">' +
         '<div class="book-meta"><h3>No match for ' + esc(isbn) + '</h3>' +
@@ -194,7 +195,7 @@ async function isbnLookupUI(isbn, mount) {
         '<button class="btn small ghost" id="rc-manual">Add it manually</button></div></div>';
       document.getElementById('rc-manual').addEventListener('click', () => {
         const shell = normalizeVolume({ volumeInfo: { title: '', authors: [] } }, isbn);
-        const b = addBook(shell, false); if (b) openDetail(b.id);
+        const b = addBook(shell, false, src); if (b) openDetail(b.id);
       });
     }
   } catch (e) {
@@ -211,6 +212,7 @@ function renderSearchTab() {
   const run = async () => {
     const q = input.value.trim();
     if (q.length < 2) return;
+    track('search_performed');
     const box = document.getElementById('s-results');
     box.innerHTML = '<p class="note">Searching…</p>';
     try {
@@ -230,7 +232,7 @@ function renderSearchTab() {
           const enriched = Object.assign({}, b, { id: uid() });
           if (!enriched._olKey) await enrichRatings(enriched); // Google-sourced: blend OL ratings
           await enrichOLBook(enriched, enriched._olKey); // OL-sourced: description/subjects/tropes
-          const added = addBook(enriched, false);
+          const added = addBook(enriched, false, 'search');
           if (added) c.style.opacity = '0.4';
         }));
     } catch (e) {
@@ -290,7 +292,7 @@ async function bulkLookupISBNs(isbns, onStep) {
 // Add a batch of books at once: one save, one render, one toast.
 // Skips background enrichment/page-count fetch — lookupISBN already fills
 // page counts, and Settings → Hardcover → "Enrich all" backfills the rest.
-function bulkAddBooks(books) {
+function bulkAddBooks(books, source) {
   let n = 0;
   for (const book of books) {
     if (alreadyHave(book)) continue;
@@ -301,6 +303,7 @@ function bulkAddBooks(books) {
   saveLibrary();
   render();
   toast(n ? 'Added ' + n + ' book' + (n === 1 ? '' : 's') + ' ✨' : 'Nothing new to add');
+  return n;
 }
 
 function renderBulkTab() {
@@ -317,6 +320,7 @@ function renderBulkTab() {
     const resEl = document.getElementById('b-results');
     if (!isbns.length) { toast('Paste some ISBNs first'); return; }
     document.getElementById('b-go').disabled = true;
+    track('import_started', { source: 'isbn_list' });
     const results = await bulkLookupISBNs(isbns,
       (i, n) => { prog.textContent = 'Looking up ' + i + ' / ' + n + '…'; });
     prog.textContent = '';
@@ -335,7 +339,9 @@ function renderBulkTab() {
           (found.length === 1 ? '' : 's') + ' to TBR</button>'
         : '<p class="note">Nothing new to add.</p>');
     const add = document.getElementById('b-add');
-    if (add) add.addEventListener('click', () =>
-      bulkAddBooks(found.map(r => r.book)));
+    if (add) add.addEventListener('click', () => {
+      const n = bulkAddBooks(found.map(r => r.book), 'isbn_list');
+      track('import_completed', { source: 'isbn_list', book_count: n });
+    });
   });
 }

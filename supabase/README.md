@@ -23,8 +23,25 @@ library, synced across devices.
      after reads it from Supabase;
    - a `deleted_books` table: deletion tombstones so a book deleted on one
      device stays deleted everywhere instead of resurrecting on sync.
+   - an `analytics_events` table + `app_admins` registry (v118, first-party
+     usage analytics — see below).
 4. Re-running `schema.sql` later is safe — it only adds what's missing, so
    run it again after updating the app to pick up new tables.
+
+## 2b. Usage analytics (v118, optional)
+
+The app records anonymous feature-usage events (adds, searches, roulette
+spins…) — never book content. To enable the pipeline:
+
+1. In the SQL editor, run `supabase/analytics.sql` (re-run safe).
+2. Register yourself as admin:
+   ```sql
+   insert into app_admins (user_id)
+   select id from auth.users where email = 'you@example.com';
+   ```
+Users insert only their own events and can never read analytics; admins can
+read everything (this powers the Libram Observatory dashboard in v119).
+Full details: `docs/ANALYTICS.md`.
 
 ## 3. Get your API credentials
 

@@ -62,6 +62,7 @@ function renderPick() {
 
   setView(html);
   updatePickCount();
+  track('roulette_opened', null, { dedupeKey: 'roulette-open', dedupeMs: 60000 });
 
   document.querySelectorAll('#view [data-g]').forEach(c => c.addEventListener('click', () => {
     const g = c.dataset.g;
@@ -102,6 +103,7 @@ function updatePickCount() {
 function runRoulette() {
   const candidates = pickCandidates();
   if (!candidates.length) { toast('No matching books 🎲'); return; }
+  track('roulette_spun');
   if (rouletteTimer) clearInterval(rouletteTimer);
 
   const box = document.getElementById('roulette-result');
@@ -161,11 +163,15 @@ function showWinner(b) {
   document.getElementById('w-start').addEventListener('click', () => {
     b.status = 'reading';
     saveLibrary();
+    track('roulette_book_started');
     toast('Happy reading! 📖');
     filter = 'reading';
     go('library');
   });
   document.getElementById('w-again').addEventListener('click', runRoulette);
-  document.getElementById('w-detail').addEventListener('click', e => openDetail(b.id, { fromEl: e.currentTarget }));
+  document.getElementById('w-detail').addEventListener('click', e => {
+    track('roulette_book_opened');
+    openDetail(b.id, { fromEl: e.currentTarget });
+  });
 }
 

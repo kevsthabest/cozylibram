@@ -170,6 +170,7 @@ async function enterApp(user) {
   view = 'library';
   render();
   renderTopbar();
+  analyticsSessionBoot(); // v118: session_started + onboarding funnel events
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   await cloudFirstSync();

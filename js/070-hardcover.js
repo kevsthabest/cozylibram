@@ -227,13 +227,15 @@ function alreadyHave(book) {
   );
 }
 
-function addBook(book, openEditor) {
+function addBook(book, openEditor, source) {
   if (alreadyHave(book)) { toast('Already on your shelves 📚'); return null; }
   untombstone(book.id); // re-adding the same id is an un-delete
   library.unshift(book);
   saveLibrary();
   render();
   toast('Added to To Be Read ✨');
+  track('book_added', { source: source || 'manual' });
+  trackOnce('first_book', 'first_book_added');
   if (openEditor) openDetail(book.id);
   // Background page-count fill — same pattern as Hardcover enrichment.
   if (!book.pageCount && book.isbn) {

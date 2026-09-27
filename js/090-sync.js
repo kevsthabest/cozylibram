@@ -196,6 +196,9 @@ async function cloudSignUp(email, password, firstName, lastName) {
   if (lastName) meta.last_name = lastName;
   const { data, error } = await sb.auth.signUp({ email: email, password: password, options: { data: meta } });
   if (error) { toast('Sign up failed: ' + error.message); return; }
+  // v118: remember the signup so the next enterApp can log account_created
+  // (analytics needs a user id, which may not exist until email confirmation).
+  try { localStorage.setItem('spicyshelves.analytics.pending_signup', '1'); } catch (e) {}
   if (data && data.session) toast('☁️ Account created — signed in');
   else toast('Account created — check your email to confirm, then sign in.');
 }

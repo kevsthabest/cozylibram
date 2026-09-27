@@ -162,7 +162,14 @@ function renderSettings() {
   /* ---- Privacy ---- */
   const htmlPrivacy =
     '<div id="st-privacy"><p class="note">Loading…</p></div>' +
-    '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>';
+    '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
+    // v118: usage-analytics opt-out. Default ON for signed-in users; never
+    // tracks guests, never collects book content — see docs/ANALYTICS.md.
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-analytics" ' +
+    (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Usage analytics' +
+    '<span class="chk-hint">Helps improve the app. Counts how features are used — never what books you own.</span></label>' +
+    '<p class="note" style="margin-top:6px"><a href="#" id="st-analytics-what">What exactly is collected?</a></p>' +
+    '<p class="note" id="st-analytics-detail" hidden>Only anonymous usage counts — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. Never titles, authors, ISBNs, ratings, notes, shelf contents, or messages. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
 
   /* ---- About ---- */
   const htmlAbout =
@@ -311,6 +318,16 @@ function renderSettings() {
   // v117: profile + privacy shortcuts
   document.getElementById('st-edit-profile').addEventListener('click', () => go('profile'));
   document.getElementById('st-privacy-go').addEventListener('click', () => go('coven'));
+  // v118: analytics opt-out
+  document.getElementById('st-analytics').addEventListener('change', e => {
+    setAnalyticsEnabled(e.target.checked);
+    toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');
+  });
+  document.getElementById('st-analytics-what').addEventListener('click', e => {
+    e.preventDefault();
+    const d = document.getElementById('st-analytics-detail');
+    if (d) d.hidden = !d.hidden;
+  });
   // v117: privacy summary — the full sharing controls live on the Coven tab
   (async () => {
     const box = document.getElementById('st-privacy');

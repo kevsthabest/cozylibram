@@ -199,7 +199,7 @@ function detectImportFormat(text, filename) {
 }
 
 // Add parsed books: dedupe against the shelf, normalize, one save + render.
-function importForeignBooks(books, label) {
+function importForeignBooks(books, label, source) {
   let added = 0, skipped = 0;
   const fresh = [];
   for (const raw of books) {
@@ -219,6 +219,7 @@ function importForeignBooks(books, label) {
   render();
   toast('Imported ' + added + ' book' + (added === 1 ? '' : 's') + ' from ' + label +
     (skipped ? ' (' + skipped + ' already on shelves)' : '') + ' ✨');
+  track('import_completed', { source: source || 'manual', book_count: added });
   return { added: added, skipped: skipped };
 }
 
@@ -235,12 +236,14 @@ function handleImportFile(file) {
     if (!fmt) {
       mount.innerHTML = '<p class="note">Couldn\'t recognize this file. The hub currently understands ' +
         IMPORT_FORMATS.map(f => f.name).join(', ') + ' and Bookmory exports.</p>';
+      track('import_failed', { source: 'manual' });
       return;
     }
     if (fmt.needsLookup) return importISBNListFile(text, mount);
+    track('import_started', { source: fmt.id === 'isbn-list' ? 'isbn_list' : fmt.id });
     let books = [];
     try { books = fmt.parse(text); } catch (e) { books = []; }
-    if (!books.length) { mount.innerHTML = '<p class="note">No books found in this file.</p>'; return; }
+    if (!books.length) { mount.innerHTML = '<p class="note">No books found in this file.</p>'; track('import_failed', { source: fmt.id }); return; }
     const dupe = books.filter(b => b.title && alreadyHave(b)).length;
     const preview = books.slice(0, 5).map(b =>
       '<div class="result-card"><div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
@@ -253,7 +256,7 @@ function handleImportFile(file) {
       '<button class="btn block" id="im-go">Import ' + books.length + ' books</button>' +
       '<p class="note">Where to get it: ' + esc(fmt.hint) + '</p>';
     document.getElementById('im-go').addEventListener('click', () => {
-      importForeignBooks(books, fmt.name);
+      importForeignBooks(books, fmt.name, fmt.id === 'isbn-list' ? 'isbn_list' : fmt.id);
       mount.innerHTML = '';
     });
   };
@@ -265,6 +268,7 @@ function importISBNListFile(text, mount) {
   const isbns = parseISBNList(text);
   mount.innerHTML = '<p class="note">Detected: <b>ISBN list</b> — ' + isbns.length + ' ISBNs. Looking them up…</p>' +
     '<p class="note" id="im-prog"></p><div id="im-res"></div>';
+  track('import_started', { source: 'isbn_list' });
   bulkLookupISBNs(isbns, (i, n) => {
     const p = document.getElementById('im-prog');
     if (p) p.textContent = 'Looking up ' + i + ' / ' + n + '…';
@@ -278,7 +282,8 @@ function importISBNListFile(text, mount) {
       (rest ? ', ' + rest + ' not found or already on shelves' : '') + '.</p>' +
       '<button class="btn block" id="im-go">Add ' + found.length + ' books</button>';
     document.getElementById('im-go').addEventListener('click', () => {
-      bulkAddBooks(found.map(rr => rr.book));
+      const n = bulkAddBooks(found.map(rr => rr.book), 'isbn_list');
+      track('import_completed', { source: 'isbn_list', book_count: n });
       mount.innerHTML = '';
     });
   });

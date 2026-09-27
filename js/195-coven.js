@@ -234,6 +234,7 @@ async function circleUpgradeAvatars(scopeEl) {
 /* ---------- Coven section ---------- */
 function renderCoven() {
   refreshCovenNav(); // theme may have changed since the nav was drawn
+  track('coven_opened', null, { dedupeKey: 'coven-open', dedupeMs: 60000 });
   if (!cloudUser) {
     setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
       '<div class="empty"><div class="big">' + icon('friends') + '</div>' +
@@ -340,12 +341,13 @@ function renderCovenMain(code, lists, priv) {
     const msg = document.getElementById('cc-msg');
     try {
       await circleSendRequest(input.value);
+      track('friend_request_sent');
       toast('Request sent');
       rerender();
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {
-    try { await circleAnswer(b.dataset.accept, true); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); }
+    try { await circleAnswer(b.dataset.accept, true); track('friend_request_accepted'); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); }
     catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
@@ -391,6 +393,7 @@ function renderCovenMain(code, lists, priv) {
 function renderCovenFriend() {
   const f = circFriend;
   if (!f || !cloudUser) { go('coven'); return; }
+  track('shared_shelf_viewed', null, { dedupeKey: 'shelf-' + f.id, dedupeMs: 60000 });
   setView('<div class="view-head"><button class="btn ghost sm" id="cf-back">← Back</button>' +
     '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
     '<p class="note" style="text-align:center">Opening their shelves…</p>');

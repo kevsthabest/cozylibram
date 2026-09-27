@@ -6,6 +6,10 @@
    shows the version actually running on THIS device and offers a manual
    update check. */
 
+/* The version stamped onto every analytics event (v118+). Paired with the
+   service-worker cache name by appversion.test.js — bump BOTH on release. */
+const APP_VERSION = 'v118';
+
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
 function parseSwVersion(text) {
   const m = /cozy-libram-(v\d+)/.exec(text || '');

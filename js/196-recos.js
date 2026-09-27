@@ -78,6 +78,7 @@ function refreshRecos() {
   loadRecos().then(recos => {
     if (!document.body.contains(slot)) return; // user navigated away mid-load
     slot.innerHTML = recos.length ? recoSectionHTML(recos) : '';
+    if (recos.length) track('recommendation_opened', { source: 'coven' }, { dedupeKey: 'reco-open' });
     slot.querySelectorAll('[data-reco-add]').forEach(btn => {
       btn.addEventListener('click', () => recoAddToTBR(Number(btn.dataset.recoAdd)));
     });
@@ -106,5 +107,8 @@ function recoAddToTBR(idx) {
     publishedDate: src.publishedDate || '',
     _mtime: Date.now(),
   };
-  if (addBook(nb, false)) renderCoven(); // re-render picks up the now-owned book
+  if (addBook(nb, false, 'recommendation')) {
+    track('friend_recommendation_used');
+    renderCoven(); // re-render picks up the now-owned book
+  }
 }

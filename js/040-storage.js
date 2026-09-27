@@ -67,6 +67,7 @@ function removeBook(id) {
   if (!tombstones.some(t => t.id === id)) tombstones.push({ id: id, at: Date.now() });
   saveTombstones();
   saveLibrary();
+  track('book_removed');
 }
 // Re-adding the exact same book id is an un-delete.
 function untombstone(id) {
