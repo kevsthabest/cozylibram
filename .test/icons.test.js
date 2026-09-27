@@ -25,7 +25,17 @@ const runInWindow = (js) => {
   ok(n + ' renders an inline svg', /<svg[^>]*class="ticon"/.test(svg) && svg.includes('</svg>'));
   ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
 });
+// v84: book modal chrome + axis glyphs
+['tbr', 'reading', 'read', 'dnf', 'upnext', 'owned', 'tobuy', 'external', 'history',
+ 'trash', 'search', 'image', 'heart', 'pepper', 'ghost', 'shock', 'swords'].forEach(n => {
+  const svg = window.icon(n);
+  ok(n + ' renders an inline svg', /<svg[^>]*class="ticon"/.test(svg) && svg.includes('</svg>'));
+  ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
+});
 ok('unknown icon falls back to covers', window.icon('nope') === window.icon('covers'));
+runInWindow(`window.__axesOk = RATING_AXES.every(a => typeof a.icon === 'string' && icon(a.icon).includes('</svg>'));
+window.__axesCount = RATING_AXES.length;`);
+ok('every axis has a line-art icon', !!window.__axesOk);
 
 runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.animation', 'off'); go('library');`);
 ok('view toggle uses line icons', qa('.view-toggle .ticon').length === 2);
@@ -40,6 +50,21 @@ runInWindow(`library.push({ id: 'q1', isbn: '', title: 'Q', authors: ['A'], cove
   dateFinished: null, notes: '', favorite: false, owned: true, series: { name: 'Icon Saga', position: 1 },
   series2: null, quotes: [] }); saveLibrary(); go('series');`);
 ok('series view header uses line icon', !!q('#view h2 .ticon'));
+
+// v84: book detail modal uses line-art icons instead of emoji glyphs
+runInWindow(`openBookFromEl(null, 'q1');`);
+ok('modal shelf buttons use line icons', qa('#f-status .ticon').length === 4);
+ok('no emoji left in shelf buttons',
+  !['📖','📘','✅','🚫'].some(e => q('#f-status').textContent.includes(e)));
+ok('up next button uses line icon', !!q('#m-upnext .ticon'));
+ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 2);
+ok('axis chips use line icons', qa('#f-axes .ticon').length === window.__axesCount);
+ok('axis pickers use line icons', qa('#f-axrows .picker .ticon').length === 5 * qa('#f-axrows .axrow').length);
+ok('favorite button uses line icon', !!q('#f-fav .ticon'));
+ok('change-cover button uses line icon', !!q('#m-changecover .ticon'));
+ok('previously-read uses line icon', !!q('#f-prevwrap .ticon'));
+ok('store links use line icon', qa('#m-buywrap .ticon').length > 0);
+runInWindow(`document.getElementById('m-x').click();`);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

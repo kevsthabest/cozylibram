@@ -428,7 +428,7 @@ function renderDetailModal(b, viaBook) {
 
   const segBtns = Object.keys(STATUS).map(s =>
     '<button data-s="' + s + '" class="' + (b.status === s ? 'active' : '') + '">' +
-    ({ tbr: '📖 TBR', reading: '📘 Reading', read: '✅ Read', dnf: '🚫 DNF' })[s] + '</button>').join('');
+    ({ tbr: icon('tbr') + ' TBR', reading: icon('reading') + ' Reading', read: icon('read') + ' Read', dnf: icon('dnf') + ' DNF' })[s] + '</button>').join('');
 
   const hearts = [1, 2, 3, 4, 5].map(n =>
     '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '">❤️</button>').join('');
@@ -449,18 +449,18 @@ function renderDetailModal(b, viaBook) {
   }
   let startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
 
-  // rating-type toggle chips + per-axis emoji pickers
+  // rating-type toggle chips + per-axis line-art pickers (v84)
   const axRowsHTML = () => draft.axes.map(k => {
     const a = axisByKey(k);
     const v = draft.ratings[k] || 0;
     const btns = [1, 2, 3, 4, 5].map(n =>
-      '<button data-v="' + n + '" class="' + (v >= n ? 'on' : '') + '">' + a.emoji + '</button>').join('');
-    return '<div class="axrow"><span>' + a.emoji + ' ' + a.label + '</span>' +
+      '<button data-v="' + n + '" class="' + (v >= n ? 'on' : '') + '">' + icon(a.icon || 'pepper') + '</button>').join('');
+    return '<div class="axrow"><span>' + icon(a.icon || 'pepper') + ' ' + a.label + '</span>' +
       '<div class="picker" data-ax="' + k + '">' + btns + '</div></div>';
   }).join('');
   const axChipsHTML = RATING_AXES.map(a =>
     '<button class="chip' + (draft.axes.includes(a.key) ? ' active' : '') + '" data-axchip="' + a.key + '">' +
-    a.emoji + ' ' + a.label + '</button>').join('');
+    icon(a.icon || 'pepper') + ' ' + a.label + '</button>').join('');
 
   // Quick page tracker for books being read: steppers save immediately.
   const progressQuickHTML = () => {
@@ -503,7 +503,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog">' +
     '<button class="modal-close" id="m-x">✕</button>' +
     '<div class="modal-head"><div class="mcover-col">' + coverHTML(b) +
-    '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">🖼️</button></div>' +
+    '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
     '<div><h2>' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
       ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
@@ -511,28 +511,28 @@ function renderDetailModal(b, viaBook) {
     (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
     (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
     '</div>' +
-    '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + (draft.favorite ? '❤️' : '🤍') + '</button></div>' +
+    '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
     (b.description ? '<div class="desc">' + b.description + '</div>' : '') +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div id="m-progress"></div>' +
 
     '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
     '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
-    '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> 📜 Previously read' +
+    '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
     '<div class="field"><button class="btn ghost block" id="m-upnext">' +
-    (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : '⏭️ Add to Up Next') +
+    (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next') +
     '</button></div>' +
 
     '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
-    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">🏠 Owned</button>' +
-    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">🛒 To buy</button></div></div>' +
+    '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
+    '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button></div></div>' +
 
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned ? 'none' : '') + '">' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
-      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ↗</a>').join('') +
+      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
     '</div></div>' +
 
     '<div class="field"><label>Ratings</label>' +
@@ -546,7 +546,7 @@ function renderDetailModal(b, viaBook) {
 
     '<div class="field"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
-    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">🔍</button>' : '') + '</div></div>' +
+    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
     '<div class="field"><label>Current page</label>' +
     '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
     (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
@@ -554,7 +554,7 @@ function renderDetailModal(b, viaBook) {
       const tk = dayKey(new Date());
       const n = pagesOnDay(b, tk);
       if (!n) return '';
-      return '<div class="field"><button class="btn ghost danger" id="m-rmlog">🗑️ Remove today’s entry (' + n + ' pages)</button></div>';
+      return '<div class="field"><button class="btn ghost danger" id="m-rmlog">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button></div>';
     })() +
 
     '<div class="field"><label>My notes</label>' +
@@ -735,8 +735,7 @@ function renderDetailModal(b, viaBook) {
     b.favorite = draft.favorite; // immediate — no need to hit Save
     saveLibrary();
     const fb = document.getElementById('f-fav');
-    fb.textContent = draft.favorite ? '❤️' : '🤍';
-    fb.classList.toggle('on', draft.favorite);
+    fb.classList.toggle('on', draft.favorite); // v84: line-art heart fills via CSS
     render(); // refresh the shelf behind the modal
     toast(draft.favorite ? 'Pinned to favorites ❤️' : 'Removed from favorites 🤍');
   });
@@ -775,9 +774,9 @@ function renderDetailModal(b, viaBook) {
 
   document.getElementById('m-upnext').addEventListener('click', () => {
     if (upNext.includes(b.id)) { upNextRemove(b.id); toast('Removed from Up Next'); }
-    else { upNextAdd(b.id); toast('Added to Up Next ⏭️'); }
-    document.getElementById('m-upnext').textContent =
-      upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : '⏭️ Add to Up Next';
+    else { upNextAdd(b.id); toast('Added to Up Next'); }
+    document.getElementById('m-upnext').innerHTML =
+      upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next';
   });
   document.getElementById('m-share').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {

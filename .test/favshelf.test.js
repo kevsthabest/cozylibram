@@ -51,15 +51,15 @@ ok('spine click opens modal', !!q('#f-fav'));
 
 // 4. heart toggle pins/unpins immediately
 runInWindow(`window.document.getElementById('m-x').click(); openDetail('fc');`);
-ok('heart starts empty', q('#f-fav').textContent === '🤍');
+ok('heart starts empty', !q('#f-fav').classList.contains('on') && !!q('#f-fav .ticon'));
 q('#f-fav').click();
-ok('heart fills on tap', q('#f-fav').textContent === '❤️');
+ok('heart fills on tap', q('#f-fav').classList.contains('on') && !!q('#f-fav .ticon'));
 runInWindow(`window.__fc = library.find(b => b.id === 'fc');`);
 ok('favorite saved on book', window.__fc.favorite === true);
 ok('shelf gains a spine', qa('.fav-shelf .spine').length === 3);
 ok('favorite persisted', JSON.parse(window.localStorage.getItem('spicyshelves.library.v1')).find(b => b.id === 'fc').favorite === true);
 q('#f-fav').click();
-ok('heart untoggles', q('#f-fav').textContent === '🤍' && qa('.fav-shelf .spine').length === 2);
+ok('heart untoggles', !q('#f-fav').classList.contains('on') && qa('.fav-shelf .spine').length === 2);
 window.document.getElementById('m-x').click();
 
 // 5. expand/collapse with many favorites (jsdom width -> 360px -> 6 per row)

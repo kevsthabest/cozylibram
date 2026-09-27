@@ -4,10 +4,10 @@
 // Different genres get different rating axes. Spice stays for romance;
 // horror gets Scare, thrillers get Suspense, fantasy/sci-fi/LitRPG get Adventure.
 const RATING_AXES = [
-  { key: 'spice',     emoji: '🌶️', label: 'Spice',     genres: ['romance', 'erotica'] },
-  { key: 'scare',     emoji: '👻', label: 'Scare',     genres: ['horror'] },
-  { key: 'suspense',  emoji: '😰', label: 'Suspense',  genres: ['thriller', 'suspense', 'mystery', 'crime'] },
-  { key: 'adventure', emoji: '⚔️', label: 'Adventure', genres: ['fantasy', 'science fiction', 'litrpg', 'dungeon', 'adventure'] },
+  { key: 'spice',     emoji: '🌶️', icon: 'pepper', label: 'Spice',     genres: ['romance', 'erotica'] },
+  { key: 'scare',     emoji: '👻', icon: 'ghost',  label: 'Scare',     genres: ['horror'] },
+  { key: 'suspense',  emoji: '😰', icon: 'shock',  label: 'Suspense',  genres: ['thriller', 'suspense', 'mystery', 'crime'] },
+  { key: 'adventure', emoji: '⚔️', icon: 'swords', label: 'Adventure', genres: ['fantasy', 'science fiction', 'litrpg', 'dungeon', 'adventure'] },
 ];
 function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES[0]; }
 
@@ -51,10 +51,10 @@ function migrateBook(b) {
   return b;
 }
 
-// Ownership badge: 🏠 owned vs 🛒 to buy (wishlist)
+// Ownership badge: line-art home vs cart (v84)
 function ownedBadge(b) {
   return b.owned
-    ? '<span class="badge owned">🏠 Owned</span>'
-    : '<span class="badge tobuy">🛒 To buy</span>';
+    ? '<span class="badge owned">' + icon('owned') + ' Owned</span>'
+    : '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';
 }
 

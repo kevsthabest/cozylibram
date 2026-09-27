@@ -1075,3 +1075,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v79: line-art toolbar/view icons scale with the surrounding text */
 .ticon { width: 1.15em; height: 1.15em; vertical-align: -0.22em; }
 .view-toggle .ticon { width: 20px; height: 20px; vertical-align: -4px; }
+/* v84: book modal line-art — favorite heart fills when active */
+.fav-btn .ticon { width: 26px; height: 26px; }
+.fav-btn.on .ticon { fill: #ff5d7e; stroke: #ff5d7e; }
+/* v84: axis rating glyphs — larger pickers, filled when selected */
+.axrow > span .ticon { width: 1.25em; height: 1.25em; }
+.axrow .picker .ticon { width: 26px; height: 26px; }
+.axrow .picker button.on .ticon { fill: currentColor; }
+/* v84: ownership badge icons */
+.badge .ticon { width: 1.2em; height: 1.2em; }
