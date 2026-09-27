@@ -114,6 +114,28 @@ ok('google sources: proxy first, then direct without CORS',
 ok('data: sources: direct with CORS ok',
   window.__proxy[4].length === 1 && window.__proxy[4][0][1] === true);
 
+// 9. shelf style toggle: spines or covers (v61)
+runInWindow(`localStorage.setItem('spicyshelves.animation', 'off');
+  favExpanded = false; favStyle = 'spines';
+  library.forEach(b => b.favorite = false);
+  library.find(b => b.id === 'fa').favorite = true;
+  library.find(b => b.id === 'fb').favorite = true;
+  renderLibrary();`);
+ok('style toggle rendered', !!q('#fav-style'));
+ok('spines shown by default', qa('.fav-shelf .spine').length === 2 && qa('.fav-shelf .book-tile').length === 0);
+ok('toggle offers covers', q('#fav-style').textContent.includes('Covers'));
+q('#fav-style').click();
+ok('covers shown after toggle', qa('.fav-shelf .book-tile').length === 2 && qa('.fav-shelf .spine').length === 0);
+ok('toggle label flips to spines', q('#fav-style').textContent.includes('Spines'));
+ok('style persisted', window.localStorage.getItem('spicyshelves.favstyle') === 'covers');
+ok('cover tile shows the book title', qa('.fav-shelf .bt-title')[0].textContent.includes('Fav Book fa'));
+qa('.fav-shelf .book-tile')[0].click();
+ok('cover tap opens the book modal', !!q('#m-back') && q('#m-back').textContent.includes('Fav Book fa'));
+window.document.getElementById('m-x').click();
+q('#fav-style').click();
+ok('toggle back to spines', qa('.fav-shelf .spine').length === 2 &&
+  window.localStorage.getItem('spicyshelves.favstyle') === 'spines');
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

@@ -728,6 +728,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .fav-shelf { margin-bottom: 16px; }
 .fav-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .fav-head h3 { margin: 0; font-size: 17px; }
+.fav-btns { display: flex; gap: 6px; align-items: center; }
+.fav-covers { padding: 4px 2px 10px; }
 .btn.sm { padding: 6px 10px; font-size: 13px; }
 .shelf-books { display: flex; align-items: flex-end; gap: 6px; padding: 12px 14px 0; overflow-x: auto; }
 .spine { flex: 0 0 auto; border-radius: 4px 4px 2px 2px; cursor: pointer; position: relative;
