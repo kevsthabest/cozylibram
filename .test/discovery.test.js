@@ -81,6 +81,8 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   runInWindow(`openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
   ok('series heading', q('#c-more').textContent.includes('Every book in this series'));
+  ok('series heading renders the icon as HTML, not escaped text',
+    q('#c-more h3').innerHTML.includes('<svg') && !q('#c-more h3').innerHTML.includes('&lt;svg'));
   const sRows = qa('#c-more .crow.ext');
   ok('series excludes owned book', sRows.length === 2);
   ok('series position shown', sRows[0].textContent.includes('#2'));

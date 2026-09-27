@@ -276,7 +276,10 @@ function addEnrichedToWishlist(x, full) {
 async function fillMoreSection(kind, name, fromId, ov) {
   const box = ov.querySelector('#c-more');
   if (!box) return;
-  const heading = icon('search') + ' ' + (kind === 'author' ? 'More by ' + name : 'Every book in this series');
+  // The icon is trusted markup — only the text (which carries the library's
+  // own author/series name) goes through esc().
+  const headingHTML = '<h3 class="serif c-more-h">' + icon('search') + ' ' +
+    esc(kind === 'author' ? 'More by ' + name : 'Every book in this series') + '</h3>';
   try {
     let rows;
     if (kind === 'author') {
@@ -285,18 +288,18 @@ async function fillMoreSection(kind, name, fromId, ov) {
       const from = library.find(b => b.id === fromId);
       const r = await fetchSeriesBooks(name, from && from.authors[0]);
       if (r.needsToken) {
-        box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+        box.innerHTML = headingHTML +
           '<p class="note">' + icon('bulb') + ' Connect Hardcover in Settings to see every book in this series.</p>';
         return;
       }
       rows = r.rows;
     }
     if (!rows.length) {
-      box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+      box.innerHTML = headingHTML +
         '<p class="note">Nothing missing — nice shelf!</p>';
       return;
     }
-    box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+    box.innerHTML = headingHTML +
       '<div class="collection-list">' + rows.map(externalRowHTML).join('') + '</div>';
     box.querySelectorAll('[data-extadd]').forEach(btn =>
       btn.addEventListener('click', (e) => {
@@ -317,7 +320,7 @@ async function fillMoreSection(kind, name, fromId, ov) {
     const hint = kind === 'series'
       ? 'Hardcover lookup failed — ' + esc(String((e && e.message) || 'unknown error'))
       : 'Couldn\'t look up more books right now.';
-    box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
+    box.innerHTML = headingHTML +
       '<p class="note">' + hint + '</p>';
   }
 }
