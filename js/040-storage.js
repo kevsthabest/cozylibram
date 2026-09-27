@@ -40,9 +40,29 @@ function saveTombstones() {
 }
 tombstones = loadTombstones();
 function tombstonedIds() { return new Set(tombstones.map(t => t.id)); }
+// "Up Next" queue (v74): ordered book ids, per-user like the library.
+// Local-only for now — the queue is a reading plan, not synced to the cloud.
+let upNext = [];
+function upNextKey() {
+  return localUid ? 'spicyshelves.upnext.v1.' + localUid : 'spicyshelves.upnext.v1';
+}
+function loadUpNext() {
+  try {
+    const have = new Set(library.map(b => b.id));
+    const arr = (JSON.parse(localStorage.getItem(upNextKey())) || []).filter(id => have.has(id));
+    try { localStorage.setItem(upNextKey(), JSON.stringify(arr)); } catch (e) {} // persist the cleanup
+    return arr;
+  } catch (e) { return []; }
+}
+function saveUpNext() {
+  try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {}
+}
+upNext = loadUpNext();
 // Central removal path: drops the book locally and records a tombstone.
 function removeBook(id) {
   library = library.filter(b => b.id !== id);
+  upNext = upNext.filter(x => x !== id); // v74: a removed book leaves the queue too
+  saveUpNext();
   bookSnapshots.delete(id);
   if (!tombstones.some(t => t.id === id)) tombstones.push({ id: id, at: Date.now() });
   saveTombstones();
@@ -123,6 +143,7 @@ function setLocalUser(uid) {
   if (uid === localUid) return;
   try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
   try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
+  try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {} // v74
   const hadBooks = library.length > 0;
   const hadTombs = tombstones.length > 0;
   localUid = uid || null;
@@ -146,5 +167,6 @@ function setLocalUser(uid) {
     } catch (e) {}
   }
   tombstones = nextTombs;
+  upNext = loadUpNext(); // v74: queue is per-user too
 }
 

@@ -98,6 +98,81 @@ function favShelfHTML() {
   return html + '</div>';
 }
 
+/* ---------------- "Up Next" queue (v74) ---------------- */
+// Ordered reading shortlist: ids live in `upNext` (040-storage.js, per-user,
+// local-only). Queue ops keep DOM and storage in sync.
+function upNextBooks() {
+  const byId = new Map(library.map(b => [b.id, b]));
+  return upNext.map(id => byId.get(id)).filter(Boolean);
+}
+function upNextAdd(id) {
+  if (!upNext.includes(id)) { upNext.push(id); saveUpNext(); }
+}
+function upNextRemove(id) {
+  if (upNext.includes(id)) { upNext = upNext.filter(x => x !== id); saveUpNext(); }
+}
+function upNextMove(id, dir) {
+  const i = upNext.indexOf(id), j = i + dir;
+  if (i < 0 || j < 0 || j >= upNext.length) return;
+  const t = upNext[i]; upNext[i] = upNext[j]; upNext[j] = t;
+  saveUpNext();
+}
+function upNextShelfHTML() {
+  const books = upNextBooks();
+  let html = '<div class="un-strip"><div class="recent-head"><h3 class="serif">⏭️ Up Next</h3>' +
+    (books.length ? '<button class="btn ghost sm" id="un-manage">Manage</button>' : '') + '</div>';
+  if (!books.length) {
+    html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">' +
+      'Queue up what to read next — open any book and tap <b>⏭️ Up Next</b>.</p></div>';
+  } else {
+    html += '<div class="recent-row">' + books.slice(0, 8).map((b, i) => {
+      const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
+        : '<div class="recent-nocover">📖</div>';
+      return '<button class="recent-card" data-id="' + b.id + '" title="#' + (i + 1) + ' · ' + esc(b.title) + '">' +
+        '<span class="un-num">' + (i + 1) + '</span>' + cov +
+        '<span class="recent-title">' + esc(b.title) + '</span></button>';
+    }).join('') + '</div>';
+  }
+  return html + '</div>';
+}
+function renderUpNext() {
+  const books = upNextBooks();
+  let html = '<button class="btn ghost" id="un-back">← Shelves</button>' +
+    '<h2 class="section serif" style="font-size:26px;margin-top:10px">⏭️ Up Next</h2>';
+  if (!books.length) {
+    html += '<div class="empty"><div class="big">⏭️</div><h2 class="serif">Nothing queued</h2>' +
+      '<p>Open any book and tap <b>⏭️ Up Next</b><br>to build your reading shortlist.</p></div>';
+  } else {
+    html += '<p class="note">Your reading shortlist, in order — start at the top.</p><div class="un-list">' +
+      books.map((b, i) =>
+        '<div class="un-row" data-id="' + b.id + '">' +
+        '<span class="un-pos">' + (i + 1) + '</span>' +
+        (b.cover ? '<img class="un-thumb" src="' + esc(b.cover) + '" alt="" loading="lazy">'
+                 : '<div class="un-thumb un-nonecover">📖</div>') +
+        '<button class="un-info" data-open="' + b.id + '"><span class="un-title">' + esc(b.title) + '</span>' +
+        '<span class="un-sub">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</span></button>' +
+        '<span class="un-btns">' +
+        '<button class="btn ghost sm" data-mv="-1" title="Move up"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button class="btn ghost sm" data-mv="1" title="Move down"' + (i === books.length - 1 ? ' disabled' : '') + '>↓</button>' +
+        '<button class="btn ghost sm" data-rm="1" title="Remove from queue">✕</button>' +
+        '</span></div>').join('') + '</div>';
+  }
+  setView(html);
+  document.getElementById('un-back').addEventListener('click', () => go('library'));
+  document.querySelectorAll('.un-row [data-mv]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      upNextMove(btn.closest('.un-row').dataset.id, Number(btn.dataset.mv));
+      animateIn = false; renderUpNext();
+    }));
+  document.querySelectorAll('.un-row [data-rm]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      upNextRemove(btn.closest('.un-row').dataset.id);
+      animateIn = false; renderUpNext();
+    }));
+  document.querySelectorAll('.un-row [data-open]').forEach(btn =>
+    btn.addEventListener('click', () => openDetail(btn.dataset.open)));
+}
+
 /* ---- spine colors from covers + pull-out animation ---- */
 const spineColorCache = {}; // bookId -> { hex, cover }
 const spinePaintInflight = new Set();
@@ -242,7 +317,7 @@ function renderLibrary() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
 
-  let html = recentStripHTML() + favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
+  let html = recentStripHTML() + favShelfHTML() + upNextShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div></div>';
   html += '<div class="chips">' +
@@ -295,6 +370,8 @@ function renderLibrary() {
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   document.querySelectorAll('.spine').forEach(s =>
     s.addEventListener('click', () => pullSpine(s, s.dataset.id)));
+  const unm = document.getElementById('un-manage');
+  if (unm) unm.addEventListener('click', () => go('upnext'));
   const ft = document.getElementById('fav-toggle');
   if (ft) ft.addEventListener('click', () => { favExpanded = !favExpanded; render(); });
   const fst = document.getElementById('fav-style');

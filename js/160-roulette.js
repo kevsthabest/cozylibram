@@ -12,6 +12,7 @@ function allPickGenres() {
 function pickCandidates() {
   const q = pickState.trope.trim().toLowerCase();
   return tbrBooks().filter(b => {
+    if (pickState.upNextOnly && !upNext.includes(b.id)) return false; // v74
     if (pickState.genres.length && !bookGenres(b).some(g => pickState.genres.includes(g))) return false;
     if (q && !(b.tropes || []).join(' ').toLowerCase().includes(q)) return false;
     const pk = primaryAxisKey(b);
@@ -51,6 +52,8 @@ function renderPick() {
     '<div class="stat-sub">How intense?</div><div class="chips">' +
     intensityOpts.map(([v, l]) => '<button class="chip' + (pickState.minIntensity === v ? ' active' : '') +
       '" data-s="' + v + '">' + l + '</button>').join('') + '</div>';
+  html += '<div class="stat-sub">Queue</div><div class="chips">' +
+    '<button class="chip' + (pickState.upNextOnly ? ' active' : '') + '" id="pk-upnext">⏭️ Up Next only (' + upNext.length + ')</button></div>';
   html += '</div>';
 
   html += '<p class="note" id="pick-count"></p>' +
@@ -75,6 +78,11 @@ function renderPick() {
   }));
   document.getElementById('pk-trope').addEventListener('input', e => {
     pickState.trope = e.target.value;
+    updatePickCount();
+  });
+  document.getElementById('pk-upnext').addEventListener('click', (e) => {
+    pickState.upNextOnly = !pickState.upNextOnly;
+    e.currentTarget.classList.toggle('active', pickState.upNextOnly);
     updatePickCount();
   });
   document.getElementById('pk-spin').addEventListener('click', runRoulette);

@@ -12,6 +12,7 @@ function render() {
   else if (view === 'profile') renderProfile();
   else if (view === 'authors') renderAuthors();
   else if (view === 'author') renderAuthorDetail();
+  else if (view === 'upnext') renderUpNext();
   else if (view === 'verify') renderVerify();
 }
 

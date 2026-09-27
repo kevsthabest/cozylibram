@@ -483,6 +483,10 @@ function renderDetailModal(b, viaBook) {
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> 📜 Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
+    '<div class="field"><button class="btn ghost block" id="m-upnext">' +
+    (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : '⏭️ Add to Up Next') +
+    '</button></div>' +
+
     '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
     '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">🏠 Owned</button>' +
     '<button data-o="0" class="' + (!draft.owned ? 'active' : '') + '">🛒 To buy</button></div></div>' +
@@ -653,6 +657,12 @@ function renderDetailModal(b, viaBook) {
     toast('Today’s entry removed 🗑️');
   });
 
+  document.getElementById('m-upnext').addEventListener('click', () => {
+    if (upNext.includes(b.id)) { upNextRemove(b.id); toast('Removed from Up Next'); }
+    else { upNextAdd(b.id); toast('Added to Up Next ⏭️'); }
+    document.getElementById('m-upnext').textContent =
+      upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : '⏭️ Add to Up Next';
+  });
   document.getElementById('m-share').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
@@ -672,6 +682,9 @@ function renderDetailModal(b, viaBook) {
     if (!draft.title.trim()) draft.title = 'Untitled';
     draft.log = b.log;
     Object.assign(b, draft);
+    // v74: starting (or finishing) a book takes it off the Up Next queue —
+    // it's no longer "next" once she's reading it.
+    if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
     saveLibrary(); close(); render();
     toast('Saved ✨');
   });
