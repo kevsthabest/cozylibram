@@ -1,4 +1,4 @@
-/* Spicy Shelves — theming via data-theme="dark|light" + data-accent on <html> */
+/* Cozy Libram — theming via data-theme + data-accent on <html> */
 :root, [data-theme="dark"] {
   --bg: #14101a;
   --bg2: #1d1526;
@@ -34,6 +34,74 @@
   --danger: #c64f4f;
   --nav-bg: rgba(250, 245, 236, 0.94);
   --glow: #f0dfc2;
+}
+[data-theme="hearthside"] {
+  --bg: #17100a;
+  --bg2: #201410;
+  --card: #2a1a12;
+  --card2: #352216;
+  --ink: #f6e9d6;
+  --muted: #c7a684;
+  --faint: #8d6f52;
+  --accent: #e5488f;
+  --accent-deep: #c2377a;
+  --gold: #d9a44f;
+  --line: #453020;
+  --ok: #7bc98a;
+  --danger: #e56b6b;
+  --nav-bg: rgba(23, 16, 10, 0.92);
+  --glow: #3a2415;
+}
+[data-theme="candlelight"] {
+  --bg: #f7efdc;
+  --bg2: #eee1c6;
+  --card: #fffaf0;
+  --card2: #f6ebd2;
+  --ink: #332619;
+  --muted: #77603f;
+  --faint: #ab9573;
+  --accent: #e5488f;
+  --accent-deep: #c2377a;
+  --gold: #a87b24;
+  --line: #e3d2ac;
+  --ok: #3e8e52;
+  --danger: #c64f4f;
+  --nav-bg: rgba(247, 239, 220, 0.94);
+  --glow: #ecdcae;
+}
+[data-theme="twilight"] {
+  --bg: #0e1120;
+  --bg2: #141a2e;
+  --card: #1a2138;
+  --card2: #222b46;
+  --ink: #e9ebf7;
+  --muted: #a4aac9;
+  --faint: #6e7492;
+  --accent: #e5488f;
+  --accent-deep: #c2377a;
+  --gold: #d4a24e;
+  --line: #2b3352;
+  --ok: #7bc98a;
+  --danger: #e56b6b;
+  --nav-bg: rgba(14, 17, 32, 0.92);
+  --glow: #1c2342;
+}
+[data-theme="verdant"] {
+  --bg: #0d140e;
+  --bg2: #121b13;
+  --card: #172419;
+  --card2: #1e2f21;
+  --ink: #eaf3e5;
+  --muted: #a5bda1;
+  --faint: #70876f;
+  --accent: #e5488f;
+  --accent-deep: #c2377a;
+  --gold: #d4a24e;
+  --line: #293b2a;
+  --ok: #7bc98a;
+  --danger: #e56b6b;
+  --nav-bg: rgba(13, 20, 14, 0.92);
+  --glow: #1a2a1c;
 }
 /* accent overrides (rose is the default, defined above) */
 [data-accent="violet"] { --accent: #8b5cf6; --accent-deep: #6d3fd4; }
@@ -797,6 +865,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ---------- theme / accent picker ---------- */
 .swatches { display: flex; gap: 14px; padding: 4px 2px; }
+.th-dot {
+  width: 14px; height: 14px; border-radius: 50%; display: inline-block;
+  margin-right: 7px; border: 1px solid var(--line); vertical-align: -2px;
+}
 .sw {
   width: 42px; height: 42px; border-radius: 50%;
   background: var(--sw); border: 2px solid var(--line);

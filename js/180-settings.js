@@ -27,10 +27,10 @@ function renderSettings() {
     '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + axisByKey(ax0).emoji : 'Avg 💥') + '</div></div>' +
     '</div>' +
     '<h2 class="section serif">Appearance</h2>' +
-    '<div class="field"><label>Theme</label><div class="seg" id="th-theme" style="grid-template-columns:1fr 1fr">' +
-    ['dark', 'light'].map(t =>
-      '<button data-t="' + t + '" class="' + (getTheme() === t ? 'active' : '') + '">' +
-      (t === 'dark' ? icon('moon') + ' Dark' : icon('sun') + ' Light') + '</button>').join('') +
+    '<div class="field"><label>Theme</label><div class="seg" id="th-theme" style="grid-template-columns:repeat(3,1fr)">' +
+    THEMES.map(th =>
+      '<button data-t="' + th.key + '" class="' + (getTheme() === th.key ? 'active' : '') + '">' +
+      '<span class="th-dot" style="background:' + th.meta + '"></span>' + th.name + '</button>').join('') +
     '</div></div>' +
     '<div class="field"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>
