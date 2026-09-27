@@ -134,11 +134,106 @@ function addExternalBook(x) {
 function externalRowHTML(x, i) {
   const sub = (x.position != null && x.position !== '' ? '#' + esc(String(x.position)) + ' · ' : '') +
     esc(x.author || 'Unknown author');
-  return '<div class="crow ext">' +
+  return '<div class="crow ext" data-ext="' + i + '">' +
     (x.cover ? '<img src="' + esc(x.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
       : '<span class="cnocover">📕</span>') +
     '<span class="ctext"><b>' + esc(x.title) + '</b><small>' + sub + '</small></span>' +
     '<button class="btn small" data-extadd="' + i + '">+ Wishlist</button></div>';
+}
+
+/* ---- external book detail sheet (v60): tap a missing/discovered book to see
+   its details. Enriches live via ISBN lookup (Google Books → Open Library),
+   falling back to a title+author search when there is no ISBN. ---- */
+function openExternalDetail(x) {
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  const sub = (x.position != null && x.position !== '' ? '#' + esc(String(x.position)) + ' · ' : '') +
+    (x.seriesName ? esc(x.seriesName) + ' · ' : '') + esc(x.author || 'Unknown author');
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="x-back" style="z-index:80"><div class="modal" role="dialog">' +
+    '<button class="modal-close" id="x-x">✕</button>' +
+    '<div class="ext-detail">' +
+    (x.cover ? '<img class="ext-cover" src="' + esc(x.cover) + '" alt="" onerror="this.remove()">'
+      : '<div class="ext-nocover">📕</div>') +
+    '<h2 class="serif">' + esc(x.title) + '</h2>' +
+    '<p class="note">' + sub + '</p>' +
+    '<div id="x-meta"><p class="note">Looking up details…</p></div>' +
+    '<div id="x-desc"></div>' +
+    '<button class="btn" id="x-wish" style="width:100%;margin-top:14px">💝 + Wishlist</button>' +
+    '</div></div></div>';
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('#x-back').addEventListener('click', e => { if (e.target.id === 'x-back') close(); });
+  ov.querySelector('#x-x').addEventListener('click', close);
+  let added = false;
+  ov.querySelector('#x-wish').addEventListener('click', () => {
+    if (added) return;
+    added = true;
+    addEnrichedToWishlist(x, ov._full);
+    const btn = ov.querySelector('#x-wish');
+    if (btn) btn.outerHTML = '<p class="note" style="text-align:center">💝 In your wishlist</p>';
+    toast('Added to wishlist 💝');
+  });
+  // enrich in the background; the sheet stays usable meanwhile
+  (async () => {
+    let full = null;
+    try {
+      if (x.isbn) full = await lookupISBN(x.isbn);
+      if (!full) {
+        const res = await searchBooks((x.title || '') + ' ' + (x.author || ''));
+        const nt = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        full = ((res || []).find(r => nt(r.title) === nt(x.title)) || (res || [])[0]) || null;
+      }
+    } catch (e) { /* show what we have */ }
+    ov._full = full;
+    const metaBox = ov.querySelector('#x-meta');
+    if (!metaBox) return; // sheet was closed already
+    if (!full) {
+      metaBox.innerHTML = '<p class="note">Couldn\'t pull full details for this one.</p>';
+      return;
+    }
+    const bits = [];
+    if (full.pageCount) bits.push(full.pageCount + ' pages');
+    const yr = String(full.publishedDate || '').slice(0, 4);
+    if (/^\d{4}$/.test(yr)) bits.push(yr);
+    if (full.publicRating) bits.push('★ ' + full.publicRating +
+      (full.ratingsCount ? ' (' + full.ratingsCount + ')' : ''));
+    metaBox.innerHTML = bits.length
+      ? '<p class="ext-bits">' + bits.map(esc).join(' · ') + '</p>' : '';
+    if (full.description) {
+      const d = ov.querySelector('#x-desc');
+      if (d) d.innerHTML = '<p class="ext-desc">' + esc(full.description) + '</p>';
+    }
+    const img = ov.querySelector('.ext-cover');
+    if (full.cover && img && img.getAttribute('src') !== full.cover) img.src = full.cover;
+  })();
+}
+
+// Add an external book to the wishlist, keeping any enriched metadata.
+function addEnrichedToWishlist(x, full) {
+  const ex = {
+    title: (full && full.title) || x.title,
+    author: ((full && full.authors && full.authors[0]) || x.author || ''),
+    cover: (full && full.cover) || x.cover || '',
+    isbn: (full && full.isbn) || x.isbn || '',
+    position: x.position != null ? x.position
+      : (full && full.series && full.series.position),
+    seriesName: x.seriesName || (full && full.series && full.series.name) || null,
+  };
+  const book = addExternalBook(ex);
+  if (full) {
+    if (full.description) book.description = full.description;
+    if (full.pageCount) book.pageCount = full.pageCount;
+    if (full.publishedDate) book.publishedDate = full.publishedDate;
+    if (full.categories && full.categories.length) book.categories = full.categories;
+    if (full.publicRating) {
+      book.publicRating = full.publicRating;
+      book.ratingsCount = full.ratingsCount || 0;
+    }
+    book.axes = autoDetectAxes(book);
+    saveLibrary();
+  }
+  return book;
 }
 
 // Fill the "more books" section of the collection sheet (async, after it opens).
@@ -168,10 +263,17 @@ async function fillMoreSection(kind, name, fromId, ov) {
     box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
       '<div class="collection-list">' + rows.map(externalRowHTML).join('') + '</div>';
     box.querySelectorAll('[data-extadd]').forEach(btn =>
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         addExternalBook(rows[Number(btn.dataset.extadd)]);
         btn.outerHTML = '<span class="c-added">💝 In wishlist</span>';
         toast('Added to wishlist 💝');
+      }));
+    // v60: tapping the row itself opens the detail sheet
+    box.querySelectorAll('[data-ext]').forEach(row =>
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-extadd]')) return;
+        openExternalDetail(rows[Number(row.dataset.ext)]);
       }));
   } catch (e) {
     const hint = kind === 'series'

@@ -100,10 +100,17 @@ async function fillMissingBooks(name) {
     }
     box.innerHTML = '<div class="collection-list">' + rows.map(missingRowHTML).join('') + '</div>';
     box.querySelectorAll('[data-madd]').forEach(btn =>
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         addExternalBook(rows[Number(btn.dataset.madd)]);
         btn.outerHTML = '<span class="c-added">💝 In wishlist</span>';
         toast('Added to wishlist 💝');
+      }));
+    // v60: tapping a missing book opens its detail sheet
+    box.querySelectorAll('[data-miss]').forEach(row =>
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('[data-madd]')) return;
+        openExternalDetail(rows[Number(row.dataset.miss)]);
       }));
   } catch (e) {
     box.innerHTML = '<p class="note">Couldn\'t look up their other books right now.</p>';

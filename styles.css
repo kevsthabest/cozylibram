@@ -856,8 +856,18 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* collection sheet: external "more books" section */
 .c-more-h { margin: 18px 0 8px; font-size: 1.1em; }
-.crow.ext { cursor: default; }
+.crow.ext { cursor: pointer; }
+.crow.missing { cursor: pointer; }
 .c-added { color: var(--accent); font-weight: 600; font-size: 13px; white-space: nowrap; }
+
+/* external book detail sheet (v60) */
+.ext-detail { text-align: center; padding: 6px 2px 2px; }
+.ext-cover { width: 150px; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,.5); }
+.ext-nocover { font-size: 64px; padding: 18px 0 6px; }
+.ext-detail h2 { margin: 12px 0 4px; font-size: 1.35em; }
+.ext-bits { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.ext-desc { text-align: left; font-size: 14px; line-height: 1.55; color: var(--ink);
+  max-height: 38vh; overflow-y: auto; margin: 12px 0 0; opacity: .92; }
 
 /* authors tab (v43) */
 .aavatar { width: 40px; height: 40px; border-radius: 50%; flex: none; display: flex;
