@@ -162,3 +162,38 @@ function wireReleaseCheck() {
     }
   });
 }
+
+/* ---------------- Discover landing (v121) ----------------
+   "What are you in the mood for?" — one destination for every discovery
+   feature, each with a plain-language explanation. Cards route to real
+   features only; the release check runs inline. */
+function discCard(ic, title, blurb, target) {
+  return '<button class="disc-card" data-disc="' + target + '">' +
+    '<span class="disc-ic">' + icon(ic) + '</span>' +
+    '<span class="disc-tx"><b>' + esc(title) + '</b><small>' + esc(blurb) + '</small></span>' +
+    '<span class="disc-go" aria-hidden="true">→</span></button>';
+}
+
+function renderDiscover() {
+  track('discover_opened', null, { dedupeKey: 'discover-open', dedupeMs: 8000 });
+  setView('<div class="view-head"><h2 class="serif">' + icon('sparkles') + ' Discover</h2>' +
+    '<p class="note">What are you in the mood for?</p></div>' +
+    '<div class="disc-list">' +
+    discCard('dice', 'Surprise Me', 'Can\u2019t decide what to read? Let Cozy Libram pick something from your TBR.', 'pick') +
+    '<div class="disc-card disc-wide"><span class="disc-ic">' + icon('calendar') + '</span>' +
+    '<span class="disc-tx"><b>New Releases</b><small>Fresh and upcoming books from your favorite authors.</small></span></div>' +
+    discCard('user', 'Authors You Might Like', 'Find missing books from authors you already love.', 'authors') +
+    discCard('friends', 'From Friends', 'Books your coven couldn\u2019t put down.', 'coven') +
+    discCard('search', 'Search Books', 'Search millions of titles to add to your library.', 'search') +
+    '</div>' +
+    '<div class="disc-releases"><button class="btn sm" id="rel-check">' + icon('sparkles') + ' Check for new releases</button>' +
+    '<div id="release-results"></div></div>');
+  wireReleaseCheck();
+  document.querySelectorAll('[data-disc]').forEach(c => c.addEventListener('click', () => {
+    const t = c.dataset.disc;
+    if (t === 'pick') go('pick');
+    else if (t === 'authors') go('authors');
+    else if (t === 'coven') go('coven');
+    else if (t === 'search') { addTab = 'search'; go('add'); }
+  }));
+}

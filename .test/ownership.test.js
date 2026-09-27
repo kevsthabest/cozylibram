@@ -69,9 +69,10 @@ ok('owned filter shows none now', qa('.book-card').length === 0);
 q('[data-of="all"]').click();
 ok('all restores both', qa('.book-card').length === 2);
 
-// 7. wishlist tab
-ok('nav has wishlist button', !!q('.bottom-nav [data-nav="wishlist"]'));
-q('.bottom-nav [data-nav="wishlist"]').click();
+// 7. wishlist (reached from the Library toolbar)
+runInWindow(`go('library')`);
+ok('library toolbar links to wishlist', !!q('#lib-wishlist'));
+q('#lib-wishlist').click();
 ok('wishlist view renders', !!q('.wish-head'));
 ok('wishlist shows only to-buy', qa('#view .book-card').length === 2);
 ok('wishlist cards have to-buy badges',

@@ -37,6 +37,7 @@ const EVENT_DEFS = {
   similar_books_opened:     { c: 'discovery', p: [] },
   release_discovery_opened: { c: 'discovery', p: [] },
   recommendation_opened:    { c: 'discovery', p: ['source'] },
+  discover_opened:          { c: 'discovery', p: [] }, // v121: Discover landing
   roulette_opened:          { c: 'discovery', p: [] },
   roulette_spun:            { c: 'discovery', p: [] },
   roulette_book_opened:     { c: 'discovery', p: [] },

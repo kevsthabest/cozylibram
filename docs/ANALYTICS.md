@@ -24,6 +24,7 @@ of properties (below), `app_version`, and a timestamp. Nothing else.
 | `book_favorited` / `book_unfavorited` | library | — |
 | `book_completed` / `book_dnf` | library | — |
 | `search_performed` | discovery | — |
+| `discover_opened` | discovery | — |
 | `author_discovery_opened` | discovery | — |
 | `similar_books_opened` | discovery | — |
 | `release_discovery_opened` | discovery | — |

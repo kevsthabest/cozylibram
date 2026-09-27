@@ -320,6 +320,7 @@ function renderLibrary() {
   let html = recentStripHTML() + favShelfHTML() + upNextShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">' + icon('list') + '</button>' +
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">' + icon('covers') + '</button></div>' +
+    '<button class="btn ghost sm" id="lib-wishlist" title="Wishlist">' + icon('gift') + ' Wishlist</button>' +
     '<button class="btn ghost sm" id="lib-quotes" title="Browse saved quotes">' + icon('quotes') + ' Quotes</button>' +
     '<button class="btn ghost sm" id="lib-series" title="Series overview">' + icon('series') + ' Series</button></div>';
   html += '<div class="chips">' +
@@ -376,6 +377,8 @@ function renderLibrary() {
   if (unm) unm.addEventListener('click', () => go('upnext'));
   const lq = document.getElementById('lib-quotes');
   if (lq) lq.addEventListener('click', () => go('quotes'));
+  const lw = document.getElementById('lib-wishlist');
+  if (lw) lw.addEventListener('click', () => go('wishlist'));
   const ls = document.getElementById('lib-series');
   if (ls) ls.addEventListener('click', () => { seriesReturn = 'library'; go('series'); });
   const ft = document.getElementById('fav-toggle');

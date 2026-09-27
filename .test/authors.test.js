@@ -48,9 +48,12 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const idx = window.eval(`authorIndex().map(e => e.name + ':' + e.owned.length + ':' + e.wanted.length).join('|')`);
   ok('authorIndex dedupes and counts', idx === 'Jane Doe:2:1|John Smith:2:0');
 
+  // authors live under the Discover tab now (v121)
+  runInWindow(`go('discover')`);
+  ok('authors reachable from the Discover landing', !!q('#view [data-disc="authors"]'));
+
   // list view renders one row per author
   runInWindow(`renderAuthors()`);
-  ok('authors tab exists in the bottom nav', !!q('.bottom-nav [data-nav="authors"]'));
   const rows = qa('[data-author]');
   ok('authors list renders one row per author', rows.length === 2);
   ok('author row shows owned count', rows[0].textContent.includes('2 owned'));

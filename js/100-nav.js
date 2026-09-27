@@ -1,13 +1,27 @@
 'use strict';
 
 /* ---------------- navigation ---------------- */
+// v121: five primary destinations. Sub-views highlight their parent tab so
+// the nav always reflects where the user is.
+const NAV_PARENT = {
+  library: 'library', wishlist: 'library', upnext: 'library', quotes: 'library',
+  discover: 'discover', pick: 'discover', authors: 'discover', author: 'discover',
+  add: 'add',
+  stats: 'stats',
+  coven: 'coven', 'coven-friend': 'coven',
+};
+function navTab(v) {
+  if (v === 'series') return NAV_PARENT[typeof seriesReturn !== 'undefined' ? seriesReturn : ''] || 'discover';
+  return NAV_PARENT[v] || null;
+}
 function go(v) {
   stopScan();
   if (rouletteTimer) { clearInterval(rouletteTimer); rouletteTimer = null; }
   view = v;
   animateIn = true;
+  const tab = navTab(v);
   document.querySelectorAll('.bottom-nav button').forEach(b =>
-    b.classList.toggle('active', b.dataset.nav === v));
+    b.classList.toggle('active', b.dataset.nav === tab));
   render();
   window.scrollTo(0, 0);
 }
