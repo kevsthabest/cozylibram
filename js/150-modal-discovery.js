@@ -404,6 +404,13 @@ function renderDetailModal(b, viaBook) {
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
 
+  // v67: previously-read default from history — a finish older than 60 days
+  // means she read it before tracking, so don't stamp or log today.
+  if (draft.previouslyRead == null) {
+    draft.previouslyRead = !!(draft.dateFinished && Date.now() - new Date(draft.dateFinished).getTime() > 60 * 864e5);
+  }
+  const startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
+
   // rating-type toggle chips + per-axis emoji pickers
   const axRowsHTML = () => draft.axes.map(k => {
     const a = axisByKey(k);
@@ -471,7 +478,10 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div id="m-progress"></div>' +
 
-    '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div></div>' +
+    '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
+    '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
+    '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> 📜 Previously read' +
+    '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
     '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr">' +
     '<button data-o="1" class="' + (draft.owned ? 'active' : '') + '">🏠 Owned</button>' +
@@ -521,15 +531,33 @@ function renderDetailModal(b, viaBook) {
     btn.addEventListener('click', () => {
       draft.status = btn.dataset.s;
       root.querySelectorAll('#f-status button').forEach(x => x.classList.toggle('active', x === btn));
-      if (draft.status === 'read' && !draft.dateFinished) draft.dateFinished = new Date().toISOString();
+      const pv = document.getElementById('f-prevwrap');
+      if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';
+      if (draft.status === 'read' && !draft.dateFinished && !draft.previouslyRead) draft.dateFinished = new Date().toISOString();
       if (draft.status !== 'read') draft.dateFinished = null;
-      if (draft.status === 'read' && draft.pageCount) {
+      if (draft.status === 'read' && draft.pageCount && !draft.previouslyRead) {
         draft.progress = draft.pageCount; // Save logs the completion delta
         const pi = document.getElementById('f-progress');
         if (pi) pi.value = draft.progress;
       }
       renderProgressSection();
     }));
+
+  document.getElementById('f-prevread').addEventListener('change', e => {
+    draft.previouslyRead = e.target.checked;
+    const pi = document.getElementById('f-progress');
+    if (draft.previouslyRead) {
+      if (draft.dateFinished && !b.dateFinished) draft.dateFinished = null; // undo today's stamp
+      draft.progress = startProgress; // undo the auto completion bump
+      if (pi) pi.value = draft.progress;
+    } else if (draft.status === 'read' && !draft.dateFinished) {
+      draft.dateFinished = new Date().toISOString();
+      if (draft.pageCount) {
+        draft.progress = draft.pageCount;
+        if (pi) pi.value = draft.progress;
+      }
+    }
+  });
 
   root.querySelectorAll('#f-owned button').forEach(btn =>
     btn.addEventListener('click', () => {
@@ -602,13 +630,18 @@ function renderDetailModal(b, viaBook) {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);
     draft.notes = document.getElementById('f-notes').value;
+    draft.previouslyRead = document.getElementById('f-prevread').checked;
     const totalEl = document.getElementById('f-pagecount');
     draft.pageCount = Math.max(0, Number(totalEl.value) || 0) || null;
     const prog = document.getElementById('f-progress');
     const cap = draft.pageCount || Infinity;
-    draft.progress = Math.max(0, Math.min(cap, Number(prog.value) || 0));
+    const enteredProg = Math.max(0, Number(prog.value) || 0);
+    // v67: only a genuine change to the progress field logs pages — fixing the
+    // total (which can clamp progress) no longer fabricates a reading session,
+    // and previously-read books never log.
+    if (!draft.previouslyRead && enteredProg !== startProgress) logPages(b, startProgress, enteredProg);
+    draft.progress = Math.min(cap, enteredProg);
     if (!draft.title.trim()) draft.title = 'Untitled';
-    logPages(b, b.progress, draft.progress);
     draft.log = b.log;
     Object.assign(b, draft);
     saveLibrary(); close(); render();
