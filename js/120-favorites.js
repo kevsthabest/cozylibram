@@ -312,12 +312,64 @@ function pullSpine(el, id) {
   }, b.cover ? 950 : 380);
 }
 
+/* ---------------- library home (v122) ----------------
+   The Library tab is the app's home: currently reading → what next →
+   library overview → everything else. Shown only on the unfiltered view;
+   filtering drops into the plain browser. */
+function readingHeroHTML() {
+  const reading = library.filter(b => b.status === 'reading');
+  let html = '<section class="home-sec"><h3 class="home-sec-title">' + icon('reading') + ' Currently Reading</h3>';
+  if (!reading.length) {
+    html += '<div class="home-empty"><p>Nothing you\u2019re reading right now.</p>' +
+      '<div class="home-empty-btns"><button class="btn sm" id="he-tbr">Browse TBR</button>' +
+      '<button class="btn ghost sm" id="he-disc">Discover something</button></div></div>';
+  } else {
+    html += '<div class="reading-hero-row">' + reading.slice(0, 4).map(b => {
+      const pct = b.pageCount
+        ? Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100))) : 0;
+      const prog = b.pageCount
+        ? '<span class="progress-line slim"><span class="fill" style="width:' + pct + '%"></span></span>' +
+          '<small class="card-progress">p. ' + (b.progress || 0) + ' / ' + b.pageCount + ' · ' + pct + '%</small>'
+        : '<small class="card-progress">Continue reading \u2192</small>';
+      return '<button class="reading-hero" data-open="' + b.id + '">' + coverHTML(b, 'rh-cover') +
+        '<span class="rh-tx"><b>' + esc(b.title) + '</b>' +
+        '<small>' + esc((b.authors || []).join(', ') || 'Unknown author') + '</small>' + prog + '</span></button>';
+    }).join('') + '</div>';
+  }
+  return html + '</section>';
+}
+
+function cantDecideHTML() {
+  const tbr = library.filter(b => b.status === 'tbr').length;
+  if (!tbr) return '';
+  return '<section class="home-sec"><button class="cant-decide" id="cd-pick">' +
+    '<span class="disc-ic">' + icon('dice') + '</span>' +
+    '<span class="disc-tx"><b>Can\u2019t decide?</b>' +
+    '<small>Let Cozy Libram pick your next read from ' + tbr + ' waiting book' + (tbr === 1 ? '' : 's') + '.</small></span>' +
+    '<span class="disc-go" aria-hidden="true">\u2192</span></button></section>';
+}
+
+function shelfTilesHTML(counts) {
+  const tiles = [['tbr', 'TBR'], ['reading', 'Reading'], ['read', 'Read'], ['dnf', 'DNF']];
+  return '<section class="home-sec"><h3 class="home-sec-title">' + icon('covers') + ' Your Library</h3>' +
+    '<div class="shelf-tiles">' + tiles.map(t =>
+      '<button class="shelf-tile" data-shelf="' + t[0] + '"><b>' + counts[t[0]] + '</b><span>' + t[1] + '</span></button>'
+    ).join('') + '</div></section>';
+}
+
+function libraryHomeHTML(counts) {
+  return readingHeroHTML() + upNextShelfHTML() + cantDecideHTML() + shelfTilesHTML(counts) +
+    recentStripHTML() + favShelfHTML();
+}
+
 function renderLibrary() {
   const books = filteredBooks();
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
+  const isHome = filter === 'all' && ownFilter === 'all' && !query.trim();
 
-  let html = recentStripHTML() + favShelfHTML() + upNextShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
+  let html = (isHome && library.length ? libraryHomeHTML(counts) : '') +
+    '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">' + icon('list') + '</button>' +
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">' + icon('covers') + '</button></div>' +
     '<button class="btn ghost sm" id="lib-wishlist" title="Wishlist">' + icon('gift') + ' Wishlist</button>' +
@@ -375,6 +427,17 @@ function renderLibrary() {
     s.addEventListener('click', () => pullSpine(s, s.dataset.id)));
   const unm = document.getElementById('un-manage');
   if (unm) unm.addEventListener('click', () => go('upnext'));
+  // v122 home-section wiring
+  document.querySelectorAll('.reading-hero').forEach(h =>
+    h.addEventListener('click', () => openDetail(h.dataset.open)));
+  const het = document.getElementById('he-tbr');
+  if (het) het.addEventListener('click', () => { filter = 'tbr'; animateIn = true; render(); });
+  const hed = document.getElementById('he-disc');
+  if (hed) hed.addEventListener('click', () => go('discover'));
+  const cdp = document.getElementById('cd-pick');
+  if (cdp) cdp.addEventListener('click', () => go('pick'));
+  document.querySelectorAll('.shelf-tile').forEach(t =>
+    t.addEventListener('click', () => { filter = t.dataset.shelf; animateIn = true; render(); }));
   const lq = document.getElementById('lib-quotes');
   if (lq) lq.addEventListener('click', () => go('quotes'));
   const lw = document.getElementById('lib-wishlist');
