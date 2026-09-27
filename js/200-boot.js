@@ -16,6 +16,8 @@ function render() {
   else if (view === 'quotes') renderQuotes();
   else if (view === 'series') renderSeries();
   else if (view === 'verify') renderVerify();
+  else if (view === 'circle') renderCircle();
+  else if (view === 'circle-friend') renderCircleFriend();
 }
 
 applyTheme();

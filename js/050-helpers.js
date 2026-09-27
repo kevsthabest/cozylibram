@@ -90,6 +90,8 @@ const ICONS = {
   // account menu
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/>',
   user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
+  // friends / circle (two people)
+  friends: '<circle cx="9" cy="8.2" r="3.1"/><path d="M3.6 19.2c.9-3.1 2.9-4.7 5.4-4.7s4.5 1.6 5.4 4.7"/><circle cx="16.8" cy="9.2" r="2.4"/><path d="M15.9 14.7c2.2.4 3.8 1.8 4.5 4.3"/>',
   logout: '<path d="M14 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h8"/><path d="M10 12h10"/><path d="M16.5 8.5L20 12l-3.5 3.5"/>',
   key: '<circle cx="7.5" cy="12" r="3.5"/><path d="M11 12h10"/><path d="M17.5 12v3M20.5 12v2"/>',
   // pencil (authors, write)

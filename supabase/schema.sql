@@ -106,3 +106,133 @@ create policy "own avatar files" on storage.objects
   for all
   using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1])
   with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ============ Circle (v96): social reading with loved ones ============
+-- Friend links. One row per request; friendship is mutual once accepted.
+-- The tight per-action policies below matter: without them a user could
+-- accept their own request and read a stranger's shelves.
+create table if not exists circle_links (
+  requester_id uuid not null references auth.users (id) on delete cascade,
+  addressee_id uuid not null references auth.users (id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now(),
+  primary key (requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+
+alter table circle_links enable row level security;
+
+drop policy if exists "read own links" on circle_links;
+create policy "read own links" on circle_links
+  for select
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+drop policy if exists "send requests" on circle_links;
+create policy "send requests" on circle_links
+  for insert
+  with check (auth.uid() = requester_id and status = 'pending');
+
+drop policy if exists "answer requests" on circle_links;
+create policy "answer requests" on circle_links
+  for update
+  using (auth.uid() = addressee_id and status = 'pending')
+  with check (auth.uid() = addressee_id and status in ('accepted', 'declined'));
+
+drop policy if exists "remove links" on circle_links;
+create policy "remove links" on circle_links
+  for delete
+  using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+-- Invite codes: short shareable codes so friends can find each other without
+-- exposing anyone's email. Codes are public-by-design; only the code and the
+-- user id live here.
+create table if not exists circle_invites (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  code text not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table circle_invites enable row level security;
+
+drop policy if exists "read codes" on circle_invites;
+create policy "read codes" on circle_invites
+  for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "own code" on circle_invites;
+create policy "own code" on circle_invites
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Circle privacy controls on the profile: a master share switch plus
+-- per-shelf hiding (e.g. keep the DNF shelf to yourself).
+alter table profiles add column if not exists share_library boolean not null default true;
+alter table profiles add column if not exists hidden_shelves text[] not null default '{}';
+
+-- Friends can see each other's names, avatars, and privacy flags (needed to
+-- render the circle and to enforce shelf visibility). Pending handshakes are
+-- included so an incoming request shows who it's from.
+drop policy if exists "circle reads profiles" on profiles;
+create policy "circle reads profiles" on profiles
+  for select
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from circle_links cl
+      where cl.status in ('accepted', 'pending')
+        and ((cl.requester_id = profiles.user_id and cl.addressee_id = auth.uid())
+          or (cl.addressee_id = profiles.user_id and cl.requester_id = auth.uid()))
+    )
+  );
+
+-- Friends can read each other's books, minus hidden shelves and only when
+-- the owner shares with the circle. Write access stays owner-only.
+drop policy if exists "circle reads shared shelves" on books;
+create policy "circle reads shared shelves" on books
+  for select
+  using (
+    auth.uid() = user_id
+    or (
+      exists (
+        select 1 from circle_links cl
+        where cl.status = 'accepted'
+          and ((cl.requester_id = books.user_id and cl.addressee_id = auth.uid())
+            or (cl.addressee_id = books.user_id and cl.requester_id = auth.uid()))
+      )
+      and coalesce((select p.share_library from profiles p where p.user_id = books.user_id), true)
+      and not (coalesce(books.data->>'status', '') = any (
+        coalesce((select p.hidden_shelves from profiles p where p.user_id = books.user_id), '{}')))
+    )
+  );
+
+-- Friends may view (not upload/delete) each other's avatar photos.
+drop policy if exists "own avatar files" on storage.objects;
+drop policy if exists "circle avatar views" on storage.objects;
+create policy "circle avatar views" on storage.objects
+  for select
+  using (
+    bucket_id = 'avatars'
+    and (
+      auth.uid()::text = (storage.foldername(name))[1]
+      or exists (
+        select 1 from circle_links cl
+        where cl.status = 'accepted'
+          and ((cl.requester_id::text = (storage.foldername(name))[1] and cl.addressee_id = auth.uid())
+            or (cl.addressee_id::text = (storage.foldername(name))[1] and cl.requester_id = auth.uid()))
+      )
+    )
+  );
+drop policy if exists "own avatar uploads" on storage.objects;
+create policy "own avatar uploads" on storage.objects
+  for insert
+  with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+drop policy if exists "own avatar changes" on storage.objects;
+create policy "own avatar changes" on storage.objects
+  for update
+  using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1])
+  with check (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+drop policy if exists "own avatar deletes" on storage.objects;
+create policy "own avatar deletes" on storage.objects
+  for delete
+  using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
