@@ -40,6 +40,22 @@ function saveTombstones() {
 }
 tombstones = loadTombstones();
 function tombstonedIds() { return new Set(tombstones.map(t => t.id)); }
+// v142: tombstone floor — after an explicit "Download into this library"
+// un-delete, cloud tombstones older than this timestamp are ignored on this
+// device. Kills the loop where stale deletion rows (re-pushed by another
+// device, or left behind by a blocked cloud delete) wipe restored books on
+// every boot. Partitioned per user exactly like the tombstones.
+let tombstoneFloor = 0;
+function tombFloorKey() {
+  return localUid ? 'spicyshelves.tombfloor.v2.' + localUid : 'spicyshelves.tombfloor.v1';
+}
+function loadTombFloor() {
+  try { return Number(localStorage.getItem(tombFloorKey())) || 0; } catch (e) { return 0; }
+}
+function saveTombFloor() {
+  try { localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); } catch (e) {}
+}
+tombstoneFloor = loadTombFloor();
 // "Up Next" queue (v74): ordered book ids, per-user like the library.
 // Local-only for now — the queue is a reading plan, not synced to the cloud.
 let upNext = [];
@@ -152,9 +168,11 @@ function setLocalUser(uid) {
   const prevUid = localUid;
   try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
   try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
+  try { localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); } catch (e) {} // v142
   try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {} // v74
   const hadBooks = library.length > 0;
   const hadTombs = tombstones.length > 0;
+  const hadFloor = tombstoneFloor > 0; // v142
   const owner = offlineOwner();
   localUid = uid || null;
   bookSnapshots.clear();
@@ -177,6 +195,7 @@ function setLocalUser(uid) {
     try {
       localStorage.setItem(libKey(), JSON.stringify(next));
       localStorage.setItem(tombKey(), JSON.stringify(tombstones));
+      localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); // v142
       localStorage.setItem(upNextKey(), JSON.stringify(upNext));
       if (prevUid) localStorage.setItem(OFFLINE_OWNER_KEY, prevUid);
     } catch (e) {}
@@ -192,6 +211,17 @@ function setLocalUser(uid) {
     } catch (e) {}
   }
   tombstones = nextTombs;
+  // v142: the floor roams with the tombstones on first-sign-in adoption, and
+  // the per-user slot keeps its own otherwise.
+  let nextFloor = loadTombFloor();
+  if (uid && nextFloor === 0 && hadFloor && adoptable) {
+    nextFloor = tombstoneFloor;
+    try {
+      localStorage.setItem(tombFloorKey(), String(nextFloor));
+      localStorage.removeItem('spicyshelves.tombfloor.v1');
+    } catch (e) {}
+  }
+  tombstoneFloor = nextFloor;
   upNext = loadUpNext(); // v74: queue is per-user too
 }
 

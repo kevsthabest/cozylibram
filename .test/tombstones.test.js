@@ -11,8 +11,9 @@ window.fetch = async () => { throw new Error('no network in tombstone tests'); }
 function makeSyncStub() {
   const books = [];   // { user_id, book_id, isbn, data }
   const deleted = []; // { user_id, book_id, deleted_at }
+  const flags = { nodelete: false }; // v142: simulate a blocked cloud delete (e.g. RLS)
   return {
-    books, deleted,
+    books, deleted, flags,
     from: (table) => {
       if (table === 'books') return {
         upsert: async (rows) => {
@@ -33,15 +34,17 @@ function makeSyncStub() {
           }
           return { error: null };
         },
-        select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id })), error: null }),
+        select: async () => ({ data: deleted.map(r => ({ book_id: r.book_id, deleted_at: r.deleted_at })), error: null }),
         delete: () => {
           const filters = [];
           const chain = {
             eq: (col, val) => { filters.push(r => r[col] === val); return chain; },
             in: (col, vals) => { filters.push(r => vals.includes(r[col])); return chain; },
             then: (resolve) => {
-              for (let i = deleted.length - 1; i >= 0; i--) {
-                if (filters.every(f => f(deleted[i]))) deleted.splice(i, 1);
+              if (!flags.nodelete) {
+                for (let i = deleted.length - 1; i >= 0; i--) {
+                  if (filters.every(f => f(deleted[i]))) deleted.splice(i, 1);
+                }
               }
               resolve({ error: null });
             },
@@ -151,9 +154,11 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   const zrows = stub3.books.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data }));
   const skipped = window.mergeCloudBooks([], zrows);
   ok('bug reproduced: plain merge skips tombstoned rows', skipped === false);
-  const added = await window.resurrectCloudBooks(zrows);
+  const res = await window.resurrectCloudBooks(zrows);
   await tick(100);
-  ok('resurrect returns the added count', added === 2);
+  ok('resurrect returns the added count', res.added === 2);
+  ok('cloud delete verified (nothing blocked)', res.blocked === 0);
+  ok('tombstone floor stamped', window.eval(`tombstoneFloor`) > 0);
   ok('tombstoned books merged into the library',
     window.eval(`library.map(b => b.id).sort().join(',')`) === 'z1,z2');
   ok('local tombstones cleared', window.eval(`tombstones.length`) === 0);
@@ -180,6 +185,66 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   ok('user tombstones restored on return',
     window.eval(`tombstones.some(t => t.id === 'u9dead') && tombstones.some(t => t.id === 'adopted')`));
   runInWindow(`setLocalUser(null); tombstones = []; saveTombstones();`);
+
+  // 9. v142: tombstone floor — stale deletions can't wipe restored books again,
+  // even if another device re-pushes the same old rows.
+  const stub4 = makeSyncStub();
+  window.__sbStub = stub4;
+  runInWindow(`cloudUser = { id: 'u1' };`);
+  const oldTs = new Date(Date.now() - 86400000).toISOString(); // yesterday
+  stub4.books.push(
+    { user_id: 'u1', book_id: 'f1', isbn: null, data: { id: 'f1', title: 'F1', _mtime: 10 } },
+    { user_id: 'u1', book_id: 'f2', isbn: null, data: { id: 'f2', title: 'F2', _mtime: 10 } });
+  stub4.deleted.push(
+    { user_id: 'u1', book_id: 'f1', deleted_at: oldTs },
+    { user_id: 'u1', book_id: 'f2', deleted_at: oldTs });
+  runInWindow(`library = []; tombstones = [{ id: 'f1', at: 1 }, { id: 'f2', at: 2 }]; saveTombstones(); saveLibrary({noCloud:true});`);
+  const frows = stub4.books.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data }));
+  const fres = await window.resurrectCloudBooks(frows);
+  await tick(100);
+  ok('v142 resurrect clears stale cloud rows', fres.blocked === 0 && stub4.deleted.length === 0);
+  // another device re-pushes the same stale tombstones (original deleted_at kept)
+  stub4.deleted.push(
+    { user_id: 'u1', book_id: 'f1', deleted_at: oldTs },
+    { user_id: 'u1', book_id: 'f2', deleted_at: oldTs });
+  runInWindow(`library = [];`); // fresh boot
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('stale re-pushed tombstones ignored (floor)',
+    window.eval(`library.map(b => b.id).sort().join(',')`) === 'f1,f2');
+  ok('stale ids not re-recorded locally', window.eval(`tombstones.length`) === 0);
+  // a FRESH deletion (newer than the floor) still propagates normally
+  stub4.deleted.push({ user_id: 'u1', book_id: 'f1', deleted_at: new Date().toISOString() });
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('fresh deletion still applies', window.eval(`library.map(b => b.id).join(',')`) === 'f2');
+  ok('fresh tombstone recorded locally', window.eval(`tombstones.map(t => t.id).join(',')`) === 'f1');
+
+  // 10. v142: a blocked cloud delete is reported honestly, and the floor still
+  // protects this device on the next sync.
+  const stub5 = makeSyncStub();
+  stub5.flags.nodelete = true; // simulate RLS refusing the delete
+  window.__sbStub = stub5;
+  runInWindow(`cloudUser = { id: 'u1' };`);
+  stub5.books.push({ user_id: 'u1', book_id: 'g1', isbn: null, data: { id: 'g1', title: 'G1', _mtime: 10 } });
+  stub5.deleted.push({ user_id: 'u1', book_id: 'g1', deleted_at: oldTs });
+  runInWindow(`library = []; tombstones = [{ id: 'g1', at: 1 }]; saveTombstones(); saveLibrary({noCloud:true});`);
+  const grows = stub5.books.map(r => ({ book_id: r.book_id, isbn: r.isbn, data: r.data }));
+  const gres = await window.resurrectCloudBooks(grows);
+  await tick(100);
+  ok('blocked cloud delete reported', gres.blocked === 1 && gres.added === 1);
+  ok('book restored despite blocked delete', window.eval(`library.map(b => b.id).join(',')`) === 'g1');
+  runInWindow(`library = [];`); // fresh boot; the cloud rows are still stuck
+  await window.cloudFirstSync();
+  await tick(100);
+  ok('floor protects across reboot even when cloud rows stuck',
+    window.eval(`library.map(b => b.id).join(',')`) === 'g1');
+
+  // 11. v142: the floor partitions per user and survives switching.
+  const floorBefore = window.eval(`tombstoneFloor`);
+  runInWindow(`setLocalUser('user-9');`);
+  runInWindow(`setLocalUser(null);`);
+  ok('floor survives user switching', window.eval(`tombstoneFloor`) === floorBefore);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

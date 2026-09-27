@@ -406,10 +406,16 @@ function renderSettings() {
           '<button class="btn small" id="bk-cloud-dl">Download into this library</button>';
         document.getElementById('bk-cloud-dl').addEventListener('click', async () => {
           // v141: downloading is an explicit un-delete (see resurrectCloudBooks).
-          const added = await resurrectCloudBooks(rows);
-          toast(added > 0
-            ? 'Restored ' + added + ' book' + (added === 1 ? '' : 's') + ' from cloud ✓'
-            : 'Already up to date ✓');
+          // v142: say so honestly if the cloud refused to drop the deletions.
+          const res = await resurrectCloudBooks(rows);
+          if (res.blocked > 0) {
+            toast('Restored ' + res.added + ' ✓ — but ' + res.blocked +
+              ' cloud deletions would not clear; tell Luna');
+          } else {
+            toast(res.added > 0
+              ? 'Restored ' + res.added + ' book' + (res.added === 1 ? '' : 's') + ' from cloud ✓'
+              : 'Already up to date ✓');
+          }
           document.getElementById('bk-find').click();
         });
       } catch (e) { cbox.innerHTML = '<p class="note">Cloud check failed: ' + esc(cloudErrMsg(e)) + '</p>'; }

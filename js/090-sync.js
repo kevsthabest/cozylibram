@@ -100,21 +100,37 @@ async function cloudPushNow() {
 async function cloudPullTombstones() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return [];
-  const { data, error } = await sb.from('deleted_books').select('book_id');
+  // v142: also pull deleted_at so the tombstone floor can tell stale
+  // deletions (older than the user's explicit un-delete) from fresh ones.
+  const { data, error } = await sb.from('deleted_books').select('book_id, deleted_at');
   if (error) throw error;
-  return (data || []).map(r => r.book_id).filter(Boolean);
+  return (data || [])
+    .map(r => ({ id: r.book_id, at: r.deleted_at ? Date.parse(r.deleted_at) || 0 : 0 }))
+    .filter(r => r.id);
 }
 
 // v141: explicit un-delete — used by "Download into this library". Clears
 // tombstones (local + cloud) for these ids so the merge can't skip them,
-// then merges the rows in. Returns how many books were added.
+// then merges the rows in.
+// v142: verifies the cloud delete actually landed (a blocked delete must not
+// silently resurrect the wipe loop) and stamps the tombstone floor, so even
+// stale rows that come back — re-pushed by another device or never deleted —
+// are ignored on this device. Returns { added, blocked }.
 async function resurrectCloudBooks(rows) {
   const ids = (rows || []).map(r => r && r.book_id).filter(Boolean);
   ids.forEach(id => untombstone(id));
-  try { await cloudDeleteTombstones(ids); } catch (e) { /* merge anyway */ }
+  let blocked = 0;
+  try {
+    await cloudDeleteTombstones(ids);
+    const still = await cloudPullTombstones();
+    const stillIds = new Set(still.map(r => r.id));
+    blocked = ids.filter(id => stillIds.has(id)).length;
+  } catch (e) { /* verify failed; the floor below still protects this device */ }
+  tombstoneFloor = Date.now();
+  saveTombFloor();
   const before = library.length;
   if (mergeCloudBooks(library, rows)) { saveLibrary(); render(); }
-  return library.length - before;
+  return { added: library.length - before, blocked: blocked };
 }
 
 // v141: rescind deletions — drop tombstone rows so no device re-applies them.
@@ -127,8 +143,16 @@ async function cloudDeleteTombstones(ids) {
 
 // Apply remote tombstones: drop matching local books and record the
 // tombstones locally so this device never re-pushes them.
-function applyTombstones(ids) {
-  if (!ids || !ids.length) return false;
+function applyTombstones(rows) {
+  if (!rows || !rows.length) return false;
+  // v142: ignore stale deletions older than the tombstone floor (set by an
+  // explicit "Download into this library" un-delete). Fresh deletions still
+  // propagate normally. Accepts plain id strings for backward compatibility.
+  const ids = rows
+    .map(r => (typeof r === 'string' ? { id: r, at: 0 } : r))
+    .filter(r => r && r.id && (r.at || 0) >= tombstoneFloor)
+    .map(r => r.id);
+  if (!ids.length) return false;
   const dead = tombstonedIds();
   let changed = false;
   for (const id of ids) {
