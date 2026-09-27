@@ -22,11 +22,9 @@ function dayActivity() {
   return map;
 }
 
-/* ---- reading activity heatmap (v62): GitHub-style, last 22 weeks ----
-   Monday-first columns; cell intensity = pages read that day (quartiles of
-   her own nonzero days). Tap a day for the book-by-book breakdown. */
-const HEAT_WEEKS = 22;
-function heatmapHTML() {
+/* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
+   own quartiles, so both the heatmap and the month calendar tint alike ---- */
+function activityLevels() {
   const byDay = dayActivity();
   const pagesByDay = {};
   Object.keys(byDay).forEach(k => {
@@ -35,13 +33,44 @@ function heatmapHTML() {
   const vals = Object.values(pagesByDay).filter(v => v > 0).sort((a, b) => a - b);
   const qt = p => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : 0;
   const t1 = qt(0.25), t2 = qt(0.5), t3 = qt(0.75);
-  const lvl = (k, p) => {
-    if (p > t3) return 4;
-    if (p > t2) return 3;
-    if (p > t1) return 2;
-    if (p > 0 || (byDay[k] || []).length) return 1; // a finish with no logged pages still counts
-    return 0;
+  return {
+    byDay,
+    level(k) {
+      const p = pagesByDay[k] || 0;
+      if (p > t3) return 4;
+      if (p > t2) return 3;
+      if (p > t1) return 2;
+      if (p > 0 || (byDay[k] || []).length) return 1; // a finish with no logged pages still counts
+      return 0;
+    }
   };
+}
+
+/* ---- one day-detail renderer shared by the heatmap and the calendar ---- */
+function dayDetailHTML(byDay, k) {
+  const acts = (byDay[k] || []).slice().sort((x, y) => String(x.b.title).localeCompare(String(y.b.title)));
+  const dayPages = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
+  const nBooks = new Set(acts.map(a => a.b.id)).size;
+  return '<div class="stat-sub" style="margin-top:12px">' +
+    fmtDate(new Date(k + 'T12:00:00').toISOString()) +
+    ' — 📖 ' + nBooks + ' book' + (nBooks === 1 ? '' : 's') +
+    ' · 📄 ' + dayPages + ' pages</div>' +
+    (acts.length ? acts.map(a => {
+      const pages = a.finished ? 0 : Math.max(0, a.to - a.from);
+      const pct = (!a.finished && a.b.pageCount) ? ' (' + Math.round(pages / a.b.pageCount * 100) + '%)' : '';
+      return '<div class="cal-book" data-id="' + a.b.id + '">' + coverHTML(a.b) +
+        '<div><h4>' + esc(a.b.title) + '</h4>' +
+        (a.finished ? '<p>Finished 🎉</p>'
+          : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
+        '</div></div>';
+    }).join('') : '<p class="note">Nothing read that day.</p>');
+}
+
+/* ---- reading activity heatmap (v62): GitHub-style, last 22 weeks ----
+   Monday-first columns; cell intensity = level() from shared quartiles. */
+const HEAT_WEEKS = 22;
+function heatmapHTML() {
+  const { byDay, level } = activityLevels();
   const today = new Date();
   const todayK = dayKey(today);
   const start = new Date(today);
@@ -56,44 +85,60 @@ function heatmapHTML() {
       dt.setDate(start.getDate() + w * 7 + d);
       const k = dayKey(dt);
       const future = k > todayK;
-      const p = future ? 0 : (pagesByDay[k] || 0);
-      const cls = 'heat-cell' + (future ? ' future' : ' l' + lvl(k, p)) +
+      const cls = 'heat-cell' + (future ? ' future' : ' l' + level(k)) +
         (k === todayK ? ' today' : '') + (k === heatSel ? ' sel' : '');
       cells += '<div class="' + cls + '" data-day="' + k + '"' +
-        (future ? '' : ' title="' + k + ' — ' + p + ' pages"') + '></div>';
+        (future ? '' : ' title="' + k + '"') + '></div>';
     }
     cols += '<div class="heat-col">' + cells + '</div>';
   }
 
-  let detail;
-  if (heatSel) {
-    const acts = (byDay[heatSel] || []).slice().sort((x, y) => String(x.b.title).localeCompare(String(y.b.title)));
-    const dayPages = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
-    const nBooks = new Set(acts.map(a => a.b.id)).size;
-    detail = '<div id="heat-books"><div class="stat-sub" style="margin-top:12px">' +
-      fmtDate(new Date(heatSel + 'T12:00:00').toISOString()) +
-      ' — 📖 ' + nBooks + ' book' + (nBooks === 1 ? '' : 's') +
-      ' · 📄 ' + dayPages + ' pages</div>' +
-      (acts.length ? acts.map(a => {
-        const pages = a.finished ? 0 : Math.max(0, a.to - a.from);
-        const pct = (!a.finished && a.b.pageCount) ? ' (' + Math.round(pages / a.b.pageCount * 100) + '%)' : '';
-        return '<div class="cal-book" data-id="' + a.b.id + '">' + coverHTML(a.b) +
-          '<div><h4>' + esc(a.b.title) + '</h4>' +
-          (a.finished ? '<p>Finished 🎉</p>'
-            : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
-          '</div></div>';
-      }).join('') : '<p class="note">Nothing read that day.</p>') + '</div>';
-  } else {
-    detail = '<div id="heat-books"><p class="note">Tap a day to see what she read.</p></div>';
-  }
-
-  const noDate = library.filter(b => b.status === 'read' && !b.dateFinished).length;
+  const detail = heatSel
+    ? '<div id="heat-books">' + dayDetailHTML(byDay, heatSel) + '</div>'
+    : '<div id="heat-books"><p class="note">Tap a day to see what she read.</p></div>';
 
   return '<div class="stat-sub">Reading activity</div>' +
     '<div class="heat-scroll"><div class="heat" id="heatmap">' + cols + '</div></div>' +
     '<div class="heat-legend"><span>Less</span>' +
     [0, 1, 2, 3, 4].map(l => '<div class="heat-cell l' + l + '"></div>').join('') +
     '<span>More</span></div>' +
+    detail;
+}
+
+/* ---- month calendar (v63): the familiar grid with covers is back, and each
+   day cell now also carries the heatmap intensity tint ---- */
+function readingCalHTML() {
+  const { byDay, level } = activityLevels();
+  const blanks = new Date(calY, calM, 1).getDay();
+  const days = new Date(calY, calM + 1, 0).getDate();
+  const todayK = dayKey(new Date());
+  const kk = d => calY + '-' + String(calM + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  let cells = '';
+  for (let i = 0; i < blanks; i++) cells += '<div class="cal-day blank"></div>';
+  for (let d = 1; d <= days; d++) {
+    const k = kk(d);
+    const acts = byDay[k] || [];
+    const n = acts.length;
+    const cls = 'cal-day l' + level(k) + (n ? ' has' : '') + (k === todayK ? ' today' : '') + (k === calSel ? ' sel' : '');
+    cells += '<div class="' + cls + '" data-day="' + k + '"><span class="d">' + d + '</span>' +
+      (n ? '<span class="ccover">' +
+        (acts[0].b.cover
+          ? '<img src="' + esc(acts[0].b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+          : '📕') +
+        (n > 1 ? '<span class="cdot">' + n + '</span>' : '') + '</span>' : '') + '</div>';
+  }
+  const dow = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-dow">' + x + '</div>').join('');
+
+  const detail = calSel
+    ? '<div id="cal-books">' + dayDetailHTML(byDay, calSel) + '</div>'
+    : '<div id="cal-books"></div>';
+  const noDate = library.filter(b => b.status === 'read' && !b.dateFinished).length;
+
+  return '<div class="stat-sub">Reading calendar</div>' +
+    '<div class="cal-head"><button class="btn ghost" id="cal-prev">‹</button>' +
+    '<h3>' + MONTHS[calM] + ' ' + calY + '</h3>' +
+    '<button class="btn ghost" id="cal-next">›</button></div>' +
+    '<div class="cal-grid" id="readcal">' + dow + cells + '</div>' +
     detail +
     (noDate ? '<p class="note">' + noDate + ' finished book' + (noDate > 1 ? 's have' : ' has') + ' no finish date.</p>' : '');
 }
@@ -231,6 +276,7 @@ function renderStats() {
     dailyStatsHTML() +
     '<div class="stat-sub">Explore</div>' +
     heatmapHTML() +
+    readingCalHTML() +
     paceHTML() +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>' +
     (topTropes.length
@@ -252,7 +298,18 @@ function renderStats() {
       heatSel = (heatSel === c.dataset.day) ? null : c.dataset.day;
       renderStats();
     }));
-  document.querySelectorAll('#heat-books .cal-book, .dstat-card .cal-book').forEach(c =>
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    calM--; if (calM < 0) { calM = 11; calY--; } renderStats();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    calM++; if (calM > 11) { calM = 0; calY++; } renderStats();
+  });
+  document.querySelectorAll('#readcal [data-day]').forEach(c =>
+    c.addEventListener('click', () => {
+      calSel = (calSel === c.dataset.day) ? null : c.dataset.day;
+      renderStats();
+    }));
+  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   document.querySelectorAll('.kv-row.tap').forEach(r =>
     r.addEventListener('click', () => openDetail(r.dataset.id)));

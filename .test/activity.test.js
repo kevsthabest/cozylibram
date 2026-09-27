@@ -1,5 +1,5 @@
-// Reading-activity heatmap + pace tests (v62): 22-week GitHub-style grid,
-// intensity levels, day-tap detail, pace hero/kv rows, longestStreak.
+// Reading-activity tests (v62/v63): 22-week heatmap, month calendar with
+// covers + heat tint, shared day detail, pace section, longestStreak.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -113,6 +113,46 @@ ok('streak card shows current streak', cards[3].textContent.includes('🔥'));
 // 8. longestStreak: today + yesterday = 2-day run; lone days don't extend it
 runInWindow(`window.__best = longestStreak();`);
 ok('longest streak is 2', window.__best === 2);
+
+// 9. month calendar: covers + heat tint + nav (v63). Fixed fixtures so the
+// assertions hold whatever day the suite runs.
+runInWindow(`library.length = 0; heatSel = null;
+  const F = (id, title, log, df) => ({ id, isbn: '', title, authors: ['A'], cover: '',
+    description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null,
+    ratingsCount: 0, status: df ? 'read' : 'reading', ratings: {}, axes: [], myRating: 0,
+    tropes: [], progress: 0, log: log || [], dateAdded: new Date().toISOString(),
+    dateFinished: df || null, notes: '' });
+  library.push(F('c1', 'Cal One', [{ d: '2026-09-15', from: 0, to: 200 }]));
+  library.push(F('c2', 'Cal Two', [{ d: '2026-09-15', from: 200, to: 260 }]));
+  library.push(F('c3', 'Cal Light', [{ d: '2026-09-16', from: 0, to: 20 }]));
+  library.push(F('c4', 'Cal Finished', null, new Date(2026, 8, 10, 12).toISOString()));
+  const nd = F('c5', 'No Date', null, null); nd.status = 'read'; library.push(nd);
+  calY = 2026; calM = 8; calSel = null;
+  renderStats();`);
+const cc = (k) => q('#readcal [data-day="' + k + '"]');
+const clvl = (k) => { const m = /l([0-4])/.exec(cc(k).className); return m ? parseInt(m[1], 10) : -1; };
+ok('calendar renders with month header', !!q('#readcal') && q('.cal-head h3').textContent === 'September 2026');
+ok('2-book day shows cover + count badge',
+  !!cc('2026-09-15').querySelector('.ccover') && cc('2026-09-15').querySelector('.cdot').textContent === '2');
+ok('1-book day shows cover, no badge',
+  !!cc('2026-09-16').querySelector('.ccover') && !cc('2026-09-16').querySelector('.cdot'));
+ok('empty day has no cover', !cc('2026-09-17').querySelector('.ccover'));
+ok('heavy day tinted brighter than light day', clvl('2026-09-15') > clvl('2026-09-16'));
+ok('finish-only day is lit', clvl('2026-09-10') === 1);
+ok('empty day has no tint', clvl('2026-09-17') === 0);
+ok('no-date note shown', q('#view').textContent.includes('1 finished book has no finish date'));
+cc('2026-09-15').click();
+ok('calendar tap lists both books', qa('#cal-books .cal-book').length === 2);
+ok('calendar detail shows pages', q('#cal-books').textContent.includes('260 pages'));
+qa('#cal-books .cal-book')[0].click();
+ok('calendar book tap opens modal', !!q('#m-back') && q('#m-back').textContent.includes('Cal One'));
+window.document.getElementById('m-x').click();
+q('#readcal [data-day="2026-09-15"]').click();
+ok('calendar deselect clears list', qa('#cal-books .cal-book').length === 0);
+q('#cal-prev').click();
+ok('prev goes to August 2026', q('.cal-head h3').textContent === 'August 2026');
+q('#cal-next').click(); q('#cal-next').click();
+ok('next twice goes to October 2026', q('.cal-head h3').textContent === 'October 2026');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
