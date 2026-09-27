@@ -1,10 +1,18 @@
 'use strict';
 
-/* ---------------- new-release discovery (v114) ---------------- */
-// "Check for new releases": sweeps Hardcover for upcoming books by the authors
-// she reads most, keeps only future release dates, and offers them as one-tap
-// adds into the Wishlist's Coming soon section. Dismissed suggestions never
-// come back.
+/* ---------------- new-release discovery (v114, reworked v135) ---------------- */
+// "Check for new releases": for each of her top authors, queries Hardcover's
+// books table directly for future-dated books by that author (ordered by
+// release date), and offers them as one-tap adds into the Wishlist's Coming
+// soon section. Dismissed suggestions never come back.
+//
+// v135 rework: the original swept each author's 10 most *relevant* books via
+// the Typesense search endpoint — for an established author that's the
+// popular backlist, so upcoming titles almost never appeared and the check
+// usually found nothing. The books-table query below asks for future
+// release dates explicitly. Query shape verified against Hardcover's public
+// GraphQL docs (books → contributions → author → name, release_date filter,
+// order_by release_date).
 
 const REL_DISMISS_KEY = 'spicyshelves.dismissed_releases';
 
@@ -38,26 +46,29 @@ function topReleaseAuthors(limit) {
     .slice(0, limit || 8).map(e => e.name);
 }
 
-function releaseInLibrary(doc) {
-  const isbns = (doc.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
+// Already on her shelves? Matches by ISBN first, then title + first author.
+function releaseInLibrary(c) {
+  const isbns = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
   if (isbns.length && library.some(b => b.isbn && isbns.indexOf(b.isbn) !== -1)) return true;
-  const t = String(doc.title || '').toLowerCase().trim();
-  const a = String((doc.author_names || [])[0] || '').toLowerCase().trim();
+  const t = String(c.title || '').toLowerCase().trim();
+  const a = String((c.authors || [])[0] || '').toLowerCase().trim();
   if (!t) return false;
   return library.some(b => String(b.title || '').toLowerCase().trim() === t &&
     String((b.authors || [])[0] || '').toLowerCase().trim() === a);
 }
 
-function releaseCandidate(doc) {
+function hcBookToCandidate(b) {
+  const names = (b.contributions || []).map(x => String((((x || {}).author) || {}).name || '')).filter(Boolean);
+  const ed = b.default_physical_edition || {};
   return {
-    hcId: doc.id,
-    title: doc.title || 'Untitled',
-    authors: (doc.author_names || []).map(String).slice(0, 3),
-    releaseDate: String(doc.release_date || '').slice(0, 10),
-    cover: (doc.image && doc.image.url) || '',
-    description: doc.description || '',
-    pages: doc.pages || null,
-    isbns: doc.isbns || []
+    hcId: b.id,
+    title: b.title || 'Untitled',
+    authors: names.slice(0, 3),
+    releaseDate: String(b.release_date || '').slice(0, 10),
+    cover: (b.image && b.image.url) || '',
+    description: b.description || '',
+    pages: b.pages || null,
+    isbns: ed.isbn_13 ? [String(ed.isbn_13)] : []
   };
 }
 
@@ -65,27 +76,32 @@ async function checkNewReleases(onTick) {
   const authors = topReleaseAuthors(8);
   const out = [];
   const seen = new Set();
+  const d = new Date();
+  const today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  let failed = 0;
   for (let i = 0; i < authors.length; i++) {
     const a = authors[i];
     if (onTick) onTick(a, i + 1, authors.length);
     try {
-      const data = await hcGraphQL('query { search(query: ' + JSON.stringify(a) +
-        ', query_type: "Book", per_page: 10) { results } }');
-      hcHits(data).map(h => h.document).filter(Boolean).forEach(doc => {
-        const names = (doc.author_names || []).map(String);
-        if (!names.some(n => n.toLowerCase() === a.toLowerCase())) return; // actually theirs
-        const du = daysUntil(String(doc.release_date || '').slice(0, 10));
-        if (du == null || du < 0) return; // already out, or dateless
-        if (doc.id == null || seen.has(doc.id) || isReleaseDismissed(doc.id)) return;
-        seen.add(doc.id);
-        if (releaseInLibrary(doc)) return;
-        out.push(releaseCandidate(doc));
+      const q = 'query { books(where: {contributions: {author: {name: {_eq: ' + JSON.stringify(a) + '}}},' +
+        ' release_date: {_gt: "' + today + '"}, canonical_id: {_is_null: true}},' +
+        ' order_by: {release_date: asc}, limit: 10)' +
+        ' { id title description release_date pages image { url }' +
+        ' contributions { author { name } } default_physical_edition { isbn_13 } } }';
+      const data = await hcGraphQL(q);
+      ((data || {}).books || []).forEach(b => {
+        if (b.id == null || seen.has(b.id) || isReleaseDismissed(b.id)) return;
+        const c = hcBookToCandidate(b);
+        if (!c.releaseDate || c.releaseDate <= today) return; // defensive: the server filters too
+        seen.add(b.id);
+        if (releaseInLibrary(c)) return;
+        out.push(c);
       });
-    } catch (e) { /* one author failing never kills the sweep */ }
-    await new Promise(r => setTimeout(r, 1100)); // share the Hardcover pacing
+    } catch (e) { failed++; /* one author failing never kills the sweep */ }
+    await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
   }
   out.sort((x, y) => x.releaseDate.localeCompare(y.releaseDate));
-  return out;
+  return { list: out, failed: failed, total: authors.length };
 }
 
 function addReleaseBook(c) {
@@ -149,10 +165,18 @@ function wireReleaseCheck() {
     btn.disabled = true;
     const label = btn.innerHTML;
     try {
-      const list = await checkNewReleases((a, i, n) => {
+      const res = await checkNewReleases((a, i, n) => {
         btn.innerHTML = icon('hourglass') + ' Checking ' + esc(a) + '… (' + i + '/' + n + ')';
       });
-      renderReleaseResults(list);
+      const box = document.getElementById('release-results');
+      // v135: if every author's lookup failed, say so — "all caught up"
+      // would be a lie when we never actually reached Hardcover.
+      if (!res.list.length && res.total > 0 && res.failed >= res.total && box) {
+        box.innerHTML = '<p class="note">Couldn\'t reach Hardcover for any author — ' +
+          'check the connection in Settings → Hardcover, then try again.</p>';
+      } else {
+        renderReleaseResults(res.list);
+      }
     } catch (e) {
       const box = document.getElementById('release-results');
       if (box) box.innerHTML = '<p class="note">The check failed — try again in a bit.</p>';

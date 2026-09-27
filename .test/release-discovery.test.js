@@ -21,23 +21,30 @@ const isoIn = (n) => {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 };
 
+const gb = (id, title, author, relIn, extra) => Object.assign({
+  id, title, contributions: [{ author: { name: author } }],
+  release_date: isoIn(relIn), description: '', pages: 300,
+  image: { url: '' }, default_physical_edition: { isbn_13: null },
+}, extra || {});
 const DOCS = {
   'Ann Author': [
-    { id: 1, title: 'Future Book', author_names: ['Ann Author'], release_date: isoIn(30), isbns: ['9780000000001'], image: { url: '' }, description: '', pages: 300 },
-    { id: 2, title: 'Old Book', author_names: ['Ann Author'], release_date: isoIn(-10), isbns: [] },
-    { id: 3, title: 'Wrong Author Book', author_names: ['Somebody Else'], release_date: isoIn(40), isbns: [] },
-    { id: 4, title: 'Already Have', author_names: ['Ann Author'], release_date: isoIn(50), isbns: ['9781111111111'] },
-    { id: 5, title: 'Dismissed', author_names: ['Ann Author'], release_date: isoIn(60), isbns: [] },
+    gb(1, 'Future Book', 'Ann Author', 30, { default_physical_edition: { isbn_13: '9780000000001' } }),
+    gb(2, 'Old Book', 'Ann Author', -10), // server-side _gt filter drops this
+    gb(4, 'Already Have', 'Ann Author', 50, { default_physical_edition: { isbn_13: '9781111111111' } }),
+    gb(5, 'Dismissed', 'Ann Author', 60),
   ],
   'Zed': [
-    { id: 6, title: 'Zed Future', author_names: ['Zed'], release_date: isoIn(5), isbns: [] },
+    gb(6, 'Zed Future', 'Zed', 5),
   ],
 };
 window.fetch = async (url, opts) => {
   const q = JSON.parse(opts.body).query;
-  const name = (q.match(/search\(query: "([^"]+)"/) || [])[1];
-  const docs = DOCS[name] || [];
-  return { status: 200, json: async () => ({ data: { search: { results: { hits: docs.map(d => ({ document: d })) } } } }) };
+  window.__lastQuery = q;
+  const name = (q.match(/name: \{_eq: "([^"]+)"\}/) || [])[1];
+  const today = isoIn(0);
+  // mimic the server: only future-dated books come back
+  const books = (DOCS[name] || []).filter(b => b.release_date > today);
+  return { status: 200, json: async () => ({ data: { books } }) };
 };
 
 runInWindow(`
@@ -55,10 +62,17 @@ ok('authors ranked by shelf count then rating',
   JSON.stringify(window.topReleaseAuthors(8)) === JSON.stringify(['Ann Author', 'Zed']));
 
 (async () => {
-  const list = await window.checkNewReleases();
+  const res = await window.checkNewReleases();
+  const list = res.list;
   ok('only genuine future releases from her authors survive',
     list.length === 2 && list[0].title === 'Zed Future' && list[1].title === 'Future Book');
   ok('results sorted by release date', list[0].releaseDate === isoIn(5));
+  ok('query asks Hardcover for future-dated books by the author',
+    /release_date/.test(window.__lastQuery) && /_gt/.test(window.__lastQuery) &&
+    /contributions/.test(window.__lastQuery) && /order_by: \{release_date: asc\}/.test(window.__lastQuery));
+  ok('no author lookups failed', res.failed === 0 && res.total === 2);
+  ok('candidates carry authors from contributions and the physical ISBN',
+    list[1].authors[0] === 'Ann Author' && list[1].isbns[0] === '9780000000001');
 
   // one-tap add
   runInWindow(`view = 'library';`);
@@ -87,8 +101,8 @@ ok('authors ranked by shelf count then rating',
   runInWindow(`
     view = 'discover'; renderDiscover();
     window.__realCheck = checkNewReleases;
-    checkNewReleases = async () => [{ hcId: 99, title: 'Card Book', authors: ['Ann Author'],
-      releaseDate: '${isoIn(20)}', cover: '', description: '', pages: 100, isbns: [] }];
+    checkNewReleases = async () => ({ list: [{ hcId: 99, title: 'Card Book', authors: ['Ann Author'],
+      releaseDate: '${isoIn(20)}', cover: '', description: '', pages: 100, isbns: [] }], failed: 0, total: 1 });
   `);
   const relCard = window.document.querySelector('[data-disc="releases"]');
   ok('New Releases is a real tappable card', !!relCard && relCard.tagName === 'BUTTON');
@@ -98,6 +112,18 @@ ok('authors ranked by shelf count then rating',
     !!window.document.querySelector('#release-results .rel-card') &&
     window.document.getElementById('release-results').textContent.includes('Card Book'));
   runInWindow(`checkNewReleases = window.__realCheck;`);
+  // v135: when every author lookup fails, the sweep reports it honestly
+  const realFetch = window.fetch;
+  window.fetch = async () => { throw new Error('boom'); };
+  const bad = await window.checkNewReleases();
+  ok('total failure is counted, not mistaken for "caught up"',
+    bad.list.length === 0 && bad.failed === bad.total && bad.total === 2);
+  runInWindow(`view = 'discover'; renderDiscover();`);
+  window.document.querySelector('[data-disc="releases"]').click();
+  await new Promise(r => setTimeout(r, 2500));
+  ok('card shows an honest error when Hardcover is unreachable',
+    /Couldn't reach Hardcover/.test(window.document.getElementById('release-results').textContent));
+  window.fetch = realFetch;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
