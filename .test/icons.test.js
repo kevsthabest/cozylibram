@@ -99,5 +99,16 @@ ok('my-rating picker uses line icons', qa('#f-myrating .ticon').length === 5);
 ok('share button uses line icon', !!q('#m-share .ticon'));
 runInWindow(`document.getElementById('m-x').click();`);
 
+// v102: rating badges use theme-aware line-art instead of emoji
+// (⚔️ renders near-black on some Android emoji fonts — invisible on dark themes)
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+[['spice', 3], ['scare', 2], ['suspense', 4], ['adventure', 5]].forEach(([k, v]) => {
+  const html = window.ratingBadges({ axes: [k], ratings: { [k]: v } });
+  ok(k + ' badge renders ' + v + ' line-art glyphs', (html.match(/<svg/g) || []).length === v);
+  ok(k + ' badge contains no emoji', !EMOJI_RE.test(html));
+  ok(k + ' badge has no hardcoded fill color', !/fill="#/.test(html));
+});
+ok('unrated axis renders no badge', window.ratingBadges({ axes: ['spice'], ratings: {} }) === '');
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

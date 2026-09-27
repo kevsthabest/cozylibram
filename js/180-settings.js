@@ -24,7 +24,7 @@ function renderSettings() {
     '<div class="stat"><div class="n">' + counts.tbr + '</div><div class="l">TBR</div></div>' +
     '<div class="stat"><div class="n">' + counts.reading + '</div><div class="l">Reading</div></div>' +
     '<div class="stat"><div class="n">' + counts.read + '</div><div class="l">Read</div></div>' +
-    '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + axisByKey(ax0).emoji : 'Avg 💥') + '</div></div>' +
+    '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + icon(axisByKey(ax0).icon || 'pepper') : 'Avg 💥') + '</div></div>' +
     '</div>' +
     '<h2 class="section serif">Appearance</h2>' +
     '<div class="field"><label>Theme</label><select id="th-theme" class="text-input">' +

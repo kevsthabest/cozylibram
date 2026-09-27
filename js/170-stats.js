@@ -256,9 +256,9 @@ function spiceProfileHTML() {
     ? (spice.avg >= 4 ? '🌶️ You tend to reach for high-spice books.'
       : spice.avg >= 2.5 ? '🌶️ Your shelf runs medium-spice overall.'
       : '🌶️ You keep things fairly low-key on the spice front.')
-    : rows[0].a.emoji + ' ' + rows[0].a.label + ' is your strongest pull.';
+    : icon(rows[0].a.icon || 'pepper') + ' ' + rows[0].a.label + ' is your strongest pull.';
   return '<div class="stat-sub">Reading profile</div><div class="kv">' +
-    rows.map(r => '<div class="kv-row"><span>' + r.a.emoji + ' ' + r.a.label +
+    rows.map(r => '<div class="kv-row"><span>' + icon(r.a.icon || 'pepper') + ' ' + r.a.label +
       ' <i style="font-style:normal;color:var(--faint)">· ' + r.n + '</i></span><b><span class="meter">' +
       meter(r.avg) + '</span> ' + r.avg.toFixed(1) + '</b></div>').join('') +
     '</div><p class="note">' + line + '</p>';
@@ -478,12 +478,12 @@ function recordsHTML() {
   if (rated.length) {
     const s = rated.slice().sort((a, b) =>
       b.myRating - a.myRating || String(b.dateFinished || '').localeCompare(String(a.dateFinished || '')));
-    card('⭐', 'Highest rated', s[0], '♥ ' + s[0].myRating.toFixed(1) + ' / 5');
-    card('💔', 'Lowest rated', s[s.length - 1], '♥ ' + s[s.length - 1].myRating.toFixed(1) + ' / 5');
+    card(icon('heart'), 'Highest rated', s[0], '♥ ' + s[0].myRating.toFixed(1) + ' / 5');
+    card(icon('heart'), 'Lowest rated', s[s.length - 1], '♥ ' + s[s.length - 1].myRating.toFixed(1) + ' / 5');
   }
   if (spiced.length) {
     const s = spiced.slice().sort((a, b) => b.ratings.spice - a.ratings.spice);
-    card('🌶️', 'Spiciest', s[0], '🌶️ ' + s[0].ratings.spice + ' / 5');
+    card(icon('pepper'), 'Spiciest', s[0], icon('pepper') + ' ' + s[0].ratings.spice + ' / 5');
   }
   const bd = biggestDay();
   if (bd) cards.push('<div class="record-card" id="bigday" data-day="' + bd.k + '"><div class="rlbl">' + icon('doc') + ' Biggest day</div>' +

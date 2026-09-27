@@ -41,12 +41,13 @@ runInWindow(`localStorage.clear();
   library.push(M('d1', 'DNF One',     { status: 'dnf', pageCount: 700 }));
   renderStats();`);
 
-// 1. reading profile
-const spiceRow = qa('.kv-row').find(r => r.textContent.includes('🌶️'));
+// 1. reading profile (v102: axis rows use theme-aware line-art icons, not emoji)
+const spiceRow = qa('.kv-row').find(r => r.textContent.includes('Spice'));
 ok('spice row shows 4.8 avg', !!spiceRow && spiceRow.textContent.includes('4.8'));
 ok('spice meter is full (10 blocks)', !!spiceRow && spiceRow.querySelector('.mfill').textContent.length === 10);
 ok('spice book count shown', !!spiceRow && spiceRow.textContent.includes('4'));
-const scareRow = qa('.kv-row').find(r => r.textContent.includes('👻'));
+ok('spice row uses line-art icon, not emoji', !!spiceRow && !!spiceRow.querySelector('svg.ticon') && !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(spiceRow.textContent));
+const scareRow = qa('.kv-row').find(r => r.textContent.includes('Scare'));
 ok('scare row shows 3.0 avg', !!scareRow && scareRow.textContent.includes('3.0'));
 ok('profile line is descriptive', window.document.body.textContent.includes('You tend to reach for high-spice books.'));
 

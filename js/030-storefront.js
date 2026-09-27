@@ -74,11 +74,14 @@ function storeLinks(b) {
   }));
 }
 
-// Badges for every rated axis, e.g. 🌶️🌶️🌶️ 👻👻
+// Badges for every rated axis — line-art glyphs (v102). The axis emoji
+// (notably ⚔️) render near-black on some Android emoji fonts, making them
+// invisible on dark themes; the icons inherit the badge's accent color.
 function ratingBadges(b) {
   return (b.axes || []).map(k => {
     const v = (b.ratings || {})[k] || 0;
-    return v > 0 ? '<span class="badge spice">' + axisByKey(k).emoji.repeat(v) + '</span>' : '';
+    const a = axisByKey(k);
+    return v > 0 ? '<span class="badge spice">' + icon(a.icon || 'pepper').repeat(v) + '</span>' : '';
   }).join('');
 }
 
