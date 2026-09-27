@@ -66,15 +66,24 @@ ok('kobo title+author query', ca2[2].url ===
 ok('amazon still prefers ISBN', ca2[0].url === 'https://www.amazon.ca/s?k=9780123456789');
 setRegion('US');
 const us = window.storeLinks({ isbn: '', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
-ok('US b&n link', us[1].url === 'https://www.barnesandnoble.com/s/Iron%20Flame%20Rebecca%20Yarros');
-ok('US bookshop link', us[2].url === 'https://bookshop.org/search?keywords=Iron%20Flame%20Rebecca%20Yarros');
+ok('US b&n link (v145 pattern)', us[1].url === 'https://www.barnesandnoble.com/search?q=Iron%20Flame%20Rebecca%20Yarros');
+ok('US bookshop link (v145 beta-search)', us[2].url === 'https://bookshop.org/beta-search?keywords=Iron%20Flame%20Rebecca%20Yarros');
+// v145: only Amazon searches by ISBN now — every other store uses title+author,
+// which proved far more reliable when verified live.
+const usIsbn = window.storeLinks({ isbn: '9780123456789', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
+ok('b&n uses title+author even with ISBN', usIsbn[1].url === 'https://www.barnesandnoble.com/search?q=Iron%20Flame%20Rebecca%20Yarros');
+ok('bookshop uses title+author even with ISBN', usIsbn[2].url === 'https://bookshop.org/beta-search?keywords=Iron%20Flame%20Rebecca%20Yarros');
+ok('amazon still uses ISBN', usIsbn[0].url === 'https://www.amazon.com/s?k=9780123456789');
 setRegion('UK');
 const uk = window.storeLinks({ isbn: '', title: 'Iron Flame', authors: ['Rebecca Yarros'] });
 ok('UK waterstones link', uk[1].url === 'https://www.waterstones.com/books/search/term/Iron+Flame+Rebecca+Yarros');
+ok('waterstones uses title+author even with ISBN',
+  window.storeLinks({ isbn: '9780123456789', title: 'Iron Flame', authors: ['Rebecca Yarros'] })[1].url ===
+  'https://www.waterstones.com/books/search/term/Iron+Flame+Rebecca+Yarros');
 setRegion('AU');
-ok('AU booktopia link',
+ok('AU booktopia link (v145 pattern, title query)',
   window.storeLinks({ isbn: '9780123456789', title: 'T', authors: [] })[1].url ===
-  'https://www.booktopia.com.au/search.ep?keywords=9780123456789');
+  'https://www.booktopia.com.au/search?keywords=T&productType=917504&pn=1');
 
 // 5. modal buy row: wishlist only
 runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.storeRegion', 'CA');

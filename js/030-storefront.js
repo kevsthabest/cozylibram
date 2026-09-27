@@ -1,28 +1,36 @@
 'use strict';
 
 /* ---------------- storefront links ("where to buy" for wishlist books) ---------------- */
-// Region-aware retailer search links. Most stores search by ISBN when we have
-// one (lands on the exact edition); Indigo and Kobo search by title + author,
-// where ISBN search proved unreliable. No APIs or keys needed.
+// Region-aware retailer search links. Verified live 2026-09-27 against a real
+// book (Iron Flame): ISBN search is exact on Amazon ("1-1 of 1 results") but
+// unreliable everywhere else — Indigo and B&N return zero results for valid
+// ISBNs, Booktopia 404s on ISBN queries — while title + author finds the book
+// as the top result on every store tested. So: Amazon searches by ISBN (exact
+// edition), every other store searches by title + author (forgiving). Kobo
+// could not be live-verified (Cloudflare bot check), pattern kept as-is.
+// No APIs or keys needed.
 const STORE_REGIONS = {
   CA: { label: 'Canada', stores: [
-    { name: 'Amazon', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
-    { name: 'Indigo', mode: 'title', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
-    { name: 'Kobo', mode: 'title', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
+    { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
+    { name: 'Indigo', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
+    { name: 'Kobo', url: q => 'https://www.kobo.com/ca/en/search?query=' + encodeURIComponent(q) },
   ] },
   US: { label: 'United States', stores: [
-    { name: 'Amazon', url: q => 'https://www.amazon.com/s?k=' + encodeURIComponent(q) },
-    { name: 'Barnes & Noble', url: q => 'https://www.barnesandnoble.com/s/' + encodeURIComponent(q) },
-    { name: 'Bookshop.org', url: q => 'https://bookshop.org/search?keywords=' + encodeURIComponent(q) },
+    { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.com/s?k=' + encodeURIComponent(q) },
+    // v145: was /s/<query> — 404s; real pattern is /search?q= (verified live)
+    { name: 'Barnes & Noble', url: q => 'https://www.barnesandnoble.com/search?q=' + encodeURIComponent(q) },
+    // v145: /search redirects to /beta-search; link there directly
+    { name: 'Bookshop.org', url: q => 'https://bookshop.org/beta-search?keywords=' + encodeURIComponent(q) },
   ] },
   UK: { label: 'United Kingdom', stores: [
-    { name: 'Amazon', url: q => 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(q) },
+    { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(q) },
     { name: 'Waterstones', url: q => 'https://www.waterstones.com/books/search/term/' + encodeURIComponent(q).replace(/%20/g, '+') },
-    { name: 'Bookshop.org', url: q => 'https://bookshop.org/search?keywords=' + encodeURIComponent(q) },
+    { name: 'Bookshop.org', url: q => 'https://bookshop.org/beta-search?keywords=' + encodeURIComponent(q) },
   ] },
   AU: { label: 'Australia', stores: [
-    { name: 'Amazon', url: q => 'https://www.amazon.com.au/s?k=' + encodeURIComponent(q) },
-    { name: 'Booktopia', url: q => 'https://www.booktopia.com.au/search.ep?keywords=' + encodeURIComponent(q) },
+    { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.com.au/s?k=' + encodeURIComponent(q) },
+    // v145: was search.ep?keywords= — dead; real pattern from their search box (verified live)
+    { name: 'Booktopia', url: q => 'https://www.booktopia.com.au/search?keywords=' + encodeURIComponent(q) + '&productType=917504&pn=1' },
   ] },
 };
 const STORE_REGION_KEYS = Object.keys(STORE_REGIONS);
@@ -53,14 +61,17 @@ function detectStoreRegion() {
   return 'US';
 }
 
-// What to search the storefront for: ISBN when we have one, else title + author.
+// What to search the storefront for. Amazon gets the ISBN (exact-edition
+// landing, verified); every other store gets title + author, which proved
+// far more reliable live. storeQuery falls back to title + author when there
+// is no ISBN, so Amazon degrades gracefully too.
 function storeQuery(b) {
   const isbn = String(b.isbn || '').replace(/[^0-9X]/gi, '');
   if (isbn) return isbn;
   return storeTitleQuery(b);
 }
 
-// Title + author query, for stores where ISBN search is unreliable.
+// Title + author query — the reliable default for every non-Amazon store.
 function storeTitleQuery(b) {
   return [b.title, (b.authors || [])[0]].filter(Boolean).join(' ');
 }
@@ -70,7 +81,7 @@ function storeLinks(b) {
   const titleQ = storeTitleQuery(b);
   return STORE_REGIONS[detectStoreRegion()].stores.map(s => ({
     name: s.name,
-    url: s.url(s.mode === 'title' ? titleQ : isbnQ),
+    url: s.url(s.mode === 'isbn' ? isbnQ : titleQ),
   }));
 }
 
