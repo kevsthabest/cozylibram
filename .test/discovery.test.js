@@ -27,7 +27,7 @@ window.fetch = async (url) => {
   const u = String(url);
   if (u.includes('openlibrary.org/search.json?author=')) return { json: async () => ({ docs: olDocs }) };
   if (u.includes('api.hardcover.app')) {
-    if (window.__hcDead) return { json: async () => ({ message: 'unauthorized' }) }; // no data field
+    if (window.__hcDead) return { status: 401, json: async () => ({ message: 'unauthorized' }) }; // revoked token
     return { json: async () => hcSeries };
   }
   throw new Error('unexpected fetch: ' + u);
@@ -109,8 +109,8 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   runInWindow(`window.__hcDead = true; window.SPICY_CONFIG = { hardcoverToken: 'revoked-token' };
     seriesCache.clear(); authorCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
-  ok('dead token shows token hint, not empty-shelf',
-    q('#c-more').textContent.includes('check the token') &&
+  ok('dead token shows token-rejected reason, not empty-shelf',
+    q('#c-more').textContent.includes('rejected the token') &&
     !q('#c-more').textContent.includes('Nothing missing'));
   q('#c-x').click();
 

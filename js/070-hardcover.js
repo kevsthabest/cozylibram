@@ -18,13 +18,29 @@ function hcStatusText() {
 async function hcGraphQL(query) {
   const token = hcToken();
   if (!token) return null;
-  const r = await fetch(HC_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ query: query })
-  });
-  const d = await r.json();
-  if (d.errors && d.errors.length) throw new Error(d.errors[0].message);
+  // v77: every failure mode throws a specific, human-readable error instead of
+  // silently returning undefined — callers (series overlay, test button,
+  // enrichment) can finally tell "token rejected" apart from "offline".
+  let r;
+  try {
+    r = await fetch(HC_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ query: query })
+    });
+  } catch (e) {
+    throw new Error('Network error — couldn\'t reach Hardcover. Check your connection and try again.');
+  }
+  if (r.status === 401 || r.status === 403) {
+    throw new Error('Hardcover rejected the token (HTTP ' + r.status + '). It may be expired or revoked — ' +
+      'Hardcover tokens expire every Jan 1. Grab a fresh one at hardcover.app → Account settings → API, ' +
+      'then update hardcover_token in server-config.json on your home PC.');
+  }
+  let d;
+  try { d = await r.json(); }
+  catch (e) { throw new Error('Hardcover returned an unreadable response (HTTP ' + r.status + ').'); }
+  if (d.errors && d.errors.length) throw new Error('Hardcover error: ' + d.errors[0].message);
+  if (!d.data) throw new Error('Hardcover returned no data — the token may be invalid or revoked.');
   return d.data;
 }
 function hcHits(data) {

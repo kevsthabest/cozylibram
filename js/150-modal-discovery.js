@@ -276,8 +276,10 @@ async function fillMoreSection(kind, name, fromId, ov) {
         openExternalDetail(rows[Number(row.dataset.ext)]);
       }));
   } catch (e) {
+    // v77: hcGraphQL errors are specific now (token rejected / network /
+    // Hardcover error), so show the real reason instead of a generic hint.
     const hint = kind === 'series'
-      ? 'Couldn\'t reach Hardcover — if this keeps happening, check the token in Settings → Hardcover.'
+      ? 'Hardcover lookup failed — ' + esc(String((e && e.message) || 'unknown error'))
       : 'Couldn\'t look up more books right now.';
     box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
       '<p class="note">' + hint + '</p>';
