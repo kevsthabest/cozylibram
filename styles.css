@@ -1050,3 +1050,22 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .q-by { color: var(--muted); font-size: 13px; }
 #q-spot { margin-top: 12px; }
 #q-spot:empty { margin-top: 0; }
+
+/* v76: series overview */
+.sr-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.sr-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.sr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.sr-name { font-weight: 800; font-size: 17px; }
+.sr-author { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.sr-count { color: var(--gold); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.sr-covers { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
+.sr-covers img { width: 44px; height: 66px; object-fit: cover; border-radius: 5px; }
+.sr-nocover { width: 44px; height: 66px; display: flex; align-items: center; justify-content: center;
+  background: var(--card2); border-radius: 5px; font-size: 20px; }
+.sr-more { color: var(--muted); font-size: 13px; margin-left: 4px; }
+.sr-card .progress-line { margin: 4px 0 10px; }
+.sr-next { width: 100%; background: var(--card2); border: 1px solid var(--line); border-radius: 10px;
+  color: inherit; font: inherit; padding: 10px 12px; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 6px; }
+.sr-next b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-done { color: var(--muted); font-size: 14px; padding: 4px 2px; }

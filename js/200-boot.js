@@ -14,6 +14,7 @@ function render() {
   else if (view === 'author') renderAuthorDetail();
   else if (view === 'upnext') renderUpNext();
   else if (view === 'quotes') renderQuotes();
+  else if (view === 'series') renderSeries();
   else if (view === 'verify') renderVerify();
 }
 

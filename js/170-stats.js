@@ -519,7 +519,7 @@ function seriesHTML() {
         esc(next.title) + '</button></div>' : '') + '</div>';
   }).join('');
   return '<div class="stat-sub">📚 Series</div><div class="series-list">' + rows + '</div>' +
-    (names.length > 10 ? '<p class="note">+' + (names.length - 10) + ' more series in your library.</p>' : '');
+    '<button class="btn ghost sm" id="sr-all">View all ' + names.length + ' series →</button>';
 }
 
 /* ---- Your Year in Books (v70): a Wrapped-style visual summary of the year,
@@ -985,6 +985,8 @@ function renderStats() {
     }));
   document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .series-row [data-id]').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
+  const sra = document.getElementById('sr-all');
+  if (sra) sra.addEventListener('click', () => { seriesReturn = 'stats'; go('series'); });
   const big = document.getElementById('bigday');
   if (big) big.addEventListener('click', () => {
     const parts = big.dataset.day.split('-');
