@@ -878,11 +878,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .segnum { font-size: 13px; font-weight: 700; color: var(--muted); min-width: 16px; text-align: right; }
 .axrm { background: none; border: none; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; }
 .axrm:hover { color: var(--danger); }
+/* v133: inline series block in the book modal */
+.series-more-h { font-size: 13px; font-weight: 700; color: var(--muted); margin: 12px 0 6px; }
 #f-axadd { margin-top: 10px; }
 #f-axadd:empty { display: none; }
 
-/* ---------- Hardcover: series / moods / content warnings ---------- */
-.series-line { color: var(--gold); margin: 8px 0 0; font-size: 0.95em; font-weight: 600; }
+/* ---------- Hardcover: moods / content warnings ---------- */
 .mood-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
 .mood-chip { font-size: 0.78em; padding: 3px 10px; border-radius: 999px;
   background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); }
@@ -1016,7 +1017,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* tappable author / series links + collections */
 .taplink { background: none; border: none; padding: 0; font: inherit; color: var(--accent);
   cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.series-line .taplink { color: inherit; }
 .collection-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px;
   max-height: 60vh; overflow-y: auto; }
 .crow { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;

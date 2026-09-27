@@ -405,14 +405,16 @@ function addEnrichedToWishlist(x, full) {
   return book;
 }
 
-// Fill the "more books" section of the collection sheet (async, after it opens).
-async function fillMoreSection(kind, name, fromId, ov) {
-  const box = ov.querySelector('#c-more');
+// Fill a "more books" box: the overlay's #c-more, or the modal's inline
+// #m-series-more (bare mode: compact heading, no overlay chrome).
+async function fillMoreSection(kind, name, fromId, box, bare) {
   if (!box) return;
   // The icon is trusted markup — only the text (which carries the library's
   // own author/series name) goes through esc().
-  const headingHTML = '<h3 class="serif c-more-h">' + icon('search') + ' ' +
-    esc(kind === 'author' ? 'More by ' + name : 'Every book in this series') + '</h3>';
+  const headingHTML = bare
+    ? '<p class="series-more-h">Every book in this series</p>'
+    : '<h3 class="serif c-more-h">' + icon('search') + ' ' +
+      esc(kind === 'author' ? 'More by ' + name : 'Every book in this series') + '</h3>';
   try {
     let rows;
     if (kind === 'author') {
@@ -429,7 +431,7 @@ async function fillMoreSection(kind, name, fromId, ov) {
     }
     if (!rows.length) {
       box.innerHTML = headingHTML +
-        '<p class="note">Nothing missing — nice shelf!</p>';
+        '<p class="note">' + (bare ? 'No other books in this series found.' : 'Nothing missing — nice shelf!') + '</p>';
       return;
     }
     box.innerHTML = headingHTML +
@@ -456,6 +458,41 @@ async function fillMoreSection(kind, name, fromId, ov) {
     box.innerHTML = headingHTML +
       '<p class="note">' + hint + '</p>';
   }
+}
+
+/* ---- v133: series books inline in Series & Discovery — the series name is
+   display-only now; the books themselves are listed right away, no tap-through. ---- */
+function seriesInlineHTML(b, id) {
+  if (!(b.series && b.series.name)) return '';
+  const key = String(b.series.name).trim().toLowerCase();
+  const others = library.filter(x => x.id !== id && x.series && x.series.name &&
+    String(x.series.name).trim().toLowerCase() === key);
+  others.sort((x, y) => {
+    const px = parseFloat(x.series && x.series.position), py = parseFloat(y.series && y.series.position);
+    return (isNaN(px) ? 1e9 : px) - (isNaN(py) ? 1e9 : py);
+  });
+  const pos = (b.series.position != null && b.series.position !== '')
+    ? ' · Book ' + esc(String(b.series.position)) : '';
+  return '<div class="field" id="m-series"><label>' + icon('series') + ' In this series' +
+    '<span class="note-inline"> · ' + esc(b.series.name) + pos + '</span></label>' +
+    (others.length
+      ? '<div class="collection-list">' + others.map(collectionRowHTML).join('') + '</div>'
+      : '<p class="note">The only one on your shelves so far.</p>') +
+    '<div id="m-series-more"><p class="note">Looking for the full series…</p></div></div>';
+}
+function wireSeriesRows(scope) {
+  scope.querySelectorAll('#m-series [data-book]').forEach(el =>
+    el.addEventListener('click', () => openDetail(el.dataset.book)));
+}
+// v133: re-render the inline series block when background Hardcover
+// enrichment lands (the block has no inputs, so this never clobbers typing).
+function refreshSeriesInline(book) {
+  const wrap = document.getElementById('m-series-wrap');
+  if (!wrap || !(book.series && book.series.name) || wrap.querySelector('#m-series')) return;
+  wrap.innerHTML = seriesInlineHTML(book, book.id);
+  wireSeriesRows(wrap);
+  const sBox = wrap.querySelector('#m-series-more');
+  if (sBox) fillMoreSection('series', book.series.name, book.id, sBox, true);
 }
 
 function openCollection(kind, name, fromId) {
@@ -494,7 +531,7 @@ function openCollection(kind, name, fromId) {
       close();
       openDetail(el.dataset.book, { fromRect: r });
     }));
-  fillMoreSection(kind, name, fromId, ov);
+  fillMoreSection(kind, name, fromId, ov.querySelector('#c-more'));
 }
 
 /* ---- book-opening transition: the tapped cover flies to center, then swings
@@ -735,6 +772,7 @@ function renderDetailModal(b, viaBook) {
 
     '<details class="m-collapsible" id="m-sec-discovery"><summary>' + icon('sparkles') + ' Series & Discovery</summary>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
+    '<div id="m-series-wrap">' + seriesInlineHTML(b, id) + '</div>' +
     '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
       const sims = similarBooks(b, 6);
@@ -951,8 +989,10 @@ function renderDetailModal(b, viaBook) {
   }
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
-  root.querySelectorAll('[data-series]').forEach(el =>
-    el.addEventListener('click', () => openCollection('series', el.dataset.series, id)));
+  // v133: series books are inline now — wire their rows + the full-series fill.
+  wireSeriesRows(root);
+  const sBox = root.querySelector('#m-series-more');
+  if (sBox && b.series && b.series.name) fillMoreSection('series', b.series.name, id, sBox, true);
   renderProgressSection();
 
   // v81: trope suggestions — tappable chips under the tropes input. Tap to add

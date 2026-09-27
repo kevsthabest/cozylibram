@@ -101,9 +101,9 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   const legacy = window.migrateBook({ title: 'Old', ratings: {} });
   ok('migrateBook new fields', Array.isArray(legacy.contentWarnings) && Array.isArray(legacy.moods) && legacy.series === null);
 
-  // 10. hcDetailHTML renders + escapes
+  // 10. hcDetailHTML renders + escapes (v133: series lives in the inline block now)
   const htmlOut = window.hcDetailHTML({ series: { name: 'The Empyrean', position: 3 }, moods: ['dark'], contentWarnings: ['War', '<img src=x onerror=alert(1)>'] });
-  ok('detail html: series', htmlOut.includes('The Empyrean') && htmlOut.includes('Book 3'));
+  ok('detail html: series moved inline', !htmlOut.includes('The Empyrean') && !!window.seriesInlineHTML({ series: { name: 'The Empyrean', position: 3 }, id: 'x' }, 'x').includes('The Empyrean'));
   ok('detail html: moods', htmlOut.includes('mood-chip') && htmlOut.includes('dark'));
   ok('detail html: warnings collapsible', htmlOut.includes('<details') && htmlOut.includes('Content warnings (2)'));
   ok('detail html: escaped', !htmlOut.includes('<img src=x') && htmlOut.includes('&lt;img'));

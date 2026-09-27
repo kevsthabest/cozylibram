@@ -1,4 +1,6 @@
-// Collection tests: tap author/series in the book modal -> other books list.
+// Collection tests: tap author in the book modal -> other books list.
+// v133: series books list inline in Series & Discovery (no tap-through);
+// the series name is display-only text.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -38,9 +40,9 @@ runInWindow(`localStorage.clear();
 ok('author buttons rendered', qa('#modal-root [data-author]').length === 2);
 ok('first author is Jane Doe', qa('#modal-root [data-author]')[0].textContent === 'Jane Doe');
 
-// 2. series renders as tappable button
-ok('series button rendered', !!q('#modal-root [data-series]'));
-ok('series button text', q('#modal-root [data-series]').textContent === 'The Saga');
+// 2. series renders as display-only text in the inline block (v133: no tap-through)
+ok('series name shown as text', q('#modal-root #m-series label').textContent.includes('The Saga'));
+ok('no series tap button anymore', !q('#modal-root [data-series]'));
 
 // 3. tap author -> collection overlay with other books by her, current excluded
 qa('#modal-root [data-author]')[0].click();
@@ -54,15 +56,16 @@ q('.collection-overlay [data-book="c2"]').click();
 ok('overlay closes', !q('.collection-overlay'));
 ok('book detail opens', q('#modal-root h2').textContent === 'Beta');
 
-// 5. series collection sorted by position (current book = Beta, pos 1, excluded)
-q('#modal-root [data-series]').click();
-const order = qa('.collection-overlay [data-book]').map(el => el.dataset.book);
+// 5. series siblings listed inline, sorted by position (current book = Beta, pos 1, excluded)
+const order = qa('#m-series [data-book]').map(el => el.dataset.book);
 ok('series sorted by position', JSON.stringify(order) === JSON.stringify(['c1', 'c3']));
 
 // 6. rows show series position info
-ok('row shows position', q('.collection-overlay .crow small').textContent.includes('#2'));
+ok('row shows position', q('#m-series .crow small').textContent.includes('#2'));
 
-// 7. close via X, book modal still underneath
+// 7. close overlay via X, book modal still underneath
+qa('#modal-root [data-author]')[0].click();
+ok('author overlay opens', !!q('.collection-overlay'));
 q('#c-x').click();
 ok('overlay closed via X', !q('.collection-overlay'));
 ok('book modal intact', q('#modal-root h2').textContent === 'Beta');
@@ -77,9 +80,9 @@ runInWindow(`openCollection('author', 'jane doe', 'c4');`);
 ok('case-insensitive match', qa('.collection-overlay [data-book]').length === 3);
 q('#c-x').click();
 
-// 10. book without series has no series button
+// 10. book without series has no inline series block
 runInWindow(`openDetail('c4');`);
-ok('no series button without series', !q('#modal-root [data-series]'));
+ok('no series block without series', !q('#modal-root #m-series'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

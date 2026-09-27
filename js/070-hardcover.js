@@ -176,11 +176,8 @@ async function autoEnrichSweep() {
 // Display-only Hardcover sections for the detail modal (series, moods, warnings).
 function hcDetailHTML(b) {
   let h = '';
-  if (b.series && b.series.name) {
-    h += '<p class="series-line">' + icon('series') + ' <button class="taplink" data-series="' + esc(b.series.name) + '">' +
-      esc(b.series.name) + '</button>' +
-      (b.series.position != null && b.series.position !== '' ? ' · Book ' + esc(String(b.series.position)) : '') + '</p>';
-  }
+  // v133: series display moved to the inline "In this series" block in the
+  // modal (150-modal-discovery.js) — the name is no longer a tap-through.
   if (b.moods && b.moods.length) {
     h += '<div class="mood-row">' + b.moods.map(m => '<span class="mood-chip">' + esc(m) + '</span>').join('') + '</div>';
   }
@@ -259,6 +256,7 @@ function addBook(book, openEditor, source) {
       const hcEl = document.getElementById('m-hc');
       if (editingId === book.id && hcEl) hcEl.innerHTML = hcDetailHTML(book);
       else render();
+      if (editingId === book.id) refreshSeriesInline(book); // v133: series may have arrived with enrichment
       toast('✨ Enriched from Hardcover');
     });
   }
