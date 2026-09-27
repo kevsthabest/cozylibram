@@ -1239,6 +1239,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .set-group[open] > summary::after { transform: rotate(-90deg); }
 .set-group > :not(summary) { margin-left: 16px; margin-right: 16px; }
 .set-group > :last-child { margin-bottom: 16px; }
+/* v117: grouped settings — icon+title+tag summary, subsection headers */
+.set-st { display: flex; flex-direction: column; gap: 2px; }
+.set-tt { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.set-tag { color: var(--muted); font-size: 12px; font-weight: 400; }
+.set-sub { font-size: 14px; margin: 18px 0 10px; letter-spacing: .03em; }
+.set-body > .set-sub:first-child { margin-top: 2px; }
+.pf-row { display: flex; align-items: center; gap: 12px; margin: 2px 0 4px; }
+.st-pname { font-weight: 600; margin-bottom: 6px; }
+.st-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex: none; }
+.st-avatar.letter { display: inline-flex; align-items: center; justify-content: center; background: var(--bg3); font-size: 22px; }
 /* v113: upcoming releases */
 .release-line { color: var(--accent, #e8a0bf); font-weight: 600; }
 .wish-section { display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 18px 0 10px; }

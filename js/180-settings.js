@@ -1,48 +1,20 @@
 'use strict';
 
 /* ---------------- backup view ---------------- */
-/* ---------------- settings accordions (v112) ---------------- */
-// The settings page grew to 11 sections of scroll; each becomes a collapsible
-// card. Wrapping is DOM-based (no HTML restructuring), so future sections are
-// picked up automatically. Open/closed state persists per device.
-function settingsAccordions() {
-  const view = document.getElementById('view');
-  if (!view || view.querySelector('.set-group')) return; // already wrapped
-  let openIdx = [0];
-  try {
-    const saved = JSON.parse(localStorage.getItem('spicyshelves.setgroups') || 'null');
-    if (Array.isArray(saved)) openIdx = saved;
-  } catch (e) {}
-  const groups = [];
-  const collect = (first) => {
-    const nodes = [first];
-    let n = first.nextSibling;
-    while (n && !(n.nodeType === 1 && n.matches('h2.section'))) { nodes.push(n); n = n.nextSibling; }
-    return nodes;
-  };
-  const head = view.querySelector(':scope > .view-head');
-  if (head) groups.push({ title: head.querySelector('h2').innerHTML, nodes: collect(head) });
-  view.querySelectorAll(':scope > h2.section').forEach(h =>
-    groups.push({ title: h.innerHTML, nodes: collect(h) }));
-  const persist = () => {
-    const open = [];
-    view.querySelectorAll(':scope > .set-group').forEach((d, j) => { if (d.open) open.push(j); });
-    try { localStorage.setItem('spicyshelves.setgroups', JSON.stringify(open)); } catch (e) {}
-  };
-  groups.forEach((g, i) => {
-    const parent = g.nodes[0].parentNode;
-    const next = g.nodes[g.nodes.length - 1].nextSibling;
-    const det = document.createElement('details');
-    det.className = 'set-group';
-    if (openIdx.indexOf(i) !== -1) det.open = true;
-    const sum = document.createElement('summary');
-    sum.className = 'section serif';
-    sum.innerHTML = g.title;
-    det.appendChild(sum);
-    g.nodes.forEach(nd => det.appendChild(nd));
-    parent.insertBefore(det, next);
-    det.addEventListener('toggle', persist);
-  });
+/* ---------------- settings groups (v117) ---------------- */
+// Kevin's IA: Account / Library / Appearance / Reading / Metadata / Offline /
+// Privacy / About. Groups render directly as <details> cards (no post-hoc DOM
+// wrapping); open/closed state persists per device in spicyshelves.setgroups.
+function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
+  return '<details class="set-group"' + (openIdx.indexOf(idx) !== -1 ? ' open' : '') + '>' +
+    '<summary class="section serif"><span class="set-st"><span class="set-tt">' +
+    icon(iconName) + ' ' + esc(title) + '</span>' +
+    '<small class="set-tag">' + esc(tag) + '</small></span></summary>' +
+    '<div class="set-body">' + inner + '</div></details>';
+}
+
+function setSub(t) {
+  return '<h3 class="set-sub serif">' + esc(t) + '</h3>';
 }
 function renderSettings() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
@@ -60,16 +32,53 @@ function renderSettings() {
   });
   const ax0 = Object.keys(axTot).sort((x, y) => axTot[y].n - axTot[x].n)[0];
 
-  setView(
-    '<div class="view-head"><button class="btn ghost sm" id="st-back">← Back</button>' +
-    '<h2 class="section serif">Your shelves at a glance</h2></div>' +
-    '<div class="stat-row">' +
-    '<div class="stat"><div class="n">' + counts.tbr + '</div><div class="l">TBR</div></div>' +
-    '<div class="stat"><div class="n">' + counts.reading + '</div><div class="l">Reading</div></div>' +
-    '<div class="stat"><div class="n">' + counts.read + '</div><div class="l">Read</div></div>' +
-    '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + icon(axisByKey(ax0).icon || 'pepper') : 'Avg 💥') + '</div></div>' +
-    '</div>' +
-    '<h2 class="section serif">Appearance</h2>' +
+  /* ---- Account ---- */
+  const htmlLogin =
+    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
+    'The app works fine without it — everything stays on this device.</p>' +
+    '<p class="note" id="ac-status">Checking…</p>' +
+    '<div id="ac-signedout">' +
+    '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
+    '<input id="ac-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password"></div>' +
+    '<div class="search-row"><button class="btn" id="ac-signin">Sign in</button>' +
+    '<button class="btn ghost" id="ac-signup">Create account</button></div>' +
+    (window.isSecureContext
+      ? '<button class="btn ghost block" id="ac-google" style="margin-top:8px">Sign in with Google</button>'
+      : '<p class="note">Google sign-in needs localhost or HTTPS — on this connection, use email &amp; password.</p>') +
+    '</div>';
+
+  const prof = loadProfile();
+  const profName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
+  const htmlProfile =
+    '<div class="pf-row">' + avatarHTML(prof, 'st-avatar') +
+    '<div><div class="st-pname">' + (profName ? esc(profName) : 'Your profile') + '</div>' +
+    '<button class="btn ghost sm" id="st-edit-profile">Edit profile</button></div></div>' +
+    '<p class="note">Your name and picture show up for your ' + esc(covenName().toLowerCase()) + '.</p>';
+
+  const htmlSync =
+    '<div id="ac-signedin" style="display:none">' +
+    '<div class="search-row"><button class="btn ghost" id="ac-sync">' + icon('cloud') + ' Sync now</button>' +
+    '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
+    '<p class="note" id="ac-last"></p></div>';
+
+  /* ---- Library ---- */
+  const htmlBackup =
+    '<p class="note">Your library lives on this device. Export it regularly — future you will be grateful.</p>' +
+    '<button class="btn block" id="bk-export">' + icon('download') + ' Export library (' + library.length + ' books)</button>' +
+    '<button class="btn ghost block" id="bk-import">' + icon('upload') + ' Import from file</button>' +
+    '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
+    '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
+    '<p class="note" style="margin-top:14px"><b>Import from other apps.</b> One front door for every backup: Goodreads, StoryGraph, Hardcover, Bookmory, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
+    '<input type="file" id="im-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
+    '<button class="btn ghost block" id="im-pick">' + icon('download') + ' Choose an export file</button>' +
+    '<div id="im-result"></div>';
+
+  const htmlData =
+    '<p class="note">Delete everything on this device and in your cloud account. <b>This cannot be undone</b> — export a backup first.</p>' +
+    '<button class="btn danger block" id="bk-wipe">Delete everything</button>';
+
+  /* ---- Appearance ---- */
+  const htmlTheme =
     '<div class="field"><label>Theme</label><select id="th-theme" class="text-input">' +
     THEMES.map(th =>
       '<option value="' + th.key + '"' + (getTheme() === th.key ? ' selected' : '') + '>' +
@@ -84,56 +93,27 @@ function renderSettings() {
     ['on', 'off'].map(t =>
       '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '">' +
       (t === 'on' ? icon('sparkles') + ' On' : icon('dnf') + ' Off') + '</button>').join('') +
-    '</div></div>' +
-    '<h2 class="section serif" style="margin-top:26px">Shopping</h2>' +
+    '</div></div>';
+
+  const htmlDisplay =
     '<p class="note">Wishlist books show “Where to buy” links for stores in your region.</p>' +
     '<div class="field"><label>Storefront region</label><div class="seg" id="th-region" style="grid-template-columns:1fr 1fr">' +
     ['auto'].concat(STORE_REGION_KEYS).map(r =>
       '<button data-r="' + r + '" class="' + (storeRegionSetting() === r ? 'active' : '') + '">' +
       (r === 'auto' ? icon('globe') + ' Auto' : STORE_REGIONS[r].label) + '</button>').join('') +
-    '</div></div>' +
-    '<h2 class="section serif">Backup</h2>' +
-    '<p class="note">Your library lives on this device. Export it regularly — future you will be grateful.</p>' +
-    '<button class="btn block" id="bk-export">' + icon('download') + ' Export library (' + library.length + ' books)</button>' +
-    '<button class="btn ghost block" id="bk-import">' + icon('upload') + ' Import from file</button>' +
-    '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
-    '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
-    '<h3 class="serif" style="margin-top:18px">Import from other apps</h3>' +
-    '<p class="note">One front door for every backup: Goodreads, StoryGraph, Hardcover, Bookmory, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
-    '<input type="file" id="im-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
-    '<button class="btn ghost block" id="im-pick">' + icon('download') + ' Choose an export file</button>' +
-    '<div id="im-result"></div>' +
-    '<h2 class="section serif" style="margin-top:26px">Page counts</h2>' +
-    '<p class="note">Look up total pages by ISBN for books that are missing them — ' +
-    'checked via Google Books first, then Open Library.</p>' +
-    '<button class="btn ghost block" id="pc-backfill">' + icon('doc') + ' Fill missing page counts</button>' +
-    '<p class="note" id="pc-backfill-note"></p>' +
-    '<h2 class="section serif" style="margin-top:26px">Reading log</h2>' +
+    '</div></div>';
+
+  /* ---- Reading ---- */
+  const htmlReadLog =
     '<div class="field"><label>“Remove today’s entry” button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
     ['off', 'on'].map(t =>
       '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
       (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
     '</div></div>' +
-    '<p class="note">When shown, a book’s detail sheet gets a “Remove today’s entry” button on days with logged pages — handy for cleaning up mistaken entries.</p>' +
-    '<h2 class="section serif" style="margin-top:26px">Metadata check</h2>' +
-    '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
-    'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
-    'You review each difference and apply the fixes you want; nothing changes on its own.</p>' +
-    '<button class="btn ghost block" id="meta-verify">' + icon('search') + ' Check metadata</button>' +
-    '<p class="note" id="meta-verify-note">' +
-    library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
-    ' books have ISBNs to check.</p>' +
-    '<h2 class="section serif" style="margin-top:26px">Covers</h2>' +
-    '<p class="note">Fetch covers for every book that doesn\'t have one yet — same sources as the cover picker ' +
-    '(Google Books, Open Library, Apple Books, Hardcover). Each candidate is checked to make sure it actually loads before it\'s saved.</p>' +
-    '<button class="btn ghost block" id="cover-bulk">' + icon('download') + ' Download missing covers</button>' +
-    '<p class="note" id="cover-bulk-note">' +
-    library.filter(b => !b.cover).length + ' of ' + library.length +
-    ' books are missing covers.</p>' +
-    '<button class="btn ghost block" id="cover-offline">' + icon('download') + ' Cache covers for offline</button>' +
-    '<p class="note">Saves every book\'s cover on this device so the library renders fully without internet. ' +
-    'Cached covers survive app updates.</p>' +
-    '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
+    '<p class="note">When shown, a book’s detail sheet gets a “Remove today’s entry” button on days with logged pages — handy for cleaning up mistaken entries.</p>';
+
+  /* ---- Metadata ---- */
+  const htmlHardcover =
     '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
     '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
@@ -148,34 +128,97 @@ function renderSettings() {
       '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '">' +
       TROPE_SRC_LABELS[t] + '</button>').join('') +
     '</div></div>' +
-    '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>' +
-    '<h2 class="section serif" style="margin-top:26px">Account & cloud sync</h2>' +
-    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
-    'The app works fine without it — everything stays on this device.</p>' +
-    '<p class="note" id="ac-status">Checking…</p>' +
-    '<div id="ac-signedout">' +
-    '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
-    '<input id="ac-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password"></div>' +
-    '<div class="search-row"><button class="btn" id="ac-signin">Sign in</button>' +
-    '<button class="btn ghost" id="ac-signup">Create account</button></div>' +
-    (window.isSecureContext
-      ? '<button class="btn ghost block" id="ac-google" style="margin-top:8px">Sign in with Google</button>'
-      : '<p class="note">Google sign-in needs localhost or HTTPS — on this connection, use email &amp; password.</p>') +
-    '</div>' +
-    '<div id="ac-signedin" style="display:none">' +
-    '<div class="search-row"><button class="btn ghost" id="ac-sync">' + icon('cloud') + ' Sync now</button>' +
-    '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
-    '<p class="note" id="ac-last"></p>' +
-    '</div>' +
-    '<h2 class="section serif" style="margin-top:26px">App</h2>' +
+    '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>';
+
+  const htmlMetaCheck =
+    '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
+    'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
+    'You review each difference and apply the fixes you want; nothing changes on its own.</p>' +
+    '<button class="btn ghost block" id="meta-verify">' + icon('search') + ' Check metadata</button>' +
+    '<p class="note" id="meta-verify-note">' +
+    library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
+    ' books have ISBNs to check.</p>';
+
+  const htmlPageCounts =
+    '<p class="note">Look up total pages by ISBN for books that are missing them — ' +
+    'checked via Google Books first, then Open Library.</p>' +
+    '<button class="btn ghost block" id="pc-backfill">' + icon('doc') + ' Fill missing page counts</button>' +
+    '<p class="note" id="pc-backfill-note"></p>';
+
+  const htmlCovers =
+    '<p class="note">Fetch covers for every book that doesn\'t have one yet — same sources as the cover picker ' +
+    '(Google Books, Open Library, Apple Books, Hardcover). Each candidate is checked to make sure it actually loads before it\'s saved.</p>' +
+    '<button class="btn ghost block" id="cover-bulk">' + icon('download') + ' Download missing covers</button>' +
+    '<p class="note" id="cover-bulk-note">' +
+    library.filter(b => !b.cover).length + ' of ' + library.length +
+    ' books are missing covers.</p>';
+
+  /* ---- Offline ---- */
+  const htmlOffline =
+    '<button class="btn ghost block" id="cover-offline">' + icon('download') + ' Cache covers for offline</button>' +
+    '<p class="note">Saves every book\'s cover on this device so the library renders fully without internet. ' +
+    'Cached covers survive app updates.</p>';
+
+  /* ---- Privacy ---- */
+  const htmlPrivacy =
+    '<div id="st-privacy"><p class="note">Loading…</p></div>' +
+    '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>';
+
+  /* ---- About ---- */
+  const htmlAbout =
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
     '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
     '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
-    '<p class="note" id="ap-status"></p>' +
-    '<button class="btn danger block" id="bk-wipe" style="margin-top:26px">Delete everything</button>'
-  ); // end setView
-  settingsAccordions(); // v112: collapse the 11 sections (state persists)
+    '<p class="note" id="ap-status"></p>';
+
+  let openIdx = [0];
+  try {
+    const saved = JSON.parse(localStorage.getItem('spicyshelves.setgroups') || 'null');
+    if (Array.isArray(saved)) openIdx = saved;
+  } catch (e) {}
+
+  const groups = [
+    ['user', 'Account', 'Sign in, profile & sync',
+      setSub('Login') + htmlLogin + setSub('Profile & avatar') + htmlProfile + setSub('Cloud sync') + htmlSync],
+    ['covers', 'Library', 'Backups, imports & data',
+      setSub('Backup & export') + htmlBackup + setSub('Data management') + htmlData],
+    ['sparkles', 'Appearance', 'Theme & display',
+      setSub('Theme') + htmlTheme + setSub('Display') + htmlDisplay],
+    ['reading', 'Reading', 'Logging & progress',
+      setSub('Reading log') + htmlReadLog],
+    ['doc', 'Metadata', 'Enrichment & corrections',
+      setSub('Hardcover') + htmlHardcover + setSub('Metadata check') + htmlMetaCheck +
+      setSub('Page counts') + htmlPageCounts + setSub('Covers') + htmlCovers],
+    ['download', 'Offline', 'On this device',
+      setSub('Cover cache') + htmlOffline],
+    ['eyeoff', 'Privacy', 'Sharing',
+      setSub('Coven sharing') + htmlPrivacy],
+    ['help', 'About', 'Version & diagnostics',
+      setSub('App') + htmlAbout],
+  ];
+
+  setView(
+    '<div class="view-head"><button class="btn ghost sm" id="st-back">← Back</button>' +
+    '<h2 class="section serif">Your shelves at a glance</h2></div>' +
+    '<div class="stat-row">' +
+    '<div class="stat"><div class="n">' + counts.tbr + '</div><div class="l">TBR</div></div>' +
+    '<div class="stat"><div class="n">' + counts.reading + '</div><div class="l">Reading</div></div>' +
+    '<div class="stat"><div class="n">' + counts.read + '</div><div class="l">Read</div></div>' +
+    '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + icon(axisByKey(ax0).icon || 'pepper') : 'Avg 💥') + '</div></div>' +
+    '</div>' +
+    groups.map((g, i) => setGroupShell(g[0], g[1], g[2], g[3], i, openIdx)).join('')
+  );
+
+  // v117: persist open groups
+  document.querySelectorAll('#view > .set-group').forEach(det => {
+    det.addEventListener('toggle', () => {
+      const open = [];
+      document.querySelectorAll('#view > .set-group').forEach((d, k) => { if (d.open) open.push(k); });
+      try { localStorage.setItem('spicyshelves.setgroups', JSON.stringify(open)); } catch (e) {}
+    });
+  });
+
 
   // Appearance wiring
   document.getElementById('st-back').addEventListener('click', () => go('library'));
@@ -265,6 +308,28 @@ function renderSettings() {
     toast('Syncing…'); await cloudFirstSync();
   });
   refreshAccountUI();
+  // v117: profile + privacy shortcuts
+  document.getElementById('st-edit-profile').addEventListener('click', () => go('profile'));
+  document.getElementById('st-privacy-go').addEventListener('click', () => go('coven'));
+  // v117: privacy summary — the full sharing controls live on the Coven tab
+  (async () => {
+    const box = document.getElementById('st-privacy');
+    if (!box) return;
+    const cname = covenName().toLowerCase();
+    if (!cloudUser || typeof circlePrivacy !== 'function') {
+      box.innerHTML = '<p class="note">Sign in to share your shelves with your ' + esc(cname) + '.</p>';
+      return;
+    }
+    try {
+      const priv = await circlePrivacy();
+      const hidden = (priv.hidden || []).map(s => STATUS[s] || s);
+      box.innerHTML = '<p class="note">' + (priv.share
+        ? 'Your ' + esc(cname) + ' can see your shelves' + (hidden.length ? ' except: ' + esc(hidden.join(', ')) : '') + '.'
+        : 'Sharing is off — nobody can see your books.') + '</p>';
+    } catch (e) {
+      box.innerHTML = '<p class="note">Couldn\'t load sharing status.</p>';
+    }
+  })();
 
   document.getElementById('bk-wipe').addEventListener('click', async () => {
     if (!confirm('Delete ALL ' + library.length + ' books? Export a backup first!')) return;

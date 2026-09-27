@@ -1,6 +1,6 @@
 /* Cozy Libram service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'cozy-libram-v116';
+const CACHE = 'cozy-libram-v117';
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 const IMG_CACHE_MAX = 600; // trim oldest-first past this many covers
 const JS = ['000-core.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-tropes.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '136-coverpicker.js', '140-collections.js', '150-modal-discovery.js', '155-authors.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '200-boot.js'].map(f => './js/' + f);
