@@ -81,9 +81,7 @@ function renderSettings() {
     library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
     ' books have ISBNs to check.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Hardcover</h2>' +
-    '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags. ' +
-    'The token lives in server-config.json on your home PC and is shared with this device automatically over your home network. ' +
-    'Get one at hardcover.app → Account settings → API.</p>' +
+    '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags.</p>' +
     '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
     '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
     '<div class="field"><label>Background auto-enrich</label><div class="seg" id="hc-autoseg" style="grid-template-columns:1fr 1fr">' +
@@ -100,10 +98,6 @@ function renderSettings() {
     '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>' +
     '<p class="note" id="hc-status">' + hcStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Google Books</h2>' +
-    '<p class="note">Google Books lookups share one anonymous quota that can run out. ' +
-    'A personal API key gives 1,000 requests/day: Google Cloud Console → enable the "Books API" → ' +
-    'Credentials → Create an API key (restrict it to the Books API), then add it as google_books_key ' +
-    'in server-config.json on your home PC.</p>' +
     '<p class="note" id="gb-status">' + gbKeyStatusText() + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">Account & cloud sync</h2>' +
     '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
@@ -123,9 +117,6 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p>' +
     '</div>' +
-    '<p class="note">Supabase project — from your Supabase dashboard → Project Settings → API. ' +
-    'Enter the URL and anon key once in server-config.json on your home PC; ' +
-    'this device picks them up automatically over your home network.</p>' +
     '<p class="note" id="ac-cfg">' + (cloudCfg().url ? icon('owned') + ' Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">App</h2>' +
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
