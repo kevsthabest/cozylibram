@@ -479,13 +479,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .covers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 10px; }
 .cover-tile { cursor: pointer; }
 .cover-tile .tile-cover {
+  /* v55-tile: single-mechanism 2:3 box. aspect-ratio alone sizes the box;
+     the image inside is absolutely positioned and can never change it. */
   position: relative;
-  /* Forced 2:3 box via the classic padding technique (v50): works in every
-     browser and cannot be defeated by the image inside, no matter how tall
-     or wide the photo is. aspect-ratio is kept as a secondary hint. */
-  height: 0;
-  padding-bottom: 150%;
-  aspect-ratio: 2/3;
+  width: 100%;
+  aspect-ratio: 2 / 3;
   border-radius: 10px;
   overflow: hidden;
   background: linear-gradient(140deg, var(--card2), var(--bg2));

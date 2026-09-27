@@ -33,6 +33,17 @@ const doc = window.document;
 ok('App section shows version element', !!doc.getElementById('ap-ver'));
 ok('update button exists', !!doc.getElementById('ap-update'));
 ok('update status element exists', !!doc.getElementById('ap-status'));
+ok('cached CSS diagnostic element exists', !!doc.getElementById('ap-css'));
+ok('server CSS diagnostic element exists', !!doc.getElementById('ap-css-srv'));
+
+// Every classic script in index.html must be in the SW precache list
+// (an omission silently breaks offline use and update atomicity).
+const htmlScripts = [...html.matchAll(/<script src="js\/([^"]+\.js)"><\/script>/g)].map(m => m[1]);
+const jsArray = (swText.match(/const JS = \[([^\]]*)\]/) || ['', ''])[1];
+const precached = [...jsArray.matchAll(/'([^']+\.js)'/g)].map(m => m[1]);
+const missing = htmlScripts.filter(s => !precached.includes(s));
+ok('all index.html scripts are precached in sw.js', missing.length === 0);
+if (missing.length) console.log('  missing from sw.js: ' + missing.join(', '));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

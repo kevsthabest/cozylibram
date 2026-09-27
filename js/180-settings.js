@@ -110,6 +110,8 @@ function renderSettings() {
     '<p class="note" id="ac-cfg">' + (cloudCfg().url ? '🏠 Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">App</h2>' +
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
+    '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
+    '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
     '<p class="note" id="ap-status"></p>' +
     '<button class="btn danger block" id="bk-wipe" style="margin-top:26px">Delete everything</button>'
@@ -254,6 +256,14 @@ function renderSettings() {
   runningAppVersion().then(v => {
     const el = document.getElementById('ap-ver');
     if (el) el.textContent = v || 'unknown';
+  });
+  cachedCssStatus().then(s => {
+    const el = document.getElementById('ap-css');
+    if (el) el.textContent = s === 'new' ? 'fixed ✓' : (s === 'old' ? 'stale — grid guard active' : 'unknown');
+  });
+  serverCssStatus().then(s => {
+    const el = document.getElementById('ap-css-srv');
+    if (el) el.textContent = s === 'new' ? 'fixed ✓' : (s === 'old' ? 'stale — re-extract the zip on the PC' : 'unknown');
   });
   document.getElementById('ap-update').addEventListener('click', () => {
     checkForAppUpdate(document.getElementById('ap-status'));

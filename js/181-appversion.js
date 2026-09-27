@@ -23,6 +23,33 @@ async function runningAppVersion() {
   } catch (e) { return null; }
 }
 
+/* v55 marker: present only in the fixed grid CSS. Checked by cssGridStatus(). */
+function cssHasTileFix(cssText) {
+  return /v55-tile/.test(cssText || '');
+}
+
+/* Cached CSS: fetched through the controlling service worker (cache-first),
+   so this is the stylesheet the running page actually applied. */
+async function cachedCssStatus() {
+  try {
+    const res = await fetch('./styles.css');
+    if (!res.ok) return 'unreadable';
+    return cssHasTileFix(await res.text()) ? 'new' : 'old';
+  } catch (e) { return 'unreadable'; }
+}
+
+/* Server CSS: the ?probe= query busts the service-worker cache (the precache
+   key has no query string), so the request falls through to the network and
+   reveals the stylesheet file currently on the server. If the server copy is
+   old while the app is new, the zip was not extracted cleanly on the PC. */
+async function serverCssStatus() {
+  try {
+    const res = await fetch('./styles.css?probe=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return 'unreadable';
+    return cssHasTileFix(await res.text()) ? 'new' : 'old';
+  } catch (e) { return 'unreadable'; }
+}
+
 /* Ask the service worker for an update; reload into it when one is ready. */
 async function checkForAppUpdate(statusEl) {
   const say = t => { if (statusEl) statusEl.textContent = t; };

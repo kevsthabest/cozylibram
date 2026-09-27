@@ -256,6 +256,7 @@ function renderLibrary() {
     html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
   }
   setView(html);
+  tileGuard(); // v55: enforce uniform 2:3 boxes even if styles.css is stale
 
   document.getElementById('q').addEventListener('input', e => {
     query = e.target.value;
