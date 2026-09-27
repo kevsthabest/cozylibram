@@ -177,10 +177,10 @@ function verifyFlagHTML(f) {
 
 function renderVerify() {
   let html = '<div class="view-head"><button class="btn ghost sm" id="v-back">← Back</button></div>' +
-    '<div class="wish-head"><h2 class="serif">🔍 Metadata check</h2>';
+    '<div class="wish-head"><h2 class="serif">' + icon('search') + ' Metadata check</h2>';
   if (!verifyResults.length) {
     html += '<p class="note">Everything matches Open Library / Google Books ✨</p></div>' +
-      '<div class="empty"><div class="big">✨</div><h2 class="serif">All clean</h2>' +
+      '<div class="empty"><div class="big">' + icon('sparkles') + '</div><h2 class="serif">All clean</h2>' +
       '<p>No differences found in the books we could check.</p></div>';
   } else {
     html += '<p class="note">' + verifyResults.length + ' book' +
@@ -192,7 +192,7 @@ function renderVerify() {
         '<div class="crow vbook">' +
         (r.book.cover
           ? '<img src="' + esc(r.book.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-          : '<span class="cnocover">📕</span>') +
+          : '<span class="cnocover">' + icon('covers') + '</span>') +
         '<span class="ctext"><b>' + esc(r.book.title || 'Unknown title') + '</b>' +
         '<span class="vflags">' + r.flags.map(verifyFlagHTML).join('') + '</span></span>' +
         '<button class="btn small" data-vfix="' + esc(r.book.id) + '">Fix</button></div>'

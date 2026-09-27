@@ -407,7 +407,7 @@ async function handleBookmoryFile(file, mount) {
       '<div class="result-card"><div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
       '<p class="author">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</p></div></div>').join('');
     const corruptNote = parsed.skippedTitles.length
-      ? '<p class="note">⚠️ ' + parsed.skippedTitles.length + ' record' +
+      ? '<p class="note">' + icon('warn') + ' ' + parsed.skippedTitles.length + ' record' +
         (parsed.skippedTitles.length === 1 ? ' was' : 's were') +
         ' corrupted inside the export and couldn\'t be read (' +
         parsed.skippedTitles.map(t => '“' + esc(t) + '”').join(', ') +

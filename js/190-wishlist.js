@@ -4,12 +4,12 @@
 function renderWishlist() {
   const books = library.filter(b => !b.owned)
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')));
-  let html = '<div class="wish-head"><h2 class="serif">💝 Wishlist</h2>' +
+  let html = '<div class="wish-head"><h2 class="serif">' + icon('gift') + ' Wishlist</h2>' +
     '<p class="note">' + books.length + ' book' + (books.length === 1 ? '' : 's') +
     ' you want to get your hands on</p></div>';
   if (!books.length) {
-    html += '<div class="empty"><div class="big">💝</div><h2 class="serif">Nothing on the wishlist</h2>' +
-      '<p>Open any book and choose <b>🛒 To buy</b><br>under Ownership to add it here.</p></div>';
+    html += '<div class="empty"><div class="big">' + icon('gift') + '</div><h2 class="serif">Nothing on the wishlist</h2>' +
+      '<p>Open any book and choose <b>' + icon('tobuy') + ' To buy</b><br>under Ownership to add it here.</p></div>';
   } else {
     html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
   }

@@ -185,7 +185,7 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   runInWindow('boot();');
   await tick();
   ok('no gate without backend config', !q('#gate-signin') && !!q('#view .toolbar'));
-  ok('no account initial without a signed-in user', q('#menu-btn').textContent.trim() === '👤');
+  ok('no account initial without a signed-in user', !!q('#menu-btn .ticon'));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

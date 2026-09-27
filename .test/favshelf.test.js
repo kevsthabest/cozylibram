@@ -76,7 +76,7 @@ ok('collapsed again', qa('.fav-shelf .spine').length === 6);
 
 // 6. empty state
 runInWindow(`library.forEach(b => b.favorite = false); favExpanded = false; renderLibrary();`);
-ok('empty shelf hint shown', q('.fav-shelf').textContent.includes('Tap 🤍'));
+ok('empty shelf hint shown', q('.fav-shelf').textContent.includes('on any book to pin it to this shelf'));
 ok('no spines when empty', qa('.fav-shelf .spine').length === 0);
 
 // 7. cover CORS allowlist: only request CORS where the host sends ACAO,

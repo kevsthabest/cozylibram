@@ -32,6 +32,15 @@ const runInWindow = (js) => {
   ok(n + ' renders an inline svg', /<svg[^>]*class="ticon"/.test(svg) && svg.includes('</svg>'));
   ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
 });
+// v85: full-UI sweep icons
+['dice', 'sparkles', 'moon', 'sun', 'globe', 'eye', 'eyeoff', 'download', 'upload', 'doc',
+ 'camera', 'barcode', 'clipboard', 'share', 'copy', 'gear', 'user', 'logout', 'key', 'pencil',
+ 'gift', 'warn', 'calendar', 'chart', 'trophy', 'medal', 'flame', 'bulb', 'crystal', 'cloud',
+ 'pause', 'hourglass', 'help'].forEach(n => {
+  const svg = window.icon(n);
+  ok(n + ' renders an inline svg', /<svg[^>]*class=\"ticon\"/.test(svg) && svg.includes('</svg>'));
+  ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
+});
 ok('unknown icon falls back to covers', window.icon('nope') === window.icon('covers'));
 runInWindow(`window.__axesOk = RATING_AXES.every(a => typeof a.icon === 'string' && icon(a.icon).includes('</svg>'));
 window.__axesCount = RATING_AXES.length;`);
@@ -64,6 +73,30 @@ ok('favorite button uses line icon', !!q('#f-fav .ticon'));
 ok('change-cover button uses line icon', !!q('#m-changecover .ticon'));
 ok('previously-read uses line icon', !!q('#f-prevwrap .ticon'));
 ok('store links use line icon', qa('#m-buywrap .ticon').length > 0);
+
+// v85: rest-of-UI line-art sweep
+runInWindow(`go('library');`);
+ok('shelf filter chips use line icons', qa('#view .chips .ticon').length >= 4);
+ok('ownership filter chips use line icons', qa('#view .chips .ticon').length >= 6);
+runInWindow(`library[0].status = 'reading'; renderLibrary();`);
+ok('recently-read header uses line icon', !!q('.recent-head .ticon'));
+runInWindow(`go('add');`);
+ok('add tabs use line icons', qa('.tabs .ticon').length === 4);
+runInWindow(`go('wishlist');`);
+ok('wishlist header uses line icon', !!q('#view .wish-head .ticon'));
+runInWindow(`go('authors');`);
+ok('authors header uses line icon', !!q('#view .wish-head .ticon'));
+runInWindow(`go('pick');`);
+ok('roulette header uses line icon', !!q('#view h2 .ticon'));
+ok('roulette empty state uses line icon', !!q('#view .empty .big .ticon'));
+runInWindow(`go('stats');`);
+ok('stats headers use line icons', qa('#view .stat-sub .ticon').length >= 3);
+runInWindow(`go('settings');`);
+ok('settings toggles use line icons', qa('#view .seg .ticon').length >= 4);
+ok('settings buttons use line icons', qa('#view .btn .ticon').length >= 5);
+runInWindow(`openBookFromEl(null, 'q1');`);
+ok('my-rating picker uses line icons', qa('#f-myrating .ticon').length === 5);
+ok('share button uses line icon', !!q('#m-share .ticon'));
 runInWindow(`document.getElementById('m-x').click();`);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

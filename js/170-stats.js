@@ -70,14 +70,14 @@ function dayDetailHTML(byDay, k) {
   const nBooks = new Set(acts.map(a => a.b.id)).size;
   return '<div class="stat-sub" style="margin-top:12px">' +
     fmtDate(new Date(k + 'T12:00:00').toISOString()) +
-    ' — 📖 ' + nBooks + ' book' + (nBooks === 1 ? '' : 's') +
-    ' · 📄 ' + dayPages + ' pages</div>' +
+    ' — ' + icon('reading') + ' ' + nBooks + ' book' + (nBooks === 1 ? '' : 's') +
+    ' · ' + icon('doc') + ' ' + dayPages + ' pages</div>' +
     (acts.length ? acts.map(a => {
       const pages = a.finished ? 0 : Math.max(0, a.to - a.from);
       const pct = (!a.finished && a.b.pageCount) ? ' (' + Math.round(pages / a.b.pageCount * 100) + '%)' : '';
       return '<div class="cal-book" data-id="' + a.b.id + '">' + coverHTML(a.b) +
         '<div><h4>' + esc(a.b.title) + '</h4>' +
-        (a.finished ? '<p>Finished 🎉</p>'
+        (a.finished ? '<p>Finished</p>'
           : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
         '</div></div>';
     }).join('') : '<p class="note">Nothing read that day.</p>');
@@ -142,9 +142,9 @@ function readingCalHTML() {
       (n ? '<span class="ccover">' +
         (acts[0].b.cover
           ? '<img src="' + esc(acts[0].b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-          : '📕') +
+          : icon('covers')) +
         (n > 1 ? '<span class="cdot">' + n + '</span>' : '') + '</span>' : '') +
-      (dp > 0 ? '<span class="cday-pages">📄' + dp + '</span>' : '') + '</div>';
+      (dp > 0 ? '<span class="cday-pages">' + icon('doc') + dp + '</span>' : '') + '</div>';
   }
   const dow = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => '<div class="cal-dow">' + x + '</div>').join('');
 
@@ -199,10 +199,10 @@ function paceHTML() {
   const kv = (label, val) =>
     '<div class="kv-row"><span>' + label + '</span><b>' + val + '</b></div>';
   html += '<div class="kv">' +
-    (avgLen != null ? kv('📖 Average book', Math.round(avgLen) + ' pages') : '') +
-    (avgDays != null ? kv('⏳ Average time to finish', Math.max(1, Math.round(avgDays)) + ' days') : '') +
-    kv('🔥 Current streak', streak > 0 ? streak + '-day' : '–') +
-    kv('🏅 Longest streak', best > 0 ? best + '-day' : '–') +
+    (avgLen != null ? kv(icon('reading') + ' Average book', Math.round(avgLen) + ' pages') : '') +
+    (avgDays != null ? kv(icon('hourglass') + ' Average time to finish', Math.max(1, Math.round(avgDays)) + ' days') : '') +
+    kv(icon('flame') + ' Current streak', streak > 0 ? streak + '-day' : '–') +
+    kv(icon('medal') + ' Longest streak', best > 0 ? best + '-day' : '–') +
     '</div>';
   return html;
 }
@@ -219,8 +219,8 @@ function dailyStatsHTML() {
   const streak = readingStreak();
   return '<div class="stat-sub">Today</div>' +
     '<div class="dstat-card">' +
-    '<div class="dstat-head"><span>📅 ' + fmtDate(new Date().toISOString()) + '</span>' +
-    (streak > 1 ? '<span class="streak">🔥 ' + streak + '-day streak</span>' : '') + '</div>' +
+    '<div class="dstat-head"><span>' + icon('calendar') + ' ' + fmtDate(new Date().toISOString()) + '</span>' +
+    (streak > 1 ? '<span class="streak">' + icon('flame') + ' ' + streak + '-day streak</span>' : '') + '</div>' +
     (rows.length
       ? '<div class="dstat-total">' + total + ' page' + (total === 1 ? '' : 's') + ' read</div>' +
         rows.map(r => {
@@ -232,7 +232,7 @@ function dailyStatsHTML() {
             '<div><h4>' + esc(r.b.title) + '</h4><p>p. ' + from + ' → p. ' + to + '</p>' +
             '<p>+' + r.p + ' pages' + pct + '</p></div></div>';
         }).join('')
-      : '<p class="note">No pages logged yet today — open a book and tap those steppers! 📖</p>') +
+      : '<p class="note">No pages logged yet today — open a book and tap those steppers! ' + icon('reading') + '</p>') +
     '</div>';
 }
 
@@ -351,10 +351,10 @@ function patternsHTML() {
   }
 
   if (!obs.length)
-    return '<div class="stat-sub">🔮 Reading patterns</div>' +
+    return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div>' +
       '<p class="note">Finish and rate a few more books and your patterns will start showing here.</p>';
-  return '<div class="stat-sub">🔮 Reading patterns</div><div class="patterns">' +
-    obs.slice(0, 6).map(o => '<div class="pattern"><span class="pi">💡</span><p>' + o + '</p></div>').join('') +
+  return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div><div class="patterns">' +
+    obs.slice(0, 6).map(o => '<div class="pattern"><span class="pi">' + icon('bulb') + '</span><p>' + o + '</p></div>').join('') +
     '</div>';
 }
 
@@ -389,9 +389,9 @@ function genreEvoHTML() {
     if (per[k]) per[k].push(b);
   });
   const nonEmpty = keys.filter(k => per[k].length > 0);
-  const granBtns = [['year', '📅 Year'], ['quarter', '🗓️ Quarter'], ['month', '📆 Month']]
+  const granBtns = [['year', icon('calendar') + ' Year'], ['quarter', icon('calendar') + ' Quarter'], ['month', icon('calendar') + ' Month']]
     .map(([g, l]) => '<button data-g="' + g + '" class="' + (gran === g ? 'active' : '') + '">' + l + '</button>').join('');
-  const head = '<div class="stat-sub">📊 Genre evolution</div>' +
+  const head = '<div class="stat-sub">' + icon('chart') + ' Genre evolution</div>' +
     '<div class="seg" id="evo-gran" style="margin-bottom:10px">' + granBtns + '</div>';
   if (nonEmpty.length < 2)
     return head + '<p class="note">Finish books across at least two ' +
@@ -447,7 +447,7 @@ function genreEvoHTML() {
           (Math.abs(sw) === Math.abs(bestSwing) && sw > bestSwing)) { bestSwing = sw; best = g; }
     });
     if (best && Math.abs(bestSwing) >= 0.15)
-      note = '<p class="note">💡 <b>' + esc(best) + '</b> went from <b>' +
+      note = '<p class="note">' + icon('bulb') + ' <b>' + esc(best) + '</b> went from <b>' +
         Math.round((s0[best] || 0) * 100) + '%</b> to <b>' + Math.round((s1[best] || 0) * 100) +
         '%</b> of your finishes between ' + labelOf(nonEmpty[0]) + ' and ' +
         labelOf(nonEmpty[nonEmpty.length - 1]) + '.</p>';
@@ -472,8 +472,8 @@ function recordsHTML() {
   };
   if (withPages.length) {
     const s = withPages.slice().sort((a, b) => b.pageCount - a.pageCount);
-    card('📕', 'Longest', s[0], fmtBig(s[0].pageCount) + ' pages');
-    card('📗', 'Shortest', s[s.length - 1], fmtBig(s[s.length - 1].pageCount) + ' pages');
+    card(icon('covers'), 'Longest', s[0], fmtBig(s[0].pageCount) + ' pages');
+    card(icon('covers'), 'Shortest', s[s.length - 1], fmtBig(s[s.length - 1].pageCount) + ' pages');
   }
   if (rated.length) {
     const s = rated.slice().sort((a, b) =>
@@ -486,14 +486,14 @@ function recordsHTML() {
     card('🌶️', 'Spiciest', s[0], '🌶️ ' + s[0].ratings.spice + ' / 5');
   }
   const bd = biggestDay();
-  if (bd) cards.push('<div class="record-card" id="bigday" data-day="' + bd.k + '"><div class="rlbl">📄 Biggest day</div>' +
+  if (bd) cards.push('<div class="record-card" id="bigday" data-day="' + bd.k + '"><div class="rlbl">' + icon('doc') + ' Biggest day</div>' +
     '<div class="bigday-num">' + bd.pages + '</div>' +
     '<div class="rtitle">' + fmtDate(new Date(bd.k + 'T12:00:00').toISOString()) + '</div>' +
     '<div class="rstat">' + bd.pages + ' pages · ' + bd.n + ' session' + (bd.n === 1 ? '' : 's') + '</div></div>');
   if (!cards.length)
-    return '<div class="stat-sub">🏆 Personal records</div>' +
+    return '<div class="stat-sub">' + icon('trophy') + ' Personal records</div>' +
       '<p class="note">Finish some books and your records will land here.</p>';
-  return '<div class="stat-sub">🏆 Personal records</div><div class="records">' + cards.join('') + '</div>';
+  return '<div class="stat-sub">' + icon('trophy') + ' Personal records</div><div class="records">' + cards.join('') + '</div>';
 }
 
 /* ---- series statistics (v66): books read per series + next-up from her
@@ -506,7 +506,7 @@ function seriesHTML() {
   });
   const names = Object.keys(byName).sort((a, b) => byName[b].length - byName[a].length);
   if (!names.length)
-    return '<div class="stat-sub">📚 Series</div>' +
+    return '<div class="stat-sub">' + icon('series') + ' Series</div>' +
       '<p class="note">Books with series info will group here.</p>';
   const rows = names.slice(0, 10).map(sn => {
     const books = byName[sn];
@@ -518,7 +518,7 @@ function seriesHTML() {
       (next ? '<div class="snext">Next up: <button class="taplink" data-id="' + next.id + '">' +
         esc(next.title) + '</button></div>' : '') + '</div>';
   }).join('');
-  return '<div class="stat-sub">📚 Series</div><div class="series-list">' + rows + '</div>' +
+  return '<div class="stat-sub">' + icon('series') + ' Series</div><div class="series-list">' + rows + '</div>' +
     '<button class="btn ghost sm" id="sr-all">View all ' + names.length + ' series →</button>';
 }
 
@@ -611,16 +611,16 @@ function renderYearInBooks(yr) {
     '<p class="author">' + esc((b.authors || []).join(', ')) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
     '</div></div>').join('');
   const recs = [];
-  if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), '📕 Longest: ' + d.longest.title.slice(0, 22)));
-  if (d.bigDay) recs.push(stat(d.bigDay.pages, '📄 Biggest day'));
-  if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' 📚', '✍️ ' + d.topAuthor[0].slice(0, 22)));
+  if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), icon('covers') + ' Longest: ' + d.longest.title.slice(0, 22)));
+  if (d.bigDay) recs.push(stat(d.bigDay.pages, icon('doc') + ' Biggest day'));
+  if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' ' + icon('series'), icon('pencil') + ' ' + d.topAuthor[0].slice(0, 22)));
   if (d.five) recs.push(stat('♥ ' + d.five, '5-star reads'));
   setView(back + pills +
     '<div class="yib-hero"><div class="yib-kicker">Spicy Shelves</div>' +
     '<h2 class="serif">Your ' + d.yr + ' <em>in Books</em></h2>' +
     '<div class="yib-sub">' + d.n + ' books · ' + fmtBig(d.pages) + ' pages · ' + d.days + ' reading days</div></div>' +
-    '<div class="search-row" style="margin:12px 0"><button class="btn" id="yib-share">📤 Share image</button>' +
-    '<button class="btn ghost" id="yib-copy">📋 Copy text</button></div>' +
+    '<div class="search-row" style="margin:12px 0"><button class="btn" id="yib-share">' + icon('share') + ' Share image</button>' +
+    '<button class="btn ghost" id="yib-copy">' + icon('copy') + ' Copy text</button></div>' +
     '<div class="stat-row">' +
     stat(d.n, 'Books read') +
     stat(fmtBig(d.pages), 'Pages') +
@@ -943,7 +943,7 @@ function renderStats() {
     '<div class="stat"><div class="n">' + (avgMine != null ? '♥ ' + avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
     '<div class="stat"><div class="n">' + (streak > 0 ? '🔥 ' + streak : '–') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
-    '<div class="search-row" style="margin:10px 0 2px"><button class="btn ghost" id="st-yib">✨ My ' + yr + ' in Books</button></div>' +
+    '<div class="search-row" style="margin:10px 0 2px"><button class="btn ghost" id="st-yib">' + icon('sparkles') + ' My ' + yr + ' in Books</button></div>' +
     nowReading +
     dailyStatsHTML() +
     '<div class="stat-sub">Explore</div>' +

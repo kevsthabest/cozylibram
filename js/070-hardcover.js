@@ -11,7 +11,7 @@ function hcToken() {
   catch (e) { return ''; }
 }
 function hcStatusText() {
-  if (hcToken()) return '🏠 Using home-server token ✓';
+  if (hcToken()) return icon('owned') + ' Using home-server token ✓';
   return 'No token set — add hardcover_token to server-config.json on your home PC.';
 }
 
@@ -168,7 +168,7 @@ async function autoEnrichSweep() {
 function hcDetailHTML(b) {
   let h = '';
   if (b.series && b.series.name) {
-    h += '<p class="series-line">📚 <button class="taplink" data-series="' + esc(b.series.name) + '">' +
+    h += '<p class="series-line">' + icon('series') + ' <button class="taplink" data-series="' + esc(b.series.name) + '">' +
       esc(b.series.name) + '</button>' +
       (b.series.position != null && b.series.position !== '' ? ' · Book ' + esc(String(b.series.position)) : '') + '</p>';
   }
@@ -176,7 +176,7 @@ function hcDetailHTML(b) {
     h += '<div class="mood-row">' + b.moods.map(m => '<span class="mood-chip">' + esc(m) + '</span>').join('') + '</div>';
   }
   if (b.contentWarnings && b.contentWarnings.length) {
-    h += '<details class="warnings"><summary>⚠️ Content warnings (' + b.contentWarnings.length + ')</summary><div class="warn-tags">' +
+    h += '<details class="warnings"><summary>' + icon('warn') + ' Content warnings (' + b.contentWarnings.length + ')</summary><div class="warn-tags">' +
       b.contentWarnings.map(w => '<span class="warn-tag">' + esc(w) + '</span>').join('') + '</div></details>';
   }
   return h;

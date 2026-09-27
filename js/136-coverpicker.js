@@ -151,11 +151,11 @@ function openCoverPicker(bookId) {
   ov.id = 'cover-picker';
   ov.innerHTML =
     '<div class="cover-picker" role="dialog" aria-label="Choose a cover">' +
-    '<h3 class="serif">🖼️ Choose a cover</h3>' +
+    '<h3 class="serif">' + icon('image') + ' Choose a cover</h3>' +
     '<p class="note" id="cp-note">Looking for covers…</p>' +
     '<div class="cp-grid" id="cp-grid"></div>' +
     '<div class="cp-actions">' +
-    '<button class="btn ghost" id="cp-upload">📤 Upload your own</button>' +
+    '<button class="btn ghost" id="cp-upload">' + icon('upload') + ' Upload your own</button>' +
     '<input type="file" id="cp-file" accept="image/*" style="display:none">' +
     '<button class="btn ghost" id="cp-cancel">Cancel</button>' +
     '</div></div>';

@@ -246,7 +246,7 @@ function refreshAccountUI() {
     return;
   }
   if (cloudUser) {
-    st.textContent = '☁️ Signed in as ' + cloudUser.email;
+    st.innerHTML = icon('cloud') + ' Signed in as ' + esc(cloudUser.email);
     if (inEl) inEl.style.display = '';
     if (outEl) outEl.style.display = 'none';
     const last = document.getElementById('ac-last');

@@ -119,6 +119,7 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 }
 .menu-pop button:active { background: var(--card2); }
 .menu-pop .mi { width: 22px; text-align: center; }
+.menu-pop .mi .ticon { width: 18px; height: 18px; }
 
 /* profile view */
 .pf-card {
@@ -1082,5 +1083,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .axrow > span .ticon { width: 1.25em; height: 1.25em; }
 .axrow .picker .ticon { width: 26px; height: 26px; }
 .axrow .picker button.on .ticon { fill: currentColor; }
+/* v85: all pickers fill their glyph when selected */
+.picker button.on .ticon { fill: currentColor; }
 /* v84: ownership badge icons */
 .badge .ticon { width: 1.2em; height: 1.2em; }
+/* v85: line-art no-cover placeholders + empty states */
+.cover-wrap .ticon { width: 30px; height: 30px; opacity: .55; }
+.bt-fallback .ticon { width: 34px; height: 34px; opacity: .55; }
+.recent-nocover .ticon, .un-nonecover .ticon { width: 30px; height: 30px; opacity: .55; }
+.cnocover .ticon { width: 24px; height: 24px; opacity: .55; }
+.sr-nocover .ticon { width: 26px; height: 26px; opacity: .55; }
+.bo-nocover .ticon { width: 40px; height: 40px; }
+.ext-nocover .ticon { width: 64px; height: 64px; opacity: .55; }
+.empty .big .ticon { width: 60px; height: 60px; opacity: .6; }

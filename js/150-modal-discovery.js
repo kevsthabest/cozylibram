@@ -172,7 +172,7 @@ function externalRowHTML(x, i) {
     esc(x.author || 'Unknown author');
   return '<div class="crow ext" data-ext="' + i + '">' +
     (x.cover ? '<img src="' + esc(x.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-      : '<span class="cnocover">📕</span>') +
+      : '<span class="cnocover">' + icon('covers') + '</span>') +
     '<span class="ctext"><b>' + esc(x.title) + '</b><small>' + sub + '</small></span>' +
     '<button class="btn small" data-extadd="' + i + '">+ Wishlist</button></div>';
 }
@@ -190,12 +190,12 @@ function openExternalDetail(x) {
     '<button class="modal-close" id="x-x">✕</button>' +
     '<div class="ext-detail">' +
     (x.cover ? '<img class="ext-cover" src="' + esc(x.cover) + '" alt="" onerror="this.remove()">'
-      : '<div class="ext-nocover">📕</div>') +
+      : '<div class="ext-nocover">' + icon('covers') + '</div>') +
     '<h2 class="serif">' + esc(x.title) + '</h2>' +
     '<p class="note">' + sub + '</p>' +
     '<div id="x-meta"><p class="note">Looking up details…</p></div>' +
     '<div id="x-desc"></div>' +
-    '<button class="btn" id="x-wish" style="width:100%;margin-top:14px">💝 + Wishlist</button>' +
+    '<button class="btn" id="x-wish" style="width:100%;margin-top:14px">' + icon('gift') + ' Wishlist</button>' +
     '</div></div></div>';
   document.body.appendChild(ov);
   const close = () => ov.remove();
@@ -207,7 +207,7 @@ function openExternalDetail(x) {
     added = true;
     addEnrichedToWishlist(x, ov._full);
     const btn = ov.querySelector('#x-wish');
-    if (btn) btn.outerHTML = '<p class="note" style="text-align:center">💝 In your wishlist</p>';
+    if (btn) btn.outerHTML = '<p class="note" style="text-align:center">' + icon('gift') + ' In your wishlist</p>';
     toast('Added to wishlist 💝');
   });
   // enrich in the background; the sheet stays usable meanwhile
@@ -276,7 +276,7 @@ function addEnrichedToWishlist(x, full) {
 async function fillMoreSection(kind, name, fromId, ov) {
   const box = ov.querySelector('#c-more');
   if (!box) return;
-  const heading = kind === 'author' ? '🔍 More by ' + name : '🔍 Every book in this series';
+  const heading = icon('search') + ' ' + (kind === 'author' ? 'More by ' + name : 'Every book in this series');
   try {
     let rows;
     if (kind === 'author') {
@@ -286,14 +286,14 @@ async function fillMoreSection(kind, name, fromId, ov) {
       const r = await fetchSeriesBooks(name, from && from.authors[0]);
       if (r.needsToken) {
         box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
-          '<p class="note">💡 Connect Hardcover in Settings to see every book in this series.</p>';
+          '<p class="note">' + icon('bulb') + ' Connect Hardcover in Settings to see every book in this series.</p>';
         return;
       }
       rows = r.rows;
     }
     if (!rows.length) {
       box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
-        '<p class="note">Nothing missing — nice shelf! 🎉</p>';
+        '<p class="note">Nothing missing — nice shelf!</p>';
       return;
     }
     box.innerHTML = '<h3 class="serif c-more-h">' + esc(heading) + '</h3>' +
@@ -302,7 +302,7 @@ async function fillMoreSection(kind, name, fromId, ov) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         addExternalBook(rows[Number(btn.dataset.extadd)]);
-        btn.outerHTML = '<span class="c-added">💝 In wishlist</span>';
+        btn.outerHTML = '<span class="c-added">' + icon('gift') + ' In wishlist</span>';
         toast('Added to wishlist 💝');
       }));
     // v60: tapping the row itself opens the detail sheet
@@ -341,7 +341,7 @@ function openCollection(kind, name, fromId) {
   ov.innerHTML =
     '<div class="modal-backdrop" id="c-back" style="z-index:70"><div class="modal" role="dialog">' +
     '<button class="modal-close" id="c-x">✕</button>' +
-    '<h2 class="serif" style="margin-top:0">' + (kind === 'author' ? '✍️ ' : '📚 ') + esc(name) + '</h2>' +
+    '<h2 class="serif" style="margin-top:0">' + icon(kind === 'author' ? 'pencil' : 'series') + ' ' + esc(name) + '</h2>' +
     '<p class="note">' + others.length + ' other book' + (others.length === 1 ? '' : 's') + ' on your shelves</p>' +
     (others.length
       ? '<div class="collection-list">' + others.map(collectionRowHTML).join('') + '</div>'
@@ -367,7 +367,7 @@ function bookCoverFaceHTML(b) {
   if (b.cover) return '<img src="' + esc(b.cover) + '" alt="">';
   const c = (typeof spineColorCache !== 'undefined' && spineColorCache[b.id] && spineColorCache[b.id].hex) ||
     SPINE_COLORS[hashStr(b.title || '?') % SPINE_COLORS.length];
-  return '<div class="bo-nocover" style="background:' + c + '"><span>📖</span><b>' +
+  return '<div class="bo-nocover" style="background:' + c + '"><span>' + icon('covers') + '</span><b>' +
     esc(b.title || 'Untitled') + '</b></div>';
 }
 // from: element or rect the cover starts from. dropEl: removed in the same
@@ -431,7 +431,7 @@ function renderDetailModal(b, viaBook) {
     ({ tbr: icon('tbr') + ' TBR', reading: icon('reading') + ' Reading', read: icon('read') + ' Read', dnf: icon('dnf') + ' DNF' })[s] + '</button>').join('');
 
   const hearts = [1, 2, 3, 4, 5].map(n =>
-    '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '">❤️</button>').join('');
+    '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '">' + icon('heart') + '</button>').join('');
 
   // draft copy the controls edit until Save
   const draft = Object.assign({}, b, {
@@ -564,7 +564,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-quotes"></div></div>' +
 
     '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
-    '<button class="btn ghost" id="m-share">📤 Share</button>' +
+    '<button class="btn ghost" id="m-share">' + icon('share') + ' Share</button>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
 
@@ -744,7 +744,7 @@ function renderDetailModal(b, viaBook) {
   if (lk) lk.addEventListener('click', async () => {
     lk.disabled = true; lk.textContent = '…';
     const n = await fetchPageCountByISBN(b.isbn);
-    lk.disabled = false; lk.textContent = '🔍';
+    lk.disabled = false; lk.innerHTML = icon('search');
     if (n) {
       draft.pageCount = n;
       document.getElementById('f-pagecount').value = n;
@@ -841,10 +841,10 @@ function renderQuotes() {
     '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('quotes') + ' Quotes' +
     (all.length ? ' <span class="note-inline">· ' + all.length + '</span>' : '') + '</h2>';
   if (!all.length) {
-    html += '<div class="empty"><div class="big">❝</div><h2 class="serif">No quotes yet</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('quotes') + '</div><h2 class="serif">No quotes yet</h2>' +
       '<p>Open any book and tap <b>＋ Add quote</b><br>to start your collection.</p></div>';
   } else {
-    html += '<button class="btn ghost" id="q-random">🎲 Surprise me</button>' +
+    html += '<button class="btn ghost" id="q-random">' + icon('dice') + ' Surprise me</button>' +
       '<div id="q-spot"></div><div class="q-list">' +
       all.map(e => quoteCardHTML(e.book, e.q, false)).join('') + '</div>';
   }

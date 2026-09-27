@@ -4,13 +4,13 @@
 /* ---- author / series collections: "more like this" from your own shelves ---- */
 function collectionRowHTML(b) {
   const sub = (b.series && b.series.name
-    ? '📚 ' + esc(b.series.name) +
+    ? icon('series') + ' ' + esc(b.series.name) +
       (b.series.position != null && b.series.position !== '' ? ' #' + esc(String(b.series.position)) : '') + ' · '
     : '') +
     esc((b.authors || []).join(', ') || 'Unknown author') + ' · ' + STATUS[b.status];
   return '<button class="crow" data-book="' + b.id + '">' +
     (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-      : '<span class="cnocover">📕</span>') +
+      : '<span class="cnocover">' + icon('covers') + '</span>') +
     '<span class="ctext"><b>' + esc(b.title) + '</b><small>' + sub + '</small></span>' +
     '<span class="cgo">›</span></button>';
 }
@@ -76,10 +76,10 @@ function renderSeries() {
     chip('completed', 'Completed · ' + all.filter(s => s.completed).length, seriesFilter === 'completed') +
     '</div>';
   if (!all.length) {
-    html += '<div class="empty"><div class="big">📚</div><h2 class="serif">No series yet</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('series') + '</div><h2 class="serif">No series yet</h2>' +
       '<p>Series info arrives automatically<br>with Hardcover enrichment.</p></div>';
   } else if (!shown.length) {
-    html += '<div class="empty"><div class="big">📚</div><h2 class="serif">Nothing here yet</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('series') + '</div><h2 class="serif">Nothing here yet</h2>' +
       '<p>' + (seriesFilter === 'completed'
         ? 'No finished series — the shelf<br>grows as you complete them.'
         : 'No series in progress right now.') + '</p></div>';
@@ -89,7 +89,7 @@ function renderSeries() {
       const covers = s.books.slice(0, 6).map(b =>
         '<button class="sr-cover" data-id="' + b.id + '" aria-label="' + esc(b.title) + '">' +
         (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
-                 : '<span class="sr-nocover">📕</span>') + '</button>').join('');
+                 : '<span class="sr-nocover">' + icon('covers') + '</span>') + '</button>').join('');
       const posTag = (s.next && s.next.series && s.next.series.position != null && s.next.series.position !== '')
         ? ' <span class="note-inline">#' + esc(String(s.next.series.position)) + '</span>' : '';
       return '<div class="sr-card"><div class="sr-head"><div><div class="sr-name">' + esc(s.name) + '</div>' +
@@ -99,11 +99,11 @@ function renderSeries() {
         (s.books.length > 6 ? '<span class="sr-more">+' + (s.books.length - 6) + '</span>' : '') + '</div>' +
         '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
         (s.next
-          ? '<button class="sr-next" data-id="' + s.next.id + '">⏭️ Next: <b>' + esc(s.next.title) +
+          ? '<button class="sr-next" data-id="' + s.next.id + '">' + icon('upnext') + ' Next: <b>' + esc(s.next.title) +
             '</b>' + posTag + ' <span class="cgo">›</span></button>'
           : (s.read === s.books.length
-              ? '<div class="sr-done">✅ Everything you own is read</div>'
-              : '<div class="sr-done">🚫 The rest are DNF</div>')) +
+              ? '<div class="sr-done">' + icon('read') + ' Everything you own is read</div>'
+              : '<div class="sr-done">' + icon('dnf') + ' The rest are DNF</div>')) +
         '</div>';
     }).join('') + '</div>';
   }

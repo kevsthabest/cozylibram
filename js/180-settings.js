@@ -30,7 +30,7 @@ function renderSettings() {
     '<div class="field"><label>Theme</label><div class="seg" id="th-theme" style="grid-template-columns:1fr 1fr">' +
     ['dark', 'light'].map(t =>
       '<button data-t="' + t + '" class="' + (getTheme() === t ? 'active' : '') + '">' +
-      (t === 'dark' ? '🌙 Dark' : '☀️ Light') + '</button>').join('') +
+      (t === 'dark' ? icon('moon') + ' Dark' : icon('sun') + ' Light') + '</button>').join('') +
     '</div></div>' +
     '<div class="field"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>
@@ -40,43 +40,43 @@ function renderSettings() {
     '<div class="field"><label>Book pull-out animation</label><div class="seg" id="th-anim" style="grid-template-columns:1fr 1fr">' +
     ['on', 'off'].map(t =>
       '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? '✨ On' : '🚫 Off') + '</button>').join('') +
+      (t === 'on' ? icon('sparkles') + ' On' : icon('dnf') + ' Off') + '</button>').join('') +
     '</div></div>' +
     '<h2 class="section serif" style="margin-top:26px">Shopping</h2>' +
     '<p class="note">Wishlist books show “Where to buy” links for stores in your region.</p>' +
     '<div class="field"><label>Storefront region</label><div class="seg" id="th-region" style="grid-template-columns:1fr 1fr">' +
     ['auto'].concat(STORE_REGION_KEYS).map(r =>
       '<button data-r="' + r + '" class="' + (storeRegionSetting() === r ? 'active' : '') + '">' +
-      (r === 'auto' ? '🌍 Auto' : STORE_REGIONS[r].label) + '</button>').join('') +
+      (r === 'auto' ? icon('globe') + ' Auto' : STORE_REGIONS[r].label) + '</button>').join('') +
     '</div></div>' +
     '<h2 class="section serif">Backup</h2>' +
     '<p class="note">Your library lives on this device. Export it regularly — future you will be grateful.</p>' +
-    '<button class="btn block" id="bk-export">⬇ Export library (' + library.length + ' books)</button>' +
-    '<button class="btn ghost block" id="bk-import">⬆ Import from file</button>' +
+    '<button class="btn block" id="bk-export">' + icon('download') + ' Export library (' + library.length + ' books)</button>' +
+    '<button class="btn ghost block" id="bk-import">' + icon('upload') + ' Import from file</button>' +
     '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
     '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
     '<h3 class="serif" style="margin-top:18px">Import from other apps</h3>' +
     '<p class="note">One front door for every backup: Goodreads, StoryGraph, Bookmory, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
     '<input type="file" id="im-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
-    '<button class="btn ghost block" id="im-pick">📥 Choose an export file</button>' +
+    '<button class="btn ghost block" id="im-pick">' + icon('download') + ' Choose an export file</button>' +
     '<div id="im-result"></div>' +
     '<h2 class="section serif" style="margin-top:26px">Page counts</h2>' +
     '<p class="note">Look up total pages by ISBN for books that are missing them — ' +
     'checked via Google Books first, then Open Library.</p>' +
-    '<button class="btn ghost block" id="pc-backfill">📄 Fill missing page counts</button>' +
+    '<button class="btn ghost block" id="pc-backfill">' + icon('doc') + ' Fill missing page counts</button>' +
     '<p class="note" id="pc-backfill-note"></p>' +
     '<h2 class="section serif" style="margin-top:26px">Reading log</h2>' +
     '<div class="field"><label>“Remove today’s entry” button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
     ['off', 'on'].map(t =>
       '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? '👁️ Show' : '🙈 Hide') + '</button>').join('') +
+      (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
     '</div></div>' +
     '<p class="note">When shown, a book’s detail sheet gets a “Remove today’s entry” button on days with logged pages — handy for cleaning up mistaken entries.</p>' +
     '<h2 class="section serif" style="margin-top:26px">Metadata check</h2>' +
     '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
     'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
     'You review each difference and apply the fixes you want; nothing changes on its own.</p>' +
-    '<button class="btn ghost block" id="meta-verify">🔍 Check metadata</button>' +
+    '<button class="btn ghost block" id="meta-verify">' + icon('search') + ' Check metadata</button>' +
     '<p class="note" id="meta-verify-note">' +
     library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
     ' books have ISBNs to check.</p>' +
@@ -89,7 +89,7 @@ function renderSettings() {
     '<div class="field"><label>Background auto-enrich</label><div class="seg" id="hc-autoseg" style="grid-template-columns:1fr 1fr">' +
     ['off', 'on'].map(t =>
       '<button data-t="' + t + '" class="' + (hcAutoEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? '✨ On' : '⏸️ Off') + '</button>').join('') +
+      (t === 'on' ? icon('sparkles') + ' On' : icon('pause') + ' Off') + '</button>').join('') +
     '</div></div>' +
     '<p class="note">When on, unenriched books are quietly enriched from Hardcover a few seconds after the app opens — no need to tap “Enrich all books”.</p>' +
     '<div class="field"><label>Trope suggestions</label><div class="seg" id="trope-srcseg" style="grid-template-columns:repeat(4,1fr)">' +
@@ -119,14 +119,14 @@ function renderSettings() {
       : '<p class="note">Google sign-in needs localhost or HTTPS — on this connection, use email &amp; password.</p>') +
     '</div>' +
     '<div id="ac-signedin" style="display:none">' +
-    '<div class="search-row"><button class="btn ghost" id="ac-sync">☁️ Sync now</button>' +
+    '<div class="search-row"><button class="btn ghost" id="ac-sync">' + icon('cloud') + ' Sync now</button>' +
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p>' +
     '</div>' +
     '<p class="note">Supabase project — from your Supabase dashboard → Project Settings → API. ' +
     'Enter the URL and anon key once in server-config.json on your home PC; ' +
     'this device picks them up automatically over your home network.</p>' +
-    '<p class="note" id="ac-cfg">' + (cloudCfg().url ? '🏠 Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
+    '<p class="note" id="ac-cfg">' + (cloudCfg().url ? icon('owned') + ' Using the home server’s Supabase config ✓' : 'No Supabase config — add it to server-config.json on your home PC.') + '</p>' +
     '<h2 class="section serif" style="margin-top:26px">App</h2>' +
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
     '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +

@@ -11,7 +11,7 @@ function gbKey() {
   catch (e) { return ''; }
 }
 function gbKeyStatusText() {
-  if (gbKey()) return '🏠 Using home-server key ✓';
+  if (gbKey()) return icon('owned') + ' Using home-server key ✓';
   return 'No key set — add google_books_key to server-config.json on your home PC.';
 }
 // Append the API key to a Google Books URL when we have one.

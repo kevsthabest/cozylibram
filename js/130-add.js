@@ -4,7 +4,7 @@
 function renderAdd() {
   let html = '<h2 class="section serif">Add a book</h2>' +
     '<div class="tabs">' +
-    tab('scan', '📷 Scan') + tab('search', '🔍 Search') + tab('isbn', '⌨️ ISBN') + tab('bulk', '📋 Bulk') +
+    tab('scan', icon('camera') + ' Scan') + tab('search', icon('search') + ' Search') + tab('isbn', icon('barcode') + ' ISBN') + tab('bulk', icon('clipboard') + ' Bulk') +
     '</div><div id="add-body"></div>';
   setView(html);
   document.querySelectorAll('.tabs button').forEach(b =>
@@ -26,9 +26,9 @@ function renderScanTab() {
     '<div class="scan-hint">Point the camera at the barcode on the back cover</div></div>' +
     '<div id="scan-result"></div>' +
     '<button class="btn ghost block" id="scan-toggle">Start camera</button>' +
-    '<button class="btn ghost block" id="scan-photo">📸 Snap a barcode photo</button>' +
+    '<button class="btn ghost block" id="scan-photo">' + icon('camera') + ' Snap a barcode photo</button>' +
     '<input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none">' +
-    (insecure ? '<p class="note">⚠️ Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
+    (insecure ? '<p class="note">' + icon('warn') + ' Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
     '<p class="note">Tip: on a phone, install this as an app (Share → Add to Home Screen) for the full experience.</p>';
   const toggle = document.getElementById('scan-toggle');
   toggle.addEventListener('click', () => {
@@ -246,7 +246,7 @@ function renderIsbnTab() {
   body.innerHTML =
     '<div class="search-row"><input id="i-q" class="text-input" inputmode="numeric" placeholder="978…">' +
     '<button class="btn" id="i-go">Look up</button></div><div id="i-result"></div>' +
-    '<p class="note">Pasting a whole stack? The 📋 Bulk tab does them all at once.</p>';
+    '<p class="note">Pasting a whole stack? The ' + icon('clipboard') + ' Bulk tab does them all at once.</p>';
   const run = () => {
     const v = document.getElementById('i-q').value.trim();
     if (v.length < 10) { toast('That ISBN looks too short'); return; }
@@ -321,9 +321,9 @@ function renderBulkTab() {
       (i, n) => { prog.textContent = 'Looking up ' + i + ' / ' + n + '…'; });
     prog.textContent = '';
     const found = results.filter(r => r.status === 'found');
-    const chip = (r) => r.status === 'found' ? '<span class="badge owned">✅ ready</span>'
-      : r.status === 'duplicate' ? '<span class="badge tobuy">📚 already on shelves</span>'
-      : '<span class="badge">❓ not found</span>';
+    const chip = (r) => r.status === 'found' ? '<span class="badge owned">' + icon('read') + ' ready</span>'
+      : r.status === 'duplicate' ? '<span class="badge tobuy">' + icon('covers') + ' already on shelves</span>'
+      : '<span class="badge">' + icon('help') + ' not found</span>';
     resEl.innerHTML = results.map(r =>
       '<div class="result-card">' +
       (r.book ? coverHTML(r.book) : '<div class="cover-ph"></div>') +

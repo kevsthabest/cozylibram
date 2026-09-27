@@ -52,15 +52,15 @@ function recentBooks(limit) {
 function recentStripHTML() {
   const rec = recentBooks(8);
   if (!rec.length) return '';
-  return '<div class="recent-strip"><div class="recent-head"><h3 class="serif">🕘 Recently read</h3></div>' +
+  return '<div class="recent-strip"><div class="recent-head"><h3 class="serif">' + icon('history') + ' Recently read</h3></div>' +
     '<div class="recent-row">' + rec.map(b => {
       const total = b.pageCount || 0;
       const cur = total ? Math.min(b.progress || 0, total) : (b.progress || 0);
       const pct = b.status === 'read' ? 100 : (total ? Math.round(cur / total * 100) : 0);
-      const sub = b.status === 'read' ? 'Finished 🎉'
+      const sub = b.status === 'read' ? 'Finished'
         : (total ? 'p. ' + cur + ' / ' + total + ' · ' + pct + '%' : 'p. ' + cur);
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
-        : '<div class="recent-nocover">📖</div>';
+        : '<div class="recent-nocover">' + icon('covers') + '</div>';
       return '<button class="recent-card" data-id="' + b.id + '" title="' + esc(b.title) + '">' + cov +
         '<span class="recent-title">' + esc(b.title) + '</span>' +
         '<span class="recent-prog"><span class="fill" style="width:' + pct + '%"></span></span>' +
@@ -79,13 +79,13 @@ function favShelfHTML() {
   // in one grid (no collapse needed); spines keep the old rows + show-all.
   const styleBtn = '<button class="btn ghost sm" id="fav-style" title="Switch shelf style">' +
     (favStyle === 'spines' ? icon('covers') + ' Covers' : icon('spines') + ' Spines') + '</button>';
-  let html = '<div class="fav-shelf"><div class="fav-head"><h3 class="serif">❤️ Favorites</h3>' +
+  let html = '<div class="fav-shelf"><div class="fav-head"><h3 class="serif">' + icon('heart') + ' Favorites</h3>' +
     '<span class="fav-btns">' + styleBtn +
     (rows.length > 1 && favStyle === 'spines'
       ? '<button class="btn ghost sm" id="fav-toggle">' + (favExpanded ? 'Show less ↑' : 'Show all ' + favs.length + ' ↓') + '</button>'
       : '') + '</span></div>';
   if (!favs.length) {
-    html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">Tap 🤍 on any book to pin it to this shelf.</p></div>' +
+    html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">Tap ' + icon('heart') + ' on any book to pin it to this shelf.</p></div>' +
       '<div class="shelf-plank"></div>';
   } else if (favStyle === 'covers') {
     html += '<div class="book-grid fav-covers">' + favs.map((b, i) => bookTile(b, i)).join('') + '</div>';
@@ -127,7 +127,7 @@ function upNextShelfHTML() {
   } else {
     html += '<div class="recent-row">' + books.slice(0, 8).map((b, i) => {
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
-        : '<div class="recent-nocover">📖</div>';
+        : '<div class="recent-nocover">' + icon('covers') + '</div>';
       return '<button class="recent-card" data-id="' + b.id + '" title="#' + (i + 1) + ' · ' + esc(b.title) + '">' +
         '<span class="un-num">' + (i + 1) + '</span>' + cov +
         '<span class="recent-title">' + esc(b.title) + '</span></button>';
@@ -138,17 +138,17 @@ function upNextShelfHTML() {
 function renderUpNext() {
   const books = upNextBooks();
   let html = '<button class="btn ghost" id="un-back">← Shelves</button>' +
-    '<h2 class="section serif" style="font-size:26px;margin-top:10px">⏭️ Up Next</h2>';
+    '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('upnext') + ' Up Next</h2>';
   if (!books.length) {
-    html += '<div class="empty"><div class="big">⏭️</div><h2 class="serif">Nothing queued</h2>' +
-      '<p>Open any book and tap <b>⏭️ Up Next</b><br>to build your reading shortlist.</p></div>';
+    html += '<div class="empty"><div class="big">' + icon('upnext') + '</div><h2 class="serif">Nothing queued</h2>' +
+      '<p>Open any book and tap <b>' + icon('upnext') + ' Up Next</b><br>to build your reading shortlist.</p></div>';
   } else {
     html += '<p class="note">Your reading shortlist, in order — start at the top.</p><div class="un-list">' +
       books.map((b, i) =>
         '<div class="un-row" data-id="' + b.id + '">' +
         '<span class="un-pos">' + (i + 1) + '</span>' +
         (b.cover ? '<img class="un-thumb" src="' + esc(b.cover) + '" alt="" loading="lazy">'
-                 : '<div class="un-thumb un-nonecover">📖</div>') +
+                 : '<div class="un-thumb un-nonecover">' + icon('covers') + '</div>') +
         '<button class="un-info" data-open="' + b.id + '"><span class="un-title">' + esc(b.title) + '</span>' +
         '<span class="un-sub">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</span></button>' +
         '<span class="un-btns">' +
@@ -324,21 +324,21 @@ function renderLibrary() {
     '<button class="btn ghost sm" id="lib-series" title="Series overview">' + icon('series') + ' Series</button></div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
-    chip('tbr', '📖 TBR · ' + counts.tbr, filter === 'tbr') +
-    chip('reading', '📘 Reading · ' + counts.reading, filter === 'reading') +
-    chip('read', '✅ Read · ' + counts.read, filter === 'read') +
-    chip('dnf', '🚫 DNF · ' + counts.dnf, filter === 'dnf') +
+    chip('tbr', icon('tbr') + ' TBR · ' + counts.tbr, filter === 'tbr') +
+    chip('reading', icon('reading') + ' Reading · ' + counts.reading, filter === 'reading') +
+    chip('read', icon('read') + ' Read · ' + counts.read, filter === 'read') +
+    chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') +
     '</div>';
   const ownCounts = { owned: 0, tobuy: 0 };
   library.forEach(b => { b.owned ? ownCounts.owned++ : ownCounts.tobuy++; });
   html += '<div class="chips">' +
     '<button class="chip' + (ownFilter === 'all' ? ' active' : '') + '" data-of="all">Ownership: All</button>' +
-    '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">🏠 Owned · ' + ownCounts.owned + '</button>' +
-    '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">🛒 To buy · ' + ownCounts.tobuy + '</button>' +
+    '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">' + icon('owned') + ' Owned · ' + ownCounts.owned + '</button>' +
+    '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' To buy · ' + ownCounts.tobuy + '</button>' +
     '</div>';
 
   if (!books.length) {
-    html += '<div class="empty"><div class="big">📚</div><h2 class="serif">No books here yet</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('covers') + '</div><h2 class="serif">No books here yet</h2>' +
       '<p>Tap <b>Add</b> below to scan a barcode<br>or search by title.</p>' +
       '<button class="btn" data-nav="add">Add your first book</button></div>';
   } else if (layout === 'grid') {

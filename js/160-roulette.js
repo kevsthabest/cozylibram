@@ -25,14 +25,14 @@ function renderPick() {
   const tbr = tbrBooks();
   const genres = allPickGenres();
   const intensityOpts = [
-    [0, 'Any'], [1, '💥+'], [2, '💥💥+'], [3, '💥💥💥+']
+    [0, 'Any'], [1, icon('pepper') + '+'], [2, icon('pepper') + icon('pepper') + '+'], [3, icon('pepper') + icon('pepper') + icon('pepper') + '+']
   ];
 
-  let html = '<h2 class="section serif" style="font-size:26px">🎲 TBR Roulette</h2>' +
+  let html = '<h2 class="section serif" style="font-size:26px">' + icon('dice') + ' TBR Roulette</h2>' +
     '<p class="note">Can\'t decide what to read next? Set your mood, spin the wheel, and let fate choose.</p>';
 
   if (!tbr.length) {
-    html += '<div class="empty"><div class="big">🎲</div><h2 class="serif">Your TBR is empty</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('dice') + '</div><h2 class="serif">Your TBR is empty</h2>' +
       '<p>Add some books first,<br>then come back and spin.</p>' +
       '<button class="btn" data-nav="add">Add books</button></div>';
     setView(html);
@@ -57,7 +57,7 @@ function renderPick() {
   html += '</div>';
 
   html += '<p class="note" id="pick-count"></p>' +
-    '<button class="btn pick-btn" id="pk-spin">🎲 Pick my next read</button>' +
+    '<button class="btn pick-btn" id="pk-spin">' + icon('dice') + ' Pick my next read</button>' +
     '<div id="roulette-result" style="margin-top:18px"></div>';
 
   setView(html);
@@ -119,7 +119,7 @@ function runRoulette() {
     const b = candidates[Math.floor(Math.random() * candidates.length)];
     coverEl.innerHTML = b.cover
       ? '<img src="' + esc(b.cover) + '" alt="" onerror="this.remove()">'
-      : '📕';
+      : icon('covers');
     titleEl.textContent = b.title;
     if (++ticks >= total) {
       clearInterval(rouletteTimer);
@@ -143,19 +143,19 @@ function showWinner(b) {
     ratingBadges(b) +
     (b.tropes || []).slice(0, 4).map(t => '<span class="badge">🏷️ ' + esc(t) + '</span>').join('');
   box.innerHTML = '<div class="winner">' +
-    '<div class="stat-sub" style="margin-top:0">Fate has spoken ✨</div>' +
+    '<div class="stat-sub" style="margin-top:0">Fate has spoken ' + icon('sparkles') + '</div>' +
     '<div class="winner-cover">' + (b.cover
       ? '<img src="' + esc(b.cover) + '" alt="" onerror="this.remove()">'
-      : '📕') + '</div>' +
+      : icon('covers')) + '</div>' +
     '<h3 class="serif">' + esc(b.title) + '</h3>' +
     '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
     (b.description ? '<p class="winner-desc">' + esc(b.description.slice(0, 220)) +
       (b.description.length > 220 ? '…' : '') + '</p>' : '') +
     '<div class="badges" style="justify-content:center">' + pills + '</div>' +
     '<div class="winner-actions">' +
-    '<button class="btn" id="w-start">📖 Start reading</button>' +
-    '<button class="btn ghost" id="w-again">🎲 Again</button>' +
-    '<button class="btn ghost" id="w-detail">🔍 Details</button>' +
+    '<button class="btn" id="w-start">' + icon('reading') + ' Start reading</button>' +
+    '<button class="btn ghost" id="w-again">' + icon('dice') + ' Again</button>' +
+    '<button class="btn ghost" id="w-detail">' + icon('search') + ' Details</button>' +
     '</div></div>';
 
   document.getElementById('w-start').addEventListener('click', () => {

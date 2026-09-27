@@ -38,7 +38,7 @@ function bookCard(b, i) {
 function bookTile(b, i) {
   const inner = b.cover
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-    : '<span class="bt-fallback">📕</span>';
+    : '<span class="bt-fallback">' + icon('covers') + '</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
   return '<div class="book-tile' + anim + '" data-id="' + b.id + '">' +
     '<div class="bt-cover">' + inner + '</div>' +

@@ -54,11 +54,11 @@ function authorRowHTML(e) {
 
 function renderAuthors() {
   const list = authorIndex();
-  let html = '<div class="wish-head"><h2 class="serif">✍️ Authors</h2>' +
+  let html = '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' Authors</h2>' +
     '<p class="note">' + list.length + ' author' + (list.length === 1 ? '' : 's') +
     ' on your shelves</p></div>';
   if (!list.length) {
-    html += '<div class="empty"><div class="big">✍️</div><h2 class="serif">No authors yet</h2>' +
+    html += '<div class="empty"><div class="big">' + icon('pencil') + '</div><h2 class="serif">No authors yet</h2>' +
       '<p>Add some books and your authors<br>will gather here.</p></div>';
   } else {
     html += '<div class="collection-list">' + list.map(authorRowHTML).join('') + '</div>';
@@ -82,7 +82,7 @@ function openAuthor(name) {
 function missingRowHTML(x, i) {
   return '<div class="crow ext missing" data-miss="' + i + '">' +
     (x.cover ? '<img src="' + esc(x.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-      : '<span class="cnocover">📕</span>') +
+      : '<span class="cnocover">' + icon('covers') + '</span>') +
     '<span class="ctext"><b>' + esc(x.title) + '</b><small>' + esc(x.author || 'Unknown author') + '</small></span>' +
     '<span class="m-chip">Not owned</span>' +
     '<button class="btn small" data-madd="' + i + '">+ Wishlist</button></div>';
@@ -95,7 +95,7 @@ async function fillMissingBooks(name) {
   try {
     const rows = (await fetchMoreByAuthor(name)).filter(x => !inLibrary(x));
     if (!rows.length) {
-      box.innerHTML = '<p class="note">Nothing missing — you have them all! 🎉</p>';
+      box.innerHTML = '<p class="note">Nothing missing — you have them all!</p>';
       return;
     }
     box.innerHTML = '<div class="collection-list">' + rows.map(missingRowHTML).join('') + '</div>';
@@ -103,7 +103,7 @@ async function fillMissingBooks(name) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         addExternalBook(rows[Number(btn.dataset.madd)]);
-        btn.outerHTML = '<span class="c-added">💝 In wishlist</span>';
+        btn.outerHTML = '<span class="c-added">' + icon('gift') + ' In wishlist</span>';
         toast('Added to wishlist 💝');
       }));
     // v60: tapping a missing book opens its detail sheet
@@ -125,7 +125,7 @@ function renderAuthorDetail() {
   const owned = library.filter(b => match(b) && b.owned).sort(byTitle);
   const wanted = library.filter(b => match(b) && !b.owned).sort(byTitle);
   let html = '<div class="view-head"><button class="btn ghost sm" id="a-back">← Back</button></div>' +
-    '<div class="wish-head"><h2 class="serif">✍️ ' + esc(name) + '</h2>' +
+    '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' ' + esc(name) + '</h2>' +
     '<p class="note">' + owned.length + ' owned' +
     (wanted.length ? ' · ' + wanted.length + ' on wishlist' : '') + '</p></div>';
   html += '<h3 class="serif sec-h">On your shelves</h3>';

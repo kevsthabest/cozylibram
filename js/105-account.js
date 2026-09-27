@@ -186,20 +186,20 @@ function renderTopbar() {
   const p = loadProfile();
   btn.innerHTML = signedIn()
     ? avatarHTML(p, 'menu-avatar-img')
-    : '<span class="menu-avatar-img letter dim">👤</span>';
+    : '<span class="menu-avatar-img letter dim">' + icon('user') + '</span>';
   btn.title = signedIn() ? 'Account — ' + cloudUser.email : 'Menu';
   closeMenu();
 }
 function menuItems() {
   if (signedIn()) return [
-    { id: 'profile', icon: '👤', label: 'Profile' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' },
-    { id: 'logout', icon: '🚪', label: 'Logout' },
+    { id: 'profile', icon: 'user', label: 'Profile' },
+    { id: 'settings', icon: 'gear', label: 'Settings' },
+    { id: 'logout', icon: 'logout', label: 'Logout' },
   ];
-  const items = [{ id: 'settings', icon: '⚙️', label: 'Settings' }];
+  const items = [{ id: 'settings', icon: 'gear', label: 'Settings' }];
   // The gate itself is the sign-in screen — no need for a redundant item there.
   if (cloudConfigured() && !document.getElementById('gate-signin')) {
-    items.push({ id: 'signin', icon: '🔑', label: 'Sign in' });
+    items.push({ id: 'signin', icon: 'key', label: 'Sign in' });
   }
   return items;
 }
@@ -209,7 +209,7 @@ function openMenu() {
   pop.innerHTML =
     (signedIn() ? '<div class="menu-email">' + esc(cloudUser.email) + '</div>' : '') +
     menuItems().map(m =>
-      '<button data-m="' + m.id + '"><span class="mi">' + m.icon + '</span>' + m.label + '</button>').join('');
+      '<button data-m="' + m.id + '"><span class="mi">' + icon(m.icon) + '</span>' + m.label + '</button>').join('');
   pop.hidden = false;
   pop.querySelectorAll('[data-m]').forEach(b =>
     b.addEventListener('click', () => menuAction(b.dataset.m)));
@@ -280,7 +280,7 @@ function renderProfile() {
           '<button class="pf-pick' + pickSel(a.id) + '" data-av="' + a.id + '" title="' + esc(a.label) + '" aria-label="' + esc(a.label) + '">' +
           '<img src="' + a.src + '" alt="' + esc(a.label) + '"></button>').join('') +
         '<button class="pf-pick' + (p.avatar.type === 'upload' ? ' sel' : '') + '" data-av="__upload" title="Upload your own" aria-label="Upload your own">' +
-          '<span class="pf-upload">📷</span></button>' +
+          '<span class="pf-upload">' + icon('camera') + '</span></button>' +
         '<button class="pf-pick' + (p.avatar.type === 'letter' ? ' sel' : '') + '" data-av="__letter" title="Just my initial" aria-label="Just my initial">' +
           '<span class="pf-letter">' + esc(avatarLetter(p)) + '</span></button>' +
         '</div>' +

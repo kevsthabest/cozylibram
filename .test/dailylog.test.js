@@ -94,7 +94,7 @@ runInWindow(`
   renderStats();`);
 const oldK = (() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
 q('#heatmap [data-day="' + oldK + '"]').click();
-ok('finish-only day shows Finished row', q('#heat-books').textContent.includes('Finished 🎉'));
+ok('finish-only day shows Finished row', q('#heat-books').textContent.includes('Finished'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
