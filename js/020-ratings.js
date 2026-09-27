@@ -43,6 +43,7 @@ function migrateBook(b) {
   if (!Array.isArray(b.moods)) b.moods = [];
   if (b.series === undefined) b.series = null;
   if (!Array.isArray(b.log)) b.log = []; // daily reading log { d, from, to }
+  if (!Array.isArray(b.quotes)) b.quotes = []; // v75: saved quotes { t, p, at }
   b.favorite = !!b.favorite; // pinned to the favorites bookshelf
   if (b.owned === undefined) b.owned = true; // owned vs wishlist ("to buy")
   if (b._mtime == null) b._mtime = 0; // last-modified stamp, used for cloud conflict resolution

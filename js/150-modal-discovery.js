@@ -457,6 +457,7 @@ function renderDetailModal(b, viaBook) {
         const inp = document.getElementById('f-progress');
         if (inp) inp.value = draft.progress;
         renderProgressSection();
+
       }));
   };
   refreshProgressSection = renderProgressSection;
@@ -520,6 +521,9 @@ function renderDetailModal(b, viaBook) {
 
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
+
+    '<div class="field"><label>❝ Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
+    '<div id="m-quotes"></div></div>' +
 
     '<div class="modal-actions"><button class="btn ghost" id="m-del">Remove</button>' +
     '<button class="btn ghost" id="m-share">📤 Share</button>' +
@@ -614,6 +618,49 @@ function renderDetailModal(b, viaBook) {
     el.addEventListener('click', () => openCollection('series', el.dataset.series, id)));
   renderProgressSection();
 
+  // v75: quotes save immediately (like the progress steppers), independent of
+  // the draft — Save syncs draft.quotes from the book so they aren't clobbered.
+  const renderQuotesSection = () => {
+    const el = document.getElementById('m-quotes');
+    if (!el) return;
+    const qs = b.quotes || [];
+    el.innerHTML = qs.map((qt, i) =>
+      '<div class="quote-row"><span class="quote-mark">❝</span>' +
+      '<div class="quote-body"><p>' + esc(qt.t) + '</p>' +
+      (qt.p ? '<span class="quote-page">p. ' + qt.p + '</span>' : '') + '</div>' +
+      '<button class="btn ghost sm" data-qdel="' + i + '" title="Delete quote">✕</button></div>'
+    ).join('') +
+    '<div id="m-qform" hidden><textarea id="m-qtext" class="text-input" rows="2" ' +
+      'placeholder="Type the quote…"></textarea>' +
+      '<div class="row-flex"><input id="m-qpage" class="text-input" type="number" min="0" ' +
+      'inputmode="numeric" placeholder="Page (optional)">' +
+      '<button class="btn" id="m-qsave">Save quote</button>' +
+      '<button class="btn ghost" id="m-qcancel">Cancel</button></div></div>' +
+    '<button class="btn ghost sm" id="m-qadd">＋ Add quote</button>';
+    el.querySelector('#m-qadd').addEventListener('click', () => {
+      el.querySelector('#m-qform').hidden = false;
+      el.querySelector('#m-qadd').hidden = true;
+      el.querySelector('#m-qtext').focus();
+    });
+    el.querySelector('#m-qcancel').addEventListener('click', renderQuotesSection);
+    el.querySelector('#m-qsave').addEventListener('click', () => {
+      const t = el.querySelector('#m-qtext').value.trim();
+      if (!t) { toast('Type the quote first ✍️'); return; }
+      const p = Math.max(0, Number(el.querySelector('#m-qpage').value) || 0) || null;
+      if (!Array.isArray(b.quotes)) b.quotes = [];
+      b.quotes.push({ t: t.slice(0, 2000), p: p, at: new Date().toISOString() });
+      saveLibrary();
+      toast('Quote saved ❝');
+      renderQuotesSection();
+    });
+    el.querySelectorAll('[data-qdel]').forEach(btn => btn.addEventListener('click', () => {
+      b.quotes.splice(Number(btn.dataset.qdel), 1);
+      saveLibrary();
+      renderQuotesSection();
+    }));
+  };
+  renderQuotesSection();
+
   document.getElementById('f-fav').addEventListener('click', () => {
     draft.favorite = !draft.favorite;
     b.favorite = draft.favorite; // immediate — no need to hit Save
@@ -681,6 +728,7 @@ function renderDetailModal(b, viaBook) {
     draft.progress = Math.min(cap, enteredProg);
     if (!draft.title.trim()) draft.title = 'Untitled';
     draft.log = b.log;
+    draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
     Object.assign(b, draft);
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
@@ -697,3 +745,51 @@ function renderDetailModal(b, viaBook) {
   });
 }
 
+
+/* ---------------- quotes browser (v75) ---------------- */
+// Every saved quote across the library, newest first.
+function allQuotes() {
+  const out = [];
+  library.forEach(b => (b.quotes || []).forEach(qt =>
+    out.push({ book: b, q: qt })));
+  out.sort((a, b) => {
+    const ka = (a.q && a.q.at) || '', kb = (b.q && b.q.at) || '';
+    return ka < kb ? 1 : ka > kb ? -1 : 0;
+  });
+  return out;
+}
+function quoteCardHTML(book, qt, feat) {
+  return '<div class="q-card' + (feat ? ' feat' : '') + '" data-book="' + book.id + '">' +
+    '<p class="q-text">❝' + esc(qt.t) + '❞</p>' +
+    '<div class="q-meta">' +
+    (book.cover ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy">' : '') +
+    '<span><b>' + esc(book.title) + '</b><span class="q-by">' +
+    esc((book.authors || []).join(', ') || 'Unknown author') +
+    (qt.p ? ' · p. ' + qt.p : '') + '</span></span></div></div>';
+}
+function renderQuotes() {
+  const all = allQuotes();
+  let html = '<button class="btn ghost" id="q-back">← Shelves</button>' +
+    '<h2 class="section serif" style="font-size:26px;margin-top:10px">❝ Quotes' +
+    (all.length ? ' <span class="note-inline">· ' + all.length + '</span>' : '') + '</h2>';
+  if (!all.length) {
+    html += '<div class="empty"><div class="big">❝</div><h2 class="serif">No quotes yet</h2>' +
+      '<p>Open any book and tap <b>＋ Add quote</b><br>to start your collection.</p></div>';
+  } else {
+    html += '<button class="btn ghost" id="q-random">🎲 Surprise me</button>' +
+      '<div id="q-spot"></div><div class="q-list">' +
+      all.map(e => quoteCardHTML(e.book, e.q, false)).join('') + '</div>';
+  }
+  setView(html);
+  document.getElementById('q-back').addEventListener('click', () => go('library'));
+  const rnd = document.getElementById('q-random');
+  if (rnd) rnd.addEventListener('click', () => {
+    const e = all[Math.floor(Math.random() * all.length)];
+    const spot = document.getElementById('q-spot');
+    spot.innerHTML = quoteCardHTML(e.book, e.q, true);
+    spot.querySelector('.q-card').addEventListener('click', () => openDetail(e.book.id));
+    if (spot.scrollIntoView) spot.scrollIntoView({ block: 'nearest' });
+  });
+  document.querySelectorAll('.q-list .q-card').forEach(c =>
+    c.addEventListener('click', () => openDetail(c.dataset.book)));
+}

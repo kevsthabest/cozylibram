@@ -319,7 +319,8 @@ function renderLibrary() {
 
   let html = recentStripHTML() + favShelfHTML() + upNextShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
-    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div></div>';
+    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div>' +
+    '<button class="btn ghost sm" id="lib-quotes" title="Browse saved quotes">❝ Quotes</button></div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
     chip('tbr', '📖 TBR · ' + counts.tbr, filter === 'tbr') +
@@ -372,6 +373,8 @@ function renderLibrary() {
     s.addEventListener('click', () => pullSpine(s, s.dataset.id)));
   const unm = document.getElementById('un-manage');
   if (unm) unm.addEventListener('click', () => go('upnext'));
+  const lq = document.getElementById('lib-quotes');
+  if (lq) lq.addEventListener('click', () => go('quotes'));
   const ft = document.getElementById('fav-toggle');
   if (ft) ft.addEventListener('click', () => { favExpanded = !favExpanded; render(); });
   const fst = document.getElementById('fav-style');

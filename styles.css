@@ -1027,3 +1027,26 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .un-btns { display: flex; gap: 4px; }
 .un-btns .btn.sm { padding: 6px 9px; }
 .un-strip { margin: 2px 0 12px; }
+
+/* v75: quotes */
+.quote-row { display: flex; gap: 10px; align-items: flex-start; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.quote-mark { color: var(--accent); font-size: 22px; line-height: 1; }
+.quote-body { flex: 1; min-width: 0; }
+.quote-body p { margin: 0 0 4px; font-style: italic; }
+.quote-page { color: var(--muted); font-size: 13px; }
+#m-qform { margin: 8px 0; }
+#m-qform .row-flex { display: flex; gap: 8px; margin-top: 8px; }
+#m-qform .row-flex .text-input { flex: 1; min-width: 0; }
+.q-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.q-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; cursor: pointer; }
+.q-card.feat { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.q-text { margin: 0 0 10px; font-size: 17px; line-height: 1.5; font-style: italic;
+  display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+.q-meta { display: flex; gap: 10px; align-items: center; }
+.q-meta img { width: 36px; height: 54px; object-fit: cover; border-radius: 5px; flex: none; }
+.q-meta b { display: block; font-size: 14px; }
+.q-by { color: var(--muted); font-size: 13px; }
+#q-spot { margin-top: 12px; }
+#q-spot:empty { margin-top: 0; }
