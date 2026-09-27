@@ -41,10 +41,10 @@ runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.animation'
 ok('owned badge on card', q('.book-card[data-id="o1"] .badge.owned').textContent.includes('Owned'));
 ok('to-buy badge on card', q('.book-card[data-id="o2"] .badge.tobuy').textContent.includes('To buy'));
 
-// 4. grid tile shows cart for to-buy only
+// 4. v56: grid view removed — forcing layout='grid' still renders list cards
 runInWindow(`layout = 'grid'; renderLibrary();`);
-ok('tile cart on to-buy', !!q('.cover-tile[data-id="o2"] .tile-buy'));
-ok('no tile cart on owned', !q('.cover-tile[data-id="o1"] .tile-buy'));
+ok('no cover tiles even when grid is forced', !q('.cover-tile'));
+ok('falls back to book cards', !!q('.book-card[data-id="o2"]'));
 runInWindow(`layout = 'list'; renderLibrary();`);
 
 // 5. modal toggle flips ownership, Save persists

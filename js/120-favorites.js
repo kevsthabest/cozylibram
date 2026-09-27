@@ -228,9 +228,7 @@ function renderLibrary() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
 
-  let html = recentStripHTML() + favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
-    '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">☰</button>' +
-    '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">▦</button></div></div>';
+  let html = recentStripHTML() + favShelfHTML() + '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '"></div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
     chip('tbr', '📖 TBR · ' + counts.tbr, filter === 'tbr') +
@@ -250,13 +248,11 @@ function renderLibrary() {
     html += '<div class="empty"><div class="big">📚</div><h2 class="serif">No books here yet</h2>' +
       '<p>Tap <b>Add</b> below to scan a barcode<br>or search by title.</p>' +
       '<button class="btn" data-nav="add">Add your first book</button></div>';
-  } else if (layout === 'grid') {
-    html += '<div class="covers">' + books.map((b, i) => coverTile(b, i)).join('') + '</div>';
   } else {
+    // v56: grid view temporarily removed — list only.
     html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
   }
   setView(html);
-  tileGuard(); // v55: enforce uniform 2:3 boxes even if styles.css is stale
 
   document.getElementById('q').addEventListener('input', e => {
     query = e.target.value;
@@ -264,13 +260,6 @@ function renderLibrary() {
     const pos = e.target.selectionStart;
     renderLibraryKeepFocus(pos);
   });
-  document.querySelectorAll('.view-toggle button').forEach(t =>
-    t.addEventListener('click', () => {
-      layout = t.dataset.l;
-      try { localStorage.setItem('spicyshelves.layout', layout); } catch (e) {}
-      animateIn = true;
-      render();
-    }));
   document.querySelectorAll('.chip:not([data-of])').forEach(c =>
     c.addEventListener('click', () => { filter = c.dataset.f; animateIn = true; render(); }));
   document.querySelectorAll('[data-of]').forEach(c =>
