@@ -49,5 +49,13 @@ ok('tile img still covers the box',
 ok('tile no-cover fallback centers over the box',
   /\.book-tile\s+\.bt-fallback\s*\{[^}]*\}/.test(clean));
 
+// 5. responsive grid (v58): fluid auto-fill columns so tiles keep a sensible
+// size on any viewport, instead of a fixed 3-column layout.
+const bookGrid = clean.match(/\.book-grid\s*\{[^}]*\}/);
+ok('book grid uses fluid auto-fill columns',
+  !!bookGrid && /repeat\s*\(\s*auto-fill\s*,\s*minmax/.test(bookGrid[0]));
+ok('no dead .covers rules left behind',
+  !/\.covers/.test(clean));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
