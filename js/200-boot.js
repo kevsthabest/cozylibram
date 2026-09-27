@@ -35,3 +35,11 @@ function boot() {
 
 boot();
 initCloud();
+
+// New zips ship often — ask the service worker for an update on every
+// launch so devices pick up the latest version without a manual nudge.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistration()
+    .then(r => { if (r) return r.update(); })
+    .catch(() => {});
+}
