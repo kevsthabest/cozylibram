@@ -595,12 +595,14 @@ textarea.text-input { min-height: 90px; resize: vertical; }
     opacity: 0.5; pointer-events: none;
   }
   /* v183: bespoke per-theme modal artwork — replaces the tinted silhouette
-     with each theme's own art (twilight constellations, verdant garden,
-     velvet rose, abyss kelp, frost branches, midnight botanical vine).
-     Themes without bespoke art keep the tinted silhouette above. */
+     with each theme's own art. v184 completed the set: all ten themes now
+     have bespoke vines (dark laurel, light morning garden, hearthside ember
+     wheat, candlelight flame vine). */
   [data-theme="twilight"] .modal::after, [data-theme="verdant"] .modal::after,
   [data-theme="velvet"] .modal::after, [data-theme="abyss"] .modal::after,
-  [data-theme="frost"] .modal::after, [data-theme="midnight"] .modal::after {
+  [data-theme="frost"] .modal::after, [data-theme="midnight"] .modal::after,
+  [data-theme="dark"] .modal::after, [data-theme="light"] .modal::after,
+  [data-theme="hearthside"] .modal::after, [data-theme="candlelight"] .modal::after {
     background-color: transparent;
     -webkit-mask-image: none; mask-image: none;
     background-repeat: no-repeat; background-position: right center; background-size: contain;
@@ -612,6 +614,10 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   [data-theme="abyss"] .modal::after { background-image: url("Asset/themes/vine-abyss.svg"); }
   [data-theme="frost"] .modal::after { background-image: url("Asset/themes/vine-frost.svg"); }
   [data-theme="midnight"] .modal::after { background-image: url("Asset/floral-right.svg"); }
+  [data-theme="dark"] .modal::after { background-image: url("Asset/themes/vine-dark.svg"); }
+  [data-theme="light"] .modal::after { background-image: url("Asset/themes/vine-light.svg"); }
+  [data-theme="hearthside"] .modal::after { background-image: url("Asset/themes/vine-hearthside.svg"); }
+  [data-theme="candlelight"] .modal::after { background-image: url("Asset/themes/vine-candlelight.svg"); }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }

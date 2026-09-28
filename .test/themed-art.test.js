@@ -1,9 +1,9 @@
-// Tests for v183 — bespoke per-theme modal artwork.
+// Tests for v183/v184 — bespoke per-theme modal artwork.
 //
-// Covered: the 16 art files exist on disk (Asset/floral-right.svg for
-// midnight + vine/divider/moon for twilight, verdant, velvet, abyss,
-// frost); styles.css maps each art theme's .modal::after to its vine;
-// sw.js precaches the art and the cache name matches APP_VERSION.
+// Covered: the art files exist on disk (Asset/floral-right.svg for
+// midnight + vine/divider/moon for the other nine themes); styles.css maps
+// each theme's .modal::after to its vine; sw.js precaches the art and the
+// cache name matches APP_VERSION.
 
 const fs = require('fs');
 const path = require('path');
@@ -16,7 +16,8 @@ function ok(name, cond) {
   else { fail++; console.log('FAIL - ' + name); }
 }
 
-const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost'];
+// v184: all ten themes have bespoke art (midnight reuses the Asset pack vine)
+const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight'];
 const KINDS = ['vine', 'divider', 'moon'];
 
 // 1. art files exist on disk
@@ -41,14 +42,9 @@ for (const t of THEMES) {
 ok('styles.css: [data-theme="midnight"] .modal::after -> Asset/floral-right.svg',
   css.includes('[data-theme="midnight"] .modal::after') && css.includes('Asset/floral-right.svg'));
 
-// the bespoke rules must clear the v170 mask silhouette, or the art would be masked away
+// no theme is left on the old tinted silhouette
 ok('styles.css: bespoke vine rules clear mask-image',
-  /\[data-theme="twilight"\][\s\S]{0,400}?mask-image:\s*none/.test(css));
-
-// themes without bespoke art keep the tinted silhouette (no override)
-for (const t of ['dark', 'light', 'hearthside', 'candlelight']) {
-  ok(`styles.css: no bespoke vine override for ${t}`, !css.includes(`[data-theme="${t}"] .modal::after`));
-}
+  /\[data-theme="twilight"\][\s\S]{0,900}?mask-image:\s*none/.test(css));
 
 // 3. sw.js precaches the art and matches the app version
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
@@ -58,7 +54,7 @@ const appversion = fs.readFileSync(path.join(ROOT, 'js', '181-appversion.js'), '
 const m = appversion.match(/APP_VERSION = '(v\d+)'/);
 ok('APP_VERSION parsed', !!m);
 if (m) ok(`sw.js cache name matches APP_VERSION (${m[1]})`, sw.includes(`cozy-libram-${m[1]}`));
-ok('APP_VERSION is v183', m && m[1] === 'v183');
+ok('APP_VERSION is v184', m && m[1] === 'v184');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
