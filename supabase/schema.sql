@@ -79,9 +79,12 @@ create table if not exists profiles (
   user_id uuid primary key references auth.users (id) on delete cascade,
   first_name text not null default '',
   last_name text not null default '',
+  gender text not null default '',
   avatar_id text not null default '',
   updated_at timestamptz not null default now()
 );
+-- v178: existing databases re-running this file gain the gender column
+alter table profiles add column if not exists gender text not null default '';
 
 alter table profiles enable row level security;
 

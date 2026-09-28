@@ -80,6 +80,14 @@ function adoptLegacyMetadata(user) {
   if (md.avatar_id && DEFAULT_AVATARS.some(a => a.id === md.avatar_id)) p.avatar = { type: 'default', id: md.avatar_id };
   touchProfile(p);
 }
+// v178: the gender column may not exist yet on databases whose owner
+// hasn't re-run supabase/schema.sql — detect that and retry without it so
+// names/avatars keep syncing instead of failing silently.
+function isMissingColumn(err) {
+  if (!err) return false;
+  if (/42703/i.test(String(err.code || ''))) return true;
+  return /column .* does not exist/i.test(String(err.message || ''));
+}
 // Push this device's profile to the profiles table (best-effort). A newly
 // picked photo is uploaded to the private `avatars` bucket first (one file
 // per user, overwritten in place); the row just stores its path.
@@ -111,15 +119,20 @@ async function pushCloudProfile(p) {
       p.avatarCloudPath = '';
       saveProfile(p);
     }
-    const { error } = await sb.from('profiles').upsert({
+    const baseRow = () => ({
       user_id: cloudUser.id,
       first_name: p.firstName || '',
       last_name: p.lastName || '',
       avatar_id: p.avatar.type === 'default' ? p.avatar.id : '',
       avatar_path: cloudPath,
       updated_at: new Date(p.updatedAt || Date.now()).toISOString()
-    }, { onConflict: 'user_id' });
-    if (error) throw error;
+    });
+    let up = await sb.from('profiles').upsert(
+      Object.assign({ gender: p.gender || '' }, baseRow()), { onConflict: 'user_id' });
+    if (up.error && isMissingColumn(up.error)) {
+      up = await sb.from('profiles').upsert(baseRow(), { onConflict: 'user_id' });
+    }
+    if (up.error) throw up.error;
   } catch (e) { /* offline — local copy is the source of truth */ }
 }
 function themedOrLetterAvatar(id) {
@@ -147,7 +160,14 @@ async function syncCloudProfile() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
   try {
-    const res = await sb.from('profiles').select('first_name,last_name,avatar_id,avatar_path,updated_at').eq('user_id', cloudUser.id).maybeSingle();
+    // v178: prefer the gender column, fall back to the old column set when
+    // the database hasn't been migrated yet.
+    const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender';
+    const COLS_BASIC = 'first_name,last_name,avatar_id,avatar_path,updated_at';
+    let res = await sb.from('profiles').select(COLS_FULL).eq('user_id', cloudUser.id).maybeSingle();
+    if (res.error && isMissingColumn(res.error)) {
+      res = await sb.from('profiles').select(COLS_BASIC).eq('user_id', cloudUser.id).maybeSingle();
+    }
     if (res.error) throw res.error;
     const row = res.data || null;
     const p = loadProfile();
@@ -156,6 +176,7 @@ async function syncCloudProfile() {
     if (row && remoteTs > localTs) {
       p.firstName = row.first_name || '';
       p.lastName = row.last_name || '';
+      if (['f', 'm', 'other'].indexOf(row.gender) !== -1) p.gender = row.gender;
       await adoptCloudPhoto(sb, p, row);
       p.updatedAt = remoteTs;
       saveProfile(p);

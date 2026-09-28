@@ -145,13 +145,20 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('settings back button returns home', probe('view') === 'library');
 
   // ---- profiles table sync (last-write-wins across devices) ----
-  const mkStub = () => {
+  const mkStub = (noGenderCol) => {
     const rows = {};
+    const colErr = () => ({ code: '42703', message: 'column profiles.gender does not exist' });
     return { rows, from: (table) => {
       if (table !== 'profiles') throw new Error('unexpected table ' + table);
       return {
-        select: () => ({ eq: (col, val) => ({ maybeSingle: async () => ({ data: rows[val] || null, error: null }) }) }),
-        upsert: async (row) => { rows[row.user_id] = Object.assign({}, row); return { error: null }; },
+        select: (cols) => ({ eq: (col, val) => ({ maybeSingle: async () => {
+          if (noGenderCol && /gender/.test(cols || '')) return { data: null, error: colErr() };
+          return { data: rows[val] || null, error: null };
+        } }) }),
+        upsert: async (row) => {
+          if (noGenderCol && ('gender' in row)) return { error: colErr() };
+          rows[row.user_id] = Object.assign({}, row); return { error: null };
+        },
       };
     } };
   };
@@ -191,6 +198,30 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   stub.rows['u23'] = cloudRow('u23', { avatar_id: 'nope', updated_at: new Date(Date.now() + 60000).toISOString() });
   await probe('syncCloudProfile()'); await tick();
   ok('bogus cloud avatar id falls back to initial', JSON.parse(lsGet('spicyshelves.profile.u23')).avatar.type === 'letter');
+
+  // v178: gender syncs through the profiles table when the column exists.
+  useAs('u30'); wipeLocal('u30');
+  stub.rows['u30'] = cloudRow('u30', { gender: 'm', updated_at: new Date(Date.now() + 60000).toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  ok('fresh device adopts cloud gender', JSON.parse(lsGet('spicyshelves.profile.u30')).gender === 'm');
+  runInWindow(`{ const p = loadProfile(); p.gender = 'other'; touchProfile(p); }`);
+  await probe('pushCloudProfile(loadProfile())'); await tick();
+  ok('local gender pushes to the cloud row', stub.rows['u30'].gender === 'other');
+
+  // v178: databases without the gender column yet keep syncing names/avatars.
+  const stub2 = mkStub(true);
+  window.__sbStub = stub2;
+  useAs('u31'); wipeLocal('u31');
+  stub2.rows['u31'] = cloudRow('u31', { updated_at: new Date(Date.now() + 60000).toISOString() });
+  await probe('syncCloudProfile()'); await tick();
+  const adopted2 = JSON.parse(lsGet('spicyshelves.profile.u31'));
+  ok('names still adopt when the gender column is missing',
+    adopted2.firstName === 'Cloud' && adopted2.gender === '');
+  runInWindow(`{ const p = loadProfile(); p.firstName = 'Local'; p.gender = 'f'; touchProfile(p); }`);
+  await probe('pushCloudProfile(loadProfile())'); await tick();
+  ok('push falls back without gender on unmigrated databases',
+    stub2.rows['u31'].first_name === 'Local' && !('gender' in stub2.rows['u31']));
+  window.__sbStub = stub; // restore the migrated-column stub for the rest
 
   // No cloud row yet + local content → row created.
   useAs('u24'); wipeLocal('u24');
