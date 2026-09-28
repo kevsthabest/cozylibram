@@ -115,30 +115,38 @@ const TropeTaxonomy = {
   },
 
   /* Pull the shared taxonomy + rev. Restores the cached copy when offline
-     or signed out. Resolves true when the live table was reached. */
+     or signed out. Tolerates a pre-v157 database (no taxonomy_meta yet):
+     the live rows still merge, rev just stays 1. Resolves true when the
+     live table was reached. */
   async refresh() {
     let sb = null;
     try { sb = await cloudClient().catch(() => null); } catch (e) { sb = null; }
     if (!sb) { if (!this._ready) this._restore(); return false; }
     try {
-      const [tropesRes, metaRes] = await Promise.all([
-        sb.from('tropes').select('id, name, description, genres').limit(5000),
-        sb.from('taxonomy_meta').select('rev').eq('id', 1).maybeSingle(),
-      ]);
+      const tropesRes = await sb.from('tropes')
+        .select('id, name, description, genres').limit(5000);
       if (tropesRes.error) throw tropesRes.error;
       const rows = (tropesRes.data || []).filter(t => t && t.id && t.name);
       // Only adopt the live table when it actually has the seed in it;
       // an empty table means the admin hasn't seeded yet — keep the file.
-      if (rows.length) {
-        this._db = rows.map(t => ({
-          id: t.id, name: t.name, description: t.description || '',
-          genres: Array.isArray(t.genres) ? t.genres : [],
-        }));
-        this._rev = (metaRes.data && metaRes.data.rev > 0) ? metaRes.data.rev : 1;
-        this._ready = true;
-        this._persist();
-        return true;
+      if (!rows.length) {
+        if (!this._ready) this._restore();
+        return false;
       }
+      let rev = 1;
+      try {
+        const metaRes = await sb.from('taxonomy_meta')
+          .select('rev').eq('id', 1).maybeSingle();
+        if (metaRes && metaRes.data && metaRes.data.rev > 0) rev = metaRes.data.rev;
+      } catch (e) { /* pre-v157 database: rev stays 1 */ }
+      this._db = rows.map(t => ({
+        id: t.id, name: t.name, description: t.description || '',
+        genres: Array.isArray(t.genres) ? t.genres : [],
+      }));
+      this._rev = rev;
+      this._ready = true;
+      this._persist();
+      return true;
     } catch (e) { /* fall through to cache */ }
     if (!this._ready) this._restore();
     return false;
@@ -953,8 +961,8 @@ const TropeProposals = {
         .update({ rev, updated_at: new Date().toISOString() }).eq('id', 1);
       if (rerr) throw rerr;
     } catch (e) {
-      throw new Error('Approved, but the taxonomy rev could not be bumped: ' +
-        ((e && e.message) || e));
+      throw new Error('The trope was saved, but the taxonomy rev could not be bumped (' +
+        ((e && e.message) || e) + '). Re-run supabase/tropes.sql, then approve again.');
     }
     const { error: serr } = await sb.from('trope_proposals')
       .update({ status: 'approved' }).eq('id', id);

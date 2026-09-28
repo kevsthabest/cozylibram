@@ -156,6 +156,29 @@ function ok(name, cond) {
       probe(`TropeTaxonomy.byId('x1')`) !== null && probe('TropeTaxonomy.rev()') === 2);
   }
 
+  /* ---- 7. pre-v157 database: missing taxonomy_meta degrades, not fails ---- */
+  {
+    reset();
+    const db = {
+      tropes: [
+        { id: 'mafia-princess', name: 'Mafia Princess', description: 'Crime family royalty.', genres: ['dark-romance'] },
+      ],
+    };
+    const table = () => ({
+      select() { return this; },
+      limit() { return this; },
+      eq() { return this; },
+      maybeSingle: async () => { throw new Error('relation "taxonomy_meta" does not exist'); },
+      then(res) { return Promise.resolve({ data: db.tropes, error: null }).then(res); },
+    });
+    const setFake = vm.runInContext('(c) => { cloudClient = async () => c; }', ctx);
+    setFake({ from: () => table() });
+    const reached = await probe('TropeTaxonomy.refresh()');
+    ok('live rows still merge without taxonomy_meta', reached === true &&
+      probe(`TropeTaxonomy.byId('mafia-princess')`) !== null);
+    ok('rev falls back to 1 pre-migration', probe('TropeTaxonomy.rev()') === 1);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(2); });
