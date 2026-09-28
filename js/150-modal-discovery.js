@@ -1151,6 +1151,7 @@ function renderDetailModal(b, viaBook) {
     if (!draft.title.trim()) draft.title = 'Untitled';
     draft.log = b.log;
     draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
+    draft.cover = b.cover; // v168: the cover picker saves immediately too — don't clobber it
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: b.myRating || 0, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
