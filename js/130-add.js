@@ -23,6 +23,8 @@ function renderScanTab() {
   const insecure = !window.isSecureContext;
   body.innerHTML =
     '<div class="scan-box"><video id="scan-video" playsinline muted></video>' +
+    '<div class="scan-dim" aria-hidden="true"></div>' +
+    '<div class="scan-frame" aria-hidden="true"><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><div class="scan-line"></div></div>' +
     '<div class="scan-hint">Point the camera at the barcode on the back cover</div></div>' +
     '<div id="scan-result"></div>' +
     '<button class="btn ghost block" id="scan-toggle">Start camera</button>' +
@@ -98,6 +100,8 @@ async function startScan() {
   video.srcObject = scanState.stream;
   await video.play().catch(() => {});
   scanState.active = true;
+  const scanBox = video.closest('.scan-box');
+  if (scanBox) scanBox.classList.add('live');
   if (toggle) toggle.textContent = 'Stop camera';
 
   if ('BarcodeDetector' in window) {
@@ -138,6 +142,8 @@ function stopScan() {
   if (toggle) toggle.textContent = 'Start camera';
   const video = document.getElementById('scan-video');
   if (video) video.srcObject = null;
+  const box = video && video.closest('.scan-box');
+  if (box) box.classList.remove('live');
 }
 
 function loadQuagga() {

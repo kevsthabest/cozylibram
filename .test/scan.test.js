@@ -67,6 +67,23 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   ok('unreadable photo toasts helpfully', lastToast().includes('No barcode found'));
   ok('no lookup on unreadable photo', lookedUp === null);
 
+  // 7. Viewfinder overlay: present, hidden until camera goes live
+  setSecure(true);
+  window.renderAdd();
+  let box = q('.scan-box');
+  ok('viewfinder frame rendered', !!q('.scan-frame'));
+  ok('frame has 4 corner brackets', q('.scan-frame') ? q('.scan-frame').querySelectorAll('i').length === 4 : false);
+  ok('sweep line rendered', !!q('.scan-line'));
+  ok('frame hidden before camera starts', !box.classList.contains('live'));
+  Object.defineProperty(window.navigator, 'mediaDevices', { value: { getUserMedia: async () => ({ getTracks: () => [] }) }, configurable: true });
+  window.HTMLVideoElement.prototype.play = async () => {};
+  window.BarcodeDetector = class { constructor() {} async detect() { return []; } };
+  await window.startScan();
+  box = q('.scan-box');
+  ok('frame shows while camera live', box.classList.contains('live'));
+  window.stopScan();
+  ok('frame hides after stop', !box.classList.contains('live'));
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('TEST CRASH:', e); process.exit(1); });
