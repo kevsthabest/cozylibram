@@ -72,7 +72,10 @@ function cloudErrMsg(e) {
 
 async function cloudPushNow() {
   const sb = await cloudClient().catch(() => null);
-  if (!sb || !cloudUser || cloudSyncing) return false;
+  if (!sb || !cloudUser) return false;
+  // v162: a push that lands while another sync is in flight used to be
+  // silently dropped — reschedule it so the change still goes up.
+  if (cloudSyncing) { scheduleCloudPush(); return false; }
   cloudSyncing = true;
   syncBegin(); // v144: the dot covers push activity too
   try {
@@ -364,6 +367,12 @@ async function cloudSignIn(email, password) {
 }
 async function cloudSignOut() {
   const sb = await cloudClient().catch(() => null);
+  // v162: flush any pending debounced push before signing out. A change made
+  // within ~2.5s of sign-out used to be silently dropped: the timer later
+  // fired with cloudUser == null and did nothing, so the cloud kept the old
+  // version (and clearing site data made the loss permanent).
+  clearTimeout(cloudTimer);
+  if (sb && cloudUser) await cloudPushNow();
   if (sb) await sb.auth.signOut().catch(() => {});
   // The SIGNED_OUT event also triggers leaveApp; the cloudUser guard keeps it
   // from running twice (e.g. when the event doesn't fire while offline).
