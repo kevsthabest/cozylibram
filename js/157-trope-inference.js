@@ -520,7 +520,7 @@ function tropeAdminBooksClear() {
 const TROPE_PROVIDER_SETTINGS_KEY = 'cozylibram.tropeprovider.v1';
 const TROPE_PROVIDER_SUGGESTIONS = {
   openrouter: ['nvidia/nemotron-nano-9b-v2:free', 'qwen/qwen3-32b:free', 'google/gemma-3-27b-it:free'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
+  gemini: ['gemini-3.8-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
   groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
   ollama: ['llama3.1', 'qwen3'],
   custom: [],

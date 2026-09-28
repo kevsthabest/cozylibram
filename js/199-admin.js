@@ -550,7 +550,7 @@ async function tropeLabProviderHTML() {
     '<select id="tl-provider-sel" class="text-input" aria-label="Provider">' +
     providers.map(p => '<option value="' + p + '"' + (cur.provider === p ? ' selected' : '') + '>' + labels[p] + '</option>').join('') +
     '</select>' +
-    '<input id="tl-provider-model" class="text-input" list="tl-model-list" placeholder="model (e.g. gemini-2.0-flash)" value="' + esc(cur.model) + '" aria-label="Model">' +
+    '<input id="tl-provider-model" class="text-input" list="tl-model-list" placeholder="model (e.g. gemini-3.8-flash)" value="' + esc(cur.model) + '" aria-label="Model">' +
     '<datalist id="tl-model-list"></datalist>' +
     '<button class="btn sm" id="tl-provider-save">Save</button>' +
     '</div>' +
