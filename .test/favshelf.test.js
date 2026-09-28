@@ -123,29 +123,37 @@ ok('google sources: proxy first, then direct without CORS',
 ok('data: sources: direct with CORS ok',
   window.__proxy[4].length === 1 && window.__proxy[4][0][1] === true);
 
-// 9. shelf style toggle: spines or covers (v61)
+// 9. shelf style toggle: spines or covers (v61, v190 segmented)
 runInWindow(`localStorage.setItem('spicyshelves.animation', 'off');
   favExpanded = false; favStyle = 'spines';
   library.forEach(b => b.favorite = false);
   library.find(b => b.id === 'fa').favorite = true;
   library.find(b => b.id === 'fb').favorite = true;
   renderLibrary();`);
-ok('style toggle rendered', !!q('#fav-style'));
-ok('style toggle uses a line-art icon', !!q('#fav-style .ticon'));
+const segBtns = () => qa('.fav-shelf [data-fs]');
+ok('style toggle rendered with both segments', segBtns().length === 2);
+ok('style toggle uses line-art icons', segBtns().every(b => !!b.querySelector('.ticon')));
 ok('spines shown by default', qa('.fav-shelf .spine').length === 2 && qa('.fav-shelf .book-tile').length === 0);
-ok('toggle offers covers', q('#fav-style').textContent.includes('Covers'));
-q('#fav-style').click();
+ok('active segment matches current style',
+  q('.fav-shelf [data-fs="spines"]').classList.contains('active') &&
+  !q('.fav-shelf [data-fs="covers"]').classList.contains('active'));
+q('.fav-shelf [data-fs="covers"]').click();
 ok('covers shown after toggle', qa('.fav-shelf .book-tile').length === 2 && qa('.fav-shelf .spine').length === 0);
-ok('toggle label flips to spines', q('#fav-style').textContent.includes('Spines'));
-ok('toggle still line-art after flip', !!q('#fav-style .ticon'));
+ok('active segment follows the switch',
+  q('.fav-shelf [data-fs="covers"]').classList.contains('active') &&
+  !q('.fav-shelf [data-fs="spines"]').classList.contains('active'));
+ok('toggle still line-art after flip', segBtns().every(b => !!b.querySelector('.ticon')));
 ok('style persisted', window.localStorage.getItem('spicyshelves.favstyle') === 'covers');
 ok('cover tile shows the book title', qa('.fav-shelf .bt-title')[0].textContent.includes('Fav Book fa'));
 qa('.fav-shelf .book-tile')[0].click();
 ok('cover tap opens the book modal', !!q('#m-back') && q('#m-back').textContent.includes('Fav Book fa'));
 window.document.getElementById('m-x').click();
-q('#fav-style').click();
+q('.fav-shelf [data-fs="spines"]').click();
 ok('toggle back to spines', qa('.fav-shelf .spine').length === 2 &&
   window.localStorage.getItem('spicyshelves.favstyle') === 'spines');
+// v190: tapping the already-active segment is a no-op (no flip, no crash)
+q('.fav-shelf [data-fs="spines"]').click();
+ok('active segment tap keeps spines', qa('.fav-shelf .spine').length === 2 && window.eval('favStyle') === 'spines');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

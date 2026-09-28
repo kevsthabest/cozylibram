@@ -57,10 +57,15 @@ function favShelfHTML() {
   const shown = favExpanded ? rows : rows.slice(0, 1);
   // v61: style toggle — spines or covers. Covers mode shows every favorite
   // in one grid (no collapse needed); spines keep the old rows + show-all.
-  const styleBtn = '<button class="btn ghost sm" id="fav-style" title="Switch shelf style">' +
-    (favStyle === 'spines' ? icon('covers') + ' Covers' : icon('spines') + ' Spines') + '</button>';
+  // v190: segmented control showing the CURRENT style with the active
+  // segment highlighted (same pattern as the toolbar view-toggle). The old
+  // single button labeled the *target* style ("Spines" while covers were
+  // shown), which read as a desynced label.
+  const styleSeg = '<span class="view-toggle" role="group" aria-label="Favorites shelf style">' +
+    '<button data-fs="spines" class="' + (favStyle === 'spines' ? 'active' : '') + '" title="Spines view" aria-label="Spines view" aria-pressed="' + (favStyle === 'spines') + '">' + icon('spines') + '</button>' +
+    '<button data-fs="covers" class="' + (favStyle === 'covers' ? 'active' : '') + '" title="Covers view" aria-label="Covers view" aria-pressed="' + (favStyle === 'covers') + '">' + icon('covers') + '</button></span>';
   let html = '<div class="fav-shelf"><div class="fav-head"><h3 class="serif">' + icon('heart') + ' Favorites</h3>' +
-    '<span class="fav-btns">' + styleBtn +
+    '<span class="fav-btns">' + styleSeg +
     (rows.length > 1 && favStyle === 'spines'
       ? '<button class="btn ghost sm" id="fav-toggle">' + (favExpanded ? 'Show less ↑' : 'Show all ' + favs.length + ' ↓') + '</button>'
       : '') + '</span></div>';
@@ -474,13 +479,14 @@ function renderLibrary() {
   if (ls) ls.addEventListener('click', () => { seriesReturn = 'library'; go('series'); });
   const ft = document.getElementById('fav-toggle');
   if (ft) ft.addEventListener('click', () => { favExpanded = !favExpanded; render(); });
-  const fst = document.getElementById('fav-style');
-  if (fst) fst.addEventListener('click', () => {
-    favStyle = favStyle === 'spines' ? 'covers' : 'spines';
-    try { localStorage.setItem('spicyshelves.favstyle', favStyle); } catch (e) {}
-    animateIn = true;
-    render();
-  });
+  document.querySelectorAll('.fav-shelf [data-fs]').forEach(b =>
+    b.addEventListener('click', () => {
+      if (favStyle === b.dataset.fs) return;
+      favStyle = b.dataset.fs;
+      try { localStorage.setItem('spicyshelves.favstyle', favStyle); } catch (e) {}
+      animateIn = true;
+      render();
+    }));
   paintSpineColors();
   const addBtn = document.querySelector('#view [data-nav="add"]');
   if (addBtn) addBtn.addEventListener('click', () => go('add'));
