@@ -105,6 +105,15 @@ function ok(name, cond) {
     env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' } });
   ok('unparsable upstream body -> 502', r.status === 502);
 
+  upstreamHandler = () => ({ ok: true, status: 200,
+    json: async () => ({ data: [{ id: 'models/gemini-2.5-flash' }, { id: 'gemini-2.5-flash' }, { id: 'gemini-2.5-pro' }] }) });
+  r = await onRequest({ request: req('GET', 'gemini'),
+    env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GEMINI: 'GK' } });
+  const pj = await r.json();
+  ok("Google's models/ prefix is stripped and deduped",
+    r.status === 200 && pj.models.length === 2 &&
+    pj.models[0].id === 'gemini-2.5-flash' && pj.models[1].id === 'gemini-2.5-pro');
+
   /* ---- 2. Client tropeModelList ---- */
   const ctx = { console, setTimeout, clearTimeout, fetch: null };
   ctx.window = ctx;

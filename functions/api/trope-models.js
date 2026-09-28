@@ -76,10 +76,19 @@ export async function onRequest(context) {
   } catch {
     return jsonErr(502, 'provider returned an unparsable model list');
   }
-  const rows = (parsed && Array.isArray(parsed.data) ? parsed.data : [])
-    .filter(m => m && typeof m.id === 'string' && m.id)
-    .slice(0, 500)
-    .map(m => ({ id: m.id, name: typeof m.name === 'string' && m.name ? m.name : m.id }));
+  /* Google's OpenAI-compat list returns canonical ids like
+     "models/gemini-2.5-flash"; the chat endpoint takes the short name, so
+     strip the prefix (and dedupe) before sending the list down. */
+  const seen = new Set();
+  const rows = [];
+  for (const m of (parsed && Array.isArray(parsed.data) ? parsed.data : [])) {
+    if (!m || typeof m.id !== 'string' || !m.id) continue;
+    const id = m.id.startsWith('models/') ? m.id.slice('models/'.length) : m.id;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rows.push({ id, name: typeof m.name === 'string' && m.name ? m.name : id });
+    if (rows.length >= 500) break;
+  }
   return new Response(JSON.stringify({ provider, models: rows }), {
     headers: { 'Content-Type': 'application/json' },
   });

@@ -288,10 +288,19 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             data = parsed.get('data') if isinstance(parsed, dict) else None
             models = []
+            seen = set()
             for m in data if isinstance(data, list) else []:
                 mid = m.get('id') if isinstance(m, dict) else None
                 if not mid or not isinstance(mid, str):
                     continue
+                # Google's list returns canonical ids like
+                # "models/gemini-2.5-flash"; the chat endpoint takes the
+                # short name, so strip the prefix (and dedupe).
+                if mid.startswith('models/'):
+                    mid = mid[len('models/'):]
+                if mid in seen:
+                    continue
+                seen.add(mid)
                 name = m.get('name') if isinstance(m.get('name'), str) and m.get('name') else mid
                 models.append({'id': mid, 'name': name})
                 if len(models) >= 500:
