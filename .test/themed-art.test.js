@@ -54,7 +54,8 @@ const appversion = fs.readFileSync(path.join(ROOT, 'js', '181-appversion.js'), '
 const m = appversion.match(/APP_VERSION = '(v\d+)'/);
 ok('APP_VERSION parsed', !!m);
 if (m) ok(`sw.js cache name matches APP_VERSION (${m[1]})`, sw.includes(`cozy-libram-${m[1]}`));
-ok('APP_VERSION is v184', m && m[1] === 'v184');
+// the version number itself is asserted by .test/appversion.test.js; here we
+// only require the two to agree, so the art can't go stale behind a worker.
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

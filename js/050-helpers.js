@@ -143,6 +143,9 @@ function emptyState(o) {
   return '<div class="empty"><div class="big">' + icon(o.icon || 'covers') + '</div>' +
     '<h2 class="serif">' + esc(o.title) + '</h2>' +
     (o.body ? '<p>' + o.body + '</p>' : '') +
+    // v185: the current theme's divider art — a quiet flourish between the
+    // message and the call to action, styled per theme in CSS.
+    '<div class="empty-div" aria-hidden="true"></div>' +
     (o.cta ? '<button class="btn" data-empty-go="' + esc(o.cta.go) + '">' + esc(o.cta.label) + '</button>' : '') +
     '</div>';
 }

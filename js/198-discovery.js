@@ -365,7 +365,8 @@ function covenJump(sel) {
 function renderDiscover() {
   track('discover_opened', null, { dedupeKey: 'discover-open', dedupeMs: 8000 });
   setView(
-    '<div class="disc-hero"><span class="disc-hero-ic">' + icon('sparkles') + '</span>' +
+    '<div class="disc-hero"><span class="disc-moon" aria-hidden="true"></span>' +
+    '<span class="disc-hero-ic">' + icon('sparkles') + '</span>' +
     '<h2 class="serif">What are you in the mood for?</h2>' +
     '<p>Find your next favorite book, or let us surprise you.</p></div>' +
 

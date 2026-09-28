@@ -1651,6 +1651,41 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* ================= v126: empty-state CTA ================= */
 .empty .btn { margin-top: 14px; }
 
+/* ================= v185: themed art in Discover + empty states =================
+   The Discover hero gets the current theme's moon/sparkle ornament; every
+   empty state gets the theme's divider art between the message and the CTA.
+   Pure CSS theme switches — no JS needed when the theme changes. */
+.disc-moon {
+  display: block; width: 56px; height: 56px; margin: 0 auto 2px;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+  opacity: 0.9;
+}
+.empty-div {
+  width: 100%; max-width: 260px; height: 30px; margin: 14px auto 0;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+  opacity: 0.8;
+}
+[data-theme="twilight"] .disc-moon { background-image: url("Asset/themes/moon-twilight.svg"); }
+[data-theme="verdant"] .disc-moon { background-image: url("Asset/themes/moon-verdant.svg"); }
+[data-theme="velvet"] .disc-moon { background-image: url("Asset/themes/moon-velvet.svg"); }
+[data-theme="abyss"] .disc-moon { background-image: url("Asset/themes/moon-abyss.svg"); }
+[data-theme="frost"] .disc-moon { background-image: url("Asset/themes/moon-frost.svg"); }
+[data-theme="midnight"] .disc-moon { background-image: url("Asset/moon-sparkle.svg"); }
+[data-theme="dark"] .disc-moon { background-image: url("Asset/themes/moon-dark.svg"); }
+[data-theme="light"] .disc-moon { background-image: url("Asset/themes/moon-light.svg"); }
+[data-theme="hearthside"] .disc-moon { background-image: url("Asset/themes/moon-hearthside.svg"); }
+[data-theme="candlelight"] .disc-moon { background-image: url("Asset/themes/moon-candlelight.svg"); }
+[data-theme="twilight"] .empty-div { background-image: url("Asset/themes/divider-twilight.svg"); }
+[data-theme="verdant"] .empty-div { background-image: url("Asset/themes/divider-verdant.svg"); }
+[data-theme="velvet"] .empty-div { background-image: url("Asset/themes/divider-velvet.svg"); }
+[data-theme="abyss"] .empty-div { background-image: url("Asset/themes/divider-abyss.svg"); }
+[data-theme="frost"] .empty-div { background-image: url("Asset/themes/divider-frost.svg"); }
+[data-theme="midnight"] .empty-div { background-image: url("Asset/divider-botanical.svg"); }
+[data-theme="dark"] .empty-div { background-image: url("Asset/themes/divider-dark.svg"); }
+[data-theme="light"] .empty-div { background-image: url("Asset/themes/divider-light.svg"); }
+[data-theme="hearthside"] .empty-div { background-image: url("Asset/themes/divider-hearthside.svg"); }
+[data-theme="candlelight"] .empty-div { background-image: url("Asset/themes/divider-candlelight.svg"); }
+
 /* ================= v127: onboarding ================= */
 #onb-overlay {
   position: fixed; inset: 0; z-index: 200;
