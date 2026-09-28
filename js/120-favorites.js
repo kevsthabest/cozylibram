@@ -22,11 +22,14 @@ function spineHTML(b) {
   const author = (b.authors[0] || '').trim().split(/\s+/).pop() || '';
   // v186: foil redesign — near-black cover-tinted base, gold-foil title,
   // double hairline rules top and bottom.
+  // v187: read badge — a gold seal on the spines of finished books.
+  const readBadge = b.status === 'read'
+    ? '<span class="spine-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
   return '<div class="spine" data-id="' + b.id + '" title="' + esc(b.title) + '"' +
     ' style="--sc:' + c + ';width:' + w + 'px;height:' + h + 'px">' +
     '<span class="spine-rule" aria-hidden="true"></span><span class="spine-title">' + esc(b.title) + '</span>' +
     (author ? '<span class="spine-author">' + esc(author) + '</span>' : '') +
-    '<span class="spine-rule" aria-hidden="true"></span></div>';
+    '<span class="spine-rule" aria-hidden="true"></span>' + readBadge + '</div>';
 }
 /* ---- recently added (v173): newest arrivals first, per the home mockup ---- */
 function recentlyAddedHTML() {

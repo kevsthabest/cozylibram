@@ -42,6 +42,11 @@ ok('thicker spine for more pages',
 ok('foil spines carry two hairline rules',
   qa('.fav-shelf .spine').every(s => s.querySelectorAll('.spine-rule').length === 2));
 ok('no legacy single band remains', qa('.fav-shelf .spine-band').length === 0);
+// v187 read badge: gold seal on finished books' spines only
+ok('read spines carry the read seal', qa('.fav-shelf .spine-read').length === 2);
+runInWindow(`window.__tbrSpine = spineHTML({ id: 'tbr1', title: 'TBR Book', authors: ['Jane Doe'],
+  pageCount: 300, status: 'tbr' });`);
+ok('unread spine has no read seal', !String(window.__tbrSpine).includes('spine-read'));
 
 // 3-6 need async (spine pull animation). Books here have no covers -> short pull.
 (async () => {
