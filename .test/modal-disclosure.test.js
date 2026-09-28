@@ -48,6 +48,13 @@ ok('hero: meta row shows pages + year + ISBN', (() => {
   return t.includes('200 pages') && t.includes('2021') && t.includes('9781250123456');
 })());
 ok('hero: public stars shown', q('.d-hero .pub-rating').textContent.includes('★★★★'));
+// --- v179: desktop panel — hero text wrapped for the two-column layout ---
+ok('hero text wrapped for the desktop two-column panel (v179)', !!q('.d-hero .d-hero-text h2'));
+ok('desktop panel CSS present (v179)', (() => {
+  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  return css.includes('.modal.detail-v174') && css.includes('.d-hero-text') &&
+    css.includes('padding: 26px 120px 26px 34px');
+})());
 
 // --- 2. Tabs exist; Details active, others hidden ---
 const tabs = qa('.d-tab').map(t => t.textContent);

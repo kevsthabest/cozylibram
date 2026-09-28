@@ -1779,6 +1779,42 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .d-log li b { font-weight: 600; }
 #m-del2 { margin-top: 18px; }
 
+/* ================= v179: desktop book detail as a mockup-style panel =================
+   One component, one code path — on wide screens the same modal presents as a
+   large near-full-height panel (two-column hero, florals parked in their own
+   gutter instead of overlapping the content) rather than a small centered
+   popup. Mobile is untouched. */
+@media (min-width: 900px) {
+  .modal.detail-v174 {
+    max-width: 880px;
+    min-height: 90vh;
+    max-height: 94vh;
+    padding: 26px 120px 26px 34px; /* right gutter clears the floral vine */
+  }
+  /* the vine lives in the gutter, clear of text and the favorite button */
+  .modal.detail-v174::after {
+    top: 70px; bottom: 26px; right: 28px; width: 62px;
+    opacity: 0.55;
+  }
+  /* two-column hero like the mockup: cover left, title block right */
+  .modal.detail-v174 .d-hero {
+    display: flex; align-items: center; gap: 28px;
+    text-align: left; padding: 10px 0 0;
+  }
+  .modal.detail-v174 .d-cover { flex: 0 0 auto; }
+  .modal.detail-v174 .d-cover .cover-wrap.d-cov { margin: 0; }
+  .modal.detail-v174 .d-hero-text { min-width: 0; }
+  .modal.detail-v174 .d-hero h2 { margin-top: 0; font-size: 28px; }
+  .modal.detail-v174 .d-meta { justify-content: flex-start; }
+  /* sticky rails re-anchor to the new padding */
+  .modal.detail-v174 .d-tabs {
+    top: -26px; margin: 16px -120px 0 -34px; padding: 10px 120px 0 34px;
+  }
+  .modal.detail-v174 .modal-actions {
+    margin: 18px -120px 0 -34px; padding: 12px 120px 0 34px;
+  }
+}
+
 /* ================= v171: desktop sidebar nav ================= */
 @media (min-width: 1024px) {
   .bottom-nav {

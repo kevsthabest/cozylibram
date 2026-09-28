@@ -748,6 +748,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
     '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
+    '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
       ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
@@ -759,6 +760,7 @@ function renderDetailModal(b, viaBook) {
     (b.isbn ? '<span>ISBN ' + esc(b.isbn) + '</span>' : '') +
     '</div>' +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
+    '</div>' +
     '</div>' +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
     // collapsible sections; every control keeps its id).
