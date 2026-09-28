@@ -59,7 +59,7 @@ runInWindow(`
 `);
 
 ok('authors ranked by shelf count then rating',
-  JSON.stringify(window.topReleaseAuthors(8)) === JSON.stringify(['Ann Author', 'Zed']));
+  JSON.stringify(window.topReleaseAuthors()) === JSON.stringify(['Ann Author', 'Zed']));
 
 (async () => {
   const res = await window.checkNewReleases();
@@ -124,6 +124,38 @@ ok('authors ranked by shelf count then rating',
   ok('card shows an honest error when Hardcover is unreachable',
     /Couldn't reach Hardcover/.test(window.document.getElementById('release-results').textContent));
   window.fetch = realFetch;
+
+  // v176: the sweep covers EVERY author (not just the top 8) and streams
+  // finds in as they're detected instead of waiting for the full sweep.
+  const manyDocs = {}, manyLib = [];
+  for (let i = 0; i < 10; i++) {
+    const name = 'Author ' + i;
+    manyLib.push({ id: 'm' + i, title: 'Book ' + i, authors: [name], status: 'read',
+      owned: 'owned', cover: '', tropes: [], myRating: 5 - (i % 3), isbn: '' });
+    // authors 8 and 9 share one upcoming book: dedup must collapse it to one
+    manyDocs[name] = i < 8 ? [gb(100 + i, 'New ' + i, name, 40 - i * 3)]
+                           : [gb(999, 'Shared Find', name, 12)];
+  }
+  Object.assign(DOCS, manyDocs);
+  runInWindow(`library = ${JSON.stringify(manyLib)};`);
+  ok('author ranking is not truncated at eight',
+    window.topReleaseAuthors().length === 10);
+
+  const streamed = [];
+  let settled = false;
+  const sweep = window.checkNewReleases(null, c => streamed.push(c.title));
+  sweep.then(() => { settled = true; });
+  await new Promise(r => setTimeout(r, 400)); // first author done, sweep still pacing
+  ok('finds stream in while the sweep is still running',
+    streamed.length > 0 && !settled);
+  const res2 = await sweep;
+  ok('all authors are scanned, not just the top 8', res2.total === 10);
+  ok('shared book across two authors is deduped',
+    res2.list.filter(c => c.title === 'Shared Find').length === 1);
+  const dates2 = res2.list.map(c => c.releaseDate);
+  ok('final streamed list is complete and sorted by release date',
+    res2.list.length === 9 && streamed.length === 9 &&
+    dates2.every((d, i) => i === 0 || dates2[i - 1] <= d));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -30,7 +30,10 @@ function dismissRelease(hcId) {
 function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId); }
 
 // Authors ranked by shelf count, then by her average rating of them.
-function topReleaseAuthors(limit) {
+// v176: every unique nonblank author in the library, ranked by shelf count
+// then average rating so her favorites scan first. No truncation — the
+// release sweep covers the whole library, not just the top 8.
+function topReleaseAuthors() {
   const map = {};
   library.forEach(b => {
     (b.authors || []).forEach(a => {
@@ -43,7 +46,7 @@ function topReleaseAuthors(limit) {
   });
   return Object.values(map)
     .sort((x, y) => (y.n - x.n) || ((y.sn ? y.stars / y.sn : 0) - (x.sn ? x.stars / x.sn : 0)))
-    .slice(0, limit || 8).map(e => e.name);
+    .map(e => e.name);
 }
 
 // Already on her shelves? Matches by ISBN first, then title + first author.
@@ -72,8 +75,8 @@ function hcBookToCandidate(b) {
   };
 }
 
-async function checkNewReleases(onTick) {
-  const authors = topReleaseAuthors(8);
+async function checkNewReleases(onTick, onFound) {
+  const authors = topReleaseAuthors();
   const out = [];
   const seen = new Set();
   const d = new Date();
@@ -96,6 +99,7 @@ async function checkNewReleases(onTick) {
         seen.add(b.id);
         if (releaseInLibrary(c)) return;
         out.push(c);
+        if (onFound) onFound(c); // v176: stream each find as it's detected
       });
     } catch (e) { failed++; /* one author failing never kills the sweep */ }
     await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
@@ -121,14 +125,11 @@ function addReleaseBook(c) {
   return addBook(book, false, 'discovery');
 }
 
-function renderReleaseResults(list) {
-  const box = document.getElementById('release-results');
-  if (!box) return;
+function releaseResultsHTML(list) {
   if (!list.length) {
-    box.innerHTML = '<p class="note">No new releases found — you\'re all caught up ✨</p>';
-    return;
+    return '<p class="note">No new releases found — you\'re all caught up ✨</p>';
   }
-  box.innerHTML = '<h3 class="wish-section">' + icon('sparkles') + ' New from your authors</h3>' +
+  return '<h3 class="wish-section">' + icon('sparkles') + ' New from your authors</h3>' +
     '<div class="grid">' + list.map((c, i) =>
       '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c) +
       '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
@@ -138,6 +139,9 @@ function renderReleaseResults(list) {
       '<button class="btn small" data-add="' + i + '">＋ Add</button>' +
       '<button class="btn ghost small" data-dis="' + i + '" aria-label="Dismiss">✕</button></div></div>'
     ).join('') + '</div>';
+}
+
+function wireReleaseResults(box, list) {
   box.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     const c = list[Number(btn.dataset.add)];
@@ -153,6 +157,13 @@ function renderReleaseResults(list) {
     btn.closest('.rel-card').remove();
     if (!box.querySelector('.rel-card')) box.innerHTML = '<p class="note">All caught up ✨</p>';
   }));
+}
+
+function renderReleaseResults(list) {
+  const box = document.getElementById('release-results');
+  if (!box) return;
+  box.innerHTML = releaseResultsHTML(list);
+  wireReleaseResults(box, list);
 }
 
 // Shared wiring: the Wishlist's "Check for new releases" button and (v175)
@@ -171,21 +182,44 @@ function wireReleaseCheck() {
     const label = isTile ? '' : btn.innerHTML;
     if (isTile && box && box.scrollIntoView)
       box.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+    // v176: accumulate finds and repaint after each one, so the results
+    // list grows live while the sweep is still running.
+    const found = [];
+    visibleReleases = found; // v150: survive re-renders while adding
+    let done = false, prog = '';
+    const byDate = (x, y) => x.releaseDate.localeCompare(y.releaseDate);
+    const cleanList = () => found.slice().sort(byDate)
+      .filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
+    const paint = () => {
+      if (!box) return;
+      const list = cleanList();
+      box.innerHTML = (prog ? '<p class="note">' + prog + '</p>' : '') +
+        (list.length ? releaseResultsHTML(list) : (done ? releaseResultsHTML([]) : ''));
+      wireReleaseResults(box, list);
+    };
     try {
-      const res = await checkNewReleases((a, i, n) => {
-        const html = icon('hourglass') + ' Checking ' + esc(a) + '… (' + i + '/' + n + ')';
-        if (isTile) { if (box) box.innerHTML = '<p class="note">' + html + '</p>'; }
-        else btn.innerHTML = html;
+      const res = await checkNewReleases(
+        (a, i, n) => {
+          prog = icon('hourglass') + ' Checking ' + esc(a) + '… (' + i + '/' + n + ')';
+          if (!isTile) btn.innerHTML = prog;
+          paint();
+        },
+        (c) => { found.push(c); paint(); }
+      );
+      done = true; prog = '';
+      // Reconcile with the returned list (covers any find onFound missed).
+      res.list.forEach(c => {
+        if (c && !found.some(f => f.hcId === c.hcId)) found.push(c);
       });
+      found.sort(byDate);
       // v135: if every author's lookup failed, say so — "all caught up"
       // would be a lie when we never actually reached Hardcover.
-      if (!res.list.length && res.total > 0 && res.failed >= res.total) {
+      if (!found.length && res.total > 0 && res.failed >= res.total) {
         if (box) box.innerHTML = '<p class="note">Couldn\'t reach Hardcover for any author — ' +
           'check the connection in Settings → Hardcover, then try again.</p>';
       } else {
-        renderReleaseResults(res.list);
-        saveAutoReleases(res.list); // v149: manual checks refresh the auto cache
-        visibleReleases = res.list; // v150: survive re-renders while adding
+        paint();
+        saveAutoReleases(found); // v149: manual checks refresh the auto cache
         markReleasesSeen();
       }
     } catch (e) {
