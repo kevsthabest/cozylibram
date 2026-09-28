@@ -30,6 +30,8 @@ const ICONS = {
   reading: '<path d="M12 6.5C10 5 7.5 4.5 4.5 4.5v13.5c3 0 5.5.5 7.5 2 2-1.5 4.5-2 7.5-2V4.5c-3 0-5.5.5-7.5 2z"/><line x1="12" y1="6.5" x2="12" y2="20"/>',
   // read: check in circle
   read: '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.4l2.6 2.6 4.8-5.4"/>',
+  // v189: plain check mark (read seals — the seal itself is the circle)
+  check: '<path d="M8.3 12.4l2.6 2.6 4.8-5.4"/>',
   // DNF: x in circle
   dnf: '<circle cx="12" cy="12" r="8.5"/><line x1="9.2" y1="9.2" x2="14.8" y2="14.8"/><line x1="14.8" y1="9.2" x2="9.2" y2="14.8"/>',
   // up next: skip-forward

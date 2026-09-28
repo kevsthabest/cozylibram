@@ -42,6 +42,9 @@ const runInWindow = (js) => {
   ok(n + ' uses currentColor line-art', svg.includes('stroke="currentColor"') && svg.includes('fill="none"'));
 });
 ok('unknown icon falls back to covers', window.icon('nope') === window.icon('covers'));
+// v189: the read seals use a real check icon, not the covers fallback
+ok('check icon renders a check mark',
+  window.icon('check').includes('M8.3 12.4l2.6 2.6 4.8-5.4') && window.icon('check') !== window.icon('covers'));
 runInWindow(`window.__axesOk = RATING_AXES.every(a => typeof a.icon === 'string' && icon(a.icon).includes('</svg>'));
 window.__axesCount = RATING_AXES.length;`);
 ok('every axis has a line-art icon', !!window.__axesOk);
