@@ -11,6 +11,10 @@
 //     doubled budget (the old nudge-only retry could not recover)
 //   - the parser extracts JSON embedded in reasoning prose, plus bare arrays
 //   - the system prompt forbids reasoning text
+// v158: failures are descriptive — a 502 carrying an upstream error object
+// surfaces its message ("provider HTTP 502: <reason>"), and truncation that
+// persists at the max budget fails fast naming itself instead of looking
+// like a provider outage.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -124,6 +128,57 @@ async function main() {
       await w.eval(`inferBookTropes(${JSON.stringify(BOOK)}, { fetchFn: window.__fetchFn, delayFn: () => Promise.resolve() })`);
     } catch (e) { err = e.message; }
     ok('non-truncated 502 retries then fails as provider error', calls === 4 && /provider HTTP 502/.test(err));
+    delete w.__fetchFn;
+  }
+
+  // ---- v158: descriptive failures ----
+  {
+    // Upstream's own message is surfaced, not just the status code.
+    const w = window;
+    let calls = 0;
+    const fetchFn = async () => {
+      calls++;
+      return mockResp(502, { error: { message: 'No available provider (529 overloaded)' } });
+    };
+    w.__fetchFn = fetchFn;
+    let err = '';
+    try {
+      await w.eval(`inferBookTropes(${JSON.stringify(BOOK)}, { fetchFn: window.__fetchFn, delayFn: () => Promise.resolve() })`);
+    } catch (e) { err = e.message; }
+    ok('502 surfaces the upstream message',
+      calls === 4 && err === 'provider HTTP 502: No available provider (529 overloaded)');
+    delete w.__fetchFn;
+  }
+  {
+    // Empty/non-JSON 502 body still says something useful.
+    const w = window;
+    const fetchFn = async () => ({
+      status: 502, ok: false,
+      headers: { get: () => null },
+      json: async () => { throw new Error('not json'); },
+    });
+    w.__fetchFn = fetchFn;
+    let err = '';
+    try {
+      await w.eval(`inferBookTropes(${JSON.stringify(BOOK)}, { fetchFn: window.__fetchFn, delayFn: () => Promise.resolve() })`);
+    } catch (e) { err = e.message; }
+    ok('bodyless 502 names the missing reason',
+      err === 'provider HTTP 502 (upstream gave no reason)');
+    delete w.__fetchFn;
+  }
+  {
+    // Truncation that persists at the max budget fails fast with its own
+    // message instead of masquerading as a provider outage.
+    const w = window;
+    let calls = 0;
+    const fetchFn = async () => { calls++; return mockResp(502, { error: 'truncated' }); };
+    w.__fetchFn = fetchFn;
+    let err = '';
+    try {
+      await w.eval(`inferBookTropes(${JSON.stringify(BOOK)}, { fetchFn: window.__fetchFn, maxTokens: 4000, delayFn: () => Promise.resolve() })`);
+    } catch (e) { err = e.message; }
+    ok('truncation at max budget fails fast and says so',
+      calls === 1 && /truncated its response at the max token budget/.test(err));
     delete w.__fetchFn;
   }
 

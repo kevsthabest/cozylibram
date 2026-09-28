@@ -372,17 +372,35 @@ async function inferBookTropes(book, opts) {
       throw TropeInferError('provider rejected the request (HTTP ' + resp.status +
         ') - check the API key', { fatal: true, status: resp.status });
     }
-    /* v156: the proxy converts finish_reason:length into a 502 with
+    /* v156/v158: the proxy converts finish_reason:length into a 502 with
        {error:'truncated'}. That is recoverable — retry immediately with a
-       bigger budget instead of burning backoff cycles on the same budget. */
+       bigger budget instead of burning backoff cycles on the same budget.
+       v158: a 502 carrying any other body is the provider itself failing,
+       so surface the upstream message instead of a bare status code; and
+       truncation that persists at the max budget fails fast with a clear
+       reason instead of masquerading as a provider outage. */
     if (resp.status === 502) {
-      let truncated = false;
-      try { truncated = (await resp.json() || {}).error === 'truncated'; }
-      catch (e) { /* fall through to generic 5xx handling */ }
-      if (truncated && maxTokens < 4000) {
-        maxTokens = Math.min(4000, maxTokens * 2);
-        continue;
+      let bodyErr = null;
+      try { bodyErr = await resp.json(); } catch (e) { bodyErr = null; }
+      const errVal = bodyErr && bodyErr.error;
+      if (errVal === 'truncated') {
+        if (maxTokens < 4000) {
+          maxTokens = Math.min(4000, maxTokens * 2);
+          continue;
+        }
+        throw TropeInferError(
+          'model truncated its response at the max token budget (4000) — ' +
+          'it burned the budget on reasoning before emitting JSON',
+          { status: 502 });
       }
+      const upMsg = typeof errVal === 'string' ? errVal
+        : (errVal && errVal.message ? String(errVal.message) : '');
+      lastErr = TropeInferError('provider HTTP 502' +
+        (upMsg ? ': ' + upMsg.slice(0, 160) : ' (upstream gave no reason)'),
+        { status: 502 });
+      if (attempt >= 3) break;
+      await delayFn(tropeBackoffMs(attempt, retryAfter));
+      continue;
     }
     if (resp.status === 429 || resp.status >= 500) {
       lastErr = TropeInferError('provider HTTP ' + resp.status, { status: resp.status });
