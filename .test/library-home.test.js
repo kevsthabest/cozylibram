@@ -41,23 +41,29 @@ function seed() {
 seed();
 run('renderLibrary()');
 const html1 = q('#view').innerHTML;
-ok('home: currently reading section leads', html1.indexOf('Currently Reading') !== -1);
+ok('home: greeting hero leads', !!q('.home-greet') && q('.home-greet').textContent.includes('Good'));
+ok('home: currently reading section present', html1.indexOf('Currently Reading') !== -1);
 ok('home: hero shows progress + percentage', (() => {
-  const h = q('.reading-hero');
+  const h = q('.cr-hero');
   return h && h.textContent.includes('70%') && h.textContent.includes('Reading One');
 })());
-ok('home: hero shows author', q('.reading-hero').textContent.includes('A One'));
+ok('home: hero shows author', q('.cr-hero').textContent.includes('A One'));
+ok('home: hero has an Update Progress button',
+  Array.from(qa('.cr-hero .btn')).some(b => b.textContent.includes('Update Progress')));
 ok('home: can\'t decide strip present', !!q('#cd-pick'));
 ok('home: can\'t decide mentions the TBR count', q('#cd-pick').textContent.includes('2 waiting'));
 const tiles = {};
 qa('.shelf-tile').forEach(t => { tiles[t.dataset.shelf] = t.querySelector('b').textContent; });
 ok('home: shelf tiles show live counts',
   tiles.tbr === '2' && tiles.reading === '1' && tiles.read === '1' && tiles.dnf === '0');
-ok('home: hierarchy order (reading -> up next -> decide -> tiles -> browser)',
-  html1.indexOf('Currently Reading') < html1.indexOf('Up Next') &&
+ok('home: favorites + wishlist tiles present', tiles.favorites === '0' && tiles.wishlist === '0');
+ok('home: hierarchy order (greeting -> reading -> tiles -> recent -> up next -> decide -> browser)',
+  html1.indexOf('home-greet') < html1.indexOf('Currently Reading') &&
+  html1.indexOf('Currently Reading') < html1.indexOf('Your Library') &&
+  html1.indexOf('Your Library') < html1.indexOf('Recently Added') &&
+  html1.indexOf('Recently Added') < html1.indexOf('Up Next') &&
   html1.indexOf('Up Next') < html1.indexOf('Can\u2019t decide?') &&
-  html1.indexOf('Can\u2019t decide?') < html1.indexOf('Your Library') &&
-  html1.indexOf('Your Library') < html1.indexOf('id="q"'));
+  html1.indexOf('Can\u2019t decide?') < html1.indexOf('id="q"'));
 ok('home: full browser still present (search + shelf chips)',
   !!q('#q') && qa('.chip:not([data-of])').length >= 5);
 
@@ -67,6 +73,14 @@ ok('home: can\'t decide opens roulette', run('view') === 'pick');
 seed(); run('renderLibrary()');
 q('.shelf-tile[data-shelf="tbr"]').click();
 ok('home: shelf tile filters to that shelf', run('filter') === 'tbr');
+seed(); run('renderLibrary()');
+q('.shelf-tile[data-shelf="wishlist"]').click();
+ok('home: wishlist tile opens the wishlist', run('view') === 'wishlist');
+seed(); run('renderLibrary()');
+q('.cr-info [data-cr]').click(); // the Update Progress button
+ok('home: hero Update Progress opens the book modal',
+  !!q('#m-back') && q('#m-back').textContent.includes('Reading One'));
+q('#m-x').click();
 
 // --- 3. Empty-reading state answers "what now?" ---
 run(`library = [

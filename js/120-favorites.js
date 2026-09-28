@@ -25,47 +25,21 @@ function spineHTML(b) {
     '<span class="spine-band"></span><span class="spine-title">' + esc(b.title) + '</span>' +
     (author ? '<span class="spine-author">' + esc(author) + '</span>' : '') + '</div>';
 }
-/* ---- recently read: quick access to books with fresh reading activity ---- */
-// Latest reading-activity day key for a book: newest log entry or finish date.
-function lastReadActivity(b) {
-  let k = '';
-  (b.log || []).forEach(e => { if (e.d && e.d > k) k = e.d; });
-  if (b.dateFinished) {
-    try { const fk = dayKey(new Date(b.dateFinished)); if (fk > k) k = fk; } catch (e) {}
-  }
-  return k;
-}
-function recentBooks(limit) {
-  return library
-    .filter(b => b.status === 'reading' || lastReadActivity(b))
-    .sort((a, b) => {
-      const ka = lastReadActivity(a), kb = lastReadActivity(b);
-      if (ka !== kb) return ka < kb ? 1 : -1;
-      // v59: same-day tie? the book whose pages were touched most recently
-      // goes first — updating pages bumps the book to the front of the shelf.
-      const ta = a.lastPagedAt || '', tb = b.lastPagedAt || '';
-      if (ta !== tb) return ta < tb ? 1 : -1;
-      return String(b.dateAdded || '') < String(a.dateAdded || '') ? 1 : -1;
-    })
-    .slice(0, limit || 8);
-}
-function recentStripHTML() {
-  const rec = recentBooks(8);
+/* ---- recently added (v173): newest arrivals first, per the home mockup ---- */
+function recentlyAddedHTML() {
+  const rec = library.slice()
+    .sort((a, b) => String(b.dateAdded || b._mtime || '')
+      .localeCompare(String(a.dateAdded || a._mtime || '')))
+    .slice(0, 10);
   if (!rec.length) return '';
-  return '<div class="recent-strip"><div class="recent-head"><h3 class="serif">' + icon('history') + ' Recently read</h3></div>' +
+  return '<section class="home-sec"><div class="recent-strip"><div class="recent-head"><h3 class="serif">' + icon('history') + ' Recently Added</h3>' +
+    '<button class="btn ghost sm" id="ra-all">View All \u2192</button></div>' +
     '<div class="recent-row">' + rec.map(b => {
-      const total = b.pageCount || 0;
-      const cur = total ? Math.min(b.progress || 0, total) : (b.progress || 0);
-      const pct = b.status === 'read' ? 100 : (total ? Math.round(cur / total * 100) : 0);
-      const sub = b.status === 'read' ? 'Finished'
-        : (total ? 'p. ' + cur + ' / ' + total + ' · ' + pct + '%' : 'p. ' + cur);
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
         : '<div class="recent-nocover">' + icon('covers') + '</div>';
       return '<button class="recent-card" data-id="' + b.id + '" title="' + esc(b.title) + '">' + cov +
-        '<span class="recent-title">' + esc(b.title) + '</span>' +
-        '<span class="recent-prog"><span class="fill" style="width:' + pct + '%"></span></span>' +
-        '<span class="recent-sub">' + sub + '</span></button>';
-    }).join('') + '</div></div>';
+        '<span class="recent-title">' + esc(b.title) + '</span></button>';
+    }).join('') + '</div></div></section>';
 }
 
 function favShelfHTML() {
@@ -315,29 +289,48 @@ function pullSpine(el, id) {
   }, b.cover ? 950 : 380);
 }
 
-/* ---------------- library home (v122) ----------------
-   The Library tab is the app's home: currently reading → what next →
-   library overview → everything else. Shown only on the unfiltered view;
-   filtering drops into the plain browser. */
+/* ---------------- library home (v122, v173) ----------------
+   The Library tab is the app's home. v173 restyles it per the mockup:
+   greeting hero → Currently Reading hero card → stat tiles → Recently
+   Added → the rest. Shown only on the unfiltered view; filtering drops
+   into the plain browser. */
+function homeGreetingHTML() {
+  const h = new Date().getHours();
+  const tod = h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : 'evening';
+  return '<section class="home-sec home-greet"><h2 class="serif">Good ' + tod + ', beautiful ' + icon('covers') + '</h2>' +
+    '<p>What are you in the mood for?</p></section>';
+}
+
 function readingHeroHTML() {
-  const reading = library.filter(b => b.status === 'reading');
+  // Featured book = the reading book touched most recently.
+  const reading = library.filter(b => b.status === 'reading')
+    .sort((a, b) => String(b._mtime || '').localeCompare(String(a._mtime || '')));
   let html = '<section class="home-sec"><h3 class="home-sec-title">' + icon('reading') + ' Currently Reading</h3>';
   if (!reading.length) {
     html += '<div class="home-empty"><p>Nothing you\u2019re reading right now.</p>' +
       '<div class="home-empty-btns"><button class="btn sm" id="he-tbr">Browse TBR</button>' +
       '<button class="btn ghost sm" id="he-disc">Discover something</button></div></div>';
   } else {
-    html += '<div class="reading-hero-row">' + reading.slice(0, 4).map(b => {
-      const pct = b.pageCount
-        ? Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100))) : 0;
-      const prog = b.pageCount
-        ? '<span class="progress-line slim"><span class="fill" style="width:' + pct + '%"></span></span>' +
-          '<small class="card-progress">p. ' + (b.progress || 0) + ' / ' + b.pageCount + ' · ' + pct + '%</small>'
-        : '<small class="card-progress">Continue reading \u2192</small>';
-      return '<button class="reading-hero" data-open="' + b.id + '">' + coverHTML(b, 'rh-cover') +
-        '<span class="rh-tx"><b>' + esc(b.title) + '</b>' +
-        '<small>' + esc((b.authors || []).join(', ') || 'Unknown author') + '</small>' + prog + '</span></button>';
-    }).join('') + '</div>';
+    const b = reading[0];
+    const total = b.pageCount || 0;
+    const cur = total ? Math.min(b.progress || 0, total) : (b.progress || 0);
+    const pct = total ? Math.round(cur / total * 100) : 0;
+    html += '<div class="cr-hero">' +
+      '<button class="cr-cover" data-cr="' + b.id + '" aria-label="Open ' + esc(b.title) + '">' +
+      coverHTML(b, 'cr-cov') + '</button>' +
+      '<div class="cr-info"><p class="cr-eyebrow">Currently Reading</p>' +
+      '<h4 class="serif">' + esc(b.title) + '</h4>' +
+      '<p class="cr-author">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</p>' +
+      (b.publicRating ? '<div class="cr-stars">' + stars(b.publicRating) + '</div>' : '') +
+      '<div class="cr-prog"><span class="progress-line"><span class="fill" style="width:' + pct + '%"></span></span>' +
+      '<small>page ' + cur + ' of ' + (total || '\u2013') + ' \u00b7 ' + pct + '%</small></div>' +
+      '<button class="btn sm" data-cr="' + b.id + '">Update Progress</button></div></div>';
+    if (reading.length > 1) {
+      html += '<div class="cr-also">' + reading.slice(1, 5).map(o =>
+        '<button class="cr-mini" data-cr="' + o.id + '" title="' + esc(o.title) + '" aria-label="Open ' + esc(o.title) + '">' +
+        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy">' : icon('covers')) +
+        '</button>').join('') + '</div>';
+    }
   }
   return html + '</section>';
 }
@@ -353,16 +346,24 @@ function cantDecideHTML() {
 }
 
 function shelfTilesHTML(counts) {
-  const tiles = [['tbr', 'TBR'], ['reading', 'Reading'], ['read', 'Read'], ['dnf', 'DNF']];
+  // v173: six tiles per the mockup — the four shelves plus Favorites and
+  // Wishlist (books marked "to buy").
+  const fav = library.filter(b => b.favorite).length;
+  const wish = library.filter(b => b.owned === 'tobuy').length;
+  const tiles = [
+    ['tbr', 'TBR', counts.tbr], ['reading', 'Reading', counts.reading],
+    ['read', 'Read', counts.read], ['dnf', 'DNF', counts.dnf],
+    ['favorites', 'Favorites', fav], ['wishlist', 'Wishlist', wish],
+  ];
   return '<section class="home-sec"><h3 class="home-sec-title">' + icon('covers') + ' Your Library</h3>' +
-    '<div class="shelf-tiles">' + tiles.map(t =>
-      '<button class="shelf-tile" data-shelf="' + t[0] + '"><b>' + counts[t[0]] + '</b><span>' + t[1] + '</span></button>'
+    '<div class="shelf-tiles tiles-6">' + tiles.map(t =>
+      '<button class="shelf-tile" data-shelf="' + t[0] + '"><b>' + t[2] + '</b><span>' + t[1] + '</span></button>'
     ).join('') + '</div></section>';
 }
 
 function libraryHomeHTML(counts) {
-  return readingHeroHTML() + upNextShelfHTML() + cantDecideHTML() + shelfTilesHTML(counts) +
-    recentStripHTML() + favShelfHTML();
+  return homeGreetingHTML() + readingHeroHTML() + shelfTilesHTML(counts) +
+    recentlyAddedHTML() + upNextShelfHTML() + cantDecideHTML() + favShelfHTML();
 }
 
 function renderLibrary() {
@@ -430,8 +431,8 @@ function renderLibrary() {
   const unm = document.getElementById('un-manage');
   if (unm) unm.addEventListener('click', () => go('upnext'));
   // v122 home-section wiring
-  document.querySelectorAll('.reading-hero').forEach(h =>
-    h.addEventListener('click', () => openDetail(h.dataset.open)));
+  document.querySelectorAll('[data-cr]').forEach(el =>
+    el.addEventListener('click', () => openDetail(el.dataset.cr)));
   const het = document.getElementById('he-tbr');
   if (het) het.addEventListener('click', () => { filter = 'tbr'; animateIn = true; render(); });
   const hed = document.getElementById('he-disc');
@@ -439,7 +440,22 @@ function renderLibrary() {
   const cdp = document.getElementById('cd-pick');
   if (cdp) cdp.addEventListener('click', () => go('pick'));
   document.querySelectorAll('.shelf-tile').forEach(t =>
-    t.addEventListener('click', () => { filter = t.dataset.shelf; animateIn = true; render(); }));
+    t.addEventListener('click', () => {
+      const s = t.dataset.shelf;
+      // v173: favorites and wishlist tiles navigate instead of filtering.
+      if (s === 'wishlist') { go('wishlist'); return; }
+      if (s === 'favorites') {
+        const el = document.querySelector('.fav-shelf');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+        return;
+      }
+      filter = s; animateIn = true; render();
+    }));
+  const raa = document.getElementById('ra-all');
+  if (raa) raa.addEventListener('click', () => {
+    const qel = document.getElementById('q');
+    if (qel && qel.scrollIntoView) qel.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
+  });
   const lq = document.getElementById('lib-quotes');
   if (lq) lq.addEventListener('click', () => go('quotes'));
   const lw = document.getElementById('lib-wishlist');

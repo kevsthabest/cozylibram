@@ -1,4 +1,8 @@
-// Recently-read strip + book-opening transition (v36).
+// Recently Added strip + book-opening transition (v36, v173).
+//
+// v173: the "Recently read" strip became "Recently Added" (newest arrivals
+// first) per the home mockup; the recentBooks/lastReadActivity helpers went
+// away with it. logPages/lastPagedAt coverage stays here.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -19,67 +23,40 @@ const runInWindow = (js) => {
   window.document.body.appendChild(s);
 };
 const probe = (js) => window.eval(js);
-const dayK = (offset) => {
-  const d = new Date(); d.setDate(d.getDate() - offset);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-};
 const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString(); };
 
 (async () => {
+  const addedDates = [];
+  for (let i = 1; i <= 12; i++) addedDates.push(isoDaysAgo(i)); // r1 newest … r12 oldest
   runInWindow(`localStorage.clear();
     const mk = (id, o) => Object.assign({ id, isbn: '', title: 'Book ' + id, authors: ['A U Thor'],
       cover: '', description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null,
       ratingsCount: 0, status: 'tbr', ratings: {}, axes: [], myRating: 0, tropes: [], progress: 0,
       dateAdded: new Date().toISOString(), dateFinished: null, notes: '', log: [] }, o);
-    window.__r1 = mk('r1', { status: 'reading', progress: 100, log: [{ d: '${dayK(0)}', from: 90, to: 100 }] });
-    window.__r2 = mk('r2', { status: 'reading', progress: 50, log: [{ d: '${dayK(1)}', from: 40, to: 50 }] });
-    window.__r3 = mk('r3', { status: 'read', dateFinished: '${isoDaysAgo(3)}', progress: 300 });
-    window.__r4 = mk('r4', { status: 'tbr' }); // no activity -> excluded
-    window.__r5 = mk('r5', { status: 'reading' }); // reading but no log yet -> included, sorts last
-    for (let i = 6; i <= 12; i++) library.push(mk('r' + i, { status: 'tbr', log: [{ d: '${dayK(10 + 0)}', from: 1, to: 5 }] }));
-    library.push(window.__r1, window.__r2, window.__r3, window.__r4, window.__r5);`);
+    window.__books = [];
+    const dates = ${JSON.stringify(addedDates)};
+    for (let i = 1; i <= 12; i++) window.__books.push(mk('r' + i, { dateAdded: dates[i - 1] }));
+    window.__books.forEach(b => library.push(b));`);
 
-  // 1. activity + ordering
-  ok('lastReadActivity picks newest log day', probe(`lastReadActivity(library.find(b=>b.id==='r1'))`) === dayK(0));
-  ok('lastReadActivity uses finish date', probe(`lastReadActivity(library.find(b=>b.id==='r3'))`) === dayK(3));
-  ok('lastReadActivity empty without activity', probe(`lastReadActivity(library.find(b=>b.id==='r4'))`) === '');
-  const order = probe(`recentBooks(20).map(b=>b.id).join(',')`);
-  ok('recent order: today > yesterday > finished > stale > reading-no-log',
-    order.indexOf('r1') < order.indexOf('r2') && order.indexOf('r2') < order.indexOf('r3') &&
-    order.indexOf('r3') < order.indexOf('r6') && order.indexOf('r6') < order.indexOf('r5'));
-  ok('inactive tbr excluded', !probe(`recentBooks(20).some(b=>b.id==='r4')`));
-  ok('reading without log still included', probe(`recentBooks(20).some(b=>b.id==='r5')`));
-  ok('default limit is 8', probe(`recentBooks().length`) === 8);
-
-  // 1b. v59: page updates stamp lastPagedAt; the just-touched book jumps first
-  // even when several books were read on the same day.
+  // 1. page updates still stamp lastPagedAt (used by stats/sync ordering)
   ok('logPages stamps lastPagedAt on a real change', probe(
     `const tb = {}; logPages(tb, 50, 60); !!tb.lastPagedAt`));
   ok('logPages no-op does not stamp', probe(
     `const b2 = { progress: 10 }; logPages(b2, 10, 10); !b2.lastPagedAt`));
-  probe(`const ra = library.find(x=>x.id==='r1'), rb = library.find(x=>x.id==='r2');
-    rb.log.push({ d: '${dayK(0)}', from: 50, to: 55 }); // temp: force a same-day tie
-    ra.lastPagedAt = new Date(Date.now() - 3600000).toISOString(); // touched an hour ago
-    rb.lastPagedAt = new Date().toISOString(); // touched just now`);
-  const sameDayOrder = probe(`recentBooks(20).map(b=>b.id).join(',')`);
-  ok('same-day tie broken by most recent page touch',
-    sameDayOrder.indexOf('r2') < sameDayOrder.indexOf('r1'));
-  probe(`renderLibrary();`);
-  ok('strip reflects the new order', qa('.recent-card')[0].dataset.id === 'r2');
-  // restore r1/r2 to their original state for the sections below
-  probe(`const ra2 = library.find(x=>x.id==='r1'), rb2 = library.find(x=>x.id==='r2');
-    rb2.log.pop(); delete ra2.lastPagedAt; delete rb2.lastPagedAt;`);
 
-  // 2. strip renders above the favorites shelf
+  // 2. Recently Added strip: newest arrivals first, capped at 10
   probe(`localStorage.setItem('spicyshelves.animation','off'); renderLibrary();`);
   const strip = q('.recent-strip');
-  ok('recent strip rendered', !!strip);
+  ok('recently-added strip rendered', !!strip);
+  ok('strip heading says Recently Added', strip && strip.textContent.includes('Recently Added'));
   ok('strip sits above favorites shelf',
     !!(strip && q('.fav-shelf') && (strip.compareDocumentPosition(q('.fav-shelf')) & 4)));
-  ok('strip shows 8 cards', qa('.recent-card').length === 8);
-  ok('first card is the most recently read', qa('.recent-card')[0].dataset.id === 'r1');
-  ok('progress bar reflects pages', qa('.recent-card')[0].querySelector('.fill').style.width === '33%');
-  ok('finished book shows Finished', qa('.recent-card').some(c => c.dataset.id === 'r3' && c.textContent.includes('Finished')));
+  ok('strip shows 10 cards (capped)', qa('.recent-card').length === 10);
+  ok('first card is the newest arrival', qa('.recent-card')[0].dataset.id === 'r1');
+  ok('last card is the 10th newest', qa('.recent-card')[9].dataset.id === 'r10');
+  ok('cards show titles without progress bars',
+    qa('.recent-card')[0].textContent.includes('Book r1') && !q('.recent-card .recent-prog'));
+  ok('View All button present', !!q('#ra-all'));
 
   // 3. tapping a recent card opens the detail modal (motion off -> instant)
   qa('.recent-card')[0].click();
@@ -93,11 +70,11 @@ const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); re
 
   // 5. empty library -> no strip
   probe(`library.length = 0; renderLibrary();`);
-  ok('no strip when nothing was read', !q('.recent-strip'));
+  ok('no strip when the library is empty', !q('.recent-strip'));
 
   // 6. transition path: overlay appears, modal arrives with the from-book entrance
   probe(`localStorage.setItem('spicyshelves.animation','on');
-    library.push(window.__r1);
+    library.push(window.__books[0]);
     renderLibrary();
     openDetail('r1', { fromEl: document.querySelector('.recent-card') });`);
   ok('book-open overlay created', !!q('.bookopen-overlay'));
