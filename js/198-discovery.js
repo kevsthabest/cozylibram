@@ -155,24 +155,32 @@ function renderReleaseResults(list) {
   }));
 }
 
-// Wishlist wiring: runs the sweep with progress on the button.
+// Shared wiring: the Wishlist's "Check for new releases" button and (v175)
+// Discover's New Releases tile. The tile shows progress inline in
+// #release-results; the Wishlist button keeps its old label-swap behavior.
 function wireReleaseCheck() {
-  const btn = document.getElementById('rel-check');
+  const btn = document.querySelector('[data-dtile="releases"]') || document.getElementById('rel-check');
   if (!btn) return;
+  const isTile = btn.hasAttribute('data-dtile');
   btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
     if (!hcReady()) { toast('Connect Hardcover in Settings → Hardcover first'); return; }
     track('release_discovery_opened');
     btn.disabled = true;
-    const label = btn.innerHTML;
+    const box = document.getElementById('release-results');
+    const label = isTile ? '' : btn.innerHTML;
+    if (isTile && box && box.scrollIntoView)
+      box.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
     try {
       const res = await checkNewReleases((a, i, n) => {
-        btn.innerHTML = icon('hourglass') + ' Checking ' + esc(a) + '… (' + i + '/' + n + ')';
+        const html = icon('hourglass') + ' Checking ' + esc(a) + '… (' + i + '/' + n + ')';
+        if (isTile) { if (box) box.innerHTML = '<p class="note">' + html + '</p>'; }
+        else btn.innerHTML = html;
       });
-      const box = document.getElementById('release-results');
       // v135: if every author's lookup failed, say so — "all caught up"
       // would be a lie when we never actually reached Hardcover.
-      if (!res.list.length && res.total > 0 && res.failed >= res.total && box) {
-        box.innerHTML = '<p class="note">Couldn\'t reach Hardcover for any author — ' +
+      if (!res.list.length && res.total > 0 && res.failed >= res.total) {
+        if (box) box.innerHTML = '<p class="note">Couldn\'t reach Hardcover for any author — ' +
           'check the connection in Settings → Hardcover, then try again.</p>';
       } else {
         renderReleaseResults(res.list);
@@ -181,11 +189,10 @@ function wireReleaseCheck() {
         markReleasesSeen();
       }
     } catch (e) {
-      const box = document.getElementById('release-results');
       if (box) box.innerHTML = '<p class="note">The check failed — try again in a bit.</p>';
     } finally {
       btn.disabled = false;
-      btn.innerHTML = label;
+      if (!isTile) btn.innerHTML = label;
     }
   });
 }
@@ -278,41 +285,111 @@ async function maybeAutoReleaseCheck() {
   } catch (e) {}
 }
 
-/* ---------------- Discover landing (v121) ----------------
-   "What are you in the mood for?" — one destination for every discovery
-   feature, each with a plain-language explanation. Cards route to real
-   features only; the release check runs inline. */
-function discCard(ic, title, blurb, target) {
-  return '<button class="disc-card" data-disc="' + target + '">' +
+/* ---------------- Discover landing (v121, restyled v175) ----------------
+   "What are you in the mood for?" per the UI mockup: a featured Surprise Me
+   card, four tiles (My Favorites / Similar Books / Authors / New Releases),
+   a Search-the-Library-&-Beyond row, and a From-Your-Coven section. Every
+   tile routes to a real feature; the release check runs inline under the
+   New Releases tile. */
+function discTile(ic, title, blurb, target) {
+  return '<button class="disc-tile" data-dtile="' + target + '">' +
     '<span class="disc-ic">' + icon(ic) + '</span>' +
-    '<span class="disc-tx"><b>' + esc(title) + '</b><small>' + esc(blurb) + '</small></span>' +
-    '<span class="disc-go" aria-hidden="true">→</span></button>';
+    '<b>' + esc(title) + '</b><small>' + esc(blurb) + '</small></button>';
+}
+
+// v175: "Similar Books — like this one": pick a seed from her highest-rated
+// books and favorites; tapping one opens its detail sheet, whose Discovery
+// section already lists similar books from her shelves.
+function similarSeedHTML() {
+  const seeds = library.filter(b => b.favorite || (b.myRating || 0) >= 4)
+    .sort((a, b) => ((b.myRating || 0) - (a.myRating || 0)) || ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)))
+    .slice(0, 6);
+  if (!seeds.length)
+    return '<p class="note">Rate a few books 4\u2605 or tap the \u2661 on a favorite — your top books will show up here as starting points.</p>';
+  return '<p class="note">Like which one?</p><div class="sim-seeds">' + seeds.map(b =>
+    '<button class="sim-seed" data-seed="' + b.id + '" aria-label="Find books like ' + esc(b.title) + '">' +
+    (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
+             : '<span class="sim-nocover">' + icon('covers') + '</span>') +
+    '<small>' + esc(b.title) + '</small></button>').join('') + '</div>';
+}
+
+// v175: "From Your Coven" chips deep-link into the Coven tab's sections.
+// Coven renders async, so poll briefly for the target instead of assuming
+// it is already in the DOM.
+function covenJump(sel) {
+  go('coven');
+  const t0 = Date.now();
+  const iv = setInterval(() => {
+    const el = document.querySelector(sel);
+    if (el) {
+      clearInterval(iv);
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    } else if (Date.now() - t0 > 6000) clearInterval(iv);
+  }, 150);
 }
 
 function renderDiscover() {
   track('discover_opened', null, { dedupeKey: 'discover-open', dedupeMs: 8000 });
-  setView('<div class="view-head"><h2 class="serif">' + icon('sparkles') + ' Discover</h2>' +
-    '<p class="note">What are you in the mood for?</p></div>' +
-    '<div class="disc-list">' +
-    discCard('dice', 'Surprise Me', 'Can\u2019t decide what to read? Let Cozy Libram pick something from your TBR.', 'pick') +
-    discCard('calendar', 'New Releases', 'Fresh and upcoming books from your favorite authors.', 'releases') +
-    discCard('user', 'Authors You Might Like', 'Find missing books from authors you already love.', 'authors') +
-    discCard('friends', 'From Friends', 'Books your coven couldn\u2019t put down.', 'coven') +
-    discCard('search', 'Search Books', 'Search millions of titles to add to your library.', 'search') +
+  setView(
+    '<div class="disc-hero"><span class="disc-hero-ic">' + icon('sparkles') + '</span>' +
+    '<h2 class="serif">What are you in the mood for?</h2>' +
+    '<p>Find your next favorite book, or let us surprise you.</p></div>' +
+
+    '<button class="disc-surprise" data-dtile="pick">' +
+    '<span class="disc-ic">' + icon('dice') + '</span>' +
+    '<span class="disc-tx"><b>Surprise Me</b><small>Pick something from your TBR</small></span>' +
+    '<span class="disc-go" aria-hidden="true">→</span></button>' +
+
+    '<div class="disc-tiles">' +
+    discTile('heart', 'My Favorites', 'Books you\u2019ve loved', 'favorites') +
+    discTile('covers', 'Similar Books', 'Like this one', 'similar') +
+    discTile('user', 'Authors', 'Your favorite authors', 'authors') +
+    discTile('calendar', 'New Releases', 'Fresh picks', 'releases') +
     '</div>' +
-    '<div class="disc-releases"><button class="btn sm" id="rel-check">' + icon('sparkles') + ' Check for new releases</button>' +
-    '<div id="release-results"></div></div>');
+
+    '<div id="disc-sim" hidden></div>' +
+
+    '<button class="disc-search" data-dtile="search">' +
+    '<span class="disc-ic">' + icon('search') + '</span>' +
+    '<span class="disc-tx"><b>Search the Library &amp; Beyond</b>' +
+    '<small>Search across your library and external sources</small></span>' +
+    '<span class="disc-go" aria-hidden="true">→</span></button>' +
+
+    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your Coven</h3>' +
+    '<button class="taplink" id="disc-coven-all">View All →</button></div>' +
+    '<div class="chips">' +
+    '<button class="chip" data-cj="#reco-slot">Recommendations</button>' +
+    '<button class="chip" data-cj="#cc-friends">Shared Shelves</button>' +
+    '<button class="chip" data-cj="#stats-slot">Friend Activity</button>' +
+    '</div></div>' +
+
+    '<div class="disc-releases"><div id="release-results"></div></div>');
   wireReleaseCheck();
   renderVisibleReleases(); // v150: restore the release list across re-renders
-  document.querySelectorAll('[data-disc]').forEach(c => c.addEventListener('click', () => {
-    const t = c.dataset.disc;
+
+  document.querySelectorAll('[data-dtile]').forEach(el => el.addEventListener('click', () => {
+    const t = el.dataset.dtile;
     if (t === 'pick') go('pick');
     else if (t === 'authors') go('authors');
-    else if (t === 'coven') go('coven');
-    else if (t === 'releases') { // v134: the card itself runs the release check
-      const b = document.getElementById('rel-check');
-      if (b) b.click();
-    }
     else if (t === 'search') { addTab = 'search'; go('add'); }
+    else if (t === 'favorites') { // v173 home-tile behavior: the shelf lives on Library home
+      filter = 'all'; ownFilter = 'all'; query = '';
+      go('library');
+      const f = document.querySelector('.fav-shelf');
+      if (f && f.scrollIntoView) f.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    }
+    else if (t === 'similar') {
+      const p = document.getElementById('disc-sim');
+      p.hidden = !p.hidden;
+      if (!p.hidden) {
+        p.innerHTML = similarSeedHTML();
+        p.querySelectorAll('[data-seed]').forEach(s =>
+          s.addEventListener('click', () => openDetail(s.dataset.seed)));
+      }
+    }
+    // 'releases' is owned by wireReleaseCheck (shared with the Wishlist button).
   }));
+  document.getElementById('disc-coven-all').addEventListener('click', () => go('coven'));
+  document.querySelectorAll('[data-cj]').forEach(c =>
+    c.addEventListener('click', () => covenJump(c.dataset.cj)));
 }

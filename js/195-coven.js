@@ -304,7 +304,7 @@ function renderCovenMain(code, lists, priv) {
   }
 
   // Friends
-  html += '<h2 class="section serif">My ' + covenName() + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
+  html += '<h2 class="section serif" id="cc-friends">My ' + covenName() + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
   if (!lists.friends.length) {
     html += '<p class="note" style="text-align:center">No friends yet — share your invite code above.</p>';
   } else {

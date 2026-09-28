@@ -1496,16 +1496,51 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 }
 .bottom-nav button.nav-add .add-fab svg { width: 26px; height: 26px; }
 .bottom-nav button.nav-add.active { color: var(--accent); }
-.disc-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.disc-card {
-  display: flex; align-items: center; gap: 14px; width: 100%;
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 14px; cursor: pointer; text-align: left; color: inherit; font: inherit;
+/* ================= v175: Discover per mockup ================= */
+.disc-hero { text-align: center; padding: 20px 16px 4px; }
+.disc-hero-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 14px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.disc-card:active { transform: scale(0.99); }
+.disc-hero-ic svg { width: 24px; height: 24px; }
+.disc-hero h2 { font-size: 22px; margin: 10px 0 4px; }
+.disc-hero p { color: var(--muted); font-size: 14px; margin: 0; }
+.disc-surprise, .disc-search {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; margin: 14px 0; cursor: pointer; text-align: left;
+  color: inherit; font: inherit;
+}
+.disc-surprise:active, .disc-search:active, .disc-tile:active { transform: scale(0.99); }
+.disc-surprise .disc-ic { width: 52px; height: 52px; border-radius: 14px; }
+.disc-surprise .disc-ic svg { width: 28px; height: 28px; }
+.disc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0; }
+@media (min-width: 700px) { .disc-tiles { grid-template-columns: repeat(4, 1fr); } }
+.disc-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; cursor: pointer; color: inherit; font: inherit; text-align: left;
+}
+.disc-tile b { font-size: 14px; }
+.disc-tile small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.disc-tile:disabled { opacity: 0.55; cursor: default; }
+.disc-coven { margin: 20px 0 6px; }
+.disc-coven-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.disc-coven-head h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.disc-coven-head h3 svg { width: 20px; height: 20px; color: var(--accent); }
+#disc-sim { margin: 4px 0 6px; }
+#disc-sim > .note { margin: 6px 2px; }
+.sim-seeds { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; }
+.sim-seed { background: none; border: 0; padding: 0; width: 92px; flex: 0 0 auto;
+  color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.sim-seed img { width: 92px; height: 138px; object-fit: cover; border-radius: 8px; display: block; }
+.sim-seed .sim-nocover { width: 92px; height: 138px; }
+.sim-seed small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; margin-top: 4px; font-size: 11px; line-height: 1.3; color: var(--muted); }
 .disc-ic {
   width: 44px; height: 44px; flex: none; border-radius: 12px;
-  background: var(--bg); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
   display: flex; align-items: center; justify-content: center;
 }
 .disc-ic svg { width: 24px; height: 24px; }

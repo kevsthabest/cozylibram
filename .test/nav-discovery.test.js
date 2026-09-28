@@ -1,4 +1,4 @@
-// Tests for v121 — P0 navigation rework (UI Improvement Pass).
+// Tests for v121 — P0 navigation rework (UI Improvement Pass), restyled v175.
 //
 // Covered: five-tab bottom nav (Library, Discover, +Add center, Stats, Coven),
 // navTab parent mapping for sub-views, Discover landing cards routing to real
@@ -71,27 +71,44 @@ run("go('discover')");
 const viewHTML = q('#view').innerHTML;
 ok('discover: asks the mood question',
   viewHTML.indexOf('What are you in the mood for?') !== -1);
-const cards = qa('#view [data-disc]').map(c => c.dataset.disc).sort();
-ok('discover: five routing cards present',
-  JSON.stringify(cards) === JSON.stringify(['authors', 'coven', 'pick', 'releases', 'search']));
-ok('discover: every card has a plain-language explanation',
-  qa('#view [data-disc]').every(c => (c.querySelector('.disc-tx small') || { textContent: '' }).textContent.trim().length > 10));
-ok('discover: release check button + results box present',
-  !!q('#rel-check') && !!q('#release-results'));
+const tiles = qa('#view [data-dtile]').map(c => c.dataset.dtile).sort();
+ok('discover: mockup tiles present (v175)',
+  JSON.stringify(tiles) === JSON.stringify(['authors', 'favorites', 'pick', 'releases', 'search', 'similar']));
+ok('discover: every tile has a plain-language explanation',
+  qa('#view [data-dtile]').every(c => (c.querySelector('small') || { textContent: '' }).textContent.trim().length > 3));
+ok('discover: New Releases tile + inline results box present',
+  !!q('[data-dtile="releases"]') && !!q('#release-results'));
+ok('discover: From Your Coven section with deep-link chips',
+  !!q('#disc-coven-all') && qa('#view [data-cj]').length === 3);
 
-// Card routing — each target is a real feature, never a dead end.
-q('#view [data-disc="pick"]').click(); // pick
+// Tile routing — each target is a real feature, never a dead end.
+q('#view [data-dtile="pick"]').click(); // Surprise Me
 ok('discover: Surprise Me opens roulette', run("view") === 'pick');
 run("go('discover')");
-q('#view [data-disc="authors"]').click(); // authors
-ok('discover: Authors card opens author discovery', run("view") === 'authors');
+q('#view [data-dtile="authors"]').click(); // Authors
+ok('discover: Authors tile opens author discovery', run("view") === 'authors');
 run("go('discover')");
-q('#view [data-disc="coven"]').click(); // coven
-ok('discover: From Friends opens coven', run("view") === 'coven');
-run("go('discover')");
-q('#view [data-disc="search"]').click(); // search
+q('#view [data-dtile="search"]').click(); // Search the Library & Beyond
 ok('discover: Search opens add in search mode (v172: unified view)',
   run("view") === 'add' && run("addTab") === 'search');
+run("go('discover')");
+q('#view [data-dtile="favorites"]').click(); // My Favorites
+ok('discover: My Favorites opens the library home', run("view") === 'library');
+run("go('discover')");
+run(`library.push({ id: 'sim1', title: 'Seed Book', authors: ['Ann Author'], status: 'read',
+  progress: 100, pageCount: 200, isbn: '', publishedDate: '', cover: '', tropes: [],
+  publicRating: null, ratingsCount: 0, genres: [], myRating: 5, ratings: {}, axes: [],
+  favorite: true, notes: '', description: '', quotes: [], log: [],
+  dateAdded: '2026-01-01T00:00:00.000Z', dateFinished: null });`);
+q('#view [data-dtile="similar"]').click(); // Similar Books
+ok('discover: Similar Books expands the seed picker',
+  q('#disc-sim').hidden === false && !!q('#disc-sim [data-seed]'));
+q('#disc-sim [data-seed]').click();
+ok('discover: seed opens the book detail sheet', !!q('#m-back'));
+q('#m-x').click();
+run(`go('discover');`);
+q('#view [data-cj="#reco-slot"]').click(); // Coven chip
+ok('discover: Coven chip navigates to the coven tab', run("view") === 'coven');
 
 // --- 5. Wishlist stays reachable via Library ---
 run("go('library')");

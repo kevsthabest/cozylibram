@@ -97,14 +97,14 @@ ok('authors ranked by shelf count then rating',
   const pills = [...window.document.querySelectorAll('.up-pill')].map(p => p.textContent);
   ok('a book releasing today counts as upcoming', pills.some(p => /today/.test(p)));
 
-  // v134: the New Releases card itself runs the check (it used to be a dead div)
+  // v134/v175: the New Releases tile itself runs the check (it used to be a dead div)
   runInWindow(`
     view = 'discover'; renderDiscover();
     window.__realCheck = checkNewReleases;
     checkNewReleases = async () => ({ list: [{ hcId: 99, title: 'Card Book', authors: ['Ann Author'],
       releaseDate: '${isoIn(20)}', cover: '', description: '', pages: 100, isbns: [] }], failed: 0, total: 1 });
   `);
-  const relCard = window.document.querySelector('[data-disc="releases"]');
+  const relCard = window.document.querySelector('[data-dtile="releases"]');
   ok('New Releases is a real tappable card', !!relCard && relCard.tagName === 'BUTTON');
   relCard.click();
   await new Promise(r => setTimeout(r, 300));
@@ -119,7 +119,7 @@ ok('authors ranked by shelf count then rating',
   ok('total failure is counted, not mistaken for "caught up"',
     bad.list.length === 0 && bad.failed === bad.total && bad.total === 2);
   runInWindow(`view = 'discover'; renderDiscover();`);
-  window.document.querySelector('[data-disc="releases"]').click();
+  window.document.querySelector('[data-dtile="releases"]').click();
   await new Promise(r => setTimeout(r, 2500));
   ok('card shows an honest error when Hardcover is unreachable',
     /Couldn't reach Hardcover/.test(window.document.getElementById('release-results').textContent));

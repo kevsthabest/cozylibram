@@ -50,7 +50,7 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
 
   // authors live under the Discover tab now (v121)
   runInWindow(`go('discover')`);
-  ok('authors reachable from the Discover landing', !!q('#view [data-disc="authors"]'));
+  ok('authors reachable from the Discover landing', !!q('#view [data-dtile="authors"]'));
 
   // list view renders one row per author
   runInWindow(`renderAuthors()`);
