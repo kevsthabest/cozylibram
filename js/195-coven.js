@@ -14,6 +14,10 @@ const COVEN_NAMES = {
   candlelight: 'Salon',
   twilight:    'Night Court',
   verdant:     'Grove',
+  midnight:    'Moon Court',
+  velvet:      'Rose Court',
+  abyss:       'The Deep',
+  frost:       'Winter Court',
 };
 function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
 function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }

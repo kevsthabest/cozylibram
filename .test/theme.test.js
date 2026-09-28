@@ -37,14 +37,14 @@ const themeSel = q('#th-theme');
 const themeOpts = qa('#th-theme option');
 const swatches = qa('#th-accent .sw');
 ok('theme picker is a select dropdown', themeSel && themeSel.tagName === 'SELECT');
-ok('six theme options', themeOpts.length === 6);
-ok('theme option values', themeOpts.map(o => o.value).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant');
+ok('ten theme options', themeOpts.length === 10);
+ok('theme option values', themeOpts.map(o => o.value).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant,midnight,velvet,abyss,frost');
 ok('options show the per-theme social name', themeOpts.every(o => o.textContent.includes('·')));
 ok('dark option names the coven', themeOpts.find(o => o.value === 'dark').textContent.includes('Coven'));
 ok('twilight option names the night court', themeOpts.find(o => o.value === 'twilight').textContent.includes('Night Court'));
 ok('light option is selected', themeOpts.find(o => o.value === 'light').hasAttribute('selected'));
-ok('eight accent swatches', swatches.length === 8);
-ok('swatch keys', swatches.map(b => b.dataset.a).join(',') === 'rose,violet,gold,teal,crimson,ember,ocean,sage');
+ok('twelve accent swatches', swatches.length === 12);
+ok('swatch keys', swatches.map(b => b.dataset.a).join(',') === 'rose,violet,gold,teal,crimson,ember,ocean,sage,blush,copper,mint,lilac');
 ok('violet swatch active', swatches.find(b => b.dataset.a === 'violet').classList.contains('active'));
 ok('swatch colors set', swatches.every(b => b.style.getPropertyValue('--sw').startsWith('#')));
 
@@ -61,12 +61,19 @@ swatches.find(b => b.dataset.a === 'teal').click();
 ok('click teal: stored', window.localStorage.getItem('accent') === 'teal');
 ok('click teal: applied live', window.document.documentElement.dataset.accent === 'teal');
 
-// 5. CSS carries both themes, all accents, and no stale --rose vars
+// 5. CSS carries all themes, all accents, and no stale --rose vars
 const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
-ok('all theme blocks exist', ['dark', 'light', 'hearthside', 'candlelight', 'twilight', 'verdant'].every(t => css.includes('[data-theme="' + t + '"]')));
-ok('all accent blocks exist', ['violet', 'gold', 'teal', 'crimson', 'ember', 'ocean', 'sage'].every(a => css.includes('[data-accent="' + a + '"]')));
+const allThemes = ['dark', 'light', 'hearthside', 'candlelight', 'twilight', 'verdant', 'midnight', 'velvet', 'abyss', 'frost'];
+ok('all theme blocks exist', allThemes.every(t => css.includes('[data-theme="' + t + '"]')));
+ok('all accent blocks exist', ['violet', 'gold', 'teal', 'crimson', 'ember', 'ocean', 'sage', 'blush', 'copper', 'mint', 'lilac'].every(a => css.includes('[data-accent="' + a + '"]')));
 ok('no var(--rose) references remain', !css.includes('var(--rose'));
 ok('swatch styles exist', css.includes('.swatches') && css.includes('.sw.active'));
+// v170: every theme carries a floral tint for the decorative vine
+ok('every theme defines --floral-tint', allThemes.every(t => {
+  const m = css.match(new RegExp('\\[data-theme="' + t + '"\\][^}]*--floral-tint:\\s*(#[0-9a-f]{6})'));
+  return !!m;
+}));
+ok('floral vine rule on modal (desktop)', css.includes('.modal::after') && css.includes('mask-image') && css.includes('min-width: 900px'));
 
 // 6. Nav uses custom SVG icons, not emoji (v37: Settings moved to the account menu)
 const navBtns = qa('.bottom-nav button');
@@ -90,6 +97,21 @@ window.localStorage.setItem('theme', 'nope');
 ok('unknown theme falls back to dark', window.getTheme() === 'dark');
 window.applyTheme();
 ok('fallback applies dataset dark', window.document.documentElement.dataset.theme === 'dark');
+
+// 7. v170: new themes apply, persist, and name their social circle
+window.localStorage.setItem('theme', 'midnight');
+window.applyTheme();
+ok('midnight applied', window.document.documentElement.dataset.theme === 'midnight');
+ok('meta theme-color midnight', q('meta[name="theme-color"]').getAttribute('content') === '#191a30');
+ok('midnight names the moon court', q('.bottom-nav [data-nav="coven"] span').textContent === 'Moon Court');
+for (const [th, name] of [['velvet', 'Rose Court'], ['abyss', 'The Deep'], ['frost', 'Winter Court']]) {
+  window.localStorage.setItem('theme', th);
+  window.applyTheme();
+  ok(th + ' names ' + name, q('.bottom-nav [data-nav="coven"] span').textContent === name);
+}
+window.localStorage.setItem('accent', 'blush');
+window.applyTheme();
+ok('blush accent applied', window.document.documentElement.dataset.accent === 'blush');
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

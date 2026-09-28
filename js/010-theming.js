@@ -8,6 +8,10 @@ const THEMES = [
   { key: 'candlelight', name: 'Candlelight', meta: '#f7efdc' },
   { key: 'twilight',    name: 'Twilight',    meta: '#0e1120' },
   { key: 'verdant',     name: 'Verdant',     meta: '#0d140e' },
+  { key: 'midnight',    name: 'Midnight',    meta: '#191a30' },
+  { key: 'velvet',      name: 'Velvet',      meta: '#1c1219' },
+  { key: 'abyss',       name: 'Abyss',       meta: '#0b1416' },
+  { key: 'frost',       name: 'Frost',       meta: '#edf1f6' },
 ];
 const ACCENTS = [
   { key: 'rose',   name: 'Rose',   color: '#e5488f' },
@@ -18,6 +22,10 @@ const ACCENTS = [
   { key: 'ember',   name: 'Ember',   color: '#e0722a' },
   { key: 'ocean',   name: 'Ocean',   color: '#3f8fd6' },
   { key: 'sage',    name: 'Sage',    color: '#8aa864' },
+  { key: 'blush',   name: 'Blush',   color: '#f2a3c0' },
+  { key: 'copper',  name: 'Copper',  color: '#c47b4a' },
+  { key: 'mint',    name: 'Mint',    color: '#6fce9e' },
+  { key: 'lilac',   name: 'Lilac',   color: '#b9a3f2' },
 ];
 function getTheme() {
   const t = localStorage.getItem('theme') || 'dark';
