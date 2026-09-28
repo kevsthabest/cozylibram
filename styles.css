@@ -1125,15 +1125,27 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .btn.sm { padding: 6px 10px; font-size: 13px; }
 .shelf-books { display: flex; align-items: flex-end; gap: 6px; padding: 12px 14px 0; overflow-x: auto; }
 .spine { flex: 0 0 auto; border-radius: 4px 4px 2px 2px; cursor: pointer; position: relative;
-  background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 18%, rgba(255,255,255,.02) 50%, rgba(0,0,0,.30)), var(--sc);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -2px 3px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.35);
+  /* v186 foil: near-black cover-tinted base — --sc (cover color or
+     deterministic fallback) darkened under a black veil, cylindrical sheen kept */
+  background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(255,255,255,.07) 22%, rgba(255,255,255,.015) 50%, rgba(0,0,0,.40)),
+    linear-gradient(180deg, rgba(0,0,0,.74), rgba(0,0,0,.58)), var(--sc);
+  box-shadow: inset 0 1px 0 rgba(255,215,130,.18), inset 0 -2px 3px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.35);
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: 7px 3px; }
-.spine-band { width: 70%; height: 3px; border-radius: 2px; background: rgba(240,210,140,.55); flex: 0 0 auto; }
-.spine-title { writing-mode: vertical-rl; font-size: 11px; font-weight: 700; color: #f7f1e3;
-  letter-spacing: .04em; max-height: 62%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(0,0,0,.5); }
-.spine-author { writing-mode: vertical-rl; font-size: 9px; color: rgba(247,241,227,.75);
+/* v186: double hairline gold rules, top and bottom of each spine */
+.spine-rule { width: 62%; height: 3px; flex: 0 0 auto;
+  background:
+    linear-gradient(90deg, transparent, rgba(244,211,130,.9), transparent) 0 0 / 100% 1px no-repeat,
+    linear-gradient(90deg, transparent, rgba(244,211,130,.9), transparent) 0 100% / 100% 1px no-repeat; }
+.spine-title { writing-mode: vertical-rl; font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; max-height: 58%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  /* v186: gold-foil gradient lettering */
+  background: linear-gradient(180deg, #fbeec2 0%, #eed07e 30%, #b3872a 52%, #f4dd92 72%, #96701d 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .spine-title { color: #eed07e; background: none; } }
+.spine-author { writing-mode: vertical-rl; font-size: 9px; letter-spacing: .06em;
+  color: rgba(233,202,110,.78);
   max-height: 22%; overflow: hidden; white-space: nowrap; }
 .shelf-plank { height: 13px; margin: 0 2px; border-radius: 3px;
   background: linear-gradient(#9a6535, #6f4525 60%, #54331b);
@@ -1146,7 +1158,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .shelf-books { overflow-x: visible; }
 .spine { transition: transform .32s cubic-bezier(.3,.7,.4,1), box-shadow .32s; }
 .spine.pulling { transform: translateY(-52px) scale(1.05); z-index: 2;
-  box-shadow: 0 18px 32px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.25); }
+  box-shadow: 0 18px 32px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,215,130,.3); }
 .pull-overlay { position: fixed; inset: 0; z-index: 60; display: flex;
   align-items: center; justify-content: center; background: rgba(5,3,8,.55);
   opacity: 0; transition: opacity .3s; pointer-events: none; }

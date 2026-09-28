@@ -38,6 +38,10 @@ ok('2 spines for 2 favorites', qa('.fav-shelf .spine').length === 2);
 ok('spine shows title', qa('.fav-shelf .spine-title')[0].textContent.includes('Fav Book fa'));
 ok('thicker spine for more pages',
   parseInt(qa('.fav-shelf .spine')[0].style.width) > parseInt(qa('.fav-shelf .spine')[1].style.width));
+// v186 foil: double hairline rules top and bottom of every spine
+ok('foil spines carry two hairline rules',
+  qa('.fav-shelf .spine').every(s => s.querySelectorAll('.spine-rule').length === 2));
+ok('no legacy single band remains', qa('.fav-shelf .spine-band').length === 0);
 
 // 3-6 need async (spine pull animation). Books here have no covers -> short pull.
 (async () => {
