@@ -72,7 +72,10 @@ function cloudErrMsg(e) {
 
 async function cloudPushNow() {
   const sb = await cloudClient().catch(() => null);
-  if (!sb || !cloudUser || cloudSyncing) return false;
+  /* v167: log every outcome. A silently dropped push is exactly what the
+     Observatory log viewer exists to catch. */
+  if (!sb || !cloudUser) { AppLog.warn('sync', 'push skipped: not signed in'); return false; }
+  if (cloudSyncing) { AppLog.warn('sync', 'push skipped: another sync in flight'); return false; }
   cloudSyncing = true;
   syncBegin(); // v144: the dot covers push activity too
   try {
@@ -95,8 +98,10 @@ async function cloudPushNow() {
       if (delError) throw delError;
     }
     cloudLastSync = Date.now();
+    AppLog.info('sync', 'push ok: ' + rows.length + ' books, ' + tombstones.length + ' tombstones');
     return true;
   } catch (e) {
+    AppLog.error('sync', 'push failed: ' + ((e && e.message) || e));
     toast(cloudErrMsg(e));
     return false;
   } finally {
@@ -179,6 +184,7 @@ function applyTombstones(rows) {
 function scheduleCloudPush() {
   if (!cloudConfigured()) return;
   clearTimeout(cloudTimer);
+  AppLog.info('sync', 'push scheduled (2.5s debounce)');
   cloudTimer = setTimeout(() => { cloudPushNow(); }, 2500);
 }
 async function cloudPullRows() {
@@ -210,7 +216,11 @@ async function cloudFirstSync(opts) {
     await cloudPushNow();
     await repairFriendPollution();
     if (announce) toast(changed ? '☁️ Library updated' : '☁️ Already up to date');
-  } catch (e) { toast(cloudErrMsg(e)); }
+    AppLog.info('sync', 'first sync done' + (changed ? ' (library changed)' : ''));
+  } catch (e) {
+    AppLog.error('sync', 'first sync failed: ' + ((e && e.message) || e));
+    toast(cloudErrMsg(e));
+  }
   syncEnd(changed);
   return { changed };
 }
@@ -364,6 +374,10 @@ async function cloudSignIn(email, password) {
 }
 async function cloudSignOut() {
   const sb = await cloudClient().catch(() => null);
+  /* v167: answer the pending-push question in the log — if a debounced
+     push was scheduled but never ran, the next "push skipped: not signed
+     in" entry explains where the change went. */
+  AppLog.info('sync', 'sign-out requested' + (cloudSyncing ? ' (a sync was in flight)' : ''));
   if (sb) await sb.auth.signOut().catch(() => {});
   // The SIGNED_OUT event also triggers leaveApp; the cloudUser guard keeps it
   // from running twice (e.g. when the event doesn't fire while offline).

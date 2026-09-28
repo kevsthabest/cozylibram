@@ -19,7 +19,7 @@ let adminCustomFrom = '';
 let adminCustomTo = '';
 let adminRowsCache = {}; // rangeKey -> rows
 let adminAggCache = {}; // rangeKey -> aggregate
-let adminTab = 'analytics'; // analytics | tropes (Trope Lab)
+let adminTab = 'analytics'; // analytics | tropes (Trope Lab) | logs (v167)
 
 async function refreshAdminStatus() {
   isAppAdmin = false;
@@ -211,6 +211,7 @@ function renderAdmin() {
     '<div class="ob-ranges">' +
     '<button class="btn sm' + (adminTab === 'analytics' ? '' : ' ghost') + '" data-atab="analytics">Analytics</button>' +
     '<button class="btn sm' + (adminTab === 'tropes' ? '' : ' ghost') + '" data-atab="tropes">' + icon('bulb') + ' Trope Lab</button>' +
+    '<button class="btn sm' + (adminTab === 'logs' ? '' : ' ghost') + '" data-atab="logs">' + icon('warn') + ' Logs</button>' +
     '</div>' +
     (adminTab === 'analytics' ? rangesHTML : '') +
     '<div id="ob-body"><p class="note">Loading…</p></div>');
@@ -231,7 +232,55 @@ function renderAdmin() {
     renderAdminBody();
   });
   if (adminTab === 'tropes') renderTropeLab();
+  else if (adminTab === 'logs') renderLogsTab();
   else renderAdminBody();
+}
+
+/* ---------------- v167: on-device log viewer ----------------
+   Read AppLog (js/002-log.js). On this device only — nothing is uploaded.
+   Reproduce the problem first, then open this tab before clearing site
+   data (clearing wipes the log along with everything else). */
+let adminLogFilter = 'all'; // all | warn | error
+function renderLogsTab() {
+  const body = document.getElementById('ob-body');
+  if (!body) return;
+  const paint = () => {
+    const level = adminLogFilter === 'all' ? 'info' : adminLogFilter;
+    const entries = AppLog.entries(level);
+    const filtBtn = (id, label) =>
+      '<button class="btn sm' + (adminLogFilter === id ? '' : ' ghost') + '" data-logf="' + id + '">' + label + '</button>';
+    const shown = entries.slice(0, 150);
+    const rows = shown.map(e =>
+      '<div class="log-row"><span class="log-time">' + esc(new Date(e.t).toLocaleString()) + '</span>' +
+      '<span class="log-badge ' + e.level + '">' + e.level + '</span>' +
+      '<span class="log-tag">' + esc(e.tag) + '</span>' +
+      '<span class="log-msg">' + esc(e.msg) + '</span></div>').join('');
+    body.innerHTML =
+      '<div class="ob-card"><h3>' + icon('warn') + ' Error &amp; activity log</h3>' +
+      '<p class="note">On this device only — these entries never leave your device. Newest first. ' +
+      'Cover changes, sync pushes, and uncaught errors all land here.</p>' +
+      '<div class="log-tools">' +
+      filtBtn('all', 'All') + filtBtn('warn', 'Warnings+') + filtBtn('error', 'Errors only') +
+      '<button class="btn sm ghost" id="log-refresh">Refresh</button>' +
+      '<button class="btn sm ghost" id="log-clear">Clear log</button>' +
+      '<span class="note">' + entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies') +
+      (entries.length > shown.length ? ' (showing ' + shown.length + ')' : '') + '</span>' +
+      '</div>' +
+      (rows ? '<div class="log-list">' + rows + '</div>'
+            : '<p class="note">No log entries at this level yet.</p>') +
+      '</div>';
+    body.querySelectorAll('[data-logf]').forEach(b => b.addEventListener('click', () => {
+      adminLogFilter = b.dataset.logf;
+      paint();
+    }));
+    const refresh = document.getElementById('log-refresh');
+    if (refresh) refresh.addEventListener('click', paint);
+    const clear = document.getElementById('log-clear');
+    if (clear) clear.addEventListener('click', () => {
+      if (confirm('Clear the on-device log?')) { AppLog.clear(); paint(); }
+    });
+  };
+  paint();
 }
 
 async function renderAdminBody() {

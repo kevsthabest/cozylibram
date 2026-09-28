@@ -1328,6 +1328,19 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ob-scroll { overflow-x: auto; }
 .ob-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ob-table th, .ob-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.08)); }
+/* ================= v167: Observatory log viewer ================= */
+.log-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.log-row { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; padding: 7px 9px;
+  background: var(--chip, rgba(255,255,255,0.05)); border-radius: 8px; }
+.log-time { opacity: 0.6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.log-tag { opacity: 0.7; white-space: nowrap; }
+.log-msg { flex: 1; overflow-wrap: anywhere; }
+.log-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+.log-badge.error { background: var(--danger); color: #fff; }
+.log-badge.warn { background: #d9a13b; color: #221a08; }
+.log-badge.info { background: var(--chip, rgba(255,255,255,0.12)); opacity: 0.8; }
+.log-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0 4px; }
 /* ================= v166: Trope Lab review queue ================= */
 .tl-review-book { border-top: 1px solid var(--line, rgba(255,255,255,0.08)); padding: 10px 0; }
 .tl-review-book:first-of-type { border-top: none; }

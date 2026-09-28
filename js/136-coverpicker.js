@@ -135,6 +135,10 @@ function chooseCover(bookId, url) {
   b.cover = url;
   b._mtime = Date.now();
   saveLibrary();
+  /* v167: trace the cover change end to end — the log shows whether the
+     follow-up cloud push actually ran. */
+  AppLog.info('cover', 'cover set for "' + (b.title || bookId) + '"' +
+    (url.indexOf('data:') === 0 ? ' (uploaded image)' : ''));
   closeCoverPicker();
   const wrap = document.querySelector('#modal-root .modal-head .cover-wrap');
   if (wrap) wrap.outerHTML = coverHTML(b);
@@ -170,7 +174,10 @@ function openCoverPicker(bookId) {
     if (!f) return;
     try {
       chooseCover(bookId, await fileToCoverDataURL(f));
-    } catch (err) { toast('Could not read that image'); }
+    } catch (err) {
+      AppLog.error('cover', 'upload failed: ' + ((err && err.message) || err));
+      toast('Could not read that image');
+    }
   });
   fetchCoverCandidates(b).then(cands => {
     const grid = document.getElementById('cp-grid');
