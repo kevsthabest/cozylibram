@@ -48,11 +48,14 @@ ok('hero: meta row shows pages + year + ISBN', (() => {
   return t.includes('200 pages') && t.includes('2021') && t.includes('9781250123456');
 })());
 ok('hero: public stars shown', q('.d-hero .pub-rating').textContent.includes('★★★★'));
-// --- v179: desktop panel — hero text wrapped for the two-column layout ---
-ok('hero text wrapped for the desktop two-column panel (v179)', !!q('.d-hero .d-hero-text h2'));
-ok('desktop panel CSS present (v180)', (() => {
+// --- v181: desktop panel — approved two-column hero composition ---
+ok('hero text wrapped for the desktop two-column panel', !!q('.d-hero .d-hero-text h2'));
+ok('desktop panel CSS uses the approved two-column hero', (() => {
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
-  return css.includes('.modal.detail-v174') && css.includes('.d-primary') &&
+  return css.includes('grid-template-columns: 190px minmax(0, 1fr)') &&
+    css.includes('grid-template-rows: auto auto') &&
+    css.includes('grid-column: 2') &&
+    css.includes('grid-row: 1 / span 2') &&
     css.includes('padding: 26px 120px 26px 34px');
 })());
 
