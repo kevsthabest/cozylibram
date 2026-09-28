@@ -761,6 +761,7 @@ function renderDetailModal(b, viaBook) {
     '</div>' +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
+    '<button class="btn primary d-primary" id="m-primary"></button>' +
     '</div>' +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
     // collapsible sections; every control keeps its id).
@@ -780,8 +781,6 @@ function renderDetailModal(b, viaBook) {
     '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
     '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
     '<div id="m-progress"></div>' +
-    '<div class="field"><label>' + icon('history') + ' Reading log</label>' +
-    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
 
     '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
     '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
@@ -802,14 +801,8 @@ function renderDetailModal(b, viaBook) {
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
 
-    '<div class="field"><label>Total pages</label>' +
-    '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
-    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
-    '<div class="field"><label>Current page</label>' +
-    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
-    '<div class="field"><label>' + icon('calendar') + ' Release date</label>' +
-    '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
-    '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
+    '<div class="field"><label>' + icon('history') + ' Reading log</label>' +
+    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
 
     '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
@@ -826,10 +819,14 @@ function renderDetailModal(b, viaBook) {
         '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
     })() + '</div></div>' +
 
-    '<div class="field"><button class="btn ghost block" id="m-upnext">' +
-    (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next') +
-    '</button></div>' +
-    '<button class="btn danger block" id="m-del2">' + icon('trash') + ' Remove from Library</button>' +
+    '<div class="field secondary"><label>Total pages</label>' +
+    '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
+    (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
+    '<div class="field secondary"><label>Current page</label>' +
+    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
+    '<div class="field secondary"><label>' + icon('calendar') + ' Release date</label>' +
+    '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
+    '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-tropes" role="tabpanel" hidden>' +
@@ -848,10 +845,11 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-quotes"></div></div>' +
     '</div>' +
 
-    '<div class="modal-actions"><button class="btn primary" id="m-primary"></button>' +
+    '<div class="modal-actions">' +
     '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
     '<div class="more-menu" id="m-moremenu" hidden>' +
     '<button class="more-item" id="m-share">' + icon('share') + ' Share</button>' +
+    '<button class="more-item" id="m-upnext">' + icon('upnext') + ' Add to Up Next</button>' +
     '<button class="more-item danger" id="m-del">Remove</button>' +
     '</div></div>' +
     '<button class="btn" id="m-save">Save</button></div>' +
@@ -1017,9 +1015,6 @@ function renderDetailModal(b, viaBook) {
   };
   root.querySelectorAll('.d-tab').forEach(t =>
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
-  // v174: the visible Remove button reuses the ⋮ menu's delete flow.
-  document.getElementById('m-del2').addEventListener('click', () =>
-    document.getElementById('m-del').click());
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   // v130: description read-more toggle — hidden when the text fits unclamped.
@@ -1170,6 +1165,7 @@ function renderDetailModal(b, viaBook) {
     else { upNextAdd(b.id); toast('Added to Up Next'); }
     document.getElementById('m-upnext').innerHTML =
       upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next';
+    moreMenu.hidden = true;
   });
   document.getElementById('m-share').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {

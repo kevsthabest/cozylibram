@@ -50,9 +50,9 @@ ok('hero: meta row shows pages + year + ISBN', (() => {
 ok('hero: public stars shown', q('.d-hero .pub-rating').textContent.includes('★★★★'));
 // --- v179: desktop panel — hero text wrapped for the two-column layout ---
 ok('hero text wrapped for the desktop two-column panel (v179)', !!q('.d-hero .d-hero-text h2'));
-ok('desktop panel CSS present (v179)', (() => {
+ok('desktop panel CSS present (v180)', (() => {
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
-  return css.includes('.modal.detail-v174') && css.includes('.d-hero-text') &&
+  return css.includes('.modal.detail-v174') && css.includes('.d-primary') &&
     css.includes('padding: 26px 120px 26px 34px');
 })());
 
@@ -69,7 +69,24 @@ ok('tabs: Tropes + Notes start hidden', q('#dtab-tropes').hidden && q('#dtab-not
 ok('action bar intact with primary action', !!q('#m-primary'));
 ok('details tab: reading log lists the session',
   q('#m-loglist').textContent.includes('30 pages'));
-ok('details tab: visible Remove button', !!q('#m-del2'));
+ok('remove lives in the overflow menu', !!q('#m-moremenu #m-del'));
+ok('up next lives in the overflow menu', !!q('#m-moremenu #m-upnext'));
+
+// --- 3b. Hero-first hierarchy (v180): primary action in the hero, details ordered ---
+ok('hero: primary action sits in the hero', !!q('.d-hero #m-primary'));
+ok('hero: primary is NOT duplicated in the bottom bar', !q('.modal-actions #m-primary'));
+ok('hero order: cover, then title, then primary', (() => {
+  const h = q('.d-hero').innerHTML;
+  return h.indexOf('d-cover') < h.indexOf('d-hero-text') &&
+    h.indexOf('d-hero-text') < h.indexOf('id="m-primary"');
+})());
+ok('details order: description, rating, progress, shelf, ownership, moods, log, series, metadata', (() => {
+  const h = q('#dtab-details').innerHTML;
+  const order = ['id="m-desc"', 'id="f-myrating"', 'id="m-progress"', 'id="f-status"',
+    'id="f-owned"', 'id="f-axrows"', 'id="m-loglist"', 'id="m-series-wrap"', 'id="f-pagecount"'];
+  let last = -1;
+  return order.every(id => { const i = h.indexOf(id); const good = i > last; last = i; return good; });
+})());
 
 // --- 4. Tropes + Notes tabs hold their controls ---
 q('[data-dtab="tropes"]').click();
@@ -97,11 +114,12 @@ ok('save: notes persisted from the Notes tab', run(`library[0].notes`) === 'new 
 ok('save: tropes persisted from the Tropes tab',
   JSON.stringify(run(`library[0].tropes`)) === JSON.stringify(['forced proximity']));
 
-// --- 7. Visible Remove button triggers the delete flow ---
+// --- 7. Overflow-menu Remove triggers the delete flow ---
 run(`openDetail('b1');`);
 let confirmed = false;
 window.confirm = () => { confirmed = true; return false; }; // cancel the confirm
-q('#m-del2').click();
+q('#m-more').click();
+q('#m-del').click();
 ok('remove button asks for confirmation', confirmed);
 ok('cancel keeps the book', run(`library.length`) === 1 && !!q('#m-back'));
 

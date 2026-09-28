@@ -1586,8 +1586,9 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ================= v123: contextual primary + overflow menu ================= */
 .modal-actions { display: flex; gap: 8px; align-items: stretch; }
-.modal-actions #m-primary { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-.modal-actions #m-primary svg { width: 18px; height: 18px; }
+/* v180: the contextual primary action lives in the hero, under the metadata */
+.d-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 340px; margin: 14px auto 2px; padding: 13px 22px; font-size: 15px; }
+.d-primary svg { width: 18px; height: 18px; }
 .more-wrap { position: relative; flex: none; }
 .more-menu {
   position: absolute; right: 0; bottom: calc(100% + 6px); min-width: 150px;
@@ -1777,13 +1778,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
 .d-log li span { color: var(--muted); }
 .d-log li b { font-weight: 600; }
-#m-del2 { margin-top: 18px; }
 
-/* ================= v179: desktop book detail as a mockup-style panel =================
-   One component, one code path — on wide screens the same modal presents as a
-   large near-full-height panel (two-column hero, florals parked in their own
-   gutter instead of overlapping the content) rather than a small centered
-   popup. Mobile is untouched. */
+
+/* ================= v180: desktop book detail as a mockup-style panel =================
+   Centered hero on every screen (per the UX spec). On wide screens the same
+   modal presents as a large near-full-height panel — bigger cover, breathing
+   room, comfortable reading width, and the floral vine parked in its own
+   gutter instead of overlapping the content. Mobile is untouched. */
 @media (min-width: 900px) {
   .modal.detail-v174 {
     max-width: 880px;
@@ -1796,16 +1797,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     top: 70px; bottom: 26px; right: 28px; width: 62px;
     opacity: 0.55;
   }
-  /* two-column hero like the mockup: cover left, title block right */
-  .modal.detail-v174 .d-hero {
-    display: flex; align-items: center; gap: 28px;
-    text-align: left; padding: 10px 0 0;
-  }
-  .modal.detail-v174 .d-cover { flex: 0 0 auto; }
-  .modal.detail-v174 .d-cover .cover-wrap.d-cov { margin: 0; }
-  .modal.detail-v174 .d-hero-text { min-width: 0; }
-  .modal.detail-v174 .d-hero h2 { margin-top: 0; font-size: 28px; }
-  .modal.detail-v174 .d-meta { justify-content: flex-start; }
+  .modal.detail-v174 .d-hero { padding-top: 10px; }
+  .modal.detail-v174 .d-cover .cover-wrap.d-cov { width: 190px; height: 285px; }
+  .modal.detail-v174 .d-hero h2 { font-size: 30px; }
+  .modal.detail-v174 .d-primary { max-width: 380px; }
   /* sticky rails re-anchor to the new padding */
   .modal.detail-v174 .d-tabs {
     top: -26px; margin: 16px -120px 0 -34px; padding: 10px 120px 0 34px;
@@ -1814,6 +1809,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     margin: 18px -120px 0 -34px; padding: 12px 120px 0 34px;
   }
 }
+
+/* v180: details hierarchy — description reads as content, metadata sits quiet */
+.d-panel .m-desc p { line-height: 1.65; }
+.d-panel .field.secondary { margin: 10px 0; opacity: 0.8; }
 
 /* ================= v171: desktop sidebar nav ================= */
 @media (min-width: 1024px) {

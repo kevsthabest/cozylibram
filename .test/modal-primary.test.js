@@ -75,11 +75,11 @@ ok('menu: remove keeps its id', !!q('#m-moremenu #m-del'));
 q('#m-more').click();
 ok('menu: toggles closed', q('#m-moremenu').hidden === true);
 
-// --- 6. Sticky bar order: primary first, save last ---
-const barBtns = Array.from(q('.modal-actions').querySelectorAll(':scope > button, :scope > .more-wrap'));
-ok('bar: primary leads, save stays last',
-  q('.modal-actions #m-primary') && q('.modal-actions #m-save') &&
-  q('.modal-actions').innerHTML.indexOf('m-primary') < q('.modal-actions').innerHTML.indexOf('m-save'));
+// --- 6. Primary lives in the hero, not the bottom bar (v180) ---
+ok('primary: in the hero before the tabs',
+  !!q('.d-hero #m-primary') && !q('.modal-actions #m-primary'));
+ok('bar: ⋮ menu + save remain, no duplicate primary',
+  !!q('.modal-actions #m-more') && !!q('.modal-actions #m-save'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
