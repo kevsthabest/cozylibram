@@ -177,6 +177,7 @@ function wireReleaseCheck() {
       } else {
         renderReleaseResults(res.list);
         saveAutoReleases(res.list); // v149: manual checks refresh the auto cache
+        visibleReleases = res.list; // v150: survive re-renders while adding
         markReleasesSeen();
       }
     } catch (e) {
@@ -242,9 +243,21 @@ function renderUnseenReleases() {
   if (!list.length) return false;
   const box = document.getElementById('release-results');
   if (!box) return false;
+  visibleReleases = list; // v150: remember what's on screen across re-renders
   renderReleaseResults(list);
   markReleasesSeen();
   return true;
+}
+// v150: the release list currently on screen, whatever its origin (auto
+// cache or manual check). Re-rendered — minus added/dismissed/shelved —
+// whenever the view re-renders, so adding one book never wipes the rest.
+let visibleReleases = [];
+function renderVisibleReleases() {
+  if (!renderUnseenReleases() && visibleReleases.length) {
+    const list = visibleReleases.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
+    const box = document.getElementById('release-results');
+    if (box && list.length) renderReleaseResults(list);
+  }
 }
 // Silent weekly sweep. Skips when Hardcover isn't configured or the library
 // is empty; a fully-failed sweep stamps nothing so it retries next boot.
@@ -258,6 +271,9 @@ async function maybeAutoReleaseCheck() {
     if (res.total > 0 && res.failed >= res.total) return;
     saveAutoReleases(res.list);
     updateReleaseBadge();
+    // v150: if she's looking at the release list right now, show the finds
+    // immediately instead of waiting for the next navigation.
+    if (document.getElementById('release-results')) renderVisibleReleases();
     track('release_auto_check', { book_count: res.list.length });
   } catch (e) {}
 }
@@ -287,7 +303,7 @@ function renderDiscover() {
     '<div class="disc-releases"><button class="btn sm" id="rel-check">' + icon('sparkles') + ' Check for new releases</button>' +
     '<div id="release-results"></div></div>');
   wireReleaseCheck();
-  renderUnseenReleases(); // v149: show cached auto-check finds, if any
+  renderVisibleReleases(); // v150: restore the release list across re-renders
   document.querySelectorAll('[data-disc]').forEach(c => c.addEventListener('click', () => {
     const t = c.dataset.disc;
     if (t === 'pick') go('pick');

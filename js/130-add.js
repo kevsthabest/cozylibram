@@ -216,9 +216,11 @@ function renderSearchTab() {
     srcs.map(s => '<button class="chip' + (searchSource === s[0] ? ' active' : '') + '" data-s="' + s[0] + '">' + s[1] + '</button>').join('') +
     '</div><div id="s-results" style="margin-top:12px"></div>';
   const input = document.getElementById('s-q');
+  input.value = searchQuery; // v150: restore the last query across re-renders
   const run = async () => {
     const q = input.value.trim();
     if (q.length < 2) return;
+    searchQuery = q; // v150: remember it so adding books doesn't wipe the search
     track('search_performed');
     const box = document.getElementById('s-results');
     box.innerHTML = '<p class="note">Searching…</p>';
@@ -233,27 +235,14 @@ function renderSearchTab() {
         });
         return;
       }
-      box.innerHTML = '<div class="grid">' + searchResults.map((b, i) =>
-        '<div class="book-card" data-i="' + i + '">' + coverHTML(b) +
-        '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-        '<p class="author">' + esc(b.authors.join(', ')) +
-        (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</p>' +
-        (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + '</div>' : '') +
-        '</div><div style="align-self:center"><button class="btn small">＋</button></div></div>'
-      ).join('') + '</div>';
-      box.querySelectorAll('.book-card').forEach(c =>
-        c.addEventListener('click', async () => {
-          const b = searchResults[Number(c.dataset.i)];
-          const enriched = Object.assign({}, b, { id: uid() });
-          if (!enriched._olKey) await enrichRatings(enriched); // Google-sourced: blend OL ratings
-          await enrichOLBook(enriched, enriched._olKey); // OL-sourced: description/subjects/tropes
-          const added = addBook(enriched, false, 'search');
-          if (added) c.style.opacity = '0.4';
-        }));
+      paintSearchResults(box);
     } catch (e) {
       box.innerHTML = '<p class="note">Search failed — check your connection.</p>';
     }
   };
+  // v150: re-rendering (e.g. addBook's render() after each add) restores the
+  // results instead of forcing a fresh search for every book.
+  if (searchResults.length) paintSearchResults(document.getElementById('s-results'));
   document.getElementById('s-go').addEventListener('click', run);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
   body.querySelectorAll('#s-src .chip').forEach(c =>
@@ -261,6 +250,36 @@ function renderSearchTab() {
       searchSource = c.dataset.s;
       body.querySelectorAll('#s-src .chip').forEach(x => x.classList.toggle('active', x === c));
       if (input.value.trim().length >= 2) run(); // re-run under the new source
+    }));
+}
+
+// v150: paints the cached searchResults. Entries already on her shelves — or
+// added during this search session — show a ✓ instead of ＋, so several
+// books by one author can be added from a single search.
+function paintSearchResults(box) {
+  box.innerHTML = '<div class="grid">' + searchResults.map((b, i) => {
+    const have = b._added || alreadyHave(b);
+    return '<div class="book-card" data-i="' + i + '"' + (have ? ' style="opacity:0.4"' : '') + '>' + coverHTML(b) +
+      '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
+      '<p class="author">' + esc(b.authors.join(', ')) +
+      (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</p>' +
+      (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + '</div>' : '') +
+      '</div><div style="align-self:center">' +
+      (have ? '<button class="btn small ghost" disabled>✓</button>'
+            : '<button class="btn small">＋</button>') +
+      '</div></div>';
+  }).join('') + '</div>';
+  box.querySelectorAll('.book-card').forEach(c =>
+    c.addEventListener('click', async () => {
+      const b = searchResults[Number(c.dataset.i)];
+      if (!b) return;
+      if (b._added || alreadyHave(b)) { if (!b._added) toast('Already on your shelves 📚'); return; }
+      const enriched = Object.assign({}, b, { id: uid() });
+      if (!enriched._olKey) await enrichRatings(enriched); // Google-sourced: blend OL ratings
+      await enrichOLBook(enriched, enriched._olKey); // OL-sourced: description/subjects/tropes
+      // Flag first so addBook's render() repaints this card as ✓ via paintSearchResults.
+      b._added = true;
+      if (!addBook(enriched, false, 'search')) b._added = false; // add refused — revert
     }));
 }
 
