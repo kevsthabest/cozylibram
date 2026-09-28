@@ -51,7 +51,7 @@ ok('siblings sorted by position', rows[0] === 's0' && rows[1] === 's2');
 
 // --- tapping a sibling opens it ---
 q('#m-series [data-book="s2"]').click();
-ok('tapping a series row opens that book', q('.modal-head h2').textContent === 'Second Book');
+ok('tapping a series row opens that book', q('.d-hero h2').textContent === 'Second Book');
 ok('opened book shows its own inline block', !!q('#m-series') &&
   q('#m-series label').textContent.includes('Book 2'));
 

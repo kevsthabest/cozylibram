@@ -1,5 +1,5 @@
-// Book modal de-clunk (v111): sticky Save/Delete/Share bar and the Quotes
-// section collapsed behind a tap-to-expand.
+// Book modal de-clunk (v111, v174): sticky Save/Delete/Share bar; quotes
+// moved from the v111 tap-to-expand section to the v174 Notes tab.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -35,14 +35,18 @@ ok('Save / Share / Remove buttons intact',
 ok('action bar is sticky-bottom via CSS',
   /\.modal-actions\s*\{[^}]*position:\s*sticky[^}]*bottom:/s.test(css));
 
-const det = Array.from(window.document.querySelectorAll('details.m-collapsible'))
-  .find(d => /Quotes/.test(d.querySelector('summary').textContent));
-ok('Quotes live in a collapsed details section',
-  !!det && det.open === false && !!det.querySelector('#m-quotes'));
-ok('quote count shown on the collapsed header',
-  /· 1/.test(det.querySelector('summary').textContent));
-ok('quote still renders when expanded',
-  (() => { det.open = true; return /a fine line/.test(det.textContent); })());
+const det = null; // v174: the v111 quotes collapsible is gone — quotes live on the Notes tab now.
+ok('Quotes live on the Notes tab',
+  !!window.document.querySelector('#dtab-notes #m-quotes'));
+ok('quotes tab panel starts hidden', window.document.getElementById('dtab-notes').hidden === true);
+ok('quote count shown on the Notes tab label', (() => {
+  const labels = Array.from(window.document.querySelectorAll('#dtab-notes .field > label'));
+  return labels.some(l => /Quotes/.test(l.textContent) && /· 1/.test(l.textContent));
+})());
+ok('quote still renders when the tab opens', (() => {
+  window.document.querySelector('[data-dtab="notes"]').click();
+  return /a fine line/.test(window.document.getElementById('dtab-notes').textContent);
+})());
 ok('notes textarea untouched', !!window.document.getElementById('f-notes'));
 
 console.log(`\n${pass} passed, ${fail} failed`);

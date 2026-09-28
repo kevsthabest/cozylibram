@@ -722,46 +722,84 @@ function renderDetailModal(b, viaBook) {
   };
   refreshProgressSection = renderProgressSection;
 
+  // v174: recent reading sessions for the Details tab (log data already exists).
+  const logListHTML = (() => {
+    const log = (b.log || []).slice()
+      .sort((x, y) => String(y.d || '').localeCompare(String(x.d || ''))).slice(0, 5);
+    if (!log.length) return '<p class="note">No sessions yet — the progress stepper logs them automatically.</p>';
+    return '<ul class="d-log">' + log.map(e => {
+      const n = Math.max(0, (e.to || 0) - (e.from || 0));
+      return '<li><span>' + esc(fmtDate(e.d)) + '</span><b>' + n + ' page' + (n === 1 ? '' : 's') + '</b></li>';
+    }).join('') + '</ul>';
+  })();
+  const rmLogHTML = (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
+    if (!logRemoveEnabled()) return '';
+    const tk = dayKey(new Date());
+    const n = pagesOnDay(b, tk);
+    if (!n) return '';
+    return '<button class="btn ghost danger sm" id="m-rmlog" style="margin-top:8px">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button>';
+  })();
+
   root.innerHTML =
-    '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal" role="dialog" aria-modal="true" aria-label="Book details">' +
-    '<button class="modal-close" id="m-x" aria-label="Close">✕</button>' +
-    '<div class="modal-head"><div class="mcover-col">' + coverHTML(b) +
+    '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
+    '<button class="d-back" id="m-x" aria-label="Close">←</button>' +
+    '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
+    // v174: mockup hero — big centered cover, title, author, stars, meta row.
+    '<div class="d-hero">' +
+    '<div class="d-cover">' + coverHTML(b, 'd-cov') +
     '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
-    '<div><h2>' + esc(b.title) + '</h2>' +
+    '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
       ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
       : 'Unknown author') + '</p>' +
-    (b.publicRating ? '<div class="pub-rating">Public: ' + stars(b.publicRating) + ' · ' + b.ratingsCount + ' ratings</div>' : '<div class="pub-rating">No public rating found</div>') +
-    // v131: your rating lives in the header — visible the moment the modal opens.
-    '<div class="hrate"><span class="hrate-label">Your rating</span>' +
-    '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
-    '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
-    (b.pageCount ? '<div class="pub-rating">' + b.pageCount + ' pages' + (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</div>' : '') +
+    (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + ' <span class="note-inline">· ' + b.ratingsCount + ' ratings</span></div>' : '') +
+    '<div class="d-meta">' +
+    (b.pageCount ? '<span>' + b.pageCount + ' pages</span>' : '') +
+    (b.publishedDate ? '<span>' + esc(b.publishedDate.slice(0, 4)) + '</span>' : '') +
+    (b.isbn ? '<span>ISBN ' + esc(b.isbn) + '</span>' : '') +
+    '</div>' +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
-    // v130: description lives with the cover — clamped with a Read more toggle.
+    '</div>' +
+    // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
+    // collapsible sections; every control keeps its id).
+    '<div class="d-tabs" role="tablist">' +
+    '<button class="d-tab active" data-dtab="details" role="tab" aria-selected="true">Details</button>' +
+    '<button class="d-tab" data-dtab="tropes" role="tab" aria-selected="false">Tropes</button>' +
+    '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">Notes</button></div>' +
+
+    '<div class="d-panel" id="dtab-details" role="tabpanel">' +
+    // v130: description — clamped with a Read more toggle.
     (b.description
       ? '<div class="m-desc" id="m-desc"><p>' + esc(String(b.description).replace(/<[^>]*>/g, '')) + '</p>' +
         '<button class="taplink" id="m-desc-toggle">Read more</button></div>'
       : '') +
-    '</div>' +
-    '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
-    // v124: priority first — progress, shelf, ratings. Everything else
-    // collapses into labeled sections (simple by default, powerful when needed).
+    // v131: your rating — hearts + word label, now on the Details tab.
+    '<div class="field"><label>Your rating</label>' +
+    '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
+    '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
     '<div id="m-progress"></div>' +
+    '<div class="field"><label>' + icon('history') + ' Reading log</label>' +
+    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
 
     '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
     '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
+    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr 1fr">' +
+    '<button data-o="owned" class="' + (draft.owned === 'owned' ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
+    '<button data-o="tobuy" class="' + (draft.owned === 'tobuy' ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button>' +
+    '<button data-o="borrowed" class="' + (draft.owned === 'borrowed' ? 'active' : '') + '">' + icon('borrowed') + ' Borrowed</button></div></div>' +
+    '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
+    '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
+    '<div class="buy-row">' + storeLinks(draft).map(l =>
+      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
+    '</div></div>' +
+
     '<div class="field"><label>Mood ratings</label>' +
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
 
-    '<details class="m-collapsible" id="m-sec-details"><summary>' + icon('doc') + ' Details</summary>' +
-    '<div class="field"><label>Tropes (comma separated)</label>' +
-    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
-    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
     '<div class="field"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
@@ -770,14 +808,10 @@ function renderDetailModal(b, viaBook) {
     '<div class="field"><label>' + icon('calendar') + ' Release date</label>' +
     '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
     '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
-    '</details>' +
 
-    '<details class="m-collapsible" id="m-sec-discovery"><summary>' + icon('sparkles') + ' Series & Discovery</summary>' +
+    '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div id="m-series-wrap">' + seriesInlineHTML(b, id) + '</div>' +
-    '<div class="field"><label>' + icon('bulb') + ' Trope intelligence</label>' +
-    '<div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
-    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div>' +
     '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
       const sims = similarBooks(b, 6);
@@ -788,38 +822,29 @@ function renderDetailModal(b, viaBook) {
         (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
                  : '<span class="sim-nocover">' + icon('covers') + '</span>') +
         '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
-    })() + '</div>' +
-    '</details>' +
+    })() + '</div></div>' +
 
-    '<details class="m-collapsible" id="m-sec-personal"><summary>' + icon('pencil') + ' Personal</summary>' +
     '<div class="field"><button class="btn ghost block" id="m-upnext">' +
     (upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next') +
     '</button></div>' +
+    '<button class="btn danger block" id="m-del2">' + icon('trash') + ' Remove from Library</button>' +
+    '</div>' +
+
+    '<div class="d-panel" id="dtab-tropes" role="tabpanel" hidden>' +
+    '<div class="field"><label>Your tropes <span class="note-inline">· comma separated</span></label>' +
+    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
+    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
+    '<div class="field"><label>' + icon('bulb') + ' Trope intelligence</label>' +
+    '<div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
+    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div>' +
+    '</div>' +
+
+    '<div class="d-panel" id="dtab-notes" role="tabpanel" hidden>' +
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
-    (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
-      if (!logRemoveEnabled()) return '';
-      const tk = dayKey(new Date());
-      const n = pagesOnDay(b, tk);
-      if (!n) return '';
-      return '<div class="field"><button class="btn ghost danger" id="m-rmlog">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button></div>';
-    })() +
-    '</details>' +
-
-    '<details class="m-collapsible" id="m-sec-owned"><summary>' + icon('gift') + ' Ownership</summary>' +
-    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr 1fr">' +
-    '<button data-o="owned" class="' + (draft.owned === 'owned' ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
-    '<button data-o="tobuy" class="' + (draft.owned === 'tobuy' ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button>' +
-    '<button data-o="borrowed" class="' + (draft.owned === 'borrowed' ? 'active' : '') + '">' + icon('borrowed') + ' Borrowed</button></div></div>' +
-    '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
-    '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
-    '<div class="buy-row">' + storeLinks(draft).map(l =>
-      '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
-    '</div></div>' +
-    '</details>' +
-
-    '<details class="m-collapsible"><summary>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></summary>' +
-    '<div id="m-quotes"></div></details>' +
+    '<div class="field"><label>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
+    '<div id="m-quotes"></div></div>' +
+    '</div>' +
 
     '<div class="modal-actions"><button class="btn primary" id="m-primary"></button>' +
     '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
@@ -858,10 +883,9 @@ function renderDetailModal(b, viaBook) {
     renderProgressSection();
   };
   const scrollToField = (fid) => {
+    showDTab('details'); // v174: tabbed modal — the target lives on Details
     const el = document.getElementById(fid);
     if (!el) return;
-    let d = el.closest('details'); // v124: open collapsed ancestors first
-    while (d) { d.open = true; d = d.parentElement ? d.parentElement.closest('details') : null; }
     el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
@@ -980,6 +1004,20 @@ function renderDetailModal(b, viaBook) {
   root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
     el.addEventListener('click', () => openDetail(el.dataset.sim)));
   document.getElementById('m-x').addEventListener('click', close);
+  // v174: tab switching — Details | Tropes | Notes.
+  const showDTab = (name) => {
+    root.querySelectorAll('.d-tab').forEach(t => {
+      const on = t.dataset.dtab === name;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    root.querySelectorAll('.d-panel').forEach(p => { p.hidden = p.id !== 'dtab-' + name; });
+  };
+  root.querySelectorAll('.d-tab').forEach(t =>
+    t.addEventListener('click', () => showDTab(t.dataset.dtab)));
+  // v174: the visible Remove button reuses the ⋮ menu's delete flow.
+  document.getElementById('m-del2').addEventListener('click', () =>
+    document.getElementById('m-del').click());
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   // v130: description read-more toggle — hidden when the text fits unclamped.

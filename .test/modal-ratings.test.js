@@ -34,9 +34,10 @@ const seed = (id, over) => {
     saveLibrary(); openBookFromEl(null, '${id}');`);
 };
 
-// --- your rating in the header ---
+// --- your rating on the Details tab (v174: moved out of the header) ---
 seed('r1', {});
-ok('rating picker lives in the modal head', !!q('.modal-head #f-myrating'));
+ok('rating picker lives on the Details tab', !!q('#dtab-details #f-myrating'));
+ok('rating picker not in the hero', !q('.d-hero #f-myrating'));
 ok('header hearts reflect saved rating', qa('#f-myrating button.on').length === 4);
 ok('word label shows for saved rating', q('#f-myrating-word').textContent === 'Really liked it');
 ok('no duplicate rating picker below', qa('#f-myrating').length === 1);

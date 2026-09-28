@@ -140,8 +140,10 @@ function chooseCover(bookId, url) {
   AppLog.info('cover', 'cover set for "' + (b.title || bookId) + '"' +
     (url.indexOf('data:') === 0 ? ' (uploaded image)' : ''));
   closeCoverPicker();
-  const wrap = document.querySelector('#modal-root .modal-head .cover-wrap');
-  if (wrap) wrap.outerHTML = coverHTML(b);
+  // v174: the modal hero cover (was .modal-head .cover-wrap pre-tabs).
+  const wrap = document.querySelector('#modal-root .d-cover .cover-wrap') ||
+               document.querySelector('#modal-root .modal-head .cover-wrap');
+  if (wrap) wrap.outerHTML = coverHTML(b, 'd-cov');
   render(); // refresh the shelf behind the modal
   toast('🖼️ Cover updated');
 }

@@ -1042,7 +1042,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   color: var(--faint); font-weight: 700; margin-bottom: 4px;
 }
 .hrate-row { display: flex; align-items: center; gap: 10px; }
-.hrate .picker button { padding: 7px 9px; font-size: 19px; }
+.hrate-row .picker button { padding: 7px 9px; font-size: 19px; }
 .rate-word { font-size: 13.5px; font-weight: 700; color: var(--accent); }
 .axrow { display: flex; flex-direction: column; gap: 7px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .axrow:last-child { border-bottom: none; }
@@ -1701,6 +1701,48 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .shelf-tiles.tiles-6 { grid-template-columns: repeat(6, 1fr); }
 }
 #ra-all { white-space: nowrap; }
+
+/* ================= v174: tabbed book detail (mockup) ================= */
+.detail-v174 { position: relative; }
+.d-back {
+  position: absolute; top: 12px; left: 12px; z-index: 3;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink);
+  width: 36px; height: 36px; border-radius: 50%;
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.detail-v174 .fav-btn { position: absolute; top: 12px; right: 12px; z-index: 3; }
+.d-hero { text-align: center; padding: 6px 46px 0; }
+.d-cover .cover-wrap.d-cov {
+  width: 150px; height: 225px; margin: 0 auto; border-radius: 12px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+}
+.d-cover #m-changecover { margin-top: 8px; }
+.d-hero h2 { margin: 12px 0 2px; font-size: 25px; line-height: 1.2; }
+.d-hero .author { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+.d-hero .pub-rating { margin-bottom: 8px; }
+.d-meta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  color: var(--muted); font-size: 13px; }
+.d-meta span:not(:last-child)::after { content: '·'; margin-left: 8px; color: var(--faint); }
+.d-hero .release-line { margin-top: 6px; }
+.d-tabs {
+  display: flex; gap: 4px; position: sticky; top: -18px; z-index: 5;
+  background: var(--bg2); margin: 14px -18px 0; padding: 10px 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.d-tab {
+  flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 10px 4px; font-weight: 700; font-size: 14px; color: var(--muted);
+  cursor: pointer;
+}
+.d-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.d-panel { padding: 6px 0 18px; }
+.d-panel .m-desc { margin: 10px 0 4px; }
+.d-log { list-style: none; margin: 0; padding: 0; }
+.d-log li { display: flex; justify-content: space-between; gap: 8px;
+  padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.d-log li span { color: var(--muted); }
+.d-log li b { font-weight: 600; }
+#m-del2 { margin-top: 18px; }
 
 /* ================= v171: desktop sidebar nav ================= */
 @media (min-width: 1024px) {

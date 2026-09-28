@@ -35,13 +35,13 @@ const seed = (id, over) => {
 
 const DESC = 'A tale of two cities. It was the best of times.\n\nIt was the worst of times.';
 
-// --- description in the header ---
+// --- description on the Details tab (v174: moved out of the header) ---
 seed('d1', { description: DESC });
-ok('description renders in the modal head', !!q('.modal-head #m-desc'));
-ok('cover and description share the header', !!q('.modal-head .mcover-col') && !!q('.modal-head #m-desc'));
+ok('description renders on the Details tab', !!q('#dtab-details #m-desc'));
+ok('cover hero does not repeat the description',
+  !q('.d-hero').textContent.includes('best of times'));
 ok('description text present', q('#m-desc').textContent.includes('best of times'));
-ok('description not duplicated in Details section',
-  !q('#m-sec-details').textContent.includes('best of times'));
+ok('description rendered exactly once', qa('#m-desc').length === 1);
 ok('read-more toggle exists', !!q('#m-desc-toggle'));
 q('#m-desc-toggle').click();
 ok('toggle expands (open class)', q('#m-desc').classList.contains('open'));
