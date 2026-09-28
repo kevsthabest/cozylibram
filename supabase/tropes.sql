@@ -241,3 +241,26 @@ on conflict (id) do update set
   version = excluded.version;
 -- END GENERATED SEED
 
+-- v157: live taxonomy. The shared `tropes` table is now the source of truth
+-- at runtime (the app merges it over the bundled js/156-trope-taxonomy.js).
+-- `taxonomy_meta` holds a single revision counter, bumped on every Trope Lab
+-- approval; book_tropes rows stamp the rev they were inferred under so
+-- Trope Lab can mark books stale when the taxonomy grows.
+create table if not exists taxonomy_meta (
+  id int primary key check (id = 1),
+  rev int not null default 1,
+  updated_at timestamptz not null default now()
+);
+alter table taxonomy_meta enable row level security;
+insert into taxonomy_meta (id, rev) values (1, 1)
+on conflict (id) do nothing;
+
+drop policy if exists "taxonomy_meta: read for signed-in" on taxonomy_meta;
+create policy "taxonomy_meta: read for signed-in"
+  on taxonomy_meta for select to authenticated using (true);
+drop policy if exists "taxonomy_meta: admin write" on taxonomy_meta;
+create policy "taxonomy_meta: admin write"
+  on taxonomy_meta for all to authenticated using (is_admin()) with check (is_admin());
+
+alter table book_tropes
+  add column if not exists taxonomy_rev int not null default 1;

@@ -62,12 +62,13 @@ Trope tags, community votes, and user-proposed tropes live in four tables:
      with normalized per-user voting; admins review them in Trope Lab
      (`/#admin`) — approve, reject, or mark duplicate.
 
-Approve flow note: approving a proposal writes its canonical row to `tropes`
-and can auto-tag the originating book, but the model only ever emits ids that
-exist in `js/156-trope-taxonomy.js`. After approving, paste the shown export
-snippet into that file's `TROPES` array, bump `TROPE_TAXONOMY_VERSION` if the
-taxonomy meaningfully changed, and re-run `node supabase/gen-trope-seed.js`
-to refresh the seed SQL.
+Approve flow note (v157): approving a proposal writes its canonical row to
+`tropes` and bumps `taxonomy_meta.rev` — the app merges the live table over
+the bundled taxonomy at runtime, so the new trope is inferable immediately
+with one tap. No file edit, no snippet, no redeploy. Tagged books are marked
+stale when the rev bumps, so the next backfill can pick up the new trope.
+`js/156-trope-taxonomy.js` remains the offline fallback and the initial seed
+(re-run `node supabase/gen-trope-seed.js` only if you change the file itself).
 
 ## 3. Get your API credentials
 

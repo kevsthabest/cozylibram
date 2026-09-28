@@ -296,11 +296,13 @@ function tropeById(id) {
 }
 
 /* Pure: tropes whose genres intersect the book's genres. Used to keep the
-   LLM prompt small and genre-relevant. Unknown genres are ignored. */
-function tropesForGenres(genres) {
+   LLM prompt small and genre-relevant. Unknown genres are ignored.
+   v157: optional `pool` (live merged taxonomy); defaults to TROPES. */
+function tropesForGenres(genres, pool) {
   const want = new Set((genres || []).map(g => String(g).toLowerCase()));
-  if (!want.size) return TROPES.slice();
-  return TROPES.filter(t => t.genres.some(g => want.has(g)));
+  const list = pool || TROPES;
+  if (!want.size) return list.slice();
+  return list.filter(t => t.genres.some(g => want.has(g)));
 }
 
 /* Pure: normalize a trope name for dedup ("Forced Proximity!" -> "forcedproximity"). */
@@ -322,12 +324,14 @@ function tropeWords(name) {
    flow to redirect near-duplicates ("forced closeness" -> forced-proximity).
    score: 1 = exact name_key match, 0.9 = one contains the other,
    otherwise word overlap ratio. */
-function findSimilarTrope(name) {
+/* v157: optional `pool` so callers can fuzzy-match over the live (merged)
+   taxonomy instead of just the bundled file. Defaults to TROPES. */
+function findSimilarTrope(name, pool) {
   const key = tropeNameKey(name);
   if (!key) return null;
   const words = new Set(tropeWords(name));
   let best = null, bestScore = 0;
-  for (const t of TROPES) {
+  for (const t of (pool || TROPES)) {
     const tk = tropeNameKey(t.name);
     if (tk === key) return { trope: t, score: 1 };
     let score = 0;

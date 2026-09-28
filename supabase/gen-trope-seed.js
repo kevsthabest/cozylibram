@@ -2,7 +2,11 @@
 /* Generates the seed INSERT for supabase/tropes.sql from js/156-trope-taxonomy.js.
    Run: node supabase/gen-trope-seed.js  →  paste output between the
    BEGIN/END GENERATED SEED markers in supabase/tropes.sql.
-   Re-run on every taxonomy bump (TROPE_TAXONOMY_VERSION change). */
+   Re-run on every taxonomy bump (TROPE_TAXONOMY_VERSION change).
+   v157 note: the JS file is the initial seed + offline fallback. Trope Lab
+   approvals now go straight to the live `tropes` table (one tap, no file
+   edit), so this script only needs re-running when the bundled file itself
+   changes. */
 'use strict';
 const fs = require('fs');
 const path = require('path');

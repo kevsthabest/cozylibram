@@ -50,6 +50,116 @@ function tropeProviderInfo() {
   } catch (e) { return { provider: '', model: '' }; }
 }
 
+/* ---------------- Live taxonomy (v157) ----------------
+   The shared `tropes` table is the source of truth at runtime: Trope Lab
+   approvals land there immediately, and this layer merges them over the
+   bundled js/156-trope-taxonomy.js file (which remains the offline
+   fallback and the initial seed). Inference prompts, id validation, and
+   duplicate checks all read the MERGED list, so an approved trope is
+   inferable the moment it is approved — no file edit, no redeploy.
+
+   `taxonomy_meta.rev` bumps on every approval; book_tropes rows stamp the
+   rev they were inferred under, so Trope Lab can mark books stale when the
+   taxonomy grows. The last-known live taxonomy is cached in localStorage
+   so an offline device keeps inferring with it. Never throws. */
+
+const TROPE_TAXONOMY_STORE_KEY = 'cozylibram.tropetaxonomy.v1';
+
+const TropeTaxonomy = {
+  _db: null,   // array of {id,name,description,genres} from the shared table
+  _rev: 1,     // taxonomy_meta rev last seen
+  _ready: false,
+
+  /* Merged list: bundled file first, DB rows override/add by id. */
+  list() {
+    if (!this._db || !this._db.length) return TROPES;
+    const byId = {};
+    TROPES.forEach(t => { byId[t.id] = t; });
+    this._db.forEach(t => { byId[t.id] = t; });
+    return Object.keys(byId).map(k => byId[k]);
+  },
+
+  /* Live id lookup: DB additions first, then the bundled file. */
+  byId(id) {
+    if (!id) return null;
+    if (this._db) {
+      for (const t of this._db) if (t.id === id) return t;
+    }
+    return tropeById(id);
+  },
+
+  forGenres(genres) {
+    return tropesForGenres(genres, this.list());
+  },
+
+  rev() { return this._rev; },
+
+  _persist() {
+    try {
+      localStorage.setItem(TROPE_TAXONOMY_STORE_KEY,
+        JSON.stringify({ db: this._db || [], rev: this._rev }));
+    } catch (e) {}
+  },
+
+  _restore() {
+    try {
+      const raw = localStorage.getItem(TROPE_TAXONOMY_STORE_KEY);
+      if (!raw) return false;
+      const o = JSON.parse(raw);
+      if (!o || !Array.isArray(o.db)) return false;
+      this._db = o.db.filter(t => t && t.id && t.name);
+      this._rev = o.rev > 0 ? o.rev : 1;
+      this._ready = true;
+      return true;
+    } catch (e) { return false; }
+  },
+
+  /* Pull the shared taxonomy + rev. Restores the cached copy when offline
+     or signed out. Resolves true when the live table was reached. */
+  async refresh() {
+    let sb = null;
+    try { sb = await cloudClient().catch(() => null); } catch (e) { sb = null; }
+    if (!sb) { if (!this._ready) this._restore(); return false; }
+    try {
+      const [tropesRes, metaRes] = await Promise.all([
+        sb.from('tropes').select('id, name, description, genres').limit(5000),
+        sb.from('taxonomy_meta').select('rev').eq('id', 1).maybeSingle(),
+      ]);
+      if (tropesRes.error) throw tropesRes.error;
+      const rows = (tropesRes.data || []).filter(t => t && t.id && t.name);
+      // Only adopt the live table when it actually has the seed in it;
+      // an empty table means the admin hasn't seeded yet — keep the file.
+      if (rows.length) {
+        this._db = rows.map(t => ({
+          id: t.id, name: t.name, description: t.description || '',
+          genres: Array.isArray(t.genres) ? t.genres : [],
+        }));
+        this._rev = (metaRes.data && metaRes.data.rev > 0) ? metaRes.data.rev : 1;
+        this._ready = true;
+        this._persist();
+        return true;
+      }
+    } catch (e) { /* fall through to cache */ }
+    if (!this._ready) this._restore();
+    return false;
+  },
+
+  /* Called right after a Trope Lab approval so the new trope is live
+     instantly, without waiting for the next refresh. */
+  noteApproved(trope, rev) {
+    trope = trope || {};
+    if (!trope.id || !trope.name) return;
+    const db = (this._db || []).filter(t => t.id !== trope.id);
+    db.push({ id: trope.id, name: trope.name,
+      description: trope.description || '',
+      genres: Array.isArray(trope.genres) ? trope.genres : [] });
+    this._db = db;
+    if (rev > 0) this._rev = rev;
+    this._ready = true;
+    this._persist();
+  },
+};
+
 /* Map the app's free-form category strings onto taxonomy genres. */
 const TROPE_GENRE_ALIASES = [
   [/dark[\s-]*romance/, 'dark-romance'],
@@ -106,7 +216,7 @@ const TROPE_SYSTEM_PROMPT = [
 function buildTropePrompt(book) {
   book = book || {};
   const genres = appGenresToTropeGenres(book.categories);
-  const pool = tropesForGenres(genres);
+  const pool = TropeTaxonomy.forGenres(genres);
   const lines = pool.map(t => t.id + ': ' + t.name + ' — ' + t.description);
   const system = TROPE_SYSTEM_PROMPT.replace('{taxonomy_lines}', lines.join('\n'));
   const authors = Array.isArray(book.authors) ? book.authors.join(', ')
@@ -167,14 +277,16 @@ function parseTropeResponse(text) {
 
 /* Pure: validate raw model output against the taxonomy. Unknown ids are
    dropped (the main defense against invented labels), confidence is
-   clamped to 0-1, duplicates removed, capped at 8. */
+   clamped to 0-1, duplicates removed, capped at 8.
+   v157: validates against the LIVE merged taxonomy, so freshly approved
+   community tropes are accepted without a file update. */
 function validateTropeResults(raw) {
   const out = [], seen = new Set();
   for (const r of raw || []) {
     if (out.length >= 8) break;
     if (!r || typeof r !== 'object') continue;
     const id = String(r.id || '').trim().toLowerCase();
-    if (!id || seen.has(id) || !tropeById(id)) continue;
+    if (!id || seen.has(id) || !TropeTaxonomy.byId(id)) continue;
     let c = Number(r.confidence);
     if (!isFinite(c)) continue;
     c = Math.min(1, Math.max(0, c));
@@ -425,6 +537,7 @@ const TropeQueue = {
               book_key: key, trope_id: t.id, source: 'llm',
               confidence: t.confidence, model: res.model || null,
               taxonomy_version: TROPE_TAXONOMY_VERSION,
+              taxonomy_rev: TropeTaxonomy.rev(),
               updated_at: new Date().toISOString(),
             }));
             // Empty inference is a legitimate result — but per the plan we
@@ -490,7 +603,7 @@ const TropeStore = {
     catch (e) { rows = null; }
     if (rows && rows.length) {
       const tropes = rows
-        .map(r => ({ trope: tropeById(r.trope_id), confidence: r.confidence, source: r.source }))
+        .map(r => ({ trope: TropeTaxonomy.byId(r.trope_id), confidence: r.confidence, source: r.source }))
         .filter(x => x.trope)
         .sort((a, b) => b.confidence - a.confidence)
         .map(x => ({ id: x.trope.id, name: x.trope.name,
@@ -519,6 +632,9 @@ const TropeStore = {
 let tropeQueueWiredForApp = false;
 
 function ensureTropeQueueWired() {
+  /* v157: actually honor the idempotency this function always claimed —
+     without it, the taxonomy refresh below would fire on every book read. */
+  if (tropeQueueWiredForApp) return;
   const resolveBook = id => {
     try { return (typeof library !== 'undefined' ? library : []).find(b => b.id === id) || null; }
     catch (e) { return null; }
@@ -544,6 +660,9 @@ function ensureTropeQueueWired() {
   TropeStore.configure({ readRows });
   TropeVotes.configure({ getClient: async () => cloudClient().catch(() => null) });
   TropeProposals.configure({ getClient: async () => cloudClient().catch(() => null) });
+  /* v157: pull the live taxonomy in the background; the last-known copy is
+     cached for offline. Never blocks boot. */
+  try { TropeTaxonomy.refresh().catch(() => {}); } catch (e) {}
   tropeQueueWiredForApp = true;
 }
 /* v153: trope-intelligence chips. Pure HTML builder (unit-tested). DB tropes
@@ -679,9 +798,10 @@ const TropeVotes = {
    submit, voted on by the coven (normalized per-user rows in
    trope_proposal_votes — counts are always derived), and reviewed by an
    admin in Trope Lab: approve / reject / mark duplicate.
-   Inference only ever accepts ids present in js/156-trope-taxonomy.js
-   (parseTropes validates against tropeById), so a proposal becomes
-   inferable exactly when its entry lands there via the export snippet. */
+   v157: approval writes the canonical row to the shared `tropes` table and
+   bumps `taxonomy_meta.rev` — the live taxonomy layer picks it up
+   immediately, so the new trope is inferable with one tap. No file edit,
+   no snippet, no redeploy. */
 
 function tropeGenreLabel(g) {
   return String(g).split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -701,14 +821,16 @@ const TropeProposals = {
 
   canPropose() { return !!this._uid(); },
 
-  /* Client-side duplicate check at submit time. Returns
+  /* Client-side duplicate check at submit time, against the LIVE merged
+     taxonomy (so a recently approved trope is caught too). Returns
      { kind: 'exact'|'similar', trope } or null. */
   checkDuplicate(name) {
     const key = tropeNameKey(name);
     if (!key) return null;
-    const exact = TROPES.find(t => tropeNameKey(t.name) === key);
+    const pool = TropeTaxonomy.list();
+    const exact = pool.find(t => tropeNameKey(t.name) === key);
     if (exact) return { kind: 'exact', trope: exact };
-    const sim = findSimilarTrope(name);
+    const sim = findSimilarTrope(name, pool);
     return sim && sim.score >= 0.5
       ? { kind: 'similar', trope: sim.trope, score: sim.score }
       : null;
@@ -794,25 +916,19 @@ const TropeProposals = {
 
   /* ---- admin review (Trope Lab) ---- */
 
-  /* Collision-safe canonical slug: base from the name, suffixed while taken
-     in the local taxonomy file or the shared taxonomy table. */
+  /* Collision-safe canonical slug: base from the name, suffixed while
+     taken in the live merged taxonomy. Refreshes first so a just-approved
+     trope on another device can't collide. */
   async slugFor(name) {
-    const taken = new Set(TROPES.map(t => t.id));
-    try {
-      const sb = this._getClient ? await this._getClient() : null;
-      if (sb) {
-        const base = tropeSlugFor(name, new Set());
-        const { data } = await sb.from('tropes').select('id')
-          .like('id', base.replace(/[%_]/g, '') + '%');
-        (data || []).forEach(r => taken.add(r.id));
-      }
-    } catch (e) {}
+    try { await TropeTaxonomy.refresh(); } catch (e) {}
+    const taken = new Set(TropeTaxonomy.list().map(t => t.id));
     return tropeSlugFor(name, taken);
   },
 
-  /* Approve: canonical row in the shared taxonomy table, proposal marked
-     approved, originating book auto-tagged (source 'community'). Returns
-     { slug, proposal } — the caller shows the JS export snippet. */
+  /* Approve: canonical row in the shared taxonomy table, taxonomy rev
+     bumped, proposal marked approved, originating book auto-tagged
+     (source 'community'). The new trope is live for inference immediately
+     — one tap, no file edit. Returns { slug, proposal, rev }. */
   async approve(id, { tagBook = true } = {}) {
     const sb = this._getClient ? await this._getClient() : null;
     if (!sb) throw new Error('Cloud unavailable.');
@@ -826,6 +942,20 @@ const TropeProposals = {
       genres: p.genres, version: TROPE_TAXONOMY_VERSION,
     }, { onConflict: 'id' });
     if (terr) throw terr;
+    /* Bump the taxonomy rev so every device marks its tagged books stale
+       and the next backfill can pick up the new trope. */
+    let rev = TropeTaxonomy.rev();
+    try {
+      const { data: meta } = await sb.from('taxonomy_meta')
+        .select('rev').eq('id', 1).maybeSingle();
+      rev = (meta && meta.rev > 0 ? meta.rev : rev) + 1;
+      const { error: rerr } = await sb.from('taxonomy_meta')
+        .update({ rev, updated_at: new Date().toISOString() }).eq('id', 1);
+      if (rerr) throw rerr;
+    } catch (e) {
+      throw new Error('Approved, but the taxonomy rev could not be bumped: ' +
+        ((e && e.message) || e));
+    }
     const { error: serr } = await sb.from('trope_proposals')
       .update({ status: 'approved' }).eq('id', id);
     if (serr) throw serr;
@@ -833,11 +963,15 @@ const TropeProposals = {
       const { error: berr } = await sb.from('book_tropes').upsert({
         book_key: p.book_key, trope_id: slug, source: 'community',
         confidence: 0.85, taxonomy_version: TROPE_TAXONOMY_VERSION,
+        taxonomy_rev: rev,
       }, { onConflict: 'book_key,trope_id' });
       if (berr) throw berr;
       TropeStore.invalidate(p.book_key);
     }
-    return { slug, proposal: p };
+    /* Live instantly on this device too — no refresh round-trip needed. */
+    TropeTaxonomy.noteApproved(
+      { id: slug, name: p.name, description: p.description, genres: p.genres }, rev);
+    return { slug, proposal: p, rev };
   },
 
   async reject(id) {
@@ -851,20 +985,11 @@ const TropeProposals = {
   async markDuplicate(id, canonicalId) {
     const sb = this._getClient ? await this._getClient() : null;
     if (!sb) throw new Error('Cloud unavailable.');
-    if (!tropeById(canonicalId)) throw new Error('Unknown canonical trope.');
+    if (!TropeTaxonomy.byId(canonicalId)) throw new Error('Unknown canonical trope.');
     const { error } = await sb.from('trope_proposals')
       .update({ status: 'duplicate', duplicate_of: canonicalId }).eq('id', id);
     if (error) throw error;
   },
 };
 
-/* JS export snippet: the exact entry to paste into the TROPES array in
-   js/156-trope-taxonomy.js, then re-run `node supabase/gen-trope-seed.js`.
-   Until the entry lands in that file, parseTropes keeps rejecting the id —
-   approval alone can never make the model emit it. */
-function tropeExportSnippet({ id, name, description, genres }) {
-  const q = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
-  return '  { id: ' + q(id) + ', name: ' + q(name) + ',\n' +
-    '    description: ' + q(description) + ',\n' +
-    '    genres: [' + (genres || []).map(g => q(g)).join(', ') + '] },';
-}
+

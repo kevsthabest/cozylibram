@@ -249,6 +249,15 @@ async function main() {
      {book_key: bookKeyFor({title:'B'}), taxonomy_version: 0}])`);
   ok('coverage counts tagged/missing/stale',
     cov.total === 3 && cov.tagged === 1 && cov.missing.length === 1 && cov.stale.length === 1);
+  // v157: staleness is rev-aware (taxonomy_meta.rev bumps on every approval)
+  const cov2 = probe(`tropeLabCoverage(
+    [{id:'a',title:'A'},{id:'b',title:'B'},{id:'c',title:'C'}],
+    [{book_key: bookKeyFor({title:'A'}), taxonomy_version: 1, taxonomy_rev: 1},
+     {book_key: bookKeyFor({title:'B'}), taxonomy_version: 1, taxonomy_rev: 3},
+     {book_key: bookKeyFor({title:'C'}), taxonomy_version: 1}],
+    { version: 1, rev: 3 })`);
+  ok('rev-aware staleness: old rev is stale, current rev is tagged, missing rev counts as rev 1',
+    cov2.total === 3 && cov2.tagged === 1 && cov2.stale.length === 2);
 
   // index.html + sw.js wiring
   ok('index.html includes 157-trope-inference.js', html.includes('js/157-trope-inference.js'));

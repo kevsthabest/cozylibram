@@ -327,13 +327,19 @@ async function tropeLabSb() {
 }
 
 /* Pure-ish: coverage of local books against book_tropes rows.
-   Returns { total, tagged, missing:[books], stale:[books] }. */
-function tropeLabCoverage(books, rows) {
+   Returns { total, tagged, missing:[books], stale:[books] }. A book is
+   stale when its rows predate the bundled taxonomy version OR the live
+   taxonomy rev (bumped on every Trope Lab approval). `current` defaults
+   to the live values; rows without taxonomy_rev count as rev 1
+   (the pre-v157 baseline). */
+function tropeLabCoverage(books, rows, current) {
+  current = current || { version: TROPE_TAXONOMY_VERSION, rev: TropeTaxonomy.rev() };
   const byKey = {};
   (rows || []).forEach(r => {
-    const e = byKey[r.book_key] || (byKey[r.book_key] = { count: 0, version: 0 });
+    const e = byKey[r.book_key] || (byKey[r.book_key] = { count: 0, version: 0, rev: 1 });
     e.count++;
     e.version = Math.max(e.version, r.taxonomy_version || 0);
+    e.rev = Math.max(e.rev, r.taxonomy_rev || 1);
   });
   const missing = [], stale = [];
   let tagged = 0;
@@ -341,7 +347,7 @@ function tropeLabCoverage(books, rows) {
     const key = bookKeyFor(b);
     const e = byKey[key];
     if (!e) missing.push(b);
-    else if (e.version < TROPE_TAXONOMY_VERSION) stale.push(b);
+    else if (e.version < current.version || e.rev < current.rev) stale.push(b);
     else tagged++;
   });
   return { total: (books || []).length, tagged, missing, stale };
@@ -410,16 +416,22 @@ async function renderTropeLab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   tropeLabWireQueue();
+  /* v157: pull the live taxonomy first so counts, staleness, and the
+     proposal review all see freshly approved tropes. */
+  try { await TropeTaxonomy.refresh(); } catch (e) {}
 
   const info = tropeProviderInfo();
   const configured = tropeInferenceConfigured();
+  const liveCount = TropeTaxonomy.list().length;
+  const addedCount = liveCount - TROPES.length;
   const statusCard =
     '<div class="ob-card"><h3 class="serif">' + icon('bulb') + ' Trope Lab</h3>' +
     '<div class="ob-grid">' +
     '<div class="ob-stat"><div class="ob-stat-val">' + esc(info.provider || '—') + '</div><div class="ob-stat-label">Provider</div></div>' +
     '<div class="ob-stat"><div class="ob-stat-val" style="font-size:15px;word-break:break-all">' + esc(info.model || '—') + '</div><div class="ob-stat-label">Model</div></div>' +
     '<div class="ob-stat"><div class="ob-stat-val">' + (configured ? 'Ready' : 'Missing') + '</div><div class="ob-stat-label">API key</div></div>' +
-    '<div class="ob-stat"><div class="ob-stat-val">v' + TROPE_TAXONOMY_VERSION + ' · ' + TROPES.length + '</div><div class="ob-stat-label">Taxonomy tropes</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">v' + TROPE_TAXONOMY_VERSION + ' · ' + liveCount + '</div><div class="ob-stat-label">Taxonomy tropes' +
+    (addedCount > 0 ? ' (+' + addedCount + ' added)' : '') + '</div></div>' +
     '</div>' +
     (configured
       ? '<p class="note">Inference calls go through the same-origin <code>/api/trope-infer</code> proxy — the key stays server-side.</p>'
@@ -447,7 +459,7 @@ async function renderTropeLab() {
     let rows = [];
     if (sb) {
       const { data, error } = await sb.from('book_tropes')
-        .select('book_key, taxonomy_version').limit(20000);
+        .select('book_key, taxonomy_version, taxonomy_rev').limit(20000);
       if (error) sbError = error.message;
       else rows = data || [];
     } else {
@@ -498,8 +510,8 @@ async function renderTropeLab() {
   propCard.innerHTML =
     '<div class="ob-card"><h3 class="serif">Trope proposals</h3>' +
     '<p class="note">Coven members propose, vote, and you review. Approving writes the canonical row ' +
-    'to the shared taxonomy table and optionally tags the originating book — then shows the exact ' +
-    'snippet to paste into <code>js/156-trope-taxonomy.js</code> so inference can emit it.</p>' +
+    'to the shared taxonomy table and optionally tags the originating book — the new trope is live ' +
+    'for inference immediately, no file edit needed.</p>' +
     '<div id="trope-proposals"><p class="note">Loading…</p></div></div>';
   body.appendChild(propCard);
   tropeLabProposalsHTML();
@@ -534,7 +546,7 @@ async function tropeLabProposalsHTML() {
       '<button class="btn ghost sm" data-preject="' + p.id + '">Reject</button>' +
       '<select data-pdup="' + p.id + '" class="text-input" style="font-size:12px;padding:6px" aria-label="Mark as duplicate of…">' +
       '<option value="">Duplicate of…</option>' +
-      TROPES.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') +
+      TropeTaxonomy.list().map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') +
       '</select>' +
       '</div></div>';
   }).join('');
@@ -545,19 +557,10 @@ async function tropeLabProposalsHTML() {
     try {
       const { slug, proposal } = await TropeProposals.approve(id, { tagBook: true });
       const exp = document.getElementById('tpexp-' + id);
-      const snippet = tropeExportSnippet({ id: slug, name: proposal.name, description: proposal.description, genres: proposal.genres });
       exp.classList.remove('hidden');
-      exp.innerHTML = '<p class="note"><b>Approved as <code>' + esc(slug) + '</code>.</b>' +
+      exp.innerHTML = '<p class="note"><b>Approved as <code>' + esc(slug) + '</code> — live now.</b>' +
         (proposal.book_key ? ' Originating book tagged.' : '') +
-        ' Until the entry below lands in <code>js/156-trope-taxonomy.js</code>, inference cannot emit it ' +
-        '(unknown ids are rejected). After pasting, re-run <code>node supabase/gen-trope-seed.js</code>.</p>' +
-        '<pre class="exportpre">' + esc(snippet) + '</pre>' +
-        '<button class="btn ghost sm" data-copyexp>Copy snippet</button>';
-      exp.querySelector('[data-copyexp]').addEventListener('click', () => {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(snippet).then(() => toast('Snippet copied'));
-        }
-      });
+        ' The taxonomy rev bumped, so tagged books are marked stale and the next backfill can pick up the new trope.</p>';
       const row = btn.closest('.circle-row');
       const acts = row.querySelector('.circle-actions');
       if (acts) acts.innerHTML = '<span class="note">approved ✓</span>';

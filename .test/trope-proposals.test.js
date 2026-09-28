@@ -1,6 +1,8 @@
 /* v155 proposal tests: TropeProposals submit/duplicate-check/voting/slug/
-   approve/reject/duplicate, tropeExportSnippet, and the guarantee that
-   inference only accepts taxonomy ids.
+   approve/reject/duplicate, and the guarantee that inference only accepts
+   taxonomy ids. v157: approval bumps taxonomy_meta.rev, stamps
+   taxonomy_rev on the auto-tag, and makes the trope live instantly via
+   TropeTaxonomy.noteApproved (the JS export snippet is gone).
    Run: node .test/trope-proposals.test.js */
 'use strict';
 const fs = require('fs');
@@ -44,17 +46,19 @@ function ok(name, cond) {
 
   /* In-memory supabase fake with a chainable query builder. */
   function makeDb() {
-    return { trope_proposals: [], trope_proposal_votes: [], tropes: [], book_tropes: [] };
+    return { trope_proposals: [], trope_proposal_votes: [], tropes: [],
+      book_tropes: [], taxonomy_meta: [{ id: 1, rev: 1 }] };
   }
   function useDb(db, log) {
-    probe(`window.__db = ${JSON.stringify(db)}; window.__log = [];`);
-    probe(`TropeProposals.configure({ getClient: async () => {
+    probe(`window.__db = ${JSON.stringify(db)}; window.__log = []; window.__sb = null;`);
+    probe(`window.__newFakeClient = () => {
       const db = window.__db, log = window.__log;
       function query(table) {
         const rows = db[table];
         const q = {
           _filters: [], _order: null,
           select() { return this; },
+          limit() { return this; },
           eq(col, val) { this._filters.push(r => r[col] === val); return this; },
           in(col, vals) { this._filters.push(r => vals.indexOf(r[col]) !== -1); return this; },
           like(col, pat) {
@@ -105,11 +109,23 @@ function ok(name, cond) {
         return q;
       }
       return { from: (t) => query(t) };
-    } })`);
+    };`);
+    probe(`window.__sb = window.__newFakeClient();`);
+    probe(`TropeProposals.configure({ getClient: async () => window.__sb })`);
+    /* v157: the live taxonomy layer reads through the global cloudClient,
+       so point it at the same fake. */
+    probe(`cloudClient = async () => window.__sb || null;`);
     return {
       db: () => probe('window.__db'),
       log: () => probe('window.__log'),
     };
+  }
+
+  /* v157: TropeTaxonomy caches live state in-memory; reset between
+     sections so each one starts from a known baseline. */
+  function resetTax() {
+    probe(`TropeTaxonomy._db = null; TropeTaxonomy._rev = 1; TropeTaxonomy._ready = false;`);
+    probe(`localStorage.removeItem('cozylibram.tropetaxonomy.v1')`);
   }
 
   /* ---- 1. duplicate checking ---- */
@@ -184,8 +200,9 @@ function ok(name, cond) {
 
   /* ---- 5. collision-safe slugs ---- */
   {
+    resetTax();
     const seed = makeDb();
-    seed.tropes = [{ id: 'only-one-bed' }];
+    seed.tropes = [{ id: 'only-one-bed', name: 'Only One Bed', description: 'x', genres: ['romance'] }];
     useDb(seed);
     ok('local taxonomy collision suffixed',
       (await probe(`TropeProposals.slugFor('Enemies to Lovers')`)) === 'enemies-to-lovers-2');
@@ -197,6 +214,7 @@ function ok(name, cond) {
 
   /* ---- 6. approve / reject / duplicate ---- */
   {
+    resetTax();
     const seed = makeDb();
     seed.trope_proposals = [
       { id: 'p1', name: 'Only One Bed', description: 'One bed, two people.', genres: ['romance'], book_key: 'isbn:123', proposed_by: 'user-2', status: 'pending' },
@@ -206,14 +224,22 @@ function ok(name, cond) {
     const { db } = useDb(seed);
     const r = await probe(`TropeProposals.approve('p1', { tagBook: true })`);
     ok('approve returns the slug', r.slug === 'only-one-bed');
+    ok('approve returns the bumped rev', r.rev === 2);
     const tropeRow = db().tropes.find(t => t.id === 'only-one-bed');
     ok('canonical row written to shared taxonomy',
       tropeRow && tropeRow.name === 'Only One Bed' && tropeRow.version === 1);
+    ok('taxonomy rev bumped in the db',
+      db().taxonomy_meta.find(m => m.id === 1).rev === 2);
     ok('proposal marked approved',
       db().trope_proposals.find(p => p.id === 'p1').status === 'approved');
     const tag = db().book_tropes.find(b => b.book_key === 'isbn:123');
     ok('originating book auto-tagged as community',
       tag && tag.trope_id === 'only-one-bed' && tag.source === 'community' && tag.confidence === 0.85);
+    ok('auto-tag stamps the new taxonomy rev', tag && tag.taxonomy_rev === 2);
+    ok('approved trope is live instantly on this device',
+      probe(`TropeTaxonomy.byId('only-one-bed')`) &&
+      probe(`TropeTaxonomy.byId('only-one-bed').name`) === 'Only One Bed' &&
+      probe(`TropeTaxonomy.rev()`) === 2);
     await probe(`TropeProposals.approve('p2', { tagBook: true })`);
     ok('approve without a book skips tagging',
       !db().book_tropes.some(b => b.trope_id === 'rejected-idea'));
@@ -230,17 +256,23 @@ function ok(name, cond) {
     ok('duplicate of unknown id throws', threw);
   }
 
-  /* ---- 7. export snippet ---- */
+  /* ---- 7. freshly approved trope is inferable (no file edit) ---- */
   {
-    const snip = probe(`tropeExportSnippet({ id: 'devils-bargain', name: "Devil's Bargain",
-      description: 'A deal with a devil.', genres: ['fantasy', 'dark-romance'] })`);
-    ok('snippet is a taxonomy entry',
-      snip.includes("id: 'devils-bargain'") && snip.includes("name: 'Devil\\'s Bargain'") &&
-      snip.includes("genres: ['fantasy', 'dark-romance']"));
+    // state left by section 6: 'only-one-bed' approved and live via noteApproved
+    const acc = probe(`validateTropeResults([{ id: 'only-one-bed', confidence: 0.9 }, { id: 'nope', confidence: 0.5 }])`);
+    ok('approved community id passes validation',
+      acc.length === 1 && acc[0].id === 'only-one-bed');
+    const dup = probe(`TropeProposals.checkDuplicate('Only One Bed')`);
+    ok('duplicate check sees the live-approved trope',
+      dup && dup.kind === 'exact' && dup.trope.id === 'only-one-bed');
+    const pool = probe(`TropeTaxonomy.forGenres(['romance']).map(t => t.id)`);
+    ok('genre prompt pool includes the live-approved trope',
+      Array.isArray(pool) && pool.indexOf('only-one-bed') !== -1);
   }
 
   /* ---- 8. inference only accepts taxonomy ids ---- */
   {
+    resetTax(); // 'only-one-bed' must NOT be live here — unapproved ids are rejected
     probe(`SPICY_CONFIG = ({ trope: true, tropeProvider: 'openrouter', tropeModel: 'm' })`);
     probe(`fetch = async () => ({ ok: true, status: 200, json: async () => ({
       choices: [{ message: { content: '{"tropes":[{"id":"only-one-bed","confidence":0.9},{"id":"dragons","confidence":0.8}]}' } }] }) })`);
