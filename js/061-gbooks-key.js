@@ -35,7 +35,15 @@ async function lookupISBN(isbn) {
   const snap = await metaCacheGet(clean);
   if (snap) return bookFromMeta(snap, clean);
   const book = await lookupISBNFromAPIs(clean);
-  if (book && book.isbn) metaCachePut(book.isbn, metaSnapshot(book)); // no await: don't slow the UI
+  if (book && book.isbn) {
+    // v192: key the canonical row by the ENTERED isbn, not the API-returned
+    // edition isbn (Google Books may match a different edition than the one
+    // typed) — re-entering the same isbn must always hit this row. Awaited
+    // so the enriched upsert later in the add flow can't lose a write-write
+    // race to this pre-enrichment snapshot.
+    book._cacheKey = clean;
+    await metaCachePut(clean, metaSnapshot(book)); // no longer fire-and-forget
+  }
   return book;
 }
 

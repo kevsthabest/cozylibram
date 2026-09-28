@@ -23,6 +23,8 @@ window.fetch = async (url) => {
   const isGb = u.includes('googleapis.com') || u.includes('/api/gbooks'); // v89: same-origin proxy
   if (isGb && u.includes('isbn:9780000000001')) return jok(gbVol('9780000000001', 'Cached Book', 321));
   if (isGb && u.includes('isbn:9780000000002')) return jok(gbVol('9780000000002', 'Second Book', 200));
+  // v192: queried isbn differs from the API-returned edition isbn
+  if (isGb && u.includes('isbn:9780000000005')) return jok(gbVol('9780000000006', 'Edition Book', 400));
   if (isGb) return jok({ items: [] });
   if (u.includes('openlibrary.org')) return jok({ docs: [] }); // no rating blend
   throw new Error('unexpected fetch in metacache tests: ' + u);
@@ -204,6 +206,31 @@ async function waitFor(fn, what) {
   const b5 = await window.lookupISBN('9780000000004');
   ok('cache hit restores enriched book', b5 && b5.hcEnriched === true && b5.series.name === 'Saga');
   ok('cache hit keeps single-blended rating', b5.publicRating === 4.3 && b5.ratingsCount === 150);
+
+  // 14. v192: row is keyed by the ENTERED isbn when the API matches another edition
+  fetchCalls = 0;
+  const b6 = await window.lookupISBN('9780000000005');
+  ok('edition-mismatch lookup returns API book', b6 && b6.title === 'Edition Book' && b6.isbn === '9780000000006');
+  ok('put landed before lookup returned (no fire-and-forget race)',
+    stub.meta.some(r => r.isbn === '9780000000005'));
+  const row6 = stub.meta.find(r => r.isbn === '9780000000005');
+  ok('row stored under entered isbn, not edition isbn',
+    !!row6 && row6.data.isbn === '9780000000006' && !stub.meta.some(r => r.isbn === '9780000000006'));
+
+  // 15. v192: re-entering the same isbn hits the cache — zero API calls
+  fetchCalls = 0;
+  const b7 = await window.lookupISBN('9780000000005');
+  ok('re-lookup of entered isbn hits cache', b7 && b7.title === 'Edition Book' && fetchCalls === 0);
+  ok('rebuilt book keeps canonical edition isbn', b7.isbn === '9780000000006');
+  ok('rebuilt book stashes cache key', b7._cacheKey === '9780000000005');
+
+  // 16. v192: metaCachePutEnriched updates the entered-isbn row, not the edition isbn
+  const eb2 = Object.assign({}, enrichedBook, { _cacheKey: '9780000000007', isbn: '9780000000008', hcEnriched: true });
+  await window.metaCachePutEnriched(window.metaSnapshot(apiBook), eb2);
+  await waitFor(() => stub.meta.some(r => r.isbn === '9780000000007'), 'entered-isbn enriched write');
+  const row7 = stub.meta.find(r => r.isbn === '9780000000007');
+  ok('enriched put uses entered-isbn key', !!row7 && row7.data.hcEnriched === true);
+  ok('enriched put does not duplicate under edition isbn', !stub.meta.some(r => r.isbn === '9780000000008'));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

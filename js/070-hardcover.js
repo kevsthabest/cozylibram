@@ -301,13 +301,15 @@ function addBook(book, openEditor, source) {
   // Background Hardcover enrichment — lands a moment later without blocking the add.
   if (hcReady() && !book.hcEnriched) {
     const pristine = metaSnapshot(book); // v191: pristine API base for the canonical cache
-    enrichHardcover(book).then(ok => {
+    enrichHardcover(book).then(async ok => {
       if (!ok) return;
       // v191: store the enriched snapshot so the next user gets full metadata
       // (series, moods, warnings, blended rating) from the shared cache with
       // zero API calls. Add-flow only — the backfill sweep never writes, so a
       // user-edited book can never pollute the canonical copy.
-      if (book.isbn) metaCachePutEnriched(pristine, book);
+      // v192: awaited and keyed by the entered isbn (book._cacheKey) — the
+      // lookup's put was awaited too, so this upsert always lands after it.
+      await metaCachePutEnriched(pristine, book);
       saveLibrary();
       // Refresh only the Hardcover sections if the editor is open — never clobbers typed input.
       const hcEl = document.getElementById('m-hc');
@@ -320,7 +322,9 @@ function addBook(book, openEditor, source) {
     // v191: arrived with Hardcover metadata (Hardcover search) or from the
     // shared cache — snapshot it canonically; the re-fetch is skipped so the
     // community rating is never blended twice. Trope suggestions still run.
-    metaCachePut(book.isbn, metaSnapshot(book));
+    // v192: refresh the row this book was read from (entered isbn), not the
+    // edition isbn, so the next lookup of the same isbn hits.
+    metaCachePut(book._cacheKey || book.isbn, metaSnapshot(book));
     enrichTropesFor(book).then(() => saveLibrary());
   }
   return book;

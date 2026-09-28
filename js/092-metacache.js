@@ -22,6 +22,13 @@
 // + Hardcover-enrichment merge. Never from user-edited books, never from
 // the backfill sweep, so a personal edit (custom title, notes, rating) can
 // never leak into the canonical copy.
+//
+// v192: the row key is the ENTERED isbn (stashed as book._cacheKey), not the
+// API-returned edition isbn — Google Books may match a different edition
+// than the one typed, and re-entering the same isbn must always hit the
+// same row. All puts for one add are awaited in order (lookup put, then the
+// enriched put after Hardcover lands), so the pre-enrichment snapshot can
+// never win a write-write race and clobber the enriched row.
 const META_TTL_MS = 30 * 24 * 3600 * 1000;
 
 // The fields every user needs from a lookup. User-specific fields (id,
@@ -74,10 +81,16 @@ function enrichedSnapshot(pristine, book) {
 
 // Store an enriched snapshot. Add-flow only (see write discipline above):
 // the book is a pristine API result here, so user edits can't pollute the
-// canonical cache. Fire-and-forget: never awaited by callers, never throws.
-function metaCachePutEnriched(pristine, book) {
-  if (!book || !book.isbn || !book.hcEnriched) return;
-  metaCachePut(book.isbn, enrichedSnapshot(pristine, book));
+// canonical cache. Keyed by the entered isbn (book._cacheKey) so the row the
+// lookup created is the row the enrichment updates. Awaited by callers: the
+// lookup's put is awaited before the add flow runs, so this upsert always
+// lands after it and can never lose a write-write race to the
+// pre-enrichment snapshot.
+async function metaCachePutEnriched(pristine, book) {
+  if (!book || !book.hcEnriched) return;
+  const key = book._cacheKey || book.isbn;
+  if (!key) return;
+  await metaCachePut(key, enrichedSnapshot(pristine, book));
 }
 
 // Rebuild a fresh book-shaped object from a cached snapshot (new id,
@@ -86,6 +99,9 @@ function bookFromMeta(snap, isbnHint) {
   const book = normalizeVolume({ volumeInfo: {} }, isbnHint || (snap && snap.isbn));
   if (!snap) return book;
   book.isbn = snap.isbn || book.isbn;
+  // v192: remember which isbn key this row was read from — the enriched
+  // upsert must update the same row, and the add flow's re-snapshot too.
+  book._cacheKey = isbnHint || snap.isbn || '';
   book.title = snap.title || book.title;
   book.authors = Array.isArray(snap.authors) ? snap.authors : [];
   book.cover = snap.cover || book.cover;
@@ -127,8 +143,8 @@ async function metaCacheGet(isbn) {
   } catch (e) { return null; }
 }
 
-// Store a lookup result for future users. Fire-and-forget: never awaited by
-// callers, and never throws.
+// Store a lookup result for future users. Never throws; callers in the add
+// flow await it so the later enriched upsert for the same row lands after it.
 async function metaCachePut(isbn, snap) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean || !snap || !cloudUser) return;
