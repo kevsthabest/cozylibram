@@ -1,75 +1,118 @@
 # Cozy Libram Roadmap
 
-## v1.0 — "Share with loved ones" (private testers)
-Goal: stable, no data loss, easy for non-technical family to pick up.
-Target user: Kevin's wife (primary) + a handful of family/friend testers.
+Rebuilt 2026-09-27. The old v1.0 → v1.1 (public BYOK) → v1.2 (hosted APK) →
+App Store track is retired: things are moving fast enough that the
+public-release tracks may be irrelevant by the time we'd get to them.
+If they come back, they'll be re-planned from scratch.
 
-### Must-have: data safety & sync
-- [x] **Deletion tombstones** (v33) — deletions propagate as tombstones
-  (`deleted_books` table + per-user on-device set) instead of resurrecting.
-- [x] **Password-reset UI** (v33) — "Forgot password?" on the gate sends a
-  Supabase reset email; the link returns to the app with a new-password form.
-- [ ] **First-login merge hardening** — the adopt-and-merge path works, but it
-  needs a deliberate test pass (two devices, offline edits, then sign-in).
-
-### Must-have: getting books in
-- [x] **Bulk ISBN import** (v34) — new 📋 Bulk tab in Add: paste a stack of
-  ISBNs, paced metacache-backed lookup, per-ISBN status, one-tap add to TBR.
-- [x] **Unified import hub** (v34) — Settings → Backup → "Import from other
-  apps": one file picker, format auto-detection (Goodreads CSV, StoryGraph
-  CSV, plain ISBN lists), preview, deduped import. New sources are one
-  registry entry.
-- [x] **Bookmory import** (v44) — the `Database.bookmory` ZIP is read directly
-  in the browser (dependency-free ZIP + inflate + SQLite readers): 189 books
-  with statuses, ratings, page logs, favorites and tags; one binary-corrupted
-  record ("Dungeon Crawler Carl") is reported by name for manual re-adding.
-  Re-imports update in place via stable `bm-` ids; written reading memos are
-  not in the export file.
-
-### Should-have: tester onboarding
-- [ ] **Supabase Site URL fix** — verification emails still link to
-  `localhost:3000`. Set Site URL + Redirect URLs to the real app address
-  (Kevin's task, ~5 min in the Supabase dashboard).
-- [ ] **First-run welcome** — 2–3 swipeable slides (scan a barcode → shelves
-  → roulette) so non-technical testers get the core loop immediately.
-
-### Should-have: delight
-- [ ] **Yearly reading goal** — "Read N books in 2026" with a progress ring
-  in Stats. A BookTok staple, and a natural fit for a prolific reader.
-- [ ] **Reading reminders (opt-in)** — gentle daily nudge; keep it optional
-  and off by default.
-
-### Stretch (only if time)
-- [ ] Shared shelf view — see a loved one's shelf (read-only) without
-  account switching. Only if testers ask for it; per-user libraries stay
-  the default.
+Two pillars now. Everything else is parked or out.
 
 ---
 
-## Backburner — not started until v1.0 is comfortable
-(Kevin's call; roadmap kept here so the direction isn't lost.)
+## Pillar 1: Trope intelligence
 
-### v1.1 — Public GitHub release (self-hosted, BYOK)
-- [ ] Key-leak audit: `server-config.json` handling, `/config.js` exposure (gating removed 2026-09-26 — keep port off public internet)
-  sharing, no tokens in client bundle or repo history.
-- [ ] BYOK setup docs polish (README + `server-config.example.json`).
-- [ ] `book_meta` becomes a per-instance shared cache — document it.
-- [ ] Rate limiting / abuse notes for self-hosters.
+The differentiator. Nobody owns trope data well — not Hardcover, not
+Goodreads, not StoryGraph. For the BookTok crowd, tropes *are* the search
+language, and they exist in every genre, not just dark romance. The goal
+is a trope-first book intelligence layer: a canonical taxonomy, per-book
+trope data seeded by LLM and refined by the community, powering discovery
+that no generic catalog can match.
 
-### v1.2 — Hosted APK track
-- [ ] Central hosting: API proxy holds keys server-side, one global
-  `book_meta` cache for all APK users.
-- [ ] Capacitor packaging: Google OAuth deep-link callbacks, camera/barcode
-  in Android WebView, `localStorage`, service-worker review.
-- [ ] Password-reset + email deep links working against the hosted domain.
+### Phase 1 — Taxonomy + data model
+- [ ] **Canonical trope taxonomy.** One curated list: id, name, description,
+  applicable genres. Genre-aware by design — the LLM prompt and the UI
+  only ever offer tropes that fit the book's genres. Starter coverage:
+  - *Romance:* enemies to lovers, friends to lovers, forced proximity,
+    fake dating, second chance, forbidden love, love triangle,
+    grumpy/sunshine, single parent, billionaire, marriage of convenience
+  - *Dark romance:* mafia/organized crime, captive/captor, morally grey
+    MMC, stalker, revenge, non-con/dub-con dynamics, secret society
+  - *Fantasy:* chosen one, magic academy, quest/party, prophecy, dark
+    lord, court intrigue, dragons, fae courts
+  - *Sci-Fi:* first contact, generation ship, AI uprising/sentience,
+    time travel, space opera, dystopia, cyberpunk, alien invasion
+  - *Mystery/Thriller:* unreliable narrator, locked room, whodunit,
+    police procedural, domestic thriller, serial killer, cold case,
+    spy/espionage
+  - *Horror:* haunted house, final girl, cosmic horror, folk horror,
+    slasher, possession, found footage
+  - (expand: historical, contemporary, non-fiction "approaches")
+- [ ] **Supabase tables:** `tropes` (the taxonomy) and `book_tropes`
+  (book ref → trope → source [`llm`|`community`] → confidence/votes).
+  Keyed the same way as the planned `book_meta` cache so it works
+  per-instance now and globally later.
+- [ ] **RLS + moderation shape:** users can propose/vote; admins curate
+  the taxonomy. Reuse the Observatory admin pattern.
 
-### Future — App Store
-- [ ] Premium features + in-app payments (entitlements validated server-side).
-- [ ] Mood-based recommendation "sommelier".
-- [ ] Monitoring, backups, production HTTPS/domain.
+### Phase 2 — LLM backfill pipeline
+- [ ] **Description → tropes inference.** Prompt constrained to the
+  canonical taxonomy and the book's genres (no invented near-duplicate
+  labels). Server-side key, same pattern as the Hardcover token.
+- [ ] **Backfill the existing library** — a few hundred books, one
+  afternoon, fractions of a cent per book.
+- [ ] **Cache globally:** each book inferred once; results feed the
+  shared `book_meta`-style cache. Wire into the existing trope UI
+  (`tropes`, `tropesAuto`, axis pickers are already there waiting).
+
+### Phase 3 — Community refinement
+- [ ] **In-app trope voting** via the Coven: upvote/downvote tropes on
+  books, propose missing ones. LLM seeds, humans correct.
+- [ ] **Confidence scoring:** LLM seed + community votes → ranked trope
+  list per book. Joke/spam tags die by downvote; taxonomy stays admin-
+  curated.
+
+### Phase 4 — Trope-powered discovery
+- [ ] **"More like this" v2** (v110 exists, scored locally) — powered by
+  the trope DB instead of only on-device data.
+- [ ] **Trope search/filter:** "enemies-to-lovers, high spice, completed
+  series" as a first-class query, not a keyword hack.
+
+---
+
+## Pillar 2: Sustained quality
+
+- **One feature per version.** Tests green, committed, pushed — the
+  definition of done doesn't change.
+- **Loved-ones testers drive hardening.** Real bug reports beat
+  anticipated ones; robustness work follows real pain.
+- **Data-safety invariants hold:** tombstones, sync conflict resolution,
+  per-user partitions, RLS — never regressed, never "simplified."
+- **First-login merge hardening** (carried over): the adopt-and-merge
+  path needs a deliberate test pass — two devices, offline edits, then
+  sign-in.
+
+---
+
+## Still owed (standing items, not pillars)
+
+- Re-run `supabase/schema.sql` (`deleted_books`, `profiles`, avatars
+  bucket + storage policies, `circle_links`/`circle_invites` + RLS).
+- Run `supabase/analytics.sql`; add Kevin to `app_admins`.
+- Supabase Site URL / redirect URL fix (verification emails link to
+  localhost).
+- Revoke + replace the exposed Hardcover token; restrict the Google
+  Books key to the Books API.
+- Manually re-add the corrupted "Dungeon Crawler Carl" Bookmory record.
+
+---
+
+## Parked (not now, not never)
+
+- Public GitHub release / self-hosted BYOK (old v1.1).
+- Hosted APK track with centrally-held keys (old v1.2).
+- App Store release, premium features, in-app payments.
+- Full actions/repository/event-bus architecture refactor — shelved
+  2026-09-27; revisit only on real pain. If revisited: architecture
+  map first, then `services/` extraction for external APIs.
 
 ---
 
 ## Deliberately out of scope
-- Social network features (follows, feeds) — this is a personal library app.
+
+- Yearly reading goals/challenges — Kevin's explicit veto, do not
+  suggest again.
+- Public social network features (follows, public feeds) — the Coven
+  is private circles by design; that boundary stays.
 - Scraping retailer sites — affiliate/search links only.
+- Rewriting in a framework, replacing Supabase, or dropping
+  local-first — the architecture constraints stand.

@@ -271,6 +271,27 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   white-space: nowrap;
 }
 .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+/* v153: trope-intelligence chips — AI-inferred ones get a subtle accent tint
+   plus the ✦ marker; heuristic chips render plain. */
+.chip.dbtrope { cursor: default; }
+.chip.dbtrope.ai { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+/* v154: community vote controls on AI trope chips — subtle by default. */
+.tgvote { display: inline-flex; align-items: center; gap: 2px; }
+.tvbtn {
+  border: 1px solid var(--line); background: var(--bg2); color: var(--muted);
+  border-radius: 999px; width: 26px; height: 26px; font-size: 11px; line-height: 1;
+  cursor: pointer; padding: 0;
+}
+.tvbtn.on { border-color: var(--accent); color: var(--accent); font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tvbtn:disabled { opacity: 0.5; }
+.tvnet { font-size: 11px; color: var(--muted); min-width: 20px; text-align: center; }
+/* v155: admin export snippet for approved trope proposals. */
+.exportpre {
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font-size: 12px; overflow-x: auto; white-space: pre;
+  margin: 8px 0; font-family: ui-monospace, monospace;
+}
 
 /* ---------- book cards ---------- */
 .grid { display: flex; flex-direction: column; gap: 12px; }
@@ -1302,6 +1323,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ob-stat { text-align: center; margin-bottom: 0; }
 .ob-stat-val { font-size: 26px; font-weight: 800; color: var(--gold, #e8b4a0); }
 .ob-stat-label { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+.ob-progress { height: 10px; border-radius: 6px; background: var(--chip, #2a2a33); overflow: hidden; margin: 8px 0; }
+.ob-progress-fill { height: 100%; border-radius: 6px; background: var(--gold, #e8b4a0); transition: width 0.3s; }
 .ob-scroll { overflow-x: auto; }
 .ob-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ob-table th, .ob-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.08)); }

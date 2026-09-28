@@ -19,6 +19,7 @@ let adminCustomFrom = '';
 let adminCustomTo = '';
 let adminRowsCache = {}; // rangeKey -> rows
 let adminAggCache = {}; // rangeKey -> aggregate
+let adminTab = 'analytics'; // analytics | tropes (Trope Lab)
 
 async function refreshAdminStatus() {
   isAppAdmin = false;
@@ -198,16 +199,25 @@ function renderAdmin() {
     return;
   }
   const ranges = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['all', 'All time'], ['custom', 'Custom']];
-  setView('<div class="view-head"><h2 class="serif">' + icon('chart') + ' Libram Observatory</h2>' +
-    '<p class="note">Admin only · usage counts, never book content</p></div>' +
-    '<div class="ob-ranges">' + ranges.map(r =>
+  const rangesHTML = '<div class="ob-ranges">' + ranges.map(r =>
       '<button class="btn sm' + (adminRange === r[0] ? '' : ' ghost') + '" data-range="' + r[0] + '">' + r[1] + '</button>').join('') +
     (adminRange === 'custom'
       ? '<input type="date" id="ob-from" class="text-input sm" value="' + esc(adminCustomFrom) + '">' +
         '<input type="date" id="ob-to" class="text-input sm" value="' + esc(adminCustomTo) + '">' +
         '<button class="btn sm" id="ob-apply">Apply</button>'
-      : '') + '</div>' +
-    '<div id="ob-body"><p class="note">Loading analytics…</p></div>');
+      : '') + '</div>';
+  setView('<div class="view-head"><h2 class="serif">' + icon('chart') + ' Libram Observatory</h2>' +
+    '<p class="note">Admin only · usage counts, never book content</p></div>' +
+    '<div class="ob-ranges">' +
+    '<button class="btn sm' + (adminTab === 'analytics' ? '' : ' ghost') + '" data-atab="analytics">Analytics</button>' +
+    '<button class="btn sm' + (adminTab === 'tropes' ? '' : ' ghost') + '" data-atab="tropes">' + icon('bulb') + ' Trope Lab</button>' +
+    '</div>' +
+    (adminTab === 'analytics' ? rangesHTML : '') +
+    '<div id="ob-body"><p class="note">Loading…</p></div>');
+  document.querySelectorAll('[data-atab]').forEach(b => b.addEventListener('click', () => {
+    adminTab = b.dataset.atab;
+    renderAdmin();
+  }));
   document.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
     adminRange = b.dataset.range;
     if (adminRange !== 'custom') renderAdmin();
@@ -220,7 +230,8 @@ function renderAdmin() {
     adminRowsCache = {}; adminAggCache = {};
     renderAdminBody();
   });
-  renderAdminBody();
+  if (adminTab === 'tropes') renderTropeLab();
+  else renderAdminBody();
 }
 
 async function renderAdminBody() {
@@ -290,4 +301,299 @@ async function renderAdminBody() {
       esc((e && e.message) || 'unknown error') + '</p>' +
       '<p class="note">If the analytics tables are missing, run supabase/analytics.sql in the Supabase SQL editor.</p></div>';
   }
+}
+
+/* ---------------- Trope Lab (v152) ----------------
+   Admin-only trope operations inside the Observatory: provider/key
+   status, taxonomy health, coverage counts, and the paced backfill
+   queue (pause/resume, per-book failure retry, re-infer on taxonomy
+   bumps). Ordinary users never see this — inference runs only when
+   an admin starts it here. */
+
+let tropeLabKeyToId = {}; // book_key -> library id, rebuilt on each coverage scan
+
+function tropeLabBooks() {
+  try { return (typeof library !== 'undefined' ? library : []).filter(b => b && !b._deleted); }
+  catch (e) { return []; }
+}
+
+function tropeLabResolve(id) {
+  return tropeLabBooks().find(b => b.id === id) || null;
+}
+
+async function tropeLabSb() {
+  try { return await cloudClient().catch(() => null); }
+  catch (e) { return null; }
+}
+
+/* Pure-ish: coverage of local books against book_tropes rows.
+   Returns { total, tagged, missing:[books], stale:[books] }. */
+function tropeLabCoverage(books, rows) {
+  const byKey = {};
+  (rows || []).forEach(r => {
+    const e = byKey[r.book_key] || (byKey[r.book_key] = { count: 0, version: 0 });
+    e.count++;
+    e.version = Math.max(e.version, r.taxonomy_version || 0);
+  });
+  const missing = [], stale = [];
+  let tagged = 0;
+  (books || []).forEach(b => {
+    const key = bookKeyFor(b);
+    const e = byKey[key];
+    if (!e) missing.push(b);
+    else if (e.version < TROPE_TAXONOMY_VERSION) stale.push(b);
+    else tagged++;
+  });
+  return { total: (books || []).length, tagged, missing, stale };
+}
+
+function tropeLabWireQueue() {
+  // v153: shared app-wide wiring (resolver, upsert, DB reads); Trope Lab
+  // only adds its progress callback on top.
+  ensureTropeQueueWired();
+  TropeQueue.configure({
+    onEvent: () => {
+      if (adminTab === 'tropes') tropeLabProgressHTML();
+    },
+  });
+}
+
+/* Refresh only the progress region (called on every queue event). */
+function tropeLabProgressHTML() {
+  const el = document.getElementById('tropelab-progress');
+  if (!el) return;
+  const s = TropeQueue.snapshot();
+  const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+  const failedKeys = Object.keys(s.failedDetail || {});
+  const failedRows = failedKeys.slice(0, 50).map(k => {
+    const b = tropeLabResolve(tropeLabKeyToId[k]);
+    return '<tr><td>' + esc(b ? b.title : k) + '</td><td class="note">' +
+      esc(s.failedDetail[k]) + '</td></tr>';
+  }).join('');
+  el.innerHTML =
+    '<div class="ob-card"><h3 class="serif">Backfill progress</h3>' +
+    '<div class="ob-progress"><div class="ob-progress-fill" style="width:' + pct + '%"></div></div>' +
+    '<p class="note">' + s.done + ' of ' + s.total + ' done · ' + s.pending + ' pending · ' +
+    failedKeys.length + ' failed' +
+    (s.running && !s.paused ? ' · <b>running</b>' : s.paused ? ' · paused' : '') +
+    (s.fatalError ? ' · <span style="color:var(--danger,#c00)">' + esc(s.fatalError) + '</span>' : '') +
+    '</p>' +
+    '<div class="ob-ranges">' +
+    (s.running && !s.paused
+      ? '<button class="btn sm" id="tl-pause">Pause</button>'
+      : '<button class="btn sm" id="tl-resume"' + (s.pending ? '' : ' disabled') + '>Resume</button>') +
+    '<button class="btn sm ghost" id="tl-retry"' + (failedKeys.length ? '' : ' disabled') + '>Retry failed (' + failedKeys.length + ')</button>' +
+    '<button class="btn sm ghost" id="tl-clear">Clear queue</button>' +
+    '</div>' +
+    (failedKeys.length
+      ? '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Book</th><th>Error</th></tr></thead>' +
+        '<tbody>' + failedRows + '</tbody></table></div>' +
+        (failedKeys.length > 50 ? '<p class="note">Showing 50 of ' + failedKeys.length + ' failures.</p>' : '')
+      : '') +
+    '</div>';
+  const pause = document.getElementById('tl-pause');
+  if (pause) pause.addEventListener('click', () => { TropeQueue.pause(); });
+  const resume = document.getElementById('tl-resume');
+  if (resume) resume.addEventListener('click', () => { TropeQueue.start(); tropeLabProgressHTML(); });
+  const retry = document.getElementById('tl-retry');
+  if (retry) retry.addEventListener('click', () => {
+    const ids = failedKeys.map(k => tropeLabKeyToId[k]).filter(Boolean);
+    TropeQueue.clearFailed();
+    if (ids.length) { TropeQueue.enqueue(ids); TropeQueue.start(); }
+    tropeLabProgressHTML();
+  });
+  const clear = document.getElementById('tl-clear');
+  if (clear) clear.addEventListener('click', () => { TropeQueue.reset(); tropeLabProgressHTML(); });
+}
+
+async function renderTropeLab() {
+  const body = document.getElementById('ob-body');
+  if (!body) return;
+  tropeLabWireQueue();
+
+  const info = tropeProviderInfo();
+  const configured = tropeInferenceConfigured();
+  const statusCard =
+    '<div class="ob-card"><h3 class="serif">' + icon('bulb') + ' Trope Lab</h3>' +
+    '<div class="ob-grid">' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + esc(info.provider || '—') + '</div><div class="ob-stat-label">Provider</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val" style="font-size:15px;word-break:break-all">' + esc(info.model || '—') + '</div><div class="ob-stat-label">Model</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + (configured ? 'Ready' : 'Missing') + '</div><div class="ob-stat-label">API key</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">v' + TROPE_TAXONOMY_VERSION + ' · ' + TROPES.length + '</div><div class="ob-stat-label">Taxonomy tropes</div></div>' +
+    '</div>' +
+    (configured
+      ? '<p class="note">Inference calls go through the same-origin <code>/api/trope-infer</code> proxy — the key stays server-side.</p>'
+      : '<p class="note">' + icon('warn') + ' No trope API key on this server. Add <code>trope_api_key</code> (+ provider/model) to ' +
+        '<code>server-config.json</code>, or set <code>TROPE_API_KEY</code> / <code>TROPE_MODEL</code> in the Pages environment.</p>') +
+    '</div>';
+
+  body.innerHTML = statusCard + '<div id="tropelab-coverage"><p class="note">Scanning library…</p></div>' +
+    '<div id="tropelab-progress"></div>';
+
+  // Resume an interrupted backfill when Trope Lab opens.
+  const snap = TropeQueue.snapshot();
+  let resumed = false;
+  if (snap.running && !snap.paused && snap.pending > 0 && configured) {
+    TropeQueue.start();
+    resumed = true;
+  }
+
+  let cov, sbError = '';
+  try {
+    const books = tropeLabBooks();
+    tropeLabKeyToId = {};
+    books.forEach(b => { tropeLabKeyToId[bookKeyFor(b)] = b.id; });
+    const sb = await tropeLabSb();
+    let rows = [];
+    if (sb) {
+      const { data, error } = await sb.from('book_tropes')
+        .select('book_key, taxonomy_version').limit(20000);
+      if (error) sbError = error.message;
+      else rows = data || [];
+    } else {
+      sbError = 'not signed in';
+    }
+    cov = tropeLabCoverage(books, rows);
+  } catch (e) {
+    sbError = (e && e.message) || 'scan failed';
+    cov = { total: 0, tagged: 0, missing: [], stale: [] };
+  }
+
+  const covEl = document.getElementById('tropelab-coverage');
+  if (!covEl) return;
+  covEl.innerHTML =
+    '<div class="ob-card"><h3 class="serif">Coverage</h3>' +
+    '<div class="ob-grid">' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + cov.tagged + '</div><div class="ob-stat-label">Books tagged</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + cov.missing.length + '</div><div class="ob-stat-label">Missing</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + cov.stale.length + '</div><div class="ob-stat-label">Stale taxonomy</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val">' + cov.total + '</div><div class="ob-stat-label">Books scanned</div></div>' +
+    '</div>' +
+    (sbError ? '<p class="note">' + icon('warn') + ' Cloud read failed (' + esc(sbError) + ') — counts may be incomplete. ' +
+      'If the trope tables are missing, run <code>supabase/tropes.sql</code> in the Supabase SQL editor.</p>' : '') +
+    (resumed ? '<p class="note">Resumed an interrupted backfill.</p>' : '') +
+    '<div class="ob-ranges">' +
+    '<button class="btn sm" id="tl-backfill"' + (configured && cov.missing.length ? '' : ' disabled') + '>Backfill missing (' + cov.missing.length + ')</button>' +
+    '<button class="btn sm ghost" id="tl-restale"' + (configured && cov.stale.length ? '' : ' disabled') + '>Re-infer stale (' + cov.stale.length + ')</button>' +
+    '</div>' +
+    '<p class="note">One book at a time, ~4s apart — stays under free-tier limits. ' +
+    'Failed or empty inference is never cached as “no tropes”; failures stay listed below for retry. ' +
+    'Closing this tab pauses nothing — reopen Trope Lab to resume.</p>' +
+    '</div>';
+
+  const wire = (id, books) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', () => {
+      const n = TropeQueue.enqueue(books.map(b => b.id));
+      if (n) TropeQueue.start();
+      tropeLabProgressHTML();
+    });
+  };
+  wire('tl-backfill', cov.missing);
+  wire('tl-restale', cov.stale);
+  tropeLabProgressHTML();
+
+  // v155: user-proposal review queue.
+  const propCard = document.createElement('div');
+  propCard.innerHTML =
+    '<div class="ob-card"><h3 class="serif">Trope proposals</h3>' +
+    '<p class="note">Coven members propose, vote, and you review. Approving writes the canonical row ' +
+    'to the shared taxonomy table and optionally tags the originating book — then shows the exact ' +
+    'snippet to paste into <code>js/156-trope-taxonomy.js</code> so inference can emit it.</p>' +
+    '<div id="trope-proposals"><p class="note">Loading…</p></div></div>';
+  body.appendChild(propCard);
+  tropeLabProposalsHTML();
+}
+
+/* v155: admin review queue for user-proposed tropes. */
+async function tropeLabProposalsHTML() {
+  const box = document.getElementById('trope-proposals');
+  if (!box || adminTab !== 'tropes') return;
+  let list = [];
+  try {
+    list = await TropeProposals.listPending();
+  } catch (e) {
+    box.innerHTML = '<p class="note">Couldn’t load proposals: ' + esc((e && e.message) || e) + '</p>';
+    return;
+  }
+  if (!list.length) {
+    box.innerHTML = '<p class="note">No pending proposals.</p>';
+    return;
+  }
+  box.innerHTML = list.map(p => {
+    const net = p.votes.up - p.votes.down;
+    return '<div class="circle-row" style="margin-bottom:8px"><div class="circle-meta">' +
+      '<b>' + esc(p.name) + '</b>' + (p.mine ? ' <span class="note-inline">· yours</span>' : '') +
+      '<p class="note" style="margin:4px 0">' + esc(p.description) + '</p>' +
+      '<p class="note">' + p.genres.map(g => esc(tropeGenreLabel(g))).join(' · ') +
+      ' · votes <b>' + (net > 0 ? '+' : '') + net + '</b> (' + p.votes.up + '▲ ' + p.votes.down + '▼)' +
+      (p.book_key ? ' · has an originating book' : '') + '</p>' +
+      '<div class="hidden" id="tpexp-' + p.id + '" style="margin-top:8px"></div>' +
+      '</div><div class="circle-actions" style="flex-direction:column;align-items:stretch;gap:6px">' +
+      '<button class="btn sm" data-papprove="' + p.id + '">Approve</button>' +
+      '<button class="btn ghost sm" data-preject="' + p.id + '">Reject</button>' +
+      '<select data-pdup="' + p.id + '" class="text-input" style="font-size:12px;padding:6px" aria-label="Mark as duplicate of…">' +
+      '<option value="">Duplicate of…</option>' +
+      TROPES.map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') +
+      '</select>' +
+      '</div></div>';
+  }).join('');
+
+  box.querySelectorAll('[data-papprove]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.papprove;
+    btn.disabled = true;
+    try {
+      const { slug, proposal } = await TropeProposals.approve(id, { tagBook: true });
+      const exp = document.getElementById('tpexp-' + id);
+      const snippet = tropeExportSnippet({ id: slug, name: proposal.name, description: proposal.description, genres: proposal.genres });
+      exp.classList.remove('hidden');
+      exp.innerHTML = '<p class="note"><b>Approved as <code>' + esc(slug) + '</code>.</b>' +
+        (proposal.book_key ? ' Originating book tagged.' : '') +
+        ' Until the entry below lands in <code>js/156-trope-taxonomy.js</code>, inference cannot emit it ' +
+        '(unknown ids are rejected). After pasting, re-run <code>node supabase/gen-trope-seed.js</code>.</p>' +
+        '<pre class="exportpre">' + esc(snippet) + '</pre>' +
+        '<button class="btn ghost sm" data-copyexp>Copy snippet</button>';
+      exp.querySelector('[data-copyexp]').addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(snippet).then(() => toast('Snippet copied'));
+        }
+      });
+      const row = btn.closest('.circle-row');
+      const acts = row.querySelector('.circle-actions');
+      if (acts) acts.innerHTML = '<span class="note">approved ✓</span>';
+    } catch (e) {
+      btn.disabled = false;
+      toast('Approve failed: ' + ((e && e.message) || e));
+    }
+  }));
+
+  box.querySelectorAll('[data-preject]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.preject;
+    btn.disabled = true;
+    try {
+      await TropeProposals.reject(id);
+      const row = btn.closest('.circle-row');
+      if (row) row.remove();
+      if (!box.querySelector('.circle-row')) box.innerHTML = '<p class="note">No pending proposals.</p>';
+    } catch (e) {
+      btn.disabled = false;
+      toast('Reject failed: ' + ((e && e.message) || e));
+    }
+  }));
+
+  box.querySelectorAll('[data-pdup]').forEach(sel => sel.addEventListener('change', async () => {
+    const id = sel.dataset.pdup;
+    if (!sel.value) return;
+    sel.disabled = true;
+    try {
+      await TropeProposals.markDuplicate(id, sel.value);
+      const row = sel.closest('.circle-row');
+      if (row) row.remove();
+      if (!box.querySelector('.circle-row')) box.innerHTML = '<p class="note">No pending proposals.</p>';
+      toast('Marked as duplicate');
+    } catch (e) {
+      sel.disabled = false;
+      toast('Failed: ' + ((e && e.message) || e));
+    }
+  }));
 }

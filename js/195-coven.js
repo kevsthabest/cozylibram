@@ -313,6 +313,13 @@ function renderCovenMain(code, lists, priv) {
     html += '</div>';
   }
 
+  // v155: trope proposals — the coven votes, admin reviews in Trope Lab.
+  html += '<h2 class="section serif">Trope proposals</h2><div class="circle-card">' +
+    '<p class="note">Missing a trope? Propose it — the ' + covenName().toLowerCase() +
+    ' votes, and popular proposals get reviewed.</p>' +
+    '<button class="btn ghost sm" id="cc-propose">＋ Propose a trope</button>' +
+    '<div id="cc-proposals" class="circle-list"><p class="note">Loading…</p></div></div>';
+
   // Privacy
   html += '<h2 class="section serif">Privacy</h2><div class="circle-card">' +
     '<div class="field"><label>Share my shelves with my ' + covenName().toLowerCase() + '</label>' +
@@ -330,6 +337,8 @@ function renderCovenMain(code, lists, priv) {
 
   // Wire up
   const rerender = () => renderCoven();
+  document.getElementById('cc-propose').addEventListener('click', () => openTropeProposalSheet(null));
+  renderCovenProposals();
   document.getElementById('cc-copy').addEventListener('click', () => {
     const c = document.getElementById('cc-code').textContent;
     const done = () => toast('Invite code copied');
@@ -471,4 +480,120 @@ function openCovenBook(b) {
   document.body.appendChild(ov);
   ov.querySelector('#cb-back').addEventListener('click', e => { if (e.target.id === 'cb-back') close(); });
   ov.querySelector('#cb-x').addEventListener('click', close);
+}
+
+/* ---------------- Trope proposals (v155) ----------------
+   Coven members propose and vote; admin reviews in Trope Lab. */
+
+function proposalRowHTML(p) {
+  const net = p.votes.up - p.votes.down;
+  return '<div class="circle-row"><div class="circle-meta">' +
+    '<b>' + esc(p.name) + '</b>' + (p.mine ? ' <span class="note-inline">· yours</span>' : '') +
+    '<p class="note" style="margin:4px 0">' + esc(p.description) + '</p>' +
+    '<div class="chips" style="padding-bottom:0">' +
+      p.genres.map(g => '<span class="chip" style="cursor:default">' + esc(tropeGenreLabel(g)) + '</span>').join('') +
+    '</div></div>' +
+    '<div class="circle-actions" style="align-items:center">' +
+    '<button class="tvbtn' + (p.votes.mine === 1 ? ' on' : '') + '" data-pv="1" data-pid="' + p.id + '" aria-label="Upvote">▲</button>' +
+    '<span class="tvnet">' + (net > 0 ? '+' : '') + net + '</span>' +
+    '<button class="tvbtn' + (p.votes.mine === -1 ? ' on' : '') + '" data-pv="-1" data-pid="' + p.id + '" aria-label="Downvote">▼</button>' +
+    '</div></div>';
+}
+
+async function renderCovenProposals() {
+  const box = document.getElementById('cc-proposals');
+  if (!box) return;
+  try {
+    ensureTropeQueueWired();
+    const list = await TropeProposals.listPending();
+    box.innerHTML = list.length
+      ? list.map(proposalRowHTML).join('')
+      : '<p class="note">No proposals yet — be the first.</p>';
+    box.querySelectorAll('[data-pv]').forEach(btn => btn.addEventListener('click', async () => {
+      try {
+        btn.disabled = true;
+        await TropeProposals.toggleVote(btn.dataset.pid, parseInt(btn.dataset.pv, 10));
+        renderCovenProposals();
+      } catch (e) {
+        btn.disabled = false;
+        toast('Couldn’t vote: ' + ((e && e.message) || e));
+      }
+    }));
+  } catch (e) {
+    box.innerHTML = '<p class="note">Couldn’t load proposals.</p>';
+  }
+}
+
+/* Proposal form sheet. `book` is optional — when launched from a book modal
+   the book becomes the proposal's originating book. */
+function openTropeProposalSheet(book) {
+  ensureTropeQueueWired();
+  const bookKey = book ? bookKeyFor(book) : null;
+  const sel = new Set();
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="tp-back"><div class="modal" role="dialog" aria-label="Propose a trope">' +
+    '<button class="modal-close" id="tp-x">✕</button>' +
+    '<h2 class="serif">Propose a trope</h2>' +
+    (book
+      ? '<p class="note">For <b>' + esc(book.title || 'this book') + '</b> — your ' + esc(covenName().toLowerCase()) + ' votes on it.</p>'
+      : '<p class="note">Your ' + esc(covenName().toLowerCase()) + ' votes on proposals; the popular ones get reviewed.</p>') +
+    '<div class="field"><label>Name</label>' +
+    '<input id="tp-name" class="text-input" maxlength="60" placeholder="Only One Bed" autocomplete="off"></div>' +
+    '<div class="field"><label>One-line definition</label>' +
+    '<input id="tp-desc" class="text-input" maxlength="160" placeholder="What makes this trope what it is, in one line" autocomplete="off"></div>' +
+    '<div class="field"><label>Genres</label><div class="chips" id="tp-genres">' +
+    TROPE_GENRES.map(g => '<button class="chip" data-tpg="' + g + '">' + esc(tropeGenreLabel(g)) + '</button>').join('') +
+    '</div></div>' +
+    '<p class="note hidden" id="tp-dup"></p>' +
+    '<p class="note hidden" id="tp-err" style="color:var(--danger)"></p>' +
+    '<button class="btn block" id="tp-submit">Submit proposal</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('#tp-back').addEventListener('click', e => { if (e.target.id === 'tp-back') close(); });
+  ov.querySelector('#tp-x').addEventListener('click', close);
+  ov.querySelectorAll('[data-tpg]').forEach(btn => btn.addEventListener('click', () => {
+    const g = btn.dataset.tpg;
+    if (sel.has(g)) { sel.delete(g); btn.classList.remove('active'); }
+    else { sel.add(g); btn.classList.add('active'); }
+  }));
+  const nameInp = ov.querySelector('#tp-name');
+  const dupBox = ov.querySelector('#tp-dup');
+  nameInp.addEventListener('input', () => {
+    const d = TropeProposals.checkDuplicate(nameInp.value);
+    if (d && d.kind === 'exact') {
+      dupBox.textContent = '“' + d.trope.name + '” already exists — pick another name.';
+      dupBox.classList.remove('hidden');
+    } else if (d) {
+      dupBox.textContent = 'Similar to existing “' + d.trope.name + '” — you can still submit.';
+      dupBox.classList.remove('hidden');
+    } else {
+      dupBox.classList.add('hidden');
+    }
+  });
+  ov.querySelector('#tp-submit').addEventListener('click', async () => {
+    const errBox = ov.querySelector('#tp-err');
+    const btn = ov.querySelector('#tp-submit');
+    errBox.classList.add('hidden');
+    try {
+      btn.disabled = true;
+      await TropeProposals.submit({
+        name: nameInp.value,
+        description: ov.querySelector('#tp-desc').value,
+        genres: [...sel],
+        bookKey,
+      });
+      ov.querySelector('.modal').innerHTML =
+        '<h2 class="serif">Proposed ✓</h2>' +
+        '<p class="note">Your ' + esc(covenName().toLowerCase()) + ' can vote on it now.</p>' +
+        '<button class="btn block" id="tp-done">Done</button>';
+      ov.querySelector('#tp-done').addEventListener('click', () => { close(); renderCovenProposals(); });
+    } catch (e) {
+      btn.disabled = false;
+      errBox.textContent = (e && e.message) || 'Could not submit.';
+      errBox.classList.remove('hidden');
+    }
+  });
 }

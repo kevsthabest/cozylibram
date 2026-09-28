@@ -43,6 +43,32 @@ Users insert only their own events and can never read analytics; admins can
 read everything (this powers the Libram Observatory dashboard in v119).
 Full details: `docs/ANALYTICS.md`.
 
+## 2c. Trope intelligence (v151–v155, optional)
+
+Trope tags, community votes, and user-proposed tropes live in four tables:
+
+1. In the SQL editor, run `supabase/tropes.sql` (re-run safe).
+2. This creates:
+   - a `tropes` table: the shared canonical taxonomy (admin writes only —
+     seeded from the curated list via `node supabase/gen-trope-seed.js`,
+     which prints SQL `insert` statements you paste into the SQL editor);
+   - a `book_tropes` table: one row per book per trope (user's own rows
+     read/write, everyone can read) — inference results, admin-tagged books,
+     and `source: 'community'` rows from approved proposals;
+   - a `trope_votes` table: normalized per-user +1/−1 votes on book-trope
+     tags (one row per user per tag — counts are always derived);
+   - a `trope_proposals` table + `trope_proposal_votes`: user-proposed
+     tropes (name, one-line definition, genres, optional originating book)
+     with normalized per-user voting; admins review them in Trope Lab
+     (`/#admin`) — approve, reject, or mark duplicate.
+
+Approve flow note: approving a proposal writes its canonical row to `tropes`
+and can auto-tag the originating book, but the model only ever emits ids that
+exist in `js/156-trope-taxonomy.js`. After approving, paste the shown export
+snippet into that file's `TROPES` array, bump `TROPE_TAXONOMY_VERSION` if the
+taxonomy meaningfully changed, and re-run `node supabase/gen-trope-seed.js`
+to refresh the seed SQL.
+
 ## 3. Get your API credentials
 
 1. Open **Project Settings → API**.

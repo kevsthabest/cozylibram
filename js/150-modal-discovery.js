@@ -775,6 +775,9 @@ function renderDetailModal(b, viaBook) {
     '<details class="m-collapsible" id="m-sec-discovery"><summary>' + icon('sparkles') + ' Series & Discovery</summary>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
     '<div id="m-series-wrap">' + seriesInlineHTML(b, id) + '</div>' +
+    '<div class="field"><label>' + icon('bulb') + ' Trope intelligence</label>' +
+    '<div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
+    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div>' +
     '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
       const sims = similarBooks(b, 6);
@@ -1029,6 +1032,13 @@ function renderDetailModal(b, viaBook) {
   }
   renderTropeSuggestions();
 
+  // v153: trope-intelligence chips — DB tropes when present (with a subtle
+  // source indicator), heuristic suggestions otherwise. Fills in async.
+  renderDbTropeChips(b);
+  // v155: propose-a-trope sheet, with this book as the originating book.
+  const tpb = document.getElementById('m-tropepropose');
+  if (tpb) tpb.addEventListener('click', () => openTropeProposalSheet(b));
+
   // v75: quotes save immediately (like the progress steppers), independent of
   // the draft — Save syncs draft.quotes from the book so they aren't clobbered.
   const renderQuotesSection = () => {
@@ -1210,4 +1220,33 @@ function renderQuotes() {
   });
   document.querySelectorAll('.q-list .q-card').forEach(c =>
     c.addEventListener('click', () => openDetail(c.dataset.book)));
+}
+
+/* v153: fill the Trope intelligence row — DB tropes when present, heuristic
+   suggestions otherwise. v154: vote buttons (tap again to retract).
+   Async; leaves a fallback note on failure. */
+async function renderDbTropeChips(book) {
+  const box = document.getElementById('m-tropedb');
+  if (!box) return;
+  try {
+    const key = bookKeyFor(book);
+    const [{ tropes, origin }, votes] = await Promise.all([
+      TropeStore.getBookTropes(book),
+      TropeVotes.getVotes(key),
+    ]);
+    box.innerHTML = dbTropeChipsHTML(tropes, origin, votes);
+    box.querySelectorAll('[data-tv]').forEach(btn => btn.addEventListener('click', async () => {
+      const tid = btn.dataset.tid;
+      const want = parseInt(btn.dataset.tv, 10);
+      try {
+        btn.disabled = true;
+        await TropeVotes.toggleVote(key, tid, want);
+        renderDbTropeChips(book); // re-render: counts, highlight, adjusted confidence
+      } catch (e) {
+        btn.disabled = false;
+      }
+    }));
+  } catch (e) {
+    box.innerHTML = '<p class="note">No trope data yet.</p>';
+  }
 }

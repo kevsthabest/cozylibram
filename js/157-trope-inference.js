@@ -1,0 +1,840 @@
+'use strict';
+
+/* ---------------- Trope inference client (v152) ----------------
+   Provider-agnostic LLM trope tagger. Every supported provider
+   (OpenRouter, Gemini, Groq, Ollama, any custom OpenAI-compatible
+   endpoint) speaks the OpenAI chat-completions wire format, so one
+   client covers all of them.
+
+   The API key NEVER touches this file: the browser POSTs to the
+   same-origin /api/trope-infer proxy (server.py locally,
+   functions/api/trope-infer.js on Cloudflare Pages), which attaches
+   the key server-side. /config.js only tells the client whether a
+   key is configured, plus the provider/model names for display.
+
+   Core (prompt building, parsing, validation) has no DOM dependencies
+   so it stays unit-testable. TropeQueue paces calls (one at a time,
+   4s apart) and persists its cursor in localStorage so a backfill
+   survives reloads and tab closes. */
+
+const TROPE_INFER_TIMEOUT_MS = 60000;
+const TROPE_QUEUE_DELAY_MS = 4000;
+const TROPE_QUEUE_STORE_KEY = 'cozylibram.tropequeue.v1';
+const TROPE_MAX_TOKENS = 1200;
+
+/* Informational: where the server proxy sends requests per provider.
+   The client never calls these directly. */
+const TROPE_PROVIDERS = {
+  openrouter: 'https://openrouter.ai/api/v1',
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  groq: 'https://api.groq.com/openai/v1',
+  ollama: 'http://localhost:11434/v1',
+  custom: null, // admin-supplied base URL, server-side only
+};
+
+/* Pure: is trope inference configured on this server? */
+function tropeInferenceConfigured() {
+  try {
+    return !!(window.SPICY_CONFIG && window.SPICY_CONFIG.trope);
+  } catch (e) { return false; }
+}
+
+/* Pure: display info about the configured provider (names only, no secrets). */
+function tropeProviderInfo() {
+  try {
+    const c = window.SPICY_CONFIG || {};
+    return { provider: c.tropeProvider || '', model: c.tropeModel || '' };
+  } catch (e) { return { provider: '', model: '' }; }
+}
+
+/* Map the app's free-form category strings onto taxonomy genres. */
+const TROPE_GENRE_ALIASES = [
+  [/dark[\s-]*romance/, 'dark-romance'],
+  [/romance/, 'romance'],
+  [/fantas/, 'fantasy'],
+  [/science[\s-]*fiction|sci[\s-]*fi/, 'sci-fi'],
+  [/mystery|thriller|suspense|\bcrime\b/, 'mystery-thriller'],
+  [/horror/, 'horror'],
+  [/histor/, 'historical'],
+  [/contemporary|literary fiction|general fiction/, 'contemporary'],
+  [/non[\s-]*fiction|biography|memoir/, 'non-fiction'],
+];
+
+/* Pure: app categories -> TROPE_GENRES subset. */
+function appGenresToTropeGenres(categories) {
+  const out = new Set();
+  (categories || []).forEach(c => {
+    const s = String(c).toLowerCase();
+    TROPE_GENRE_ALIASES.forEach(([re, g]) => { if (re.test(s)) out.add(g); });
+  });
+  return [...out];
+}
+
+const TROPE_SYSTEM_PROMPT = [
+  'You are a fiction metadata tagger for a book catalog. Read the book\'s',
+  'title, author, genres, and description, then tag it with tropes from the',
+  'fixed taxonomy below.',
+  '',
+  'STRICT RULES',
+  '1. You may ONLY use trope ids from the TAXONOMY list. Never invent,',
+  '   rename, merge, or paraphrase ids. If none fit well, return an empty list.',
+  '2. Reply with JSON ONLY. No markdown fences, no commentary, no extra keys:',
+  '   {"tropes": [{"id": "trope-id", "confidence": 0.85}]}',
+  '3. Tag 0-8 tropes. Fewer is better than guessing; an empty list is a valid answer.',
+  '4. Confidence is 0.0-1.0 and must be grounded in the description: 0.9+ means',
+  '   stated outright in the description; 0.7-0.89 means strongly implied by',
+  '   description details; 0.5-0.69 means plausible from description evidence.',
+  '   Never tag from the title, author, or genre alone — if the description',
+  '   does not support it, omit it. Below 0.5, omit the trope.',
+  '5. Prefer the most specific fitting trope over a generic one.',
+  '6. This is cataloging of published fiction. Tag dark, violent, or sexual',
+  '   themes factually where they apply; do not moralize, warn, or refuse.',
+  '7. If the description is missing or too thin to tag confidently,',
+  '   return {"tropes": []}.',
+  '',
+  'TAXONOMY (id: name — what it means)',
+  '{taxonomy_lines}',
+].join('\n');
+
+/* Pure: build the { system, user } prompt for a book. Only tropes whose
+   genres intersect the book's genres are included — keeps the prompt
+   small and kills cross-genre noise. */
+function buildTropePrompt(book) {
+  book = book || {};
+  const genres = appGenresToTropeGenres(book.categories);
+  const pool = tropesForGenres(genres);
+  const lines = pool.map(t => t.id + ': ' + t.name + ' — ' + t.description);
+  const system = TROPE_SYSTEM_PROMPT.replace('{taxonomy_lines}', lines.join('\n'));
+  const authors = Array.isArray(book.authors) ? book.authors.join(', ')
+    : String(book.authors || '');
+  const user = 'BOOK\nTitle: ' + String(book.title || '') +
+    '\nAuthor: ' + authors +
+    '\nGenres: ' + (genres.join(', ') || (book.categories || []).join(', ')) +
+    '\nDescription: ' + String(book.description || '');
+  return { system, user, genres, tropeCount: pool.length };
+}
+
+/* Pure: normalize one identifier string for book keys. */
+function tropeNormIdent(s) {
+  return String(s || '').toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim()
+    .replace(/^the\s+/, '');
+}
+
+/* Pure: stable per-work cache key. ISBN-13 when available, else
+   t:<normalized-title>:<normalized-author>. Trope data is about the
+   work, not the user's library row, so one inference serves everyone. */
+function bookKeyFor(book) {
+  book = book || {};
+  const digits = String(book.isbn || '').replace(/[^0-9]/g, '');
+  if (digits.length === 13) return 'isbn:' + digits;
+  const authors = Array.isArray(book.authors) ? book.authors.join(' ') : book.authors;
+  return 't:' + tropeNormIdent(book.title) + ':' + tropeNormIdent(authors);
+}
+
+/* Pure: defensively parse model output into a raw [{id, confidence}] array.
+   Accepts {"tropes":[...]} or a bare array; tolerates markdown fences.
+   Throws on unparseable output — the caller treats that as a failed
+   inference, never as "no tropes". */
+function parseTropeResponse(text) {
+  if (text == null || String(text).trim() === '') throw new Error('empty response');
+  let t = String(text).trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '');
+  let obj;
+  try {
+    obj = JSON.parse(t);
+  } catch (e) {
+    const m = t.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('unparseable JSON');
+    obj = JSON.parse(m[0]);
+  }
+  const arr = Array.isArray(obj) ? obj : obj.tropes;
+  if (!Array.isArray(arr)) throw new Error('no tropes array in response');
+  return arr;
+}
+
+/* Pure: validate raw model output against the taxonomy. Unknown ids are
+   dropped (the main defense against invented labels), confidence is
+   clamped to 0-1, duplicates removed, capped at 8. */
+function validateTropeResults(raw) {
+  const out = [], seen = new Set();
+  for (const r of raw || []) {
+    if (out.length >= 8) break;
+    if (!r || typeof r !== 'object') continue;
+    const id = String(r.id || '').trim().toLowerCase();
+    if (!id || seen.has(id) || !tropeById(id)) continue;
+    let c = Number(r.confidence);
+    if (!isFinite(c)) continue;
+    c = Math.min(1, Math.max(0, c));
+    seen.add(id);
+    out.push({ id, confidence: Math.round(c * 100) / 100 });
+  }
+  return out;
+}
+
+/* Error type for inference failures. `fatal` means "stop the queue"
+   (bad key); anything else is per-book and retried later. */
+function TropeInferError(message, opts) {
+  const e = new Error(message);
+  e.name = 'TropeInferError';
+  e.fatal = !!(opts && opts.fatal);
+  e.status = opts && opts.status;
+  return e;
+}
+
+/* Pure: backoff delay for attempt n (0-based), honoring Retry-After. */
+function tropeBackoffMs(attempt, retryAfterSecs) {
+  if (retryAfterSecs != null && isFinite(retryAfterSecs) && retryAfterSecs >= 0) {
+    return Math.min(120000, Math.round(retryAfterSecs * 1000));
+  }
+  return [1000, 4000, 16000][Math.min(attempt, 2)];
+}
+
+function sleepMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/* Infer tropes for one book via the same-origin proxy. Returns
+   { tropes, model }. An empty tropes array is a legitimate result;
+   any failure throws TropeInferError (fatal=true means "stop the
+   queue and tell the admin to check the key"). fetchFn is injectable
+   for tests. */
+async function inferBookTropes(book, opts) {
+  opts = opts || {};
+  const fetchFn = opts.fetchFn || fetch;
+  const delayFn = opts.delayFn || sleepMs;
+  const { system, user } = buildTropePrompt(book);
+  const maxTokens = Math.min(4000, Math.max(100, opts.maxTokens || TROPE_MAX_TOKENS));
+  const messages = [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+  let lastErr = null;
+  let nudged = false;
+
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TROPE_INFER_TIMEOUT_MS);
+    let resp;
+    try {
+      resp = await fetchFn('/api/trope-infer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, max_tokens: maxTokens }),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') throw TropeInferError('inference timed out');
+      throw TropeInferError('network error: ' + (e && e.message || e));
+    }
+    clearTimeout(timer);
+
+    const retryAfter = resp.headers && resp.headers.get
+      ? Number(resp.headers.get('retry-after')) : NaN;
+
+    if (resp.status === 401 || resp.status === 403) {
+      throw TropeInferError('provider rejected the request (HTTP ' + resp.status +
+        ') - check the API key', { fatal: true, status: resp.status });
+    }
+    if (resp.status === 429 || resp.status >= 500) {
+      lastErr = TropeInferError('provider HTTP ' + resp.status, { status: resp.status });
+      if (attempt >= 3) break;
+      await delayFn(tropeBackoffMs(attempt, retryAfter));
+      continue;
+    }
+    if (!resp.ok) {
+      throw TropeInferError('proxy HTTP ' + resp.status, { status: resp.status });
+    }
+
+    let data;
+    try {
+      data = await resp.json();
+    } catch (e) {
+      throw TropeInferError('bad proxy response');
+    }
+    const text = data && data.choices && data.choices[0] &&
+      data.choices[0].message && data.choices[0].message.content;
+    if (!text) throw TropeInferError('empty model response');
+
+    let raw;
+    try {
+      raw = parseTropeResponse(text);
+    } catch (e) {
+      // One retry with an explicit JSON-only nudge, then give up.
+      if (!nudged) {
+        nudged = true;
+        messages.push({ role: 'user', content: 'Reply with JSON only, no other text.' });
+        continue;
+      }
+      throw TropeInferError('unparseable model output');
+    }
+    return {
+      tropes: validateTropeResults(raw),
+      model: (data && data.model) || '',
+    };
+  }
+  throw lastErr || TropeInferError('inference failed');
+}
+/* ---------------- Paced background queue ----------------
+   One book at a time, TROPE_QUEUE_DELAY_MS apart. State persists in
+   localStorage so a backfill survives reloads; pause/resume is manual.
+   The queue never touches the books table or sync — it only upserts
+   into book_tropes via the injected upsertRows. */
+
+const TropeQueue = {
+  _state: null,
+  _pumping: false,
+  _resolveBook: null, // id -> book (set by the app)
+  _upsertRows: null,  // async (rows) -> void (set by the app)
+  _onEvent: null,     // (state) -> void, UI refresh hook
+
+  _blank() {
+    return { jobs: [], failed: {}, running: false, paused: false,
+             done: 0, total: 0, fatalError: '', startedAt: 0 };
+  },
+
+  _load() {
+    try {
+      const raw = localStorage.getItem(TROPE_QUEUE_STORE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.jobs)) { this._state = Object.assign(this._blank(), s); return; }
+      }
+    } catch (e) {}
+    this._state = this._blank();
+  },
+
+  _save() {
+    try { localStorage.setItem(TROPE_QUEUE_STORE_KEY, JSON.stringify(this._state)); }
+    catch (e) {}
+  },
+
+  _emit() {
+    try { if (this._onEvent) this._onEvent(this.snapshot()); } catch (e) {}
+  },
+
+  configure({ resolveBook, upsertRows, onEvent } = {}) {
+    if (!this._state) this._load();
+    if (resolveBook) this._resolveBook = resolveBook;
+    if (upsertRows) this._upsertRows = upsertRows;
+    if (onEvent) this._onEvent = onEvent;
+  },
+
+  snapshot() {
+    if (!this._state) this._load();
+    const s = this._state;
+    return { pending: s.jobs.length, failed: Object.keys(s.failed).length,
+             running: s.running, paused: s.paused, done: s.done, total: s.total,
+             fatalError: s.fatalError, failedDetail: Object.assign({}, s.failed) };
+  },
+
+  /* ids: local library book ids. Returns number enqueued. */
+  enqueue(ids) {
+    if (!this._state) this._load();
+    const have = new Set(this._state.jobs.map(j => j.id));
+    let n = 0;
+    (ids || []).forEach(id => {
+      if (id && !have.has(id)) { this._state.jobs.push({ id }); have.add(id); n++; }
+    });
+    this._state.total += n;
+    this._state.fatalError = '';
+    this._save(); this._emit();
+    return n;
+  },
+
+  clearFailed() {
+    if (!this._state) this._load();
+    const ids = Object.keys(this._state.failed);
+    this._state.failed = {};
+    this._save(); this._emit();
+    return ids;
+  },
+
+  reset() {
+    this._state = this._blank();
+    this._save(); this._emit();
+  },
+
+  start() {
+    if (!this._state) this._load();
+    if (!this._state.jobs.length || this._pumping) return false;
+    this._state.running = true;
+    this._state.paused = false;
+    this._state.fatalError = '';
+    if (!this._state.startedAt) this._state.startedAt = Date.now();
+    this._save();
+    this._pump();
+    return true;
+  },
+
+  pause() {
+    if (!this._state) this._load();
+    this._state.paused = true;
+    this._state.running = false;
+    this._save(); this._emit();
+  },
+
+  async _pump() {
+    if (this._pumping) return;
+    this._pumping = true;
+    try {
+      while (this._state.running && !this._state.paused && this._state.jobs.length) {
+        const job = this._state.jobs[0];
+        let book = null;
+        try { book = this._resolveBook ? this._resolveBook(job.id) : null; } catch (e) { book = null; }
+        if (!book) {
+          this._state.jobs.shift(); // book deleted since enqueue; drop silently
+        } else {
+          const key = bookKeyFor(book);
+          try {
+            const res = await inferBookTropes(book);
+            const rows = res.tropes.map(t => ({
+              book_key: key, trope_id: t.id, source: 'llm',
+              confidence: t.confidence, model: res.model || null,
+              taxonomy_version: TROPE_TAXONOMY_VERSION,
+              updated_at: new Date().toISOString(),
+            }));
+            // Empty inference is a legitimate result — but per the plan we
+            // never cache "no tropes", so zero rows = nothing to upsert.
+            if (rows.length && this._upsertRows) await this._upsertRows(rows);
+            this._state.done++;
+            delete this._state.failed[key];
+          } catch (e) {
+            if (e && e.fatal) {
+              this._state.running = false;
+              this._state.fatalError = e.message;
+              break;
+            }
+            this._state.failed[key] = (e && e.message) || 'inference failed';
+          }
+          this._state.jobs.shift();
+        }
+        this._save(); this._emit();
+        if (this._state.jobs.length && this._state.running && !this._state.paused) {
+          await sleepMs(this._delayMs != null ? this._delayMs : TROPE_QUEUE_DELAY_MS);
+        }
+      }
+    } finally {
+      this._pumping = false;
+    }
+    if (!this._state.jobs.length) this._state.running = false;
+    this._save(); this._emit();
+  },
+};
+
+/* ---------------- Read-path store (v153) ----------------
+   Best-available tropes for a book: memory cache → Supabase
+   book_tropes (ordered by confidence) → heuristic tropesAuto meanwhile.
+   A cache miss with no DB rows enqueues a background inference (online
+   + provider configured) so the next view has real data. Never touches
+   the books table or sync logic — purely additive metadata. */
+
+const TROPE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+const TropeStore = {
+  _cache: {},      // book_key -> { tropes, at }
+  _readRows: null, // async (bookKey) -> rows (injected)
+
+  configure({ readRows } = {}) {
+    if (readRows) this._readRows = readRows;
+  },
+
+  invalidate(bookKey) {
+    if (bookKey) delete this._cache[bookKey];
+    else this._cache = {};
+  },
+
+  async getBookTropes(book) {
+    book = book || {};
+    ensureTropeQueueWired();
+    const key = bookKeyFor(book);
+    const hit = this._cache[key];
+    if (hit && Date.now() - hit.at < TROPE_CACHE_TTL_MS) {
+      return { tropes: hit.tropes, origin: 'db' };
+    }
+    let rows = null;
+    try { rows = this._readRows ? await this._readRows(key) : null; }
+    catch (e) { rows = null; }
+    if (rows && rows.length) {
+      const tropes = rows
+        .map(r => ({ trope: tropeById(r.trope_id), confidence: r.confidence, source: r.source }))
+        .filter(x => x.trope)
+        .sort((a, b) => b.confidence - a.confidence)
+        .map(x => ({ id: x.trope.id, name: x.trope.name,
+                     confidence: x.confidence, source: x.source }));
+      this._cache[key] = { tropes, at: Date.now() };
+      return { tropes, origin: 'db' };
+    }
+    // No DB data yet: kick off a background inference (nonblocking) and
+    // return the heuristic suggestions meanwhile. Offline or unconfigured:
+    // heuristics only, zero behavior change.
+    try {
+      const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+      if (tropeInferenceConfigured() && online && book.id) {
+        TropeQueue.enqueue([book.id]);
+        TropeQueue.start();
+      }
+    } catch (e) {}
+    const heur = (book.tropesAuto || [])
+      .map(name => ({ id: null, name: String(name), confidence: 0, source: 'heuristic' }));
+    return { tropes: heur, origin: 'heuristics' };
+  },
+};
+
+/* Wire the queue + store for app-wide use (modal read-path and Trope Lab
+   both call this; Trope Lab then adds its own onEvent). Idempotent. */
+let tropeQueueWiredForApp = false;
+
+function ensureTropeQueueWired() {
+  const resolveBook = id => {
+    try { return (typeof library !== 'undefined' ? library : []).find(b => b.id === id) || null; }
+    catch (e) { return null; }
+  };
+  const upsertRows = async rows => {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) throw new Error('cloud unavailable');
+    const { error } = await sb.from('book_tropes')
+      .upsert(rows, { onConflict: 'book_key,trope_id' });
+    if (error) throw error;
+  };
+  const readRows = async bookKey => {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) return null;
+    const { data, error } = await sb.from('book_tropes')
+      .select('trope_id, confidence, source')
+      .eq('book_key', bookKey)
+      .order('confidence', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  };
+  TropeQueue.configure({ resolveBook, upsertRows });
+  TropeStore.configure({ readRows });
+  TropeVotes.configure({ getClient: async () => cloudClient().catch(() => null) });
+  TropeProposals.configure({ getClient: async () => cloudClient().catch(() => null) });
+  tropeQueueWiredForApp = true;
+}
+/* v153: trope-intelligence chips. Pure HTML builder (unit-tested). DB tropes
+   get a subtle ✦ source indicator + confidence tooltip; heuristics render
+   as plain chips. v154: signed-in users get ▲▼ vote buttons on DB chips;
+   `votes` is { tropeId: { up, down, mine } }. `esc` comes from
+   js/050-helpers.js at runtime. */
+function dbTropeChipsHTML(tropes, origin, votes) {
+  if (!tropes || !tropes.length) {
+    return '<p class="note">No trope data yet.</p>';
+  }
+  const ai = origin === 'db';
+  votes = votes || {};
+  const votable = ai && typeof TropeVotes !== 'undefined' && TropeVotes.canVote();
+  return tropes.map(t => {
+    const v = votes[t.id] || { up: 0, down: 0, mine: 0 };
+    const net = v.up - v.down;
+    let title = '';
+    if (ai) {
+      title = 'AI-inferred · ' + Math.round(tropeDisplayConfidence(t.confidence, v) * 100) + '% confidence';
+      if (net !== 0) title += ' · community ' + (net > 0 ? '+' : '') + net;
+    }
+    let h = '<span class="chip dbtrope' + (ai ? ' ai' : '') + '"' +
+      (title ? ' title="' + title + '"' : '') + '>' +
+      (ai ? '✦ ' : '') + esc(t.name) + '</span>';
+    if (votable && t.id) {
+      h = '<span class="tgvote">' + h +
+        '<button class="tvbtn' + (v.mine === 1 ? ' on' : '') + '" data-tv="1" data-tid="' + esc(t.id) + '"' +
+        ' aria-label="This trope fits">▲</button>' +
+        '<button class="tvbtn' + (v.mine === -1 ? ' on' : '') + '" data-tv="-1" data-tid="' + esc(t.id) + '"' +
+        ' aria-label="This trope does not fit">▼</button>' +
+        (net ? '<span class="tvnet">' + (net > 0 ? '+' : '') + net + '</span>' : '') +
+        '</span>';
+    }
+    return h;
+  }).join('') +
+    (ai ? '<p class="note">✦ inferred from the book\u2019s description' +
+      (votable ? ' — tap ▲▼ to agree or disagree' : '') + '</p>' : '');
+}
+
+/* ---------------- Community voting (v154) ----------------
+   One vote (+1/-1) per user per (book, trope), stored in the trope_votes
+   table (RLS: anyone signed in can read; users can only write their own
+   rows). Votes never rewrite the stored LLM confidence — they only nudge
+   what's displayed, bounded so a pile-on can't flip a result. */
+
+/* Display-time confidence: base LLM confidence nudged ±0.04 per net vote,
+   clamped to [0.05, 0.99]. Safe because the stored value is untouched and
+   the nudge saturates — ten extra downvotes can't push a 0.9 below 0.5. */
+function tropeDisplayConfidence(base, votes) {
+  const b = typeof base === 'number' && isFinite(base) ? base : 0.5;
+  const net = ((votes && votes.up) || 0) - ((votes && votes.down) || 0);
+  return Math.min(0.99, Math.max(0.05, b + 0.04 * net));
+}
+
+const TropeVotes = {
+  _getClient: null, // async () -> supabase client (injected)
+  _cache: {},       // book_key -> { tropeId: { up, down, mine } }
+
+  configure({ getClient } = {}) {
+    if (getClient) this._getClient = getClient;
+  },
+
+  _uid() {
+    try { return (typeof localUid !== 'undefined' && localUid) || null; }
+    catch (e) { return null; }
+  },
+
+  canVote() { return !!this._uid(); },
+
+  invalidate(bookKey) {
+    if (bookKey) delete this._cache[bookKey];
+    else this._cache = {};
+  },
+
+  /* Aggregate votes for a book: { tropeId: { up, down, mine } }. `mine` is
+     the current user's vote (1, -1, or 0). Signed-out users get counts with
+     mine always 0 — reading is allowed, writing isn't. */
+  async getVotes(bookKey) {
+    const hit = this._cache[bookKey];
+    if (hit) return hit;
+    const agg = {};
+    try {
+      const sb = this._getClient ? await this._getClient() : null;
+      if (!sb) { this._cache[bookKey] = agg; return agg; }
+      const { data, error } = await sb.from('trope_votes')
+        .select('trope_id, vote, user_id').eq('book_key', bookKey);
+      if (error) throw error;
+      const uid = this._uid();
+      for (const r of data || []) {
+        const e = agg[r.trope_id] || (agg[r.trope_id] = { up: 0, down: 0, mine: 0 });
+        if (r.vote === 1) e.up++;
+        else if (r.vote === -1) e.down++;
+        if (uid && r.user_id === uid) e.mine = r.vote;
+      }
+    } catch (e) {}
+    this._cache[bookKey] = agg;
+    return agg;
+  },
+
+  /* Set the final vote state: 1 (fits), -1 (doesn't fit), 0/null (retract).
+     Returns the fresh aggregate entry for the trope. */
+  async vote(bookKey, tropeId, vote) {
+    const sb = this._getClient ? await this._getClient() : null;
+    const uid = this._uid();
+    if (!sb || !uid) throw new Error('sign in to vote on tropes');
+    if (vote === 1 || vote === -1) {
+      const { error } = await sb.from('trope_votes').upsert(
+        { book_key: bookKey, trope_id: tropeId, user_id: uid, vote },
+        { onConflict: 'book_key,trope_id,user_id' });
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('trope_votes').delete()
+        .eq('book_key', bookKey).eq('trope_id', tropeId).eq('user_id', uid);
+      if (error) throw error;
+    }
+    this.invalidate(bookKey);
+    const agg = await this.getVotes(bookKey);
+    return agg[tropeId] || { up: 0, down: 0, mine: 0 };
+  },
+
+  /* Tap-again-to-retract toggle used by the chip buttons. */
+  async toggleVote(bookKey, tropeId, want) {
+    const agg = await this.getVotes(bookKey);
+    const cur = (agg[tropeId] || { mine: 0 }).mine;
+    return this.vote(bookKey, tropeId, cur === want ? 0 : want);
+  },
+};
+
+/* ---------------- User-proposed tropes (v155) ----------------
+   Anyone signed in can propose a trope (name, one-line definition, genres,
+   optional originating book). Proposals are deduplicated client-side at
+   submit, voted on by the coven (normalized per-user rows in
+   trope_proposal_votes — counts are always derived), and reviewed by an
+   admin in Trope Lab: approve / reject / mark duplicate.
+   Inference only ever accepts ids present in js/156-trope-taxonomy.js
+   (parseTropes validates against tropeById), so a proposal becomes
+   inferable exactly when its entry lands there via the export snippet. */
+
+function tropeGenreLabel(g) {
+  return String(g).split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+const TropeProposals = {
+  _getClient: null, // async () -> supabase client (injected)
+
+  configure({ getClient } = {}) {
+    if (getClient) this._getClient = getClient;
+  },
+
+  _uid() {
+    try { return (typeof localUid !== 'undefined' && localUid) || null; }
+    catch (e) { return null; }
+  },
+
+  canPropose() { return !!this._uid(); },
+
+  /* Client-side duplicate check at submit time. Returns
+     { kind: 'exact'|'similar', trope } or null. */
+  checkDuplicate(name) {
+    const key = tropeNameKey(name);
+    if (!key) return null;
+    const exact = TROPES.find(t => tropeNameKey(t.name) === key);
+    if (exact) return { kind: 'exact', trope: exact };
+    const sim = findSimilarTrope(name);
+    return sim && sim.score >= 0.5
+      ? { kind: 'similar', trope: sim.trope, score: sim.score }
+      : null;
+  },
+
+  async submit({ name, description, genres, bookKey }) {
+    const sb = this._getClient ? await this._getClient() : null;
+    const uid = this._uid();
+    if (!sb || !uid) throw new Error('Sign in to propose a trope.');
+    name = String(name || '').trim().replace(/\s+/g, ' ');
+    description = String(description || '').trim().replace(/\s+/g, ' ');
+    genres = (genres || []).filter(g => TROPE_GENRES.includes(g));
+    if (name.length < 3 || name.length > 60)
+      throw new Error('Name must be 3–60 characters.');
+    if (description.length < 10 || description.length > 160)
+      throw new Error('Definition must be 10–160 characters (one line).');
+    if (!genres.length) throw new Error('Pick at least one genre.');
+    const dup = this.checkDuplicate(name);
+    if (dup && dup.kind === 'exact')
+      throw new Error('“' + dup.trope.name + '” already exists in the taxonomy.');
+    const { data, error } = await sb.from('trope_proposals').insert({
+      name, name_key: tropeNameKey(name), description, genres,
+      book_key: bookKey || null, proposed_by: uid, status: 'pending',
+    }).select('id').single();
+    if (error) throw error;
+    return data.id;
+  },
+
+  /* Pending proposals with derived vote counts + my vote, best first. */
+  async listPending() {
+    const sb = this._getClient ? await this._getClient() : null;
+    if (!sb) return [];
+    const { data: props, error } = await sb.from('trope_proposals')
+      .select('id, name, description, genres, book_key, proposed_by, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!props || !props.length) return [];
+    const { data: votes, error: verr } = await sb.from('trope_proposal_votes')
+      .select('proposal_id, vote, user_id')
+      .in('proposal_id', props.map(p => p.id));
+    if (verr) throw verr;
+    const uid = this._uid();
+    const byId = {};
+    for (const v of votes || []) {
+      const e = byId[v.proposal_id] || (byId[v.proposal_id] = { up: 0, down: 0, mine: 0 });
+      if (v.vote === 1) e.up++;
+      else if (v.vote === -1) e.down++;
+      if (uid && v.user_id === uid) e.mine = v.vote;
+    }
+    return props
+      .map(p => ({ ...p,
+        votes: byId[p.id] || { up: 0, down: 0, mine: 0 },
+        mine: !!uid && p.proposed_by === uid }))
+      .sort((a, b) => (b.votes.up - b.votes.down) - (a.votes.up - a.votes.down));
+  },
+
+  /* Tap-again-to-retract toggle. Returns the new final state (1/-1/0). */
+  async toggleVote(proposalId, want) {
+    const sb = this._getClient ? await this._getClient() : null;
+    const uid = this._uid();
+    if (!sb || !uid) throw new Error('Sign in to vote.');
+    let cur = 0;
+    try {
+      const { data } = await sb.from('trope_proposal_votes')
+        .select('vote').eq('proposal_id', proposalId).eq('user_id', uid)
+        .maybeSingle();
+      cur = data ? data.vote : 0;
+    } catch (e) {}
+    const next = cur === want ? 0 : want;
+    if (next === 1 || next === -1) {
+      const { error } = await sb.from('trope_proposal_votes').upsert(
+        { proposal_id: proposalId, user_id: uid, vote: next },
+        { onConflict: 'proposal_id,user_id' });
+      if (error) throw error;
+    } else if (cur !== 0) {
+      const { error } = await sb.from('trope_proposal_votes').delete()
+        .eq('proposal_id', proposalId).eq('user_id', uid);
+      if (error) throw error;
+    }
+    return next;
+  },
+
+  /* ---- admin review (Trope Lab) ---- */
+
+  /* Collision-safe canonical slug: base from the name, suffixed while taken
+     in the local taxonomy file or the shared taxonomy table. */
+  async slugFor(name) {
+    const taken = new Set(TROPES.map(t => t.id));
+    try {
+      const sb = this._getClient ? await this._getClient() : null;
+      if (sb) {
+        const base = tropeSlugFor(name, new Set());
+        const { data } = await sb.from('tropes').select('id')
+          .like('id', base.replace(/[%_]/g, '') + '%');
+        (data || []).forEach(r => taken.add(r.id));
+      }
+    } catch (e) {}
+    return tropeSlugFor(name, taken);
+  },
+
+  /* Approve: canonical row in the shared taxonomy table, proposal marked
+     approved, originating book auto-tagged (source 'community'). Returns
+     { slug, proposal } — the caller shows the JS export snippet. */
+  async approve(id, { tagBook = true } = {}) {
+    const sb = this._getClient ? await this._getClient() : null;
+    if (!sb) throw new Error('Cloud unavailable.');
+    const { data: p, error: perr } = await sb.from('trope_proposals')
+      .select('id, name, description, genres, book_key')
+      .eq('id', id).single();
+    if (perr || !p) throw perr || new Error('Proposal not found.');
+    const slug = await this.slugFor(p.name);
+    const { error: terr } = await sb.from('tropes').upsert({
+      id: slug, name: p.name, description: p.description,
+      genres: p.genres, version: TROPE_TAXONOMY_VERSION,
+    }, { onConflict: 'id' });
+    if (terr) throw terr;
+    const { error: serr } = await sb.from('trope_proposals')
+      .update({ status: 'approved' }).eq('id', id);
+    if (serr) throw serr;
+    if (tagBook && p.book_key) {
+      const { error: berr } = await sb.from('book_tropes').upsert({
+        book_key: p.book_key, trope_id: slug, source: 'community',
+        confidence: 0.85, taxonomy_version: TROPE_TAXONOMY_VERSION,
+      }, { onConflict: 'book_key,trope_id' });
+      if (berr) throw berr;
+      TropeStore.invalidate(p.book_key);
+    }
+    return { slug, proposal: p };
+  },
+
+  async reject(id) {
+    const sb = this._getClient ? await this._getClient() : null;
+    if (!sb) throw new Error('Cloud unavailable.');
+    const { error } = await sb.from('trope_proposals')
+      .update({ status: 'rejected' }).eq('id', id);
+    if (error) throw error;
+  },
+
+  async markDuplicate(id, canonicalId) {
+    const sb = this._getClient ? await this._getClient() : null;
+    if (!sb) throw new Error('Cloud unavailable.');
+    if (!tropeById(canonicalId)) throw new Error('Unknown canonical trope.');
+    const { error } = await sb.from('trope_proposals')
+      .update({ status: 'duplicate', duplicate_of: canonicalId }).eq('id', id);
+    if (error) throw error;
+  },
+};
+
+/* JS export snippet: the exact entry to paste into the TROPES array in
+   js/156-trope-taxonomy.js, then re-run `node supabase/gen-trope-seed.js`.
+   Until the entry lands in that file, parseTropes keeps rejecting the id —
+   approval alone can never make the model emit it. */
+function tropeExportSnippet({ id, name, description, genres }) {
+  const q = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  return '  { id: ' + q(id) + ', name: ' + q(name) + ',\n' +
+    '    description: ' + q(description) + ',\n' +
+    '    genres: [' + (genres || []).map(g => q(g)).join(', ') + '] },';
+}

@@ -184,9 +184,13 @@ function ev(uid, name, cat, props, created) {
   {
     const src = fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
     const sels = [...src.matchAll(/\.select\('([^']+)'\)/g)].map(m => m[1]);
+    // The third select is Trope Lab's coverage scan: book_key (a cache key,
+    // ISBN or normalized title/author — no titles, descriptions, or notes)
+    // plus taxonomy_version. Still no book content.
     ok('structural: select projections are exactly the safe columns',
-      sels.length === 2 && sels.includes('user_id') &&
-      sels.includes('user_id,event_name,event_category,properties,app_version,created_at'));
+      sels.length === 3 && sels.includes('user_id') &&
+      sels.includes('user_id,event_name,event_category,properties,app_version,created_at') &&
+      sels.includes('book_key, taxonomy_version'));
     ok('structural: never reads content fields off properties',
       !/properties\.(title|author|isbn|cover|notes|tropes|rating)/i.test(src) &&
       !/properties\[['"](title|author|isbn)/i.test(src));

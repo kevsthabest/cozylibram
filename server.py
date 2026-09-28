@@ -8,6 +8,8 @@ Serves the app's static files, plus:
   server-side by the /api/* proxies below.
 - /api/hardcover: POST {query} → Hardcover GraphQL with the server token.
 - /api/gbooks/...: GET → Google Books API with the server key.
+- /api/trope-infer: POST {messages, max_tokens} → LLM chat completions
+  with the server-side trope API key (OpenRouter/Gemini/Groq/Ollama/custom).
 - /cover-proxy: same-origin cover fetches for pixel reads.
 
 Setup: copy server-config.example.json to server-config.json and paste your
@@ -56,6 +58,32 @@ def load_cloud_cfg():
         return {'supabaseUrl': '', 'supabaseAnonKey': ''}
 
 
+TROPE_PROVIDER_URLS = {
+    'openrouter': 'https://openrouter.ai/api/v1',
+    'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
+    'groq': 'https://api.groq.com/openai/v1',
+    'ollama': 'http://localhost:11434/v1',
+}
+
+
+def load_trope_cfg():
+    """Trope-inference LLM config (v152). All server-side: the browser only
+    learns whether a key is configured (via /config.js), never the key."""
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            d = json.load(f)
+        provider = (d.get('trope_provider') or 'openrouter').strip().lower()
+        base_url = (d.get('trope_base_url') or '').strip().rstrip('/')
+        if not base_url:
+            base_url = TROPE_PROVIDER_URLS.get(provider, '')
+        return {'provider': provider,
+                'model': (d.get('trope_model') or '').strip(),
+                'key': (d.get('trope_api_key') or '').strip(),
+                'base_url': base_url}
+    except Exception:
+        return {'provider': 'openrouter', 'model': '', 'key': '', 'base_url': ''}
+
+
 def config_js_body():
     """The /config.js payload: capability flags, not secrets.
 
@@ -69,6 +97,11 @@ def config_js_body():
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
         payload['supabaseUrl'] = cc['supabaseUrl']
         payload['supabaseAnonKey'] = cc['supabaseAnonKey']
+    tc = load_trope_cfg()
+    if tc['key'] and tc['model'] and tc['base_url']:
+        payload['trope'] = True
+        payload['tropeProvider'] = tc['provider']
+        payload['tropeModel'] = tc['model']
     return ('window.SPICY_CONFIG = %s;' % json.dumps(payload)).encode('utf-8')
 
 
@@ -127,6 +160,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/hardcover':
             self.handle_api_hardcover()
             return
+        if path == '/api/trope-infer':
+            self.handle_api_trope_infer()
+            return
         self.send_error(404)
 
     def handle_api_hardcover(self):
@@ -175,6 +211,75 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             try:
                 self.send_error(502, 'hardcover fetch failed')
+            except Exception:
+                pass
+
+    def handle_api_trope_infer(self):
+        """POST /api/trope-infer {messages, max_tokens} → LLM chat completions.
+
+        Mirrors functions/api/trope-infer.js. The API key, model, and base
+        URL come from server-config.json — the browser never sees them.
+        Guards: POST only, messages is a small array of role/content objects,
+        max_tokens clamped to 100..4000. The upstream HTTP status is
+        forwarded so the client's 401/403/429 handling keeps working.
+        """
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+            raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
+            body = json.loads(raw)
+            messages = body.get('messages')
+            if not isinstance(messages, list) or not messages or len(messages) > 20:
+                self.send_error(400, 'bad request')
+                return
+            for m in messages:
+                if not isinstance(m, dict) or m.get('role') not in (
+                        'system', 'user', 'assistant') or not isinstance(
+                        m.get('content'), str) or len(m['content']) > 20000:
+                    self.send_error(400, 'bad request')
+                    return
+            try:
+                max_tokens = int(body.get('max_tokens') or 1200)
+            except (TypeError, ValueError):
+                max_tokens = 1200
+            max_tokens = min(4000, max(100, max_tokens))
+
+            tc = load_trope_cfg()
+            if not tc['key'] or not tc['model'] or not tc['base_url']:
+                self.send_error(503, 'trope inference not configured on this server')
+                return
+            url = tc['base_url'] + '/chat/completions'
+            upstream_body = json.dumps({
+                'model': tc['model'],
+                'messages': [{'role': m['role'], 'content': m['content']}
+                             for m in messages],
+                'temperature': 0,
+                'max_tokens': max_tokens,
+            }).encode('utf-8')
+            headers = {'Content-Type': 'application/json',
+                       'Authorization': 'Bearer ' + tc['key'],
+                       'User-Agent': 'CozyLibram/1.0 trope-proxy'}
+            if tc['provider'] == 'openrouter':
+                headers['HTTP-Referer'] = 'https://cozylibram.pages.dev'
+                headers['X-Title'] = 'Cozy Libram'
+            req = urllib.request.Request(url, data=upstream_body, headers=headers)
+            with urllib.request.urlopen(req, timeout=90) as r:
+                data = r.read(256 * 1024)
+                status = r.status
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read(256 * 1024)
+            self.send_response(e.code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'trope inference failed')
             except Exception:
                 pass
 
@@ -270,6 +375,10 @@ def main():
     print('[Cozy Libram] On your home network, also reachable at this PC\'s LAN IP.')
     if token:
         print('[Cozy Libram] Hardcover token loaded — attached server-side (/api/hardcover).')
+    tc = load_trope_cfg()
+    if tc['key'] and tc['model'] and tc['base_url']:
+        print('[Cozy Libram] Trope inference ready — %s / %s (/api/trope-infer).'
+              % (tc['provider'], tc['model']))
     if cc['supabaseUrl'] and cc['supabaseAnonKey']:
         print('[Cozy Libram] Supabase config loaded — served to every client (/config.js).')
     if not token and not (cc['supabaseUrl'] and cc['supabaseAnonKey']):

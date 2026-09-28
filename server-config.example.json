@@ -15,5 +15,14 @@
   "google_books_key": "PASTE_YOUR_GOOGLE_BOOKS_API_KEY_HERE",
   "_section_supabase": "Supabase — optional cloud sync. Supabase dashboard → Project Settings → API.",
   "supabase_url": "https://xyzcompany.supabase.co",
-  "supabase_anon_key": "PASTE_YOUR_SUPABASE_ANON_KEY_HERE"
+  "supabase_anon_key": "PASTE_YOUR_SUPABASE_ANON_KEY_HERE",
+  "_section_trope_inference": "Trope inference (v152) — LLM trope tagging. The key stays on the server and is attached by the /api/trope-infer proxy; browsers only see a configured/missing flag. Any OpenAI-compatible provider works.",
+  "trope_provider": "openrouter",
+  "_trope_provider_note": "One of: openrouter, gemini, groq, ollama, custom. (Ollama/custom need trope_base_url.)",
+  "trope_model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "_trope_model_note": "Model id for the provider above. Free OpenRouter options that worked in testing: nvidia/nemotron-3-ultra-550b-a55b:free, qwen/qwen3.8-27b:free, google/gemma-4-31b-it:free.",
+  "trope_api_key": "PASTE_YOUR_TROPE_API_KEY_HERE",
+  "_trope_api_key_note": "OpenRouter: openrouter.ai → Keys. Gemini/Groq: their dashboards. Ollama/local: anything non-empty (or leave provider unset).",
+  "trope_base_url": "",
+  "_trope_base_url_note": "Optional override. Needed for provider=custom (e.g. http://your-host:11434/v1). Leave empty to use the provider default."
 }

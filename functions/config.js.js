@@ -24,6 +24,18 @@ export async function onRequest(context) {
     payload.supabaseAnonKey = sbKey;
   }
 
+  // Trope inference (v152): capability flag + display names only — the
+  // TROPE_API_KEY never leaves the server (attached by /api/trope-infer).
+  const tropeProvider = (env.TROPE_PROVIDER || 'openrouter').trim().toLowerCase();
+  const tropeModel = (env.TROPE_MODEL || '').trim();
+  const hasTropeEndpoint = !!(env.TROPE_BASE_URL || '').trim() ||
+    ['openrouter', 'gemini', 'groq', 'ollama'].includes(tropeProvider);
+  if ((env.TROPE_API_KEY || '').trim() && tropeModel && hasTropeEndpoint) {
+    payload.trope = true;
+    payload.tropeProvider = tropeProvider;
+    payload.tropeModel = tropeModel;
+  }
+
   return new Response('window.SPICY_CONFIG = ' + JSON.stringify(payload) + ';', {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',

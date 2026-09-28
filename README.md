@@ -1,134 +1,128 @@
-# Cozy Libram 📚🌶️
+# Cozy Libram 📚
 
-Her dark little library — a mobile-first, installable web app (PWA) for tracking a
-dark-romance book collection. The library lives on-device in `localStorage`
-(works fully offline); book metadata comes from the free Google Books API
-(public ratings are blended with Open Library's via a count-weighted average)
-(with Open Library as a cover fallback). Optional Supabase login adds per-user
-cloud backup + multi-device sync — see `supabase/README.md`.
+A mobile-first, installable web app (PWA) for tracking a book collection —
+built for a prolific dark-romance reader, now the household's shared
+library. The library lives on-device in `localStorage` (fully offline);
+optional Supabase login adds per-user cloud backup, multi-device sync,
+and social shelves.
 
-## Run it locally
+![Library](docs/screenshots/library.png)
 
-No backend to install — it's static files.
+## What it does
 
-**Windows (easiest):** copy this folder to your PC, install Python 3.12 free from the
-Microsoft Store, then double-click `start-server.bat`. It opens the app at
-`http://localhost:8000`. Keep the black window open while using it.
+**Add books, three taps or less**
+- 📷 Barcode scan with the phone camera (native `BarcodeDetector`,
+  Quagga2 fallback, manual ISBN as backup)
+- 🔍 Title/author search across Google Books, Open Library, and Hardcover
+- ⌨️ Bulk ISBN import — paste a stack, paced lookup, one-tap add
+- 📥 Import hub: Goodreads CSV, StoryGraph CSV, ISBN lists, Bookmory
+  backups (parsed in-browser, no server), Hardcover CSV exports
 
-**Any machine with Python:** `python server.py` inside the folder.
+**Shelves & personal layer**
+- Shelves: To Be Read · Currently Reading · Read · Did Not Finish, plus
+  a Favorites bookshelf and a Wishlist with region-aware storefront links
+  and coming-soon countdowns
+- Personal ♥ rating (1–5) and genre-aware intensity axes — 🌶️ Spice for
+  romance, 👻 Scare for horror, 😰 Suspense for thrillers, ⚔️ Adventure
+  for fantasy/sci-fi — auto-detected per book, 1–5 each
+- Trope tags, page tracking with a daily reading log, calendar, streaks,
+  notes, and saved quotes
+- Hardcover enrichment in the background: series name + position,
+  content warnings, mood chips, extra genres, and a blended community
+  rating (ISBN-verified)
 
-**Phone on the same Wi-Fi:** open `http://<your-PC's-IP>:8000` on the phone
-(find the IP with `ipconfig` on Windows). Note: live camera barcode scanning needs
-HTTPS or localhost, so on the phone over plain HTTP use the "Snap a barcode photo"
-button or title search instead.
+![Book detail](docs/screenshots/book-modal.png)
 
-## Cloudflare Pages hosting
+**Discovery**
+- **Discover tab**: new releases from your top authors (checked
+  automatically weekly), "More like this" strips, series collections
+  with "owns X of Y" progress badges and missing-in-series lookup
+- **Authors tab** with missing-by-author lookup
+- 🎲 **TBR Roulette**: set your mood — genre, tropes, minimum spice —
+  and spin; slot-machine animation lands a winner with one-tap
+  **Start reading**
 
-The repo also deploys to Cloudflare Pages (no build step, root output directory):
+**Stats**
+- Dashboard: books finished, pages devoured, average rating, shelf
+  distribution, top tropes, current-read progress — plus a detailed
+  stats explorer
 
-- `functions/config.js.js` serves `/config.js` from Pages environment variables.
-  Since v89 it carries **no secrets** — only `hardcover`/`gbooks` capability
-  flags plus the Supabase URL/anon key (public by design).
-- `functions/api/hardcover.js` serves `POST /api/hardcover`: forwards GraphQL
-  queries to Hardcover with `HARDCOVER_TOKEN` attached server-side.
-- `functions/api/gbooks/[[path]].js` serves `GET /api/gbooks/books/v1/volumes`:
-  forwards to Google Books with `GOOGLE_BOOKS_KEY` attached server-side
-  (only the volumes endpoint is allowed).
-- `functions/cover-proxy.js` serves `/cover-proxy`, restricted to known cover hosts.
-- `_headers` keeps `/sw.js` out of edge caching so updates propagate.
-- `server.py` stays for local development (it mirrors the `/api/*` proxies
-  using `server-config.json`); it is not used on Pages.
+![Discover](docs/screenshots/discover.png) ![Stats](docs/screenshots/stats.png)
 
-Pages env vars to set: `HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`, `SUPABASE_URL`,
-`SUPABASE_ANON_KEY`. Because the secrets never reach the browser, no
-Cloudflare Access allowlist is needed to keep them private — though Access
-is still a fine extra layer if you want the whole site login-gated.
+**Coven (private social)**
+- Invite-code friends, read-only shelf browsing, per-shelf privacy
+  controls ("share my shelves" + hide individual shelves)
+- "You'd love this" recommendations from friends' 4★+ books
+- Soulmate scores, monthly leaderboard, buddy reads, now-reading feed
 
-### API keys (server-side since v89)
+**Sync & safety**
+- Supabase cloud sync: pull-merge-push with last-write-wins conflict
+  resolution, deletion tombstones (a deleted book stays deleted),
+  per-user on-device partitions, realtime updates across devices
+- Quiet by design: background syncs pulse a small dot instead of
+  toasting; manual syncs report what changed
 
-Put your Hardcover token and Google Books key in `server-config.json` (local:
-copy `server-config.example.json`) or in the Pages environment variables
-(`HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`). The keys stay on the server and are
-attached to API calls by the `/api/*` proxies — browsers only ever see
-capability flags, so no device ever needs a key pasted into Settings and
-there is nothing worth stealing in `/config.js`.
-
-Security notes: the keys never leave the server at all — browsers only see
-capability flags. If a token was ever
-pasted anywhere public (chat logs, screenshots), revoke it at hardcover.app and
-make a fresh one for `server-config.json`. Never commit `server-config.json`
-anywhere.
-
-## v1 features
-
-- **Three ways to add books**
-  - 📷 Barcode scan with the phone camera (native `BarcodeDetector`, Quagga2 fallback, manual ISBN as last resort)
-  - 🔍 Search by title/author via Google Books
-  - ⌨️ Manual ISBN entry
-- **Shelves**: To Be Read · Currently Reading · Read · Did Not Finish
-- **Auto-pulled metadata**: cover, description, page count, publish year, public star rating + rating count (Google Books primary, Open Library automatic fallback), plus starter trope tags seeded from subject data — all editable
-- **Personal layer**: genre-aware intensity ratings 🌶️👻😰⚔️ (1–5, auto-detected per book — Spice for romance, Scare for horror, Suspense for thrillers, Adventure for fantasy/sci-fi/LitRPG), personal ♥ rating (1–5), tropes tags, page progress, notes, dates
-- **Filter chips + live search** across title, author, and tropes
-- **List/grid view toggle** (cover grid is very BookTok), staggered card animations
-- **TBR Roulette** (🎲 Pick tab): set your mood — genre chips, trope/tag search, minimum spice — then spin. Slot-machine animation lands on a winner with cover, description, and one-tap **Start reading**
-- **Responsive**: phone-first, but opens up on tablets (2 columns) and desktops (3 columns, nav moves to a top bar)
-- **Stats tab**: books read this year, pages devoured, avg spice, shelf distribution, top tropes, currently-reading progress
-- **One-tap JSON backup**: export / import (import merges by ISBN, skips duplicates)
-- **Installable**: manifest + service worker, Add to Home Screen on iOS/Android
+**Feel**
+- 8 accent themes, cohesive line-art icon set, 3-step onboarding,
+  thoughtful empty states, full PWA (installable, offline covers)
 
 ## Run it locally
+
+No build step, no dependencies — it's static files.
 
 ```bash
 cd booktok
-python3 -m http.server 8080
-# open http://localhost:8080 on your phone (same Wi-Fi)
-# camera scanning needs https or localhost — use plain browsing over http,
-# or host it somewhere with https for the full experience
+python3 server.py        # serves on http://localhost:8000
 ```
 
-Or just double-click `index.html` — everything works except the camera and
-offline install, which need a real server.
+On Windows, double-click `start-server.bat`. On the same Wi-Fi, open
+`http://<your-PC's-IP>:8000` on a phone (camera barcode scanning needs
+HTTPS or localhost — over plain HTTP use the photo/scan fallback or
+title search).
 
-## Put it on her phone (free hosting)
+## API keys (server-side)
 
-Easiest: **Netlify Drop** — drag the `booktok` folder onto https://app.netlify.com/drop
-and you get an `https://` link instantly. Then on her iPhone: Share → Add to Home
-Screen. Camera scanning works because it's https.
+Metadata providers need keys, and they never touch the browser:
 
-Alternatives: Cloudflare Pages, GitHub Pages, Vercel — all free for static sites.
+- **Local**: copy `server-config.example.json` → `server-config.json`
+  and fill in `HARDCOVER_TOKEN` + `GOOGLE_BOOKS_KEY`. `server.py`
+  serves `/config.js` from it and proxies `/api/*` with the keys
+  attached server-side. Never commit `server-config.json`.
+- **Cloudflare Pages** (production: https://cozylibram.pages.dev):
+  set `HARDCOVER_TOKEN`, `GOOGLE_BOOKS_KEY`, `SUPABASE_URL`,
+  `SUPABASE_ANON_KEY` as environment variables. `functions/api/*`
+  attach the secrets server-side; `/config.js` carries only capability
+  flags plus the public Supabase anon key.
 
-## Roadmap
+If a token was ever pasted anywhere public (chat logs, screenshots),
+revoke it at hardcover.app and make a fresh one.
 
-### v2
-- [ ] Bookmory backup import (one-click: books, statuses, ratings)
-- [ ] Bulk ISBN import (paste a list, we look them all up)
-- [ ] Goodreads / StoryGraph CSV import
-- [ ] Recommendation roulette (bring back the classic)
+## Optional: Supabase cloud sync
 
-### Later
-- [ ] **The Sommelier**: mood-based chat agent that curates from her own TBR
-- [ ] Cloud sync (Supabase) so the library survives device changes
-- [ ] Reading-pace predictions ("you'll finish this Thursday")
+See `supabase/README.md`. Tables: `books`, `deleted_books`, `profiles`
+(per-user RLS), `circle_links`/`circle_invites` (Coven),
+`analytics_events` + `app_admins` (first-party analytics, default-on
+for signed-in users with a Settings → Privacy opt-out).
 
 ## Tech notes
 
-- Single-page vanilla JS — no build step, no framework to rot.
-- `normalizeVolume()` maps Google Books API → our book schema; swap in another
-  metadata source (Open Library, Hardcover) by writing a second normalizer.
-- Book schema: `id, isbn, title, authors[], cover, description, pageCount,
-  publishedDate, categories[], publicRating, ratingsCount, status, spice,
-  myRating, tropes[], progress, dateAdded, dateFinished, notes`,
-  plus optional Hardcover enrichment: `series{name, position}, contentWarnings[],
-  moods[], hcEnriched`
-- Backup format: `{ app: 'spicy-shelves', version: 1, exported, books: [...] }`
+- Single-page vanilla JS — numbered classic scripts (`js/000-core.js`
+  … `js/200-boot.js`), zero runtime dependencies, no build step.
+- Book schema: `id, isbn, title, authors[], cover, description,
+  pageCount, publishedDate, categories[], publicRating, ratingsCount,
+  status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],
+  tropesAuto[], axes[], progress, log[], quotes[], notes, series{},
+  contentWarnings[], moods[], owned, favorite`, plus sync (`_mtime`)
+  and enrichment (`hcEnriched`) bookkeeping.
+- Service worker precaches the app; bump `APP_VERSION` to force a
+  full asset refetch.
+- Test suite in `.test/` (`npm test`) — one feature per version,
+  tests green + committed + pushed is the definition of done.
 
-### Hardcover (optional enrichment)
+## Roadmap
 
-- Paste a free personal token (hardcover.app → Account settings → API) in
-  Settings → Hardcover. The token is stored in `localStorage` on the device only.
-- New books are enriched in the background after adding; "Enrich all books"
-  backfills the existing library (paced to stay under 60 req/min).
-- Enrichment adds: series name + position, content warnings (collapsible),
-  mood chips, extra genres, and blends the Hardcover community rating into
-  the public rating. ISBN match is verified against the returned ISBNs;
-  otherwise it falls back to title + author matching.
+See [ROADMAP.md](ROADMAP.md) — currently two pillars: a **trope
+intelligence** layer (curated multi-genre trope taxonomy, LLM-seeded
+per-book tropes, community refinement) and **sustained quality**.
+The implementation plan lives in
+[TROPE_INTELLIGENCE_PLAN.md](TROPE_INTELLIGENCE_PLAN.md).
