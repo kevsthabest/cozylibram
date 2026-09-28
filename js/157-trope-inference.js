@@ -452,6 +452,49 @@ async function inferBookTropes(book, opts) {
    The queue never touches the books table or sync — it only upserts
    into book_tropes via the injected upsertRows. */
 
+/* ---------------- Admin all-libraries backfill (v159) ----------------
+   Trope Lab (admin-only) can backfill every user's books, not just the
+   local library. The admin book list is a minimal projection
+   ({key, book}) persisted in localStorage so a backfill survives reloads;
+   all-libraries jobs are keyed by book_key (stable across users), and the
+   queue resolver falls back to the projection when the local library has
+   no such id. Cleared together with the queue. */
+
+const TROPE_ADMIN_BOOKS_KEY = 'cozylibram.tropeadminbooks.v1';
+let tropeAdminBookCache = null;
+
+function tropeAdminBooksLoad() {
+  if (tropeAdminBookCache) return tropeAdminBookCache;
+  try {
+    const raw = localStorage.getItem(TROPE_ADMIN_BOOKS_KEY);
+    const arr = raw ? JSON.parse(raw) : null;
+    tropeAdminBookCache = Array.isArray(arr) ? arr : [];
+  } catch (e) { tropeAdminBookCache = []; }
+  return tropeAdminBookCache;
+}
+
+/* Minimal book projection for inference, looked up by book_key. */
+function tropeAdminBookById(id) {
+  if (!id) return null;
+  const list = tropeAdminBooksLoad();
+  for (const b of list) if (b && b.key === id) return b.book || null;
+  return null;
+}
+
+/* Persist the admin projection (built by Trope Lab on scan). */
+function tropeAdminBooksSave(list) {
+  tropeAdminBookCache = Array.isArray(list) ? list : [];
+  try {
+    localStorage.setItem(TROPE_ADMIN_BOOKS_KEY,
+      JSON.stringify(tropeAdminBookCache));
+  } catch (e) {}
+}
+
+function tropeAdminBooksClear() {
+  tropeAdminBookCache = [];
+  try { localStorage.removeItem(TROPE_ADMIN_BOOKS_KEY); } catch (e) {}
+}
+
 const TropeQueue = {
   _state: null,
   _pumping: false,
@@ -523,6 +566,7 @@ const TropeQueue = {
 
   reset() {
     this._state = this._blank();
+    try { tropeAdminBooksClear(); } catch (e) {}
     this._save(); this._emit();
   },
 
@@ -662,8 +706,14 @@ function ensureTropeQueueWired() {
      without it, the taxonomy refresh below would fire on every book read. */
   if (tropeQueueWiredForApp) return;
   const resolveBook = id => {
-    try { return (typeof library !== 'undefined' ? library : []).find(b => b.id === id) || null; }
-    catch (e) { return null; }
+    try {
+      const lib = (typeof library !== 'undefined' ? library : []);
+      const local = lib.find(b => b.id === id);
+      if (local) return local;
+    } catch (e) {}
+    /* v159: all-libraries backfill jobs are keyed by book_key — resolve
+       them from the persisted admin projection. */
+    try { return tropeAdminBookById(id); } catch (e) { return null; }
   };
   const upsertRows = async rows => {
     const sb = await cloudClient().catch(() => null);

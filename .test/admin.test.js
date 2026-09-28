@@ -187,10 +187,20 @@ function ev(uid, name, cat, props, created) {
     // The third select is Trope Lab's coverage scan: book_key (a cache key,
     // ISBN or normalized title/author — no titles, descriptions, or notes)
     // plus taxonomy_version and taxonomy_rev (v157). Still no book content.
+    // The fourth (v159) is the all-libraries backfill scan: it selects only
+    // bibliographic jsonb fields via data-> — never the full data blob
+    // (which can hold shelves, ratings, notes).
+    const allowed = new Set([
+      'user_id',
+      'user_id,event_name,event_category,properties,app_version,created_at',
+      'book_key, taxonomy_version, taxonomy_rev',
+      'user_id, isbn, data->title, data->authors, data->categories, data->description',
+    ]);
     ok('structural: select projections are exactly the safe columns',
-      sels.length === 3 && sels.includes('user_id') &&
-      sels.includes('user_id,event_name,event_category,properties,app_version,created_at') &&
-      sels.includes('book_key, taxonomy_version, taxonomy_rev'));
+      sels.length > 0 && sels.every(s => allowed.has(s)) &&
+      sels.includes('user_id, isbn, data->title, data->authors, data->categories, data->description'));
+    ok('structural: never selects the whole book data blob',
+      !sels.some(s => s.includes('data') && !s.includes('data->')));
     ok('structural: never reads content fields off properties',
       !/properties\.(title|author|isbn|cover|notes|tropes|rating)/i.test(src) &&
       !/properties\[['"](title|author|isbn)/i.test(src));

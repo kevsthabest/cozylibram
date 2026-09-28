@@ -311,6 +311,7 @@ async function renderAdminBody() {
    an admin starts it here. */
 
 let tropeLabKeyToId = {}; // book_key -> library id, rebuilt on each coverage scan
+let tropeLabLastRows = []; // last book_tropes scan, reused by the all-libraries scan
 
 function tropeLabBooks() {
   try { return (typeof library !== 'undefined' ? library : []).filter(b => b && !b._deleted); }
@@ -373,7 +374,8 @@ function tropeLabProgressHTML() {
   const failedKeys = Object.keys(s.failedDetail || {});
   const failedRows = failedKeys.slice(0, 50).map(k => {
     const b = tropeLabResolve(tropeLabKeyToId[k]);
-    return '<tr><td>' + esc(b ? b.title : k) + '</td><td class="note">' +
+    const ab = b ? null : tropeAdminBookById(k); // v159: all-libraries jobs
+    return '<tr><td>' + esc(b ? b.title : (ab && ab.title) || k) + '</td><td class="note">' +
       esc(s.failedDetail[k]) + '</td></tr>';
   }).join('');
   el.innerHTML =
@@ -403,7 +405,9 @@ function tropeLabProgressHTML() {
   if (resume) resume.addEventListener('click', () => { TropeQueue.start(); tropeLabProgressHTML(); });
   const retry = document.getElementById('tl-retry');
   if (retry) retry.addEventListener('click', () => {
-    const ids = failedKeys.map(k => tropeLabKeyToId[k]).filter(Boolean);
+    /* v159: local books retry by library id; all-libraries jobs are keyed
+       by book_key and resolve through the admin projection. */
+    const ids = failedKeys.map(k => tropeLabKeyToId[k] || k).filter(Boolean);
     TropeQueue.clearFailed();
     if (ids.length) { TropeQueue.enqueue(ids); TropeQueue.start(); }
     tropeLabProgressHTML();
@@ -440,6 +444,7 @@ async function renderTropeLab() {
     '</div>';
 
   body.innerHTML = statusCard + '<div id="tropelab-coverage"><p class="note">Scanning library…</p></div>' +
+    '<div id="tropelab-alllibs"></div>' +
     '<div id="tropelab-progress"></div>';
 
   // Resume an interrupted backfill when Trope Lab opens.
@@ -470,6 +475,7 @@ async function renderTropeLab() {
     sbError = (e && e.message) || 'scan failed';
     cov = { total: 0, tagged: 0, missing: [], stale: [] };
   }
+  tropeLabLastRows = rows;
 
   const covEl = document.getElementById('tropelab-coverage');
   if (!covEl) return;
@@ -504,6 +510,7 @@ async function renderTropeLab() {
   wire('tl-backfill', cov.missing);
   wire('tl-restale', cov.stale);
   tropeLabProgressHTML();
+  tropeLabAllLibrariesHTML(configured);
 
   // v155: user-proposal review queue.
   const propCard = document.createElement('div');
@@ -516,6 +523,121 @@ async function renderTropeLab() {
   body.appendChild(propCard);
   tropeLabProposalsHTML();
 }
+
+/* v159: backfill every user's books, not just this device's library.
+   Two-step on purpose: the scan is a paginated admin read of the shared
+   books table (needs the v159 "admins read all books" policy), and only
+   then are the missing/stale ones enqueued. Tags land in the shared
+   book_tropes table, so one backfill covers everyone. Jobs are keyed by
+   book_key and resolve through the persisted admin projection. */
+function tropeLabAllLibrariesHTML(configured) {
+  const box = document.getElementById('tropelab-alllibs');
+  if (!box || adminTab !== 'tropes') return;
+  box.innerHTML =
+    '<div class="ob-card"><h3 class="serif">All libraries</h3>' +
+    '<p class="note">Backfill tropes for <b>every</b> user\u2019s books, not just this device\u2019s library. ' +
+    'Tags are shared, so one backfill covers everyone. Needs the v159 database rule ' +
+    '(re-run <code>supabase/tropes.sql</code>).</p>' +
+    '<div class="ob-ranges"><button class="btn sm" id="tl-alllibs-scan"' +
+    (configured ? '' : ' disabled') + '>Scan all libraries</button></div>' +
+    '<div id="tl-alllibs-result"></div></div>';
+  const btn = document.getElementById('tl-alllibs-scan');
+  if (btn) btn.addEventListener('click', tropeLabAllLibrariesScan);
+}
+
+async function tropeLabAllLibrariesScan() {
+  const out = document.getElementById('tl-alllibs-result');
+  const btn = document.getElementById('tl-alllibs-scan');
+  if (!out) return;
+  if (btn) btn.disabled = true;
+  try {
+    const sb = await tropeLabSb();
+    if (!sb) throw new Error('not signed in');
+    /* Paginated admin read; dedupe by book_key (richest record wins).
+       Only bibliographic fields are selected — never the full data blob
+       (which can hold shelves, ratings, notes). */
+    const seen = new Map();
+    let users = 0;
+    const userIds = new Set();
+    const PAGE = 1000;
+    let from = 0, done = false;
+    out.innerHTML = '<p class="note">Reading all libraries…</p>';
+    while (!done) {
+      const { data, error } = await sb.from('books')
+        .select('user_id, isbn, data->title, data->authors, data->categories, data->description')
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = data || [];
+      rows.forEach(r => {
+        if (r && r.user_id) userIds.add(r.user_id);
+        const book = {
+          title: r.title || '',
+          authors: r.authors || [],
+          categories: r.categories || [],
+          isbn: r.isbn || '',
+          description: String(r.description || '').slice(0, 2000),
+        };
+        if (!book.title) return;
+        const key = bookKeyFor(book);
+        const prev = seen.get(key);
+        if (!prev || book.description.length > (prev.book.description || '').length) {
+          seen.set(key, { key, book });
+        }
+      });
+      users = userIds.size;
+      done = rows.length < PAGE;
+      from += PAGE;
+      out.innerHTML = '<p class="note">Reading all libraries… ' + seen.size +
+        ' unique books so far.</p>';
+    }
+    const entries = [...seen.values()];
+    let rows = tropeLabLastRows || [];
+    if (!rows.length) {
+      const r2 = await sb.from('book_tropes')
+        .select('book_key, taxonomy_version, taxonomy_rev').limit(20000);
+      if (r2.error) throw r2.error;
+      rows = r2.data || [];
+      tropeLabLastRows = rows;
+    }
+    const cov = tropeLabCoverage(entries.map(e => e.book), rows);
+    const keyOf = b => bookKeyFor(b);
+    const missingKeys = cov.missing.map(keyOf);
+    const staleKeys = cov.stale.map(keyOf);
+    out.innerHTML =
+      '<div class="ob-grid">' +
+      '<div class="ob-stat"><div class="ob-stat-val">' + entries.length + '</div><div class="ob-stat-label">Unique books (' + users + ' users)</div></div>' +
+      '<div class="ob-stat"><div class="ob-stat-val">' + cov.tagged + '</div><div class="ob-stat-label">Tagged</div></div>' +
+      '<div class="ob-stat"><div class="ob-stat-val">' + missingKeys.length + '</div><div class="ob-stat-label">Missing</div></div>' +
+      '<div class="ob-stat"><div class="ob-stat-val">' + staleKeys.length + '</div><div class="ob-stat-label">Stale taxonomy</div></div>' +
+      '</div>' +
+      '<div class="ob-ranges">' +
+      '<button class="btn sm" id="tl-alllibs-backfill"' + (missingKeys.length ? '' : ' disabled') +
+      '>Backfill missing (' + missingKeys.length + ')</button>' +
+      '<button class="btn sm ghost" id="tl-alllibs-restale"' + (staleKeys.length ? '' : ' disabled') +
+      '>Re-infer stale (' + staleKeys.length + ')</button>' +
+      '</div>' +
+      '<p class="note">One book at a time, ~4s apart. Progress and failures appear in Backfill progress above; ' +
+      'closing this tab pauses nothing — reopen Trope Lab to resume.</p>';
+    const startAll = keys => {
+      /* Persist the projection BEFORE enqueueing — the queue resolves
+         through it, including after a reload. */
+      try { tropeAdminBooksSave(entries); } catch (e) {}
+      const n = TropeQueue.enqueue(keys);
+      if (n) TropeQueue.start();
+      tropeLabProgressHTML();
+    };
+    const bb = document.getElementById('tl-alllibs-backfill');
+    if (bb) bb.addEventListener('click', () => startAll(missingKeys));
+    const rs = document.getElementById('tl-alllibs-restale');
+    if (rs) rs.addEventListener('click', () => startAll(staleKeys));
+  } catch (e) {
+    const msg = (e && e.message) || 'scan failed';
+    out.innerHTML = '<p class="note">' + icon('warn') + ' Scan failed (' + esc(msg) + '). ' +
+      'If books are unreadable, re-run <code>supabase/tropes.sql</code> for the v159 admin read policy.</p>';
+    if (btn) btn.disabled = false;
+  }
+}
+
 
 /* v155: admin review queue for user-proposed tropes. */
 async function tropeLabProposalsHTML() {

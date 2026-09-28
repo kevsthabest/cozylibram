@@ -264,3 +264,12 @@ create policy "taxonomy_meta: admin write"
 
 alter table book_tropes
   add column if not exists taxonomy_rev int not null default 1;
+
+-- v159: admins can read every user's books so Trope Lab can backfill all
+-- libraries in one pass. Requires the app_admins registry from
+-- supabase/analytics.sql (the Observatory needs it too).
+drop policy if exists "admins read all books" on books;
+create policy "admins read all books" on books
+  for select using (
+    exists (select 1 from app_admins where user_id = auth.uid())
+  );
