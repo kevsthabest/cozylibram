@@ -248,13 +248,19 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_error(503, 'trope inference not configured on this server')
                 return
             url = tc['base_url'] + '/chat/completions'
-            upstream_body = json.dumps({
+            # v156: low reasoning effort for OpenRouter (trope tagging is a
+            # classification task; free reasoning models otherwise burn the
+            # token budget on chain-of-thought and truncate the JSON).
+            upstream_obj = {
                 'model': tc['model'],
                 'messages': [{'role': m['role'], 'content': m['content']}
                              for m in messages],
                 'temperature': 0,
                 'max_tokens': max_tokens,
-            }).encode('utf-8')
+            }
+            if tc['provider'] == 'openrouter':
+                upstream_obj['reasoning'] = {'effort': 'low'}
+            upstream_body = json.dumps(upstream_obj).encode('utf-8')
             headers = {'Content-Type': 'application/json',
                        'Authorization': 'Bearer ' + tc['key'],
                        'User-Agent': 'CozyLibram/1.0 trope-proxy'}
@@ -265,6 +271,18 @@ class Handler(SimpleHTTPRequestHandler):
             with urllib.request.urlopen(req, timeout=90) as r:
                 data = r.read(256 * 1024)
                 status = r.status
+            # v156: surface truncation as a distinct, recoverable signal so
+            # the client retries with a bigger budget instead of parsing
+            # cut-off JSON.
+            if status == 200:
+                try:
+                    fr = (json.loads(data).get('choices') or [{}])[0].get(
+                        'finish_reason')
+                    if fr == 'length':
+                        data = json.dumps({'error': 'truncated'}).encode('utf-8')
+                        status = 502
+                except Exception:
+                    pass
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(data)))

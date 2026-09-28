@@ -17,10 +17,13 @@
    4s apart) and persists its cursor in localStorage so a backfill
    survives reloads and tab closes. */
 
-const TROPE_INFER_TIMEOUT_MS = 60000;
+const TROPE_INFER_TIMEOUT_MS = 90000;
 const TROPE_QUEUE_DELAY_MS = 4000;
 const TROPE_QUEUE_STORE_KEY = 'cozylibram.tropequeue.v1';
-const TROPE_MAX_TOKENS = 1200;
+/* v156: raised from 1200 — free reasoning models can spend 1000+ tokens on
+   chain-of-thought before emitting the JSON, which truncated output
+   (finish_reason: length) and produced "unparseable model output". */
+const TROPE_MAX_TOKENS = 2000;
 
 /* Informational: where the server proxy sends requests per provider.
    The client never calls these directly. */
@@ -78,7 +81,8 @@ const TROPE_SYSTEM_PROMPT = [
   'STRICT RULES',
   '1. You may ONLY use trope ids from the TAXONOMY list. Never invent,',
   '   rename, merge, or paraphrase ids. If none fit well, return an empty list.',
-  '2. Reply with JSON ONLY. No markdown fences, no commentary, no extra keys:',
+  '2. Reply with JSON ONLY. No markdown fences, no commentary, no extra keys,',
+  '   no reasoning text, no explanations:',
   '   {"tropes": [{"id": "trope-id", "confidence": 0.85}]}',
   '3. Tag 0-8 tropes. Fewer is better than guessing; an empty list is a valid answer.',
   '4. Confidence is 0.0-1.0 and must be grounded in the description: 0.9+ means',
@@ -134,25 +138,31 @@ function bookKeyFor(book) {
 }
 
 /* Pure: defensively parse model output into a raw [{id, confidence}] array.
-   Accepts {"tropes":[...]} or a bare array; tolerates markdown fences.
-   Throws on unparseable output — the caller treats that as a failed
-   inference, never as "no tropes". */
+   Accepts {"tropes":[...]} or a bare array; tolerates markdown fences and
+   JSON embedded in reasoning prose. Throws on unparseable output — the
+   caller treats that as a failed inference, never as "no tropes". */
 function parseTropeResponse(text) {
   if (text == null || String(text).trim() === '') throw new Error('empty response');
   let t = String(text).trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```\s*$/, '');
-  let obj;
-  try {
-    obj = JSON.parse(t);
-  } catch (e) {
-    const m = t.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error('unparseable JSON');
-    obj = JSON.parse(m[0]);
+  /* Candidate spans, most to least specific: the whole text, then the
+     greediest {...} block, then the greediest [...] block. The first span
+     that parses AND yields a tropes array wins — this handles JSON buried
+     in reasoning prose and bare arrays in prose (where the {...} span
+     would grab just one inner object and yield no array). */
+  const spans = [t];
+  const mObj = t.match(/\{[\s\S]*\}/);
+  if (mObj && mObj[0] !== t) spans.push(mObj[0]);
+  const mArr = t.match(/\[[\s\S]*\]/);
+  if (mArr && mArr[0] !== t) spans.push(mArr[0]);
+  for (const s of spans) {
+    let obj;
+    try { obj = JSON.parse(s); } catch (e) { continue; }
+    const arr = Array.isArray(obj) ? obj : obj.tropes;
+    if (Array.isArray(arr)) return arr;
   }
-  const arr = Array.isArray(obj) ? obj : obj.tropes;
-  if (!Array.isArray(arr)) throw new Error('no tropes array in response');
-  return arr;
+  throw new Error('unparseable JSON');
 }
 
 /* Pure: validate raw model output against the taxonomy. Unknown ids are
@@ -206,7 +216,10 @@ async function inferBookTropes(book, opts) {
   const fetchFn = opts.fetchFn || fetch;
   const delayFn = opts.delayFn || sleepMs;
   const { system, user } = buildTropePrompt(book);
-  const maxTokens = Math.min(4000, Math.max(100, opts.maxTokens || TROPE_MAX_TOKENS));
+  /* v156: mutable — truncation/unparseable retries double the budget.
+     Reasoning models can burn 1000+ tokens on chain-of-thought, so a fixed
+     small budget turned into "unparseable model output" with no recovery. */
+  let maxTokens = Math.min(4000, Math.max(100, opts.maxTokens || TROPE_MAX_TOKENS));
   const messages = [
     { role: 'system', content: system },
     { role: 'user', content: user },
@@ -239,6 +252,18 @@ async function inferBookTropes(book, opts) {
       throw TropeInferError('provider rejected the request (HTTP ' + resp.status +
         ') - check the API key', { fatal: true, status: resp.status });
     }
+    /* v156: the proxy converts finish_reason:length into a 502 with
+       {error:'truncated'}. That is recoverable — retry immediately with a
+       bigger budget instead of burning backoff cycles on the same budget. */
+    if (resp.status === 502) {
+      let truncated = false;
+      try { truncated = (await resp.json() || {}).error === 'truncated'; }
+      catch (e) { /* fall through to generic 5xx handling */ }
+      if (truncated && maxTokens < 4000) {
+        maxTokens = Math.min(4000, maxTokens * 2);
+        continue;
+      }
+    }
     if (resp.status === 429 || resp.status >= 500) {
       lastErr = TropeInferError('provider HTTP ' + resp.status, { status: resp.status });
       if (attempt >= 3) break;
@@ -263,10 +288,15 @@ async function inferBookTropes(book, opts) {
     try {
       raw = parseTropeResponse(text);
     } catch (e) {
-      // One retry with an explicit JSON-only nudge, then give up.
+      /* v156: one recovery attempt — nudge JSON-only AND double the token
+         budget. Unparseable output is usually a reasoning model that spent
+         the whole budget on chain-of-thought, so a text nudge alone (the
+         old behavior) just failed the same way again. */
       if (!nudged) {
         nudged = true;
-        messages.push({ role: 'user', content: 'Reply with JSON only, no other text.' });
+        messages.push({ role: 'user',
+          content: 'Reply with JSON only, no other text. Do not explain your reasoning.' });
+        if (maxTokens < 4000) maxTokens = Math.min(4000, maxTokens * 2);
         continue;
       }
       throw TropeInferError('unparseable model output');

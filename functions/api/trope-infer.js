@@ -75,16 +75,23 @@ export async function onRequest(context) {
   }
 
   let upstream;
+  /* v156: request low reasoning effort from OpenRouter — trope tagging is
+     a classification task, and free reasoning models can otherwise burn
+     the whole token budget on chain-of-thought (finish_reason: length),
+     leaving no room for the JSON answer. Other providers ignore the
+     extra field, so it is only sent for OpenRouter. */
+  const upstreamBody = {
+    model,
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+    temperature: 0,
+    max_tokens: maxTokens,
+  };
+  if (provider === 'openrouter') upstreamBody.reasoning = { effort: 'low' };
   try {
     upstream = await fetch(baseUrl + '/chat/completions', {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        temperature: 0,
-        max_tokens: maxTokens,
-      }),
+      body: JSON.stringify(upstreamBody),
     });
   } catch {
     return new Response('upstream fetch failed', { status: 502 });
@@ -94,5 +101,19 @@ export async function onRequest(context) {
   const outHeaders = { 'Content-Type': 'application/json' };
   const retryAfter = upstream.headers.get('retry-after');
   if (retryAfter) outHeaders['Retry-After'] = retryAfter;
+  /* v156: surface truncation as a distinct, recoverable signal. The client
+     retries a truncated response with a bigger token budget instead of
+     trying to parse cut-off JSON. */
+  if (upstream.status === 200) {
+    try {
+      const parsed = JSON.parse(new TextDecoder().decode(data));
+      const fr = parsed && parsed.choices && parsed.choices[0] &&
+        parsed.choices[0].finish_reason;
+      if (fr === 'length') {
+        return new Response(JSON.stringify({ error: 'truncated' }),
+          { status: 502, headers: { 'Content-Type': 'application/json' } });
+      }
+    } catch { /* not JSON — forward untouched */ }
+  }
   return new Response(data, { status: upstream.status, headers: outHeaders });
 }
