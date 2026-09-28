@@ -37,5 +37,6 @@ function renderWishlist() {
   document.querySelectorAll('.book-card[data-id]').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   wireReleaseCheck(); // v114: "Check for new releases"
+  renderUnseenReleases(); // v149: show cached auto-check finds, if any
 }
 

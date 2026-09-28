@@ -190,6 +190,8 @@ async function enterApp(user) {
   });
   // Library is settled now — let the Hardcover auto-sweep backfill the rest.
   setTimeout(autoEnrichSweep, 5000);
+  updateReleaseBadge(); // v149: surface any unseen auto-found releases
+  setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
 }
 
 function leaveApp() {

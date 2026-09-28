@@ -36,6 +36,7 @@ const EVENT_DEFS = {
   author_discovery_opened:  { c: 'discovery', p: [] },
   similar_books_opened:     { c: 'discovery', p: [] },
   release_discovery_opened: { c: 'discovery', p: [] },
+  release_auto_check:      { c: 'discovery', p: ['book_count'] }, // v149: silent weekly sweep
   recommendation_opened:    { c: 'discovery', p: ['source'] },
   discover_opened:          { c: 'discovery', p: [] }, // v121: Discover landing
   roulette_opened:          { c: 'discovery', p: [] },

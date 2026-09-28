@@ -41,6 +41,8 @@ function boot() {
     maybeOnboard(); // v127: welcome brand-new libraries
     // No sign-in gate on this path — kick off the Hardcover auto-sweep directly.
     setTimeout(autoEnrichSweep, 5000);
+    updateReleaseBadge(); // v149: surface any unseen auto-found releases
+    setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
   } else renderGate();
 }
 

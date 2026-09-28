@@ -176,6 +176,8 @@ function wireReleaseCheck() {
           'check the connection in Settings → Hardcover, then try again.</p>';
       } else {
         renderReleaseResults(res.list);
+        saveAutoReleases(res.list); // v149: manual checks refresh the auto cache
+        markReleasesSeen();
       }
     } catch (e) {
       const box = document.getElementById('release-results');
@@ -185,6 +187,79 @@ function wireReleaseCheck() {
       btn.innerHTML = label;
     }
   });
+}
+
+/* ---------------- auto new-release checks (v149) ---------------- */
+// The manual "Check for new releases" sweep now also runs by itself: once a
+// week, silently, on app entry (same pattern as the Hardcover auto-enrich
+// sweep). Fresh finds raise a count badge on the Discover tab; opening
+// Discover (or the Wishlist) renders them inline and clears the badge.
+const AUTO_REL_KEY = 'spicyshelves.auto_releases';          // { at, list }
+const AUTO_REL_SEEN_KEY = 'spicyshelves.auto_releases_seen'; // ms epoch
+const AUTO_REL_DAYS = 7;
+
+function autoReleases() {
+  try {
+    const c = JSON.parse(localStorage.getItem(AUTO_REL_KEY) || 'null');
+    if (c && typeof c.at === 'number' && Array.isArray(c.list)) return c;
+  } catch (e) {}
+  return null;
+}
+function saveAutoReleases(list) {
+  try {
+    localStorage.setItem(AUTO_REL_KEY,
+      JSON.stringify({ at: Date.now(), list: (list || []).slice(0, 40) }));
+  } catch (e) {}
+}
+function autoReleasesSeenAt() {
+  try { return Number(localStorage.getItem(AUTO_REL_SEEN_KEY) || 0) || 0; }
+  catch (e) { return 0; }
+}
+// Unseen finds, minus anything dismissed or shelved since the sweep.
+function unseenReleaseList() {
+  const c = autoReleases();
+  if (!c || !c.list.length || c.at <= autoReleasesSeenAt()) return [];
+  return c.list.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
+}
+function updateReleaseBadge() {
+  const n = unseenReleaseList().length;
+  const el = document.getElementById('nav-rel-badge');
+  if (el) {
+    el.textContent = n > 9 ? '9+' : String(n);
+    el.style.display = n > 0 ? '' : 'none';
+  }
+  const btn = document.querySelector('.bottom-nav button[data-nav="discover"]');
+  if (btn) btn.setAttribute('aria-label', n > 0 ? 'Discover, ' + n + ' new releases' : 'Discover');
+}
+function markReleasesSeen() {
+  try { localStorage.setItem(AUTO_REL_SEEN_KEY, String(Date.now())); } catch (e) {}
+  updateReleaseBadge();
+}
+// Renders cached auto-check finds into the current view's #release-results
+// box (Discover and Wishlist both have one). Returns true when shown.
+function renderUnseenReleases() {
+  const list = unseenReleaseList();
+  if (!list.length) return false;
+  const box = document.getElementById('release-results');
+  if (!box) return false;
+  renderReleaseResults(list);
+  markReleasesSeen();
+  return true;
+}
+// Silent weekly sweep. Skips when Hardcover isn't configured or the library
+// is empty; a fully-failed sweep stamps nothing so it retries next boot.
+async function maybeAutoReleaseCheck() {
+  try {
+    updateReleaseBadge();
+    if (!hcReady() || !library.length) return;
+    const c = autoReleases();
+    if (c && Date.now() - c.at < AUTO_REL_DAYS * 864e5) return;
+    const res = await checkNewReleases(); // no onTick: no progress UI
+    if (res.total > 0 && res.failed >= res.total) return;
+    saveAutoReleases(res.list);
+    updateReleaseBadge();
+    track('release_auto_check', { book_count: res.list.length });
+  } catch (e) {}
 }
 
 /* ---------------- Discover landing (v121) ----------------
@@ -212,6 +287,7 @@ function renderDiscover() {
     '<div class="disc-releases"><button class="btn sm" id="rel-check">' + icon('sparkles') + ' Check for new releases</button>' +
     '<div id="release-results"></div></div>');
   wireReleaseCheck();
+  renderUnseenReleases(); // v149: show cached auto-check finds, if any
   document.querySelectorAll('[data-disc]').forEach(c => c.addEventListener('click', () => {
     const t = c.dataset.disc;
     if (t === 'pick') go('pick');
