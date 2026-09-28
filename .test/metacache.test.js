@@ -1,5 +1,6 @@
 // Shared metadata cache tests: book_meta get/put, TTL, offline bypass,
-// lookupISBN integration, and fetchPageCountByISBN cache use.
+// lookupISBN integration, fetchPageCountByISBN cache use, and v191 enriched
+// snapshots (Hardcover fields cached canonically; user edits never leak in).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -133,6 +134,76 @@ async function waitFor(fn, what) {
   // 7. bookFromMeta skeleton for unknown ISBN
   const skel = window.bookFromMeta(null, '9780000000009');
   ok('skeleton keeps isbn hint', skel && skel.isbn === '9780000000009');
+
+  // 8. v191: enriched snapshots — canonical metadata, user edits excluded
+  const apiBook = {
+    isbn: '9780000000004', title: 'Real Title', authors: ['Jane Author'],
+    cover: 'http://example.com/c.jpg', description: 'A great book',
+    pageCount: 321, publishedDate: '2020-05-01', categories: ['Romance'],
+    publicRating: 4.5, ratingsCount: 100,
+    status: 'tbr', owned: 'owned', ratings: {}, myRating: 5,
+    tropes: ['enemies to lovers'], tropesAuto: [], progress: 42,
+    notes: 'my private notes', id: 'user-book-id'
+  };
+  const snap8 = window.metaSnapshot(apiBook);
+  ok('snapshot carries series/moods/warnings when present', (() => {
+    const b = Object.assign({}, apiBook, {
+      series: { name: 'Saga', position: 2 }, moods: ['Dark'], contentWarnings: ['Violence'],
+      releaseDate: '2021-02-03', hcId: 4242, hcEnriched: true
+    });
+    const s = window.metaSnapshot(b);
+    return s.series && s.series.name === 'Saga' && s.series.position === 2 &&
+      s.moods.length === 1 && s.contentWarnings.length === 1 &&
+      s.releaseDate === '2021-02-03' && s.hcId === 4242 && s.hcEnriched === true;
+  })());
+  ok('snapshot still excludes user fields',
+    snap8.id === undefined && snap8.status === undefined && snap8.myRating === undefined &&
+    snap8.tropes === undefined && snap8.progress === undefined && snap8.notes === undefined);
+
+  // 9. v191: enrichedSnapshot merges pristine base + Hardcover fields;
+  // a user edit typed between add and enrichment landing never becomes canonical
+  const pristine = window.metaSnapshot(apiBook);
+  const enrichedBook = Object.assign({}, apiBook, {
+    title: 'My Custom Title', // user edit!
+    series: { name: 'Saga', position: 2 }, moods: ['Dark', 'Emotional'],
+    contentWarnings: ['Violence'], hcId: 4242, hcEnriched: true,
+    categories: ['Romance', 'Fantasy'], publicRating: 4.3, ratingsCount: 150
+  });
+  const esnap = window.enrichedSnapshot(pristine, enrichedBook);
+  ok('enriched snapshot keeps pristine title', esnap.title === 'Real Title');
+  ok('enriched snapshot keeps pristine authors/cover', esnap.authors[0] === 'Jane Author' && esnap.cover === 'http://example.com/c.jpg');
+  ok('enriched snapshot merges hc fields',
+    esnap.series.name === 'Saga' && esnap.moods.length === 2 &&
+    esnap.contentWarnings[0] === 'Violence' && esnap.hcId === 4242 && esnap.hcEnriched === true);
+  ok('enriched snapshot takes blended rating + merged categories',
+    esnap.publicRating === 4.3 && esnap.ratingsCount === 150 &&
+    esnap.categories.length === 2 && esnap.categories[1] === 'Fantasy');
+
+  // 10. v191: bookFromMeta restores enrichment and the hcEnriched marker
+  const rebuilt = window.bookFromMeta(esnap, '9780000000004');
+  ok('rebuilt book restores series/moods/warnings',
+    rebuilt.series && rebuilt.series.name === 'Saga' && rebuilt.series.position === 2 &&
+    rebuilt.moods.length === 2 && rebuilt.contentWarnings[0] === 'Violence');
+  ok('rebuilt book restores hcId + hcEnriched', rebuilt.hcId === 4242 && rebuilt.hcEnriched === true);
+  ok('rebuilt book keeps canonical title', rebuilt.title === 'Real Title');
+
+  // 11. v191: metaCachePutEnriched guards — no write without enrichment+isbn
+  const upBefore2 = stub.calls.upsert;
+  window.metaCachePutEnriched(pristine, Object.assign({}, apiBook, { hcEnriched: false }));
+  window.metaCachePutEnriched(pristine, Object.assign({}, apiBook, { isbn: '', hcEnriched: true }));
+  await tick(80);
+  ok('unenriched / isbn-less books never write', stub.calls.upsert === upBefore2);
+
+  // 12. v191: metaCachePutEnriched writes the merged snapshot
+  window.metaCachePutEnriched(pristine, enrichedBook);
+  await waitFor(() => stub.meta.some(r => r.isbn === '9780000000004'), 'enriched cache write');
+  const erow = stub.meta.find(r => r.isbn === '9780000000004');
+  ok('enriched row stored', !!erow && erow.data.title === 'Real Title');
+  ok('enriched row carries hc fields', erow.data.hcEnriched === true && erow.data.moods.length === 2);
+  // 13. v191: second lookup gets the enriched snapshot — no re-blend downstream
+  const b5 = await window.lookupISBN('9780000000004');
+  ok('cache hit restores enriched book', b5 && b5.hcEnriched === true && b5.series.name === 'Saga');
+  ok('cache hit keeps single-blended rating', b5.publicRating === 4.3 && b5.ratingsCount === 150);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

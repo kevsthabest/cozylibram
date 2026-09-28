@@ -81,17 +81,24 @@ async function enrichHardcover(book) {
     }
     if (!doc) return false;
     applyHardcoverDoc(book, doc);
-    // v81: trope suggestions ride along with enrichment (best-effort; never
-    // fails the enrichment). Pace the extra tags request under the rate limit.
-    try {
-      await refreshTropeSuggestions(book);
-      if (book._hcTagsFetched) {
-        delete book._hcTagsFetched;
-        await new Promise(r => setTimeout(r, 1100));
-      }
-    } catch (e) {}
+    await enrichTropesFor(book);
     return true;
   } catch (e) { return false; }
+}
+
+// v191: trope suggestions, extracted from enrichHardcover so books that skip
+// the Hardcover re-fetch (shared-cache hits, Hardcover-search adds) still get
+// suggestions — refreshTropeSuggestions only needs the cached hcId.
+async function enrichTropesFor(book) {
+  // v81: trope suggestions ride along with enrichment (best-effort; never
+  // fails the enrichment). Pace the extra tags request under the rate limit.
+  try {
+    await refreshTropeSuggestions(book);
+    if (book._hcTagsFetched) {
+      delete book._hcTagsFetched;
+      await new Promise(r => setTimeout(r, 1100));
+    }
+  } catch (e) {}
 }
 
 function applyHardcoverDoc(book, doc) {
@@ -293,8 +300,14 @@ function addBook(book, openEditor, source) {
   }
   // Background Hardcover enrichment — lands a moment later without blocking the add.
   if (hcReady() && !book.hcEnriched) {
+    const pristine = metaSnapshot(book); // v191: pristine API base for the canonical cache
     enrichHardcover(book).then(ok => {
       if (!ok) return;
+      // v191: store the enriched snapshot so the next user gets full metadata
+      // (series, moods, warnings, blended rating) from the shared cache with
+      // zero API calls. Add-flow only — the backfill sweep never writes, so a
+      // user-edited book can never pollute the canonical copy.
+      if (book.isbn) metaCachePutEnriched(pristine, book);
       saveLibrary();
       // Refresh only the Hardcover sections if the editor is open — never clobbers typed input.
       const hcEl = document.getElementById('m-hc');
@@ -303,6 +316,12 @@ function addBook(book, openEditor, source) {
       if (editingId === book.id) refreshSeriesInline(book); // v133: series may have arrived with enrichment
       toast('✨ Enriched from Hardcover');
     });
+  } else if (hcReady() && book.hcEnriched && book.isbn) {
+    // v191: arrived with Hardcover metadata (Hardcover search) or from the
+    // shared cache — snapshot it canonically; the re-fetch is skipped so the
+    // community rating is never blended twice. Trope suggestions still run.
+    metaCachePut(book.isbn, metaSnapshot(book));
+    enrichTropesFor(book).then(() => saveLibrary());
   }
   return book;
 }
