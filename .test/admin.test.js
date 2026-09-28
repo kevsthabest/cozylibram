@@ -190,11 +190,16 @@ function ev(uid, name, cat, props, created) {
     // The fourth (v159) is the all-libraries backfill scan: it selects only
     // bibliographic jsonb fields via data-> — never the full data blob
     // (which can hold shelves, ratings, notes).
+    // The fifth/sixth (v166) are the review queue: book_tropes rows
+    // (book_key cache key, trope ids, confidence) and trope_votes rows
+    // (votes + voter ids) — still no titles, descriptions, or notes.
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
       'book_key, taxonomy_version, taxonomy_rev',
       'user_id, isbn, data->title, data->authors, data->categories, data->description',
+      'book_key, trope_id, confidence, source',
+      'book_key, trope_id, vote, user_id',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&

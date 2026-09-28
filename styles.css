@@ -1328,6 +1328,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ob-scroll { overflow-x: auto; }
 .ob-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ob-table th, .ob-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.08)); }
+/* ================= v166: Trope Lab review queue ================= */
+.tl-review-book { border-top: 1px solid var(--line, rgba(255,255,255,0.08)); padding: 10px 0; }
+.tl-review-book:first-of-type { border-top: none; }
+.tl-review-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.tl-review-head > div { min-width: 0; }
+.tl-review-chips { margin-bottom: 2px; }
 .ob-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.65; }
 .ob-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .ob-table code { font-size: 12px; }

@@ -416,6 +416,175 @@ function tropeLabProgressHTML() {
   if (clear) clear.addEventListener('click', () => { TropeQueue.reset(); tropeLabProgressHTML(); });
 }
 
+/* ---------------- Trope review queue (v166) ----------------
+   Approve inferred tropes without opening each book. Lists every book
+   with inferred rows in book_tropes, reusing the book modal's chip +
+   ▲▼ vote UI (TropeVotes) — an upvote here is exactly the "approval"
+   Kevin used to do one book at a time. "Approve all" upvotes every
+   inferred trope for the book in one tap. Unreviewed books sort first
+   so the list reads as a work queue. */
+
+let tropeLabReviewShown = 15; // pagination: how many books are rendered
+const TROPE_LAB_REVIEW_PAGE = 15;
+
+/* Pure: group book_tropes rows into per-book review entries.
+   rows: [{book_key, trope_id, confidence, source}].
+   byId: trope_id -> {id, name}; rows with unknown ids are dropped.
+   Returns [{ bookKey, tropes: [{id, name, confidence, source}] }] with
+   tropes sorted by confidence desc. */
+function tropeLabReviewEntries(rows, byId) {
+  const byKey = {};
+  (rows || []).forEach(r => {
+    if (!r || !r.book_key || !r.trope_id) return;
+    const t = byId ? byId(r.trope_id) : null;
+    if (!t) return;
+    const e = byKey[r.book_key] || (byKey[r.book_key] = { bookKey: r.book_key, tropes: [] });
+    if (e.tropes.some(x => x.id === t.id)) return;
+    e.tropes.push({ id: t.id, name: t.name,
+      confidence: typeof r.confidence === 'number' ? r.confidence : 0.5,
+      source: r.source || 'llm' });
+  });
+  return Object.keys(byKey).map(k => {
+    const e = byKey[k];
+    e.tropes.sort((a, b) => b.confidence - a.confidence);
+    return e;
+  });
+}
+
+/* Pure: aggregate trope_votes rows into the {tropeId:{up,down,mine}}
+   shape dbTropeChipsHTML expects, keyed by book. `uid` marks the
+   current user's own vote. */
+function tropeLabReviewVotes(rows, uid) {
+  const agg = {};
+  (rows || []).forEach(r => {
+    if (!r || !r.book_key || !r.trope_id) return;
+    const perBook = agg[r.book_key] || (agg[r.book_key] = {});
+    const e = perBook[r.trope_id] || (perBook[r.trope_id] = { up: 0, down: 0, mine: 0 });
+    if (r.vote === 1) e.up++;
+    else if (r.vote === -1) e.down++;
+    if (uid && r.user_id === uid) e.mine = r.vote;
+  });
+  return agg;
+}
+
+/* Resolve a book_key to a display title/authors: local library first,
+   then the persisted all-libraries admin projection. */
+function tropeLabReviewTitle(key) {
+  try {
+    const b = tropeLabResolve(tropeLabKeyToId[key]);
+    if (b) return { title: b.title || key, authors: (b.authors || []).join(', ') };
+    const ab = tropeAdminBookById(key);
+    if (ab) return { title: ab.title || key, authors: (ab.authors || []).join(', ') };
+  } catch (e) {}
+  return { title: key, authors: '' };
+}
+
+async function tropeLabReviewHTML() {
+  const el = document.getElementById('tropelab-review');
+  if (!el) return;
+  const head = '<div class="ob-card"><h3 class="serif">Review inferred tropes</h3>';
+  const sb = await tropeLabSb();
+  if (!sb) {
+    el.innerHTML = head + '<p class="note">Sign in to review inferred tropes.</p></div>';
+    return;
+  }
+  let rows = [];
+  try {
+    const r1 = await sb.from('book_tropes')
+      .select('book_key, trope_id, confidence, source').limit(20000);
+    if (r1.error) throw r1.error;
+    rows = r1.data || [];
+  } catch (e) {
+    el.innerHTML = head + '<p class="note">' + icon('warn') +
+      ' Could not load inferred tropes (' + esc((e && e.message) || 'unknown error') + ').</p></div>';
+    return;
+  }
+  const entries = tropeLabReviewEntries(rows, id => TropeTaxonomy.byId(id));
+  if (!entries.length) {
+    el.innerHTML = head + '<p class="note">No inferred tropes yet — run a backfill above first.</p></div>';
+    return;
+  }
+  let votes = {};
+  try {
+    const uid = (typeof localUid !== 'undefined' && localUid) || null;
+    const r2 = await sb.from('trope_votes')
+      .select('book_key, trope_id, vote, user_id')
+      .in('book_key', entries.map(e => e.bookKey));
+    if (r2.error) throw r2.error;
+    votes = tropeLabReviewVotes(r2.data || [], uid);
+  } catch (e) { votes = {}; }
+  entries.forEach(e => {
+    const t = tropeLabReviewTitle(e.bookKey);
+    e.title = t.title;
+    e.authors = t.authors;
+    const v = votes[e.bookKey] || {};
+    e.reviewed = e.tropes.every(tr => (v[tr.id] || { mine: 0 }).mine !== 0);
+  });
+  entries.sort((a, b) =>
+    ((a.reviewed ? 1 : 0) - (b.reviewed ? 1 : 0)) ||
+    String(a.title).localeCompare(String(b.title)));
+  const reviewedCount = entries.filter(e => e.reviewed).length;
+  const shown = entries.slice(0, tropeLabReviewShown);
+  const byKey = {};
+  entries.forEach(e => { byKey[e.bookKey] = e; });
+  let html = head +
+    '<p class="note">' + entries.length + ' books with inferred tropes · ' +
+    reviewedCount + ' fully reviewed by you. ▲ approves a trope, ▼ rejects it — ' +
+    'the same votes as in each book\u2019s detail sheet. ' +
+    '<button class="btn sm ghost" id="tl-review-refresh">↻ Refresh</button></p>';
+  shown.forEach(e => {
+    const v = votes[e.bookKey] || {};
+    html += '<div class="tl-review-book" data-review-book="' + esc(e.bookKey) + '">' +
+      '<div class="tl-review-head"><div><b>' + esc(e.title) + '</b>' +
+      (e.authors ? ' <span class="note">· ' + esc(e.authors) + '</span>' : '') +
+      (e.reviewed ? ' <span class="note">✓ reviewed</span>' : '') +
+      '</div>' +
+      '<button class="btn sm ghost" data-approve-all' + (e.reviewed ? ' disabled' : '') +
+      '>Approve all</button></div>' +
+      '<div class="tl-review-chips">' + dbTropeChipsHTML(e.tropes, 'db', v) + '</div>' +
+      '</div>';
+  });
+  if (entries.length > shown.length) {
+    html += '<button class="btn sm" id="tl-review-more">Show more (' +
+      (entries.length - shown.length) + ' remaining)</button>';
+  }
+  el.innerHTML = html + '</div>';
+
+  const refresh = document.getElementById('tl-review-refresh');
+  if (refresh) refresh.addEventListener('click', () => tropeLabReviewHTML());
+  const more = document.getElementById('tl-review-more');
+  if (more) more.addEventListener('click', () => {
+    tropeLabReviewShown += TROPE_LAB_REVIEW_PAGE;
+    tropeLabReviewHTML();
+  });
+  el.querySelectorAll('[data-review-book]').forEach(row => {
+    const key = row.getAttribute('data-review-book');
+    row.querySelectorAll('[data-tv]').forEach(btn => btn.addEventListener('click', async () => {
+      const tid = btn.getAttribute('data-tid');
+      const want = parseInt(btn.getAttribute('data-tv'), 10);
+      btn.disabled = true;
+      try { await TropeVotes.toggleVote(key, tid, want); } catch (e) {}
+      tropeLabReviewHTML(); // re-render: counts, highlights, reviewed state
+    }));
+    const all = row.querySelector('[data-approve-all]');
+    if (all) all.addEventListener('click', async () => {
+      const label = all.textContent;
+      all.disabled = true;
+      all.textContent = 'Approving…';
+      try {
+        const entry = byKey[key];
+        const v = await TropeVotes.getVotes(key);
+        for (const tr of (entry ? entry.tropes : [])) {
+          const cur = (v[tr.id] || { mine: 0 }).mine;
+          if (cur !== 1) await TropeVotes.vote(key, tr.id, 1);
+        }
+      } catch (e) {}
+      all.textContent = label;
+      tropeLabReviewHTML();
+    });
+  });
+}
+
 async function renderTropeLab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
@@ -449,7 +618,8 @@ async function renderTropeLab() {
   body.innerHTML = statusCard + '<div id="tropelab-provider"></div>' +
     '<div id="tropelab-coverage"><p class="note">Scanning library…</p></div>' +
     '<div id="tropelab-alllibs"></div>' +
-    '<div id="tropelab-progress"></div>';
+    '<div id="tropelab-progress"></div>' +
+    '<div id="tropelab-review"></div>';
 
   // Resume an interrupted backfill when Trope Lab opens.
   const snap = TropeQueue.snapshot();
@@ -516,6 +686,7 @@ async function renderTropeLab() {
   tropeLabProgressHTML();
   tropeLabProviderHTML();
   tropeLabAllLibrariesHTML(configured);
+  tropeLabReviewHTML();
 
   // v155: user-proposal review queue.
   const propCard = document.createElement('div');
