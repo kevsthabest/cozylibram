@@ -972,45 +972,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .book-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 
-/* ================= v171: desktop sidebar nav ================= */
-@media (min-width: 1024px) {
-  .bottom-nav {
-    top: 0; bottom: 0; left: 0; right: auto;
-    width: 236px; height: 100dvh;
-    flex-direction: column; align-items: stretch; justify-content: flex-start;
-    gap: 4px; padding: 22px 14px calc(18px + env(safe-area-inset-bottom));
-    border-top: none; border-right: 1px solid var(--line);
-  }
-  .nav-brand { display: flex; align-items: center; gap: 10px; padding: 2px 12px 20px; }
-  .nav-brand svg { width: 26px; height: 26px; color: var(--gold); flex: none; }
-  .nav-brand-name {
-    font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 20px;
-    background: linear-gradient(100deg, var(--accent), var(--gold));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    white-space: nowrap;
-  }
-  .bottom-nav button {
-    flex: none; width: 100%;
-    flex-direction: row; justify-content: flex-start; align-items: center;
-    gap: 12px; padding: 11px 14px; border-radius: 12px; font-size: 17px;
-  }
-  .bottom-nav button span { font-size: 14px; letter-spacing: 0.2px; }
-  .bottom-nav button svg { width: 22px; height: 22px; }
-  .bottom-nav button.active { background: var(--card2); color: var(--ink); }
-  /* the add FAB becomes a plain sidebar row */
-  .bottom-nav button.nav-add .add-fab {
-    width: 22px; height: 22px; margin: 0; border: none; border-radius: 0;
-    background: none; color: inherit; box-shadow: none; flex: none;
-  }
-  .bottom-nav button.nav-add .add-fab svg { width: 22px; height: 22px; }
-  .bottom-nav .nav-settings { display: flex; margin-top: auto; }
-  .nav-badge { top: 50%; right: 12px; transform: translateY(-50%); }
-  body { padding-top: 0; }
-  #view { margin-left: 236px; }
-  /* brand lives in the sidebar now; the account menu stays docked top-right */
-  .app-header { padding: 0; }
-  .app-header .brand { display: none; }
-}
 
 /* ================= TBR roulette ================= */
 
@@ -1698,3 +1659,54 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .pq-manual .btn { flex: none; }
 .stepper-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .stepper-row .step { min-height: 44px; font-size: 15px; }
+
+/* ================= v172: unified add view ================= */
+.add-scan-btn { padding: 16px; font-size: 17px; margin-bottom: 4px; }
+.add-scan-btn svg { width: 22px; height: 22px; vertical-align: -4px; margin-right: 8px; }
+.add-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--faint); font-size: 13px; }
+.add-or::before, .add-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.add-bulk { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.add-bulk summary { padding: 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; }
+.add-bulk summary::-webkit-details-marker { display: none; }
+.add-bulk summary svg { width: 20px; height: 20px; flex: none; }
+.add-bulk #add-bulk-body { padding: 0 14px 14px; }
+
+/* ================= v171: desktop sidebar nav ================= */
+@media (min-width: 1024px) {
+  .bottom-nav {
+    top: 0; bottom: 0; left: 0; right: auto;
+    width: 236px; height: 100dvh;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    gap: 4px; padding: 22px 14px calc(18px + env(safe-area-inset-bottom));
+    border-top: none; border-right: 1px solid var(--line);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; padding: 2px 12px 20px; }
+  .nav-brand svg { width: 26px; height: 26px; color: var(--gold); flex: none; }
+  .nav-brand-name {
+    font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 20px;
+    background: linear-gradient(100deg, var(--accent), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    white-space: nowrap;
+  }
+  .bottom-nav button {
+    flex: none; width: 100%;
+    flex-direction: row; justify-content: flex-start; align-items: center;
+    gap: 12px; padding: 11px 14px; border-radius: 12px; font-size: 17px;
+  }
+  .bottom-nav button span { font-size: 14px; letter-spacing: 0.2px; }
+  .bottom-nav button svg { width: 22px; height: 22px; }
+  .bottom-nav button.active { background: var(--card2); color: var(--ink); }
+  /* the add FAB becomes a plain sidebar row */
+  .bottom-nav button.nav-add .add-fab {
+    width: 22px; height: 22px; margin: 0; border: none; border-radius: 0;
+    background: none; color: inherit; box-shadow: none; flex: none;
+  }
+  .bottom-nav button.nav-add .add-fab svg { width: 22px; height: 22px; }
+  .bottom-nav .nav-settings { display: flex; margin-top: auto; }
+  .nav-badge { top: 50%; right: 12px; transform: translateY(-50%); }
+  body { padding-top: 0; }
+  #view { margin-left: 236px; }
+  /* brand lives in the sidebar now; the account menu stays docked top-right */
+  .app-header { padding: 0; }
+  .app-header .brand { display: none; }
+}

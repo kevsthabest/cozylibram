@@ -81,7 +81,7 @@ ok('ownership filter chips use line icons', qa('#view .chips .ticon').length >= 
 runInWindow(`library[0].status = 'reading'; renderLibrary();`);
 ok('recently-read header uses line icon', !!q('.recent-head .ticon'));
 runInWindow(`go('add');`);
-ok('add tabs use line icons', qa('.tabs .ticon').length === 4);
+ok('add view uses line icons (v172: unified)', !!q('#add-scan-btn .ticon') && !!q('.add-bulk summary .ticon'));
 runInWindow(`go('wishlist');`);
 ok('wishlist header uses line icon', !!q('#view .wish-head .ticon'));
 runInWindow(`go('authors');`);

@@ -1,28 +1,103 @@
 'use strict';
 
 /* ---------------- add view ---------------- */
+// v172: unified — one big Scan button, one smart search field that takes a
+// title, author, or ISBN, and bulk ISBN import tucked behind a disclosure.
+// (The old Scan/Search/ISBN/Bulk tabs are gone; `addTab` survives only as a
+// hint — 'search' focuses the field — for deep links from Discover/onboarding.)
 function renderAdd() {
+  // v139: source filter chips — target one catalog or search them all.
+  const srcs = [['all', 'All'], ['gbooks', 'Google Books'], ['openlibrary', 'Open Library']];
+  if (typeof hcReady === 'function' && hcReady()) srcs.push(['hardcover', 'Hardcover']);
+  if (!srcs.some(s => s[0] === searchSource)) searchSource = 'all';
   let html = '<h2 class="section serif">Add a book</h2>' +
-    '<div class="tabs">' +
-    tab('scan', icon('camera') + ' Scan') + tab('search', icon('search') + ' Search') + tab('isbn', icon('barcode') + ' ISBN') + tab('bulk', icon('clipboard') + ' Bulk') +
-    '</div><div id="add-body"></div>';
+    '<button class="btn block add-scan-btn" id="add-scan-btn">' + icon('camera') + ' Scan a barcode</button>' +
+    '<div id="add-scan-mount"></div>' +
+    '<div class="add-or" aria-hidden="true"><span>or</span></div>' +
+    '<div class="search-row"><input id="s-q" class="text-input" placeholder="Title, author, or ISBN…" enterkeyhint="search">' +
+    '<button class="btn" id="s-go">Go</button></div>' +
+    '<div class="chips" id="s-src" style="margin-top:10px">' +
+    srcs.map(s => '<button class="chip' + (searchSource === s[0] ? ' active' : '') + '" data-s="' + s[0] + '">' + s[1] + '</button>').join('') +
+    '</div><div id="s-results" style="margin-top:12px"></div>' +
+    '<details class="add-bulk"><summary>' + icon('clipboard') + ' Pasting a stack of ISBNs?</summary>' +
+    '<div id="add-bulk-body"></div></details>';
   setView(html);
-  document.querySelectorAll('.tabs button').forEach(b =>
-    b.addEventListener('click', () => { addTab = b.dataset.t; stopScan(); renderAdd(); }));
-  if (addTab === 'scan') renderScanTab();
-  if (addTab === 'search') renderSearchTab();
-  if (addTab === 'isbn') renderIsbnTab();
-  if (addTab === 'bulk') renderBulkTab();
-}
-function tab(t, label) {
-  return '<button data-t="' + t + '" class="' + (addTab === t ? 'active' : '') + '">' + label + '</button>';
+
+  // Scanner expands inline below the button; collapsing stops the camera.
+  const scanBtn = document.getElementById('add-scan-btn');
+  scanBtn.addEventListener('click', () => {
+    const mount = document.getElementById('add-scan-mount');
+    if (mount.dataset.open) {
+      stopScan();
+      mount.innerHTML = '';
+      delete mount.dataset.open;
+      scanBtn.style.display = '';
+    } else {
+      mount.dataset.open = '1';
+      mount.innerHTML = scanPanelHTML();
+      wireScanPanel(mount);
+      scanBtn.style.display = 'none';
+    }
+  });
+
+  const input = document.getElementById('s-q');
+  input.value = searchQuery; // v150: restore the last query across re-renders
+  const run = async () => {
+    const qv = input.value.trim();
+    if (qv.length < 2) return;
+    searchQuery = qv; // v150: remember it so adding books doesn't wipe the search
+    const box = document.getElementById('s-results');
+    const digits = qv.replace(/[^0-9X]/gi, '');
+    if (/^(\d{10}|\d{13}|\d{9}X)$/i.test(digits)) {
+      isbnLookupUI(digits, box, 'isbn'); // looks like an ISBN — skip the catalog search
+      return;
+    }
+    track('search_performed');
+    box.innerHTML = '<p class="note">Searching…</p>';
+    try {
+      searchResults = await searchBooks(qv, searchSource);
+      if (!searchResults.length) {
+        box.innerHTML = '<p class="note">No matches. Try different words, or add it yourself:</p>' +
+          '<button class="btn small ghost" id="s-manual">Add it manually</button>';
+        document.getElementById('s-manual').addEventListener('click', () => {
+          const shell = normalizeVolume({ volumeInfo: { title: qv, authors: [] } }, '');
+          const b = addBook(shell, false, 'search'); if (b) openDetail(b.id);
+        });
+        return;
+      }
+      paintSearchResults(box);
+    } catch (e) {
+      box.innerHTML = '<p class="note">Search failed — check your connection.</p>';
+    }
+  };
+  // v150: re-rendering (e.g. addBook's render() after each add) restores the
+  // results instead of forcing a fresh search for every book.
+  if (searchResults.length) paintSearchResults(document.getElementById('s-results'));
+  document.getElementById('s-go').addEventListener('click', run);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+  document.querySelectorAll('#s-src .chip').forEach(c =>
+    c.addEventListener('click', () => {
+      searchSource = c.dataset.s;
+      document.querySelectorAll('#s-src .chip').forEach(x => x.classList.toggle('active', x === c));
+      if (input.value.trim().length >= 2) run(); // re-run under the new source
+    }));
+
+  // Bulk import renders lazily on first open.
+  const bulk = document.querySelector('.add-bulk');
+  bulk.addEventListener('toggle', () => {
+    if (bulk.open && !bulk.dataset.wired) {
+      bulk.dataset.wired = '1';
+      renderBulkInto(document.getElementById('add-bulk-body'));
+    }
+  });
+
+  if (addTab === 'search') input.focus(); // deep link from Discover / onboarding
 }
 
-function renderScanTab() {
-  const body = document.getElementById('add-body');
+// Scanner panel: viewfinder + camera toggle + photo fallback.
+function scanPanelHTML() {
   const insecure = !window.isSecureContext;
-  body.innerHTML =
-    '<div class="scan-box"><video id="scan-video" playsinline muted></video>' +
+  return '<div class="scan-box"><video id="scan-video" playsinline muted></video>' +
     '<div class="scan-dim" aria-hidden="true"></div>' +
     '<div class="scan-frame" aria-hidden="true"><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><div class="scan-line"></div></div>' +
     '<div class="scan-hint">Point the camera at the barcode on the back cover</div></div>' +
@@ -32,13 +107,15 @@ function renderScanTab() {
     '<input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none">' +
     (insecure ? '<p class="note">' + icon('warn') + ' Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
     '<p class="note">Tip: on a phone, install this as an app (Share → Add to Home Screen) for the full experience.</p>';
-  const toggle = document.getElementById('scan-toggle');
+}
+function wireScanPanel(mount) {
+  const toggle = mount.querySelector('#scan-toggle');
   toggle.addEventListener('click', () => {
     if (scanState.active) stopScan();
     else startScan();
   });
-  const file = document.getElementById('scan-file');
-  document.getElementById('scan-photo').addEventListener('click', () => file.click());
+  const file = mount.querySelector('#scan-file');
+  mount.querySelector('#scan-photo').addEventListener('click', () => file.click());
   file.addEventListener('change', () => {
     if (file.files && file.files[0]) {
       const f = file.files[0];
@@ -51,7 +128,7 @@ function renderScanTab() {
 // Photo fallback: uses the camera app directly (no getUserMedia permission needed,
 // works over plain http://), then decodes the barcode from the snapshot.
 async function decodePhotoFile(file) {
-  const mount = document.getElementById('scan-result') || document.getElementById('add-body');
+  const mount = document.getElementById('scan-result') || document.getElementById('add-scan-mount');
   mount.innerHTML = '<p class="note">Reading barcode…</p>';
   try {
     const bmp = await createImageBitmap(file);
@@ -130,7 +207,7 @@ function onBarcode(raw) {
   const isbn = String(raw).replace(/[^0-9X]/gi, '');
   if (isbn.length < 10) return;
   stopScan();
-  isbnLookupUI(isbn, document.getElementById('scan-result') || document.getElementById('add-body'), 'barcode');
+  isbnLookupUI(isbn, document.getElementById('scan-result') || document.getElementById('add-scan-mount'), 'barcode');
 }
 
 function stopScan() {
@@ -209,56 +286,6 @@ async function isbnLookupUI(isbn, mount, source) {
   }
 }
 
-function renderSearchTab() {
-  const body = document.getElementById('add-body');
-  // v139: source filter chips — target one catalog or search them all.
-  const srcs = [['all', 'All'], ['gbooks', 'Google Books'], ['openlibrary', 'Open Library']];
-  if (typeof hcReady === 'function' && hcReady()) srcs.push(['hardcover', 'Hardcover']);
-  if (!srcs.some(s => s[0] === searchSource)) searchSource = 'all';
-  body.innerHTML =
-    '<div class="search-row"><input id="s-q" class="text-input" placeholder="Title or author…" enterkeyhint="search">' +
-    '<button class="btn" id="s-go">Go</button></div>' +
-    '<div class="chips" id="s-src" style="margin-top:10px">' +
-    srcs.map(s => '<button class="chip' + (searchSource === s[0] ? ' active' : '') + '" data-s="' + s[0] + '">' + s[1] + '</button>').join('') +
-    '</div><div id="s-results" style="margin-top:12px"></div>';
-  const input = document.getElementById('s-q');
-  input.value = searchQuery; // v150: restore the last query across re-renders
-  const run = async () => {
-    const q = input.value.trim();
-    if (q.length < 2) return;
-    searchQuery = q; // v150: remember it so adding books doesn't wipe the search
-    track('search_performed');
-    const box = document.getElementById('s-results');
-    box.innerHTML = '<p class="note">Searching…</p>';
-    try {
-      searchResults = await searchBooks(q, searchSource);
-      if (!searchResults.length) {
-        box.innerHTML = '<p class="note">No matches. Try different words, or add it yourself:</p>' +
-          '<button class="btn small ghost" id="s-manual">Add it manually</button>';
-        document.getElementById('s-manual').addEventListener('click', () => {
-          const shell = normalizeVolume({ volumeInfo: { title: input.value.trim(), authors: [] } }, '');
-          const b = addBook(shell, false, 'search'); if (b) openDetail(b.id);
-        });
-        return;
-      }
-      paintSearchResults(box);
-    } catch (e) {
-      box.innerHTML = '<p class="note">Search failed — check your connection.</p>';
-    }
-  };
-  // v150: re-rendering (e.g. addBook's render() after each add) restores the
-  // results instead of forcing a fresh search for every book.
-  if (searchResults.length) paintSearchResults(document.getElementById('s-results'));
-  document.getElementById('s-go').addEventListener('click', run);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
-  body.querySelectorAll('#s-src .chip').forEach(c =>
-    c.addEventListener('click', () => {
-      searchSource = c.dataset.s;
-      body.querySelectorAll('#s-src .chip').forEach(x => x.classList.toggle('active', x === c));
-      if (input.value.trim().length >= 2) run(); // re-run under the new source
-    }));
-}
-
 // v150: paints the cached searchResults. Entries already on her shelves — or
 // added during this search session — show a ✓ instead of ＋, so several
 // books by one author can be added from a single search.
@@ -288,22 +315,6 @@ function paintSearchResults(box) {
       if (!addBook(enriched, false, 'search')) b._added = false; // add refused — revert
     }));
 }
-
-function renderIsbnTab() {
-  const body = document.getElementById('add-body');
-  body.innerHTML =
-    '<div class="search-row"><input id="i-q" class="text-input" inputmode="numeric" placeholder="978…">' +
-    '<button class="btn" id="i-go">Look up</button></div><div id="i-result"></div>' +
-    '<p class="note">Pasting a whole stack? The ' + icon('clipboard') + ' Bulk tab does them all at once.</p>';
-  const run = () => {
-    const v = document.getElementById('i-q').value.trim();
-    if (v.length < 10) { toast('That ISBN looks too short'); return; }
-    isbnLookupUI(v, document.getElementById('i-result'));
-  };
-  document.getElementById('i-go').addEventListener('click', run);
-  document.getElementById('i-q').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
-}
-
 
 /* ---------------- bulk ISBN import ---------------- */
 // Split pasted text into clean, deduped ISBN candidates (10 or 13 digits).
@@ -352,8 +363,7 @@ function bulkAddBooks(books, source) {
   return n;
 }
 
-function renderBulkTab() {
-  const body = document.getElementById('add-body');
+function renderBulkInto(body) {
   body.innerHTML =
     '<textarea id="b-isbns" class="text-input" rows="6" inputmode="numeric" ' +
     'placeholder="978125031…&#10;9780593…&#10;one ISBN per line"></textarea>' +

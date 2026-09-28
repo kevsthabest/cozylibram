@@ -26,24 +26,30 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   // 1. Insecure context: photo button + warning, no camera attempt
   setSecure(false);
   window.renderAdd();
+  ok('unified add view: scan button present', !!q('#add-scan-btn'));
+  ok('scanner collapsed until opened', !q('#scan-photo'));
+  q('#add-scan-btn').click();
+  ok('scanner expands below the button', !!q('#add-scan-mount #scan-photo'));
+  ok('scan button hides while scanner open', q('#add-scan-btn').style.display === 'none');
   ok('photo button rendered', !!q('#scan-photo'));
   ok('file input captures environment camera', q('#scan-file') && q('#scan-file').getAttribute('capture') === 'environment');
-  ok('https warning shown when insecure', window.document.getElementById('add-body').textContent.includes('HTTPS'));
+  ok('https warning shown when insecure', q('#add-scan-mount').textContent.includes('HTTPS'));
 
   // 2. Secure context: no warning
   setSecure(true);
-  window.renderAdd();
-  ok('no https warning when secure', !window.document.getElementById('add-body').textContent.includes('plain http'));
+  window.renderAdd(); q('#add-scan-btn').click();
+  ok('no https warning when secure', !q('#add-scan-mount').textContent.includes('plain http'));
 
   // 3. startScan refuses cleanly when insecure
   setSecure(false);
+  window.renderAdd(); q('#add-scan-btn').click();
   q('#toast-root').innerHTML = '';
   await window.startScan();
   ok('startScan warns instead of throwing', lastToast().includes('HTTPS'));
 
   // 4. Photo decode via native BarcodeDetector
   setSecure(false);
-  window.renderAdd();
+  window.renderAdd(); q('#add-scan-btn').click();
   lookedUp = null;
   window.BarcodeDetector = class { constructor() {} async detect() { return [{ rawValue: '9780349437064' }]; } };
   const file = new window.File(['fake'], 'barcode.jpg', { type: 'image/jpeg' });
@@ -69,7 +75,7 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
 
   // 7. Viewfinder overlay: present, hidden until camera goes live
   setSecure(true);
-  window.renderAdd();
+  window.renderAdd(); q('#add-scan-btn').click();
   let box = q('.scan-box');
   ok('viewfinder frame rendered', !!q('.scan-frame'));
   ok('frame has 4 corner brackets', q('.scan-frame') ? q('.scan-frame').querySelectorAll('i').length === 4 : false);
@@ -83,6 +89,24 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   ok('frame shows while camera live', box.classList.contains('live'));
   window.stopScan();
   ok('frame hides after stop', !box.classList.contains('live'));
+
+  // 8. v172: unified smart field — ISBN-looking input skips catalog search
+  setSecure(true);
+  window.renderAdd();
+  window.__isbnSeen = null;
+  window.isbnLookupUI = (isbn, mount, src) => { window.__isbnSeen = { isbn, src }; };
+  q('#s-q').value = '9780349437064';
+  q('#s-go').click();
+  await new Promise(r => setTimeout(r, 30));
+  ok('isbn input dispatches to isbn lookup', window.__isbnSeen && window.__isbnSeen.isbn === '9780349437064');
+  ok('isbn dispatch tagged as isbn source', window.__isbnSeen && window.__isbnSeen.src === 'isbn');
+  window.__isbnSeen = null;
+  q('#s-q').value = 'jane doe';
+  q('#s-go').click();
+  await new Promise(r => setTimeout(r, 30));
+  ok('title input does not hit isbn lookup', window.__isbnSeen === null);
+  ok('title input runs catalog search (fails without network here)',
+    q('#s-results').textContent.includes('Search failed'));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

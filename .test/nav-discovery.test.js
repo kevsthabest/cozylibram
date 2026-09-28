@@ -90,7 +90,7 @@ q('#view [data-disc="coven"]').click(); // coven
 ok('discover: From Friends opens coven', run("view") === 'coven');
 run("go('discover')");
 q('#view [data-disc="search"]').click(); // search
-ok('discover: Search opens add on the search tab',
+ok('discover: Search opens add in search mode (v172: unified view)',
   run("view") === 'add' && run("addTab") === 'search');
 
 // --- 5. Wishlist stays reachable via Library ---
