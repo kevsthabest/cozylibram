@@ -554,6 +554,7 @@ async function tropeLabProviderHTML() {
     '<datalist id="tl-model-list"></datalist>' +
     '<button class="btn sm" id="tl-provider-save">Save</button>' +
     '</div>' +
+    '<p class="note" id="tl-models-note"></p>' +
     '<p class="note">Applies to all devices. Each provider needs its key on the server ' +
     '(Cloudflare env <code>TROPE_KEY_GEMINI</code>, <code>TROPE_KEY_OPENROUTER</code>, …); ' +
     'picking one without a key fails the next run with a clear error. ' +
@@ -562,10 +563,40 @@ async function tropeLabProviderHTML() {
   const sel = document.getElementById('tl-provider-sel');
   const modelInput = document.getElementById('tl-provider-model');
   const list = document.getElementById('tl-model-list');
-  const fillList = () => {
+  const modelsNote = document.getElementById('tl-models-note');
+  /* v164: the datalist first shows the hardcoded suggestions (instant,
+     offline-safe), then the live model list from /api/trope-models when it
+     loads. A failed load keeps the suggestions — the input stays free text,
+     so any model name still works. */
+  const fillList = async () => {
+    const p = sel.value;
     const sugs = (typeof TROPE_PROVIDER_SUGGESTIONS !== 'undefined' &&
-      TROPE_PROVIDER_SUGGESTIONS[sel.value]) || [];
-    list.innerHTML = sugs.map(s => '<option value="' + esc(s) + '">').join('');
+      TROPE_PROVIDER_SUGGESTIONS[p]) || [];
+    const showSugs = () => {
+      list.innerHTML = sugs.map(s => '<option value="' + esc(s) + '">').join('');
+    };
+    showSugs();
+    if (!p || p === 'custom') {
+      modelsNote.textContent = p === 'custom'
+        ? 'Custom provider — type the exact model name.'
+        : 'Server default — the model comes from the server env.';
+      return;
+    }
+    modelsNote.textContent = 'Loading available models…';
+    let live = null;
+    try { live = await tropeModelList(p); } catch (e) { live = null; }
+    if (p !== sel.value) return; // provider changed while loading
+    if (live && live.length) {
+      list.innerHTML = live.map(m =>
+        '<option value="' + esc(m.id) + '"' +
+        (m.name !== m.id ? ' label="' + esc(m.name) + '"' : '') + '>').join('');
+      modelsNote.textContent = live.length + ' models available from ' + p +
+        ' — pick one or type your own.';
+    } else {
+      showSugs();
+      modelsNote.textContent = 'Could not load the live model list — showing ' +
+        'suggestions; you can still type any model name.';
+    }
   };
   sel.addEventListener('change', fillList);
   fillList();

@@ -166,6 +166,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith('/api/gbooks/'):
             self.handle_api_gbooks()
             return
+        if path == '/api/trope-models':
+            self.handle_api_trope_models()
+            return
         super().do_GET()
 
     def do_POST(self):
@@ -234,6 +237,71 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    TROPE_MODELS_URLS = {
+        'openrouter': 'https://openrouter.ai/api/v1/models',
+        'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+        'groq': 'https://api.groq.com/openai/v1/models',
+        'ollama': 'http://localhost:11434/v1/models',
+    }
+
+    def handle_api_trope_models(self):
+        """GET /api/trope-models?provider=<id> → live model list.
+
+        Mirrors functions/api/trope-models.js. Unlike the Pages edge, this
+        server runs on the user's own machine, so ollama (localhost:11434)
+        IS reachable and listed here. The key is resolved like
+        handle_api_trope_infer and never leaves the server.
+        """
+        try:
+            parts = self.path.split('?', 1)
+            qs = urllib.parse.parse_qs(parts[1] if len(parts) > 1 else '')
+            provider = (qs.get('provider', [''])[0] or '').strip().lower()
+            if provider not in self.TROPE_MODELS_URLS:
+                if provider == 'custom':
+                    self._send_json(400, {'error': 'custom providers have no model list — type the model name'})
+                else:
+                    self._send_json(400, {'error': 'unknown provider'})
+                return
+            # Same key resolution as trope-infer. OpenRouter's list is public
+            # and ollama is local/keyless — both work without a key.
+            tc = load_trope_cfg()
+            key = tc['keys'].get(provider) or \
+                (tc['key'] if provider == tc['provider'] else '')
+            if not key and provider not in ('openrouter', 'ollama'):
+                self._send_json(503, {'error': "no API key configured for provider '%s' (set trope_key_%s)" % (provider, provider)})
+                return
+            headers = {'User-Agent': 'CozyLibram/1.0 trope-proxy'}
+            if key:
+                headers['Authorization'] = 'Bearer ' + key
+            req = urllib.request.Request(
+                self.TROPE_MODELS_URLS[provider], headers=headers)
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    parsed = json.loads(r.read(2 * 1024 * 1024).decode('utf-8', 'replace'))
+                    status = r.status
+            except urllib.error.HTTPError as e:
+                self._send_json(502, {'error': 'provider returned HTTP %d for the model list' % e.code})
+                return
+            if status != 200:
+                self._send_json(502, {'error': 'provider returned HTTP %d for the model list' % status})
+                return
+            data = parsed.get('data') if isinstance(parsed, dict) else None
+            models = []
+            for m in data if isinstance(data, list) else []:
+                mid = m.get('id') if isinstance(m, dict) else None
+                if not mid or not isinstance(mid, str):
+                    continue
+                name = m.get('name') if isinstance(m.get('name'), str) and m.get('name') else mid
+                models.append({'id': mid, 'name': name})
+                if len(models) >= 500:
+                    break
+            self._send_json(200, {'provider': provider, 'models': models})
+        except Exception:
+            try:
+                self.send_error(502, 'model list fetch failed')
+            except Exception:
+                pass
 
     def handle_api_trope_infer(self):
         """POST /api/trope-infer {messages, max_tokens} → LLM chat completions.
