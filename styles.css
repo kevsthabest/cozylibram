@@ -594,6 +594,24 @@ textarea.text-input { min-height: 90px; resize: vertical; }
     mask-position: right center; mask-size: contain;
     opacity: 0.5; pointer-events: none;
   }
+  /* v183: bespoke per-theme modal artwork — replaces the tinted silhouette
+     with each theme's own art (twilight constellations, verdant garden,
+     velvet rose, abyss kelp, frost branches, midnight botanical vine).
+     Themes without bespoke art keep the tinted silhouette above. */
+  [data-theme="twilight"] .modal::after, [data-theme="verdant"] .modal::after,
+  [data-theme="velvet"] .modal::after, [data-theme="abyss"] .modal::after,
+  [data-theme="frost"] .modal::after, [data-theme="midnight"] .modal::after {
+    background-color: transparent;
+    -webkit-mask-image: none; mask-image: none;
+    background-repeat: no-repeat; background-position: right center; background-size: contain;
+    opacity: 0.6;
+  }
+  [data-theme="twilight"] .modal::after { background-image: url("Asset/themes/vine-twilight.svg"); }
+  [data-theme="verdant"] .modal::after { background-image: url("Asset/themes/vine-verdant.svg"); }
+  [data-theme="velvet"] .modal::after { background-image: url("Asset/themes/vine-velvet.svg"); }
+  [data-theme="abyss"] .modal::after { background-image: url("Asset/themes/vine-abyss.svg"); }
+  [data-theme="frost"] .modal::after { background-image: url("Asset/themes/vine-frost.svg"); }
+  [data-theme="midnight"] .modal::after { background-image: url("Asset/floral-right.svg"); }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }
