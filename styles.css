@@ -1780,11 +1780,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .d-log li b { font-weight: 600; }
 
 
-/* ================= v180: desktop book detail as a mockup-style panel =================
-   Centered hero on every screen (per the UX spec). On wide screens the same
-   modal presents as a large near-full-height panel — bigger cover, breathing
-   room, comfortable reading width, and the floral vine parked in its own
-   gutter instead of overlapping the content. Mobile is untouched. */
+/* ================= v181: desktop book detail hero correction =================
+   v180 preserved the hero functionality but centered the entire hero on desktop.
+   v181 restores the approved mockup composition: cover left, book information
+   right, contextual primary action under the information column. Mobile keeps
+   the existing stacked hero. */
 @media (min-width: 900px) {
   .modal.detail-v174 {
     max-width: 880px;
@@ -1792,25 +1792,69 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     max-height: 94vh;
     padding: 26px 120px 26px 34px; /* right gutter clears the floral vine */
   }
-  /* the vine lives in the gutter, clear of text and the favorite button */
+  /* Keep the vine in its own peripheral gutter, clear of content and controls. */
   .modal.detail-v174::after {
     top: 70px; bottom: 26px; right: 28px; width: 62px;
     opacity: 0.55;
   }
-  .modal.detail-v174 .d-hero { padding-top: 10px; }
-  .modal.detail-v174 .d-cover .cover-wrap.d-cov { width: 190px; height: 285px; }
-  .modal.detail-v174 .d-hero h2 { font-size: 30px; }
-  .modal.detail-v174 .d-primary { max-width: 380px; }
-  /* sticky rails re-anchor to the new padding */
+
+  /* Approved desktop composition: cover on the left, information on the right. */
+  .modal.detail-v174 .d-hero {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 28px;
+    row-gap: 12px;
+    text-align: left;
+    padding: 10px 0 0;
+  }
+  .modal.detail-v174 .d-cover {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+  }
+  .modal.detail-v174 .d-cover .cover-wrap.d-cov {
+    width: 190px;
+    height: 285px;
+    margin: 0;
+  }
+  .modal.detail-v174 .d-hero-text {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    align-self: end;
+  }
+  .modal.detail-v174 .d-hero h2 {
+    margin-top: 0;
+    font-size: 30px;
+  }
+  .modal.detail-v174 .d-meta {
+    justify-content: flex-start;
+  }
+  .modal.detail-v174 .d-primary {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    width: 100%;
+    max-width: 380px;
+    margin: 0 0 2px;
+  }
+
+  /* Sticky rails re-anchor to the widened desktop modal padding. */
   .modal.detail-v174 .d-tabs {
-    top: -26px; margin: 16px -120px 0 -34px; padding: 10px 120px 0 34px;
+    top: -26px;
+    margin: 16px -120px 0 -34px;
+    padding: 10px 120px 0 34px;
   }
   .modal.detail-v174 .modal-actions {
-    margin: 18px -120px 0 -34px; padding: 12px 120px 0 34px;
+    margin: 18px -120px 0 -34px;
+    padding: 12px 120px 0 34px;
   }
 }
 
-/* v180: details hierarchy — description reads as content, metadata sits quiet */
+/* v181: details hierarchy — description reads as content, metadata sits quiet */
 .d-panel .m-desc p { line-height: 1.65; }
 .d-panel .field.secondary { margin: 10px 0; opacity: 0.8; }
 
