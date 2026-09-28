@@ -41,7 +41,7 @@ ok('Quotes live on the Notes tab',
 ok('quotes tab panel starts hidden', window.document.getElementById('dtab-notes').hidden === true);
 ok('quote count shown on the Notes tab label', (() => {
   const labels = Array.from(window.document.querySelectorAll('#dtab-notes .field > label'));
-  return labels.some(l => /Quotes/.test(l.textContent) && /· 1/.test(l.textContent));
+  return labels.some(l => /quotes/i.test(l.textContent) && /· 1/.test(l.textContent));
 })());
 ok('quote still renders when the tab opens', (() => {
   window.document.querySelector('[data-dtab="notes"]').click();

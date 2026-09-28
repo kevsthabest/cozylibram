@@ -75,11 +75,12 @@ ok('menu: remove keeps its id', !!q('#m-moremenu #m-del'));
 q('#m-more').click();
 ok('menu: toggles closed', q('#m-moremenu').hidden === true);
 
-// --- 6. Primary lives in the hero, not the bottom bar (v180) ---
+// --- 6. Primary lives in the hero, not the bottom bar (v180); ⋮ moved to the
+// top-right cluster in v182 ---
 ok('primary: in the hero before the tabs',
   !!q('.d-hero #m-primary') && !q('.modal-actions #m-primary'));
-ok('bar: ⋮ menu + save remain, no duplicate primary',
-  !!q('.modal-actions #m-more') && !!q('.modal-actions #m-save'));
+ok('bar: save remains alone; ⋮ lives in the top-right cluster',
+  !!q('.d-topactions #m-more') && !!q('.modal-actions #m-save') && !q('.modal-actions #m-more'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

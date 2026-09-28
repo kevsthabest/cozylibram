@@ -626,9 +626,27 @@ function renderDetailModal(b, viaBook) {
   editingId = id;
   const root = document.getElementById('modal-root');
 
-  const segBtns = Object.keys(STATUS).map(s =>
-    '<button data-s="' + s + '" class="' + (b.status === s ? 'active' : '') + '">' +
-    ({ tbr: icon('tbr') + ' TBR', reading: icon('reading') + ' Reading', read: icon('read') + ' Read', dnf: icon('dnf') + ' DNF' })[s] + '</button>').join('');
+  // v182: mockup alignment — shelf/ownership become tappable rows that expand
+  // to choose. Labels + icons for the row display and the option lists.
+  const STATUS_META = {
+    tbr:     { label: 'TBR',               ic: 'tbr' },
+    reading: { label: 'Currently Reading', ic: 'reading' },
+    read:    { label: 'Read',              ic: 'read' },
+    dnf:     { label: 'DNF',               ic: 'dnf' },
+  };
+  const OWNED_META = {
+    owned:    { label: 'Owned',    ic: 'owned' },
+    tobuy:    { label: 'To buy',   ic: 'tobuy' },
+    borrowed: { label: 'Borrowed', ic: 'borrowed' },
+  };
+  // v182: the description appears twice per the mockup — in the hero
+  // (desktop only) and under "About this book" on the Details tab.
+  const descHTML = (idpfx, cls) =>
+    (b.description
+      ? '<div class="m-desc' + (cls ? ' ' + cls : '') + '" id="' + idpfx + '"><p>' +
+        esc(String(b.description).replace(/<[^>]*>/g, '')) + '</p>' +
+        '<button class="taplink" id="' + idpfx + '-toggle">Read more</button></div>'
+      : '');
 
   const hearts = [1, 2, 3, 4, 5].map(n =>
     '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '">' + icon('heart') + '</button>').join('');
@@ -641,6 +659,13 @@ function renderDetailModal(b, viaBook) {
   });
   if (draft.owned === true) draft.owned = 'owned'; // v148: tolerate legacy booleans
   else if (draft.owned === false) draft.owned = 'tobuy';
+  // v182: option buttons for the tappable shelf/ownership rows (needs the draft).
+  const statusOpts = Object.keys(STATUS_META).map(s =>
+    '<button data-s="' + s + '" class="' + (draft.status === s ? 'active' : '') + '">' +
+    icon(STATUS_META[s].ic) + ' ' + STATUS_META[s].label + '</button>').join('');
+  const ownedOpts = Object.keys(OWNED_META).map(o =>
+    '<button data-o="' + o + '" class="' + (draft.owned === o ? 'active' : '') + '">' +
+    icon(OWNED_META[o].ic) + ' ' + OWNED_META[o].label + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
 
@@ -740,14 +765,35 @@ function renderDetailModal(b, viaBook) {
     return '<button class="btn ghost danger sm" id="m-rmlog" style="margin-top:8px">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button>';
   })();
 
+  // v182: mockup reading-log card header — Started / Last read.
+  const logSummaryHTML = (() => {
+    const ds = (b.log || []).map(x => x.d).filter(Boolean).sort();
+    if (!ds.length) return '';
+    return '<div class="log-summary"><span>Started <b>' + esc(fmtDate(ds[0])) + '</b></span>' +
+      '<span>Last read <b>' + esc(fmtDate(ds[ds.length - 1])) + '</b></span></div>';
+  })();
+
   root.innerHTML =
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
     '<button class="d-back" id="m-x" aria-label="Close">←</button>' +
+    // v182: mockup top-right cluster — favorite + overflow menu (moved out of
+    // the bottom bar). The menu is a floating card now.
+    '<div class="d-topactions">' +
     '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
-    // v181: mockup hero — desktop uses cover-left / info-right; mobile stacks cover, title, author, rating, and action.
+    '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
+    '<div class="more-menu" id="m-moremenu" hidden>' +
+    '<button class="more-item" id="m-share">' + icon('share') + ' <span>Share</span></button>' +
+    '<button class="more-item" id="m-favmenu">' + icon('heart') + ' <span>Add to Favorites</span></button>' +
+    '<button class="more-item" id="m-upnext">' + icon('upnext') + ' <span>Add to Up Next</span></button>' +
+    '<button class="more-item" id="m-covermenu">' + icon('camera') + ' <span>Change Cover</span></button>' +
+    '<div class="more-sep"></div>' +
+    '<button class="more-item danger" id="m-del">' + icon('trash') + ' <span>Remove from Library</span></button>' +
+    '</div></div></div>' +
+    // v182: mockup hero — desktop is cover left / info right / primary row /
+    // description; mobile stacks cover, title, author, rating, meta, action.
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
-    '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
+    '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button></div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
@@ -755,53 +801,59 @@ function renderDetailModal(b, viaBook) {
       : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + ' <span class="note-inline">· ' + b.ratingsCount + ' ratings</span></div>' : '') +
     '<div class="d-meta">' +
-    (b.pageCount ? '<span>' + b.pageCount + ' pages</span>' : '') +
-    (b.publishedDate ? '<span>' + esc(b.publishedDate.slice(0, 4)) + '</span>' : '') +
-    (b.isbn ? '<span>ISBN ' + esc(b.isbn) + '</span>' : '') +
+    (b.pageCount ? '<span>' + icon('reading') + ' ' + b.pageCount + ' pages</span>' : '') +
+    (b.publishedDate ? '<span>' + icon('calendar') + ' ' + esc(b.publishedDate.slice(0, 4)) + '</span>' : '') +
+    (b.isbn ? '<span>' + icon('barcode') + ' ISBN ' + esc(b.isbn) + '</span>' : '') +
     '</div>' +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
-    '<button class="btn primary d-primary" id="m-primary"></button>' +
+    '<div class="d-primary-row"><button class="btn primary d-primary" id="m-primary"></button>' +
+    '<button class="fav-btn d-fav2' + (draft.favorite ? ' on' : '') + '" id="f-fav2" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
+    descHTML('m-desc-hero', 'd-hero-desc') +
     '</div>' +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
-    // collapsible sections; every control keeps its id).
+    // collapsible sections; every control keeps its id). v182: mockup tab icons.
     '<div class="d-tabs" role="tablist">' +
-    '<button class="d-tab active" data-dtab="details" role="tab" aria-selected="true">Details</button>' +
-    '<button class="d-tab" data-dtab="tropes" role="tab" aria-selected="false">Tropes</button>' +
-    '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">Notes</button></div>' +
+    '<button class="d-tab active" data-dtab="details" role="tab" aria-selected="true">' + icon('doc') + 'Details</button>' +
+    '<button class="d-tab" data-dtab="tropes" role="tab" aria-selected="false">' + icon('sparkles') + 'Tropes</button>' +
+    '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">' + icon('clipboard') + 'Notes</button></div>' +
 
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
-    // v130: description — clamped with a Read more toggle.
-    (b.description
-      ? '<div class="m-desc" id="m-desc"><p>' + esc(String(b.description).replace(/<[^>]*>/g, '')) + '</p>' +
-        '<button class="taplink" id="m-desc-toggle">Read more</button></div>'
-      : '') +
+    // v182: mockup "About this book" section (the hero carries its own copy on desktop).
+    (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
     // v131: your rating — hearts + word label, now on the Details tab.
     '<div class="field"><label>Your rating</label>' +
     '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
     '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
     '<div id="m-progress"></div>' +
 
-    '<div class="field"><label>Shelf</label><div class="seg" id="f-status">' + segBtns + '</div>' +
+    // v182: mockup tappable rows — tap to expand, pick, collapse.
+    '<div class="field"><label>Shelf / Status</label>' +
+    '<div class="mselect" id="f-status">' +
+    '<button class="mrow" data-mrow="status"><span class="mrow-ic" id="f-status-ic">' + icon((STATUS_META[draft.status] || STATUS_META.tbr).ic) + '</span>' +
+    '<span class="mrow-val" id="f-status-val">' + (STATUS_META[draft.status] || STATUS_META.tbr).label + '</span><span class="mrow-chev">›</span></button>' +
+    '<div class="mrow-opts" hidden>' + statusOpts + '</div></div>' +
     '<label class="checkline" id="f-prevwrap" style="' + (draft.status === 'read' ? '' : 'display:none') + '">' +
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
-    '<div class="field"><label>Ownership</label><div class="seg" id="f-owned" style="grid-template-columns:1fr 1fr 1fr">' +
-    '<button data-o="owned" class="' + (draft.owned === 'owned' ? 'active' : '') + '">' + icon('owned') + ' Owned</button>' +
-    '<button data-o="tobuy" class="' + (draft.owned === 'tobuy' ? 'active' : '') + '">' + icon('tobuy') + ' To buy</button>' +
-    '<button data-o="borrowed" class="' + (draft.owned === 'borrowed' ? 'active' : '') + '">' + icon('borrowed') + ' Borrowed</button></div></div>' +
+    '<div class="field"><label>Ownership</label>' +
+    '<div class="mselect" id="f-owned">' +
+    '<button class="mrow" data-mrow="owned"><span class="mrow-ic" id="f-owned-ic">' + icon((OWNED_META[draft.owned] || OWNED_META.tobuy).ic) + '</span>' +
+    '<span class="mrow-val" id="f-owned-val">' + (OWNED_META[draft.owned] || OWNED_META.tobuy).label + '</span><span class="mrow-chev">›</span></button>' +
+    '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div>' +
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
     '</div></div>' +
 
-    '<div class="field"><label>Mood ratings</label>' +
+    '<div class="field"><label>Mood</label>' +
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
 
-    '<div class="field"><label>' + icon('history') + ' Reading log</label>' +
+    '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
+    logSummaryHTML +
     '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
 
     '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
@@ -819,6 +871,7 @@ function renderDetailModal(b, viaBook) {
         '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
     })() + '</div></div>' +
 
+    '<details class="m-more-details"><summary><span>More details</span></summary>' +
     '<div class="field secondary"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
@@ -827,31 +880,37 @@ function renderDetailModal(b, viaBook) {
     '<div class="field secondary"><label>' + icon('calendar') + ' Release date</label>' +
     '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
     '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
+    '</details>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-tropes" role="tabpanel" hidden>' +
-    '<div class="field"><label>Your tropes <span class="note-inline">· comma separated</span></label>' +
-    '<input id="f-tropes" class="text-input" placeholder="enemies to lovers, forced proximity…" value="' + esc(b.tropes.join(', ')) + '">' +
-    '<div id="f-tropesugg" class="chips" style="margin-top:6px"></div></div>' +
-    '<div class="field"><label>' + icon('bulb') + ' Trope intelligence</label>' +
-    '<div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
-    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div>' +
+    // v182: mockup tropes — your tropes as chips (+ Add), suggested tropes
+    // with View more, trope intelligence card. The hidden #f-tropes input
+    // stays the save-flow source of truth; chips mirror it.
+    '<div class="field"><label>Your tropes</label>' +
+    '<div class="chips" id="f-tropechips"></div>' +
+    '<button class="chip" id="f-tropeaddtoggle">+ Add</button>' +
+    '<div class="tadd-row" id="f-tropeaddwrap" hidden>' +
+    '<input id="f-tropeadd" class="text-input" placeholder="e.g. forced proximity" aria-label="Add a trope">' +
+    '<button class="btn sm" id="f-tropeaddbtn">Add</button></div>' +
+    '<input id="f-tropes" type="hidden" value="' + esc(b.tropes.join(', ')) + '"></div>' +
+    '<div class="field"><label>Suggested tropes</label>' +
+    '<div id="f-tropesugg" class="chips"></div>' +
+    '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
+    '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
+    '<div class="tcard"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
+    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div></div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-notes" role="tabpanel" hidden>' +
     '<div class="field"><label>My notes</label>' +
-    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea></div>' +
-    '<div class="field"><label>' + icon('quotes') + ' Quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
+    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea>' +
+    '<div class="row-flex" style="margin-top:8px"><button class="btn sm" id="m-notesave">Save note</button></div></div>' +
+    '<div class="field"><label>' + icon('quotes') + ' Saved quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
     '<div id="m-quotes"></div></div>' +
     '</div>' +
 
     '<div class="modal-actions">' +
-    '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
-    '<div class="more-menu" id="m-moremenu" hidden>' +
-    '<button class="more-item" id="m-share">' + icon('share') + ' Share</button>' +
-    '<button class="more-item" id="m-upnext">' + icon('upnext') + ' Add to Up Next</button>' +
-    '<button class="more-item danger" id="m-del">Remove</button>' +
-    '</div></div>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
 
@@ -878,7 +937,8 @@ function renderDetailModal(b, viaBook) {
     track('book_status_changed', { from: from, to: s });
     if (s === 'read') track('book_completed');
     toast(s === 'reading' ? 'Happy reading ✨' : 'Back on the TBR');
-    root.querySelectorAll('#f-status button').forEach(x => x.classList.toggle('active', x.dataset.s === s));
+    root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x.dataset.s === s));
+    paintShelfRow(); // v182: keep the tappable shelf row in sync
     paintPrimary();
     renderProgressSection();
   };
@@ -938,10 +998,42 @@ function renderDetailModal(b, viaBook) {
     }));
   };
 
-  root.querySelectorAll('#f-status button').forEach(btn =>
+  // v182: mockup tappable rows — the row button expands the options; picking
+  // one sets the draft value, repaints the row, and collapses.
+  const paintShelfRow = () => {
+    const m = STATUS_META[draft.status] || STATUS_META.tbr;
+    const v = document.getElementById('f-status-val');
+    const ic = document.getElementById('f-status-ic');
+    if (v) v.textContent = m.label;
+    if (ic) ic.innerHTML = icon(m.ic);
+  };
+  const paintOwnedRow = () => {
+    const m = OWNED_META[draft.owned] || OWNED_META.tobuy;
+    const v = document.getElementById('f-owned-val');
+    const ic = document.getElementById('f-owned-ic');
+    if (v) v.textContent = m.label;
+    if (ic) ic.innerHTML = icon(m.ic);
+  };
+  root.querySelectorAll('[data-mrow]').forEach(t => t.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opts = t.parentElement.querySelector('.mrow-opts');
+    const willOpen = opts.hidden;
+    root.querySelectorAll('.mrow-opts').forEach(o => { o.hidden = true; });
+    root.querySelectorAll('.mrow-chev').forEach(c => { c.textContent = '›'; });
+    opts.hidden = !willOpen;
+    t.querySelector('.mrow-chev').textContent = willOpen ? '⌄' : '›';
+  }));
+  root.addEventListener('click', (e) => {
+    if (!e.target.closest('.mselect')) {
+      root.querySelectorAll('.mrow-opts').forEach(o => { o.hidden = true; });
+      root.querySelectorAll('.mrow-chev').forEach(c => { c.textContent = '›'; });
+    }
+  });
+
+  root.querySelectorAll('#f-status [data-s]').forEach(btn =>
     btn.addEventListener('click', () => {
       draft.status = btn.dataset.s;
-      root.querySelectorAll('#f-status button').forEach(x => x.classList.toggle('active', x === btn));
+      root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');
       if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';
       if (draft.status === 'read' && !draft.dateFinished && !draft.previouslyRead) draft.dateFinished = new Date().toISOString();
@@ -951,6 +1043,11 @@ function renderDetailModal(b, viaBook) {
         const pi = document.getElementById('f-progress');
         if (pi) pi.value = draft.progress;
       }
+      paintShelfRow();
+      const opts = btn.closest('.mrow-opts');
+      if (opts) { opts.hidden = true; }
+      const chev = btn.closest('.mselect').querySelector('.mrow-chev');
+      if (chev) chev.textContent = '›';
       renderProgressSection();
       paintPrimary(); // v123: primary action follows the shelf
     }));
@@ -971,10 +1068,15 @@ function renderDetailModal(b, viaBook) {
     }
   });
 
-  root.querySelectorAll('#f-owned button').forEach(btn =>
+  root.querySelectorAll('#f-owned [data-o]').forEach(btn =>
     btn.addEventListener('click', () => {
       draft.owned = btn.dataset.o; // v148: 'owned' | 'tobuy' | 'borrowed'
-      root.querySelectorAll('#f-owned button').forEach(x => x.classList.toggle('active', x === btn));
+      root.querySelectorAll('#f-owned [data-o]').forEach(x => x.classList.toggle('active', x === btn));
+      paintOwnedRow();
+      const opts = btn.closest('.mrow-opts');
+      if (opts) { opts.hidden = true; }
+      const chev = btn.closest('.mselect').querySelector('.mrow-chev');
+      if (chev) chev.textContent = '›';
       const bw = document.getElementById('m-buywrap');
       if (bw) bw.style.display = draft.owned === 'owned' ? 'none' : '';
     }));
@@ -1017,17 +1119,22 @@ function renderDetailModal(b, viaBook) {
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
-  // v130: description read-more toggle — hidden when the text fits unclamped.
-  const dWrap = document.getElementById('m-desc');
-  if (dWrap) {
+  // v182: description read-more toggles — hero (desktop) + Details tab.
+  // Hidden when the text fits unclamped.
+  const wireDescToggle = (wrapId) => {
+    const dWrap = document.getElementById(wrapId);
+    if (!dWrap) return;
     const dP = dWrap.querySelector('p');
-    const dT = document.getElementById('m-desc-toggle');
+    const dT = document.getElementById(wrapId + '-toggle');
+    if (!dP || !dT) return;
     if (dP.scrollHeight <= dP.clientHeight + 2) dT.style.display = 'none';
     dT.addEventListener('click', () => {
       const open = dWrap.classList.toggle('open');
       dT.textContent = open ? 'Show less' : 'Read more';
     });
-  }
+  };
+  wireDescToggle('m-desc');
+  wireDescToggle('m-desc-hero');
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
   // v133: series books are inline now — wire their rows + the full-series fill.
@@ -1036,17 +1143,59 @@ function renderDetailModal(b, viaBook) {
   if (sBox && b.series && b.series.name) fillMoreSection('series', b.series.name, id, sBox, true);
   renderProgressSection();
 
-  // v81: trope suggestions — tappable chips under the tropes input. Tap to add
-  // to her list; suggestions never overwrite what she typed. Refreshes when the
-  // Settings source changed since they were computed.
+  // v182: mockup "Your tropes" — chips with × remove, + Add reveals the
+  // input. The hidden #f-tropes input stays the save-flow source of truth;
+  // chips mirror it so suggestions and Save keep working unchanged.
+  const syncTropeChips = () => {
+    const inp = document.getElementById('f-tropes');
+    const box = document.getElementById('f-tropechips');
+    if (!inp || !box) return;
+    const list = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+    box.innerHTML = list.length
+      ? list.map(t => '<span class="chip on">' + esc(t) +
+          '<button data-trm="' + esc(t.toLowerCase()) + '" aria-label="Remove ' + esc(t) + '">×</button></span>').join('')
+      : '<span class="note">No tropes yet — tap + Add for what you love about this book.</span>';
+    box.querySelectorAll('[data-trm]').forEach(btn => btn.addEventListener('click', () => {
+      const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean)
+        .filter(t => t.toLowerCase() !== btn.dataset.trm);
+      inp.value = cur.join(', ');
+      syncTropeChips();
+      renderTropeSuggestions();
+    }));
+  };
+  const commitTropeAdd = () => {
+    const addEl = document.getElementById('f-tropeadd');
+    const inp = document.getElementById('f-tropes');
+    if (!addEl || !inp) return;
+    const v = addEl.value.trim().toLowerCase();
+    if (!v) return;
+    const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+    if (!cur.map(t => t.toLowerCase()).includes(v)) cur.push(v);
+    inp.value = cur.join(', ');
+    addEl.value = '';
+    syncTropeChips();
+    renderTropeSuggestions();
+  };
+  document.getElementById('f-tropeaddtoggle').addEventListener('click', () => {
+    const w = document.getElementById('f-tropeaddwrap');
+    w.hidden = !w.hidden;
+    if (!w.hidden) document.getElementById('f-tropeadd').focus();
+  });
+  document.getElementById('f-tropeaddbtn').addEventListener('click', commitTropeAdd);
+  document.getElementById('f-tropeadd').addEventListener('keydown', e => { if (e.key === 'Enter') commitTropeAdd(); });
+
+  // v81: trope suggestions — tappable chips. Tap to add to her list;
+  // suggestions never overwrite what she typed. v182: mockup "View more".
+  let tropeSuggExpanded = false;
   const renderTropeSuggestions = () => {
     const box = document.getElementById('f-tropesugg');
     if (!box) return;
     const inp = document.getElementById('f-tropes');
     const mine = new Set((inp ? inp.value : '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean));
     const sugg = (b.tropesAuto || []).filter(t => !mine.has(String(t).toLowerCase()));
-    box.innerHTML = sugg.length
-      ? '<span class="note">Suggested — tap to add:</span> ' + sugg.map(t =>
+    const shown = tropeSuggExpanded ? sugg : sugg.slice(0, 6);
+    box.innerHTML = shown.length
+      ? '<span class="note">Suggested — tap to add:</span> ' + shown.map(t =>
         '<button class="chip sugg" data-tsugg="' + esc(t) + '">+ ' + esc(t) + '</button>').join('')
       : '';
     box.querySelectorAll('[data-tsugg]').forEach(btn => btn.addEventListener('click', () => {
@@ -1055,9 +1204,20 @@ function renderDetailModal(b, viaBook) {
         cur.push(btn.dataset.tsugg);
         inp.value = cur.join(', ');
       }
+      syncTropeChips();
       renderTropeSuggestions();
     }));
+    const moreBtn = document.getElementById('m-tropemore');
+    if (moreBtn) {
+      moreBtn.hidden = sugg.length <= 6;
+      moreBtn.textContent = tropeSuggExpanded ? 'Show less' : 'View more →';
+    }
   };
+  const tropeMoreBtn = document.getElementById('m-tropemore');
+  if (tropeMoreBtn) tropeMoreBtn.addEventListener('click', () => {
+    tropeSuggExpanded = !tropeSuggExpanded;
+    renderTropeSuggestions();
+  });
   if ((b.tropeSrc || '') !== tropeSourceKey()) {
     refreshTropeSuggestions(b).then(() => {
       try { delete b._hcTagsFetched; } catch (e) {}
@@ -1066,6 +1226,7 @@ function renderDetailModal(b, viaBook) {
     });
   }
   renderTropeSuggestions();
+  syncTropeChips();
 
   // v153: trope-intelligence chips — DB tropes when present (with a subtle
   // source indicator), heuristic suggestions otherwise. Fills in async.
@@ -1073,6 +1234,16 @@ function renderDetailModal(b, viaBook) {
   // v155: propose-a-trope sheet, with this book as the originating book.
   const tpb = document.getElementById('m-tropepropose');
   if (tpb) tpb.addEventListener('click', () => openTropeProposalSheet(b));
+
+  // v182: mockup "Save note" — notes save immediately (like quotes), and the
+  // draft stays in sync so the modal Save can't clobber them.
+  document.getElementById('m-notesave').addEventListener('click', () => {
+    const v = document.getElementById('f-notes').value;
+    b.notes = v;
+    draft.notes = v;
+    saveLibrary();
+    toast('Note saved 📝');
+  });
 
   // v75: quotes save immediately (like the progress steppers), independent of
   // the draft — Save syncs draft.quotes from the book so they aren't clobbered.
@@ -1117,16 +1288,34 @@ function renderDetailModal(b, viaBook) {
   };
   renderQuotesSection();
 
-  document.getElementById('f-fav').addEventListener('click', () => {
+  // v182: the mockup shows favorite in three places — top-right heart, hero
+  // heart beside the primary action, and the ⋮ menu. One toggle, all repaint.
+  const paintFav = () => {
+    const on = !!draft.favorite;
+    ['f-fav', 'f-fav2'].forEach(fid => {
+      const el = document.getElementById(fid);
+      if (el) el.classList.toggle('on', on);
+    });
+    const fm = document.getElementById('m-favmenu');
+    if (fm) fm.innerHTML = icon('heart') + ' <span>' +
+      (on ? 'Remove from Favorites' : 'Add to Favorites') + '</span>';
+  };
+  const toggleFavorite = () => {
     draft.favorite = !draft.favorite;
     b.favorite = draft.favorite; // immediate — no need to hit Save
     saveLibrary();
-    const fb = document.getElementById('f-fav');
-    fb.classList.toggle('on', draft.favorite); // v84: line-art heart fills via CSS
+    paintFav();
     render(); // refresh the shelf behind the modal
     track(draft.favorite ? 'book_favorited' : 'book_unfavorited');
     toast(draft.favorite ? 'Pinned to favorites ❤️' : 'Removed from favorites 🤍');
+  };
+  document.getElementById('f-fav').addEventListener('click', toggleFavorite);
+  document.getElementById('f-fav2').addEventListener('click', toggleFavorite);
+  document.getElementById('m-favmenu').addEventListener('click', () => {
+    toggleFavorite();
+    document.getElementById('m-moremenu').hidden = true;
   });
+  paintFav(); // sync the menu label with the initial state
 
   const lk = document.getElementById('pc-lookup');
   if (lk) lk.addEventListener('click', async () => {
@@ -1163,11 +1352,19 @@ function renderDetailModal(b, viaBook) {
   document.getElementById('m-upnext').addEventListener('click', () => {
     if (upNext.includes(b.id)) { upNextRemove(b.id); toast('Removed from Up Next'); }
     else { upNextAdd(b.id); toast('Added to Up Next'); }
-    document.getElementById('m-upnext').innerHTML =
-      upNext.includes(b.id) ? '✓ In your Up Next queue — tap to remove' : icon('upnext') + ' Add to Up Next';
+    document.getElementById('m-upnext').innerHTML = icon('upnext') + ' <span>' +
+      (upNext.includes(b.id) ? 'In your Up Next queue — tap to remove' : 'Add to Up Next') + '</span>';
     moreMenu.hidden = true;
   });
-  document.getElementById('m-share').addEventListener('click', () => shareBookCard(b.id));
+  // v182: mockup menu — Change Cover joins the floating card.
+  document.getElementById('m-covermenu').addEventListener('click', () => {
+    moreMenu.hidden = true;
+    openCoverPicker(id);
+  });
+  document.getElementById('m-share').addEventListener('click', () => {
+    moreMenu.hidden = true;
+    shareBookCard(b.id);
+  });
   document.getElementById('m-save').addEventListener('click', () => {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);

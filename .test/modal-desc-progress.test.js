@@ -1,6 +1,6 @@
-// Tests for v130 — modal improvements (UI Improvement Pass, modal polish):
-// description visible in the modal header next to the cover (with a
-// read-more toggle); manual page entry in the quick tracker.
+// Tests for v130/v182 — modal description + page tracker:
+// v182 mockup alignment: the description lives in the desktop hero AND under
+// "About this book" on the Details tab, each with a read-more toggle.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -35,11 +35,13 @@ const seed = (id, over) => {
 
 const DESC = 'A tale of two cities. It was the best of times.\n\nIt was the worst of times.';
 
-// --- description on the Details tab (v174: moved out of the header) ---
+// --- description: hero copy (desktop, per the v182 mockup) + Details tab copy ---
 seed('d1', { description: DESC });
 ok('description renders on the Details tab', !!q('#dtab-details #m-desc'));
-ok('cover hero does not repeat the description',
-  !q('.d-hero').textContent.includes('best of times'));
+ok('hero carries the mockup description copy', !!q('.d-hero #m-desc-hero') &&
+  q('#m-desc-hero').textContent.includes('best of times'));
+ok('hero description toggle exists', !!q('#m-desc-hero-toggle'));
+ok('details description toggle exists', !!q('#m-desc-toggle'));
 ok('description text present', q('#m-desc').textContent.includes('best of times'));
 ok('description rendered exactly once', qa('#m-desc').length === 1);
 ok('read-more toggle exists', !!q('#m-desc-toggle'));

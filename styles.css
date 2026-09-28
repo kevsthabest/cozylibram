@@ -1798,11 +1798,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     opacity: 0.55;
   }
 
-  /* Approved desktop composition: cover on the left, information on the right. */
+  /* Approved desktop composition: cover on the left, information on the right.
+     v182: the mockup adds a primary-action row and the description under it. */
   .modal.detail-v174 .d-hero {
     display: grid;
     grid-template-columns: 190px minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     align-items: center;
     column-gap: 28px;
     row-gap: 12px;
@@ -1811,7 +1812,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   }
   .modal.detail-v174 .d-cover {
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
     align-self: center;
     justify-self: center;
   }
@@ -1833,13 +1834,22 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .modal.detail-v174 .d-meta {
     justify-content: flex-start;
   }
-  .modal.detail-v174 .d-primary {
+  .modal.detail-v174 .d-primary-row {
     grid-column: 2;
     grid-row: 2;
     justify-self: start;
     width: 100%;
-    max-width: 380px;
+    max-width: 420px;
     margin: 0 0 2px;
+  }
+  .modal.detail-v174 .d-hero-desc {
+    display: block;
+    grid-column: 2;
+    grid-row: 3;
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 62ch;
+    margin: 2px 0 0;
   }
 
   /* Sticky rails re-anchor to the widened desktop modal padding. */
@@ -1857,6 +1867,129 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v181: details hierarchy — description reads as content, metadata sits quiet */
 .d-panel .m-desc p { line-height: 1.65; }
 .d-panel .field.secondary { margin: 10px 0; opacity: 0.8; }
+
+/* ================= v182: book detail mockup alignment =================
+   Full pass matching the approved mockup: description in the desktop hero,
+   favorite beside the primary action, icon metadata, labeled Change Cover,
+   top-right ⋮ floating card, icon tabs, tappable shelf/ownership rows,
+   "More details" expander, mockup Notes + Tropes tab structure. */
+
+/* --- top-right cluster: favorite + overflow --- */
+.d-topactions {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  display: flex; gap: 8px; align-items: center;
+}
+.detail-v174 .d-topactions .fav-btn { position: static; }
+.d-topactions #m-more {
+  width: 36px; height: 36px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.d-topactions #m-more svg { width: 20px; height: 20px; }
+.d-topactions .more-menu {
+  top: calc(100% + 6px); bottom: auto; right: 0; min-width: 210px;
+}
+.more-sep { height: 1px; background: var(--line); margin: 6px 4px; }
+
+/* --- hero: primary row + favorite beside it --- */
+.d-primary-row { display: flex; gap: 10px; align-items: stretch; margin: 14px auto 2px; max-width: 400px; }
+.d-primary-row .d-primary { flex: 1; width: auto; max-width: none; margin: 0; }
+.detail-v174 .d-primary-row .fav-btn { position: static; }
+.d-fav2 {
+  flex: none; width: 50px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.d-fav2 .ticon { width: 24px; height: 24px; }
+.d-fav2.on { color: #ff5d7e; border-color: #ff5d7e; }
+.d-fav2.on .ticon { fill: #ff5d7e; stroke: #ff5d7e; }
+
+/* --- hero description: desktop only (Details tab keeps its copy) --- */
+.d-hero-desc { display: none; }
+.d-hero-desc p { line-height: 1.65; }
+
+/* --- icon metadata row --- */
+.d-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.d-meta span svg { width: 14px; height: 14px; color: var(--faint); }
+
+/* --- labeled Change Cover button --- */
+.d-cover #m-changecover { display: inline-flex; align-items: center; gap: 6px; }
+.d-cover #m-changecover svg { width: 15px; height: 15px; }
+
+/* --- tab icons --- */
+.d-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.d-tab svg { width: 17px; height: 17px; }
+
+/* --- mockup tappable rows (shelf / ownership) --- */
+.mselect { border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+.mrow {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; color: inherit; font: inherit;
+  padding: 13px 14px; cursor: pointer;
+}
+.mrow-ic { display: inline-flex; color: var(--accent); }
+.mrow-ic svg { width: 20px; height: 20px; }
+.mrow-val { flex: 1; text-align: left; font-weight: 600; font-size: 14.5px; }
+.mrow-chev { color: var(--faint); font-size: 20px; line-height: 1; }
+.mrow-opts { border-top: 1px solid var(--line); padding: 6px; }
+.mrow-opts button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; color: inherit; font: inherit; font-size: 14px;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer; text-align: left;
+}
+.mrow-opts button svg { width: 18px; height: 18px; color: var(--muted); }
+.mrow-opts button.active { background: var(--bg2); color: var(--accent); font-weight: 700; }
+.mrow-opts button.active svg { color: var(--accent); }
+
+/* --- "More details" expander --- */
+.m-more-details {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); margin: 14px 0; padding: 0 14px;
+}
+.m-more-details summary {
+  padding: 14px 0; cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 14.5px;
+}
+.m-more-details summary::-webkit-details-marker { display: none; }
+.m-more-details summary::after {
+  content: '›'; color: var(--faint); font-size: 20px;
+  transition: transform 0.15s ease;
+}
+.m-more-details[open] summary::after { transform: rotate(90deg); }
+.m-more-details .field.secondary { margin: 4px 0 12px; }
+
+/* --- rating word pill --- */
+.rate-word {
+  background: var(--bg2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; font-size: 13px;
+}
+
+/* --- reading log summary card --- */
+.log-summary {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 8px; font-size: 13.5px; color: var(--muted);
+}
+.log-summary b { color: var(--ink); font-weight: 600; }
+
+/* --- trope chips with remove --- */
+#f-tropechips .chip { display: inline-flex; align-items: center; gap: 6px; }
+#f-tropechips .chip button {
+  background: none; border: none; color: inherit; font: inherit;
+  cursor: pointer; padding: 0; font-size: 15px; line-height: 1;
+}
+.tadd-row { display: flex; gap: 8px; margin-top: 8px; }
+.tadd-row .text-input { flex: 1; min-width: 0; }
+.tadd-row .btn { flex: none; }
+#f-tropeaddtoggle { margin-top: 8px; }
+.tcard {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); padding: 12px 12px 8px;
+}
+#m-tropemore { margin-top: 2px; }
+
+/* --- notes tab --- */
+#dtab-notes .row-flex { margin-top: 8px; }
 
 /* ================= v171: desktop sidebar nav ================= */
 @media (min-width: 1024px) {

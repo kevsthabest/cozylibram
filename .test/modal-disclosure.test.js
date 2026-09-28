@@ -48,14 +48,16 @@ ok('hero: meta row shows pages + year + ISBN', (() => {
   return t.includes('200 pages') && t.includes('2021') && t.includes('9781250123456');
 })());
 ok('hero: public stars shown', q('.d-hero .pub-rating').textContent.includes('★★★★'));
-// --- v181: desktop panel — approved two-column hero composition ---
+// --- v182: desktop panel — approved mockup hero: cover left, info right,
+// primary row, description (three-row grid) ---
 ok('hero text wrapped for the desktop two-column panel', !!q('.d-hero .d-hero-text h2'));
-ok('desktop panel CSS uses the approved two-column hero', (() => {
+ok('desktop panel CSS uses the approved mockup hero grid', (() => {
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
   return css.includes('grid-template-columns: 190px minmax(0, 1fr)') &&
-    css.includes('grid-template-rows: auto auto') &&
-    css.includes('grid-column: 2') &&
-    css.includes('grid-row: 1 / span 2') &&
+    css.includes('grid-template-rows: auto auto auto') &&
+    css.includes('.d-primary-row') &&
+    css.includes('grid-row: 1 / span 3') &&
+    css.includes('.d-hero-desc') &&
     css.includes('padding: 26px 120px 26px 34px');
 })());
 
