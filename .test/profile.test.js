@@ -102,6 +102,28 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('names saved to the per-user profile slot', saved.firstName === 'Ada' && saved.lastName === 'Lovelace');
   ok('menu button initial follows the first name', q('#menu-btn').textContent.trim() === 'A');
 
+  // v177: gender picker + gender-aware home greeting.
+  ok('gender picker offers Female / Male / Other', qa('#pf-gender button').length === 3);
+  const gMale = q('#pf-gender [data-g="m"]');
+  gMale.click();
+  ok('tapping Male marks it active', gMale.classList.contains('active'));
+  gMale.click();
+  ok('tapping the active choice again clears it', !q('#pf-gender button.active'));
+  q('#pf-gender [data-g="m"]').click();
+  q('#pf-save').click(); await tick();
+  ok('gender saved to the per-user profile slot', JSON.parse(lsGet('spicyshelves.profile.u1')).gender === 'm');
+  runInWindow(`library.push({ id: 'g1', title: 'Seed', authors: ['A'], status: 'tbr', owned: 'owned', cover: '', tropes: [] });
+    view = 'library'; renderLibrary();`); await tick();
+  ok('greeting says handsome for a Male profile', /handsome/.test(q('.home-greet h2').textContent));
+  runInWindow(`{ const p = loadProfile(); p.gender = 'other'; touchProfile(p); renderLibrary(); }`); await tick();
+  ok('greeting says friend for an Other profile', /friend/.test(q('.home-greet h2').textContent));
+  runInWindow(`{ const p = loadProfile(); p.gender = 'f'; touchProfile(p); renderLibrary(); }`); await tick();
+  ok('greeting says beautiful for a Female profile', /beautiful/.test(q('.home-greet h2').textContent));
+  runInWindow(`{ const p = loadProfile(); p.gender = ''; touchProfile(p); renderLibrary(); }`); await tick();
+  ok('unset gender keeps the beautiful default', /beautiful/.test(q('.home-greet h2').textContent));
+  runInWindow(`renderProfile();`); await tick();
+  ok('back on the profile view', !!q('#pf-first'));
+
   // Pick a themed default.
   q('#pf-change').click(); await tick();
   q('#pf-picker [data-av="raven"]').click(); await tick();

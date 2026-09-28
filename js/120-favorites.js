@@ -297,7 +297,11 @@ function pullSpine(el, id) {
 function homeGreetingHTML() {
   const h = new Date().getHours();
   const tod = h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : 'evening';
-  return '<section class="home-sec home-greet"><h2 class="serif">Good ' + tod + ', beautiful ' + icon('covers') + '</h2>' +
+  // v177: the term of endearment follows the profile gender — unset keeps
+  // the long-standing "beautiful" default.
+  const g = (typeof loadProfile === 'function' && loadProfile().gender) || '';
+  const term = g === 'm' ? 'handsome' : g === 'other' ? 'friend' : 'beautiful';
+  return '<section class="home-sec home-greet"><h2 class="serif">Good ' + tod + ', ' + term + ' ' + icon('covers') + '</h2>' +
     '<p>What are you in the mood for?</p></section>';
 }
 

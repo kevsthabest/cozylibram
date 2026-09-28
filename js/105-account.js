@@ -17,7 +17,7 @@ function profileKey() {
   return 'spicyshelves.profile.' + (cloudUser ? cloudUser.id : 'offline');
 }
 function blankProfile() {
-  return { firstName: '', lastName: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0 };
+  return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0 };
 }
 function loadProfile() {
   let p = null;
@@ -26,6 +26,7 @@ function loadProfile() {
   if (!p || typeof p !== 'object') return base;
   base.firstName = String(p.firstName || '');
   base.lastName = String(p.lastName || '');
+  base.gender = ['f', 'm', 'other'].indexOf(p.gender) !== -1 ? p.gender : ''; // v177: greeting term
   base.avatarCloudPath = String(p.avatarCloudPath || '');
   base.updatedAt = Number(p.updatedAt) || 0;
   if (p.avatar && typeof p.avatar === 'object') {
@@ -309,6 +310,12 @@ function renderProfile() {
       '<input id="pf-first" class="text-input" value="' + esc(p.firstName) + '" autocomplete="given-name" maxlength="40"></div>' +
       '<div class="field"><label>Last name</label>' +
       '<input id="pf-last" class="text-input" value="' + esc(p.lastName) + '" autocomplete="family-name" maxlength="40"></div>' +
+      '<div class="field"><label>Gender</label>' +
+      '<div class="seg" id="pf-gender" style="grid-template-columns:1fr 1fr 1fr">' +
+      '<button type="button" data-g="f" class="' + (p.gender === 'f' ? 'active' : '') + '">Female</button>' +
+      '<button type="button" data-g="m" class="' + (p.gender === 'm' ? 'active' : '') + '">Male</button>' +
+      '<button type="button" data-g="other" class="' + (p.gender === 'other' ? 'active' : '') + '">Other</button></div>' +
+      '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
       '<div class="field"><label>Email</label>' +
       '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
       '<button class="btn block" id="pf-save">Save profile</button>' +
@@ -349,11 +356,20 @@ function renderProfile() {
     const np = loadProfile();
     np.firstName = document.getElementById('pf-first').value.trim().slice(0, 40);
     np.lastName = document.getElementById('pf-last').value.trim().slice(0, 40);
+    const gsel = document.querySelector('#pf-gender button.active');
+    np.gender = gsel ? gsel.dataset.g : '';
     touchProfile(np);
     pushCloudProfile(np);
     renderTopbar();
     toast('Profile saved ✨');
   });
+  // v177: gender picker toggles (tap the active one to clear back to unset)
+  const gbtns = Array.from(document.querySelectorAll('#pf-gender button'));
+  gbtns.forEach(b => b.addEventListener('click', () => {
+    const was = b.classList.contains('active');
+    gbtns.forEach(x => x.classList.remove('active'));
+    if (!was) b.classList.add('active');
+  }));
 }
 
 renderTopbar();
