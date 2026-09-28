@@ -1667,6 +1667,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .bt-statusbar.status-read { background: var(--ok); }
 .bt-statusbar.status-dnf { background: var(--danger); }
 .bt-statusbar .bt-fill { display: block; height: 100%; background: rgba(255, 255, 255, 0.85); }
+/* v188: read badge on grid tiles — the same gold seal as the favorite
+   spines, bottom-right of the cover, clear of the status strip */
+.tile-read { position: absolute; right: 4px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fbeec2, #d9a93f 62%, #8a6414);
+  color: #2a1e06; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,.55), inset 0 0 0 1px rgba(120,80,10,.55); pointer-events: none; }
+.tile-read .ticon { width: 12px; height: 12px; stroke-width: 2.8; }
 
 /* ================= v126: empty-state CTA ================= */
 .empty .btn { margin-top: 14px; }

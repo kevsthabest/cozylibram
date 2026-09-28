@@ -47,5 +47,10 @@ ok('tile: reading strip shows progress fill', /bt-fill" style="width:25%"/.test(
 ok('tile: favorite heart on tile too',
   /card-fav/.test(run(`bookTile(${JSON.stringify(mk({ favorite: true }))}, 0)`)));
 
+// v188: read badge — gold seal on finished books' tiles only
+ok('tile: read seal on read tile', /class="tile-read"/.test(tileRead));
+ok('tile: no read seal on tbr tile', !/tile-read/.test(tileTbr));
+ok('tile: no read seal on reading tile', !/tile-read/.test(tileProg));
+
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

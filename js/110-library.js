@@ -57,8 +57,12 @@ function bookTile(b, i) {
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
     : '<span class="bt-fallback">' + icon('covers') + '</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
+  // v188: read badge — the same gold seal as the favorite spines, so a
+  // finished book is recognizable in grid view too.
+  const readSeal = b.status === 'read'
+    ? '<span class="tile-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
   return '<div class="book-tile' + anim + '" data-id="' + b.id + '">' +
-    '<div class="bt-cover">' + inner + coverFav(b) + tileStatusBar(b) + '</div>' +
+    '<div class="bt-cover">' + inner + coverFav(b) + readSeal + tileStatusBar(b) + '</div>' +
     '<div class="bt-title">' + esc(b.title) + '</div></div>';
 }
 
