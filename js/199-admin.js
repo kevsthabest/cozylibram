@@ -423,6 +423,9 @@ async function renderTropeLab() {
   /* v157: pull the live taxonomy first so counts, staleness, and the
      proposal review all see freshly approved tropes. */
   try { await TropeTaxonomy.refresh(); } catch (e) {}
+  /* v160: load the shared provider/model override so the status card
+     shows the effective provider. */
+  try { await tropeProviderGet(); } catch (e) {}
 
   const info = tropeProviderInfo();
   const configured = tropeInferenceConfigured();
@@ -431,8 +434,8 @@ async function renderTropeLab() {
   const statusCard =
     '<div class="ob-card"><h3 class="serif">' + icon('bulb') + ' Trope Lab</h3>' +
     '<div class="ob-grid">' +
-    '<div class="ob-stat"><div class="ob-stat-val">' + esc(info.provider || '—') + '</div><div class="ob-stat-label">Provider</div></div>' +
-    '<div class="ob-stat"><div class="ob-stat-val" style="font-size:15px;word-break:break-all">' + esc(info.model || '—') + '</div><div class="ob-stat-label">Model</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val" id="tl-stat-provider">' + esc(info.provider || '—') + '</div><div class="ob-stat-label">Provider</div></div>' +
+    '<div class="ob-stat"><div class="ob-stat-val" id="tl-stat-model" style="font-size:15px;word-break:break-all">' + esc(info.model || '—') + '</div><div class="ob-stat-label">Model</div></div>' +
     '<div class="ob-stat"><div class="ob-stat-val">' + (configured ? 'Ready' : 'Missing') + '</div><div class="ob-stat-label">API key</div></div>' +
     '<div class="ob-stat"><div class="ob-stat-val">v' + TROPE_TAXONOMY_VERSION + ' · ' + liveCount + '</div><div class="ob-stat-label">Taxonomy tropes' +
     (addedCount > 0 ? ' (+' + addedCount + ' added)' : '') + '</div></div>' +
@@ -443,7 +446,8 @@ async function renderTropeLab() {
         '<code>server-config.json</code>, or set <code>TROPE_API_KEY</code> / <code>TROPE_MODEL</code> in the Pages environment.</p>') +
     '</div>';
 
-  body.innerHTML = statusCard + '<div id="tropelab-coverage"><p class="note">Scanning library…</p></div>' +
+  body.innerHTML = statusCard + '<div id="tropelab-provider"></div>' +
+    '<div id="tropelab-coverage"><p class="note">Scanning library…</p></div>' +
     '<div id="tropelab-alllibs"></div>' +
     '<div id="tropelab-progress"></div>';
 
@@ -510,6 +514,7 @@ async function renderTropeLab() {
   wire('tl-backfill', cov.missing);
   wire('tl-restale', cov.stale);
   tropeLabProgressHTML();
+  tropeLabProviderHTML();
   tropeLabAllLibrariesHTML(configured);
 
   // v155: user-proposal review queue.
@@ -522,6 +527,75 @@ async function renderTropeLab() {
     '<div id="trope-proposals"><p class="note">Loading…</p></div></div>';
   body.appendChild(propCard);
   tropeLabProposalsHTML();
+}
+
+/* v160: in-app provider/model picker. The choice is stored in the shared
+   trope_provider_settings row and applies to all devices on their next
+   inference run. API keys stay server-side — the proxy holds one key per
+   provider (TROPE_KEY_<PROVIDER>) and the client only names the provider. */
+async function tropeLabProviderHTML() {
+  const box = document.getElementById('tropelab-provider');
+  if (!box || adminTab !== 'tropes') return;
+  let cur = { provider: '', model: '' };
+  try { cur = await tropeProviderGet(); } catch (e) {}
+  const info = tropeProviderInfo();
+  const providers = ['', 'openrouter', 'gemini', 'groq', 'ollama', 'custom'];
+  const labels = { '': 'Server default (env)', openrouter: 'OpenRouter', gemini: 'Google Gemini', groq: 'Groq', ollama: 'Ollama (local)', custom: 'Custom' };
+  box.innerHTML =
+    '<div class="ob-card"><h3 class="serif">Inference provider</h3>' +
+    '<p class="note" id="tl-provider-current">Currently: <b>' + esc(info.provider || 'server default') + '</b>' +
+    (info.model ? ' · <span style="word-break:break-all">' + esc(info.model) + '</span>' : '') +
+    (info.overridden ? ' (override)' : ' (server env)') + '</p>' +
+    '<div class="ob-ranges">' +
+    '<select id="tl-provider-sel" class="text-input" aria-label="Provider">' +
+    providers.map(p => '<option value="' + p + '"' + (cur.provider === p ? ' selected' : '') + '>' + labels[p] + '</option>').join('') +
+    '</select>' +
+    '<input id="tl-provider-model" class="text-input" list="tl-model-list" placeholder="model (e.g. gemini-2.0-flash)" value="' + esc(cur.model) + '" aria-label="Model">' +
+    '<datalist id="tl-model-list"></datalist>' +
+    '<button class="btn sm" id="tl-provider-save">Save</button>' +
+    '</div>' +
+    '<p class="note">Applies to all devices. Each provider needs its key on the server ' +
+    '(Cloudflare env <code>TROPE_KEY_GEMINI</code>, <code>TROPE_KEY_OPENROUTER</code>, …); ' +
+    'picking one without a key fails the next run with a clear error. ' +
+    'Choose “Server default” with an empty model to go back to the env settings.</p>' +
+    '<p class="note" id="tl-provider-msg"></p></div>';
+  const sel = document.getElementById('tl-provider-sel');
+  const modelInput = document.getElementById('tl-provider-model');
+  const list = document.getElementById('tl-model-list');
+  const fillList = () => {
+    const sugs = (typeof TROPE_PROVIDER_SUGGESTIONS !== 'undefined' &&
+      TROPE_PROVIDER_SUGGESTIONS[sel.value]) || [];
+    list.innerHTML = sugs.map(s => '<option value="' + esc(s) + '">').join('');
+  };
+  sel.addEventListener('change', fillList);
+  fillList();
+  const save = document.getElementById('tl-provider-save');
+  save.addEventListener('click', async () => {
+    const msg = document.getElementById('tl-provider-msg');
+    const p = sel.value, m = modelInput.value.trim();
+    if (p && !m) { msg.textContent = 'Pick a model for ' + p + ' (or choose Server default).'; return; }
+    if (m && !/^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$/.test(m)) {
+      msg.textContent = 'That model name looks invalid.';
+      return;
+    }
+    save.disabled = true;
+    try {
+      await tropeProviderSet(p, m);
+      const now = tropeProviderInfo();
+      document.getElementById('tl-provider-current').innerHTML =
+        'Currently: <b>' + esc(now.provider || 'server default') + '</b>' +
+        (now.model ? ' · <span style="word-break:break-all">' + esc(now.model) + '</span>' : '') +
+        (now.overridden ? ' (override)' : ' (server env)');
+      const sp = document.getElementById('tl-stat-provider');
+      if (sp) sp.textContent = now.provider || '—';
+      const sm = document.getElementById('tl-stat-model');
+      if (sm) sm.textContent = now.model || '—';
+      msg.textContent = 'Saved — all devices use this on their next inference run.';
+    } catch (e) {
+      msg.textContent = 'Save failed: ' + ((e && e.message) || e);
+    }
+    save.disabled = false;
+  });
 }
 
 /* v159: backfill every user's books, not just this device's library.

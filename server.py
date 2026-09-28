@@ -68,20 +68,33 @@ TROPE_PROVIDER_URLS = {
 
 def load_trope_cfg():
     """Trope-inference LLM config (v152). All server-side: the browser only
-    learns whether a key is configured (via /config.js), never the key."""
+    learns whether a key is configured (via /config.js), never the key.
+
+    v160: per-provider keys (trope_key_<provider> in server-config.json);
+    trope_api_key remains the fallback for the default provider."""
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
             d = json.load(f)
         provider = (d.get('trope_provider') or 'openrouter').strip().lower()
-        base_url = (d.get('trope_base_url') or '').strip().rstrip('/')
-        if not base_url:
-            base_url = TROPE_PROVIDER_URLS.get(provider, '')
+        base_url_explicit = (d.get('trope_base_url') or '').strip().rstrip('/')
+        base_url = base_url_explicit or TROPE_PROVIDER_URLS.get(provider, '')
+        keys = {}
+        for p in list(TROPE_PROVIDER_URLS) + ['custom']:
+            k = (d.get('trope_key_' + p) or '').strip()
+            if k:
+                keys[p] = k
         return {'provider': provider,
                 'model': (d.get('trope_model') or '').strip(),
                 'key': (d.get('trope_api_key') or '').strip(),
-                'base_url': base_url}
+                'base_url': base_url,
+                'base_url_explicit': base_url_explicit,
+                'keys': keys}
     except Exception:
-        return {'provider': 'openrouter', 'model': '', 'key': '', 'base_url': ''}
+        return {'provider': 'openrouter', 'model': '', 'key': '',
+                'base_url': '', 'base_url_explicit': '', 'keys': {}}
+
+
+TROPE_MODEL_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$')
 
 
 def config_js_body():
@@ -214,11 +227,21 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
+    def _send_json(self, status, obj):
+        body = json.dumps(obj).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def handle_api_trope_infer(self):
         """POST /api/trope-infer {messages, max_tokens} → LLM chat completions.
 
         Mirrors functions/api/trope-infer.js. The API key, model, and base
         URL come from server-config.json — the browser never sees them.
+        v160: the client may NAME a provider + model (Trope Lab picker);
+        the provider is allowlisted and the key is per-provider server-side.
         Guards: POST only, messages is a small array of role/content objects,
         max_tokens clamped to 100..4000. The upstream HTTP status is
         forwarded so the client's 401/403/429 handling keeps working.
@@ -243,28 +266,58 @@ class Handler(SimpleHTTPRequestHandler):
                 max_tokens = 1200
             max_tokens = min(4000, max(100, max_tokens))
 
+            # v160: optional client-chosen provider + model (must be a pair).
             tc = load_trope_cfg()
-            if not tc['key'] or not tc['model'] or not tc['base_url']:
-                self.send_error(503, 'trope inference not configured on this server')
+            env_provider = tc['provider']
+            req_provider = body.get('provider')
+            req_provider = req_provider.strip().lower() \
+                if isinstance(req_provider, str) else ''
+            req_model = body.get('model')
+            req_model = req_model.strip() \
+                if isinstance(req_model, str) else ''
+            provider, model = env_provider, tc['model']
+            if req_provider or req_model:
+                if not req_provider or not req_model or \
+                        (req_provider != 'custom' and
+                         req_provider not in TROPE_PROVIDER_URLS) or \
+                        not TROPE_MODEL_RE.match(req_model):
+                    self.send_error(400, 'bad request')
+                    return
+                provider, model = req_provider, req_model
+            key = tc['keys'].get(provider) or \
+                (tc['key'] if provider == env_provider else '')
+            if req_provider:
+                base_url = tc['base_url_explicit'] if provider == 'custom' \
+                    else TROPE_PROVIDER_URLS.get(provider, '')
+            else:
+                base_url = tc['base_url']
+            if not key:
+                self._send_json(
+                    503, {'error': "no API key configured for provider '%s' "
+                                   "(set trope_key_%s)" % (provider, provider)})
                 return
-            url = tc['base_url'] + '/chat/completions'
+            if not model or not base_url:
+                self._send_json(
+                    503, {'error': 'trope inference not configured on this server'})
+                return
+            url = base_url + '/chat/completions'
             # v156: low reasoning effort for OpenRouter (trope tagging is a
             # classification task; free reasoning models otherwise burn the
             # token budget on chain-of-thought and truncate the JSON).
             upstream_obj = {
-                'model': tc['model'],
+                'model': model,
                 'messages': [{'role': m['role'], 'content': m['content']}
                              for m in messages],
                 'temperature': 0,
                 'max_tokens': max_tokens,
             }
-            if tc['provider'] == 'openrouter':
+            if provider == 'openrouter':
                 upstream_obj['reasoning'] = {'effort': 'low'}
             upstream_body = json.dumps(upstream_obj).encode('utf-8')
             headers = {'Content-Type': 'application/json',
-                       'Authorization': 'Bearer ' + tc['key'],
+                       'Authorization': 'Bearer ' + key,
                        'User-Agent': 'CozyLibram/1.0 trope-proxy'}
-            if tc['provider'] == 'openrouter':
+            if provider == 'openrouter':
                 headers['HTTP-Referer'] = 'https://cozylibram.pages.dev'
                 headers['X-Title'] = 'Cozy Libram'
             req = urllib.request.Request(url, data=upstream_body, headers=headers)

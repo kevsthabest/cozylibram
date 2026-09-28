@@ -21,8 +21,8 @@ function ok(name, cond) {
     const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
     ok('tropes.sql has the admin read policy on books',
       sql.includes('create policy "admins read all books" on books'));
-    ok('policy is select-only via the app_admins registry',
-      /for select using \([\s\S]*?app_admins/.test(sql));
+    ok('policy is select-only via the is_admin() check',
+      /for select using \(is_admin\(\)\)/.test(sql));
     ok('policy notes the analytics.sql dependency',
       sql.includes('supabase/analytics.sql'));
   }

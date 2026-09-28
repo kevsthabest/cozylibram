@@ -42,11 +42,17 @@ function tropeInferenceConfigured() {
   } catch (e) { return false; }
 }
 
-/* Pure: display info about the configured provider (names only, no secrets). */
+/* Pure: display info about the configured provider (names only, no secrets).
+   v160: reflects the shared provider/model override when one is set. */
 function tropeProviderInfo() {
   try {
     const c = window.SPICY_CONFIG || {};
-    return { provider: c.tropeProvider || '', model: c.tropeModel || '' };
+    const ov = (typeof tropeProviderCache !== 'undefined' && tropeProviderCache) || null;
+    return {
+      provider: (ov && ov.provider) || c.tropeProvider || '',
+      model: (ov && ov.model) || c.tropeModel || '',
+      overridden: !!(ov && ov.provider && ov.model),
+    };
   } catch (e) { return { provider: '', model: '' }; }
 }
 
@@ -344,6 +350,15 @@ async function inferBookTropes(book, opts) {
     { role: 'system', content: system },
     { role: 'user', content: user },
   ];
+  /* v160: shared provider/model override (Trope Lab picker). When set, the
+     proxy routes to that provider with the per-provider server-side key. */
+  let providerOverride = null;
+  try { providerOverride = await tropeProviderGet(); } catch (e) { providerOverride = null; }
+  const reqBodyBase = { messages, max_tokens: maxTokens };
+  if (providerOverride && providerOverride.provider && providerOverride.model) {
+    reqBodyBase.provider = providerOverride.provider;
+    reqBodyBase.model = providerOverride.model;
+  }
   let lastErr = null;
   let nudged = false;
 
@@ -355,7 +370,7 @@ async function inferBookTropes(book, opts) {
       resp = await fetchFn('/api/trope-infer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, max_tokens: maxTokens }),
+        body: JSON.stringify(Object.assign({}, reqBodyBase, { max_tokens: maxTokens })),
         signal: ctrl.signal,
       });
     } catch (e) {
@@ -493,6 +508,64 @@ function tropeAdminBooksSave(list) {
 function tropeAdminBooksClear() {
   tropeAdminBookCache = [];
   try { localStorage.removeItem(TROPE_ADMIN_BOOKS_KEY); } catch (e) {}
+}
+
+/* ---------------- Provider/model override (v160) ----------------
+   The admin picks the inference provider + model in Trope Lab; the choice
+   lives in the shared trope_provider_settings row and applies to all
+   devices. Empty = use the server env defaults (backward compatible).
+   Keys stay server-side: the proxy holds one key per provider
+   (TROPE_KEY_<PROVIDER>) and the client only names the provider. */
+
+const TROPE_PROVIDER_SETTINGS_KEY = 'cozylibram.tropeprovider.v1';
+const TROPE_PROVIDER_SUGGESTIONS = {
+  openrouter: ['nvidia/nemotron-nano-9b-v2:free', 'qwen/qwen3-32b:free', 'google/gemma-3-27b-it:free'],
+  gemini: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash'],
+  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
+  ollama: ['llama3.1', 'qwen3'],
+  custom: [],
+};
+let tropeProviderCache = null; // null = not loaded yet
+
+/* {provider, model} — either may be '' meaning "server default". */
+async function tropeProviderGet() {
+  if (tropeProviderCache) return tropeProviderCache;
+  let row = null;
+  try {
+    const sb = await cloudClient().catch(() => null);
+    if (sb) {
+      const res = await sb.from('trope_provider_settings')
+        .select('provider, model').eq('id', 1).maybeSingle();
+      if (res && res.data) row = res.data;
+    }
+  } catch (e) {}
+  if (!row) {
+    try { row = JSON.parse(localStorage.getItem(TROPE_PROVIDER_SETTINGS_KEY) || 'null'); }
+    catch (e) { row = null; }
+  }
+  tropeProviderCache = {
+    provider: String((row && row.provider) || '').trim().toLowerCase(),
+    model: String((row && row.model) || '').trim(),
+  };
+  try { localStorage.setItem(TROPE_PROVIDER_SETTINGS_KEY, JSON.stringify(tropeProviderCache)); }
+  catch (e) {}
+  return tropeProviderCache;
+}
+
+/* Admin-only (RLS enforces). Clears the override when both are empty. */
+async function tropeProviderSet(provider, model) {
+  provider = String(provider || '').trim().toLowerCase();
+  model = String(model || '').trim();
+  const sb = await cloudClient().catch(() => null);
+  if (!sb) throw new Error('not signed in');
+  const { error } = await sb.from('trope_provider_settings').upsert(
+    { id: 1, provider, model, updated_at: new Date().toISOString() },
+    { onConflict: 'id' });
+  if (error) throw error;
+  tropeProviderCache = { provider, model };
+  try { localStorage.setItem(TROPE_PROVIDER_SETTINGS_KEY, JSON.stringify(tropeProviderCache)); }
+  catch (e) {}
+  return tropeProviderCache;
 }
 
 const TropeQueue = {

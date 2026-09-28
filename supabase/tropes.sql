@@ -266,10 +266,32 @@ alter table book_tropes
   add column if not exists taxonomy_rev int not null default 1;
 
 -- v159: admins can read every user's books so Trope Lab can backfill all
--- libraries in one pass. Requires the app_admins registry from
--- supabase/analytics.sql (the Observatory needs it too).
+-- libraries in one pass. (is_admin() comes from supabase/analytics.sql,
+-- same as the taxonomy_meta policies above.)
 drop policy if exists "admins read all books" on books;
 create policy "admins read all books" on books
-  for select using (
-    exists (select 1 from app_admins where user_id = auth.uid())
-  );
+  for select using (is_admin());
+
+-- v160: shared trope provider/model override. The admin picks the inference
+-- provider + model in Trope Lab; the choice applies to all devices. An empty
+-- row means "use the server env defaults". API keys stay server-side — the
+-- proxy holds one key per provider (TROPE_KEY_<PROVIDER>) and the client
+-- only names the provider.
+create table if not exists trope_provider_settings (
+  id int primary key check (id = 1),
+  provider text not null default '',
+  model text not null default '',
+  updated_at timestamptz not null default now()
+);
+insert into trope_provider_settings (id, provider, model)
+  values (1, '', '') on conflict (id) do nothing;
+
+alter table trope_provider_settings enable row level security;
+
+drop policy if exists "trope_provider_settings: signed-in read" on trope_provider_settings;
+create policy "trope_provider_settings: signed-in read"
+  on trope_provider_settings for select to authenticated using (true);
+
+drop policy if exists "trope_provider_settings: admin write" on trope_provider_settings;
+create policy "trope_provider_settings: admin write"
+  on trope_provider_settings for all to authenticated using (is_admin()) with check (is_admin());
