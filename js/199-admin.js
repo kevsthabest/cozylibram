@@ -459,13 +459,13 @@ async function renderTropeLab() {
     resumed = true;
   }
 
-  let cov, sbError = '';
+  let cov, sbError = '', rows = [];
   try {
     const books = tropeLabBooks();
     tropeLabKeyToId = {};
     books.forEach(b => { tropeLabKeyToId[bookKeyFor(b)] = b.id; });
     const sb = await tropeLabSb();
-    let rows = [];
+    rows = [];
     if (sb) {
       const { data, error } = await sb.from('book_tropes')
         .select('book_key, taxonomy_version, taxonomy_rev').limit(20000);
