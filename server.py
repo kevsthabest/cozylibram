@@ -240,10 +240,46 @@ class Handler(SimpleHTTPRequestHandler):
 
     TROPE_MODELS_URLS = {
         'openrouter': 'https://openrouter.ai/api/v1/models',
-        'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+        # v165: the native endpoint, not the OpenAI-compat one — the compat
+        # /models list has no capability metadata and includes TTS / image /
+        # video / embedding / live models that 404 on /chat/completions.
+        'gemini': 'https://generativelanguage.googleapis.com/v1beta/models',
         'groq': 'https://api.groq.com/openai/v1/models',
         'ollama': 'http://localhost:11434/v1/models',
     }
+
+    # v165: model families that support generateContent but are not text
+    # chat on the OpenAI-compat endpoint.
+    TROPE_GEMINI_NONCHAT_RE = re.compile(
+        r'tts|image|video|veo|lyria|embed|robotics|computer-use|deep-research|'
+        r'transcribe|aqa|antigravity|nano-banana|native-audio|live', re.IGNORECASE)
+
+    @staticmethod
+    def _map_gemini_models(parsed):
+        """v165: native v1beta/models shape → [{id, name}], chat-capable only."""
+        data = parsed.get('models') if isinstance(parsed, dict) else None
+        models = []
+        seen = set()
+        for m in data if isinstance(data, list) else []:
+            name = m.get('name') if isinstance(m, dict) else None
+            if not name or not isinstance(name, str):
+                continue
+            methods = m.get('supportedGenerationMethods')
+            if isinstance(methods, list) and 'generateContent' not in methods:
+                continue
+            mid = name[len('models/'):] if name.startswith('models/') else name
+            if Handler.TROPE_GEMINI_NONCHAT_RE.search(mid):
+                continue
+            if mid in seen:
+                continue
+            seen.add(mid)
+            label = m.get('displayName')
+            if not isinstance(label, str) or not label:
+                label = mid
+            models.append({'id': mid, 'name': label})
+            if len(models) >= 500:
+                break
+        return models
 
     def handle_api_trope_models(self):
         """GET /api/trope-models?provider=<id> → live model list.
@@ -273,7 +309,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             headers = {'User-Agent': 'CozyLibram/1.0 trope-proxy'}
             if key:
-                headers['Authorization'] = 'Bearer ' + key
+                # v165: the native Gemini API takes the key in
+                # x-goog-api-key (Bearer expects an OAuth token there).
+                if provider == 'gemini':
+                    headers['x-goog-api-key'] = key
+                else:
+                    headers['Authorization'] = 'Bearer ' + key
             req = urllib.request.Request(
                 self.TROPE_MODELS_URLS[provider], headers=headers)
             try:
@@ -286,25 +327,28 @@ class Handler(SimpleHTTPRequestHandler):
             if status != 200:
                 self._send_json(502, {'error': 'provider returned HTTP %d for the model list' % status})
                 return
-            data = parsed.get('data') if isinstance(parsed, dict) else None
-            models = []
-            seen = set()
-            for m in data if isinstance(data, list) else []:
-                mid = m.get('id') if isinstance(m, dict) else None
-                if not mid or not isinstance(mid, str):
-                    continue
-                # Google's list returns canonical ids like
-                # "models/gemini-2.5-flash"; the chat endpoint takes the
-                # short name, so strip the prefix (and dedupe).
-                if mid.startswith('models/'):
-                    mid = mid[len('models/'):]
-                if mid in seen:
-                    continue
-                seen.add(mid)
-                name = m.get('name') if isinstance(m.get('name'), str) and m.get('name') else mid
-                models.append({'id': mid, 'name': name})
-                if len(models) >= 500:
-                    break
+            if provider == 'gemini':
+                models = self._map_gemini_models(parsed)
+            else:
+                data = parsed.get('data') if isinstance(parsed, dict) else None
+                models = []
+                seen = set()
+                for m in data if isinstance(data, list) else []:
+                    mid = m.get('id') if isinstance(m, dict) else None
+                    if not mid or not isinstance(mid, str):
+                        continue
+                    # Google's list returns canonical ids like
+                    # "models/gemini-2.5-flash"; the chat endpoint takes the
+                    # short name, so strip the prefix (and dedupe).
+                    if mid.startswith('models/'):
+                        mid = mid[len('models/'):]
+                    if mid in seen:
+                        continue
+                    seen.add(mid)
+                    name = m.get('name') if isinstance(m.get('name'), str) and m.get('name') else mid
+                    models.append({'id': mid, 'name': name})
+                    if len(models) >= 500:
+                        break
             self._send_json(200, {'provider': provider, 'models': models})
         except Exception:
             try:

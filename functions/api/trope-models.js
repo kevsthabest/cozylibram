@@ -19,9 +19,45 @@
 
 const MODELS_URLS = {
   openrouter: 'https://openrouter.ai/api/v1/models',
-  gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+  /* v165: the native endpoint, not the OpenAI-compat one — the compat
+     /models list has no capability metadata and includes TTS / image /
+     video / embedding / live models that 404 on /chat/completions. The
+     native list reports supportedGenerationMethods so only chat-capable
+     models are offered. */
+  gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
   groq: 'https://api.groq.com/openai/v1/models',
 };
+
+/* v165: model families that support generateContent but are not text chat
+   on the OpenAI-compat endpoint (voice, image, video, music, embeddings,
+   live API, agents, …). Kept as a name filter because Google's names are
+   the stable signal here. */
+const GEMINI_NONCHAT_RE = /tts|image|video|veo|lyria|embed|robotics|computer-use|deep-research|transcribe|aqa|antigravity|nano-banana|native-audio|live/i;
+
+/* v165: map Google's native model list to [{id, name}], keeping only
+   text-chat-capable models. Models that omit supportedGenerationMethods
+   are kept (fail open on API shape changes). */
+function mapGeminiModels(parsed) {
+  const arr = parsed && Array.isArray(parsed.models) ? parsed.models : [];
+  const seen = new Set();
+  const rows = [];
+  for (const m of arr) {
+    if (!m || typeof m.name !== 'string' || !m.name) continue;
+    const methods = Array.isArray(m.supportedGenerationMethods)
+      ? m.supportedGenerationMethods : null;
+    if (methods && !methods.includes('generateContent')) continue;
+    const id = m.name.startsWith('models/') ? m.name.slice('models/'.length) : m.name;
+    if (GEMINI_NONCHAT_RE.test(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rows.push({
+      id,
+      name: typeof m.displayName === 'string' && m.displayName ? m.displayName : id,
+    });
+    if (rows.length >= 500) break;
+  }
+  return rows;
+}
 
 const jsonErr = (status, error) => new Response(JSON.stringify({ error }),
   { status, headers: { 'Content-Type': 'application/json' } });
@@ -61,7 +97,12 @@ export async function onRequest(context) {
   let upstream;
   try {
     const headers = { 'User-Agent': 'CozyLibram/1.0 trope-proxy' };
-    if (key) headers['Authorization'] = 'Bearer ' + key;
+    if (key) {
+      /* v165: the native Gemini API takes the key in x-goog-api-key
+         (Bearer expects an OAuth token there). */
+      if (provider === 'gemini') headers['x-goog-api-key'] = key;
+      else headers['Authorization'] = 'Bearer ' + key;
+    }
     upstream = await fetch(MODELS_URLS[provider], { headers });
   } catch {
     return new Response('upstream fetch failed', { status: 502 });
@@ -76,19 +117,20 @@ export async function onRequest(context) {
   } catch {
     return jsonErr(502, 'provider returned an unparsable model list');
   }
-  /* Google's OpenAI-compat list returns canonical ids like
-     "models/gemini-2.5-flash"; the chat endpoint takes the short name, so
-     strip the prefix (and dedupe) before sending the list down. */
-  const seen = new Set();
-  const rows = [];
-  for (const m of (parsed && Array.isArray(parsed.data) ? parsed.data : [])) {
-    if (!m || typeof m.id !== 'string' || !m.id) continue;
-    const id = m.id.startsWith('models/') ? m.id.slice('models/'.length) : m.id;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    rows.push({ id, name: typeof m.name === 'string' && m.name ? m.name : id });
-    if (rows.length >= 500) break;
-  }
+  /* v165: Google's native list shape differs from the OpenAI one. */
+  const rows = provider === 'gemini'
+    ? mapGeminiModels(parsed)
+    : (() => {
+      const seen = new Set();
+      const out = [];
+      for (const m of (parsed && Array.isArray(parsed.data) ? parsed.data : [])) {
+        if (!m || typeof m.id !== 'string' || !m.id || seen.has(m.id)) continue;
+        seen.add(m.id);
+        out.push({ id: m.id, name: typeof m.name === 'string' && m.name ? m.name : m.id });
+        if (out.length >= 500) break;
+      }
+      return out;
+    })();
   return new Response(JSON.stringify({ provider, models: rows }), {
     headers: { 'Content-Type': 'application/json' },
   });

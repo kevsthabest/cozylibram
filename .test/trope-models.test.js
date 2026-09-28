@@ -33,15 +33,29 @@ function ok(name, cond) {
   let upstreamCalls = [];
   let upstreamHandler = null;
   globalThis.fetch = async (url, opts) => {
-    upstreamCalls.push({ url, auth: (opts.headers || {}).Authorization });
+    upstreamCalls.push({ url, auth: (opts.headers || {}).Authorization,
+      googKey: (opts.headers || {})['x-goog-api-key'] });
     return upstreamHandler(url, opts);
   };
   const req = (method, provider) => ({
     method,
     url: 'https://cozylibram.pages.dev/api/trope-models' + (provider ? '?provider=' + provider : ''),
   });
-  const modelsBody = { data: [{ id: 'gemini-3.8-flash' }, { id: 'x-1', name: 'X One' }] };
+  const modelsBody = { data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'x-1', name: 'X One' }] };
   const okUpstream = () => ({ ok: true, status: 200, json: async () => modelsBody });
+  /* v165: Google's native list shape. */
+  const geminiBody = { models: [
+    { name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash',
+      supportedGenerationMethods: ['generateContent', 'countTokens'] },
+    { name: 'models/gemini-3.8-flash-tts', displayName: 'Gemini 3.8 Flash TTS',
+      supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-embedding-001', displayName: 'Gemini Embedding',
+      supportedGenerationMethods: ['embedContent'] },
+    { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro',
+      supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/mystery-model' }, // no methods listed -> kept (fail open)
+  ] };
+  const okGeminiUpstream = () => ({ ok: true, status: 200, json: async () => geminiBody });
 
   upstreamCalls = []; upstreamHandler = okUpstream;
   let r = await onRequest({ request: req('POST', 'gemini'), env: {} });
@@ -65,18 +79,21 @@ function ok(name, cond) {
   ok('gemini without its key -> descriptive 503',
     r.status === 503 && (await r.json()).error.includes('TROPE_KEY_GEMINI'));
 
-  upstreamCalls = []; upstreamHandler = okUpstream;
+  upstreamCalls = []; upstreamHandler = okGeminiUpstream;
   r = await onRequest({ request: req('GET', 'gemini'),
     env: { TROPE_PROVIDER: 'openrouter', TROPE_API_KEY: 'K1', TROPE_KEY_GEMINI: 'GK' } });
   const gj = await r.json();
-  ok('gemini: 200 + per-provider key + allowlist URL',
+  ok('gemini: 200 + native endpoint + x-goog-api-key (not Bearer)',
     r.status === 200 && upstreamCalls.length === 1 &&
-    upstreamCalls[0].url === 'https://generativelanguage.googleapis.com/v1beta/openai/models' &&
-    upstreamCalls[0].auth === 'Bearer GK');
-  ok('gemini: models mapped {id,name}, name defaults to id',
-    gj.provider === 'gemini' && gj.models.length === 2 &&
-    gj.models[0].id === 'gemini-3.8-flash' && gj.models[0].name === 'gemini-3.8-flash' &&
-    gj.models[1].name === 'X One');
+    upstreamCalls[0].url === 'https://generativelanguage.googleapis.com/v1beta/models' &&
+    upstreamCalls[0].googKey === 'GK' && !upstreamCalls[0].auth);
+  ok('gemini: chat-capable models kept, models/ prefix stripped, displayName used',
+    gj.provider === 'gemini' &&
+    gj.models.some(m => m.id === 'gemini-3.8-flash' && m.name === 'Gemini 3.8 Flash') &&
+    gj.models.some(m => m.id === 'gemini-2.5-pro'));
+  ok('gemini: TTS + embedding + non-generateContent models filtered out',
+    gj.models.every(m => !/tts|embed/i.test(m.id)) &&
+    gj.models.some(m => m.id === 'mystery-model'));
   ok('response carries no key material', !JSON.stringify(gj).includes('GK'));
 
   upstreamCalls = []; upstreamHandler = okUpstream;
@@ -104,15 +121,6 @@ function ok(name, cond) {
   r = await onRequest({ request: req('GET', 'groq'),
     env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' } });
   ok('unparsable upstream body -> 502', r.status === 502);
-
-  upstreamHandler = () => ({ ok: true, status: 200,
-    json: async () => ({ data: [{ id: 'models/gemini-2.5-flash' }, { id: 'gemini-2.5-flash' }, { id: 'gemini-2.5-pro' }] }) });
-  r = await onRequest({ request: req('GET', 'gemini'),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GEMINI: 'GK' } });
-  const pj = await r.json();
-  ok("Google's models/ prefix is stripped and deduped",
-    r.status === 200 && pj.models.length === 2 &&
-    pj.models[0].id === 'gemini-2.5-flash' && pj.models[1].id === 'gemini-2.5-pro');
 
   /* ---- 2. Client tropeModelList ---- */
   const ctx = { console, setTimeout, clearTimeout, fetch: null };
