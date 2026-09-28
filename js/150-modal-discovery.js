@@ -744,7 +744,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
     '<button class="d-back" id="m-x" aria-label="Close">←</button>' +
     '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
-    // v174: mockup hero — big centered cover, title, author, stars, meta row.
+    // v181: mockup hero — desktop uses cover-left / info-right; mobile stacks cover, title, author, rating, and action.
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
     '<button class="btn ghost sm" id="m-changecover" title="Choose a different cover">' + icon('image') + '</button></div>' +
