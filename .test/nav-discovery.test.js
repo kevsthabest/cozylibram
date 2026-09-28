@@ -33,9 +33,9 @@ const qa = (sel) => Array.from(window.document.querySelectorAll(sel));
 
 // --- 1. Bottom nav: exactly five tabs in the right order ---
 const tabs = qa('.bottom-nav button').map(b => b.dataset.nav);
-ok('nav: exactly five tabs', tabs.length === 5);
-ok('nav: order is library/discover/add/stats/coven',
-  JSON.stringify(tabs) === JSON.stringify(['library', 'discover', 'add', 'stats', 'coven']));
+ok('nav: six entries (five primary + desktop-only settings, v171)', tabs.length === 6);
+ok('nav: order is library/discover/add/stats/coven/settings',
+  JSON.stringify(tabs) === JSON.stringify(['library', 'discover', 'add', 'stats', 'coven', 'settings']));
 const addBtn = q('.bottom-nav button.nav-add');
 ok('nav: add is the visually distinct center action',
   !!addBtn && addBtn.dataset.nav === 'add' && qa('.bottom-nav button').indexOf(addBtn) === 2);
@@ -54,7 +54,8 @@ run("seriesReturn = 'stats'");
 ok('navTab: series from stats highlights stats', run("navTab('series')") === 'stats');
 run("seriesReturn = 'library'");
 ok('navTab: coven-friend highlights coven', run("navTab('coven-friend')") === 'coven');
-ok('navTab: unknown view has no tab', run("navTab('settings')") === null);
+ok('navTab: settings highlights itself (v171)', run("navTab('settings')") === 'settings');
+ok('navTab: unknown view has no tab', run("navTab('nope-not-a-view')") === null);
 
 // --- 3. go() activates the parent tab ---
 run("go('wishlist')");

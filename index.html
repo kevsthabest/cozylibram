@@ -31,11 +31,13 @@
 <main id="view"></main>
 
 <nav class="bottom-nav">
+  <div class="nav-brand" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-4.5-2-8-2v14c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2V4c-3.5 0-6 .5-8 2z"/><path d="M12 6v14"/></svg><span class="nav-brand-name">Cozy Libram</span></div>
   <button data-nav="library" class="active" aria-label="Library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="15" width="16" height="4.2" rx="1.2"/><path d="M8 15v4.2"/><rect x="5.5" y="10.3" width="13" height="4.2" rx="1.2"/><path d="M9.5 10.3v4.2"/><rect x="7" y="5.6" width="10" height="4.2" rx="1.2"/><path d="M11 5.6v4.2"/></svg><span>Library</span></button>
   <button data-nav="discover" aria-label="Discover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l1.7 4.3L18 10l-4.3 1.7L12 16l-1.7-4.3L6 10l4.3-1.7z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Discover</span><span class="nav-badge" id="nav-rel-badge" style="display:none"></span></button>
   <button data-nav="add" class="nav-add" aria-label="Add a book"><span class="add-fab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span>Add</span></button>
   <button data-nav="stats" aria-label="Stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16"/><path d="M7 20v-5"/><path d="M12 20V9"/><path d="M17 20v-8"/><path d="M18.8 2.8v2.6M17.5 4.1h2.6"/></svg><span>Stats</span></button>
   <button data-nav="coven" aria-label="Coven"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8.2" r="3.1"/><path d="M3.6 19.2c.9-3.1 2.9-4.7 5.4-4.7s4.5 1.6 5.4 4.7"/><circle cx="16.8" cy="9.2" r="2.4"/><path d="M15.9 14.7c2.2.4 3.8 1.8 4.5 4.3"/></svg><span>Coven</span></button>
+  <button data-nav="settings" class="nav-settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg><span>Settings</span></button>
 </nav>
 
 <div id="modal-root"></div>

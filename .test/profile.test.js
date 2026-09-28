@@ -29,8 +29,9 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
 (async () => {
   await tick(3); // let boot() settle (no backend → library view)
 
-  ok('settings removed from the bottom nav', !q('.bottom-nav [data-nav="settings"]'));
-  ok('bottom nav has five tabs (v121 P0 rework)', qa('.bottom-nav button').length === 5);
+  ok('settings lives in the nav DOM for the desktop sidebar (v171)', !!q('.bottom-nav [data-nav="settings"]'));
+  ok('settings nav entry is hidden on mobile', fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8').includes('.bottom-nav .nav-settings { display: none; }'));
+  ok('bottom nav has six entries incl. desktop-only settings (v171)', qa('.bottom-nav button').length === 6);
   ok('menu button lives in the top-right header', !!q('.app-header .topbar-menu-wrap #menu-btn'));
   ok('header title is centered on all screens', (() => {
     const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');

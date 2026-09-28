@@ -77,10 +77,17 @@ ok('floral vine rule on modal (desktop)', css.includes('.modal::after') && css.i
 
 // 6. Nav uses custom SVG icons, not emoji (v37: Settings moved to the account menu)
 const navBtns = qa('.bottom-nav button');
-ok('five nav buttons (v121: library/discover/add/stats/coven)', navBtns.length === 5);
+ok('six nav entries (v171: 5 primary + desktop-only settings)', navBtns.length === 6);
 ok('every nav button has an inline svg', navBtns.every(b => b.querySelector('svg')));
 ok('no emoji left in nav', !navBtns.some(b => /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(b.textContent)));
 ok('nav svgs are aria-hidden (labels on buttons)', navBtns.every(b => b.querySelector('svg').getAttribute('aria-hidden') === 'true'));
+// v171: desktop sidebar chrome
+ok('sidebar brand block present', !!q('.nav-brand .nav-brand-name') && q('.nav-brand .nav-brand-name').textContent === 'Cozy Libram');
+ok('settings entry has gear icon + label', !!q('.bottom-nav [data-nav="settings"] svg') && q('.bottom-nav [data-nav="settings"] span').textContent === 'Settings');
+ok('settings maps to its own nav tab', window.navTab('settings') === 'settings');
+ok('sidebar CSS: 1024px breakpoint', css.includes('@media (min-width: 1024px)'));
+ok('sidebar CSS: brand hidden on mobile', css.includes('.nav-brand { display: none; }'));
+ok('sidebar CSS: active pill style', css.includes('.bottom-nav button.active { background: var(--card2);'));
 
 // 6. New cozy themes apply, persist, and unknown values fall back
 window.localStorage.setItem('theme', 'hearthside');

@@ -657,6 +657,9 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .bottom-nav button span { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
 .bottom-nav button svg { width: 23px; height: 23px; flex: none; }
 .bottom-nav button.active { color: var(--accent); }
+/* v171: sidebar-only nav chrome — brand header + settings entry (desktop) */
+.nav-brand { display: none; }
+.bottom-nav .nav-settings { display: none; }
 
 /* ---------- backup view ---------- */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 20px; }
@@ -967,6 +970,46 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #view { max-width: 1140px; }
   .grid { grid-template-columns: repeat(3, 1fr); }
   .book-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+
+/* ================= v171: desktop sidebar nav ================= */
+@media (min-width: 1024px) {
+  .bottom-nav {
+    top: 0; bottom: 0; left: 0; right: auto;
+    width: 236px; height: 100dvh;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    gap: 4px; padding: 22px 14px calc(18px + env(safe-area-inset-bottom));
+    border-top: none; border-right: 1px solid var(--line);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; padding: 2px 12px 20px; }
+  .nav-brand svg { width: 26px; height: 26px; color: var(--gold); flex: none; }
+  .nav-brand-name {
+    font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 20px;
+    background: linear-gradient(100deg, var(--accent), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    white-space: nowrap;
+  }
+  .bottom-nav button {
+    flex: none; width: 100%;
+    flex-direction: row; justify-content: flex-start; align-items: center;
+    gap: 12px; padding: 11px 14px; border-radius: 12px; font-size: 17px;
+  }
+  .bottom-nav button span { font-size: 14px; letter-spacing: 0.2px; }
+  .bottom-nav button svg { width: 22px; height: 22px; }
+  .bottom-nav button.active { background: var(--card2); color: var(--ink); }
+  /* the add FAB becomes a plain sidebar row */
+  .bottom-nav button.nav-add .add-fab {
+    width: 22px; height: 22px; margin: 0; border: none; border-radius: 0;
+    background: none; color: inherit; box-shadow: none; flex: none;
+  }
+  .bottom-nav button.nav-add .add-fab svg { width: 22px; height: 22px; }
+  .bottom-nav .nav-settings { display: flex; margin-top: auto; }
+  .nav-badge { top: 50%; right: 12px; transform: translateY(-50%); }
+  body { padding-top: 0; }
+  #view { margin-left: 236px; }
+  /* brand lives in the sidebar now; the account menu stays docked top-right */
+  .app-header { padding: 0; }
+  .app-header .brand { display: none; }
 }
 
 /* ================= TBR roulette ================= */

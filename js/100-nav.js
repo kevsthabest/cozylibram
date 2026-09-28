@@ -9,6 +9,7 @@ const NAV_PARENT = {
   add: 'add',
   stats: 'stats',
   coven: 'coven', 'coven-friend': 'coven',
+  settings: 'settings', // v171: sidebar settings entry highlights itself
 };
 function navTab(v) {
   if (v === 'series') return NAV_PARENT[typeof seriesReturn !== 'undefined' ? seriesReturn : ''] || 'discover';
