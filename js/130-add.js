@@ -6,6 +6,13 @@
 // (The old Scan/Search/ISBN/Bulk tabs are gone; `addTab` survives only as a
 // hint — 'search' focuses the field — for deep links from Discover/onboarding.)
 function renderAdd() {
+  // v193: the scan panel is stateful across re-renders — addBook's render()
+  // used to collapse the panel and kill the camera after every add, forcing
+  // the user to start the camera again for the next book.
+  const keepPanel = scanState.panelOpen;
+  const resumeScan = scanState.resume || scanState.active;
+  scanState.resume = false;
+  if (scanState.active) stopScan();
   // v139: source filter chips — target one catalog or search them all.
   const srcs = [['all', 'All'], ['gbooks', 'Google Books'], ['openlibrary', 'Open Library']];
   if (typeof hcReady === 'function' && hcReady()) srcs.push(['hardcover', 'Hardcover']);
@@ -29,10 +36,12 @@ function renderAdd() {
     const mount = document.getElementById('add-scan-mount');
     if (mount.dataset.open) {
       stopScan();
+      scanState.panelOpen = false; // v193: remember the collapsed state
       mount.innerHTML = '';
       delete mount.dataset.open;
       scanBtn.style.display = '';
     } else {
+      scanState.panelOpen = true; // v193: remember the expanded state
       mount.dataset.open = '1';
       mount.innerHTML = scanPanelHTML();
       wireScanPanel(mount);
@@ -92,6 +101,18 @@ function renderAdd() {
   });
 
   if (addTab === 'search') input.focus(); // deep link from Discover / onboarding
+
+  // v193: restore the scan panel exactly as it was before the re-render, and
+  // restart the camera when it was running (or an add just requested it) so a
+  // stack of books can be scanned without tapping anything between adds.
+  if (keepPanel) {
+    const mount = document.getElementById('add-scan-mount');
+    mount.dataset.open = '1';
+    mount.innerHTML = scanPanelHTML();
+    wireScanPanel(mount);
+    scanBtn.style.display = 'none';
+    if (resumeScan) startScan();
+  }
 }
 
 // Scanner panel: viewfinder + camera toggle + photo fallback.
@@ -136,7 +157,14 @@ async function decodePhotoFile(file) {
       try {
         const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
         const codes = await det.detect(bmp);
-        if (codes && codes.length) { onBarcode(codes[0].rawValue); return; }
+        // v193: instant — a photo is a single decode, no consensus possible.
+        // A check-digit failure here means a garbled read, not a bad book.
+        if (codes && codes.length) {
+          if (onBarcode(codes[0].rawValue, true)) return;
+          mount.innerHTML = '';
+          toast('Barcode read was garbled — try closer, in good light');
+          return;
+        }
       } catch (e) { /* fall through to quagga */ }
     }
     await loadQuagga();
@@ -150,7 +178,13 @@ async function decodePhotoFile(file) {
     }, result => {
       URL.revokeObjectURL(url);
       const code = result && result.codeResult && result.codeResult.code;
-      if (code) onBarcode(code);
+      // v193: instant — single decode, no consensus; garbled reads fail the
+      // check digit and report cleanly instead of hanging on "Reading…".
+      if (code) {
+        if (onBarcode(code, true)) return;
+        mount.innerHTML = '';
+        toast('Barcode read was garbled — try closer, in good light');
+      }
       else { mount.innerHTML = ''; toast('No barcode found — try closer, in good light'); }
     });
   } catch (e) {
@@ -203,15 +237,47 @@ async function startScan() {
   }
 }
 
-function onBarcode(raw) {
-  const isbn = String(raw).replace(/[^0-9X]/gi, '');
-  if (isbn.length < 10) return;
+function onBarcode(raw, instant) {
+  const isbn = String(raw).replace(/[^0-9X]/gi, '').toUpperCase();
+  if (!/^(\d{13}|\d{12}|\d{9}[\dX])$/.test(isbn)) return false; // partial read — keep scanning
+  if (!isbnCheckOk(isbn)) return false; // v193: misread (bad check digit) — keep scanning silently
+  if (!instant) {
+    // v193: consensus — the same value must be reported twice in a row before
+    // we accept it, so a single bad frame can't trigger a failed lookup.
+    if (scanState.lastCode === isbn) scanState.hits++;
+    else { scanState.lastCode = isbn; scanState.hits = 1; }
+    if (scanState.hits < 2) return false;
+  }
+  scanState.lastCode = null; scanState.hits = 0;
   stopScan();
   isbnLookupUI(isbn, document.getElementById('scan-result') || document.getElementById('add-scan-mount'), 'barcode');
+  return true;
+}
+
+// v193: ISBN/EAN check-digit validation — rejects the garbled first-frame
+// reads that used to fail the lookup and force a manual rescan.
+// ISBN-13 and UPC-A/EAN-12 use mod-10; ISBN-10 uses mod-11 (X = 10).
+function isbnCheckOk(isbn) {
+  // A 12-digit UPC-A is an EAN-13 with a leading zero — validate it as one.
+  if (/^\d{12}$/.test(isbn)) isbn = '0' + isbn;
+  if (/^\d{13}$/.test(isbn)) {
+    let s = 0;
+    for (let i = 0; i < 12; i++) s += (isbn.charCodeAt(i) - 48) * (i % 2 ? 3 : 1);
+    return (10 - (s % 10)) % 10 === (isbn.charCodeAt(12) - 48);
+  }
+  if (/^\d{9}[\dX]$/.test(isbn)) {
+    let s = 0;
+    for (let i = 0; i < 9; i++) s += (isbn.charCodeAt(i) - 48) * (10 - i);
+    const c = isbn[9];
+    s += c === 'X' ? 10 : (c.charCodeAt(0) - 48);
+    return s % 11 === 0;
+  }
+  return false;
 }
 
 function stopScan() {
   scanState.active = false;
+  scanState.lastCode = null; scanState.hits = 0; // v193: reset misread consensus
   if (scanState.timer) { clearInterval(scanState.timer); scanState.timer = null; }
   if (scanState.stream) { scanState.stream.getTracks().forEach(t => t.stop()); scanState.stream = null; }
   stopQuagga();
@@ -269,17 +335,30 @@ async function isbnLookupUI(isbn, mount, source) {
         '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn small" id="rc-add">Add to TBR</button>' +
         '<button class="btn small ghost" id="rc-edit">Add & edit details</button></div></div></div>';
-      document.getElementById('rc-add').addEventListener('click', () => { addBook(book, false, src); mount.innerHTML = ''; });
+      document.getElementById('rc-add').addEventListener('click', () => {
+        // v193: after a *barcode* add, keep the scan panel open and the camera
+        // running — the re-render restores both, so a stack of books can be
+        // scanned back-to-back. (Typed-ISBN adds leave the panel as it was.)
+        if (src === 'barcode') { scanState.panelOpen = true; scanState.resume = true; }
+        addBook(book, false, src);
+      });
       document.getElementById('rc-edit').addEventListener('click', () => { const b = addBook(book, false, src); if (b) openDetail(b.id); mount.innerHTML = ''; });
     } else {
       mount.innerHTML = '<div class="result-card">' +
         '<div class="book-meta"><h3>No match for ' + esc(isbn) + '</h3>' +
         '<p class="author">Neither Google Books nor Open Library knows this one.</p>' +
-        '<button class="btn small ghost" id="rc-manual">Add it manually</button></div></div>';
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn small ghost" id="rc-manual">Add it manually</button>' +
+        // v193: a failed scan shouldn't force the user to rebuild the panel —
+        // one tap restarts the camera right here.
+        (src === 'barcode' ? '<button class="btn small" id="rc-rescan">Scan again</button>' : '') +
+        '</div></div></div>';
       document.getElementById('rc-manual').addEventListener('click', () => {
         const shell = normalizeVolume({ volumeInfo: { title: '', authors: [] } }, isbn);
         const b = addBook(shell, false, src); if (b) openDetail(b.id);
       });
+      const rescan = document.getElementById('rc-rescan');
+      if (rescan) rescan.addEventListener('click', () => startScan());
     }
   } catch (e) {
     mount.innerHTML = '<p class="note">Lookup failed — check your connection and try again.</p>';

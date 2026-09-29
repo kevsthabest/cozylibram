@@ -59,10 +59,10 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   // 5. Photo decode falls back to Quagga when no BarcodeDetector
   delete window.BarcodeDetector;
   let quaggaCfg = null;
-  window.Quagga = { decodeSingle: (cfg, cb) => { quaggaCfg = cfg; cb({ codeResult: { code: '9781234567890' } }); } };
+  window.Quagga = { decodeSingle: (cfg, cb) => { quaggaCfg = cfg; cb({ codeResult: { code: '9781234567897' } }); } };
   lookedUp = null;
   await window.decodePhotoFile(file);
-  ok('photo barcode detected via Quagga fallback', lookedUp === '9781234567890');
+  ok('photo barcode detected via Quagga fallback', lookedUp === '9781234567897');
   ok('quagga uses EAN readers', quaggaCfg.decoder.readers.includes('ean_reader'));
 
   // 6. Unreadable photo -> friendly message, no crash

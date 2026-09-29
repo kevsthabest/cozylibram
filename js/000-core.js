@@ -35,5 +35,8 @@ let refreshProgressSection = null; // re-render fn for the open modal's progress
 let searchResults = [];
 let searchQuery = ''; // v150: last Add → Search query, restored across re-renders
 let searchSource = 'all'; // v139: Add → Search source filter (all/gbooks/openlibrary/hardcover)
-let scanState = { stream: null, timer: null, active: false, quagga: false };
+let scanState = { stream: null, timer: null, active: false, quagga: false,
+  panelOpen: false, // v193: scan panel expansion survives re-renders
+  resume: false,     // v193: restart the camera after renderAdd() rebuilds the view
+  lastCode: null, hits: 0 }; // v193: misread rejection — consensus counters
 
