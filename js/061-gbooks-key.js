@@ -59,15 +59,46 @@ async function lookupISBNFromAPIs(isbn) {
       '&fields=title,author_name,cover_i,isbn,first_publish_year,ratings_average,ratings_count&limit=1');
     const d = await r.json();
     const doc = (d.docs || [])[0];
-    if (!doc) return null;
-    const b = olDocToBook(doc);
-    if (doc.ratings_average && doc.ratings_count) {
-      b.publicRating = Math.round(doc.ratings_average * 10) / 10;
-      b.ratingsCount = doc.ratings_count;
+    if (doc) {
+      const b = olDocToBook(doc);
+      if (doc.ratings_average && doc.ratings_count) {
+        b.publicRating = Math.round(doc.ratings_average * 10) / 10;
+        b.ratingsCount = doc.ratings_count;
+      }
+      await enrichOLBook(b, b._olKey);
+      return b;
     }
-    await enrichOLBook(b, b._olKey);
-    return b;
-  } catch (e) { return null; }
+  } catch (e) { /* fall through to Hardcover */ }
+  // v196: Hardcover as the third ISBN source — catches books Google Books and
+  // Open Library don't know (indie / KU titles). Skipped for 12-digit UPCs:
+  // those aren't ISBNs and no catalog maps them to a book. Typesense search
+  // is fuzzy, so the doc's isbns[] must contain the scanned ISBN — a
+  // near-miss title is worse than no match.
+  if (typeof hcReady === 'function' && hcReady() && /^(?:\d{13}|\d{10}|\d{9}X)$/i.test(clean)) {
+    try {
+      const want13 = isbn13of(clean);
+      const docs = await hcSearchDocs(clean);
+      const hit = docs.find(d => (d.isbns || []).some(i => {
+        const n = String(i).replace(/[^0-9X]/gi, '').toUpperCase();
+        return n === clean || isbn13of(n) === want13;
+      }));
+      if (hit) return hcDocToBook(hit);
+    } catch (e) { /* no match */ }
+  }
+  return null;
+}
+
+// v196: normalize an ISBN-10/13 to ISBN-13 for cross-source comparison.
+function isbn13of(s) {
+  s = String(s || '').replace(/[^0-9X]/gi, '').toUpperCase();
+  if (/^\d{13}$/.test(s)) return s;
+  if (/^\d{9}[\dX]$/.test(s)) {
+    const core = '978' + s.slice(0, 9);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += (+core[i]) * (i % 2 ? 3 : 1);
+    return core + ((10 - (sum % 10)) % 10);
+  }
+  return s;
 }
 
 async function searchBooks(q, source) {

@@ -178,13 +178,18 @@ function hcDocToBook(doc) {
   return book;
 }
 
-async function hcSearchBooks(q) {
+async function hcSearchDocs(q) {
+  // v196: raw Hardcover docs (unmapped) so the ISBN waterfall can verify a
+  // doc's isbns[] contains the scanned ISBN before accepting the match —
+  // Typesense search is fuzzy, and a near-miss title is worse than no match.
   if (!hcReady()) return [];
   try {
     const data = await hcGraphQL('query { search(query: ' + JSON.stringify(q) + ', query_type: "Book", per_page: 8) { results } }');
-    const docs = hcHits(data).map(h => h.document).filter(d => d && d.title);
-    return docs.map(hcDocToBook);
+    return hcHits(data).map(h => h.document).filter(d => d && d.title);
   } catch (e) { return []; }
+}
+async function hcSearchBooks(q) {
+  return (await hcSearchDocs(q)).map(hcDocToBook);
 }
 
 // Automatic background sweep (v72): enriches books Hardcover hasn't seen yet a

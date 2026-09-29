@@ -358,9 +358,14 @@ async function isbnLookupUI(isbn, mount, source) {
       });
       document.getElementById('rc-edit').addEventListener('click', () => { const b = addBook(book, false, src); if (b) openDetail(b.id); mount.innerHTML = ''; });
     } else {
+      // v196: a 12-digit scan is a retail UPC, not an ISBN — no catalog maps
+      // those old UPCs to a book, so say so plainly instead of a bare miss.
+      const isUPC = src === 'barcode' && /^\d{12}$/.test(isbn);
       mount.innerHTML = '<div class="result-card">' +
         '<div class="book-meta"><h3>No match for ' + esc(isbn) + '</h3>' +
-        '<p class="author">Neither Google Books nor Open Library knows this one.</p>' +
+        (isUPC
+          ? '<p class="author">That scanned as a retail UPC, not an ISBN — this edition only has the UPC barcoded, and no catalog maps UPCs to books. Type the ISBN printed above the barcode instead.</p>'
+          : '<p class="author">None of the catalogs (Google Books, Open Library, Hardcover) know this one.</p>') +
         '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn small ghost" id="rc-manual">Add it manually</button>' +
         // v193: a failed scan shouldn't force the user to rebuild the panel —
