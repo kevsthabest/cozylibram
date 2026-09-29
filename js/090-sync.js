@@ -6,7 +6,9 @@
 // They are configured once in server-config.json on the home PC.
 // The anon key is safe in the browser — Row Level Security ensures each user
 // only sees their own rows.
-const SB_LIB_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+// v194 (security): vendored as js/vendor/supabase.min.js (pinned 2.117.2,
+// see js/vendor/SOURCES.txt). Same-origin, no CDN, works offline.
+const SB_LIB_URL = 'js/vendor/supabase.min.js';
 let sbClient = null, sbClientCfg = '', cloudUser = null;
 let cloudTimer = null, cloudLastSync = 0, cloudSyncing = false;
 
@@ -25,7 +27,7 @@ function loadSupabaseLib() {
     const s = document.createElement('script');
     s.src = SB_LIB_URL;
     s.onload = resolve;
-    s.onerror = () => reject(new Error('Could not load Supabase library (are you online?)'));
+    s.onerror = () => reject(new Error('Could not load Supabase library (js/vendor/supabase.min.js missing?)'));
     document.head.appendChild(s);
   });
 }

@@ -32,7 +32,13 @@ create policy "own rows" on books
 create table if not exists book_meta (
   isbn text primary key,
   data jsonb not null,
-  fetched_at timestamptz not null default now()
+  fetched_at timestamptz not null default now(),
+  -- v194 (security): write attribution. The app legitimately overwrites rows
+  -- (enriched upsert seconds after the lookup put; stale refresh after 30
+  -- days), so the table can't be insert-only — but a stranger must not be
+  -- able to silently deface anyone's cached metadata.
+  created_by uuid,
+  updated_by uuid
 );
 
 alter table book_meta enable row level security;
@@ -47,11 +53,45 @@ create policy "write meta" on book_meta
   for insert
   with check (auth.role() = 'authenticated');
 
+-- v194: a row may be overwritten only by its creator (covers the app's
+-- lookup-put → enriched-upsert flow, same user, seconds apart) or via a
+-- genuine stale refresh (>30 days, the app's META_TTL_MS). Everyone else's
+-- UPDATE is rejected. Legacy rows (created_by null, pre-v194) stay
+-- writable until first touched, when the trigger below claims them.
 drop policy if exists "refresh meta" on book_meta;
 create policy "refresh meta" on book_meta
   for update
-  using (auth.role() = 'authenticated')
+  using (auth.role() = 'authenticated' and (
+    created_by is null
+    or created_by = auth.uid()
+    or fetched_at < now() - interval '30 days'
+  ))
   with check (auth.role() = 'authenticated');
+
+-- v194: the trigger owns the attribution columns — clients can't spoof them.
+-- A genuine stale refresh transfers ownership to the refresher; otherwise
+-- ownership never changes hands.
+create or replace function book_meta_guard() returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    NEW.created_by := auth.uid();
+    NEW.updated_by := auth.uid();
+    return NEW;
+  end if;
+  NEW.updated_by := auth.uid();
+  if OLD.fetched_at < now() - interval '30 days' then
+    NEW.created_by := auth.uid();
+  else
+    NEW.created_by := coalesce(OLD.created_by, auth.uid());
+  end if;
+  return NEW;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists book_meta_guard_trg on book_meta;
+create trigger book_meta_guard_trg
+  before insert or update on book_meta
+  for each row execute function book_meta_guard();
 
 -- Deletion tombstones: when a book is deleted on one device, the deletion
 -- must propagate instead of the book resurrecting on the next sync.

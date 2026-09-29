@@ -1,3 +1,5 @@
+import { rateLimit } from '../_lib/rate-limit.js';
+
 // Cloudflare Pages Function: POST /api/trope-infer
 //
 // Forwards a trope-tagging chat-completions request to the configured LLM
@@ -44,6 +46,9 @@ export async function onRequest(context) {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v194 (security): unauthenticated internet-facing LLM spend — cap it.
+  const limited = rateLimit(request, 'trope-infer', 30, 60 * 1000);
+  if (limited) return limited;
 
   let body;
   try {

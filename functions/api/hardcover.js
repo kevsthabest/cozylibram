@@ -8,6 +8,8 @@
 // HTTP status is forwarded untouched so the client's 401/403/429 handling
 // keeps working.
 
+import { rateLimit } from '../_lib/rate-limit.js';
+
 const HC_API = 'https://api.hardcover.app/v1/graphql';
 const MAX_QUERY = 8000;
 
@@ -16,6 +18,9 @@ export async function onRequest(context) {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v194 (security): unauthenticated internet-facing quota spend — cap it.
+  const limited = rateLimit(request, 'hardcover', 120, 60 * 1000);
+  if (limited) return limited;
   const token = (env.HARDCOVER_TOKEN || '').trim();
   if (!token) {
     return new Response(JSON.stringify({ errors: [{ message: 'hardcover not configured on this server' }] }), {

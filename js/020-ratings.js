@@ -74,6 +74,14 @@ function migrateBook(b) {
   if (!b.ratings) b.ratings = {};
   if (b.spice) b.ratings.spice = b.spice;
   delete b.spice;
+  // v194 (security): books cross a trust boundary here — friend libraries,
+  // cloud rows, CSV/Bookmory imports. `id` and `status` are interpolated
+  // into HTML attributes and selectors by several renderers, so neutralize
+  // them once at this choke point. App-generated ids are [a-z0-9] (uid()),
+  // so stripping anything else only ever mangles attacker-controlled values.
+  if (typeof b.id !== 'string' || !b.id) b.id = uid();
+  else { const clean = b.id.replace(/[^A-Za-z0-9_-]/g, ''); b.id = clean || uid(); }
+  if (!Object.prototype.hasOwnProperty.call(STATUS, b.status)) b.status = 'tbr';
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
   if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81

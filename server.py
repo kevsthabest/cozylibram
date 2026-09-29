@@ -21,6 +21,7 @@ import json
 import os
 import re
 import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -137,6 +138,54 @@ def cover_proxy_host_blocked(host):
     return False
 
 
+# v194 (security): light in-process rate limiting for the /api/* proxies and
+# /cover-proxy. The home server is LAN-only by convention, but a runaway
+# client (or a compromised LAN device) shouldn't burn LLM/API quota
+# unchecked. Mirrors functions/_lib/rate-limit.js. ThreadingHTTPServer
+# serves concurrent requests; dict/list ops are GIL-atomic, which is plenty
+# precise for a rate limiter.
+_RATE_BUCKETS = {}
+_RATE_LIMITS = {
+    'trope-infer': (30, 60),    # each hit can spend up to 4000 LLM tokens
+    'hardcover': (120, 60),
+    'gbooks': (120, 60),
+    'trope-models': (60, 60),
+    'cover-proxy': (120, 60),
+}
+
+def rate_limit_ok(name, ip):
+    """Sliding-window check: True when the request may proceed."""
+    limit, window = _RATE_LIMITS[name]
+    now = time.time()
+    key = '%s|%s' % (name, ip)
+    hits = _RATE_BUCKETS.get(key)
+    if hits is None:
+        hits = []
+        _RATE_BUCKETS[key] = hits
+    while hits and now - hits[0] >= window:
+        hits.pop(0)
+    if len(hits) >= limit:
+        return False
+    hits.append(now)
+    return True
+
+
+class _SSRFRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """v194 (security): re-check every redirect hop against the SSRF guard.
+    urllib follows redirects without re-validating, so a cover host could
+    bounce to a private/loopback address unchecked."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        hop = urllib.parse.urljoin(req.full_url, newurl)
+        hop_host = urllib.parse.urlparse(hop).hostname or ''
+        if cover_proxy_host_blocked(hop_host):
+            raise urllib.error.HTTPError(req.full_url, 403,
+                                         'redirect to private host blocked',
+                                         headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+_COVER_OPENER = urllib.request.build_opener(_SSRFRedirectHandler)
+
+
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
@@ -181,12 +230,24 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def _check_rate(self, name):
+        """v194 (security): 429 when this client is over the per-endpoint budget."""
+        if not rate_limit_ok(name, self.client_address[0]):
+            try:
+                self._send_json(429, {'error': 'rate limited'})
+            except Exception:
+                pass
+            return False
+        return True
+
     def handle_api_hardcover(self):
         """POST {query} → Hardcover GraphQL with the server-side token.
 
         Mirrors functions/api/hardcover.js. Hardcover's own HTTP status is
         forwarded so the client's 401/403 handling keeps working.
         """
+        if not self._check_rate('hardcover'):
+            return
         try:
             length = int(self.headers.get('Content-Length') or 0)
             raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
@@ -289,6 +350,8 @@ class Handler(SimpleHTTPRequestHandler):
         IS reachable and listed here. The key is resolved like
         handle_api_trope_infer and never leaves the server.
         """
+        if not self._check_rate('trope-models'):
+            return
         try:
             parts = self.path.split('?', 1)
             qs = urllib.parse.parse_qs(parts[1] if len(parts) > 1 else '')
@@ -367,6 +430,8 @@ class Handler(SimpleHTTPRequestHandler):
         max_tokens clamped to 100..4000. The upstream HTTP status is
         forwarded so the client's 401/403/429 handling keeps working.
         """
+        if not self._check_rate('trope-infer'):
+            return
         try:
             length = int(self.headers.get('Content-Length') or 0)
             raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
@@ -481,6 +546,8 @@ class Handler(SimpleHTTPRequestHandler):
         Mirrors functions/api/gbooks/[[path]].js. Only the volumes endpoint
         is allowed; a client-supplied key param is stripped and replaced.
         """
+        if not self._check_rate('gbooks'):
+            return
         try:
             parts = self.path.split('?', 1)
             subpath = parts[0][len('/api/gbooks/'):]
@@ -526,6 +593,8 @@ class Handler(SimpleHTTPRequestHandler):
         http(s) URLs, 4 MB cap, must be an image, and the host must not
         resolve to a private/loopback/link-local address (SSRF guard).
         """
+        if not self._check_rate('cover-proxy'):
+            return
         try:
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             url = (qs.get('url') or [''])[0].strip()[:2000]
@@ -538,7 +607,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             req = urllib.request.Request(
                 url, headers={'User-Agent': 'SpicyShelves/1.0 cover-proxy'})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            # v194: opener re-validates every redirect hop against the SSRF
+            # guard (urllib would otherwise follow them unchecked).
+            with _COVER_OPENER.open(req, timeout=15) as r:
                 data = r.read(4 * 1024 * 1024)
                 ctype = r.headers.get('Content-Type', 'application/octet-stream')
             if not ctype.split(';')[0].strip().lower().startswith('image/'):

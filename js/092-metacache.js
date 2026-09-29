@@ -29,6 +29,15 @@
 // same row. All puts for one add are awaited in order (lookup put, then the
 // enriched put after Hardcover lands), so the pre-enrichment snapshot can
 // never win a write-write race and clobber the enriched row.
+//
+// v194 (security): book_meta is a shared table, so UPDATEs are gated at the
+// DB level (see supabase/schema.sql + supabase/migrations/
+// v194_book_meta_ownership.sql): a row may be overwritten only by its
+// creator or via a genuine stale refresh (>30 days). Every write is
+// attributed (created_by/updated_by, trigger-owned, not client-settable).
+// The app's flows are unaffected: the lookup put and the enriched upsert
+// are the same user seconds apart, and stale refreshes transfer ownership
+// to the refresher.
 const META_TTL_MS = 30 * 24 * 3600 * 1000;
 
 // The fields every user needs from a lookup. User-specific fields (id,

@@ -11,6 +11,8 @@
 //
 // Add a host here if a new cover provider is ever adopted.
 
+import { rateLimit } from './_lib/rate-limit.js';
+
 const ALLOWED_HOSTS = new Set([
   'covers.openlibrary.org', // Open Library covers
   'books.google.com',       // Google Books thumbnails
@@ -21,6 +23,9 @@ const ALLOWED_HOSTS = new Set([
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function onRequest(context) {
+  // v194 (security): unauthenticated internet-facing endpoint — cap it.
+  const limited = rateLimit(context.request, 'cover-proxy', 120, 60 * 1000);
+  if (limited) return limited;
   const raw = (new URL(context.request.url).searchParams.get('url') || '').trim().slice(0, 2000);
 
   let target;

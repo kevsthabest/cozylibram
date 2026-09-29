@@ -293,7 +293,9 @@ function loadQuagga() {
   return new Promise((resolve, reject) => {
     if (window.Quagga) return resolve();
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js';
+    // v194 (security): vendored as js/vendor/quagga.min.js (pinned 0.12.1,
+    // see js/vendor/SOURCES.txt). Same-origin, no CDN, works offline.
+    s.src = 'js/vendor/quagga.min.js';
     s.onload = resolve; s.onerror = reject;
     document.head.appendChild(s);
   });

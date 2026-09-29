@@ -27,11 +27,11 @@ function tileStatusBar(b) {
     const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
     fill = '<i class="bt-fill" style="width:' + pct + '%"></i>';
   }
-  return '<span class="bt-statusbar status-' + b.status + '" title="' + esc(STATUS[b.status]) + '">' + fill + '</span>';
+  return '<span class="bt-statusbar status-' + esc(b.status) + '" title="' + esc(STATUS[b.status]) + '">' + fill + '</span>';
 }
 
 function bookCard(b, i) {
-  const badges = ['<span class="badge status-' + b.status + '">' + STATUS[b.status] + '</span>', ownedBadge(b)];
+  const badges = ['<span class="badge status-' + esc(b.status) + '">' + STATUS[b.status] + '</span>', ownedBadge(b)];
   if (b.publicRating) badges.push('<span class="badge">★ ' + Number(b.publicRating).toFixed(1) + '</span>');
   badges.push(ratingBadges(b));
   if (b.myRating > 0) badges.push('<span class="badge">' + '♥'.repeat(b.myRating) + '</span>');
@@ -42,7 +42,7 @@ function bookCard(b, i) {
     progHTML = '<div class="progress-line slim"><div class="fill" style="width:' + pct + '%"></div></div>' +
       '<p class="card-progress">p. ' + (b.progress || 0) + ' / ' + b.pageCount + ' · ' + pct + '%</p>';
   }
-  return '<div class="book-card' + anim + '" data-id="' + b.id + '">' +
+  return '<div class="book-card' + anim + '" data-id="' + esc(b.id) + '">' +
     coverHTML(b, '', coverFav(b)) +
     '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
     '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
@@ -61,7 +61,7 @@ function bookTile(b, i) {
   // finished book is recognizable in grid view too.
   const readSeal = b.status === 'read'
     ? '<span class="tile-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
-  return '<div class="book-tile' + anim + '" data-id="' + b.id + '">' +
+  return '<div class="book-tile' + anim + '" data-id="' + esc(b.id) + '">' +
     '<div class="bt-cover">' + inner + coverFav(b) + readSeal + tileStatusBar(b) + '</div>' +
     '<div class="bt-title">' + esc(b.title) + '</div></div>';
 }

@@ -1,3 +1,5 @@
+import { rateLimit } from '../_lib/rate-limit.js';
+
 // Cloudflare Pages Function: GET /api/trope-models?provider=<id>
 //
 // Returns the live model list for a trope-inference provider so the Trope
@@ -67,6 +69,9 @@ export async function onRequest(context) {
   if (request.method !== 'GET') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v194 (security): unauthenticated internet-facing endpoint — cap it.
+  const limited = rateLimit(request, 'trope-models', 60, 60 * 1000);
+  if (limited) return limited;
 
   let provider = '';
   try {

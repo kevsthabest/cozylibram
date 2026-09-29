@@ -7,6 +7,8 @@
 // If no key is configured, the request is forwarded without one (same as the
 // old anonymous behavior) so the app keeps working.
 
+import { rateLimit } from '../../_lib/rate-limit.js';
+
 const ALLOWED_PATHS = new Set(['books/v1/volumes']);
 
 export async function onRequest(context) {
@@ -14,6 +16,9 @@ export async function onRequest(context) {
   if (request.method !== 'GET') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v194 (security): unauthenticated internet-facing quota spend — cap it.
+  const limited = rateLimit(request, 'gbooks', 120, 60 * 1000);
+  if (limited) return limited;
   const path = (params.path || []).join('/');
   if (!ALLOWED_PATHS.has(path)) {
     return new Response('not found', { status: 404 });
