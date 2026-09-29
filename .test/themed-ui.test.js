@@ -51,10 +51,10 @@ for (const t of THEMES) {
 ok('css: .disc-moon sized', /\.disc-moon\s*{[^}]*width:\s*56px/.test(css));
 ok('css: .empty-div constrained', /\.empty-div\s*{[^}]*max-width:\s*260px/.test(css));
 
-// APP_VERSION bumped to v194
+// APP_VERSION bumped to v195
 const v = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
 const m = /const APP_VERSION = '([^']+)'/.exec(v);
-ok('APP_VERSION is v194', m && m[1] === 'v194');
+ok('APP_VERSION is v195', m && m[1] === 'v195');
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js cache name matches APP_VERSION',
   sw.includes(`const CACHE = 'cozy-libram-${m[1]}';`));

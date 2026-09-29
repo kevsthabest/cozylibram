@@ -145,7 +145,7 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
       arrayBuffer: async () => enc.encode(JSON.stringify(goodBody)).buffer,
     };
   };
-  const req = (body) => ({ method: 'POST', json: async () => body });
+  const req = (body) => ({ method: 'POST', json: async () => body, headers: { get: () => null } });
   const msgs = [{ role: 'user', content: 'hi' }];
 
   upstream = null;

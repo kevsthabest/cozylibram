@@ -294,7 +294,7 @@ function addBook(book, openEditor, source) {
         const inp = document.getElementById('f-pagecount');
         if (inp) inp.value = book.pageCount;
         if (refreshProgressSection) refreshProgressSection();
-      } else render();
+      } else renderKeepScan(); // v195: don't tear down an active scan session
       toast('📄 Found page count: ' + book.pageCount);
     });
   }
@@ -314,7 +314,7 @@ function addBook(book, openEditor, source) {
       // Refresh only the Hardcover sections if the editor is open — never clobbers typed input.
       const hcEl = document.getElementById('m-hc');
       if (editingId === book.id && hcEl) hcEl.innerHTML = hcDetailHTML(book);
-      else render();
+      else renderKeepScan(); // v195: don't tear down an active scan session
       if (editingId === book.id) refreshSeriesInline(book); // v133: series may have arrived with enrichment
       toast('✨ Enriched from Hardcover');
     });

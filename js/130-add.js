@@ -289,6 +289,18 @@ function stopScan() {
   if (box) box.classList.remove('live');
 }
 
+// v195: background refreshes (Hardcover enrichment, page-count fill) must not
+// re-render while the scan panel is open. Their render() lands a second or
+// two after "Add to TBR" — right in the middle of the camera restart — and
+// tears the panel down mid-getUserMedia, leaving a dead "Start camera"
+// button. The data is already saved, so skipping the render loses nothing:
+// the UI picks the enriched data up on the next navigation render.
+function renderKeepScan() {
+  const mount = document.getElementById('add-scan-mount');
+  if (mount && mount.dataset.open) return;
+  render();
+}
+
 function loadQuagga() {
   return new Promise((resolve, reject) => {
     if (window.Quagga) return resolve();

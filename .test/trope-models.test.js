@@ -39,6 +39,7 @@ function ok(name, cond) {
   };
   const req = (method, provider) => ({
     method,
+    headers: { get: () => null },
     url: 'https://cozylibram.pages.dev/api/trope-models' + (provider ? '?provider=' + provider : ''),
   });
   const modelsBody = { data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'x-1', name: 'X One' }] };
