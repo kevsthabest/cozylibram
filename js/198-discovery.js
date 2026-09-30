@@ -321,8 +321,8 @@ async function maybeAutoReleaseCheck() {
 
 /* ---------------- Discover landing (v121, restyled v175) ----------------
    "What are you in the mood for?" per the UI mockup: a featured Surprise Me
-   card, four tiles (My Favorites / Similar Books / Authors / New Releases),
-   a Search-the-Library-&-Beyond row, and a From-Your-Coven section. Every
+   card, five tiles (My Favorites / Similar Books / Authors / New Releases /
+   Recommended), a Search-the-Library-&-Beyond row, and a From-Your-Coven section. Every
    tile routes to a real feature; the release check runs inline under the
    New Releases tile. */
 function discTile(ic, title, blurb, target) {
@@ -380,9 +380,11 @@ function renderDiscover() {
     discTile('covers', 'Similar Books', 'Like this one', 'similar') +
     discTile('user', 'Authors', 'Your favorite authors', 'authors') +
     discTile('calendar', 'New Releases', 'Fresh picks', 'releases') +
+    discTile('crystal', 'Recommended', 'Picked for your taste', 'recommended') +
     '</div>' +
 
     '<div id="disc-sim" hidden></div>' +
+    '<div id="disc-reco" hidden></div>' +
 
     '<button class="disc-search" data-dtile="search">' +
     '<span class="disc-ic">' + icon('search') + '</span>' +
@@ -422,9 +424,375 @@ function renderDiscover() {
           s.addEventListener('click', () => openDetail(s.dataset.seed)));
       }
     }
+    else if (t === 'recommended') {
+      const p = document.getElementById('disc-reco');
+      p.hidden = !p.hidden;
+      if (!p.hidden && !p.dataset.loaded) { p.dataset.loaded = '1'; refreshRecommendations(); }
+    }
     // 'releases' is owned by wireReleaseCheck (shared with the Wishlist button).
   }));
   document.getElementById('disc-coven-all').addEventListener('click', () => go('coven'));
   document.querySelectorAll('[data-cj]').forEach(c =>
     c.addEventListener('click', () => covenJump(c.dataset.cj)));
+}
+
+/* ---------------- Recommended for you (v213) ----------------
+   Embeddings-based recommendations. A taste profile is built from the
+   1024-dim bge-m3 embeddings stored on works (v213 migration): the
+   rating-weighted mean of her read books' vectors. Candidates are fresh
+   books by her most-loved authors (4★+ reads) via the Hardcover books
+   table; their embed texts go through /api/embed and rank by cosine
+   similarity to the profile in JS.
+
+   Graceful degradation: with no work embeddings yet (backfill pending) or
+   when the embed proxy is unreachable, candidates still show, ranked by
+   loved-author order, with a "warming up" note. Dismissals persist in the
+   IDB kv store ('reco_dismissed'), localStorage fallback. */
+
+// Pure: embed text for one book. Shared with scripts/backfill-embeddings.js
+// (loaded via vm), so the client and the backfill can never drift.
+function buildEmbedText(b) {
+  b = b || {};
+  const parts = [];
+  const title = String(b.title || '').trim();
+  if (title) {
+    const authors = [].concat(b.authors || []).map(a => String(a || '').trim()).filter(Boolean);
+    parts.push(authors.length ? title + ' \u2014 ' + authors.join(', ') : title);
+  }
+  const desc = String(b.description || '').replace(/\s+/g, ' ').trim();
+  if (desc) parts.push(desc.slice(0, 2000));
+  const tropes = [].concat(b.tropes || []).map(t => String(t || '').trim()).filter(Boolean);
+  if (tropes.length) parts.push('Tropes: ' + tropes.join(', '));
+  const genres = [].concat(b.genres || b.categories || []).map(g => String(g || '').trim()).filter(Boolean);
+  if (genres.length) parts.push('Genres: ' + genres.join(', '));
+  return parts.join('. ').slice(0, 4000);
+}
+
+// Pure: cosine similarity in [-1, 1]; 0 on any malformed input.
+function cosineSim(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || !a.length || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    dot += x * y; na += x * x; nb += y * y;
+  }
+  if (na === 0 || nb === 0) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+// Pure: rating-weighted mean of embedding vectors. items: [{vector, rating}];
+// weight = (rating || 3) / 5 so unrated read books count neutrally. Vectors
+// with a different dimensionality than the first valid one are dropped.
+function tasteProfileVector(items) {
+  const valid = (items || []).filter(it => it && Array.isArray(it.vector) && it.vector.length &&
+    it.vector.every(n => typeof n === 'number' && Number.isFinite(n)));
+  if (!valid.length) return null;
+  const dims = valid[0].vector.length;
+  const same = valid.filter(it => it.vector.length === dims);
+  if (!same.length) return null;
+  const acc = new Array(dims).fill(0);
+  let wsum = 0;
+  for (const it of same) {
+    const w = (it.rating || 3) / 5;
+    if (w <= 0) continue;
+    wsum += w;
+    for (let i = 0; i < dims; i++) acc[i] += it.vector[i] * w;
+  }
+  if (wsum <= 0) return null;
+  return acc.map(v => v / wsum);
+}
+
+// Pure: pgvector comes back from PostgREST as a "[0.1, ...]" string;
+// normalize to a validated number array, or null.
+function parseEmbedding(v) {
+  if (Array.isArray(v)) {
+    return v.length && v.every(n => typeof n === 'number' && Number.isFinite(n)) ? v.slice() : null;
+  }
+  if (typeof v === 'string') {
+    try {
+      const p = JSON.parse(v);
+      return parseEmbedding(p);
+    } catch (e) { return null; }
+  }
+  return null;
+}
+
+// Authors of her 4★+ read books, most-loved first.
+function topLovedAuthors(limit) {
+  const map = {};
+  library.forEach(b => {
+    if (!b || b.status !== 'read' || (b.myRating || 0) < 4) return;
+    (b.authors || []).forEach(a => {
+      const k = String(a || '').trim();
+      if (k) map[k] = (map[k] || 0) + 1;
+    });
+  });
+  return Object.keys(map).sort((x, y) => map[y] - map[x]).slice(0, limit || 6);
+}
+
+// Canonical trope ids across her 4★+ read books (book.tropes holds display
+// names, so resolve each through the taxonomy; v212's AI-added entries
+// qualify too since they live in book.tropes).
+function recoLovedTropeIds() {
+  const ids = [], seen = new Set();
+  library.forEach(b => {
+    if (!b || b.status !== 'read' || (b.myRating || 0) < 4) return;
+    ((b.tropes || []).concat(b.tropesAuto || [])).forEach(t => {
+      let id = null;
+      try { id = typeof tropeResolveId === 'function' ? tropeResolveId(t) : null; } catch (e) {}
+      if (id && !seen.has(id)) { seen.add(id); ids.push(id); }
+    });
+  });
+  return ids;
+}
+
+// Pure: which of her loved trope ids have a name/alias mentioned in the
+// candidate text (title + description). Returns up to 3 display names.
+function recoSharedTropes(text, lovedIds) {
+  const hay = String(text || '').toLowerCase();
+  if (!hay || !(lovedIds || []).length) return [];
+  const out = [];
+  for (const id of lovedIds) {
+    let terms = [String(id).replace(/-/g, ' ')];
+    let label = id;
+    try {
+      const t = typeof tropeById === 'function' ? tropeById(id) : null;
+      if (t) {
+        label = t.name;
+        terms.push(t.name);
+        const als = (typeof TROPE_ALIASES !== 'undefined' && TROPE_ALIASES[id]) || [];
+        als.forEach(a => terms.push(a));
+      }
+    } catch (e) {}
+    const hit = terms.some(term => {
+      const s = String(term || '').toLowerCase().trim();
+      return s.length > 2 && hay.indexOf(s) !== -1;
+    });
+    if (hit) out.push(label);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/* Dismissals: 'hc:<id>' keys in the IDB kv store, localStorage fallback
+   (same split-brain rule as the release dismissals, per-device). */
+const RECO_DISMISS_KEY = 'reco_dismissed';
+async function recoDismissedSet() {
+  try {
+    if (typeof currentDb !== 'undefined' && currentDb) {
+      const v = await idbKvGet(currentDb, RECO_DISMISS_KEY);
+      if (Array.isArray(v)) return new Set(v);
+    }
+  } catch (e) {}
+  try { return new Set(JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]')); }
+  catch (e) { return new Set(); }
+}
+async function recoDismiss(key) {
+  const s = await recoDismissedSet();
+  s.add(key);
+  const arr = Array.from(s).slice(-200);
+  let saved = false;
+  try {
+    if (typeof currentDb !== 'undefined' && currentDb) {
+      await idbKvPut(currentDb, RECO_DISMISS_KEY, arr);
+      saved = true;
+    }
+  } catch (e) {}
+  if (!saved) {
+    try { localStorage.setItem('spicyshelves.' + RECO_DISMISS_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+}
+
+// Work embeddings for her read books. RLS: "works: read for signed-in"
+// (v205) — returns {} offline or when signed out, and the caller degrades.
+async function fetchWorkEmbeddings(workIds) {
+  const ids = (workIds || []).filter(Boolean);
+  if (!ids.length) return {};
+  let sb = null;
+  try { sb = await cloudClient(); } catch (e) { return {}; }
+  if (!sb) return {};
+  try {
+    const { data, error } = await sb.from('works').select('id, embedding').in('id', ids);
+    if (error) throw error;
+    const out = {};
+    for (const r of (data || [])) {
+      const v = parseEmbedding(r && r.embedding);
+      if (v) out[r.id] = v;
+    }
+    return out;
+  } catch (e) { return {}; }
+}
+
+async function embedTextsClient(texts) {
+  const res = await fetch('/api/embed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texts: texts }),
+  });
+  if (!res.ok) throw new Error('embed proxy ' + res.status);
+  const data = await res.json();
+  if (!data || !Array.isArray(data.vectors) || data.vectors.length !== texts.length) {
+    throw new Error('embed proxy returned an unexpected shape');
+  }
+  return data.vectors;
+}
+
+// Fresh books by her loved authors (Hardcover books table, newest first).
+// Reuses hcBookToCandidate / releaseInLibrary; one author failing never
+// kills the sweep (same pacing as the release check).
+async function sweepRecoCandidates(authors, dismissed) {
+  const out = [], seen = new Set();
+  for (const a of (authors || []).slice(0, 6)) {
+    try {
+      const q = 'query { books(where: {contributions: {author: {name: {_eq: ' + JSON.stringify(a) + '}}},' +
+        ' canonical_id: {_is_null: true}}, order_by: {release_date: desc}, limit: 12)' +
+        ' { id title description pages image { url }' +
+        ' contributions { author { name } } default_physical_edition { isbn_13 } } }';
+      const data = await hcGraphQL(q);
+      ((data || {}).books || []).forEach(b => {
+        if (b.id == null || seen.has(b.id)) return;
+        if (dismissed.has('hc:' + b.id)) return;
+        const c = hcBookToCandidate(b);
+        if (releaseInLibrary(c)) return;
+        seen.add(b.id);
+        c.loveAuthor = a;
+        out.push(c);
+      });
+    } catch (e) { /* next author */ }
+    await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
+  }
+  return out;
+}
+
+function addRecoBook(c) {
+  const clean = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
+  const book = {
+    id: uid(),
+    isbn: clean.find(i => i.length === 13) || clean[0] || '',
+    title: c.title, authors: c.authors, cover: c.cover, description: c.description,
+    pageCount: c.pages, publishedDate: '', releaseDate: '',
+    categories: [], publicRating: null, ratingsCount: 0,
+    status: 'tbr', owned: 'tobuy', ratings: {}, myRating: 0,
+    tropes: [], tropesAuto: [], progress: 0,
+    dateAdded: new Date().toISOString(), dateFinished: null, notes: '',
+    hcId: c.hcId, hcEnriched: true // already holds this Hardcover doc's data
+  };
+  book.axes = autoDetectAxes(book);
+  return addBook(book, false, 'discovery');
+}
+
+let visibleRecos = []; // ranked [{c, sim}] currently on screen
+
+function recoCardHTML(r, i, lovedIds) {
+  const c = r.c;
+  const chips = [];
+  if (c.loveAuthor) chips.push('<span class="why-chip">' + icon('heart') + ' ' + esc(c.loveAuthor) + '</span>');
+  recoSharedTropes((c.title || '') + ' ' + (c.description || ''), lovedIds).slice(0, 2)
+    .forEach(t => chips.push('<span class="why-chip">\u2726 ' + esc(t) + '</span>'));
+  if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
+  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c) +
+    '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
+    '<p class="author">' + esc(c.authors.join(', ')) + '</p>' +
+    (chips.length ? '<div class="why-chips">' + chips.join('') + '</div>' : '') +
+    '</div><div style="align-self:center;display:flex;gap:6px">' +
+    '<button class="btn small" data-add="' + i + '">\uFF0B TBR</button>' +
+    '<button class="btn ghost small" data-dis="' + i + '" aria-label="Not for me">\u2715</button></div></div>';
+}
+
+function wireRecoResults(box) {
+  box.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const r = visibleRecos[Number(btn.dataset.add)];
+    if (r && addRecoBook(r.c)) {
+      btn.closest('.rel-card').style.opacity = '0.4';
+      btn.textContent = '\u2713 Added';
+      btn.disabled = true;
+    }
+  }));
+  box.querySelectorAll('[data-dis]').forEach(btn => btn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const r = visibleRecos[Number(btn.dataset.dis)];
+    if (r) await recoDismiss('hc:' + r.c.hcId);
+    btn.closest('.rel-card').remove();
+    if (!box.querySelector('.rel-card')) box.innerHTML = '<p class="note">All caught up \u2728</p>';
+  }));
+}
+
+function renderRecoResults(ranked, lovedIds, embedded) {
+  const box = document.getElementById('disc-reco');
+  if (!box) return;
+  visibleRecos = ranked;
+  if (!ranked.length) {
+    box.innerHTML = '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
+    return;
+  }
+  box.innerHTML = '<h3 class="wish-section">' + icon('crystal') + ' Recommended for you</h3>' +
+    (embedded ? '' : '<p class="note">\u2726 Taste matching is still warming up \u2014 showing fresh picks from your favorite authors.</p>') +
+    '<div class="grid">' + ranked.map((r, i) => recoCardHTML(r, i, lovedIds)).join('') + '</div>' +
+    '<p class="note" style="text-align:center"><button class="btn ghost small" id="reco-refresh">\u21BB Refresh</button></p>';
+  wireRecoResults(box);
+  const rf = document.getElementById('reco-refresh');
+  if (rf) rf.addEventListener('click', () => refreshRecommendations());
+  track('reco_viewed', { count: ranked.length, embedded: !!embedded });
+}
+
+async function refreshRecommendations() {
+  const box = document.getElementById('disc-reco');
+  if (!box) return;
+  box.innerHTML = '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
+  try {
+    const read = library.filter(b => b && b.status === 'read');
+    if (!read.length) {
+      box.innerHTML = '<p class="note">Read and rate a few books first \u2014 your taste profile grows from the books you finish.</p>';
+      return;
+    }
+    const authors = topLovedAuthors(6);
+    if (!authors.length) {
+      box.innerHTML = '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
+      return;
+    }
+    if (!hcReady()) {
+      box.innerHTML = '<p class="note">Connect Hardcover in Settings \u2192 Hardcover to browse recommendations.</p>';
+      return;
+    }
+    // Taste profile: rating-weighted mean of her read books' work embeddings.
+    const withIds = [];
+    for (const b of read) {
+      let wid = null;
+      try { wid = await resolveWork(b); } catch (e) {}
+      if (wid) withIds.push({ book: b, workId: wid });
+    }
+    const emb = await fetchWorkEmbeddings(withIds.map(x => x.workId));
+    const profile = tasteProfileVector(withIds.map(x => ({
+      vector: emb[x.workId] || null, rating: x.book.myRating || 0,
+    })));
+    const dismissed = await recoDismissedSet();
+    const lovedIds = recoLovedTropeIds();
+    box.innerHTML = '<p class="note">' + icon('hourglass') + ' Browsing ' + authors.length + ' favorite authors\u2026</p>';
+    const cands = await sweepRecoCandidates(authors, dismissed);
+    if (!cands.length) {
+      box.innerHTML = '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
+      return;
+    }
+    let ranked = null;
+    if (profile) {
+      try {
+        const vectors = await embedTextsClient(cands.map(c =>
+          buildEmbedText({ title: c.title, authors: c.authors, description: c.description })));
+        ranked = cands.map((c, i) => ({ c: c, sim: cosineSim(profile, vectors[i]) }))
+          .sort((x, y) => y.sim - x.sim).slice(0, 12);
+      } catch (e) { ranked = null; /* proxy down: fall through to the fallback */ }
+    }
+    if (!ranked) {
+      const rank = {};
+      authors.forEach((a, i) => { rank[a] = i; });
+      ranked = cands.slice()
+        .sort((x, y) => ((rank[x.loveAuthor] == null ? 99 : rank[x.loveAuthor]) - (rank[y.loveAuthor] == null ? 99 : rank[y.loveAuthor])))
+        .slice(0, 12).map(c => ({ c: c, sim: null }));
+    }
+    renderRecoResults(ranked, lovedIds, !!profile && ranked[0] && ranked[0].sim != null);
+  } catch (e) {
+    box.innerHTML = '<p class="note">Recommendations hiccuped \u2014 try again in a bit.</p>';
+  }
 }

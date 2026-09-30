@@ -72,8 +72,8 @@ const viewHTML = q('#view').innerHTML;
 ok('discover: asks the mood question',
   viewHTML.indexOf('What are you in the mood for?') !== -1);
 const tiles = qa('#view [data-dtile]').map(c => c.dataset.dtile).sort();
-ok('discover: mockup tiles present (v175)',
-  JSON.stringify(tiles) === JSON.stringify(['authors', 'favorites', 'pick', 'releases', 'search', 'similar']));
+ok('discover: mockup tiles present (v175, +recommended v213)',
+  JSON.stringify(tiles) === JSON.stringify(['authors', 'favorites', 'pick', 'recommended', 'releases', 'search', 'similar']));
 ok('discover: every tile has a plain-language explanation',
   qa('#view [data-dtile]').every(c => (c.querySelector('small') || { textContent: '' }).textContent.trim().length > 3));
 ok('discover: New Releases tile + inline results box present',

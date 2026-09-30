@@ -51,13 +51,14 @@ for (const t of THEMES) {
 ok('css: .disc-moon sized', /\.disc-moon\s*{[^}]*width:\s*56px/.test(css));
 ok('css: .empty-div constrained', /\.empty-div\s*{[^}]*max-width:\s*260px/.test(css));
 
-// APP_VERSION bumped to v212
+// APP_VERSION: any vNNN; the sw cache name must match it. (Was a hardcoded
+// literal before v213 and broke on every release — now version-agnostic.)
 const v = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
-const m = /const APP_VERSION = '([^']+)'/.exec(v);
-ok('APP_VERSION is v212', m && m[1] === 'v212');
+const m = /const APP_VERSION = '(v\d+)'/.exec(v);
+ok('APP_VERSION is a version tag', !!(m && m[1]));
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js cache name matches APP_VERSION',
-  sw.includes(`const CACHE = 'cozy-libram-${m[1]}';`));
+  !!(m && sw.includes(`const CACHE = 'cozy-libram-${m[1]}';`)));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

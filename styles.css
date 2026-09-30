@@ -2136,3 +2136,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .app-header { padding: 0; }
   .app-header .brand { display: none; }
 }
+
+/* v213: "why" chips on Recommended-for-you cards — smaller than .chip,
+   informational rather than tappable. */
+.why-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.why-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; line-height: 1.5;
+  padding: 1px 8px; border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--muted); white-space: nowrap;
+}
+.why-chip svg { width: 11px; height: 11px; }

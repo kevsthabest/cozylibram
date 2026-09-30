@@ -274,6 +274,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/read-cover':
             self.handle_api_read_cover()
             return
+        if path == '/api/embed':
+            self.handle_api_embed()
+            return
         self.send_error(404)
 
     def _check_rate(self, name):
@@ -585,6 +588,22 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_error(502, 'trope inference failed')
             except Exception:
                 pass
+
+    def handle_api_embed(self):
+        """POST /api/embed {texts} → text embeddings.
+
+        The home server has no Workers AI binding, so embeddings are not
+        available over LAN — the Cloudflare Pages Function serves them in
+        production. Always 503 here; the client degrades to loved-author
+        ranking instead of failing.
+        """
+        if not self._check_rate('embed'):
+            return
+        try:
+            self._send_json(503, {'error': 'embeddings not set up: add a Workers AI binding ' +
+                'named AI to this Pages project (Settings → Functions → Workers AI bindings)'})
+        except Exception:
+            pass
 
     def handle_api_read_cover(self):
         """POST /api/read-cover {image, mode:'single'|'shelf'} → vision model.
