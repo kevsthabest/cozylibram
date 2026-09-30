@@ -204,9 +204,12 @@ const TROPE_STOPWORDS = new Set(['general', 'fiction', 'nonfiction', 'large type
 function seedTropes(book) {
   if (book.tropes && book.tropes.length) return;
   const tags = [];
+  // v211: also consult the canonical format-junk set (js/020) — this is where
+  // 'audiobook' (singular, from Open Library subjects) used to slip through.
+  const junk = (typeof TROPE_FORMAT_JUNK !== 'undefined') ? TROPE_FORMAT_JUNK : TROPE_STOPWORDS;
   bookGenres(book).forEach(g => {
     const t = g.toLowerCase().trim();
-    if (!t || t.length > 28 || TROPE_STOPWORDS.has(t) || tags.includes(t)) return;
+    if (!t || t.length > 28 || TROPE_STOPWORDS.has(t) || junk.has(t) || tags.includes(t)) return;
     tags.push(t);
   });
   book.tropes = tags.slice(0, 6);

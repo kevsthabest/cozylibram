@@ -69,6 +69,14 @@ function autoDetectAxes(b) {
   return hit.length ? hit : ['spice'];
 }
 
+// v211: format junk is not a trope. One canonical set, shared by seedTropes
+// (js/061) and the migrateBook strip below — the bug was two stopword sets
+// drifting apart ('audiobook' singular slipped through 061's).
+const TROPE_FORMAT_JUNK = new Set([
+  'audiobook', 'audiobooks', 'ebook', 'ebooks', 'paperback', 'hardcover',
+  'textbook', 'textbooks', 'large type',
+]);
+
 // Migrate old books (b.spice) to the new { ratings, axes } model.
 function migrateBook(b) {
   if (!b.ratings) b.ratings = {};
@@ -85,6 +93,18 @@ function migrateBook(b) {
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
   if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81
+  // v211: strip format junk ('audiobook' etc.) that older stopword sets let
+  // seedTropes plant in b.tropes. _mtime bumps only when something was
+  // actually removed, so the cleaned book wins the cloud merge and pushes once.
+  let _junkRemoved = false;
+  const _stripJunk = arr => arr.filter(t => {
+    const bad = TROPE_FORMAT_JUNK.has(String(t).toLowerCase().trim());
+    if (bad) _junkRemoved = true;
+    return !bad;
+  });
+  b.tropes = _stripJunk(b.tropes);
+  b.tropesAuto = _stripJunk(b.tropesAuto);
+  if (_junkRemoved) b._mtime = Date.now();
   if (!Array.isArray(b.axes) || !b.axes.length) b.axes = autoDetectAxes(b);
   if (!Array.isArray(b.contentWarnings)) b.contentWarnings = [];
   if (!Array.isArray(b.moods)) b.moods = [];
