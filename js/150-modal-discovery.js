@@ -621,9 +621,86 @@ function openDetail(id, opts) {
     renderDetailModal(b, false);
   }
 }
+/* ---- v215: bottom-sheet drag-to-dismiss (touch only) + background scroll lock.
+   The sheet follows the finger only when its scrollable content is at the
+   very top (scrollTop <= 0) — otherwise the gesture is a normal content
+   scroll. Desktop keeps the close button; no mouse-drag. Gesture feel needs
+   on-phone QA; the decision math below is unit-tested. ---- */
+const SHEET_DISMISS_PX = 120; // drag distance that dismisses the sheet
+const SHEET_FLICK_V = 0.55;   // px/ms downward velocity that dismisses (a flick)
+// Pure decision logic — testable in node.
+function shouldDismissDrag(dy, v, scrollTop) {
+  if (dy <= 0 || scrollTop > 0) return false;
+  return dy >= SHEET_DISMISS_PX || v >= SHEET_FLICK_V;
+}
+// Idempotent: safe to call on every re-render (e.g. jumping to a similar
+// book re-renders without closing first); one unlock releases the lock.
+let bodyScrollLocked = false, bodyScrollPrev = '';
+function lockBodyScroll() {
+  if (bodyScrollLocked || typeof document === 'undefined') return;
+  bodyScrollLocked = true;
+  bodyScrollPrev = document.body.style.overflow || '';
+  document.body.style.overflow = 'hidden';
+}
+function unlockBodyScroll() {
+  if (!bodyScrollLocked || typeof document === 'undefined') return;
+  bodyScrollLocked = false;
+  document.body.style.overflow = bodyScrollPrev;
+}
+function wireSheetDrag(sheet, onDismiss) {
+  if (!sheet || typeof window === 'undefined' || !('ontouchstart' in window)) return;
+  let y0 = null, t0 = 0, dragging = false, dy = 0;
+  const cancel = () => {
+    y0 = null; dragging = false; dy = 0;
+    sheet.style.transition = ''; sheet.style.transform = '';
+  };
+  sheet.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) { y0 = null; return; }
+    y0 = e.touches[0].clientY; t0 = e.timeStamp; dragging = false; dy = 0;
+  }, { passive: true });
+  sheet.addEventListener('touchmove', e => {
+    if (y0 == null || e.touches.length !== 1) { if (e.touches.length !== 1) cancel(); return; }
+    const d = e.touches[0].clientY - y0;
+    if (!dragging) {
+      if (d < 10 || sheet.scrollTop > 0) return; // not a top-of-sheet downward swipe
+      dragging = true;
+      // Re-anchor: the sheet starts following from this finger position so it
+      // can't jump if the gesture reached the top mid-swipe.
+      y0 = e.touches[0].clientY; t0 = e.timeStamp; dy = 0;
+      sheet.style.transition = 'none';
+      return;
+    }
+    if (d <= 0) { // finger came back up — hand the gesture back, re-anchor
+      dragging = false; dy = 0;
+      sheet.style.transition = ''; sheet.style.transform = '';
+      y0 = e.touches[0].clientY; t0 = e.timeStamp;
+      return;
+    }
+    dy = d;
+    // passive:false — stop scroll chaining so the library behind can't move.
+    if (e.cancelable) e.preventDefault();
+    sheet.style.transform = 'translateY(' + d + 'px)';
+  }, { passive: false });
+  sheet.addEventListener('touchend', e => {
+    if (y0 == null) return;
+    const dt = Math.max(1, (e.timeStamp || 0) - t0);
+    const dist = dy, v = dist / dt, wasDragging = dragging;
+    y0 = null; dragging = false; dy = 0;
+    if (!wasDragging) return;
+    if (shouldDismissDrag(dist, v, sheet.scrollTop)) {
+      sheet.style.transition = 'transform .18s ease-in';
+      sheet.style.transform = 'translateY(110%)';
+      setTimeout(onDismiss, 190);
+    } else { // spring back
+      sheet.style.transition = ''; sheet.style.transform = '';
+    }
+  }, { passive: true });
+  sheet.addEventListener('touchcancel', cancel, { passive: true });
+}
 function renderDetailModal(b, viaBook) {
   const id = b.id;
   editingId = id;
+  lockBodyScroll(); // v215: the library behind must not scroll while open
   const root = document.getElementById('modal-root');
 
   // v182: mockup alignment — shelf/ownership become tappable rows that expand
@@ -775,6 +852,7 @@ function renderDetailModal(b, viaBook) {
 
   root.innerHTML =
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
+    '<div class="sheet-grabber" aria-hidden="true"></div>' + // v215: drag-to-dismiss affordance (touch)
     '<button class="d-back" id="m-x" aria-label="Close">←</button>' +
     // v182: mockup top-right cluster — favorite + overflow menu (moved out of
     // the bottom bar). The menu is a floating card now.
@@ -1102,6 +1180,7 @@ function renderDetailModal(b, viaBook) {
   const escClose = e => { if (e.key === 'Escape') close(); }; // v129: escape closes
   const close = () => {
     document.removeEventListener('keydown', escClose);
+    unlockBodyScroll(); // v215: release the background scroll lock
     root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
   };
   document.addEventListener('keydown', escClose);
@@ -1123,6 +1202,8 @@ function renderDetailModal(b, viaBook) {
   // v210: edition picker — change which edition of the book she owns.
   document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
+  // v215: bottom-sheet drag-to-dismiss (touch only) on the sheet element.
+  wireSheetDrag(root.querySelector('#m-back .modal'), close);
   // v182: description read-more toggles — hero (desktop) + Details tab.
   // Hidden when the text fits unclamped.
   const wireDescToggle = (wrapId) => {

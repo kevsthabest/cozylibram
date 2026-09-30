@@ -584,6 +584,17 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 
 /* v170: floral vine — decorative side ornament on modals (desktop), tinted per theme */
 .modal { position: relative; }
+
+/* v215: bottom-sheet drag-to-dismiss — grabber affordance (touch only; hidden
+   on desktop where the modal is a centered dialog), transform transition for
+   the follow-finger drag and spring-back, and scroll-chaining containment so
+   the library behind can't scroll at the sheet's scroll boundaries. */
+.sheet-grabber {
+  width: 44px; height: 5px; border-radius: 3px;
+  background: var(--line); margin: 0 auto 10px;
+}
+@media (min-width: 600px) { .sheet-grabber { display: none; } }
+.modal { overscroll-behavior: contain; transition: transform .22s ease; }
 @media (min-width: 900px) {
   .modal::after {
     content: ''; position: absolute; top: 18px; right: 10px; bottom: 18px; width: 76px;
