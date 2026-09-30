@@ -1,4 +1,4 @@
-// v197: vision cover reading — /api/read-cover endpoint + client flow.
+// v198: vision cover reading (Gemini, was OpenAI in v197) — /api/read-cover endpoint + client flow.
 // The model is never trusted on the ISBN: the client must validate the
 // check digit before routing to lookupISBN.
 const path = require('path');
@@ -32,7 +32,7 @@ async function main() {
   // 2. Missing key -> 503 naming VISION_API_KEY
   r = await post({}, { image: IMG, mode: 'single' });
   ok('endpoint: no key -> 503', r.status === 503);
-  ok('endpoint: 503 names VISION_API_KEY', (await r.text()).includes('VISION_API_KEY'));
+  ok('endpoint: 503 names the key env vars', (await r.text()).includes('TROPE_KEY_GEMINI'));
 
   // 3. Mode allowlist (v198 adds 'shelf')
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
@@ -48,8 +48,28 @@ async function main() {
   r = await post({ VISION_API_KEY: 'k' }, { image: 'data:text/plain;base64,AAAA', mode: 'single' });
   ok('endpoint: non-image data URL -> 400', r.status === 400);
 
-  // 5. Happy path with mocked upstream
-  let seen = null;
+  // 5b. v198: falls back to the already-configured trope Gemini key.
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ isbn: null, title: 'T', author: 'A' }) } }],
+    }), { status: 200 });
+  };
+  r = await post({ TROPE_KEY_GEMINI: 'gem-key' }, { image: IMG, mode: 'single' });
+  ok('endpoint: TROPE_KEY_GEMINI fallback -> 200', r.status === 200);
+  ok('endpoint: fallback key attached as Bearer',
+    seen.init.headers['Authorization'] === 'Bearer gem-key');
+  ok('endpoint: default model is gemini-2.0-flash',
+    seen.body.model === 'gemini-2.0-flash');
+
+  // 5c. v198: markdown-fenced JSON from the model still parses.
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    choices: [{ message: { content: '```json\n{"isbn":"9780425189863","title":"T","author":"A"}\n```' } }],
+  }), { status: 200 });
+  r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
+  ok('endpoint: fenced JSON parses', (await r.json()).isbn === '9780425189863');
+
+  // 5d. Happy path with mocked upstream (full payload).
   globalThis.fetch = async (url, init) => {
     seen = { url, init, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({
@@ -61,7 +81,8 @@ async function main() {
   ok('endpoint: happy path -> 200', r.status === 200);
   ok('endpoint: returns parsed isbn/title/author',
     out.isbn === '9780425189863' && out.title === 'Test Title' && out.author === 'Jane Doe');
-  ok('endpoint: upstream is api.openai.com', seen.url === 'https://api.openai.com/v1/chat/completions');
+  ok('endpoint: upstream is the Gemini OpenAI-compat endpoint',
+    seen.url === 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
   ok('endpoint: Bearer key attached', seen.init.headers['Authorization'] === 'Bearer sk-test');
   ok('endpoint: json_object response format', seen.body.response_format && seen.body.response_format.type === 'json_object');
   ok('endpoint: temperature 0', seen.body.temperature === 0);

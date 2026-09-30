@@ -8,16 +8,21 @@ import { rateLimit } from '../_lib/rate-limit.js';
 // client validates any returned ISBN's check digit before trusting it — a
 // misread becomes "couldn't read it", never the wrong book.
 //
-// The OpenAI API key lives in the Pages environment variable VISION_API_KEY
-// (model override: VISION_MODEL, default gpt-4o-mini). The browser never
-// sees the key. Shelf/bulk spine mode arrives in v198; this endpoint only
-// accepts mode 'single' for now.
+// v198: switched from OpenAI to Gemini — Kevin's Gemini key was already set
+// up for trope inference, so this reuses it. Same OpenAI-compatible wire
+// format the trope endpoint already speaks to Gemini
+// (generativelanguage.googleapis.com/v1beta/openai).
+//
+// The key lives server-side: VISION_API_KEY, falling back to the already-
+// configured TROPE_KEY_GEMINI (model override: VISION_MODEL, default
+// gemini-2.0-flash). The browser never sees the key. Shelf/bulk spine mode
+// arrives in v199; this endpoint only accepts mode 'single' for now.
 //
 // Guards: POST only, JSON body, mode allowlist, image is a capped data URL
 // or raw base64 (max ~2.5MB — the client downscales to ~1024px first),
 // response_format json_object so the model can't ramble, temperature 0.
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const MAX_IMAGE_CHARS = 3500000; // ~2.6MB base64
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$/;
 
@@ -40,6 +45,13 @@ function cleanResult(obj) {
     if (!/^(\d{13}|\d{10}|\d{9}X)$/i.test(isbn)) isbn = null; // not ISBN-shaped: don't trust it
   }
   return { isbn, title: s(obj.title), author: s(obj.author) };
+}
+
+// v198: strip markdown fences in case the model wraps the JSON anyway.
+function parseModelJson(text) {
+  const t = String(text || '').trim()
+    .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  return cleanResult(JSON.parse(t));
 }
 
 export async function onRequest(context) {
@@ -69,16 +81,18 @@ export async function onRequest(context) {
     return new Response('bad request', { status: 400 });
   }
 
-  const key = (env.VISION_API_KEY || '').trim();
+  // v198: Kevin's Gemini key is already configured for trope inference, so
+  // reuse it — VISION_API_KEY is only needed for a separate key.
+  const key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
   if (!key) {
-    return jsonErr(503, "cover reading isn't set up on this server (set VISION_API_KEY)");
+    return jsonErr(503, "cover reading isn't set up on this server (set VISION_API_KEY or TROPE_KEY_GEMINI)");
   }
-  const model = (env.VISION_MODEL || 'gpt-4o-mini').trim();
+  const model = (env.VISION_MODEL || 'gemini-2.0-flash').trim();
   if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
 
   let upstream;
   try {
-    upstream = await fetch(OPENAI_URL, {
+    upstream = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -109,8 +123,7 @@ export async function onRequest(context) {
   }
   let parsed;
   try {
-    parsed = cleanResult(JSON.parse(
-      (await upstream.json()).choices[0].message.content));
+    parsed = parseModelJson((await upstream.json()).choices[0].message.content);
   } catch (e) {
     return jsonErr(502, 'vision provider returned an unreadable answer');
   }

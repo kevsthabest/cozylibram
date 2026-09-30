@@ -99,18 +99,22 @@ TROPE_MODEL_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$')
 
 
 def load_vision_cfg():
-    """Vision cover-reading config (v197). All server-side: the browser only
-    learns whether a key is configured, never the key itself.
+    """Vision cover-reading config (v197; v198: Gemini, not OpenAI). All
+    server-side: the browser only learns whether a key is configured, never
+    the key itself.
 
-    server-config.json keys: vision_api_key (OpenAI), vision_model
-    (default gpt-4o-mini)."""
+    server-config.json keys: vision_api_key (dedicated), falling back to
+    the already-configured trope_key_gemini; vision_model
+    (default gemini-2.0-flash)."""
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
             d = json.load(f)
-        return {'key': (d.get('vision_api_key') or '').strip(),
-                'model': (d.get('vision_model') or 'gpt-4o-mini').strip()}
+        key = (d.get('vision_api_key') or '').strip() or \
+            (d.get('trope_key_gemini') or '').strip()
+        return {'key': key,
+                'model': (d.get('vision_model') or 'gemini-2.0-flash').strip()}
     except Exception:
-        return {'key': '', 'model': 'gpt-4o-mini'}
+        return {'key': '', 'model': 'gemini-2.0-flash'}
 
 
 VISION_PROMPT_SINGLE = (
@@ -571,9 +575,10 @@ class Handler(SimpleHTTPRequestHandler):
     def handle_api_read_cover(self):
         """POST /api/read-cover {image, mode:'single'} → vision model reads
         the printed ISBN (digits only), falling back to title/author when no
-        ISBN is printed. Mirrors functions/api/read-cover.js. The OpenAI key
-        comes from server-config.json (vision_api_key) — the browser never
-        sees it. v198 will add mode 'shelf' for bulk spine reading.
+        ISBN is printed. Mirrors functions/api/read-cover.js. The Gemini key
+        comes from server-config.json (vision_api_key, falling back to the
+        already-configured trope_key_gemini) — the browser never sees it.
+        v199 will add mode 'shelf' for bulk spine reading.
 
         Guards: POST only, mode allowlist, image is a capped data URL or raw
         base64 (the client downscales to ~1024px first). The client validates
@@ -603,7 +608,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not vc['key']:
                 self._send_json(503, {'error':
                     "cover reading isn't set up on this server "
-                    "(set vision_api_key)"})
+                    "(set vision_api_key or trope_key_gemini)"})
                 return
             if not TROPE_MODEL_RE.match(vc['model']):
                 self._send_json(503, {'error': 'bad vision_model'})
@@ -623,7 +628,7 @@ class Handler(SimpleHTTPRequestHandler):
                 }],
             }
             req = urllib.request.Request(
-                'https://api.openai.com/v1/chat/completions',
+                'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
                 data=json.dumps(upstream_obj).encode('utf-8'),
                 headers={'Content-Type': 'application/json',
                          'Authorization': 'Bearer ' + vc['key'],
@@ -656,9 +661,13 @@ class Handler(SimpleHTTPRequestHandler):
     def _clean_vision_result(parsed):
         """Keep only the expected string fields; drop ISBN-shaped junk."""
         try:
-            obj = (parsed.get('choices') or [{}])[0].get(
+            content = (parsed.get('choices') or [{}])[0].get(
                 'message', {}).get('content')
-            obj = json.loads(obj)
+            # v198: strip markdown fences in case the model wraps the JSON.
+            content = re.sub(r'^```(?:json)?\s*', '',
+                             str(content or '').strip(), flags=re.I)
+            content = re.sub(r'\s*```$', '', content)
+            obj = json.loads(content)
         except Exception:
             return {'isbn': None, 'title': None, 'author': None}
 
