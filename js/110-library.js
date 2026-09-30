@@ -54,7 +54,7 @@ function bookCard(b, i) {
    stretch the box, no matter the photo's real dimensions. */
 function bookTile(b, i) {
   const inner = b.cover
-    ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+    ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' /* v217: async decode off the main thread */
     : '<span class="bt-fallback">' + icon('covers') + '</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
   // v188: read badge — the same gold seal as the favorite spines, so a

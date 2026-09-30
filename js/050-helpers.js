@@ -179,7 +179,7 @@ function toast(msg) {
 }
 function coverHTML(book, cls, extra) {
   const inner = book.cover
-    ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+    ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' // v217: async decode off the main thread
     : icon('covers'); // v85: line-art no-cover placeholder
   return '<div class="cover-wrap ' + (cls || '') + '">' + inner + (extra || '') + '</div>';
 }

@@ -387,7 +387,12 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   padding: 12px;
   cursor: pointer;
   transition: transform 0.12s ease;
+  /* v217: same long-list treatment as .book-tile — skip off-screen cards
+     while scrolling; `auto` keeps find-in-page working. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
 }
+.book-card.rise { animation: none; }
 .book-card:active { transform: scale(0.985); }
 .cover-wrap {
   flex: 0 0 64px;
@@ -787,7 +792,18 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border-radius: 18px;
   padding: 10px 10px 12px;
   transition: transform 0.15s ease;
+  /* v217: scroll performance — the grid renders every book at once (~3,500
+     nodes for a 600-book library), so skip off-screen tiles entirely while
+     scrolling. `auto` (not `hidden`) keeps find-in-page working; the
+     intrinsic size keeps the scrollbar stable. This also disables the .rise
+     entrance animation on tiles: a skipped tile would otherwise replay its
+     rise (with up to 400ms stagger delay) the first time it scrolls into
+     view, looking like pop-in lag. tileGuard (js/182-tileguard.js) is
+     unaffected — it measures the first tile, which is always rendered. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
+.book-tile.rise { animation: none; }
 .book-tile:active { transform: scale(0.97); }
 .book-tile .bt-cover {
   /* v57-tile: single-mechanism 2:3 box */
