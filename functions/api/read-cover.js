@@ -152,9 +152,16 @@ export async function onRequest(context) {
     return jsonErr(502, 'vision provider unreachable');
   }
   if (!upstream.ok) {
-    // Forward the upstream status so the client's 401/403/429 handling works.
+    const status = upstream.status;
+    // v203: an upstream 503 (model overloaded/unavailable) must NOT be
+    // forwarded as-is — the client reads OUR 503 as "no API key configured",
+    // which misled real users when Google's model 503'd with a valid key.
+    // Surface it as a 502 (bad gateway) with a clear body instead, so a 503
+    // from this endpoint unambiguously means "not set up".
+    if (status === 503) return jsonErr(502, 'vision model temporarily unavailable (upstream 503)');
+    // Forward other upstream statuses so the client's 401/403/429 handling works.
     // Never leak the key: the body is the provider's, which contains no secret.
-    return new Response(await upstream.text(), { status: upstream.status });
+    return new Response(await upstream.text(), { status });
   }
   let parsed;
   try {

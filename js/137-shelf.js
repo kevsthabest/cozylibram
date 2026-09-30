@@ -89,6 +89,12 @@ async function shelfSend(dataUrl) {
       paint('<p class="note">Too many scans — wait a minute and try again.</p>');
       return;
     }
+    // v203: 502 means the model itself errored (e.g. upstream 503 overloaded) —
+    // our 503 is reserved for "not set up", so this must not blame the API key.
+    if (r.status === 502) {
+      paint('<p class="note">The AI reader is temporarily unavailable — try again in a bit.</p>');
+      return;
+    }
     if (!r.ok) throw new Error('http ' + r.status);
     const res = await r.json();
     const spines = (res.books || []).filter(b => b && (b.title || b.author));

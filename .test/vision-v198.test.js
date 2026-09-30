@@ -104,6 +104,21 @@ async function main() {
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   ok('endpoint: upstream 401 forwarded', r.status === 401);
 
+  // 7b. v203: an upstream 503 (model overloaded/unavailable) must NOT be
+  // forwarded as 503 — the client reads our 503 as "no API key configured".
+  globalThis.fetch = async () => new Response(
+    '{"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE"}}',
+    { status: 503 });
+  r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
+  ok('endpoint: upstream 503 -> 502, never forwarded', r.status === 502);
+  ok('endpoint: upstream 503 body names the real cause',
+    (await r.text()).includes('temporarily unavailable'));
+
+  // 7c. Other upstream statuses still pass through untouched.
+  globalThis.fetch = async () => new Response('{"error":{"message":"slow down"}}', { status: 429 });
+  r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
+  ok('endpoint: upstream 429 still forwarded', r.status === 429);
+
   // 8. Rate limit (20/min) — distinct IP, mocked upstream
   globalThis.fetch = async () => new Response(JSON.stringify({
     choices: [{ message: { content: '{}' } }],
@@ -207,6 +222,14 @@ async function main() {
   await tick(60);
   ok('client: 429 -> wait message',
     /Too many cover reads/.test(runInWindowRet(`document.getElementById('scan-result').innerHTML`)));
+
+  // B6 (v203): 502 -> temporarily-unavailable message, never the setup message.
+  setResp(502, { error: 'vision model temporarily unavailable (upstream 503)' });
+  runInWindow(`visionSend('data:image/jpeg;base64,FAKE')`);
+  await tick(60);
+  ok('client: 502 -> temporarily unavailable, does not blame the key',
+    /temporarily unavailable/.test(runInWindowRet(`document.getElementById('scan-result').innerHTML`)) &&
+    !/isn.t set up/.test(runInWindowRet(`document.getElementById('scan-result').innerHTML`)));
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

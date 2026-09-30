@@ -168,6 +168,16 @@ async function main() {
   await tick(120);
   ok('client: 503 -> setup message', mountHTML().includes('isn\u2019t set up'));
 
+  // v203: 502 (upstream model error) -> temporarily-unavailable, never the setup message.
+  runInWindow(`
+    window.fetch = async () => new Response('{"error":"vision model temporarily unavailable (upstream 503)"}', { status: 502 });
+    shelfBusy = false;
+  `);
+  runInWindow(`shelfSend('data:image/jpeg;base64,FAKE')`);
+  await tick(120);
+  ok('client: 502 -> temporarily unavailable, does not blame the key',
+    mountHTML().includes('temporarily unavailable') && !mountHTML().includes('isn\u2019t set up'));
+
   // Empty books -> helpful message.
   runInWindow(`
     window.fetch = async () => new Response('{"books":[]}', { status: 200 });
