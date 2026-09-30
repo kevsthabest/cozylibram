@@ -103,7 +103,9 @@ const mk = (id, fields) =>
   ok('e2 flags title, pages, year, cover',
     out.results[0].flags.map(f => f.field).sort().join(',') === 'cover,pageCount,title,year');
 
-  runInWindow(`applyVerifyFix(library[1], ${JSON.stringify(out.results[0].meta)}, ${JSON.stringify(out.results[0].flags)});`);
+  // v216: applyVerifyFix is async (adopted covers go through the canonical
+  // bucket, falling back to the remote URL when the function is unreachable)
+  await window.eval(`applyVerifyFix(library[1], ${JSON.stringify(out.results[0].meta)}, ${JSON.stringify(out.results[0].flags)})`);
   const fixed = window.eval(`({ title: library[1].title, pageCount: library[1].pageCount, publishedDate: library[1].publishedDate, cover: library[1].cover })`);
   ok('applyVerifyFix writes every flagged field',
     fixed.title === 'Dune' && fixed.pageCount === 412 && fixed.publishedDate === '1965' &&

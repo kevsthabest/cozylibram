@@ -107,7 +107,7 @@ const mk = (id, fields) =>
   runInWindow(`document.getElementById('modal-root').innerHTML =
     '<div class="modal"><div class="modal-head"><div class="cover-wrap">OLD</div></div></div>';`);
   const newUrl = 'https://covers.openlibrary.org/b/id/222-L.jpg';
-  runInWindow(`chooseCover('k1', '${newUrl}')`);
+  await window.eval(`chooseCover('k1', '${newUrl}')`);
   await tick(2);
   ok('chooseCover updates the book', window.eval(`library[0].cover`) === newUrl);
   ok('chooseCover persists', window.eval(`JSON.parse(localStorage.getItem(libKey())).find(b => b.id === 'k1').cover`) === newUrl);

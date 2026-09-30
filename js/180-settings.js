@@ -161,7 +161,11 @@ function renderSettings() {
   const htmlOffline =
     '<button class="btn ghost block" id="cover-offline">' + icon('download') + ' Cache covers for offline</button>' +
     '<p class="note">Saves every book\'s cover on this device so the library renders fully without internet. ' +
-    'Cached covers survive app updates.</p>';
+    'Covers are shared canonical copies (one per unique cover, stored once for everyone); this button only saves ' +
+    'this device\'s offline copies. Cached covers survive app updates.</p>' +
+    '<p class="note" id="cover-cache-usage">Checking cover storage…</p>' +
+    '<button class="btn ghost block" id="cover-cache-clear">' + icon('trash') + ' Clear cached covers</button>' +
+    '<p class="note">Clears only this device\'s offline copies — the shared canonical covers are untouched.</p>';
 
   /* ---- Privacy ---- */
   const htmlPrivacy =
@@ -509,6 +513,44 @@ function renderSettings() {
     btn.innerHTML = icon('download') + ' Cache covers for offline';
     toast('Cached ' + okc + ' of ' + targets.length + ' covers for offline 📴');
   });
+  // v216: live cover-storage readout + clear-cached-covers. The clear button
+  // only drops this device's offline copies from the 'cozy-libram-covers'
+  // cache — the shared canonical copies in the Supabase bucket are untouched.
+  async function refreshCoverCacheUsage() {
+    const el = document.getElementById('cover-cache-usage');
+    if (!el) return;
+    try {
+      let count = 0;
+      try {
+        if (typeof caches !== 'undefined' && caches.open) {
+          const cc = await caches.open('cozy-libram-covers');
+          count = (await cc.keys()).length;
+        }
+      } catch (e) {}
+      let mb = null;
+      try {
+        if (navigator.storage && navigator.storage.estimate) {
+          const est = await navigator.storage.estimate();
+          if (est && typeof est.usage === 'number') mb = (est.usage / 1048576).toFixed(1);
+        }
+      } catch (e) {}
+      el.textContent = 'On this device: ' + (mb === null ? '?' : mb + ' MB') +
+        ' total · ' + count + ' cover' + (count === 1 ? '' : 's') + ' cached';
+    } catch (e) {
+      el.textContent = 'Cover storage info is unavailable on this device.';
+    }
+  }
+  const clearBtn = document.getElementById('cover-cache-clear');
+  if (clearBtn) clearBtn.addEventListener('click', async () => {
+    try {
+      if (typeof caches !== 'undefined' && caches.delete) await caches.delete('cozy-libram-covers');
+      toast('🗑️ Cached covers cleared (shared copies untouched)');
+    } catch (e) {
+      toast('Could not clear the cover cache');
+    }
+    refreshCoverCacheUsage();
+  });
+  refreshCoverCacheUsage();
   // v81: trope suggestion source
   document.querySelectorAll('#trope-srcseg button').forEach(btn =>
     btn.addEventListener('click', () => {

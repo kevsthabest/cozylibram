@@ -11,11 +11,13 @@ Serves the app's static files, plus:
 - /api/trope-infer: POST {messages, max_tokens} → LLM chat completions
   with the server-side trope API key (OpenRouter/Gemini/Groq/Ollama/custom).
 - /cover-proxy: same-origin cover fetches for pixel reads.
+- /api/cache-cover: POST {url} → canonical Supabase Storage cover URL (v216).
 
 Setup: copy server-config.example.json to server-config.json and paste your
 Hardcover personal token and Google Books API key in it. server-config.json
 is read by this server only — it is never committed to git.
 """
+import hashlib
 import ipaddress
 import json
 import os
@@ -57,6 +59,17 @@ def load_cloud_cfg():
                     'supabaseAnonKey': (d.get('supabase_anon_key') or '').strip()}
     except Exception:
         return {'supabaseUrl': '', 'supabaseAnonKey': ''}
+
+
+def load_supabase_service_key():
+    """v216: service key for server-side writes to the `covers` bucket.
+    Kevin-owned: paste into server-config.json (never committed). Without
+    it /api/cache-cover answers 503 and clients keep the remote URL."""
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            return (json.load(f).get('supabase_service_key') or '').strip()
+    except Exception:
+        return ''
 
 
 TROPE_PROVIDER_URLS = {
@@ -160,6 +173,22 @@ def config_js_body():
         payload['tropeModel'] = tc['model']
     return ('window.SPICY_CONFIG = %s;' % json.dumps(payload)).encode('utf-8')
 
+# v216: allowlist for /api/cache-cover — mirrors functions/api/cache-cover.js.
+# Hosts we adopt covers from (verified against live library data 2026-09-30).
+# Not listed ⇒ unreachable by construction (same SSRF shape as cover-proxy.js).
+_CACHE_COVER_HOSTS = frozenset([
+    'covers.openlibrary.org',
+    'books.google.com',
+    'assets.hardcover.app',
+    'images-na.ssl-images-amazon.com',
+    'm.media-amazon.com',
+    'i.gr-assets.com',
+    'archive.org',  # Open Library cover redirects
+    'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
+    'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com',  # Apple Books artwork
+])
+_COVER_EXT = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+              'image/gif': 'gif', 'image/avif': 'avif'}
 
 def cover_proxy_host_blocked(host):
     """SSRF guard for /cover-proxy: True when the host must not be fetched —
@@ -194,6 +223,7 @@ _RATE_LIMITS = {
     'gbooks': (120, 60),
     'trope-models': (60, 60),
     'cover-proxy': (120, 60),
+    'cache-cover': (300, 60),   # v216: bulk backfill paces itself at ~150/min
 }
 
 def rate_limit_ok(name, ip):
@@ -276,6 +306,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == '/api/embed':
             self.handle_api_embed()
+            return
+        if path == '/api/cache-cover':
+            self.handle_api_cache_cover()
             return
         self.send_error(404)
 
@@ -604,6 +637,72 @@ class Handler(SimpleHTTPRequestHandler):
                 'named AI to this Pages project (Settings → Functions → Workers AI bindings)'})
         except Exception:
             pass
+
+    def handle_api_cache_cover(self):
+        """POST /api/cache-cover {url} → canonical bucket URL (v216).
+
+        Mirrors functions/api/cache-cover.js for local-dev parity. Fetches
+        the cover server-side, stores one content-addressed copy in the
+        Supabase Storage `covers` bucket, and returns the public URL.
+        Guards: POST only, rate limit, https + host allowlist (SSRF), 4 MB
+        cap, must be an image. Needs supabase_service_key in
+        server-config.json (Kevin-owned) — without it → 503 and the client
+        keeps the remote URL. Every failure falls back to the remote URL;
+        a cover is never lost here.
+        """
+        if not self._check_rate('cache-cover'):
+            return
+        try:
+            cc = load_cloud_cfg()
+            svc = load_supabase_service_key()
+            supa_url = (cc['supabaseUrl'] or '').rstrip('/')
+            if not supa_url or not svc:
+                self._send_json(503, {'error': 'cover cache not configured'})
+                return
+            length = int(self.headers.get('Content-Length') or 0)
+            raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
+            body = json.loads(raw)
+            url = str(body.get('url') or '').strip()[:2000]
+            if not re.match(r'^https://', url, re.I):
+                self._send_json(400, {'error': 'not an https url'})
+                return
+            host = (urllib.parse.urlparse(url).hostname or '').lower()
+            if host not in _CACHE_COVER_HOSTS:
+                self._send_json(403, {'error': 'host not allowed'})
+                return
+            req = urllib.request.Request(
+                url, headers={'User-Agent': 'CozyLibram/1.0 cache-cover'})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = r.read(4 * 1024 * 1024 + 1)
+                ctype = r.headers.get('Content-Type',
+                                      'application/octet-stream').split(';')[0].strip().lower()
+            if not ctype.startswith('image/'):
+                self._send_json(502, {'error': 'not an image'})
+                return
+            if len(data) > 4 * 1024 * 1024:
+                self._send_json(502, {'error': 'image too large'})
+                return
+            key = hashlib.sha256(data).hexdigest() + '.' + _COVER_EXT.get(ctype, 'jpg')
+            up = urllib.request.Request(
+                supa_url + '/storage/v1/object/covers/' + key, data=data, method='POST',
+                headers={'apikey': svc, 'Authorization': 'Bearer ' + svc,
+                         'Content-Type': ctype, 'x-upsert': 'false'})
+            try:
+                urllib.request.urlopen(up, timeout=20).read()
+            except urllib.error.HTTPError as e:
+                eb = e.read(4096).decode('utf-8', 'replace')
+                # Duplicate upload = dedup hit: the canonical copy already exists.
+                if not (e.code in (400, 409) and
+                        re.search(r'duplicate|already exists', eb, re.I)):
+                    self._send_json(502, {'error': 'cover store rejected the upload'})
+                    return
+            self._send_json(200, {'coverUrl':
+                supa_url + '/storage/v1/object/public/covers/' + key})
+        except Exception:
+            try:
+                self._send_json(502, {'error': 'cover cache failed'})
+            except Exception:
+                pass
 
     def handle_api_read_cover(self):
         """POST /api/read-cover {image, mode:'single'|'shelf'} → vision model.

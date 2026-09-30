@@ -5,3 +5,4 @@ server-config.json
 scripts/reclassify-progress.jsonl
 scripts/reclassify-run.log
 scripts/embed-progress.jsonl
+scripts/cover-backfill-progress.jsonl

@@ -150,7 +150,9 @@ async function applyEdition(bookId, ed) {
   b.isbn = isbn;
   b._mtime = Date.now();
   // Adopt the edition's cover art — unless she uploaded her own (data: URL).
-  if (ed.cover && String(b.cover || '').indexOf('data:') !== 0) b.cover = ed.cover;
+  // v216: remote covers go through the canonical bucket (falls back to the
+  // remote URL on any failure; the data: guard is double-covered by the helper).
+  if (ed.cover && String(b.cover || '').indexOf('data:') !== 0) b.cover = await canonicalizeCoverUrl(ed.cover);
   const wasEnriched = b.hcEnriched === true;
   if (typeof editingId !== 'undefined' && editingId === bookId &&
       typeof editingDraft !== 'undefined' && editingDraft) {

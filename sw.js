@@ -1,8 +1,13 @@
 /* Cozy Libram service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'cozy-libram-v215';
+const CACHE = 'cozy-libram-v216';
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
-const IMG_CACHE_MAX = 600; // trim oldest-first past this many covers
+// v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
+// objects are CORS-clean with real Content-Length, so size-based eviction
+// finally works.
+const IMG_CACHE_MAX_BYTES = 150 * 1024 * 1024;
+const COVERS_PATH = '/storage/v1/object/public/covers/';
+const EST_BYTES_PER_COVER = 300 * 1024; // fallback when Content-Length is absent
 const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '041-idb.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-tropes.js', '065-analytics.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '096-onboarding.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '135-vision.js', '136-coverpicker.js', '137-shelf.js', '138-editions.js', '140-collections.js', '150-modal-discovery.js', '155-authors.js', '156-trope-taxonomy.js', '157-trope-inference.js', '158-works.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '199-admin.js', '200-boot.js'].map(f => './js/' + f);
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v194 (security): vendored third-party libs, precached like first-party code.
@@ -22,12 +27,35 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// v109: keep the image cache bounded — Cache.keys() returns insertion order,
-// so the oldest covers are evicted first.
+// v216: size-based LRU trim — Cache.keys() returns insertion order, so the
+// oldest covers are evicted first. Sizes come from the stored response's
+// Content-Length (bucket objects are CORS-clean, so it is real), falling
+// back to a conservative estimate when absent. Defensive: any failure
+// leaves the cache alone.
 function trimImageCache(cache) {
-  return cache.keys().then((keys) => {
-    if (keys.length <= IMG_CACHE_MAX) return;
-    return Promise.all(keys.slice(0, keys.length - IMG_CACHE_MAX).map((k) => cache.delete(k)));
+  return cache.keys().then(async (keys) => {
+    try {
+      const sizes = [];
+      let total = 0;
+      for (const req of keys) {
+        let size = EST_BYTES_PER_COVER;
+        try {
+          const res = await cache.match(req);
+          const len = parseInt((res && res.headers.get('Content-Length')) || '', 10);
+          if (Number.isFinite(len) && len > 0) size = len;
+        } catch (e) {}
+        sizes.push(size);
+        total += size;
+      }
+      let i = 0;
+      const dels = [];
+      while (total > IMG_CACHE_MAX_BYTES && i < keys.length) {
+        total -= sizes[i];
+        dels.push(cache.delete(keys[i]));
+        i++;
+      }
+      await Promise.all(dels);
+    } catch (e) { /* leave the cache alone */ }
   });
 }
 
@@ -35,17 +63,19 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.pathname.endsWith('/config.js')) return; // never cache: varies with server config
   if (url.pathname.startsWith('/api/')) return; // never cache: live API responses
-  // v109: cover art (usually cross-origin) gets a cache-first runtime cache so
-  // the library renders offline once covers have been seen or pre-cached from
-  // Settings → Covers. Opaque cross-origin responses are storable.
-  if (e.request.destination === 'image') {
+  // v216: only canonical bucket covers get a runtime cache (cache-first, so
+  // the library renders offline once covers are seen or pre-cached from
+  // Settings → Offline). The old catch-all that cached EVERY image the
+  // device ever rendered (~1 GB of picker candidates, edition art and
+  // full-resolution files) is gone.
+  if (e.request.destination === 'image' && url.pathname.indexOf(COVERS_PATH) === 0) {
     e.respondWith((async () => {
       const cache = await caches.open(IMG_CACHE);
       const hit = await cache.match(e.request);
       if (hit) return hit;
       try {
         const res = await fetch(e.request);
-        if (res && (res.ok || res.type === 'opaque')) {
+        if (res && res.ok) {
           await cache.put(e.request, res.clone());
           trimImageCache(cache).catch(() => {});
         }

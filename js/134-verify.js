@@ -111,14 +111,16 @@ function compareBookMeta(book, meta) {
   return flags;
 }
 
-function applyVerifyFix(book, meta, flags) {
-  flags.forEach(f => {
+async function applyVerifyFix(book, meta, flags) {
+  for (const f of flags) {
     if (f.field === 'title') book.title = meta.title;
     else if (f.field === 'authors') book.authors = (meta.authors || []).slice();
     else if (f.field === 'pageCount') book.pageCount = meta.pageCount;
     else if (f.field === 'year') book.publishedDate = String(meta.year);
-    else if (f.field === 'cover') book.cover = meta.cover;
-  });
+    // v216: adopted remote covers go through the canonical bucket (falls
+    // back to the remote URL on any failure — never a lost cover).
+    else if (f.field === 'cover') book.cover = await canonicalizeCoverUrl(meta.cover);
+  }
   book._mtime = Date.now();
   saveLibrary();
 }
@@ -201,18 +203,18 @@ function renderVerify() {
   setView(html);
   document.getElementById('v-back').addEventListener('click', () => { view = 'settings'; render(); });
   const all = document.getElementById('v-apply-all');
-  if (all) all.addEventListener('click', () => {
-    verifyResults.forEach(r => applyVerifyFix(r.book, r.meta, r.flags));
+  if (all) all.addEventListener('click', async () => {
+    for (const r of verifyResults) await applyVerifyFix(r.book, r.meta, r.flags);
     verifyResults = [];
     toast('✅ All metadata fixes applied');
     render();
   });
   document.querySelectorAll('[data-vfix]').forEach(btn =>
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const i = verifyResults.findIndex(r => r.book.id === btn.dataset.vfix);
       if (i === -1) return;
       const r = verifyResults[i];
-      applyVerifyFix(r.book, r.meta, r.flags);
+      await applyVerifyFix(r.book, r.meta, r.flags);
       verifyResults.splice(i, 1);
       toast('✅ Fixed');
       render();

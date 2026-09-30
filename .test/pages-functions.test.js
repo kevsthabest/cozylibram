@@ -10,6 +10,7 @@ const configPayload = async (res) =>
 async function main() {
   const configFn = await import(path.resolve(__dirname, '../functions/config.js.js'));
   const proxyFn = await import(path.resolve(__dirname, '../functions/cover-proxy.js'));
+  const ccFn = await import(path.resolve(__dirname, '../functions/api/cache-cover.js'));
   const hcFn = await import(path.resolve(__dirname, '../functions/api/hardcover.js'));
   const gbFn = await import(path.resolve(__dirname, '../functions/api/gbooks/[[path]].js'));
   const ctx = (env, url) => ({ env, request: new Request(url || 'https://app.test/') });
@@ -108,6 +109,97 @@ async function main() {
   const gbPost = await gbFn.onRequest(gbCtx({ GOOGLE_BOOKS_KEY: 'k' }, 'POST'));
   ok('gb: POST rejected (405)', gbPost.status === 405);
 
+  globalThis.fetch = realFetch;
+
+  // ---- /api/cache-cover (v216: canonical cover cache) ----
+  const IMG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+  const BIG = new Uint8Array(5 * 1024 * 1024);
+  const storageCalls = [];
+  let storageMode = 'ok'; // 'ok' | 'duplicate'
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    if (u === 'https://covers.openlibrary.org/b/id/1-L.jpg') {
+      return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
+    }
+    if (u === 'https://covers.openlibrary.org/b/id/big.jpg') {
+      return new Response(BIG, { headers: { 'Content-Type': 'image/jpeg' } });
+    }
+    if (u === 'https://covers.openlibrary.org/b/id/notimage') {
+      return new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } });
+    }
+    if (u.startsWith('https://x.supabase.co/storage/v1/object/covers/')) {
+      storageCalls.push({ url: u, headers: init.headers });
+      if (storageMode === 'duplicate') {
+        return new Response(JSON.stringify({
+          statusCode: '400', error: 'Duplicate', message: 'The resource already exists',
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    throw new Error('network down');
+  };
+  const ccEnv = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'svc1' };
+  const ccReq = (body, method) => ({
+    env: ccEnv,
+    request: new Request('https://app.test/api/cache-cover', Object.assign(
+      { method: method || 'POST', headers: { 'Content-Type': 'application/json' } },
+      (method || 'POST') === 'GET' ? {} : {
+        body: body === undefined
+          ? JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' })
+          : body,
+      })),
+  });
+  const ccGet = await ccFn.onRequest(ccReq(undefined, 'GET'));
+  ok('cc: GET rejected (405)', ccGet.status === 405);
+  const ccNoEnv = await ccFn.onRequest({
+    env: {},
+    request: new Request('https://app.test/api/cache-cover', { method: 'POST' }),
+  });
+  ok('cc: missing service key -> 503', ccNoEnv.status === 503);
+  const ccHttp = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.test/x.jpg' })));
+  ok('cc: http url -> 400', ccHttp.status === 400);
+  const ccBadBody = await ccFn.onRequest({
+    env: ccEnv,
+    request: new Request('https://app.test/api/cache-cover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not json{',
+    }),
+  });
+  ok('cc: unparseable body -> 400', ccBadBody.status === 400);
+  const ccEvil = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://169.254.169.254/x.jpg' })));
+  ok('cc: unlisted host rejected (SSRF, 403)', ccEvil.status === 403);
+  const ccEvil2 = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://evil.example.com/x.jpg' })));
+  ok('cc: unknown host rejected (403)', ccEvil2.status === 403);
+
+  const ccOk = await ccFn.onRequest(ccReq());
+  const ccBody = await ccOk.json();
+  ok('cc: 200 on success', ccOk.status === 200);
+  ok('cc: returns the public bucket URL',
+    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.png$/.test(ccBody.coverUrl));
+  ok('cc: upload used x-upsert false (dedup by construction)',
+    storageCalls.length === 1 && storageCalls[0].headers['x-upsert'] === 'false');
+  ok('cc: service key attached server-side, never echoed in the response',
+    storageCalls[0].headers['Authorization'] === 'Bearer svc1' &&
+    storageCalls[0].headers['apikey'] === 'svc1' &&
+    JSON.stringify(ccBody).indexOf('svc1') === -1);
+
+  // same bytes -> same object key (content-addressed)
+  const ccOk2 = await ccFn.onRequest(ccReq());
+  const ccBody2 = await ccOk2.json();
+  ok('cc: same bytes map to the same canonical URL (dedup)',
+    ccOk2.status === 200 && ccBody2.coverUrl === ccBody.coverUrl);
+
+  // duplicate-object error from Storage is the dedup hit, not a failure
+  storageMode = 'duplicate';
+  const ccDup = await ccFn.onRequest(ccReq());
+  const ccDupBody = await ccDup.json();
+  ok('cc: duplicate upload still 200s with the canonical URL',
+    ccDup.status === 200 && ccDupBody.coverUrl === ccBody.coverUrl);
+  storageMode = 'ok';
+
+  const ccNotImg = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/notimage' })));
+  ok('cc: non-image content-type -> 502', ccNotImg.status === 502);
+  const ccBig = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/big.jpg' })));
+  ok('cc: over-4MB image -> 502', ccBig.status === 502);
   globalThis.fetch = realFetch;
 
   // ---- /cover-proxy (unchanged contract) ----

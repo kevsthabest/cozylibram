@@ -129,10 +129,48 @@ function closeCoverPicker() {
   if (ov) ov.remove();
 }
 
-function chooseCover(bookId, url) {
+// v216: canonical cover cache. Returns the shared Supabase Storage URL for a
+// remote cover, or the ORIGINAL url on ANY failure (server not configured,
+// rate-limited, network down, unexpected shape, timeout). data: URLs (user
+// uploads) and already-canonical bucket URLs pass through untouched —
+// uploads never leave the device, and canonical URLs are never
+// re-canonicalized. Never throws to the caller: a cover is never lost here.
+async function canonicalizeCoverUrl(url) {
+  try {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('data:') === 0) return url;
+    if (url.indexOf('/storage/v1/object/public/covers/') !== -1) return url;
+    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 20000) : null;
+    let res;
+    try {
+      res = await fetch('/api/cache-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+        signal: ctl ? ctl.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (!res.ok) return url; // 403/429/502/503 — keep the remote cover
+    const data = await res.json();
+    const canon = data && data.coverUrl;
+    if (typeof canon !== 'string' || canon.indexOf('https://') !== 0) {
+      AppLog.error('cover', 'cache-cover returned an unexpected shape');
+      return url;
+    }
+    AppLog.info('cover', 'cover canonicalized to the shared bucket');
+    return canon;
+  } catch (e) {
+    return url;
+  }
+}
+
+async function chooseCover(bookId, url) {
   const b = library.find(x => x.id === bookId);
   if (!b || !url) return;
-  b.cover = url;
+  b.cover = await canonicalizeCoverUrl(url);
   b._mtime = Date.now();
   saveLibrary();
   /* v167: trace the cover change end to end — the log shows whether the
@@ -197,7 +235,7 @@ function openCoverPicker(bookId) {
       '<img src="' + esc(c.url) + '" alt="' + esc(c.label) + '" loading="lazy" onerror="this.closest(\'.cp-pick\').remove()">' +
       '<span>' + esc(c.label) + '</span></button>').join('');
     grid.querySelectorAll('[data-cpurl]').forEach(btn =>
-      btn.addEventListener('click', () => chooseCover(bookId, btn.dataset.cpurl)));
+      btn.addEventListener('click', async () => { await chooseCover(bookId, btn.dataset.cpurl); }));
   });
 }
 
@@ -233,7 +271,11 @@ async function downloadMissingCovers(onProgress, fns) {
       const list = Array.isArray(cands) ? cands.slice(0, 4) : [];
       for (const c of list) {
         const url = c && c.url;
-        if (url && await verify(url)) { b.cover = url; done++; break; }
+        // v216: adopted covers go through the canonical bucket (falls back
+        // to the remote URL on any failure — the 400 ms politeness pacing
+        // below also paces the function calls; 429s are picked up by the
+        // backfill script).
+        if (url && await verify(url)) { b.cover = await canonicalizeCoverUrl(url); done++; break; }
       }
     } catch (e) { /* skip this book */ }
     await new Promise(r => setTimeout(r, 400)); // be polite to the cover sources
