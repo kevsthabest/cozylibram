@@ -11,7 +11,8 @@
 // same as the Workers AI binding). Without them the function 503s and the
 // client keeps the remote URL. Keys never enter the repo.
 //
-// Guards: POST only; per-IP rate limit; https-only + tight host allowlist
+// Guards: POST only; per-IP rate limit; http upgraded to https for
+// allowlisted hosts, https-only otherwise + tight host allowlist
 // (SSRF: a non-listed host can never be fetched — same "not listed ⇒
 // unreachable by construction" shape as cover-proxy.js); 4 MB cap; must
 // be an image. Every failure mode answers non-200 and the client falls
@@ -92,6 +93,14 @@ export async function onRequest(context) {
     target = new URL(url);
   } catch {
     return json(400, { error: 'not an https url' });
+  }
+  // v216 follow-up: many stored Google Books covers are plain http. If the
+  // host is already allowlisted, upgrade to https and continue — the fetch
+  // still goes through the same SSRF allowlist, so a non-listed http host
+  // can never be fetched (it falls through to the https-only rejection).
+  if (target.protocol === 'http:' && ALLOWED_HOSTS.has(target.hostname.toLowerCase())) {
+    console.log('cache-cover: upgrading http→https for allowlisted host ' + target.hostname);
+    target.protocol = 'https:';
   }
   if (target.protocol !== 'https:') {
     return json(400, { error: 'not an https url' });

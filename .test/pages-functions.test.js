@@ -115,10 +115,15 @@ async function main() {
   const IMG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
   const BIG = new Uint8Array(5 * 1024 * 1024);
   const storageCalls = [];
+  const fetchedUpstream = []; // v216 follow-up: records upstream fetch URLs to prove the http→https upgrade
   let storageMode = 'ok'; // 'ok' | 'duplicate'
   globalThis.fetch = async (url, init) => {
     const u = String(url);
     if (u === 'https://covers.openlibrary.org/b/id/1-L.jpg') {
+      return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
+    }
+    if (u.startsWith('https://books.google.com/')) {
+      fetchedUpstream.push(u);
       return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
     }
     if (u === 'https://covers.openlibrary.org/b/id/big.jpg') {
@@ -158,6 +163,17 @@ async function main() {
   ok('cc: missing service key -> 503', ccNoEnv.status === 503);
   const ccHttp = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.test/x.jpg' })));
   ok('cc: http url -> 400', ccHttp.status === 400);
+  // v216 follow-up: allowlisted http hosts are upgraded to https, non-allowlisted http still rejected
+  const ccHttpGb = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://books.google.com/books/content?id=abc&printsec=frontcover&img=1' })));
+  const ccHttpGbBody = await ccHttpGb.json();
+  ok('cc: allowlisted http upgraded to https (200)', ccHttpGb.status === 200);
+  ok('cc: upgraded fetch went out over https',
+    fetchedUpstream.length === 1 && fetchedUpstream[0].startsWith('https://books.google.com/'));
+  ok('cc: upgraded url returns the canonical bucket URL',
+    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.png$/.test(ccHttpGbBody.coverUrl || ''));
+  const ccHttpEvil = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.example.com/x.jpg' })));
+  ok('cc: non-allowlisted http still rejected (400)', ccHttpEvil.status === 400);
+  storageCalls.length = 0; // the upgrade test above uploaded once; reset for the x-upsert assertions below
   const ccBadBody = await ccFn.onRequest({
     env: ccEnv,
     request: new Request('https://app.test/api/cache-cover', {

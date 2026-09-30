@@ -12,6 +12,7 @@
    Usage:
      LIMIT=1 node scripts/backfill-covers.js   # probe: one book, no writes
      node scripts/backfill-covers.js           # full run (background it)
+     RETRY_SKIPS=1 node scripts/backfill-covers.js  # reprocess skips the function rejected (proxy 400/502)
    Progress: scripts/cover-backfill-progress.jsonl (resume skips 'ok'/'skip')
    Env: COVER_BASE (default https://cozylibram.pages.dev/api/cache-cover)
 */
@@ -27,6 +28,10 @@ const PROXY = (process.env.COVER_BASE || 'https://cozylibram.pages.dev/api/cache
 const LIMIT = parseInt(process.env.LIMIT || '0', 10);
 const PROBE = LIMIT === 1;
 const PACE_MS = 500; // ~2 req/s, well under the function's 300/min limit
+// v216 follow-up: RETRY_SKIPS=1 reprocesses books the function previously
+// rejected (proxy 400/502) instead of treating them as done — e.g. the
+// http:// Google Books covers rejected before the http→https upgrade.
+const RETRY_SKIPS = process.env.RETRY_SKIPS === '1';
 
 // Mirrors functions/api/cache-cover.js ALLOWED_HOSTS (2026-09-30).
 const ALLOWED_HOSTS = new Set([
@@ -57,7 +62,14 @@ async function main() {
       if (!line.trim()) continue;
       try {
         const e = JSON.parse(line);
-        if (e && (e.status === 'ok' || e.status === 'skip')) done.add(e.id);
+        if (e && e.status === 'ok') done.add(e.id);
+        else if (e && e.status === 'skip') {
+          // RETRY_SKIPS=1: function-rejected skips (proxy 400/502) become
+          // targets again; permanent skips (already canonical, host not
+          // allowlisted, probe) stay done.
+          const retryable = RETRY_SKIPS && /^proxy (400|502)$/.test(String(e.detail || ''));
+          if (!retryable) done.add(e.id);
+        }
       } catch {}
     }
   }
