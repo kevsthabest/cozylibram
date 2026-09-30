@@ -89,7 +89,8 @@ if (seedBlock) {
   ok('seed ids match taxonomy ids',
     seedIds.length === ids.length && ids.every(id => seedIds.includes(id)));
   ok('seed carries the taxonomy version',
-    new RegExp(`, ${VERSION}\\)`, 'g').test(seedBlock[1]));
+    // v207: rows now end with `, <version>, ARRAY[...aliases...], ARRAY[...exclusions...])`.
+    new RegExp(`, ${VERSION}, ARRAY\\[`, 'g').test(seedBlock[1]));
 }
 ok('tropes.sql defines all four tables',
   ['create table if not exists tropes', 'create table if not exists book_tropes',

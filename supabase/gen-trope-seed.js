@@ -16,22 +16,26 @@ const APP_DIR = path.join(__dirname, '..');
 const src = fs.readFileSync(path.join(APP_DIR, 'js', '156-trope-taxonomy.js'), 'utf8');
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(src + '\nthis.OUT = { v: TROPE_TAXONOMY_VERSION, tropes: TROPES };', sandbox);
-const { v, tropes } = sandbox.OUT;
+vm.runInContext(src + '\nthis.OUT = { v: TROPE_TAXONOMY_VERSION, tropes: TROPES, aliases: TROPE_ALIASES, exclusions: TROPE_EXCLUSIONS };', sandbox);
+const { v, tropes, aliases, exclusions } = sandbox.OUT;
 
 const q = s => "'" + String(s).replace(/'/g, "''") + "'";
+const qa = a => 'ARRAY[' + (a || []).map(q).join(', ') + ']';
 const lines = tropes.map(t =>
   `  (${q(t.id)}, ${q(t.name)}, ${q(t.description)}, ` +
-  `ARRAY[${t.genres.map(q).join(', ')}], ${v})`
+  `ARRAY[${t.genres.map(q).join(', ')}], ${v}, ` +
+  `${qa(aliases[t.id])}, ${qa(exclusions[t.id])})`
 );
 console.log(`-- BEGIN GENERATED SEED (from js/156-trope-taxonomy.js v${v}, ${tropes.length} tropes)`);
 console.log('-- Regenerate with: node supabase/gen-trope-seed.js');
-console.log('insert into tropes (id, name, description, genres, version)');
+console.log('insert into tropes (id, name, description, genres, version, aliases, exclusions)');
 console.log('values');
 console.log(lines.join(',\n'));
 console.log('on conflict (id) do update set');
 console.log('  name = excluded.name,');
 console.log('  description = excluded.description,');
 console.log('  genres = excluded.genres,');
-console.log('  version = excluded.version;');
+console.log('  version = excluded.version,');
+console.log('  aliases = excluded.aliases,');
+console.log('  exclusions = excluded.exclusions;');
 console.log(`-- END GENERATED SEED`);

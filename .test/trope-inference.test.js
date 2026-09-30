@@ -87,7 +87,9 @@ async function main() {
   ok('throws when no tropes array', (() => { try { probe('parseTropeResponse(\'{"foo":1}\')'); return false; } catch (e) { return true; } })());
 
   // ---- validation ----
-  ok('drops unknown ids', probe("validateTropeResults([{id:'dragons',confidence:0.9},{id:'forced-closeness',confidence:0.9}]).length") === 1);
+  // v207: 'forced-closeness' is now a registered alias of forced-proximity,
+  // so it resolves instead of dropping — use a genuinely unknown id here.
+  ok('drops unknown ids', probe("validateTropeResults([{id:'dragons',confidence:0.9},{id:'not-a-real-trope',confidence:0.9}]).length") === 1);
   ok('clamps confidence', (() => {
     const r = probe("validateTropeResults([{id:'dragons',confidence:2},{id:'quest',confidence:-1}])");
     return r[0].confidence === 1 && r[1].confidence === 0;

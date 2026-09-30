@@ -94,6 +94,15 @@ const TropeTaxonomy = {
     return tropeById(id);
   },
 
+  /* v207: resolve a free-text term to a canonical id (alias-aware).
+     Exact ids win; known aliases map to their canonical id; excluded
+     or unknown terms return null. Only canonical ids ever come back —
+     validation and storage stay on the catalog. Works over the merged
+     live list, so DB rows may carry their own aliases/exclusions. */
+  resolveId(term) {
+    return tropeResolveId(term, this.list());
+  },
+
   forGenres(genres) {
     return tropesForGenres(genres, this.list());
   },
@@ -205,6 +214,10 @@ const TROPE_SYSTEM_PROMPT = [
   'STRICT RULES',
   '1. You may ONLY use trope ids from the TAXONOMY list. Never invent,',
   '   rename, merge, or paraphrase ids. If none fit well, return an empty list.',
+  '   Copy each id character-for-character from the list — never emit the',
+  '   display name or a reworded variant ("enemies to lovers" is wrong;',
+  '   "enemies-to-lovers" is right). Anything that is not exactly an id',
+  '   from the list is discarded.',
   '2. Reply with JSON ONLY. No markdown fences, no commentary, no extra keys,',
   '   no reasoning text, no explanations:',
   '   {"tropes": [{"id": "trope-id", "confidence": 0.85}]}',
@@ -290,17 +303,21 @@ function parseTropeResponse(text) {
 }
 
 /* Pure: validate raw model output against the taxonomy. Unknown ids are
-   dropped (the main defense against invented labels), confidence is
-   clamped to 0-1, duplicates removed, capped at 8.
+   dropped (the main defense against invented labels), known aliases are
+   resolved to their canonical id, confidence is clamped to 0-1,
+   duplicates removed, capped at 8.
    v157: validates against the LIVE merged taxonomy, so freshly approved
-   community tropes are accepted without a file update. */
+   community tropes are accepted without a file update.
+   v207: alias-aware — the model often emits the display name or a
+   synonym ("reverse harem"); those now map to the catalog id instead of
+   being silently dropped. Only canonical ids leave this function. */
 function validateTropeResults(raw) {
   const out = [], seen = new Set();
   for (const r of raw || []) {
     if (out.length >= 8) break;
     if (!r || typeof r !== 'object') continue;
-    const id = String(r.id || '').trim().toLowerCase();
-    if (!id || seen.has(id) || !TropeTaxonomy.byId(id)) continue;
+    const id = TropeTaxonomy.resolveId(r.id);
+    if (!id || seen.has(id)) continue;
     let c = Number(r.confidence);
     if (!isFinite(c)) continue;
     c = Math.min(1, Math.max(0, c));

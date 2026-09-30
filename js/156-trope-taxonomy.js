@@ -13,7 +13,10 @@
    Shape: { id, name, description, genres[] }
    - id: stable slug, lowercase alnum + hyphens.
    - genres: subset of TROPE_GENRES — used to filter the prompt per book
-     so a sci-fi blurb never sees romance-only tropes. */
+     so a sci-fi blurb never sees romance-only tropes.
+   v207: TROPE_ALIASES / TROPE_EXCLUSIONS map model-emitted variants to
+   canonical ids (or veto them); tropeResolveId() is the only entry point
+   and returns canonical ids exclusively. */
 
 const TROPE_TAXONOMY_VERSION = 1;
 
@@ -292,6 +295,102 @@ const TROPES = [
 function tropeById(id) {
   if (!id) return null;
   for (const t of TROPES) if (t.id === id) return t;
+  return null;
+}
+
+/* ---------------- Aliases & exclusions (v207) ----------------
+   The model doesn't always emit the exact canonical id — it writes
+   "reverse harem" instead of "why-choose", "morally gray" instead of
+   "morally-grey". Rather than dropping those near-misses (lost tags) or
+   accepting free text (invented tags), validation resolves them here:
+   aliases map a variant to its canonical id, exclusions veto a variant
+   that is too generic to auto-map ("betrayal" is not a double-cross).
+
+   Only canonical ids ever leave the resolver — storage, claims, and the
+   UI never see an alias. Live `tropes` table rows may carry their own
+   `aliases`/`exclusions` arrays (added v207); a row-level array, when
+   present, overrides the bundled map below for that trope. */
+
+const TROPE_ALIASES = {
+  'enemies-to-lovers': ['enemy to lover', 'enemies to lover'],
+  'forced-proximity': ['forced closeness'],
+  'grumpy-x-sunshine': ['grumpy sunshine', 'grumpy/sunshine'],
+  'fated-mates': ['fated mate', 'destined mates'],
+  'fake-dating': ['fake relationship'],
+  'marriage-of-convenience': ['convenience marriage'],
+  'second-chance': ['second chance romance'],
+  'secret-baby': ['hidden baby'],
+  'mafia': ['mob', 'mafia romance', 'organized crime'],
+  'bully': ['bullying', 'bullies'],
+  'stalker': ['stalking'],
+  'kidnapping': ['kidnap'],
+  'captive': ['captor', 'captive/captor', 'captive romance'],
+  'morally-grey': ['morally gray', 'morally gray love interest', 'morally grey love interest'],
+  'age-gap': ['age difference'],
+  'single-dad': ['single father'],
+  'workplace-romance': ['office romance'],
+  'small-town': ['small town romance'],
+  'friends-to-lovers': ['friend to lover'],
+  'royalty': ['royals'],
+  'amnesia': ['memory loss'],
+  'pregnancy': ['unplanned pregnancy', 'pregnant'],
+  'why-choose': ['why choose', 'reverse harem'],
+  'stepbrother': ['step brother'],
+  'biker': ['bikers', 'mc romance', 'motorcycle club'],
+  'vampire': ['vampires'],
+  'werewolf': ['werewolves'],
+  'shifter': ['shifters', 'shapeshifter', 'shapeshifters'],
+  'magic-academy': ['magic school'],
+  'dragons': ['dragon'],
+  'hidden-powers': ['hidden magic'],
+  'political-intrigue': ['court intrigue'],
+  'hard-magic': ['hard magic'],
+  'ai-uprising': ['robot uprising'],
+  'dystopia': ['dystopian'],
+  'dead-mans-switch': ["dead man's switch", 'dead man switch'],
+  'whodunit': ['who dunnit', 'murder mystery'],
+  'locked-room': ['locked room mystery'],
+  'double-cross': ['double cross'],
+  'missing-person': ['missing persons'],
+  'possession': ['possessed', 'demonic possession'],
+  'cosmic-horror': ['lovecraftian'],
+  'war-story': ['military'],
+  'coming-of-age': ['bildungsroman'],
+};
+
+const TROPE_EXCLUSIONS = {
+  /* Terms deliberately never auto-mapped: considered, rejected as too
+     generic. Documented here so nobody re-adds them as aliases. */
+  'double-cross': ['betrayal'],
+  'royalty': ['prince', 'princess'],
+};
+
+/* Pure: normalize a free-text trope term to slug form so "Enemies To
+   Lovers", "enemies_to_lovers" and "enemies-to-lovers" all match. */
+function tropeNormTerm(s) {
+  return String(s || '').toLowerCase().normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/* Pure: resolve a free-text term to a canonical trope id, or null.
+   Order: exact id → alias (unless excluded for that trope). Only
+   canonical ids are ever returned. `pool` defaults to the bundled list;
+   pass the merged live list (whose rows may carry aliases/exclusions)
+   and row-level arrays take precedence over the bundled maps. */
+function tropeResolveId(term, pool) {
+  const n = tropeNormTerm(term);
+  if (!n) return null;
+  const list = pool || TROPES;
+  for (const t of list) if (t && t.id === n) return t.id;
+  for (const t of list) {
+    if (!t || !t.id) continue;
+    const ex = Array.isArray(t.exclusions) ? t.exclusions : (TROPE_EXCLUSIONS[t.id] || []);
+    if (ex.some(x => tropeNormTerm(x) === n)) continue;
+    const al = Array.isArray(t.aliases) ? t.aliases : (TROPE_ALIASES[t.id] || []);
+    if (al.some(a => tropeNormTerm(a) === n)) return t.id;
+  }
   return null;
 }
 
