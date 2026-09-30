@@ -13,7 +13,7 @@
   --line: #3a2b4d;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(20, 16, 26, 0.92);
+  --nav-bg: rgba(20, 16, 26, 1);
   --glow: #2b1b3d;
   --floral-tint: #e5488f;
   --radius: 14px;
@@ -33,7 +33,7 @@
   --line: #e2d4bd;
   --ok: #3e8e52;
   --danger: #c64f4f;
-  --nav-bg: rgba(250, 245, 236, 0.94);
+  --nav-bg: rgba(250, 245, 236, 1);
   --glow: #f0dfc2;
   --floral-tint: #c08a24;
 }
@@ -51,7 +51,7 @@
   --line: #453020;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(23, 16, 10, 0.92);
+  --nav-bg: rgba(23, 16, 10, 1);
   --glow: #3a2415;
   --floral-tint: #d9a44f;
 }
@@ -69,7 +69,7 @@
   --line: #e3d2ac;
   --ok: #3e8e52;
   --danger: #c64f4f;
-  --nav-bg: rgba(247, 239, 220, 0.94);
+  --nav-bg: rgba(247, 239, 220, 1);
   --glow: #ecdcae;
   --floral-tint: #a87b24;
 }
@@ -87,7 +87,7 @@
   --line: #2b3352;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(14, 17, 32, 0.92);
+  --nav-bg: rgba(14, 17, 32, 1);
   --glow: #1c2342;
   --floral-tint: #8b5cf6;
 }
@@ -105,7 +105,7 @@
   --line: #293b2a;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(13, 20, 14, 0.92);
+  --nav-bg: rgba(13, 20, 14, 1);
   --glow: #1a2a1c;
   --floral-tint: #8aa864;
 }
@@ -124,7 +124,7 @@
   --line: #35375c;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(25, 26, 48, 0.92);
+  --nav-bg: rgba(25, 26, 48, 1);
   --glow: #262849;
   --floral-tint: #f0c46c;
 }
@@ -142,7 +142,7 @@
   --line: #4a3040;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(28, 18, 25, 0.92);
+  --nav-bg: rgba(28, 18, 25, 1);
   --glow: #33202b;
   --floral-tint: #d98aa5;
 }
@@ -160,7 +160,7 @@
   --line: #234044;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(11, 20, 22, 0.92);
+  --nav-bg: rgba(11, 20, 22, 1);
   --glow: #16282b;
   --floral-tint: #7fd6c2;
 }
@@ -178,7 +178,7 @@
   --line: #d5dce8;
   --ok: #3e8e52;
   --danger: #c64f4f;
-  --nav-bg: rgba(237, 241, 246, 0.94);
+  --nav-bg: rgba(237, 241, 246, 1);
   --glow: #dce5f0;
   --floral-tint: #8b5cf6;
 }
@@ -674,7 +674,6 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   background: var(--nav-bg);
-  backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
   z-index: 40;
 }
