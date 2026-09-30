@@ -124,17 +124,13 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   ok('bottom nav hidden on gate', q('.bottom-nav').style.display === 'none');
   ok('legacy storage key while signed out', probe('libKey()') === 'spicyshelves.library.v1');
 
-  // Continue offline → library, no gate; choice persists; nav restored.
-  q('#gate-offline').click();
+  // v204: no "Continue offline" — sign-in is required. A legacy offline
+  // flag is ignored and cleaned up; the gate stays.
+  ok('no Continue offline button', !q('#gate-offline'));
+  runInWindow("localStorage.setItem('spicyshelves.offline', '1'); boot();");
   await tick();
-  ok('offline choice opens library', !q('#gate-signin') && !!q('#view .toolbar'));
-  ok('offline flag persisted', lsGet('spicyshelves.offline') === '1');
-  ok('nav restored after leaving gate', q('.bottom-nav').style.display === '');
-
-  // Back to the gate after clearing the flag (simulates next launch).
-  runInWindow("localStorage.removeItem('spicyshelves.offline'); boot();");
-  await tick();
-  ok('gate returns when offline flag cleared', !!q('#gate-signin'));
+  ok('legacy offline flag ignored — gate stays', !!q('#gate-signin') && !q('#view .toolbar'));
+  ok('legacy offline flag cleaned up', lsGet('spicyshelves.offline') === null);
 
   // Sign in with an existing offline library → adopted into the per-user slot.
   runInWindow(`
@@ -174,26 +170,22 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await tick(2);
   ok('logout menu item signs out to the gate', !!q('#gate-signin') && probe('cloudUser') === null);
 
-  // Sign out → gate; the library is handed back to the offline shelf (v136:
-  // signing out must not make the library look deleted).
+  // v204: sign-out returns to the gate; the books stay in the per-user
+  // slot — no hand-back to the offline shelf (signed-out mode is gone).
   await window.cloudSignOut();
   await tick();
   ok('gate shown after sign-out', !!q('#gate-signin'));
-  ok('library handed back to the offline shelf',
-    probe('library.some(b => b.id === "b1")') === true &&
-    lsBooks('spicyshelves.library.v1').some(b => b.id === 'b1'));
-  ok('offline shelf marked as a user-1 hand-back',
-    lsGet('spicyshelves.offline.owner') === 'user-1');
+  ok('offline shelf stays empty after sign-out',
+    lsBooks('spicyshelves.library.v1').length === 0);
+  ok('no owner marker written', lsGet('spicyshelves.offline.owner') === null);
   ok('per-user books kept on device', lsBooks('spicyshelves.library.v2.user-1').some(b => b.id === 'b1'));
 
-  // Second user → clean shelf; the first user's hand-back is NOT adopted.
+  // Second user → clean shelf.
   window.__sbStub.fire('SIGNED_IN', { id: 'user-2', email: 'friend@example.com' });
   await tick(6);
   ok('second user starts with empty shelf', probe('library.length') === 0);
   ok('second user has own storage key', probe('libKey()') === 'spicyshelves.library.v2.user-2');
   ok('first user shelf untouched', lsBooks('spicyshelves.library.v2.user-1').some(b => b.id === 'b1'));
-  ok('hand-back not absorbed into the second user shelf',
-    !lsBooks('spicyshelves.library.v2.user-2').some(b => b.id === 'b1'));
 
   // Sign back in as user-1 → shelf restored from the per-user slot.
   await window.cloudSignOut();
@@ -244,13 +236,16 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await window.cloudSignOut();
   await tick(2);
 
-  // No backend configured → no gate, classic behavior.
+  // v204: no backend configured → the gate says sign-in isn't set up
+  // (no more silent offline library).
   await window.cloudSignOut();
   runInWindow('delete window.SPICY_CONFIG;');
   await window.initCloud();
   runInWindow('boot();');
   await tick();
-  ok('no gate without backend config', !q('#gate-signin') && !!q('#view .toolbar'));
+  ok('gate shown without backend config', !!q('#gate-status') && !q('#view .toolbar'));
+  ok('gate names the missing setup', q('#gate-status').textContent.indexOf('isn\u2019t set up') >= 0);
+  ok('no sign-in form without backend config', !q('#gate-signin'));
   ok('no account initial without a signed-in user', !!q('#menu-btn .ticon'));
 
   console.log(`\n${pass} passed, ${fail} failed`);

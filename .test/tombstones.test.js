@@ -196,8 +196,10 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
     window.eval(`tombstones.some(t => t.id === 'adopted')`));
   runInWindow(`tombstones.push({ id: 'u9dead', at: 2 }); saveTombstones();`);
   runInWindow(`setLocalUser(null);`);
-  ok('signed-out shelf keeps the handed-back tombstones (v136)',
-    window.eval(`tombstones.some(t => t.id === 'u9dead') && tombstones.some(t => t.id === 'adopted')`));
+  ok('v204: sign-out does not hand tombstones back (signed-out mode is gone)',
+    window.eval(`tombstones.length`) === 0);
+  ok('v204: per-user tombstones kept on device',
+    window.eval(`(JSON.parse(localStorage.getItem('spicyshelves.tombstones.v2.user-9')) || []).length`) === 2);
   runInWindow(`setLocalUser('user-9');`);
   ok('user tombstones restored on return',
     window.eval(`tombstones.some(t => t.id === 'u9dead') && tombstones.some(t => t.id === 'adopted')`));

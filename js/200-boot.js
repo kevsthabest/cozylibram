@@ -30,24 +30,20 @@ try {
   ['hc_token', 'gbooks_key', 'sb_url', 'sb_key'].forEach(k => localStorage.removeItem(k));
 } catch (e) {}
 
-// Boot: no backend (or offline chosen) → straight to the library, classic
-// behavior. Backend configured → sign-in gate first; initCloud() enters the
-// app automatically when a session already exists.
+// Boot (v204): signed-out mode is deprecated — the sign-in gate is the only
+// entry point. A persisted session enters the app automatically via
+// initCloud (Supabase reads the session from local storage, so returning
+// users keep working from the on-device cache even while offline). First
+// launch needs connectivity; there is no offline fallback anymore.
 //
 // v202: the library now persists in IndexedDB. One async init (open +
 // migrate + load) runs before anything renders; the legacy localStorage
 // backend (old browsers, test env) boots synchronously exactly like v201.
 function boot() {
-  let offline = false;
-  try { offline = localStorage.getItem(OFFLINE_KEY) === '1'; } catch (e) {}
-  if (!cloudConfigured() || offline) {
-    render();
-    maybeOnboard(); // v127: welcome brand-new libraries
-    // No sign-in gate on this path — kick off the Hardcover auto-sweep directly.
-    setTimeout(autoEnrichSweep, 5000);
-    updateReleaseBadge(); // v149: surface any unseen auto-found releases
-    setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
-  } else renderGate();
+  // v204: the retired offline-mode flags are never honored again — drop any
+  // copies left over from before signed-out mode was deprecated.
+  try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}
+  renderGate();
 }
 
 if (idbDisabled) {

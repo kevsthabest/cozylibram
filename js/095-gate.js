@@ -1,34 +1,51 @@
 'use strict';
 
 /* ---------------- sign-in gate (multi-user) ---------------- */
-// When cloud sync is configured, the app opens on a sign-in gate instead of
-// the library: each user gets their own on-device library (partitioned by
-// user id — see setLocalUser) plus their own cloud rows (RLS). "Continue
-// offline" skips the gate and uses the classic single-device library;
-// Settings → Account can sign in later. Sessions persist, so the gate only
-// appears while signed out.
-const OFFLINE_KEY = 'spicyshelves.offline';
+// Sign-in is required (v204: the "Continue offline" escape hatch is gone).
+// Each user gets their own on-device library (partitioned by user id — see
+// setLocalUser) plus their own cloud rows (RLS). Sessions persist, so the
+// gate only appears while signed out, and returning users keep working from
+// the on-device cache when offline. A pre-v204 offline library is adopted
+// into the account on first sign-in — see setLocalUser.
 let gateEnteredUid = null;
 
 function renderGate() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
+  const configured = cloudConfigured();
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+  const shelfCount = (typeof library !== 'undefined' && library) ? library.length : 0;
+  let status;
+  if (!configured) {
+    status = 'Sign-in isn\u2019t set up on this server yet.';
+  } else if (!online) {
+    status = 'You\u2019re offline \u2014 connect to the internet to sign in.';
+  } else if (shelfCount > 0) {
+    // Pre-v204 offline library waiting for adoption on first sign-in.
+    status = 'You have ' + shelfCount + ' book' + (shelfCount === 1 ? '' : 's') +
+      ' on this device \u2014 sign in to bring ' + (shelfCount === 1 ? 'it' : 'them') +
+      ' into your account.';
+  } else {
+    status = 'Sign in to sync your shelves across devices.';
+  }
   setView(
     '<div class="gate-wrap"><div class="gate-card">' +
     '<h1 class="serif">Cozy Libram</h1>' +
     '<p class="note">her dark little library</p>' +
-    '<p class="note" id="gate-status">Sign in to sync your shelves across devices.</p>' +
-    '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
-    '<input id="gate-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password">' +
-    '<button class="btn block" id="gate-signin">Sign in</button>' +
-    '<button class="btn ghost block" id="gate-show-signup">New here? Create account</button>' +
-    (window.isSecureContext
-      ? '<button class="btn ghost block" id="gate-google">Sign in with Google</button>'
+    '<p class="note" id="gate-status">' + esc(status) + '</p>' +
+    (configured ?
+      '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
+      '<input id="gate-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password">' +
+      '<button class="btn block" id="gate-signin">Sign in</button>' +
+      '<button class="btn ghost block" id="gate-show-signup">New here? Create account</button>' +
+      (window.isSecureContext
+        ? '<button class="btn ghost block" id="gate-google">Sign in with Google</button>'
+        : '') +
+      '<button class="btn ghost block gate-offline" id="gate-forgot" style="margin-top:2px">Forgot password?</button>'
       : '') +
-    '<button class="btn ghost block gate-offline" id="gate-offline">Continue offline →</button>' +
-    '<button class="btn ghost block gate-offline" id="gate-forgot" style="margin-top:2px">Forgot password?</button>' +
     '</div></div>'
   );
+  if (!configured) return;
   const em = () => document.getElementById('gate-email').value.trim();
   const pw = () => document.getElementById('gate-pass').value;
   const busy = (msg) => {
@@ -43,12 +60,6 @@ function renderGate() {
   document.getElementById('gate-show-signup').addEventListener('click', renderGateSignup);
   const g = document.getElementById('gate-google');
   if (g) g.addEventListener('click', () => { busy('Redirecting to Google…'); cloudGoogle(); });
-  document.getElementById('gate-offline').addEventListener('click', () => {
-    try { localStorage.setItem(OFFLINE_KEY, '1'); } catch (e) {}
-    hideGate();
-    render();
-    maybeOnboard(); // v127: welcome brand-new libraries
-  });
   document.getElementById('gate-forgot').addEventListener('click', renderGateReset);
 }
 
@@ -154,7 +165,8 @@ function hideGate() {
 async function enterApp(user) {
   if (gateEnteredUid === user.id) return;
   gateEnteredUid = user.id;
-  try { localStorage.removeItem(OFFLINE_KEY); } catch (e) {}
+  // v204: drop the retired offline-mode flags (the choice no longer exists).
+  try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}
   // v202: async in the IndexedDB backend — the slot must be loaded before render().
   // A failed switch is logged (not thrown): enterApp is fire-and-forget.
   try { await setLocalUser(user.id); }

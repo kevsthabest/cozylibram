@@ -59,15 +59,14 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   window.document.dispatchEvent(esc); await tick();
   ok('Escape closes the menu', q('#menu-pop').hidden);
 
-  // Signed out WITH backend + offline flag → Settings + Sign in.
+  // v204: signed-out mode is deprecated — even with a backend configured and
+  // a legacy offline flag, the signed-out menu stays Settings-only (there is
+  // no Sign in item; the gate is the sign-in screen) and boot() ignores the flag.
   runInWindow('window.SPICY_CONFIG = { supabaseUrl: "https://xyz.supabase.co", supabaseAnonKey: "k" };');
   window.localStorage.setItem('spicyshelves.offline', '1');
   probe('renderTopbar()');
   q('#menu-btn').click(); await tick();
-  ok('offline menu has Settings and Sign in', JSON.stringify(menuIds()) === '["settings","signin"]');
-  q('#menu-pop [data-m="signin"]').click(); await tick();
-  ok('Sign in clears the offline flag and shows the gate',
-    lsGet('spicyshelves.offline') === null && !!q('#gate-signin'));
+  ok('legacy offline flag: signed-out menu still Settings-only', JSON.stringify(menuIds()) === '["settings"]');
   runInWindow('delete window.SPICY_CONFIG;');
   window.localStorage.removeItem('spicyshelves.offline');
   probe('renderTopbar()');

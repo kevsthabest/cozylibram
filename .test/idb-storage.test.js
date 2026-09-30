@@ -254,22 +254,24 @@ function check(name, cond) {
       window.localStorage.getItem('spicyshelves.library.v1') !== null);
   }
 
-  // --- Scenario 6: sign-out hands the library back to the offline slot ---
+  // --- Scenario 6 (v204): sign-out does NOT hand the library back ---
   {
     const window = makeWindow();
     const fake = window.indexedDB;
     await ready(window);
-    window.eval(`library.push(${JSON.stringify(book('h1', 'Hand Back'))}); saveLibrary({ noCloud: true });`);
+    window.eval(`library.push(${JSON.stringify(book('h1', 'Keep Me'))}); saveLibrary({ noCloud: true });`);
     await window.eval('storageDrain()');
     await window.eval(`setLocalUser('user-9')`);
     await window.eval(`setLocalUser(null)`); // sign out
 
-    check('hand-back: books return to the offline slot',
-      fake.getAll('cozylibram.offline', 'books').some(b => b.id === 'h1'));
-    check('hand-back: per-user slot keeps its copy',
+    check('sign-out: offline slot stays empty (no hand-back)',
+      fake.getAll('cozylibram.offline', 'books').length === 0);
+    check('sign-out: per-user slot keeps its copy',
       fake.getAll('cozylibram.user-9', 'books').some(b => b.id === 'h1'));
-    check('hand-back: offline slot is marked unowned',
-      window.localStorage.getItem('spicyshelves.localuser.owner.v1') === null);
+    check('sign-out: in-memory library is empty',
+      window.eval(`library.length`) === 0);
+    check('sign-out: no owner marker written',
+      window.localStorage.getItem('spicyshelves.offline.owner') === null);
   }
 
   // --- Scenario 7: reload boots from IDB, not localStorage ---
@@ -291,26 +293,26 @@ function check(name, cond) {
 
   // --- Scenario 8: the migration marker survives slot clearing ------------
   // Adoption clears the offline IDB slot; without the per-slot marker the
-  // next sign-out would re-import the read-only legacy key, skip the v136
-  // hand-back branch, and leak one user's books to the next sign-in.
+  // next slot load would re-import the read-only legacy key. (v204: there is
+  // no hand-back branch anymore — sign-out leaves the offline slot alone.)
   {
     const window = makeWindow();
     const fake = window.indexedDB;
     seedLegacy(window);
     await ready(window);
     await window.eval(`setLocalUser('user-9')`); // adoption: offline -> user-9
-    await window.eval(`setLocalUser(null)`);     // sign out: hand-back
+    await window.eval(`setLocalUser(null)`);     // sign out: no hand-back
 
     check('marker: offline slot not re-imported from legacy on sign-out',
-      fake.getAll('cozylibram.offline', 'books').length === 2);
-    check('marker: hand-back branch ran (owner recorded)',
-      window.localStorage.getItem('spicyshelves.offline.owner') === 'user-9');
+      fake.getAll('cozylibram.offline', 'books').length === 0);
+    check('marker: no owner marker written',
+      window.localStorage.getItem('spicyshelves.offline.owner') === null);
     const migLogs = window.eval(`AppLog.entries('info').map(e => e.msg).join('\\n')`);
     check('marker: legacy migration ran exactly once',
       (migLogs.match(/migrated 2 books/g) || []).length === 1);
 
-    await window.eval(`setLocalUser('user-X')`); // different user: must not adopt
-    check('marker: different user does not adopt the hand-back',
+    await window.eval(`setLocalUser('user-X')`); // different user: clean shelf
+    check('marker: different user starts empty',
       window.eval(`library.length`) === 0 &&
       fake.getAll('cozylibram.user-X', 'books').length === 0);
     check('marker: legacy keys still untouched',

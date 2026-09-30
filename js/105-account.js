@@ -237,10 +237,8 @@ function menuItems() {
     return items;
   }
   const items = [{ id: 'settings', icon: 'gear', label: 'Settings' }];
-  // The gate itself is the sign-in screen — no need for a redundant item there.
-  if (cloudConfigured() && !document.getElementById('gate-signin')) {
-    items.push({ id: 'signin', icon: 'key', label: 'Sign in' });
-  }
+  // v204: signed-out mode is gone — a signed-out user is always on the gate,
+  // which is the sign-in screen, so there is no separate menu item for it.
   return items;
 }
 function openMenu() {
@@ -263,10 +261,6 @@ function menuAction(id) {
   if (id === 'profile') go('profile');
   else if (id === 'settings') go('settings');
   else if (id === 'observatory') go('admin'); // v119: admin-gated in renderAdmin()
-  else if (id === 'signin') {
-    try { localStorage.removeItem(OFFLINE_KEY); } catch (e) {}
-    renderGate();
-  }
   else if (id === 'logout') {
     if (confirm('Sign out of ' + cloudUser.email + '?\nYour books stay on this device.')) cloudSignOut();
   }

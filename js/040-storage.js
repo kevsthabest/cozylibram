@@ -131,9 +131,8 @@ async function idbOpenSlot(uid) {
    A per-slot `legacyMigrationDone` kv marker records that migration ran: an
    emptied slot (e.g. the offline slot after first-sign-in adoption clears it)
    must NOT re-import the read-only legacy key on a later visit — without the
-   marker, sign-out would resurrect the legacy copy and skip the v136
-   hand-back (OFFLINE_OWNER_KEY) branch. The marker is written only after the
-   copies and the book-count verification succeed. */
+   marker, sign-out would resurrect the legacy copy. The marker is written
+   only after the copies and the book-count verification succeed. */
 async function migrateSlotFromLegacy(db) {
   if (await idbCountBooks(db) > 0) return false; // already on IDB
   if (await idbKvGet(db, 'legacyMigrationDone')) return false; // migrated before; slot deliberately empty
@@ -340,37 +339,24 @@ function setLocalUserLegacy(uid) {
   const hadBooks = library.length > 0;
   const hadTombs = tombstones.length > 0;
   const hadFloor = tombstoneFloor > 0; // v142
-  const owner = offlineOwner();
   localUid = uid || null;
   bookSnapshots.clear();
   let next = loadLegacyLibrary();
-  // The offline shelf is adoptable unless it's another user's hand-back.
-  const adoptable = !owner || owner === uid;
-  if (uid && next.length === 0 && hadBooks && adoptable) {
+  // v204: signed-out mode is deprecated — the only offline shelf left is a
+  // pre-v204 library, which the first sign-in adopts into the new account's
+  // slot. (The v136 sign-out hand-back is gone: signing out no longer copies
+  // anything into the shared offline slot.)
+  if (uid && next.length === 0 && hadBooks) {
     next = library;
     try {
       localStorage.setItem(libKey(), JSON.stringify(next));
       localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(OFFLINE_OWNER_KEY);
-    } catch (e) {}
-  } else if (!uid && next.length === 0 && hadBooks) {
-    // v136: signing out hands the library back to the shared offline slot
-    // instead of stranding it in the per-user slot (which made the library
-    // look deleted after sign-out / "Continue offline"). The per-user slot
-    // keeps its copy too, so signing back in still finds it there.
-    next = library;
-    try {
-      localStorage.setItem(libKey(), JSON.stringify(next));
-      localStorage.setItem(tombKey(), JSON.stringify(tombstones));
-      localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); // v142
-      localStorage.setItem(upNextKey(), JSON.stringify(upNext));
-      if (prevUid) localStorage.setItem(OFFLINE_OWNER_KEY, prevUid);
     } catch (e) {}
   }
   library = next;
   library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
   let nextTombs = loadLegacyTombstones();
-  if (uid && nextTombs.length === 0 && hadTombs && adoptable) {
+  if (uid && nextTombs.length === 0 && hadTombs) {
     nextTombs = tombstones;
     try {
       localStorage.setItem(tombKey(), JSON.stringify(nextTombs));
@@ -381,7 +367,7 @@ function setLocalUserLegacy(uid) {
   // v142: the floor roams with the tombstones on first-sign-in adoption, and
   // the per-user slot keeps its own otherwise.
   let nextFloor = loadLegacyTombFloor();
-  if (uid && nextFloor === 0 && hadFloor && adoptable) {
+  if (uid && nextFloor === 0 && hadFloor) {
     nextFloor = tombstoneFloor;
     try {
       localStorage.setItem(tombFloorKey(), String(nextFloor));
@@ -401,7 +387,6 @@ async function setLocalUserIdb(uid) {
   const hadBooks = prev.library.length > 0;
   const hadTombs = prev.tombstones.length > 0;
   const hadFloor = prev.tombstoneFloor > 0;
-  const owner = offlineOwner();
   // Belt-and-braces flush of the outgoing slot (write-through already did it).
   try { await idbPersistSlot(prevUid, prev); }
   catch (e) { try { AppLog.error('storage', 'slot flush failed: ' + (e && e.message)); } catch (_) {} }
@@ -410,41 +395,28 @@ async function setLocalUserIdb(uid) {
   currentDb = await idbOpenSlot(localUid);
   await migrateSlotFromLegacy(currentDb);
   await loadSlotState(currentDb);
-  // The offline shelf is adoptable unless it's another user's hand-back.
-  // (v136/v142 semantics, now across IDB slots instead of localStorage keys.)
-  const adoptable = !owner || owner === uid;
-  if (uid && library.length === 0 && hadBooks && adoptable) {
+  // v204: signed-out mode is deprecated — the only offline shelf left is a
+  // pre-v204 library, which the first sign-in adopts into the new account's
+  // slot. (The v136 sign-out hand-back is gone: signing out leaves the
+  // shared offline slot alone; the per-user slot keeps its copy.)
+  if (uid && library.length === 0 && hadBooks) {
     // First sign-in: the offline shelf moves into the new account's slot.
     library = prev.library; tombstones = prev.tombstones;
     tombstoneFloor = prev.tombstoneFloor; upNext = prev.upNext;
     await idbPersistSlot(localUid, { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext });
     await idbClearBooks(await idbOpenSlot(prevUid)).catch(() => {}); // moved, not copied
-    try { localStorage.removeItem(OFFLINE_OWNER_KEY); } catch (e) {}
     // v202: legacy localStorage partition keys are read-only — kept as the
     // grace-period fallback, not deleted.
-  } else if (!uid && library.length === 0 && hadBooks) {
-    // v136: signing out hands the library back to the shared offline slot.
-    // The per-user slot keeps its copy too, so signing back in finds it.
-    library = prev.library; tombstones = prev.tombstones;
-    tombstoneFloor = prev.tombstoneFloor; upNext = prev.upNext;
-    if (prevUid) { try { localStorage.setItem(OFFLINE_OWNER_KEY, prevUid); } catch (e) {} }
-    await idbPersistSlot(localUid, { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext });
   }
   snapshotBooks();
 }
 
-// v136: marks whose sign-out hand-back the offline shelf currently holds, so
-// a *different* user signing in later won't adopt someone else's books.
-// Tiny flag — stays in localStorage.
-const OFFLINE_OWNER_KEY = 'spicyshelves.offline.owner';
-function offlineOwner() {
-  try { return localStorage.getItem(OFFLINE_OWNER_KEY); } catch (e) { return null; }
-}
-
-/* ---------------- library recovery (v136) ---------------- */
+/* ---------------- library recovery ---------------- */
 // Every on-device library partition: the shared offline slot plus one per
 // signed-in user. Settings → "Find my library" lists them so a library that
-// looks empty (e.g. after signing out) can be found and restored.
+// looks empty can be found and restored. (v136 introduced this for the
+// sign-out hand-back; v204 removed the hand-back with signed-out mode, but
+// the recovery UI stays as a grace-period safety net.)
 // v202: lists the legacy localStorage partitions (grace-period fallback);
 // the live data now lives in IndexedDB.
 function libraryPartitions() {

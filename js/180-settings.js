@@ -364,9 +364,11 @@ function renderSettings() {
     toast('Shelves cleared');
   });
 
-  // v136: "Find my library" — lists every on-device library partition (one
+  // "Find my library" — lists every on-device library partition (one
   // per sign-in plus the offline shelf) with book counts, restores any of
   // them into the open library, and can pull the cloud copy when signed in.
+  // (v136; kept as a grace-period safety net after v204 removed the
+  // sign-out hand-back with signed-out mode.)
   document.getElementById('bk-find').addEventListener('click', () => {
     const box = document.getElementById('bk-found');
     const parts = libraryPartitions();
