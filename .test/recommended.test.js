@@ -126,6 +126,61 @@ const near = (a, b, eps) => Math.abs(a - b) < (eps || 1e-9);
   runInWindow('window.__p2 = (async () => { await recoDismiss("hc:43"); return (await recoDismissedSet()).size; })();');
   ok('dismiss: accumulates', await window.__p2 === 2);
 
+  // ---- v214: recoItemWeight — favorites anchor the profile ----
+  ok('weight: favorite, no rating → 1.0', get('recoItemWeight({favorite:true})') === 1.0);
+  ok('weight: favorite rated 5 → 1.0', get('recoItemWeight({favorite:true,rating:5})') === 1.0);
+  ok('weight: favorite rated 3 → 0.9', near(get('recoItemWeight({favorite:true,rating:3})'), 0.9));
+  ok('weight: favorite rated 1 → 0.9', near(get('recoItemWeight({favorite:true,rating:1})'), 0.9));
+  ok('weight: read rated 4 → 0.8', near(get('recoItemWeight({rating:4})'), 0.8));
+  ok('weight: read unrated → 0.6', near(get('recoItemWeight({rating:0})'), 0.6));
+  ok('weight: null → 0.6', near(get('recoItemWeight(null)'), 0.6));
+
+  // ---- v214: favorites in the taste profile ----
+  // favorite [1,0] (w=1.0) + 5★ read [0,1] (w=1.0) → [0.5, 0.5]
+  const pvf = get('tasteProfileVector([{vector:[1,0],favorite:true},{vector:[0,1],rating:5}])');
+  ok('prof: favorite + 5★ equal weights', near(pvf[0], 0.5) && near(pvf[1], 0.5));
+  // favorite-only profile ≈ that book's embedding
+  const pvf2 = get('tasteProfileVector([{vector:[1,2],favorite:true}])');
+  ok('prof: favorite-only ≈ its embedding', near(pvf2[0], 1) && near(pvf2[1], 2));
+  // favorite rated 3 (w=0.9) vs 5★ read [0,1] (w=1.0): [0.9/1.9, 1/1.9]
+  const pvf3 = get('tasteProfileVector([{vector:[1,0],favorite:true,rating:3},{vector:[0,1],rating:5}])');
+  ok('prof: favorite rated 3 weight', near(pvf3[0], 0.9 / 1.9) && near(pvf3[1], 1 / 1.9));
+
+  // ---- v214: mmrDiversify ----
+  // 6 near-identical books by Ann A (sims .95–.90) vs 6 diverse others (.85–.80).
+  // Without MMR Ann A would sweep; expect ≤3 of her and a spread list.
+  const mmrIn = [];
+  for (let i = 0; i < 6; i++) {
+    mmrIn.push({ c: { title: 'A' + i, authors: ['Ann A'] }, sim: 0.95 - i * 0.01, vector: [1, 0.01 * i] });
+  }
+  ['Bob B', 'Cat C', 'Dan D', 'Eli E', 'Fay F', 'Gus G'].forEach((a, i) => {
+    mmrIn.push({ c: { title: a, authors: [a] }, sim: 0.85 - i * 0.01, vector: [0.01 * i, 1] });
+  });
+  runInWindow('window.__mmr = mmrDiversify(' + JSON.stringify(mmrIn) + ', 12);');
+  const mmrOut = window.__mmr;
+  const annCount = mmrOut.filter(r => r.c.authors[0] === 'Ann A').length;
+  ok('mmr: per-author cap enforced', annCount <= 3);
+  ok('mmr: keeps 9 of 12 (3 A + 6 others)', mmrOut.length === 9);
+  ok('mmr: diverse authors present', mmrOut.some(r => r.c.authors[0] === 'Gus G'));
+  ok('mmr: top pick still highest sim', mmrOut[0].c.title === 'A0');
+  ok('mmr: second pick spreads (not A1)',
+    mmrOut[1].c.authors[0] !== 'Ann A',
+    'second pick was ' + mmrOut[1].c.title);
+  // fallback path (sim null): cap still applies, order preserved
+  const fbIn = [];
+  for (let i = 0; i < 8; i++) fbIn.push({ c: { title: 'F' + i, authors: ['Solo S'] }, sim: null });
+  runInWindow('window.__fmmr = mmrDiversify(' + JSON.stringify(fbIn) + ', 12);');
+  const fbOut = window.__fmmr;
+  ok('mmr fallback: cap enforced', fbOut.length === 3);
+  ok('mmr fallback: order preserved', fbOut[0].c.title === 'F0' && fbOut[2].c.title === 'F2');
+  // limit + empty edges
+  const manyIn = [];
+  for (let i = 0; i < 20; i++) manyIn.push({ c: { title: 'M' + i, authors: ['Auth' + i] }, sim: 1 - i * 0.01, vector: [i, 1] });
+  runInWindow('window.__lmmr = mmrDiversify(' + JSON.stringify(manyIn) + ', 12);');
+  ok('mmr: limit respected', window.__lmmr.length === 12);
+  ok('mmr: empty → []', get('mmrDiversify([], 12).length') === 0);
+  ok('mmr: null → []', get('mmrDiversify(null, 12).length') === 0);
+
   console.log('\\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

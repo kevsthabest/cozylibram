@@ -436,18 +436,22 @@ function renderDiscover() {
     c.addEventListener('click', () => covenJump(c.dataset.cj)));
 }
 
-/* ---------------- Recommended for you (v213) ----------------
+/* ---------------- Recommended for you (v213, diversity v214) ----------------
    Embeddings-based recommendations. A taste profile is built from the
    1024-dim bge-m3 embeddings stored on works (v213 migration): the
-   rating-weighted mean of her read books' vectors. Candidates are fresh
-   books by her most-loved authors (4★+ reads) via the Hardcover books
-   table; their embed texts go through /api/embed and rank by cosine
-   similarity to the profile in JS.
+   weighted mean of her read books' and favorites' vectors (v214: favorites
+   anchor the profile at weight 1.0 so a thin rating history still works).
+   Candidates are fresh books by her most-loved authors (4★+ reads) via the
+   Hardcover books table; their embed texts go through /api/embed and rank
+   by cosine similarity to the profile in JS, then v214 re-ranks with
+   Maximal Marginal Relevance (λ=0.7) plus a max-3-per-author cap so one
+   prolific author can't sweep the whole list.
 
    Graceful degradation: with no work embeddings yet (backfill pending) or
    when the embed proxy is unreachable, candidates still show, ranked by
-   loved-author order, with a "warming up" note. Dismissals persist in the
-   IDB kv store ('reco_dismissed'), localStorage fallback. */
+   loved-author order (still capped per author), with a "warming up" note.
+   Dismissals persist in the IDB kv store ('reco_dismissed'), localStorage
+   fallback. */
 
 // Pure: embed text for one book. Shared with scripts/backfill-embeddings.js
 // (loaded via vm), so the client and the backfill can never drift.
@@ -481,9 +485,18 @@ function cosineSim(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-// Pure: rating-weighted mean of embedding vectors. items: [{vector, rating}];
-// weight = (rating || 3) / 5 so unrated read books count neutrally. Vectors
-// with a different dimensionality than the first valid one are dropped.
+// Pure: profile weight for one book. Favorites anchor the profile (1.0, or
+// max(rating/5, 0.9) when also rated); rated reads use rating/5; unrated
+// reads count neutrally at 0.6.
+function recoItemWeight(it) {
+  const r = (it && it.rating) || 0;
+  if (it && it.favorite) return it.rating ? Math.max(r / 5, 0.9) : 1.0;
+  return (r || 3) / 5;
+}
+
+// Pure: rating-weighted mean of embedding vectors. items: [{vector, rating,
+// favorite}]; weight comes from recoItemWeight. Vectors with a different
+// dimensionality than the first valid one are dropped.
 function tasteProfileVector(items) {
   const valid = (items || []).filter(it => it && Array.isArray(it.vector) && it.vector.length &&
     it.vector.every(n => typeof n === 'number' && Number.isFinite(n)));
@@ -494,13 +507,54 @@ function tasteProfileVector(items) {
   const acc = new Array(dims).fill(0);
   let wsum = 0;
   for (const it of same) {
-    const w = (it.rating || 3) / 5;
+    const w = recoItemWeight(it);
     if (w <= 0) continue;
     wsum += w;
     for (let i = 0; i < dims; i++) acc[i] += it.vector[i] * w;
   }
   if (wsum <= 0) return null;
   return acc.map(v => v / wsum);
+}
+
+const RECO_FINAL_COUNT = 12; // cards shown
+const RECO_AUTHOR_CAP = 3;   // max books per author in the final list
+const RECO_MMR_LAMBDA = 0.7; // similarity vs. diversity trade-off
+
+// Pure: diversity re-ranking over pre-sorted [{c, sim, vector?}] (sim may be
+// null on the non-embedded fallback path). Iteratively picks the candidate
+// maximizing λ·sim − (1−λ)·maxSimToPicked (candidate similarity via cosine
+// of their embeddings), skipping candidates whose primary author already hit
+// RECO_AUTHOR_CAP. Returns up to `limit` items.
+function mmrDiversify(ranked, limit) {
+  const cap = RECO_AUTHOR_CAP, lambda = RECO_MMR_LAMBDA;
+  const key = c => String((c && c.authors && c.authors[0]) || (c && c.loveAuthor) || '').trim().toLowerCase();
+  const remaining = (ranked || []).slice();
+  const picked = [], authorCount = {};
+  const n = limit || RECO_FINAL_COUNT;
+  while (picked.length < n && remaining.length) {
+    let best = -1, bestScore = -Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const r = remaining[i];
+      if ((authorCount[key(r.c)] || 0) >= cap) continue;
+      const sim = (r.sim == null ? 0 : r.sim);
+      let red = 0;
+      if (r.vector) {
+        for (const p of picked) {
+          if (!p.vector) continue;
+          const s = cosineSim(r.vector, p.vector);
+          if (s > red) red = s;
+        }
+      }
+      const score = lambda * sim - (1 - lambda) * red;
+      if (score > bestScore) { bestScore = score; best = i; }
+    }
+    if (best < 0) break; // everything left is cap-blocked
+    const r = remaining.splice(best, 1)[0];
+    const k = key(r.c);
+    authorCount[k] = (authorCount[k] || 0) + 1;
+    picked.push(r);
+  }
+  return picked;
 }
 
 // Pure: pgvector comes back from PostgREST as a "[0.1, ...]" string;
@@ -742,9 +796,11 @@ async function refreshRecommendations() {
   if (!box) return;
   box.innerHTML = '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
   try {
-    const read = library.filter(b => b && b.status === 'read');
-    if (!read.length) {
-      box.innerHTML = '<p class="note">Read and rate a few books first \u2014 your taste profile grows from the books you finish.</p>';
+    // v214: profile books are finished reads AND favorites (favorites anchor
+    // the profile at top weight, so a thin rating history still works).
+    const profBooks = library.filter(b => b && (b.status === 'read' || b.favorite));
+    if (!profBooks.length) {
+      box.innerHTML = '<p class="note">Finish a few books or tap \u2661 on some favorites \u2014 your taste profile grows from the books you love.</p>';
       return;
     }
     const authors = topLovedAuthors(6);
@@ -756,16 +812,17 @@ async function refreshRecommendations() {
       box.innerHTML = '<p class="note">Connect Hardcover in Settings \u2192 Hardcover to browse recommendations.</p>';
       return;
     }
-    // Taste profile: rating-weighted mean of her read books' work embeddings.
+    // Taste profile: weighted mean of her read books' and favorites'
+    // work embeddings (v214: favorites included at top weight).
     const withIds = [];
-    for (const b of read) {
+    for (const b of profBooks) {
       let wid = null;
       try { wid = await resolveWork(b); } catch (e) {}
       if (wid) withIds.push({ book: b, workId: wid });
     }
     const emb = await fetchWorkEmbeddings(withIds.map(x => x.workId));
     const profile = tasteProfileVector(withIds.map(x => ({
-      vector: emb[x.workId] || null, rating: x.book.myRating || 0,
+      vector: emb[x.workId] || null, rating: x.book.myRating || 0, favorite: !!x.book.favorite,
     })));
     const dismissed = await recoDismissedSet();
     const lovedIds = recoLovedTropeIds();
@@ -780,16 +837,19 @@ async function refreshRecommendations() {
       try {
         const vectors = await embedTextsClient(cands.map(c =>
           buildEmbedText({ title: c.title, authors: c.authors, description: c.description })));
-        ranked = cands.map((c, i) => ({ c: c, sim: cosineSim(profile, vectors[i]) }))
-          .sort((x, y) => y.sim - x.sim).slice(0, 12);
+        // v214: MMR re-ranking spreads the list across authors instead of
+        // letting one prolific loved author sweep every slot.
+        ranked = mmrDiversify(cands
+          .map((c, i) => ({ c: c, sim: cosineSim(profile, vectors[i]), vector: vectors[i] }))
+          .sort((x, y) => y.sim - x.sim), RECO_FINAL_COUNT);
       } catch (e) { ranked = null; /* proxy down: fall through to the fallback */ }
     }
     if (!ranked) {
       const rank = {};
       authors.forEach((a, i) => { rank[a] = i; });
-      ranked = cands.slice()
+      ranked = mmrDiversify(cands.slice()
         .sort((x, y) => ((rank[x.loveAuthor] == null ? 99 : rank[x.loveAuthor]) - (rank[y.loveAuthor] == null ? 99 : rank[y.loveAuthor])))
-        .slice(0, 12).map(c => ({ c: c, sim: null }));
+        .map(c => ({ c: c, sim: null })), RECO_FINAL_COUNT);
     }
     renderRecoResults(ranked, lovedIds, !!profile && ranked[0] && ranked[0].sim != null);
   } catch (e) {
