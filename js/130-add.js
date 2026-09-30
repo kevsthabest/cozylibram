@@ -125,6 +125,7 @@ function scanPanelHTML() {
     '<div id="scan-result"></div>' +
     '<button class="btn ghost block" id="scan-toggle">Start camera</button>' +
     '<button class="btn ghost block" id="scan-photo">' + icon('camera') + ' Snap a barcode photo</button>' +
+    '<button class="btn ghost block vision-btn" id="scan-vision">' + icon('sparkles') + ' Read the cover with AI</button>' +
     '<input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none">' +
     (insecure ? '<p class="note">' + icon('warn') + ' Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
     '<p class="note">Tip: on a phone, install this as an app (Share → Add to Home Screen) for the full experience.</p>';
@@ -137,6 +138,9 @@ function wireScanPanel(mount) {
   });
   const file = mount.querySelector('#scan-file');
   mount.querySelector('#scan-photo').addEventListener('click', () => file.click());
+  // v197: vision cover reading — ISBN off the back cover, or title/author
+  // when no ISBN is printed.
+  mount.querySelector('#scan-vision').addEventListener('click', () => visionReadCover());
   file.addEventListener('change', () => {
     if (file.files && file.files[0]) {
       const f = file.files[0];
@@ -371,6 +375,9 @@ async function isbnLookupUI(isbn, mount, source) {
         // v193: a failed scan shouldn't force the user to rebuild the panel —
         // one tap restarts the camera right here.
         (src === 'barcode' ? '<button class="btn small" id="rc-rescan">Scan again</button>' : '') +
+        // v197: the highest-value spot for vision reading — the exact moment
+        // a UPC-only or unknown barcode needs the printed ISBN instead.
+        (src === 'barcode' ? '<button class="btn small vision-btn" id="rc-vision">Read the ISBN off the cover</button>' : '') +
         '</div></div></div>';
       document.getElementById('rc-manual').addEventListener('click', () => {
         const shell = normalizeVolume({ volumeInfo: { title: '', authors: [] } }, isbn);
@@ -378,6 +385,8 @@ async function isbnLookupUI(isbn, mount, source) {
       });
       const rescan = document.getElementById('rc-rescan');
       if (rescan) rescan.addEventListener('click', () => startScan());
+      const rcVision = document.getElementById('rc-vision');
+      if (rcVision) rcVision.addEventListener('click', () => visionReadCover());
     }
   } catch (e) {
     mount.innerHTML = '<p class="note">Lookup failed — check your connection and try again.</p>';

@@ -98,6 +98,30 @@ def load_trope_cfg():
 TROPE_MODEL_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$')
 
 
+def load_vision_cfg():
+    """Vision cover-reading config (v197). All server-side: the browser only
+    learns whether a key is configured, never the key itself.
+
+    server-config.json keys: vision_api_key (OpenAI), vision_model
+    (default gpt-4o-mini)."""
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            d = json.load(f)
+        return {'key': (d.get('vision_api_key') or '').strip(),
+                'model': (d.get('vision_model') or 'gpt-4o-mini').strip()}
+    except Exception:
+        return {'key': '', 'model': 'gpt-4o-mini'}
+
+
+VISION_PROMPT_SINGLE = (
+    'You are reading a photo of a book cover. Return a JSON object with '
+    'exactly these keys: "isbn" (the printed ISBN digits with no dashes or '
+    'spaces, or null if no ISBN is printed \u2014 pre-1970 books have none), '
+    '"title" (or null), "author" (or null). The ISBN is usually printed near '
+    'the barcode on the back cover. Prefer the ISBN when one is visible. '
+    'Reply with ONLY the JSON object, no other text.')
+
+
 def config_js_body():
     """The /config.js payload: capability flags, not secrets.
 
@@ -147,6 +171,7 @@ def cover_proxy_host_blocked(host):
 _RATE_BUCKETS = {}
 _RATE_LIMITS = {
     'trope-infer': (30, 60),    # each hit can spend up to 4000 LLM tokens
+    'read-cover': (20, 60),     # v197: vision calls cost more than text
     'hardcover': (120, 60),
     'gbooks': (120, 60),
     'trope-models': (60, 60),
@@ -227,6 +252,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == '/api/trope-infer':
             self.handle_api_trope_infer()
+            return
+        if path == '/api/read-cover':
+            self.handle_api_read_cover()
             return
         self.send_error(404)
 
@@ -539,6 +567,113 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_error(502, 'trope inference failed')
             except Exception:
                 pass
+
+    def handle_api_read_cover(self):
+        """POST /api/read-cover {image, mode:'single'} → vision model reads
+        the printed ISBN (digits only), falling back to title/author when no
+        ISBN is printed. Mirrors functions/api/read-cover.js. The OpenAI key
+        comes from server-config.json (vision_api_key) — the browser never
+        sees it. v198 will add mode 'shelf' for bulk spine reading.
+
+        Guards: POST only, mode allowlist, image is a capped data URL or raw
+        base64 (the client downscales to ~1024px first). The client validates
+        any returned ISBN's check digit before trusting it.
+        """
+        if not self._check_rate('read-cover'):
+            return
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+            raw = self.rfile.read(min(length, 4 * 1024 * 1024)).decode(
+                'utf-8', 'replace')
+            body = json.loads(raw)
+            if body.get('mode') != 'single':
+                self.send_error(400, 'bad request')
+                return
+            image = body.get('image')
+            if not isinstance(image, str) or not image or \
+                    len(image) > 3500000:
+                self.send_error(400, 'bad request')
+                return
+            if not image.startswith('data:'):
+                image = 'data:image/jpeg;base64,' + image
+            if not re.match(r'^data:image/(jpeg|png|webp);base64,', image):
+                self.send_error(400, 'bad request')
+                return
+            vc = load_vision_cfg()
+            if not vc['key']:
+                self._send_json(503, {'error':
+                    "cover reading isn't set up on this server "
+                    "(set vision_api_key)"})
+                return
+            if not TROPE_MODEL_RE.match(vc['model']):
+                self._send_json(503, {'error': 'bad vision_model'})
+                return
+            upstream_obj = {
+                'model': vc['model'],
+                'temperature': 0,
+                'max_tokens': 300,
+                'response_format': {'type': 'json_object'},
+                'messages': [{
+                    'role': 'user',
+                    'content': [
+                        {'type': 'text', 'text': VISION_PROMPT_SINGLE},
+                        {'type': 'image_url',
+                         'image_url': {'url': image}},
+                    ],
+                }],
+            }
+            req = urllib.request.Request(
+                'https://api.openai.com/v1/chat/completions',
+                data=json.dumps(upstream_obj).encode('utf-8'),
+                headers={'Content-Type': 'application/json',
+                         'Authorization': 'Bearer ' + vc['key'],
+                         'User-Agent': 'CozyLibram/1.0 read-cover'})
+            with urllib.request.urlopen(req, timeout=90) as r:
+                data = r.read(256 * 1024)
+                status = r.status
+            if status == 200:
+                data = json.dumps(
+                    self._clean_vision_result(json.loads(data))).encode('utf-8')
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read(256 * 1024)
+            self.send_response(e.code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'cover reading failed')
+            except Exception:
+                pass
+
+    @staticmethod
+    def _clean_vision_result(parsed):
+        """Keep only the expected string fields; drop ISBN-shaped junk."""
+        try:
+            obj = (parsed.get('choices') or [{}])[0].get(
+                'message', {}).get('content')
+            obj = json.loads(obj)
+        except Exception:
+            return {'isbn': None, 'title': None, 'author': None}
+
+        def s(v):
+            return v.strip()[:300] if isinstance(v, str) and v.strip() \
+                else None
+        isbn = s(obj.get('isbn')) if isinstance(obj, dict) else None
+        if isbn:
+            isbn = re.sub(r'[^0-9X]', '', isbn).upper()
+            if not re.match(r'^(\d{13}|\d{10}|\d{9}X)$', isbn):
+                isbn = None
+        return {'isbn': isbn,
+                'title': s(obj.get('title')) if isinstance(obj, dict) else None,
+                'author': s(obj.get('author')) if isinstance(obj, dict)
+                else None}
 
     def handle_api_gbooks(self):
         """GET /api/gbooks/books/v1/volumes?... → Google Books, key attached.
