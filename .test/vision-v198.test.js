@@ -59,8 +59,8 @@ async function main() {
   ok('endpoint: TROPE_KEY_GEMINI fallback -> 200', r.status === 200);
   ok('endpoint: fallback key attached as Bearer',
     seen.init.headers['Authorization'] === 'Bearer gem-key');
-  ok('endpoint: default model is gemini-2.0-flash',
-    seen.body.model === 'gemini-2.0-flash');
+  ok('endpoint: default model is gemini-3.8-flash', // v200: 2.0-flash was retired by Google
+    seen.body.model === 'gemini-3.8-flash');
 
   // 5c. v198: markdown-fenced JSON from the model still parses.
   globalThis.fetch = async () => new Response(JSON.stringify({

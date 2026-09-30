@@ -103,6 +103,9 @@ async function shelfSend(dataUrl) {
     }
     paintShelfResults(mount);
   } catch (e) {
+    // v200: log it — caught fetch failures never reach the Logs tab's
+    // uncaught-error hook, so without this the failure is invisible there.
+    if (typeof AppLog !== 'undefined') AppLog.error('shelf', 'scan failed: ' + ((e && e.message) || e));
     mount.innerHTML = '<p class="note">Shelf scan failed — check your connection and try again.</p>';
   } finally {
     shelfBusy = false;

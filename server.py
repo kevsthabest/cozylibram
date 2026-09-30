@@ -105,16 +105,16 @@ def load_vision_cfg():
 
     server-config.json keys: vision_api_key (dedicated), falling back to
     the already-configured trope_key_gemini; vision_model
-    (default gemini-2.0-flash)."""
+    (default gemini-3.8-flash)."""
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
             d = json.load(f)
         key = (d.get('vision_api_key') or '').strip() or \
             (d.get('trope_key_gemini') or '').strip()
         return {'key': key,
-                'model': (d.get('vision_model') or 'gemini-2.0-flash').strip()}
+                'model': (d.get('vision_model') or 'gemini-3.8-flash').strip()}
     except Exception:
-        return {'key': '', 'model': 'gemini-2.0-flash'}
+        return {'key': '', 'model': 'gemini-3.8-flash'}
 
 
 VISION_PROMPT_SINGLE = (

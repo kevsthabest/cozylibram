@@ -54,7 +54,7 @@ ok('css: .empty-div constrained', /\.empty-div\s*{[^}]*max-width:\s*260px/.test(
 // APP_VERSION bumped to v196
 const v = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
 const m = /const APP_VERSION = '([^']+)'/.exec(v);
-ok('APP_VERSION is v199', m && m[1] === 'v199');
+ok('APP_VERSION is v200', m && m[1] === 'v200');
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js cache name matches APP_VERSION',
   sw.includes(`const CACHE = 'cozy-libram-${m[1]}';`));

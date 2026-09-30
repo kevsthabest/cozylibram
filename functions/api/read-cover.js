@@ -15,7 +15,7 @@ import { rateLimit } from '../_lib/rate-limit.js';
 //
 // The key lives server-side: VISION_API_KEY, falling back to the already-
 // configured TROPE_KEY_GEMINI (model override: VISION_MODEL, default
-// gemini-2.0-flash). The browser never sees the key. v199 added mode
+// gemini-3.8-flash). The browser never sees the key. v199 added mode
 // 'shelf': bulk bookshelf-spine reading, returning title/author candidates
 // left-to-right for the client to look up and review (never added silently).
 //
@@ -120,7 +120,7 @@ export async function onRequest(context) {
   if (!key) {
     return jsonErr(503, "cover reading isn't set up on this server (set VISION_API_KEY or TROPE_KEY_GEMINI)");
   }
-  const model = (env.VISION_MODEL || 'gemini-2.0-flash').trim();
+  const model = (env.VISION_MODEL || 'gemini-3.8-flash').trim();
   if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
 
   const isShelf = mode === 'shelf';

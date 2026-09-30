@@ -177,6 +177,18 @@ async function main() {
   await tick(120);
   ok('client: no readable spines -> helpful message',
     mountHTML().includes('Couldn\u2019t read any spines'));
+
+  // v200: a failed scan lands in the on-device Logs tab, not just on screen.
+  runInWindow(`
+    window.fetch = async () => { throw new Error('boom'); };
+    if (typeof AppLog !== 'undefined') AppLog.clear();
+    shelfBusy = false;
+  `);
+  runInWindow(`shelfSend('data:image/jpeg;base64,FAKE')`);
+  await tick(120);
+  ok('client: failed scan paints a message', mountHTML().includes('Shelf scan failed'));
+  ok('client: failed scan is logged to the Logs tab',
+    runInWindowRet(`typeof AppLog !== 'undefined' && AppLog.entries('error').some(e => e.tag === 'shelf')`));
 }
 
 main().then(() => {
