@@ -50,12 +50,11 @@ const ctx = {
 };
 ctx.window = ctx;
 vm.createContext(ctx);
-for (const f of ['198-discovery.js']) {
+for (const f of ['156-trope-taxonomy.js', '157-trope-inference.js', '198-discovery.js']) {
   vm.runInContext(fs.readFileSync(path.join(APP, 'js', f), 'utf8'), ctx, { filename: f });
 }
 const buildEmbedText = vm.runInContext('buildEmbedText', ctx);
-const normIdent = vm.runInContext(
-  'typeof tropeNormIdent === "function" ? tropeNormIdent : null', ctx);
+const normIdent = vm.runInContext('tropeNormIdent', ctx);
 if (!buildEmbedText || !normIdent) throw new Error('app JS failed to load');
 
 async function embedBatch(texts) {
@@ -184,10 +183,11 @@ async function main() {
       try {
         if (PROBE) {
           console.log('PROBE dims:', v.length, '| text head:', texts[j].slice(0, 80));
+          // PROBE writes nothing: do NOT log ok, or the real run would skip this work.
         } else {
           sql(`update works set embedding=${vectorLit(v)}::vector where id=${lit(w.id)};`);
+          logProgress({ work_id: w.id, title: w.title, ok: true, dims: v.length });
         }
-        logProgress({ work_id: w.id, title: w.title, ok: true, dims: v.length });
         ok++;
       } catch (e) {
         logProgress({ work_id: w.id, title: w.title, ok: false, error: e.message });
