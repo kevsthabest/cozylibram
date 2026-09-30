@@ -1335,6 +1335,24 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .cp-pick.current { border-color: var(--accent); }
 .cp-actions { display: flex; gap: 10px; justify-content: space-between; }
 
+/* ---- Edition picker (v210) ---- */
+.ep-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.ep-pick { display: flex; align-items: center; gap: 12px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px;
+  cursor: pointer; width: 100%; text-align: left; color: inherit; font: inherit; }
+.ep-pick.current { border-color: var(--accent); }
+.ep-thumb { width: 44px; height: 66px; object-fit: cover; border-radius: 6px; flex: none; background: var(--card2); }
+.ep-nocover { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.ep-nocover .ticon { width: 22px; height: 22px; }
+.ep-info { flex: 1; min-width: 0; }
+.ep-pub { display: block; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ep-sub { display: block; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ep-badge { font-size: 11px; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 999px; padding: 2px 8px; flex: none; }
+.ep-manual { display: flex; gap: 8px; }
+.ep-manual .text-input { flex: 1; min-width: 0; }
+#modal-root #m-edition { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
 /* v74: Up Next queue */
 .recent-card { position: relative; }
 .un-num { position: absolute; top: 6px; left: 6px; z-index: 2; background: rgba(20,8,24,.85);

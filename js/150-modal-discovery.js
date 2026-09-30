@@ -801,9 +801,11 @@ function renderDetailModal(b, viaBook) {
       : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + ' <span class="note-inline">· ' + b.ratingsCount + ' ratings</span></div>' : '') +
     '<div class="d-meta">' +
-    (b.pageCount ? '<span>' + icon('reading') + ' ' + b.pageCount + ' pages</span>' : '') +
+    (b.pageCount ? '<span id="m-pagespan">' + icon('reading') + ' ' + b.pageCount + ' pages</span>' : '') +
     (b.publishedDate ? '<span>' + icon('calendar') + ' ' + esc(b.publishedDate.slice(0, 4)) + '</span>' : '') +
-    (b.isbn ? '<span>' + icon('barcode') + ' ISBN ' + esc(b.isbn) + '</span>' : '') +
+    // v210: the ISBN row opens the edition picker (or sets one for manual adds).
+    '<button class="taplink" id="m-edition" title="Choose edition">' + icon('barcode') +
+    (b.isbn ? ' ISBN ' + esc(b.isbn) : ' Set edition') + '</button>' +
     '</div>' +
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
@@ -1118,6 +1120,8 @@ function renderDetailModal(b, viaBook) {
   root.querySelectorAll('.d-tab').forEach(t =>
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
+  // v210: edition picker — change which edition of the book she owns.
+  document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   // v182: description read-more toggles — hero (desktop) + Details tab.
   // Hidden when the text fits unclamped.
@@ -1385,6 +1389,7 @@ function renderDetailModal(b, viaBook) {
     draft.log = b.log;
     draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
     draft.cover = b.cover; // v168: the cover picker saves immediately too — don't clobber it
+    draft.isbn = b.isbn; // v210: the edition picker saves immediately too — don't clobber it
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: b.myRating || 0, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
