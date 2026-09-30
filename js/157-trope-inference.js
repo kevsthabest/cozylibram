@@ -393,7 +393,18 @@ function tropeInputHash(book) {
    v208: evidence-aware — each trope carries 1-2 cleaned evidence quotes;
    a trope with no usable evidence loses 0.15 confidence and is dropped
    below 0.5 (unverifiable guesses don't publish). */
-function validateTropeResults(raw) {
+/* v208: a cleaned quote counts as evidence only if it appears verbatim in
+   the supplied description (normalized: lowercase, whitespace collapsed).
+   Without a description there is nothing to check against, so cleaned
+   quotes are kept as-is (Trope Lab re-inference fallback). */
+function evidenceQuoteIn(quote, description) {
+  if (!description) return true;
+  const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const q = norm(quote), d = norm(description);
+  return q.length >= 4 && d.indexOf(q) !== -1;
+}
+
+function validateTropeResults(raw, description) {
   const out = [], seen = new Set();
   for (const r of raw || []) {
     if (out.length >= 8) break;
@@ -402,7 +413,7 @@ function validateTropeResults(raw) {
     if (!id || seen.has(id)) continue;
     let c = Number(r.confidence);
     if (!isFinite(c)) continue;
-    const evidence = cleanEvidence(r.evidence);
+    const evidence = cleanEvidence(r.evidence).filter(q => evidenceQuoteIn(q, description));
     if (!evidence.length) c -= 0.15;
     if (c < 0.5) continue;
     c = Math.min(1, Math.max(0, c));
@@ -557,7 +568,7 @@ async function inferBookTropes(book, opts) {
       throw TropeInferError('unparseable model output');
     }
     return {
-      tropes: validateTropeResults(raw),
+      tropes: validateTropeResults(raw, book.description),
       model: (data && data.model) || '',
     };
   }

@@ -93,6 +93,34 @@ function ok(name, cond) {
     ok('alias resolves with evidence intact',
       out.length === 1 && out[0].id === 'why-choose' && out[0].evidence.length === 1);
   }
+  {
+    // literal-substring verification against the description
+    const desc = 'The dragon soars above the burning mountains at dawn.';
+    const real = validate(
+      [{ id: 'dragons', confidence: 0.9, evidence: ['SOARS ABOVE the burning mountains'] }], desc);
+    ok('real quote kept (case/whitespace-insensitive match)',
+      real.length === 1 && real[0].evidence.length === 1 &&
+      Math.abs(real[0].confidence - 0.9) < 1e-9);
+    const fake = validate(
+      [{ id: 'dragons', confidence: 0.9, evidence: ['the dragon pilots a starship'] }], desc);
+    ok('invented quote dropped, penalty applies',
+      fake.length === 1 && fake[0].evidence.length === 0 &&
+      Math.abs(fake[0].confidence - 0.75) < 1e-9);
+    const boundary = validate(
+      [{ id: 'dragons', confidence: 0.6, evidence: ['the dragon pilots a starship'] }], desc);
+    ok('invented quote at boundary drops the trope', boundary.length === 0);
+    const mixed = validate(
+      [{ id: 'dragons', confidence: 0.9,
+         evidence: ['the dragon pilots a starship', 'soars above the burning mountains'] }], desc);
+    ok('mixed evidence keeps only the verified quote',
+      mixed.length === 1 && mixed[0].evidence.length === 1 &&
+      mixed[0].evidence[0] === 'soars above the burning mountains' &&
+      Math.abs(mixed[0].confidence - 0.9) < 1e-9);
+    const noDesc = validate(
+      [{ id: 'dragons', confidence: 0.9, evidence: ['some quote here'] }]);
+    ok('no description -> evidence kept as-is (fallback)',
+      noDesc.length === 1 && noDesc[0].evidence.length === 1);
+  }
 
   /* ---- C. tiers + auto-publish ---- */
   ok('tier high at 0.85', tier({ confidence: 0.85 }) === 'high');

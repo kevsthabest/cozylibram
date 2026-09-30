@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /* One-off batch reclassification (2026-09-30, Kevin-approved).
-   Re-runs trope inference for every work in the library under the v207
-   hardened catalog, writing AI candidate claims through the v206 write
-   path: rejected tropes are never resurrected, confirmed ones never
-   demoted, and only ai-candidate rows are replaced.
+   Re-runs trope inference for every work in the library under the v208
+   evidence pipeline, writing claims through the v208 write path:
+   rejected tropes are never resurrected, human-confirmed ones never
+   demoted, AI regenerable rows (candidates + auto-confirmed) are
+   replaced, and high-confidence results with verified description
+   quotes auto-publish as confirmed.
 
    Uses the app's own JS (prompt builder, response parser, alias-aware
    validator, work-key normalizer) loaded in a vm, and the production
@@ -50,6 +52,9 @@ const normIdent = vm.runInContext('tropeNormIdent', ctx);
 const buildTropePrompt = vm.runInContext('buildTropePrompt', ctx);
 const parseTropeResponse = vm.runInContext('parseTropeResponse', ctx);
 const validateTropeResults = vm.runInContext('validateTropeResults', ctx);
+const TROPE_CONFIDENCE_TIERS = vm.runInContext('TROPE_CONFIDENCE_TIERS', ctx);
+const tropeInputHash = vm.runInContext('tropeInputHash', ctx);
+const TROPE_TAXONOMY_VERSION = vm.runInContext('TROPE_TAXONOMY_VERSION', ctx);
 
 function logProgress(obj) {
   fs.appendFileSync(path.join(APP, 'scripts', 'reclassify-progress.jsonl'),
@@ -62,7 +67,7 @@ async function inferWork(w, provider, model) {
     description: w.description, isbn: [...w.isbns][0] || '',
   };
   const { system, user } = buildTropePrompt(book);
-  let maxTokens = 1200;
+  let maxTokens = 1600; // evidence quotes make responses longer
   for (let attempt = 0; attempt < 3; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90000);
@@ -105,35 +110,66 @@ async function inferWork(w, provider, model) {
     const text = data && data.choices && data.choices[0] &&
       data.choices[0].message && data.choices[0].message.content;
     const raw = parseTropeResponse(text);
-    return { tropes: validateTropeResults(raw), model: provider + '/' + model };
+    // v208: description passed so evidence quotes are verified as literal substrings
+    return { tropes: validateTropeResults(raw, book.description), model: provider + '/' + model };
   }
   throw new Error('exhausted retries');
 }
 
-/* v206 write path in SQL: filter rejected/confirmed, replace ai candidates. */
-function writeClaims(workId, tropes, model) {
+/* v208 write path in SQL: filter rejected + human-confirmed, replace AI
+   regenerable rows (candidates + auto-confirmed) by id, and auto-publish
+   high-confidence tropes with verified evidence as confirmed. */
+function evObj(c) {
+  const e = c.evidence;
+  if (e && typeof e === 'object') return e;
+  if (typeof e === 'string') { try { return JSON.parse(e); } catch (_) {} }
+  return {};
+}
+function writeClaims(workId, book, tropes, model) {
   const existing = sql(
-    `select trope_id, status from book_trope_claims where work_id=${lit(workId)};`);
-  const rejected = new Set(), confirmed = new Set();
+    `select id, trope_id, status, source_type, evidence from book_trope_claims ` +
+    `where work_id=${lit(workId)};`);
+  const rejected = new Set(), protected_ = new Set(), regenIds = [];
   for (const c of existing) {
-    if (c.status === 'rejected') rejected.add(c.trope_id);
-    else if (c.status === 'confirmed') confirmed.add(c.trope_id);
+    if (c.status === 'rejected') { rejected.add(c.trope_id); continue; }
+    if (c.status === 'confirmed' && !evObj(c).auto_confirmed) {
+      protected_.add(c.trope_id); continue; // human/community confirmed: never demoted
+    }
+    if (c.source_type === 'ai' &&
+        (c.status === 'candidate' ||
+         (c.status === 'confirmed' && evObj(c).auto_confirmed)) && c.id) {
+      regenIds.push(c.id);
+    }
   }
-  const fresh = tropes.filter(t => t && t.id &&
-    !rejected.has(t.id) && !confirmed.has(t.id));
-  sql(`delete from book_trope_claims where work_id=${lit(workId)} ` +
-      `and status='candidate' and source_type='ai';`);
-  if (!fresh.length) return { inserted: 0, skippedRejected:
-    tropes.filter(t => t && rejected.has(t.id)).length };
-  const vals = fresh.map(t =>
-    `(${lit(workId)}, ${lit(t.id)}, 'candidate', ${t.confidence}, 'ai', ` +
-    `${lit(model)}, null, '{"taxonomy_version": 1, "taxonomy_rev": 1}'::jsonb)`).join(',');
+  const fresh = (tropes || []).filter(t => t && t.id &&
+    !rejected.has(t.id) && !protected_.has(t.id));
+  if (regenIds.length) {
+    // ids are uuids: quote each one
+    sql(`delete from book_trope_claims where id in (${regenIds.map(u => lit(u)).join(',')});`);
+  }
+  if (!fresh.length) return { inserted: 0, auto: 0, skippedRejected:
+    (tropes || []).filter(t => t && rejected.has(t.id)).length };
+  const inputHash = tropeInputHash({
+    title: book.title, authors: book.authors,
+    description: book.description, categories: book.categories });
+  const vals = fresh.map(t => {
+    const ev = Array.isArray(t.evidence) ? t.evidence : [];
+    const auto = t.confidence >= TROPE_CONFIDENCE_TIERS.high && ev.length > 0;
+    const evidence = JSON.stringify({
+      taxonomy_version: TROPE_TAXONOMY_VERSION, taxonomy_rev: 1,
+      evidence: ev, input_hash: inputHash,
+      ...(auto ? { auto_confirmed: true } : {}),
+    });
+    return `(${lit(workId)}, ${lit(t.id)}, ${auto ? "'confirmed'" : "'candidate'"}, ` +
+      `${t.confidence}, 'ai', ${lit(model)}, null, ${lit(evidence)}::jsonb)`;
+  }).join(',');
   const rows = sql(
     `insert into book_trope_claims ` +
     `(work_id, trope_id, status, confidence, source_type, model, model_version, evidence) ` +
-    `values ${vals} returning trope_id;`);
+    `values ${vals} returning trope_id, status;`);
   return { inserted: rows.length,
-    skippedRejected: tropes.filter(t => t && rejected.has(t.id)).length };
+    auto: rows.filter(r => r.status === 'confirmed').length,
+    skippedRejected: (tropes || []).filter(t => t && rejected.has(t.id)).length };
 }
 
 function resolveWorkRow(w) {
@@ -185,6 +221,27 @@ async function main() {
   let list = [...works.values()];
   console.log('unique works:', list.length);
   if (LIMIT > 0) list = list.slice(0, LIMIT);
+  // Resume: skip works already completed in a previous run's progress log.
+  // (Only 'ok' entries are skipped; failures/skips are retried.)
+  const progressPath = path.join(APP, 'scripts', 'reclassify-progress.jsonl');
+  let resumed = 0;
+  if (!PROBE && fs.existsSync(progressPath)) {
+    const doneTitles = new Set();
+    for (const line of fs.readFileSync(progressPath, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const e = JSON.parse(line);
+        if (e && e.status === 'ok' && e.work) doneTitles.add(e.work);
+      } catch (_) {}
+    }
+    if (doneTitles.size) {
+      list = list.filter(w => {
+        if (doneTitles.has(w.title)) { resumed++; return false; }
+        return true;
+      });
+      console.log(`resumed: skipping ${resumed} already-completed works, ${list.length} remaining`);
+    }
+  }
 
   let done = 0, failed = 0, insertedTotal = 0;
   for (const w of list) {
@@ -209,15 +266,18 @@ async function main() {
               `(${lit(workId)}, ${lit(isbn)}) on conflict (isbn) do nothing;`);
         } catch (e) { /* best-effort */ }
       }
-      const wr = writeClaims(workId, inf.tropes, inf.model);
+      const book = { title: w.title, authors: w.authors,
+        description: w.description, categories: w.categories };
+      const wr = writeClaims(workId, book, inf.tropes, inf.model);
       done++; insertedTotal += wr.inserted;
       console.log(`ok [${done}/${list.length}] ${tag} -> ` +
-        `${wr.inserted} candidates` +
+        `${wr.inserted} claims (${wr.auto} auto)` +
         (wr.skippedRejected ? ` (${wr.skippedRejected} rejected kept)` : '') +
         (created ? ' (new work)' : ''));
       logProgress({ work: w.title, workId, status: 'ok',
-        inserted: wr.inserted, skippedRejected: wr.skippedRejected,
-        tropes: inf.tropes.map(t => t.id) });
+        inserted: wr.inserted, auto: wr.auto, skippedRejected: wr.skippedRejected,
+        tropes: inf.tropes.map(t => ({ id: t.id, c: t.confidence,
+          ev: (t.evidence || []).length })) });
     } catch (e) {
       failed++;
       console.log(`FAIL ${tag}: ${e.message}`);
@@ -225,7 +285,7 @@ async function main() {
     }
     await sleep(PACE_MS);
   }
-  console.log(`\ndone: ${done} works, ${insertedTotal} candidate claims, ${failed} failed`);
+  console.log(`\ndone: ${done} works, ${insertedTotal} claims, ${failed} failed`);
 }
 
 main().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
