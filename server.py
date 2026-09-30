@@ -125,6 +125,20 @@ VISION_PROMPT_SINGLE = (
     'the barcode on the back cover. Prefer the ISBN when one is visible. '
     'Reply with ONLY the JSON object, no other text.')
 
+# v199: bulk bookshelf spine scanning — spines left to right, readable
+# title/author candidates for the client to look up and review.
+VISION_PROMPT_SHELF = (
+    'You are reading a photo of a bookshelf. List the books whose spines '
+    'you can read, in left-to-right order. Return a JSON object with exactly '
+    'one key, "books": an array (up to 30) of objects with "title", '
+    '"author", and "confidence" ("high" for clearly legible spines, '
+    '"medium" for partly legible or guessed letters, "low" for very '
+    'uncertain). Use null for a title or author you cannot read; skip spines '
+    'you cannot read at all. Vertical text, foil, and small print are common '
+    '\u2014 transcribe carefully. Reply with ONLY the JSON object, no other '
+    'text.')
+VISION_MAX_SHELF_SPINES = 30
+
 
 def config_js_body():
     """The /config.js payload: capability flags, not secrets.
@@ -573,12 +587,14 @@ class Handler(SimpleHTTPRequestHandler):
                 pass
 
     def handle_api_read_cover(self):
-        """POST /api/read-cover {image, mode:'single'} → vision model reads
-        the printed ISBN (digits only), falling back to title/author when no
-        ISBN is printed. Mirrors functions/api/read-cover.js. The Gemini key
+        """POST /api/read-cover {image, mode:'single'|'shelf'} → vision model.
+        mode 'single' reads the printed ISBN (digits only), falling back to
+        title/author when no ISBN is printed. mode 'shelf' (v199) reads
+        bookshelf spines left-to-right and returns title/author candidates
+        for the client to look up and review — nothing is added silently.
+        Mirrors functions/api/read-cover.js. The Gemini key
         comes from server-config.json (vision_api_key, falling back to the
         already-configured trope_key_gemini) — the browser never sees it.
-        v199 will add mode 'shelf' for bulk spine reading.
 
         Guards: POST only, mode allowlist, image is a capped data URL or raw
         base64 (the client downscales to ~1024px first). The client validates
@@ -591,7 +607,8 @@ class Handler(SimpleHTTPRequestHandler):
             raw = self.rfile.read(min(length, 4 * 1024 * 1024)).decode(
                 'utf-8', 'replace')
             body = json.loads(raw)
-            if body.get('mode') != 'single':
+            mode = body.get('mode')
+            if mode not in ('single', 'shelf'):
                 self.send_error(400, 'bad request')
                 return
             image = body.get('image')
@@ -613,15 +630,18 @@ class Handler(SimpleHTTPRequestHandler):
             if not TROPE_MODEL_RE.match(vc['model']):
                 self._send_json(503, {'error': 'bad vision_model'})
                 return
+            is_shelf = (mode == 'shelf')
             upstream_obj = {
                 'model': vc['model'],
                 'temperature': 0,
-                'max_tokens': 300,
+                'max_tokens': 2000 if is_shelf else 300,
                 'response_format': {'type': 'json_object'},
                 'messages': [{
                     'role': 'user',
                     'content': [
-                        {'type': 'text', 'text': VISION_PROMPT_SINGLE},
+                        {'type': 'text',
+                         'text': VISION_PROMPT_SHELF if is_shelf
+                         else VISION_PROMPT_SINGLE},
                         {'type': 'image_url',
                          'image_url': {'url': image}},
                     ],
@@ -637,8 +657,9 @@ class Handler(SimpleHTTPRequestHandler):
                 data = r.read(256 * 1024)
                 status = r.status
             if status == 200:
-                data = json.dumps(
-                    self._clean_vision_result(json.loads(data))).encode('utf-8')
+                cleaned = self._clean_shelf_result(json.loads(data)) \
+                    if is_shelf else self._clean_vision_result(json.loads(data))
+                data = json.dumps(cleaned).encode('utf-8')
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(data)))
@@ -683,6 +704,42 @@ class Handler(SimpleHTTPRequestHandler):
                 'title': s(obj.get('title')) if isinstance(obj, dict) else None,
                 'author': s(obj.get('author')) if isinstance(obj, dict)
                 else None}
+
+    @staticmethod
+    def _clean_shelf_result(parsed):
+        """v199: sanitize a shelf-mode model answer into
+        {'books': [{title, author, confidence}]} — capped, allowlisted."""
+        try:
+            content = (parsed.get('choices') or [{}])[0].get(
+                'message', {}).get('content')
+            content = re.sub(r'^```(?:json)?\s*', '',
+                             str(content or '').strip(), flags=re.I)
+            content = re.sub(r'\s*```$', '', content)
+            obj = json.loads(content)
+            arr = obj.get('books') if isinstance(obj, dict) else None
+            if not isinstance(arr, list):
+                return {'books': []}
+        except Exception:
+            return {'books': []}
+
+        def s(v):
+            return v.strip()[:300] if isinstance(v, str) and v.strip() \
+                else None
+        out = []
+        for b in arr:
+            if not isinstance(b, dict):
+                continue
+            title, author = s(b.get('title')), s(b.get('author'))
+            if not title and not author:
+                continue
+            conf = b.get('confidence')
+            if conf not in ('high', 'medium', 'low'):
+                conf = 'low'
+            out.append({'title': title, 'author': author,
+                        'confidence': conf})
+            if len(out) >= VISION_MAX_SHELF_SPINES:
+                break
+        return {'books': out}
 
     def handle_api_gbooks(self):
         """GET /api/gbooks/books/v1/volumes?... → Google Books, key attached.

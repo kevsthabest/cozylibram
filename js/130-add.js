@@ -126,6 +126,7 @@ function scanPanelHTML() {
     '<button class="btn ghost block" id="scan-toggle">Start camera</button>' +
     '<button class="btn ghost block" id="scan-photo">' + icon('camera') + ' Snap a barcode photo</button>' +
     '<button class="btn ghost block vision-btn" id="scan-vision">' + icon('sparkles') + ' Read the cover with AI</button>' +
+    '<button class="btn ghost block vision-btn" id="scan-shelf">' + icon('sparkles') + ' Scan a bookshelf with AI</button>' +
     '<input type="file" id="scan-file" accept="image/*" capture="environment" style="display:none">' +
     (insecure ? '<p class="note">' + icon('warn') + ' Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
     '<p class="note">Tip: on a phone, install this as an app (Share → Add to Home Screen) for the full experience.</p>';
@@ -141,6 +142,8 @@ function wireScanPanel(mount) {
   // v197: vision cover reading — ISBN off the back cover, or title/author
   // when no ISBN is printed.
   mount.querySelector('#scan-vision').addEventListener('click', () => visionReadCover());
+  // v199: bulk bookshelf-spine scanning with a review list before adding.
+  mount.querySelector('#scan-shelf').addEventListener('click', () => shelfScan());
   file.addEventListener('change', () => {
     if (file.files && file.files[0]) {
       const f = file.files[0];

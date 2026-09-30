@@ -15,8 +15,9 @@ import { rateLimit } from '../_lib/rate-limit.js';
 //
 // The key lives server-side: VISION_API_KEY, falling back to the already-
 // configured TROPE_KEY_GEMINI (model override: VISION_MODEL, default
-// gemini-2.0-flash). The browser never sees the key. Shelf/bulk spine mode
-// arrives in v199; this endpoint only accepts mode 'single' for now.
+// gemini-2.0-flash). The browser never sees the key. v199 added mode
+// 'shelf': bulk bookshelf-spine reading, returning title/author candidates
+// left-to-right for the client to look up and review (never added silently).
 //
 // Guards: POST only, JSON body, mode allowlist, image is a capped data URL
 // or raw base64 (max ~2.5MB — the client downscales to ~1024px first),
@@ -33,6 +34,32 @@ const PROMPT_SINGLE = 'You are reading a photo of a book cover. Return a JSON ' 
   'near the barcode on the back cover. Prefer the ISBN when one is visible. ' +
   'Reply with ONLY the JSON object, no other text.';
 
+const PROMPT_SHELF = 'You are reading a photo of a bookshelf. List the books ' +
+  'whose spines you can read, in left-to-right order. Return a JSON object ' +
+  'with exactly one key, "books": an array (up to 30) of objects with ' +
+  '"title", "author", and "confidence" ("high" for clearly legible spines, ' +
+  '"medium" for partly legible or guessed letters, "low" for very ' +
+  'uncertain). Use null for a title or author you cannot read; skip spines ' +
+  'you cannot read at all. Vertical text, foil, and small print are common ' +
+  '— transcribe carefully. Reply with ONLY the JSON object, no other text.';
+
+// v199: sanitize a shelf-mode model answer into [{title, author, confidence}].
+function cleanShelfResult(obj) {
+  const out = [];
+  const arr = obj && Array.isArray(obj.books) ? obj.books : [];
+  const s = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
+  for (const b of arr) {
+    if (!b || typeof b !== 'object') continue;
+    const title = s(b.title), author = s(b.author);
+    if (!title && !author) continue; // unreadable — nothing to search
+    const conf = b.confidence === 'high' || b.confidence === 'medium' || b.confidence === 'low'
+      ? b.confidence : 'low';
+    out.push({ title, author, confidence: conf });
+    if (out.length >= MAX_SHELF_SPINES) break;
+  }
+  return { books: out };
+}
+
 const jsonErr = (status, error) => new Response(JSON.stringify({ error }),
   { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -47,11 +74,17 @@ function cleanResult(obj) {
   return { isbn, title: s(obj.title), author: s(obj.author) };
 }
 
+// v199: bulk bookshelf spine scanning. mode 'shelf' reads the spines left
+// to right and returns readable title/author candidates; the client looks
+// each one up in the catalog and shows a review list — nothing is added
+// silently.
+const MAX_SHELF_SPINES = 30;
+
 // v198: strip markdown fences in case the model wraps the JSON anyway.
-function parseModelJson(text) {
+function parseModelJsonRaw(text) {
   const t = String(text || '').trim()
     .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  return cleanResult(JSON.parse(t));
+  return JSON.parse(t);
 }
 
 export async function onRequest(context) {
@@ -70,7 +103,7 @@ export async function onRequest(context) {
     return new Response('bad request', { status: 400 });
   }
   const mode = body && body.mode;
-  if (mode !== 'single') return new Response('bad request', { status: 400 }); // v198 adds 'shelf'
+  if (mode !== 'single' && mode !== 'shelf') return new Response('bad request', { status: 400 });
   let image = body && body.image;
   if (typeof image !== 'string' || !image.length || image.length > MAX_IMAGE_CHARS) {
     return new Response('bad request', { status: 400 });
@@ -90,6 +123,8 @@ export async function onRequest(context) {
   const model = (env.VISION_MODEL || 'gemini-2.0-flash').trim();
   if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
 
+  const isShelf = mode === 'shelf';
+  const prompt = isShelf ? PROMPT_SHELF : PROMPT_SINGLE;
   let upstream;
   try {
     upstream = await fetch(GEMINI_URL, {
@@ -102,12 +137,12 @@ export async function onRequest(context) {
       body: JSON.stringify({
         model,
         temperature: 0,
-        max_tokens: 300,
+        max_tokens: isShelf ? 2000 : 300,
         response_format: { type: 'json_object' },
         messages: [{
           role: 'user',
           content: [
-            { type: 'text', text: PROMPT_SINGLE },
+            { type: 'text', text: prompt },
             { type: 'image_url', image_url: { url: image } },
           ],
         }],
@@ -123,7 +158,8 @@ export async function onRequest(context) {
   }
   let parsed;
   try {
-    parsed = parseModelJson((await upstream.json()).choices[0].message.content);
+    const content = parseModelJsonRaw((await upstream.json()).choices[0].message.content);
+    parsed = isShelf ? cleanShelfResult(content) : cleanResult(content);
   } catch (e) {
     return jsonErr(502, 'vision provider returned an unreadable answer');
   }

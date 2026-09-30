@@ -28,7 +28,10 @@ function visionGetImage() {
 }
 
 // Photo picker fallback for when the live camera isn't running.
-function visionPickPhoto() {
+// onPick defaults to visionSend (single-cover flow); shelf mode passes
+// shelfSend instead. The callback is read off the input at change time so
+// the shared picker always delivers to the flow that opened it.
+function visionPickPhoto(onPick) {
   let input = document.getElementById('vision-file');
   if (!input) {
     input = document.createElement('input');
@@ -41,12 +44,14 @@ function visionPickPhoto() {
       const f = input.files && input.files[0];
       input.value = '';
       if (!f) return;
+      const deliver = input._deliver || visionSend;
       const r = new FileReader();
-      r.onload = () => visionSend(String(r.result || ''));
+      r.onload = () => deliver(String(r.result || ''));
       r.readAsDataURL(f);
     });
     document.body.appendChild(input);
   }
+  input._deliver = onPick || visionSend;
   input.click();
 }
 
