@@ -91,8 +91,12 @@ async function main() {
   // so it resolves instead of dropping — use a genuinely unknown id here.
   ok('drops unknown ids', probe("validateTropeResults([{id:'dragons',confidence:0.9},{id:'not-a-real-trope',confidence:0.9}]).length") === 1);
   ok('clamps confidence', (() => {
-    const r = probe("validateTropeResults([{id:'dragons',confidence:2},{id:'quest',confidence:-1}])");
-    return r[0].confidence === 1 && r[1].confidence === 0;
+    const r = probe("validateTropeResults([{id:'dragons',confidence:2,evidence:['x']},{id:'quest',confidence:-1,evidence:['y']}])");
+    return r.length === 1 && r[0].id === 'dragons' && r[0].confidence === 1;
+  })());
+  ok('zero confidence drops instead of clamping to a stored row', (() => {
+    const r = probe("validateTropeResults([{id:'quest',confidence:-1,evidence:['y']}])");
+    return r.length === 0;
   })());
   ok('caps at 8', (() => {
     const ids = probe('TROPES').slice(0, 10).map(t => ({ id: t.id, confidence: 0.9 }));

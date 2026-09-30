@@ -634,10 +634,11 @@ async function tropeLabReviewHTML() {
   });
 }
 
-/* ---------------- Claim moderation card (v206) ----------------
-   Work-wide confirm/reject for AI candidate claims. Confirming outranks
-   future AI guesses; rejecting hides the trope and persists through
-   re-inference (the claims writer never re-inserts a rejected trope). */
+/* ---------------- Claim review card (v206, v208) ----------------
+   Corrections for AI claims, work-wide. v208: high-confidence claims
+   with quoted evidence auto-publish, so this queue is corrections-only —
+   ✓ confirms a candidate work-wide, ✕ rejects any AI claim (rejections
+   survive re-inference). Auto-published tags are badged "auto". */
 
 let tropeLabClaimsShown = 15;
 const TROPE_LAB_CLAIMS_PAGE = 15;
@@ -645,21 +646,23 @@ const TROPE_LAB_CLAIMS_PAGE = 15;
 async function tropeLabClaimsHTML() {
   const el = document.getElementById('tropelab-claims');
   if (!el) return;
-  const head = '<div class="ob-card"><h3 class="serif">Moderate AI candidates</h3>';
+  const head = '<div class="ob-card"><h3 class="serif">Review AI tags</h3>';
   let groups = [];
   try {
     groups = await TropeClaims.listCandidates(500);
   } catch (e) { groups = []; }
   if (!groups.length) {
     el.innerHTML = head +
-      '<p class="note">No AI candidates awaiting review. Run a backfill above — ' +
-      'new inferences land here as candidate claims.</p></div>';
+      '<p class="note">No AI tags awaiting review. High-confidence tags with quoted ' +
+      'evidence publish automatically — corrections land here.</p></div>';
     return;
   }
   const shown = groups.slice(0, tropeLabClaimsShown);
   let html = head + '<p class="note">' + groups.length +
-    ' works with AI candidates · ✓ confirms a trope work-wide, ✕ rejects it ' +
+    ' works with AI tags · ✓ confirms a candidate work-wide, ✕ rejects it ' +
     '(rejections survive re-inference). ' +
+    '<span class="chip dbtrope ai">auto</span> = published automatically on ' +
+    'high confidence + quoted evidence. ' +
     '<button class="btn sm ghost" id="tl-claims-refresh">↻ Refresh</button></p>';
   shown.forEach(g => {
     html += '<div class="tl-review-book" data-claim-work="' + esc(g.workId) + '">' +
@@ -667,10 +670,13 @@ async function tropeLabClaimsHTML() {
       (g.authors ? ' <span class="note">· ' + esc(g.authors) + '</span>' : '') +
       '</div></div><div class="tl-review-chips">';
     g.tropes.forEach(t => {
-      html += '<span class="tgvote"><span class="chip dbtrope ai" title="AI candidate · ' +
-        Math.round(t.confidence * 100) + '% confidence">✦ ' + esc(t.name) + '</span>' +
-        '<button class="tvbtn" data-claim="confirmed" data-tid="' + esc(t.id) +
-        '" aria-label="Confirm ' + esc(t.name) + '">✓</button>' +
+      html += '<span class="tgvote"><span class="chip dbtrope ai" title="AI ' +
+        (t.auto ? 'auto-published' : 'candidate') + ' · ' +
+        Math.round(t.confidence * 100) + '% confidence">' +
+        (t.auto ? '✓auto ' : '✦ ') + esc(t.name) + '</span>' +
+        (t.auto ? '' :
+          '<button class="tvbtn" data-claim="confirmed" data-tid="' + esc(t.id) +
+          '" aria-label="Confirm ' + esc(t.name) + '">✓</button>') +
         '<button class="tvbtn" data-claim="rejected" data-tid="' + esc(t.id) +
         '" aria-label="Reject ' + esc(t.name) + '">✕</button></span>';
     });
@@ -794,16 +800,16 @@ async function renderTropeLab() {
     'Closing this tab pauses nothing — reopen Trope Lab to resume.</p>' +
     '</div>';
 
-  const wire = (id, books) => {
+  const wire = (id, books, force) => {
     const btn = document.getElementById(id);
     if (btn) btn.addEventListener('click', () => {
-      const n = TropeQueue.enqueue(books.map(b => b.id));
+      const n = TropeQueue.enqueue(books.map(b => b.id), { force: !!force });
       if (n) TropeQueue.start();
       tropeLabProgressHTML();
     });
   };
   wire('tl-backfill', cov.missing);
-  wire('tl-restale', cov.stale);
+  wire('tl-restale', cov.stale, true); // v208: explicit re-infer bypasses the input-hash cache
   tropeLabProgressHTML();
   tropeLabProviderHTML();
   tropeLabAllLibrariesHTML(configured);
@@ -1021,18 +1027,19 @@ async function tropeLabAllLibrariesScan() {
       '</div>' +
       '<p class="note">One book at a time, ~4s apart. Progress and failures appear in Backfill progress above; ' +
       'closing this tab pauses nothing — reopen Trope Lab to resume.</p>';
-    const startAll = keys => {
+    const startAll = (keys, force) => {
       /* Persist the projection BEFORE enqueueing — the queue resolves
          through it, including after a reload. */
       try { tropeAdminBooksSave(entries); } catch (e) {}
-      const n = TropeQueue.enqueue(keys);
+      const n = TropeQueue.enqueue(keys, { force: !!force });
       if (n) TropeQueue.start();
       tropeLabProgressHTML();
     };
     const bb = document.getElementById('tl-alllibs-backfill');
     if (bb) bb.addEventListener('click', () => startAll(missingKeys));
     const rs = document.getElementById('tl-alllibs-restale');
-    if (rs) rs.addEventListener('click', () => startAll(staleKeys));
+    // v208: explicit re-infer bypasses the input-hash cache
+    if (rs) rs.addEventListener('click', () => startAll(staleKeys, true));
   } catch (e) {
     const msg = (e && e.message) || 'scan failed';
     out.innerHTML = '<p class="note">' + icon('warn') + ' Scan failed (' + esc(msg) + '). ' +

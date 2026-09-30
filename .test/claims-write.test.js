@@ -53,10 +53,10 @@ function ok(name, cond) {
           },
         }),
         delete: () => ({
-          eq: (c1, v1) => ({ eq: (c2, v2) => ({ eq: (c3, v3) => {
-            calls.push('delete:' + c1 + '=' + v1 + ',' + c2 + '=' + v2 + ',' + c3 + '=' + v3);
+          in: (col, vals) => {
+            calls.push('delete:in:' + col + '=' + vals.join(','));
             return Promise.resolve({ error: null });
-          } }) }),
+          },
         }),
         insert: (rows) => {
           calls.push('insert:' + rows.map(r => r.trope_id).join(','));
@@ -72,42 +72,55 @@ function ok(name, cond) {
     probe('ensureTropeQueueWired()');
     const calls = [];
     const existing = [
-      { trope_id: 'vampire', status: 'rejected' },   // must never be resurrected
-      { trope_id: 'dragons', status: 'confirmed' },  // must never be demoted
-      { trope_id: 'revenge', status: 'candidate' },  // replaced
+      { id: 'r1', trope_id: 'vampire', status: 'rejected', source_type: 'ai' }, // never resurrected
+      { id: 'c1', trope_id: 'dragons', status: 'confirmed', source_type: 'ai' }, // human-confirmed: never demoted
+      { id: 'c2', trope_id: 'revenge', status: 'candidate', source_type: 'ai' }, // replaced
+      { id: 'c3', trope_id: 'mafia', status: 'confirmed', source_type: 'ai', // auto: regenerable
+        evidence: { auto_confirmed: true } },
     ];
     vm.runInContext('cloudClient = async () => __sb;',
       Object.assign(ctx, { __sb: claimsSb({ existing, calls }) }));
     const upsert = probe('TropeQueue._upsertClaims');
     await probe(`(${upsert.toString()})('w-1', [
-      { trope_id: 'vampire', confidence: 0.95 },
-      { trope_id: 'dragons', confidence: 0.9 },
-      { trope_id: 'revenge', confidence: 0.8 },
-      { trope_id: 'mafia', confidence: 0.7 },
-    ], { model: 'test-model' })`).catch(e => 'THREW: ' + e.message);
+      { trope_id: 'vampire', confidence: 0.95, evidence: ['vampires stalk the night'] },
+      { trope_id: 'dragons', confidence: 0.9, evidence: ['dragons soar above'] },
+      { trope_id: 'revenge', confidence: 0.8, evidence: ['she seeks revenge'] },
+      { trope_id: 'grumpy-x-sunshine', confidence: 0.7 },
+      { trope_id: 'mafia', confidence: 0.92, evidence: ['the mafia family rules'] },
+    ], { model: 'test-model', inputHash: 'h1' })`).catch(e => 'THREW: ' + e.message);
 
     ok('rejected trope never re-inserted', !calls.some(c => c === 'insert:vampire' || (c.indexOf('insert:') === 0 && c.includes('vampire'))));
     const insRows = JSON.parse(calls.find(c => c.indexOf('insertRows:') === 0).slice('insertRows:'.length));
     const ids = insRows.map(r => r.trope_id).sort();
-    ok('only fresh candidates inserted (rejected+confirmed filtered)',
-      JSON.stringify(ids) === JSON.stringify(['mafia', 'revenge']));
-    ok('inserted rows carry provenance',
-      insRows.every(r => r.status === 'candidate' && r.source_type === 'ai' &&
-        r.work_id === 'w-1' && r.model === 'test-model' &&
-        r.evidence && r.evidence.taxonomy_version === 1));
-    ok('old AI candidates deleted first (replace semantics)',
-      calls.some(c => c === 'delete:work_id=w-1,status=candidate,source_type=ai'));
+    ok('only fresh tropes inserted (rejected + human-confirmed filtered)',
+      JSON.stringify(ids) === JSON.stringify(['grumpy-x-sunshine', 'mafia', 'revenge']));
+    const byId = Object.fromEntries(insRows.map(r => [r.trope_id, r]));
+    ok('high-confidence + evidence auto-publishes as confirmed',
+      byId.mafia.status === 'confirmed' && byId.mafia.evidence.auto_confirmed === true);
+    ok('medium trope stays candidate even with evidence',
+      byId.revenge.status === 'candidate' && byId.revenge.evidence.auto_confirmed !== true);
+    ok('high-confidence without evidence stays candidate',
+      byId['grumpy-x-sunshine'].status === 'candidate');
+    ok('inserted rows carry provenance incl. input hash',
+      insRows.every(r => r.source_type === 'ai' && r.work_id === 'w-1' &&
+        r.model === 'test-model' && r.evidence &&
+        r.evidence.taxonomy_version === 1 && r.evidence.input_hash === 'h1' &&
+        Array.isArray(r.evidence.evidence)));
+    ok('regenerable rows deleted by id (candidate + auto-confirmed)',
+      calls.some(c => c === 'delete:in:id=c2,c3'));
+    ok('human-confirmed + rejected rows never deleted',
+      !calls.some(c => /delete:in.*c1/.test(c) || /delete:in.*r1/.test(c)));
   }
 
   {
-    // No fresh tropes: delete still runs, insert skipped.
+    // No fresh tropes and nothing regenerable: no delete, no insert.
     const calls = [];
     vm.runInContext('cloudClient = async () => __sb;',
-      Object.assign(ctx, { __sb: claimsSb({ existing: [{ trope_id: 'vampire', status: 'rejected' }], calls }) }));
+      Object.assign(ctx, { __sb: claimsSb({ existing: [{ id: 'r1', trope_id: 'vampire', status: 'rejected', source_type: 'ai' }], calls }) }));
     const upsert = probe('TropeQueue._upsertClaims');
     await probe(`(${upsert.toString()})('w-2', [{ trope_id: 'vampire', confidence: 0.9 }], {})`);
-    ok('all-rejected set: delete runs, nothing inserted',
-      calls.some(c => c.indexOf('delete:') === 0) && !calls.some(c => c.indexOf('insert:') === 0));
+    ok('all-rejected set: nothing deleted, nothing inserted',
+      !calls.some(c => c.indexOf('delete:') === 0) && !calls.some(c => c.indexOf('insert:') === 0));
   }
 
   {
@@ -168,27 +181,40 @@ function ok(name, cond) {
   {
     const rows = [
       { work_id: 'w-1', trope_id: 'dragons', confidence: 0.9,
+        status: 'candidate', source_type: 'ai',
         works: { title: 'Fourth Wing', authors: ['Rebecca Yarros'] } },
       { work_id: 'w-1', trope_id: 'bogus-id', confidence: 0.99,
+        status: 'candidate', source_type: 'ai',
         works: { title: 'Fourth Wing', authors: ['Rebecca Yarros'] } },
       { work_id: 'w-2', trope_id: 'mafia', confidence: 0.7,
+        status: 'candidate', source_type: 'ai',
         works: { title: 'Mafia Book', authors: ['Anon'] } },
+      { work_id: 'w-3', trope_id: 'revenge', confidence: 0.95,
+        status: 'confirmed', source_type: 'ai', evidence: { auto_confirmed: true },
+        works: { title: 'Auto Book', authors: ['Anon'] } },
+      { work_id: 'w-3', trope_id: 'vampire', confidence: 0.9,
+        status: 'confirmed', source_type: 'ai', evidence: {},
+        works: { title: 'Auto Book', authors: ['Anon'] } },
     ];
     const calls = [];
     const sb = {
       from: (table) => ({
-        select: () => ({ eq: () => ({ eq: () => ({ order: () => ({
+        select: () => ({ eq: () => ({ in: () => ({ order: () => ({
           limit: async () => { calls.push('list:' + table); return { data: rows, error: null }; },
         }) }) }) }),
       }),
     };
     vm.runInContext('cloudClient = async () => __sb;', Object.assign(ctx, { __sb: sb }));
     const groups = await probe('TropeClaims.listCandidates(500)');
-    ok('candidates grouped by work', groups.length === 2);
+    ok('candidates grouped by work', groups.length === 3);
     const g1 = groups.find(g => g.workId === 'w-1');
     ok('work title/authors resolved', g1.title === 'Fourth Wing' && g1.authors === 'Rebecca Yarros');
     ok('unknown trope ids dropped', g1.tropes.length === 1 && g1.tropes[0].id === 'dragons');
     ok('taxonomy name attached', g1.tropes[0].name === 'Dragons');
+    const g3 = groups.find(g => g.workId === 'w-3');
+    ok('auto-published claim listed with auto flag',
+      g3.tropes.length === 1 && g3.tropes[0].id === 'revenge' && g3.tropes[0].auto === true);
+    ok('human-confirmed claim excluded from review', !g3.tropes.some(t => t.id === 'vampire'));
   }
 
   {
@@ -201,30 +227,59 @@ function ok(name, cond) {
   /* ---- D. TropeClaims.setStatus ---- */
   {
     const calls = [];
-    const sb = {
+    // __selRow: the row the pre-check select returns.
+    const mkSb = (selRow) => ({
       from: (table) => ({
-        update: (patch) => ({ eq: (c1, v1) => ({ eq: (c2, v2) => ({ eq: (c3, v3) => {
-          calls.push('update:' + JSON.stringify(patch) + '|' + c1 + '=' + v1 + ',' + c2 + '=' + v2 + ',' + c3 + '=' + v3);
+        select: (cols) => ({ eq: (c1, v1) => ({ eq: (c2, v2) => ({
+          limit: async () => ({ data: selRow ? [selRow] : [], error: null }),
+        }) }) }),
+        update: (patch) => ({ eq: (c1, v1) => ({ eq: (c2, v2) => {
+          calls.push('update:' + JSON.stringify(patch) + '|' + c1 + '=' + v1 + ',' + c2 + '=' + v2);
           return Promise.resolve({ error: null });
-        } }) }) }),
+        } }) }),
       }),
-    };
-    vm.runInContext('cloudClient = async () => __sb;', Object.assign(ctx, { __sb: sb }));
+    });
+    const asSb = (selRow) =>
+      vm.runInContext('cloudClient = async () => __sb;', Object.assign(ctx, { __sb: mkSb(selRow) }));
+    asSb({ status: 'candidate', source_type: 'ai', evidence: {} });
     probe(`TropeStore._cache['w:w-7'] = { tropes: [], at: Date.now() };`);
     await probe(`TropeClaims.setStatus('w-7', 'dragons', 'rejected')`);
-    ok('reject updates only candidate rows',
-      calls.some(c => c === 'update:{"status":"rejected"}|work_id=w-7,trope_id=dragons,status=candidate'));
+    ok('candidate can be rejected',
+      calls.some(c => c === 'update:{"status":"rejected"}|work_id=w-7,trope_id=dragons'));
     ok('work cache invalidated after moderation',
       probe(`!('w:w-7' in TropeStore._cache)`));
 
     await probe(`TropeClaims.setStatus('w-7', 'mafia', 'confirmed')`);
-    ok('confirm updates only candidate rows',
+    ok('candidate can be confirmed',
       calls.some(c => c.indexOf('"status":"confirmed"') !== -1));
 
     let threw = false;
     try { await probe(`TropeClaims.setStatus('w-7', 'mafia', 'bogus')`); }
     catch (e) { threw = true; }
     ok('invalid status rejected', threw);
+
+    // Auto-published claim: reject allowed, confirm refused.
+    asSb({ status: 'confirmed', source_type: 'ai', evidence: { auto_confirmed: true } });
+    await probe(`TropeClaims.setStatus('w-7', 'dragons', 'rejected')`);
+    ok('auto-published claim can be rejected', calls.length === 3);
+    threw = false;
+    try { await probe(`TropeClaims.setStatus('w-7', 'dragons', 'confirmed')`); }
+    catch (e) { threw = true; }
+    ok('auto-published claim cannot be re-confirmed', threw);
+
+    // Human-confirmed claim: neither transition allowed.
+    asSb({ status: 'confirmed', source_type: 'ai', evidence: {} });
+    threw = false;
+    try { await probe(`TropeClaims.setStatus('w-7', 'dragons', 'rejected')`); }
+    catch (e) { threw = true; }
+    ok('human-confirmed claim not reviewable', threw);
+
+    // Non-AI row: refused.
+    asSb({ status: 'candidate', source_type: 'community', evidence: {} });
+    threw = false;
+    try { await probe(`TropeClaims.setStatus('w-7', 'dragons', 'rejected')`); }
+    catch (e) { threw = true; }
+    ok('community claim not moderated here', threw);
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

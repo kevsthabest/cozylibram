@@ -220,7 +220,9 @@ const TROPE_SYSTEM_PROMPT = [
   '   from the list is discarded.',
   '2. Reply with JSON ONLY. No markdown fences, no commentary, no extra keys,',
   '   no reasoning text, no explanations:',
-  '   {"tropes": [{"id": "trope-id", "confidence": 0.85}]}',
+  '   {"tropes": [{"id": "trope-id", "confidence": 0.85,',
+  '                "evidence": ["exact quote from the description",',
+  '                             "second supporting quote"]}]}',
   '3. Tag 0-8 tropes. Fewer is better than guessing; an empty list is a valid answer.',
   '4. Confidence is 0.0-1.0 and must be grounded in the description: 0.9+ means',
   '   stated outright in the description; 0.7-0.89 means strongly implied by',
@@ -232,6 +234,10 @@ const TROPE_SYSTEM_PROMPT = [
   '   themes factually where they apply; do not moralize, warn, or refuse.',
   '7. If the description is missing or too thin to tag confidently,',
   '   return {"tropes": []}.',
+  '8. For EVERY trope, quote 1-2 SHORT excerpts from the description above',
+  '   that support the tag. Quote exactly — never invent, paraphrase, or',
+  '   quote the title/author/genres. A trope with no quotable support in',
+  '   the description must be omitted, not tagged on a hunch.',
   '',
   'TAXONOMY (id: name — what it means)',
   '{taxonomy_lines}',
@@ -302,6 +308,79 @@ function parseTropeResponse(text) {
   throw new Error('unparseable JSON');
 }
 
+/* Pure: clean a model's evidence quotes — at most 2, trimmed, capped at
+   200 chars each, whitespace-collapsed. Non-array input yields []. */
+function cleanEvidence(ev) {
+  const out = [];
+  for (const q of Array.isArray(ev) ? ev : []) {
+    if (out.length >= 2) break;
+    const s = String(q == null ? '' : q).replace(/\s+/g, ' ').trim();
+    if (s.length >= 4) out.push(s.slice(0, 200));
+  }
+  return out;
+}
+
+/* v208: confidence tiers (single source of truth). High-confidence claims
+   WITH quoted evidence auto-publish; everything else stays a candidate
+   for human correction. Thresholds are starting points, not permanent. */
+const TROPE_CONFIDENCE_TIERS = { high: 0.85, medium: 0.60 };
+
+/* Pure: which tier a validated trope falls in. */
+function tropeClaimTier(t) {
+  const c = t && isFinite(t.confidence) ? t.confidence : 0;
+  if (c >= TROPE_CONFIDENCE_TIERS.high) return 'high';
+  if (c >= TROPE_CONFIDENCE_TIERS.medium) return 'medium';
+  return 'low';
+}
+
+/* Pure: may this validated trope auto-publish? Only high-confidence
+   claims with quoted evidence — the human review queue is for
+   corrections, not approvals. */
+function tropeAutoPublish(t) {
+  return tropeClaimTier(t) === 'high' &&
+    Array.isArray(t && t.evidence) && t.evidence.length > 0;
+}
+
+/* Pure: is this stored claim regenerable AI output (safe to replace on
+   re-inference)? AI candidates always; AI auto-confirmed rows too (they
+   carry evidence.auto_confirmed). Human/community confirmations and
+   rejections are never regenerable. */
+function isRegenerableClaim(row) {
+  if (!row || row.source_type !== 'ai') return false;
+  if (row.status === 'candidate') return true;
+  return row.status === 'confirmed' &&
+    !!(row.evidence && row.evidence.auto_confirmed === true);
+}
+
+/* Pure: stable input hash for the reprocess cache — the same book input
+   classified under the same taxonomy version/rev never needs a second API
+   call. The model is compared separately (see _pump): with a client model
+   override the stored model must match; without one the server default is
+   assumed stable. cyrb53, hex; a cache key, not a security hash. */
+function tropeInputHash(book) {
+  book = book || {};
+  const authors = Array.isArray(book.authors) ? book.authors.join(' ')
+    : String(book.authors || '');
+  const cats = Array.isArray(book.categories) ? book.categories.join(' ')
+    : String(book.categories || '');
+  const s = [
+    tropeNormIdent(book.title), tropeNormIdent(authors),
+    String(book.description || '').replace(/\s+/g, ' ').trim().toLowerCase(),
+    String(cats).toLowerCase(),
+    TROPE_TAXONOMY_VERSION, TropeTaxonomy.rev(),
+  ].join('\\x1f');
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, '0') +
+         (h1 >>> 0).toString(16).padStart(8, '0');
+}
+
 /* Pure: validate raw model output against the taxonomy. Unknown ids are
    dropped (the main defense against invented labels), known aliases are
    resolved to their canonical id, confidence is clamped to 0-1,
@@ -310,7 +389,10 @@ function parseTropeResponse(text) {
    community tropes are accepted without a file update.
    v207: alias-aware — the model often emits the display name or a
    synonym ("reverse harem"); those now map to the catalog id instead of
-   being silently dropped. Only canonical ids leave this function. */
+   being silently dropped. Only canonical ids leave this function.
+   v208: evidence-aware — each trope carries 1-2 cleaned evidence quotes;
+   a trope with no usable evidence loses 0.15 confidence and is dropped
+   below 0.5 (unverifiable guesses don't publish). */
 function validateTropeResults(raw) {
   const out = [], seen = new Set();
   for (const r of raw || []) {
@@ -320,9 +402,12 @@ function validateTropeResults(raw) {
     if (!id || seen.has(id)) continue;
     let c = Number(r.confidence);
     if (!isFinite(c)) continue;
+    const evidence = cleanEvidence(r.evidence);
+    if (!evidence.length) c -= 0.15;
+    if (c < 0.5) continue;
     c = Math.min(1, Math.max(0, c));
     seen.add(id);
-    out.push({ id, confidence: Math.round(c * 100) / 100 });
+    out.push({ id, confidence: Math.round(c * 100) / 100, evidence });
   }
   return out;
 }
@@ -629,6 +714,7 @@ const TropeQueue = {
   _resolveBook: null, // id -> book (set by the app)
   _upsertRows: null,  // async (rows) -> void (set by the app)
   _upsertClaims: null, // v206: async (workId, tropes, meta) -> void (set by the app)
+  _getClaimHashes: null, // v208: async (workId) -> [input_hash] (set by the app)
   _onEvent: null,     // (state) -> void, UI refresh hook
 
   _blank() {
@@ -656,11 +742,12 @@ const TropeQueue = {
     try { if (this._onEvent) this._onEvent(this.snapshot()); } catch (e) {}
   },
 
-  configure({ resolveBook, upsertRows, upsertClaims, onEvent } = {}) {
+  configure({ resolveBook, upsertRows, upsertClaims, getClaimHashes, onEvent } = {}) {
     if (!this._state) this._load();
     if (resolveBook) this._resolveBook = resolveBook;
     if (upsertRows) this._upsertRows = upsertRows;
     if (upsertClaims) this._upsertClaims = upsertClaims;
+    if (getClaimHashes) this._getClaimHashes = getClaimHashes;
     if (onEvent) this._onEvent = onEvent;
   },
 
@@ -672,13 +759,18 @@ const TropeQueue = {
              fatalError: s.fatalError, failedDetail: Object.assign({}, s.failed) };
   },
 
-  /* ids: local library book ids. Returns number enqueued. */
-  enqueue(ids) {
+  /* ids: local library book ids. opts.force bypasses the v208 input-hash
+     reprocess cache (used by explicit "re-infer" actions). Returns number
+     enqueued. */
+  enqueue(ids, opts) {
     if (!this._state) this._load();
+    const force = !!(opts && opts.force);
     const have = new Set(this._state.jobs.map(j => j.id));
     let n = 0;
     (ids || []).forEach(id => {
-      if (id && !have.has(id)) { this._state.jobs.push({ id }); have.add(id); n++; }
+      if (id && !have.has(id)) {
+        this._state.jobs.push({ id, force }); have.add(id); n++;
+      }
     });
     this._state.total += n;
     this._state.fatalError = '';
@@ -732,20 +824,48 @@ const TropeQueue = {
         } else {
           const key = bookKeyFor(book);
           try {
+            /* v208: resolve the work first — the input-hash reprocess
+               cache (§26) skips the API call when this exact input was
+               already classified under the current taxonomy and model.
+               Forced jobs (explicit re-infer) always run. */
+            let workId = null;
+            try { workId = (typeof resolveWork === 'function') ? await resolveWork(book) : null; }
+            catch (e) { workId = null; }
+            let skipInference = false;
+            if (!job.force && workId && this._getClaimHashes) {
+              try {
+                /* v208: getClaimHashes -> [{input_hash, model}]. Skip when
+                   this exact input was classified under the current
+                   taxonomy; with a client model override the model must
+                   match too, otherwise the server default is assumed. */
+                const seen = await this._getClaimHashes(workId) || [];
+                const ov = await tropeProviderGet().catch(() => null);
+                const ovModel = (ov && ov.model) || '';
+                const want = tropeInputHash(book);
+                skipInference = seen.some(r => r && r.input_hash === want &&
+                  (!ovModel || r.model === ovModel));
+              } catch (e) { skipInference = false; }
+            }
+            if (skipInference) {
+              this._state.done++;
+              delete this._state.failed[key];
+            } else {
             const res = await inferBookTropes(book);
             /* v206: claims write path — the work is the identity now.
                Resolve it, then record the AI's tropes as candidate claims
                (the writer filters out rejected/confirmed tropes, so
                re-inference can never resurrect a rejection or demote a
                confirmation). The legacy book_tropes write stays as the
-               fallback for books whose work can't be resolved. */
-            let workId = null;
-            try { workId = (typeof resolveWork === 'function') ? await resolveWork(book) : null; }
-            catch (e) { workId = null; }
+               fallback for books whose work can't be resolved.
+               v208: high-confidence claims with quoted evidence
+               auto-publish (status confirmed, source ai); the writer
+               decides per trope. */
             if (workId && this._upsertClaims) {
               await this._upsertClaims(workId,
-                res.tropes.map(t => ({ trope_id: t.id, confidence: t.confidence })),
-                { model: res.model || null });
+                res.tropes.map(t => ({ trope_id: t.id, confidence: t.confidence,
+                                       evidence: t.evidence || [] })),
+                { model: res.model || null,
+                  inputHash: tropeInputHash(book) });
               try { TropeStore.invalidate('w:' + workId); } catch (e) {}
             } else {
               const rows = res.tropes.map(t => ({
@@ -761,6 +881,7 @@ const TropeQueue = {
             }
             this._state.done++;
             delete this._state.failed[key];
+            } // end v208 skipInference else
           } catch (e) {
             if (e && e.fatal) {
               this._state.running = false;
@@ -936,41 +1057,73 @@ function ensureTropeQueueWired() {
      this work's AI candidates wholesale (delete-then-insert), but:
      - a REJECTED trope is never re-inserted (rejections survive
        re-inference — the read path's rejected-wins rule is the backstop);
-     - a CONFIRMED trope is never demoted back to candidate.
-     Only status='candidate' + source_type='ai' rows are deleted — the
-     regenerable guesses. Rejected/confirmed/community rows are never
-     touched (RLS wouldn't allow it anyway). */
+     - a human/COMMUNITY CONFIRMED trope is never demoted back to candidate.
+     Only regenerable AI rows are deleted — candidates plus AI
+     auto-confirmed rows (isRegenerableClaim). Human confirmations,
+     rejections, and community rows are never touched (RLS wouldn't allow
+     it anyway).
+     v208: evidence-backed auto-publishing — high-confidence tropes with
+     quoted evidence are written as confirmed (source ai,
+     evidence.auto_confirmed=true) instead of candidates; the Trope Lab
+     queue becomes corrections-only. */
   const upsertClaims = async (workId, tropes, meta) => {
     const sb = await cloudClient().catch(() => null);
     if (!sb) throw new Error('cloud unavailable');
     let existing = [];
     try {
       const r = await sb.from('book_trope_claims')
-        .select('trope_id, status').eq('work_id', workId);
+        .select('id, trope_id, status, source_type, evidence').eq('work_id', workId);
       if (r.error) throw r.error;
       existing = r.data || [];
     } catch (e) { existing = []; }
-    const rejected = new Set(), confirmed = new Set();
+    const rejected = new Set(), confirmed = new Set(), regenIds = [];
     for (const c of existing) {
       if (!c || !c.trope_id) continue;
       if (c.status === 'rejected') rejected.add(c.trope_id);
-      else if (c.status === 'confirmed') confirmed.add(c.trope_id);
+      else if (c.status === 'confirmed' && !isRegenerableClaim(c)) confirmed.add(c.trope_id);
+      if (isRegenerableClaim(c) && c.id) regenIds.push(c.id);
     }
     const fresh = (tropes || []).filter(t => t && t.trope_id &&
       !rejected.has(t.trope_id) && !confirmed.has(t.trope_id));
-    const del = await sb.from('book_trope_claims').delete()
-      .eq('work_id', workId).eq('status', 'candidate').eq('source_type', 'ai');
-    if (del.error) throw del.error;
+    if (regenIds.length) {
+      const del = await sb.from('book_trope_claims').delete().in('id', regenIds);
+      if (del.error) throw del.error;
+    }
     if (!fresh.length) return;
-    const rows = fresh.map(t => ({
-      work_id: workId, trope_id: t.trope_id, status: 'candidate',
-      confidence: t.confidence, source_type: 'ai',
-      model: (meta && meta.model) || null, model_version: null,
-      evidence: { taxonomy_version: TROPE_TAXONOMY_VERSION,
-                  taxonomy_rev: TropeTaxonomy.rev() },
-    }));
+    const rows = fresh.map(t => {
+      const auto = tropeAutoPublish({ confidence: t.confidence,
+                                      evidence: t.evidence || [] });
+      return {
+        work_id: workId, trope_id: t.trope_id,
+        status: auto ? 'confirmed' : 'candidate',
+        confidence: t.confidence, source_type: 'ai',
+        model: (meta && meta.model) || null, model_version: null,
+        evidence: { taxonomy_version: TROPE_TAXONOMY_VERSION,
+                    taxonomy_rev: TropeTaxonomy.rev(),
+                    evidence: t.evidence || [],
+                    input_hash: (meta && meta.inputHash) || null,
+                    auto_confirmed: auto || undefined },
+      };
+    });
     const ins = await sb.from('book_trope_claims').insert(rows);
     if (ins.error) throw ins.error;
+  };
+  /* v208: input hashes + models of existing claims for one work, for the
+     queue's reprocess cache. Never throws. */
+  const getClaimHashes = async workId => {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('book_trope_claims')
+        .select('evidence, model').eq('work_id', workId).limit(200);
+      if (error || !data) return [];
+      const out = [];
+      for (const r of data) {
+        const h = r && r.evidence && r.evidence.input_hash;
+        if (typeof h === 'string' && h) out.push({ input_hash: h, model: r.model || '' });
+      }
+      return out;
+    } catch (e) { return []; }
   };
   const readRows = async bookKey => {
     const sb = await cloudClient().catch(() => null);
@@ -993,7 +1146,7 @@ function ensureTropeQueueWired() {
     if (error) throw error;
     return data || [];
   };
-  TropeQueue.configure({ resolveBook, upsertRows, upsertClaims });
+  TropeQueue.configure({ resolveBook, upsertRows, upsertClaims, getClaimHashes });
   TropeStore.configure({ readRows, readClaims });
   TropeVotes.configure({ getClient: async () => cloudClient().catch(() => null) });
   TropeProposals.configure({ getClient: async () => cloudClient().catch(() => null) });
@@ -1142,23 +1295,29 @@ const TropeClaims = {
     return cloudClient().catch(() => null);
   },
 
-  /* Works that still have AI candidates awaiting review, grouped with
-     taxonomy names resolved. Returns
-     [{ workId, title, authors, tropes: [{id, name, confidence}] }].
-     Never throws — returns [] when signed out or on error. */
+  /* Works with AI claims awaiting review, grouped with taxonomy names
+     resolved. Returns
+     [{ workId, title, authors, tropes: [{id, name, confidence, auto}] }].
+     v208: includes AI auto-published claims (auto=true) alongside
+     candidates — the queue is corrections-only now, and a wrong
+     auto-published tag is exactly what needs a human ✕. Never throws —
+     returns [] when signed out or on error. */
   async listCandidates(limit) {
     let sb = null;
     try { sb = await this._sb(); } catch (e) { sb = null; }
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_trope_claims')
-        .select('work_id, trope_id, confidence, works(title, authors)')
-        .eq('status', 'candidate').eq('source_type', 'ai')
+        .select('work_id, trope_id, confidence, source_type, status, evidence, works(title, authors)')
+        .eq('source_type', 'ai')
+        .in('status', ['candidate', 'confirmed'])
         .order('updated_at', { ascending: false })
         .limit(limit || 500);
       if (error) throw error;
       const byWork = {};
       for (const r of data || []) {
+        if (r.status === 'confirmed' &&
+            !(r.evidence && r.evidence.auto_confirmed === true)) continue;
         const t = (typeof TropeTaxonomy !== 'undefined' && TropeTaxonomy)
           ? TropeTaxonomy.byId(r.trope_id) : null;
         if (!t) continue;
@@ -1171,7 +1330,8 @@ const TropeClaims = {
         if (e.tropes.some(x => x.id === t.id)) continue;
         const conf = Number(r.confidence);
         e.tropes.push({ id: t.id, name: t.name,
-          confidence: isFinite(conf) ? conf : 0.5 });
+          confidence: isFinite(conf) ? conf : 0.5,
+          auto: r.status === 'confirmed' });
       }
       return Object.keys(byWork).map(k => {
         const e = byWork[k];
@@ -1181,16 +1341,29 @@ const TropeClaims = {
     } catch (e) { return []; }
   },
 
-  /* Confirm or reject a candidate claim. Only candidate rows are touched —
-     an already-confirmed/rejected claim keeps its status. Throws on
-     error (RLS denial included) so the UI can report it. */
+  /* Confirm or reject an AI claim. Candidates move either way; AI
+     auto-published claims (evidence.auto_confirmed) can be rejected —
+     that is the corrections workflow. Human/community confirmations are
+     never touched here. Throws on error (RLS denial included) so the UI
+     can report it. */
   async setStatus(workId, tropeId, status) {
     if (status !== 'confirmed' && status !== 'rejected')
       throw new Error('status must be confirmed or rejected');
     const sb = await this._sb();
     if (!sb) throw new Error('cloud unavailable');
+    const cur = await sb.from('book_trope_claims')
+      .select('status, source_type, evidence')
+      .eq('work_id', workId).eq('trope_id', tropeId).limit(1);
+    if (cur.error) throw cur.error;
+    const row = (cur.data || [])[0];
+    if (!row || row.source_type !== 'ai')
+      throw new Error('only AI claims can be moderated here');
+    const auto = row.status === 'confirmed' &&
+      !!(row.evidence && row.evidence.auto_confirmed === true);
+    if (row.status !== 'candidate' && !(auto && status === 'rejected'))
+      throw new Error('claim is not reviewable');
     const { error } = await sb.from('book_trope_claims').update({ status })
-      .eq('work_id', workId).eq('trope_id', tropeId).eq('status', 'candidate');
+      .eq('work_id', workId).eq('trope_id', tropeId);
     if (error) throw error;
     try { TropeStore.invalidate('w:' + workId); } catch (e) {}
   },
