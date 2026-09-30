@@ -925,6 +925,17 @@ const TropeQueue = {
 
 const TROPE_CACHE_TTL_MS = 10 * 60 * 1000;
 
+/* v212: the auto-publish tier — high-confidence AI claims carrying quoted
+   evidence (evidence.auto_confirmed). Only these auto-add to the book's
+   own trope list; candidates never do. Admin-confirmed candidates lack the
+   flag, so a human confirmation never triggers an auto-add. */
+function isAutoConfirmed(row) {
+  if (!row || row.status !== 'confirmed' || row.source_type !== 'ai') return false;
+  let e = row.evidence;
+  if (typeof e === 'string') { try { e = JSON.parse(e); } catch (_) { return false; } }
+  return !!(e && e.auto_confirmed === true);
+}
+
 /* ---------------- Claim resolution (v205) ----------------
    Pure: reduce a work's book_trope_claims rows to the display list.
    The client resolution rule: when candidate and rejected claims coexist
@@ -958,10 +969,62 @@ function resolveClaims(claims) {
       confidence: isFinite(conf) ? conf : 0.5,
       source: best.source_type === 'community' ? 'community' : 'ai',
       status: best.status,
+      auto: isAutoConfirmed(best), // v212: the auto-publish tier
     });
   }
   out.sort((a, b) => b.confidence - a.confidence);
   return out;
+}
+
+/* ---------------- Auto-add (v212) ----------------
+   High-confidence AI tropes (the auto-publish tier) join the book's own
+   trope list instead of living only in the Trope intelligence card.
+   - Only claims flagged auto (evidence.auto_confirmed) qualify; medium
+     candidates never auto-add.
+   - book.tropesAI tracks the lowercased names the AI added (for the ✦
+     badge); book.tropesAIDismissed tombstones claim ids she ×-removed so
+     the merge never resurrects them. (Work-wide rejection stays
+     admin-only per RLS; the tombstone rides the synced book row.)
+   - Never removes anything from book.tropes. Idempotent. Returns true
+   when the book changed (caller re-syncs the editor chips). */
+function autoAddConfirmedTropes(book, claims) {
+  if (!book || !Array.isArray(claims)) return false;
+  if (!Array.isArray(book.tropes)) book.tropes = [];
+  if (!Array.isArray(book.tropesAI)) book.tropesAI = [];
+  if (!Array.isArray(book.tropesAIDismissed)) book.tropesAIDismissed = [];
+  const dismissed = new Set(book.tropesAIDismissed);
+  const auto = claims.filter(c => c && c.auto && c.id && !dismissed.has(c.id));
+  const norm = s => String(s || '').toLowerCase().trim();
+  const have = new Set(book.tropes.map(norm));
+  let changed = false;
+  for (const c of auto) {
+    const name = norm(c.name);
+    if (!name || have.has(name)) continue;
+    book.tropes.push(name);
+    have.add(name);
+    changed = true;
+  }
+  // Reconcile the badge list with the claims that are auto *right now*
+  // and still present in her list (a Trope Lab rejection drops the badge
+  // but leaves her text alone).
+  const badge = [...new Set(auto.map(c => norm(c.name)).filter(n => n && have.has(n)))].sort();
+  const cur = [...new Set(book.tropesAI.map(x => norm(x)))].sort();
+  if (JSON.stringify(badge) !== JSON.stringify(cur)) { book.tropesAI = badge; changed = true; }
+  if (changed) {
+    try { book._mtime = Date.now(); } catch (e) {}
+    try { if (typeof saveLibrary === 'function') saveLibrary(); } catch (e) {}
+  }
+  return changed;
+}
+
+/* She ×-removed an AI-added trope from her list. Tombstone the claim id so
+   auto-add never brings it back. */
+function dismissAutoTrope(book, tropeId) {
+  if (!book || !tropeId) return;
+  if (!Array.isArray(book.tropesAIDismissed)) book.tropesAIDismissed = [];
+  if (!book.tropesAIDismissed.includes(tropeId)) book.tropesAIDismissed.push(tropeId);
+  try { book._mtime = Date.now(); } catch (e) {}
+  try { if (typeof saveLibrary === 'function') saveLibrary(); } catch (e) {}
 }
 
 const TropeStore = {
@@ -1146,12 +1209,13 @@ function ensureTropeQueueWired() {
     if (error) throw error;
     return data || [];
   };
-  /* v205: work-keyed claim read for the new resolution path. */
+  /* v205: work-keyed claim read for the new resolution path.
+     v212: evidence is selected so resolveClaims can flag the auto-publish tier. */
   const readClaims = async workId => {
     const sb = await cloudClient().catch(() => null);
     if (!sb) return null;
     const { data, error } = await sb.from('book_trope_claims')
-      .select('trope_id, status, confidence, source_type')
+      .select('trope_id, status, confidence, source_type, evidence')
       .eq('work_id', workId)
       .order('confidence', { ascending: false });
     if (error) throw error;

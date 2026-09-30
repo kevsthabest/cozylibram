@@ -1155,14 +1155,32 @@ function renderDetailModal(b, viaBook) {
     const box = document.getElementById('f-tropechips');
     if (!inp || !box) return;
     const list = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+    // v212: badge the tropes the AI auto-added so she can tell them apart
+    const aiSet = new Set((b.tropesAI || []).map(t => String(t).toLowerCase()));
     box.innerHTML = list.length
-      ? list.map(t => '<span class="chip on">' + esc(t) +
-          '<button data-trm="' + esc(t.toLowerCase()) + '" aria-label="Remove ' + esc(t) + '">×</button></span>').join('')
+      ? list.map(t => {
+          const ai = aiSet.has(t.toLowerCase());
+          return '<span class="chip on' + (ai ? ' ai' : '') + '">' + (ai ? '✦ ' : '') + esc(t) +
+            '<button data-trm="' + esc(t.toLowerCase()) + '" aria-label="Remove ' + esc(t) + '">×</button></span>';
+        }).join('')
       : '<span class="note">No tropes yet — tap + Add for what you love about this book.</span>';
     box.querySelectorAll('[data-trm]').forEach(btn => btn.addEventListener('click', () => {
+      const removed = btn.dataset.trm;
       const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean)
-        .filter(t => t.toLowerCase() !== btn.dataset.trm);
+        .filter(t => t.toLowerCase() !== removed);
       inp.value = cur.join(', ');
+      // v212: ×-removing an AI-added trope tombstones it so auto-add never
+      // resurrects it (work-wide rejection stays admin-only per RLS).
+      try {
+        if (aiSet.has(removed)) {
+          b.tropesAI = (b.tropesAI || []).filter(t => String(t).toLowerCase() !== removed);
+          b.tropes = (b.tropes || []).filter(t => String(t).toLowerCase() !== removed);
+          if (typeof TropeTaxonomy !== 'undefined' && typeof dismissAutoTrope === 'function') {
+            const id = TropeTaxonomy.resolveId(removed);
+            if (id) dismissAutoTrope(b, id);
+          }
+        }
+      } catch (e) {}
       syncTropeChips();
       renderTropeSuggestions();
     }));
@@ -1234,7 +1252,19 @@ function renderDetailModal(b, viaBook) {
 
   // v153: trope-intelligence chips — DB tropes when present (with a subtle
   // source indicator), heuristic suggestions otherwise. Fills in async.
-  renderDbTropeChips(b);
+  // v212: onAutoAdd unions the AI-augmented book list with any in-flight
+  // chip edits instead of clobbering what she typed while claims loaded.
+  renderDbTropeChips(b, () => {
+    const inp = document.getElementById('f-tropes');
+    if (!inp) return;
+    const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean);
+    const have = new Set(cur.map(t => t.toLowerCase()));
+    for (const t of (b.tropes || [])) {
+      if (!have.has(String(t).toLowerCase())) { cur.push(t); have.add(String(t).toLowerCase()); }
+    }
+    inp.value = cur.join(', ');
+    syncTropeChips();
+  });
   // v155: propose-a-trope sheet, with this book as the originating book.
   const tpb = document.getElementById('m-tropepropose');
   if (tpb) tpb.addEventListener('click', () => openTropeProposalSheet(b));
@@ -1463,8 +1493,10 @@ function renderQuotes() {
 
 /* v153: fill the Trope intelligence row — DB tropes when present, heuristic
    suggestions otherwise. v154: vote buttons (tap again to retract).
+   v212: high-confidence AI tropes also auto-add to her list via
+   autoAddConfirmedTropes; onAutoAdd (optional) re-syncs the editor chips.
    Async; leaves a fallback note on failure. */
-async function renderDbTropeChips(book) {
+async function renderDbTropeChips(book, onAutoAdd) {
   const box = document.getElementById('m-tropedb');
   if (!box) return;
   try {
@@ -1480,11 +1512,16 @@ async function renderDbTropeChips(book) {
       try {
         btn.disabled = true;
         await TropeVotes.toggleVote(key, tid, want);
-        renderDbTropeChips(book); // re-render: counts, highlight, adjusted confidence
+        renderDbTropeChips(book, onAutoAdd); // re-render: counts, highlight, adjusted confidence
       } catch (e) {
         btn.disabled = false;
       }
     }));
+    try {
+      if (typeof autoAddConfirmedTropes === 'function' &&
+          autoAddConfirmedTropes(book, tropes) &&
+          typeof onAutoAdd === 'function') onAutoAdd();
+    } catch (e) {}
   } catch (e) {
     box.innerHTML = '<p class="note">No trope data yet.</p>';
   }

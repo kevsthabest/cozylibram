@@ -93,6 +93,8 @@ function migrateBook(b) {
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
   if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81
+  if (!Array.isArray(b.tropesAI)) b.tropesAI = []; // v212: AI auto-added trope names (✦ badge)
+  if (!Array.isArray(b.tropesAIDismissed)) b.tropesAIDismissed = []; // v212: dismissed AI trope ids
   // v211: strip format junk ('audiobook' etc.) that older stopword sets let
   // seedTropes plant in b.tropes. _mtime bumps only when something was
   // actually removed, so the cleaned book wins the cloud merge and pushes once.

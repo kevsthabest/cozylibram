@@ -2078,6 +2078,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* --- trope chips with remove --- */
 #f-tropechips .chip { display: inline-flex; align-items: center; gap: 6px; }
+/* v212: AI auto-added tropes get the accent treatment, mirroring .chip.dbtrope.ai */
+#f-tropechips .chip.ai { border-color: var(--accent); color: var(--accent); }
 #f-tropechips .chip button {
   background: none; border: none; color: inherit; font: inherit;
   cursor: pointer; padding: 0; font-size: 15px; line-height: 1;
