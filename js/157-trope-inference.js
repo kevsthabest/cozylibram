@@ -611,6 +611,7 @@ const TropeQueue = {
   _pumping: false,
   _resolveBook: null, // id -> book (set by the app)
   _upsertRows: null,  // async (rows) -> void (set by the app)
+  _upsertClaims: null, // v206: async (workId, tropes, meta) -> void (set by the app)
   _onEvent: null,     // (state) -> void, UI refresh hook
 
   _blank() {
@@ -638,10 +639,11 @@ const TropeQueue = {
     try { if (this._onEvent) this._onEvent(this.snapshot()); } catch (e) {}
   },
 
-  configure({ resolveBook, upsertRows, onEvent } = {}) {
+  configure({ resolveBook, upsertRows, upsertClaims, onEvent } = {}) {
     if (!this._state) this._load();
     if (resolveBook) this._resolveBook = resolveBook;
     if (upsertRows) this._upsertRows = upsertRows;
+    if (upsertClaims) this._upsertClaims = upsertClaims;
     if (onEvent) this._onEvent = onEvent;
   },
 
@@ -714,16 +716,32 @@ const TropeQueue = {
           const key = bookKeyFor(book);
           try {
             const res = await inferBookTropes(book);
-            const rows = res.tropes.map(t => ({
-              book_key: key, trope_id: t.id, source: 'llm',
-              confidence: t.confidence, model: res.model || null,
-              taxonomy_version: TROPE_TAXONOMY_VERSION,
-              taxonomy_rev: TropeTaxonomy.rev(),
-              updated_at: new Date().toISOString(),
-            }));
-            // Empty inference is a legitimate result — but per the plan we
-            // never cache "no tropes", so zero rows = nothing to upsert.
-            if (rows.length && this._upsertRows) await this._upsertRows(rows);
+            /* v206: claims write path — the work is the identity now.
+               Resolve it, then record the AI's tropes as candidate claims
+               (the writer filters out rejected/confirmed tropes, so
+               re-inference can never resurrect a rejection or demote a
+               confirmation). The legacy book_tropes write stays as the
+               fallback for books whose work can't be resolved. */
+            let workId = null;
+            try { workId = (typeof resolveWork === 'function') ? await resolveWork(book) : null; }
+            catch (e) { workId = null; }
+            if (workId && this._upsertClaims) {
+              await this._upsertClaims(workId,
+                res.tropes.map(t => ({ trope_id: t.id, confidence: t.confidence })),
+                { model: res.model || null });
+              try { TropeStore.invalidate('w:' + workId); } catch (e) {}
+            } else {
+              const rows = res.tropes.map(t => ({
+                book_key: key, trope_id: t.id, source: 'llm',
+                confidence: t.confidence, model: res.model || null,
+                taxonomy_version: TROPE_TAXONOMY_VERSION,
+                taxonomy_rev: TropeTaxonomy.rev(),
+                updated_at: new Date().toISOString(),
+              }));
+              // Empty inference is a legitimate result — but per the plan we
+              // never cache "no tropes", so zero rows = nothing to upsert.
+              if (rows.length && this._upsertRows) await this._upsertRows(rows);
+            }
             this._state.done++;
             delete this._state.failed[key];
           } catch (e) {
@@ -897,6 +915,46 @@ function ensureTropeQueueWired() {
       .upsert(rows, { onConflict: 'book_key,trope_id' });
     if (error) throw error;
   };
+  /* v206: claims writer with rejection persistence. Re-inference replaces
+     this work's AI candidates wholesale (delete-then-insert), but:
+     - a REJECTED trope is never re-inserted (rejections survive
+       re-inference — the read path's rejected-wins rule is the backstop);
+     - a CONFIRMED trope is never demoted back to candidate.
+     Only status='candidate' + source_type='ai' rows are deleted — the
+     regenerable guesses. Rejected/confirmed/community rows are never
+     touched (RLS wouldn't allow it anyway). */
+  const upsertClaims = async (workId, tropes, meta) => {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) throw new Error('cloud unavailable');
+    let existing = [];
+    try {
+      const r = await sb.from('book_trope_claims')
+        .select('trope_id, status').eq('work_id', workId);
+      if (r.error) throw r.error;
+      existing = r.data || [];
+    } catch (e) { existing = []; }
+    const rejected = new Set(), confirmed = new Set();
+    for (const c of existing) {
+      if (!c || !c.trope_id) continue;
+      if (c.status === 'rejected') rejected.add(c.trope_id);
+      else if (c.status === 'confirmed') confirmed.add(c.trope_id);
+    }
+    const fresh = (tropes || []).filter(t => t && t.trope_id &&
+      !rejected.has(t.trope_id) && !confirmed.has(t.trope_id));
+    const del = await sb.from('book_trope_claims').delete()
+      .eq('work_id', workId).eq('status', 'candidate').eq('source_type', 'ai');
+    if (del.error) throw del.error;
+    if (!fresh.length) return;
+    const rows = fresh.map(t => ({
+      work_id: workId, trope_id: t.trope_id, status: 'candidate',
+      confidence: t.confidence, source_type: 'ai',
+      model: (meta && meta.model) || null, model_version: null,
+      evidence: { taxonomy_version: TROPE_TAXONOMY_VERSION,
+                  taxonomy_rev: TropeTaxonomy.rev() },
+    }));
+    const ins = await sb.from('book_trope_claims').insert(rows);
+    if (ins.error) throw ins.error;
+  };
   const readRows = async bookKey => {
     const sb = await cloudClient().catch(() => null);
     if (!sb) return null;
@@ -918,7 +976,7 @@ function ensureTropeQueueWired() {
     if (error) throw error;
     return data || [];
   };
-  TropeQueue.configure({ resolveBook, upsertRows });
+  TropeQueue.configure({ resolveBook, upsertRows, upsertClaims });
   TropeStore.configure({ readRows, readClaims });
   TropeVotes.configure({ getClient: async () => cloudClient().catch(() => null) });
   TropeProposals.configure({ getClient: async () => cloudClient().catch(() => null) });
@@ -1051,6 +1109,73 @@ const TropeVotes = {
     const agg = await this.getVotes(bookKey);
     const cur = (agg[tropeId] || { mine: 0 }).mine;
     return this.vote(bookKey, tropeId, cur === want ? 0 : want);
+  },
+};
+
+/* ---------------- Claim moderation (v206) ----------------
+   Admin-only curation of book_trope_claims. Confirming a candidate makes
+   it outrank future AI guesses (the resolution rule prefers confirmed);
+   rejecting hides the trope work-wide AND makes the rejection persistent
+   — the claims writer filters rejected tropes, so re-inference can never
+   resurrect them. RLS enforces the admin-only part; these helpers just
+   shape the calls. */
+
+const TropeClaims = {
+  _sb() {
+    return cloudClient().catch(() => null);
+  },
+
+  /* Works that still have AI candidates awaiting review, grouped with
+     taxonomy names resolved. Returns
+     [{ workId, title, authors, tropes: [{id, name, confidence}] }].
+     Never throws — returns [] when signed out or on error. */
+  async listCandidates(limit) {
+    let sb = null;
+    try { sb = await this._sb(); } catch (e) { sb = null; }
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('book_trope_claims')
+        .select('work_id, trope_id, confidence, works(title, authors)')
+        .eq('status', 'candidate').eq('source_type', 'ai')
+        .order('updated_at', { ascending: false })
+        .limit(limit || 500);
+      if (error) throw error;
+      const byWork = {};
+      for (const r of data || []) {
+        const t = (typeof TropeTaxonomy !== 'undefined' && TropeTaxonomy)
+          ? TropeTaxonomy.byId(r.trope_id) : null;
+        if (!t) continue;
+        const e = byWork[r.work_id] || (byWork[r.work_id] = {
+          workId: r.work_id,
+          title: (r.works && r.works.title) || r.work_id,
+          authors: ((r.works && r.works.authors) || []).join(', '),
+          tropes: [],
+        });
+        if (e.tropes.some(x => x.id === t.id)) continue;
+        const conf = Number(r.confidence);
+        e.tropes.push({ id: t.id, name: t.name,
+          confidence: isFinite(conf) ? conf : 0.5 });
+      }
+      return Object.keys(byWork).map(k => {
+        const e = byWork[k];
+        e.tropes.sort((a, b) => b.confidence - a.confidence);
+        return e;
+      });
+    } catch (e) { return []; }
+  },
+
+  /* Confirm or reject a candidate claim. Only candidate rows are touched —
+     an already-confirmed/rejected claim keeps its status. Throws on
+     error (RLS denial included) so the UI can report it. */
+  async setStatus(workId, tropeId, status) {
+    if (status !== 'confirmed' && status !== 'rejected')
+      throw new Error('status must be confirmed or rejected');
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    const { error } = await sb.from('book_trope_claims').update({ status })
+      .eq('work_id', workId).eq('trope_id', tropeId).eq('status', 'candidate');
+    if (error) throw error;
+    try { TropeStore.invalidate('w:' + workId); } catch (e) {}
   },
 };
 

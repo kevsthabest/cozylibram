@@ -634,6 +634,78 @@ async function tropeLabReviewHTML() {
   });
 }
 
+/* ---------------- Claim moderation card (v206) ----------------
+   Work-wide confirm/reject for AI candidate claims. Confirming outranks
+   future AI guesses; rejecting hides the trope and persists through
+   re-inference (the claims writer never re-inserts a rejected trope). */
+
+let tropeLabClaimsShown = 15;
+const TROPE_LAB_CLAIMS_PAGE = 15;
+
+async function tropeLabClaimsHTML() {
+  const el = document.getElementById('tropelab-claims');
+  if (!el) return;
+  const head = '<div class="ob-card"><h3 class="serif">Moderate AI candidates</h3>';
+  let groups = [];
+  try {
+    groups = await TropeClaims.listCandidates(500);
+  } catch (e) { groups = []; }
+  if (!groups.length) {
+    el.innerHTML = head +
+      '<p class="note">No AI candidates awaiting review. Run a backfill above — ' +
+      'new inferences land here as candidate claims.</p></div>';
+    return;
+  }
+  const shown = groups.slice(0, tropeLabClaimsShown);
+  let html = head + '<p class="note">' + groups.length +
+    ' works with AI candidates · ✓ confirms a trope work-wide, ✕ rejects it ' +
+    '(rejections survive re-inference). ' +
+    '<button class="btn sm ghost" id="tl-claims-refresh">↻ Refresh</button></p>';
+  shown.forEach(g => {
+    html += '<div class="tl-review-book" data-claim-work="' + esc(g.workId) + '">' +
+      '<div class="tl-review-head"><div><b>' + esc(g.title) + '</b>' +
+      (g.authors ? ' <span class="note">· ' + esc(g.authors) + '</span>' : '') +
+      '</div></div><div class="tl-review-chips">';
+    g.tropes.forEach(t => {
+      html += '<span class="tgvote"><span class="chip dbtrope ai" title="AI candidate · ' +
+        Math.round(t.confidence * 100) + '% confidence">✦ ' + esc(t.name) + '</span>' +
+        '<button class="tvbtn" data-claim="confirmed" data-tid="' + esc(t.id) +
+        '" aria-label="Confirm ' + esc(t.name) + '">✓</button>' +
+        '<button class="tvbtn" data-claim="rejected" data-tid="' + esc(t.id) +
+        '" aria-label="Reject ' + esc(t.name) + '">✕</button></span>';
+    });
+    html += '</div></div>';
+  });
+  if (groups.length > shown.length) {
+    html += '<button class="btn sm" id="tl-claims-more">Show more (' +
+      (groups.length - shown.length) + ' remaining)</button>';
+  }
+  el.innerHTML = html + '</div>';
+
+  const refresh = document.getElementById('tl-claims-refresh');
+  if (refresh) refresh.addEventListener('click', () => tropeLabClaimsHTML());
+  const more = document.getElementById('tl-claims-more');
+  if (more) more.addEventListener('click', () => {
+    tropeLabClaimsShown += TROPE_LAB_CLAIMS_PAGE;
+    tropeLabClaimsHTML();
+  });
+  el.querySelectorAll('[data-claim-work]').forEach(row => {
+    const workId = row.getAttribute('data-claim-work');
+    row.querySelectorAll('[data-claim]').forEach(btn => btn.addEventListener('click', async () => {
+      const status = btn.getAttribute('data-claim');
+      const tid = btn.getAttribute('data-tid');
+      btn.disabled = true;
+      try { await TropeClaims.setStatus(workId, tid, status); }
+      catch (e) {
+        btn.disabled = false;
+        btn.title = 'Failed: ' + ((e && e.message) || 'unknown error');
+        return;
+      }
+      tropeLabClaimsHTML(); // re-render: the decided claim leaves the queue
+    }));
+  });
+}
+
 async function renderTropeLab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
@@ -747,6 +819,12 @@ async function renderTropeLab() {
     '<div id="trope-proposals"><p class="note">Loading…</p></div></div>';
   body.appendChild(propCard);
   tropeLabProposalsHTML();
+
+  // v206: AI candidate claim moderation (confirm/reject, work-wide).
+  const claimsCard = document.createElement('div');
+  claimsCard.innerHTML = '<div id="tropelab-claims"><p class="note">Loading…</p></div>';
+  body.appendChild(claimsCard);
+  tropeLabClaimsHTML();
 }
 
 /* v160: in-app provider/model picker. The choice is stored in the shared
