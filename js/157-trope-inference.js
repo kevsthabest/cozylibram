@@ -758,12 +758,53 @@ const TropeQueue = {
 
 const TROPE_CACHE_TTL_MS = 10 * 60 * 1000;
 
+/* ---------------- Claim resolution (v205) ----------------
+   Pure: reduce a work's book_trope_claims rows to the display list.
+   The client resolution rule: when candidate and rejected claims coexist
+   for the same Work/trope, REJECTED WINS — the trope is hidden, never
+   resurrected by a stale candidate. Otherwise confirmed beats candidate
+   (a community/admin confirmation outranks the AI's guess); among equal
+   statuses the highest confidence wins. Unknown statuses (e.g. disputed)
+   stay hidden until reviewed. Unknown trope ids are dropped. */
+function resolveClaims(claims) {
+  const byTrope = {};
+  for (const c of claims || []) {
+    if (!c || !c.trope_id) continue;
+    (byTrope[c.trope_id] = byTrope[c.trope_id] || []).push(c);
+  }
+  const out = [];
+  for (const tid of Object.keys(byTrope)) {
+    const group = byTrope[tid];
+    if (group.some(c => c.status === 'rejected')) continue; // rejected wins
+    const confirmed = group.filter(c => c.status === 'confirmed');
+    const pool = (confirmed.length ? confirmed
+      : group.filter(c => c.status === 'candidate'));
+    if (!pool.length) continue;
+    pool.sort((a, b) => (Number(b.confidence) || 0) - (Number(a.confidence) || 0));
+    const best = pool[0];
+    const trope = (typeof TropeTaxonomy !== 'undefined' && TropeTaxonomy)
+      ? TropeTaxonomy.byId(tid) : (typeof tropeById === 'function' ? tropeById(tid) : null);
+    if (!trope) continue;
+    const conf = Number(best.confidence);
+    out.push({
+      id: trope.id, name: trope.name,
+      confidence: isFinite(conf) ? conf : 0.5,
+      source: best.source_type === 'community' ? 'community' : 'ai',
+      status: best.status,
+    });
+  }
+  out.sort((a, b) => b.confidence - a.confidence);
+  return out;
+}
+
 const TropeStore = {
   _cache: {},      // book_key -> { tropes, at }
   _readRows: null, // async (bookKey) -> rows (injected)
+  _readClaims: null, // v205: async (workId) -> claim rows (injected)
 
-  configure({ readRows } = {}) {
+  configure({ readRows, readClaims } = {}) {
     if (readRows) this._readRows = readRows;
+    if (readClaims) this._readClaims = readClaims;
   },
 
   invalidate(bookKey) {
@@ -775,6 +816,29 @@ const TropeStore = {
     book = book || {};
     ensureTropeQueueWired();
     const key = bookKeyFor(book);
+    /* v205: Work-keyed claims first. Every edition of the same book shares
+       one trope set; the resolution rule (rejected wins) is applied by
+       resolveClaims. A work with no claims falls through to the legacy
+       book_tropes read so nothing disappears mid-migration. */
+    let workId = null;
+    try {
+      workId = (typeof resolveWork === 'function') ? await resolveWork(book) : null;
+    } catch (e) { workId = null; }
+    if (workId && this._readClaims) {
+      const ck = 'w:' + workId;
+      const hit = this._cache[ck];
+      if (hit && Date.now() - hit.at < TROPE_CACHE_TTL_MS) {
+        return { tropes: hit.tropes, origin: 'db' };
+      }
+      let claims = null;
+      try { claims = await this._readClaims(workId); } catch (e) { claims = null; }
+      if (claims && claims.length) {
+        const tropes = resolveClaims(claims);
+        this._cache[ck] = { tropes, at: Date.now() };
+        return { tropes, origin: 'db' };
+      }
+      // No claims for this work (yet) — fall through to the legacy read.
+    }
     const hit = this._cache[key];
     if (hit && Date.now() - hit.at < TROPE_CACHE_TTL_MS) {
       return { tropes: hit.tropes, origin: 'db' };
@@ -843,8 +907,19 @@ function ensureTropeQueueWired() {
     if (error) throw error;
     return data || [];
   };
+  /* v205: work-keyed claim read for the new resolution path. */
+  const readClaims = async workId => {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) return null;
+    const { data, error } = await sb.from('book_trope_claims')
+      .select('trope_id, status, confidence, source_type')
+      .eq('work_id', workId)
+      .order('confidence', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  };
   TropeQueue.configure({ resolveBook, upsertRows });
-  TropeStore.configure({ readRows });
+  TropeStore.configure({ readRows, readClaims });
   TropeVotes.configure({ getClient: async () => cloudClient().catch(() => null) });
   TropeProposals.configure({ getClient: async () => cloudClient().catch(() => null) });
   /* v157: pull the live taxonomy in the background; the last-known copy is
