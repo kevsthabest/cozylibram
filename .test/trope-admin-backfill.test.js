@@ -1,7 +1,8 @@
 /* v159 admin all-libraries backfill tests: the SQL admin-read policy, the
-   persisted admin book projection, book_key dedup across users, the queue
-   resolver chain (local library first, admin projection fallback), and
-   queue reset clearing the projection.
+   admin book projection (v202: in-memory only, rebuilt on demand from the
+   library — no localStorage persistence), book_key dedup across users, the
+   queue resolver chain (local library first, admin projection fallback),
+   and queue reset clearing the projection.
    Run: node .test/trope-admin-backfill.test.js */
 'use strict';
 const fs = require('fs');
@@ -57,6 +58,7 @@ function ok(name, cond) {
   const reset = () => {
     Object.keys(memStore).forEach(k => delete memStore[k]);
     probe('tropeAdminBookCache = null;');
+    probe('library = [];');
   };
 
   /* ---- 2. book_key dedups the same book across users ---- */
@@ -69,21 +71,21 @@ function ok(name, cond) {
     ok('same title/author without ISBN -> same t: key', k3 === k4 && k3.indexOf('t:') === 0);
   }
 
-  /* ---- 3. admin projection round-trip ---- */
+  /* ---- 3. admin projection is memory-only (v202) ---- */
   {
     reset();
     probe(`tropeAdminBooksSave([
       { key: 'isbn:9781234567890', book: { title: 'Shared Book', authors: ['A. Uthor'], isbn: '9781234567890' } },
       { key: 't:other:writer', book: { title: 'Other', authors: ['Writer'] } },
     ])`);
-    ok('projection persists to localStorage',
-      JSON.parse(memStore[ADMIN_KEY]).length === 2);
+    ok('projection stays in memory, not localStorage',
+      probe('tropeAdminBookCache.length') === 2 && !(ADMIN_KEY in memStore));
     const t = probe(`tropeAdminBookById('isbn:9781234567890')`);
     ok('byId returns the projected book', t && t.title === 'Shared Book');
     ok('byId misses unknown keys', probe(`tropeAdminBookById('isbn:000')`) === null);
     probe('tropeAdminBooksClear()');
-    ok('clear empties the projection',
-      !(ADMIN_KEY in memStore) && probe(`tropeAdminBookById('isbn:9781234567890')`) === null);
+    ok('clear drops the projection (rebuilds empty from the empty library)',
+      probe('tropeAdminBookCache') === null && probe(`tropeAdminBookById('isbn:9781234567890')`) === null);
   }
 
   /* ---- 4. resolver chain: local library first, admin projection fallback ---- */
@@ -110,14 +112,27 @@ function ok(name, cond) {
     reset();
     probe(`tropeAdminBooksSave([{ key: 'isbn:9781234567890', book: { title: 'Shared Book' } }])`);
     probe('TropeQueue.reset()');
-    ok('reset clears the persisted projection',
-      !(ADMIN_KEY in memStore) && probe(`tropeAdminBookById('isbn:9781234567890')`) === null);
+    ok('reset clears the in-memory projection',
+      probe('tropeAdminBookCache') === null);
+    ok('after reset, byId rebuilds from the (empty) library → null',
+      probe(`tropeAdminBookById('isbn:9781234567890')`) === null);
   }
 
   /* ---- 6. projection books carry what inference needs ---- */
   {
     const key = probe(`bookKeyFor({ title: 'T', authors: ['A'], isbn: '', categories: ['romance'], description: 'd' })`);
     ok('minimal projection still keys deterministically', typeof key === 'string' && key.indexOf('t:') === 0);
+  }
+
+  /* ---- 7. v202: projection rebuilds on demand from the in-memory library ---- */
+  {
+    reset();
+    probe(`library = [{ id: 'b9', title: 'Rebuilt Book', authors: ['R. Ebuilder'], isbn: '9780000000001', description: 'a blurb', categories: ['romance'] }]`);
+    const t = probe(`tropeAdminBookById('isbn:9780000000001')`);
+    ok('byId resolves via the rebuilt projection', t && t.title === 'Rebuilt Book');
+    ok('rebuilt book carries the minimal bibliographic shape',
+      t && t.description === 'a blurb' && Array.isArray(t.categories) && t.categories[0] === 'romance');
+    ok('rebuild persists nothing to localStorage', !(ADMIN_KEY in memStore));
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

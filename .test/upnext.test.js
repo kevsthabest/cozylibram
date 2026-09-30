@@ -50,7 +50,7 @@ ok('upNextBooks resolves in queue order',
 
 // 2. stale ids are filtered on load
 window.localStorage.setItem('spicyshelves.upnext.v1', JSON.stringify(['c', 'ghost']));
-runInWindow('upNext = loadUpNext();');
+runInWindow('upNext = loadLegacyUpNext();');
 ok('loadUpNext drops ids of deleted books', JSON.stringify(queuedIds()) === '["c"]');
 
 // 3. library shelf shows the queue with position badges

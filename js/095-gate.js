@@ -155,7 +155,10 @@ async function enterApp(user) {
   if (gateEnteredUid === user.id) return;
   gateEnteredUid = user.id;
   try { localStorage.removeItem(OFFLINE_KEY); } catch (e) {}
-  setLocalUser(user.id);
+  // v202: async in the IndexedDB backend — the slot must be loaded before render().
+  // A failed switch is logged (not thrown): enterApp is fire-and-forget.
+  try { await setLocalUser(user.id); }
+  catch (e) { try { AppLog.error('storage', 'sign-in slot switch failed: ' + (e && e.message)); } catch (_) {} }
   // Names captured on the "Create account" form travel in user_metadata —
   // adopt them into the local profile so syncCloudProfile pushes them to
   // the profiles table. Never overwrites names already set on the device.
@@ -194,10 +197,12 @@ async function enterApp(user) {
   setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
 }
 
-function leaveApp() {
+async function leaveApp() {
   gateEnteredUid = null;
   cloudRealtimeStop(); // v143
-  setLocalUser(null);
+  // v202: async in the IndexedDB backend. Logged, not thrown: leaveApp is fire-and-forget.
+  try { await setLocalUser(null); }
+  catch (e) { try { AppLog.error('storage', 'sign-out slot switch failed: ' + (e && e.message)); } catch (_) {} }
   isAppAdmin = false; // v119: drop admin state + cached analytics on sign-out
   adminRowsCache = {}; adminAggCache = {};
   renderTopbar();

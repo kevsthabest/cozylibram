@@ -1,79 +1,254 @@
 'use strict';
 
-/* ---------------- storage ---------------- */
+/* ---------------- storage (v202) ---------------- */
 // On-device libraries are partitioned by signed-in user so several people can
 // share one device without mixing shelves. `localUid` is null when signed out
 // (classic single-device library under LS_KEY).
+//
+// v202: the persistence backend is IndexedDB — one database per slot named
+// `cozylibram.<uid|offline>` (see js/041-idb.js) — which has no 5MB cap. The
+// working model is unchanged: the library lives in the in-memory `library`
+// array, call sites stay synchronous, and saves are async write-through.
+// When indexedDB is missing (old browsers, the jsdom test env) or the IDB
+// open fails at runtime, the v201 localStorage backend stays in charge for
+// the session (`idbDisabled`); legacy keys are otherwise read-only.
 let localUid = null;
-function libKey() {
-  return localUid ? 'spicyshelves.library.v2.' + localUid : LS_KEY;
-}
-function loadLibrary() {
-  try { return (JSON.parse(localStorage.getItem(libKey())) || []).map(migrateBook); }
-  catch (e) { return []; }
-}
+let idbDisabled = (typeof indexedDB === 'undefined');
+let currentDb = null; // IDBDatabase for the active slot (IDB backend only)
+const slotDbs = {};   // slot db name -> IDBDatabase
+const IDB_SLOT_PREFIX = 'cozylibram.'; // one database per slot: cozylibram.<uid|offline>
+
+let library = [];
+let tombstones = [];
+let tombstoneFloor = 0;
+let upNext = [];
+
 // Snapshots (excluding _mtime) so saveLibrary() can stamp only books that changed.
 const bookSnapshots = new Map();
-// NOTE: library loads here (not at the top of the file) because migrateBook can
-// reach RATING_AXES/autoDetectAxes — both must be initialized first.
-let library = loadLibrary();
-library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
 function bookSnap(b) {
   const c = {};
   Object.keys(b).sort().forEach(k => { if (k !== '_mtime') c[k] = b[k]; });
   return JSON.stringify(c);
 }
+function stampMtimes() {
+  const now = Date.now();
+  for (const b of library) {
+    const s = bookSnap(b);
+    if (bookSnapshots.get(b.id) !== s) { b._mtime = now; bookSnapshots.set(b.id, bookSnap(b)); }
+  }
+}
+function snapshotBooks() {
+  bookSnapshots.clear();
+  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
+}
+
+/* ---------------- legacy localStorage backend (v201) ----------------
+   Read-only in v202 except when the IDB backend is disabled, in which case
+   these are the live read/write path exactly as before. `loadLegacyUpNext`
+   keeps its v74 cleanup write; the IDB migration uses `readLegacyUpNext`
+   (no write) instead. */
+function libKey() {
+  return localUid ? 'spicyshelves.library.v2.' + localUid : LS_KEY;
+}
+function loadLegacyLibrary() {
+  try { return (JSON.parse(localStorage.getItem(libKey())) || []).map(migrateBook); }
+  catch (e) { return []; }
+}
+function saveLegacyLibrary() {
+  try { localStorage.setItem(libKey(), JSON.stringify(library)); }
+  catch (e) { toast('Storage full — export a backup!'); }
+}
+// NOTE: library loads in storageInit/loadLegacyAll (not at the top of the
+// file) because migrateBook can reach RATING_AXES/autoDetectAxes — both must
+// be initialized first.
 
 // Deletion tombstones: deleting a book records { id, at } so the deletion
 // propagates through sync instead of the book resurrecting from another
 // device's push. Partitioned per user exactly like the library.
-let tombstones = [];
 function tombKey() {
   return localUid ? 'spicyshelves.tombstones.v2.' + localUid : 'spicyshelves.tombstones.v1';
 }
-function loadTombstones() {
+function loadLegacyTombstones() {
   try { return JSON.parse(localStorage.getItem(tombKey())) || []; }
   catch (e) { return []; }
 }
-function saveTombstones() {
+function saveLegacyTombstones() {
   try { localStorage.setItem(tombKey(), JSON.stringify(tombstones)); } catch (e) {}
 }
-tombstones = loadTombstones();
 function tombstonedIds() { return new Set(tombstones.map(t => t.id)); }
 // v142: tombstone floor — after an explicit "Download into this library"
 // un-delete, cloud tombstones older than this timestamp are ignored on this
 // device. Kills the loop where stale deletion rows (re-pushed by another
 // device, or left behind by a blocked cloud delete) wipe restored books on
 // every boot. Partitioned per user exactly like the tombstones.
-let tombstoneFloor = 0;
 function tombFloorKey() {
   return localUid ? 'spicyshelves.tombfloor.v2.' + localUid : 'spicyshelves.tombfloor.v1';
 }
-function loadTombFloor() {
+function loadLegacyTombFloor() {
   try { return Number(localStorage.getItem(tombFloorKey())) || 0; } catch (e) { return 0; }
 }
-function saveTombFloor() {
+function saveLegacyTombFloor() {
   try { localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); } catch (e) {}
 }
-tombstoneFloor = loadTombFloor();
 // "Up Next" queue (v74): ordered book ids, per-user like the library.
 // Local-only for now — the queue is a reading plan, not synced to the cloud.
-let upNext = [];
 function upNextKey() {
   return localUid ? 'spicyshelves.upnext.v1.' + localUid : 'spicyshelves.upnext.v1';
 }
-function loadUpNext() {
+function readLegacyUpNext() {
+  try { return JSON.parse(localStorage.getItem(upNextKey())) || []; }
+  catch (e) { return []; }
+}
+function loadLegacyUpNext() {
   try {
     const have = new Set(library.map(b => b.id));
-    const arr = (JSON.parse(localStorage.getItem(upNextKey())) || []).filter(id => have.has(id));
+    const arr = readLegacyUpNext().filter(id => have.has(id));
     try { localStorage.setItem(upNextKey(), JSON.stringify(arr)); } catch (e) {} // persist the cleanup
     return arr;
   } catch (e) { return []; }
 }
-function saveUpNext() {
+function saveLegacyUpNext() {
   try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {}
 }
-upNext = loadUpNext();
+function loadLegacyAll() {
+  library = loadLegacyLibrary();
+  tombstones = loadLegacyTombstones();
+  tombstoneFloor = loadLegacyTombFloor();
+  upNext = loadLegacyUpNext();
+}
+
+/* ---------------- IndexedDB backend (v202) ---------------- */
+function idbSlotName(uid) { return IDB_SLOT_PREFIX + (uid || 'offline'); }
+async function idbOpenSlot(uid) {
+  const name = idbSlotName(uid);
+  if (!slotDbs[name]) slotDbs[name] = await idbOpenDb(name);
+  return slotDbs[name];
+}
+
+/* First open of a slot: copy the legacy localStorage partition into IDB and
+   verify the book count. Throws on mismatch so the caller falls back to the
+   legacy backend for this session (and retries the migration next boot).
+   A per-slot `legacyMigrationDone` kv marker records that migration ran: an
+   emptied slot (e.g. the offline slot after first-sign-in adoption clears it)
+   must NOT re-import the read-only legacy key on a later visit — without the
+   marker, sign-out would resurrect the legacy copy and skip the v136
+   hand-back (OFFLINE_OWNER_KEY) branch. The marker is written only after the
+   copies and the book-count verification succeed. */
+async function migrateSlotFromLegacy(db) {
+  if (await idbCountBooks(db) > 0) return false; // already on IDB
+  if (await idbKvGet(db, 'legacyMigrationDone')) return false; // migrated before; slot deliberately empty
+  const legacy = loadLegacyLibrary();
+  if (legacy.length) {
+    await idbPutAllBooks(db, legacy);
+    AppLog.info('storage', 'v202: migrated ' + legacy.length + ' books from localStorage to IndexedDB');
+  }
+  const t = loadLegacyTombstones();
+  if (t.length) await idbKvPut(db, 'tombstones', t);
+  const f = loadLegacyTombFloor();
+  if (f) await idbKvPut(db, 'tombFloor', f);
+  const u = readLegacyUpNext();
+  if (u.length) await idbKvPut(db, 'upNext', u);
+  await idbKvPut(db, 'legacyMigrationDone', true);
+  return true;
+}
+
+async function loadSlotState(db) {
+  library = (await idbGetAllBooks(db)).map(migrateBook);
+  tombstones = (await idbKvGet(db, 'tombstones')) || [];
+  tombstoneFloor = Number(await idbKvGet(db, 'tombFloor')) || 0;
+  upNext = (await idbKvGet(db, 'upNext')) || [];
+  // v74 cleanup, IDB edition: drop queued ids for books that no longer exist.
+  const have = new Set(library.map(b => b.id));
+  const cleaned = upNext.filter(id => have.has(id));
+  if (cleaned.length !== upNext.length) { upNext = cleaned; persistUpNext(); }
+}
+
+async function idbPersistSlot(uid, state) {
+  const db = await idbOpenSlot(uid);
+  await idbPutAllBooks(db, state.library);
+  await idbKvPut(db, 'tombstones', state.tombstones);
+  await idbKvPut(db, 'tombFloor', state.tombstoneFloor);
+  await idbKvPut(db, 'upNext', state.upNext);
+}
+
+/* Boot init: open the slot, migrate once, load state. Never rejects — any
+   failure drops back to the v201 localStorage backend for the session. */
+async function storageInit() {
+  try {
+    currentDb = await idbOpenSlot(localUid);
+    await migrateSlotFromLegacy(currentDb);
+    await loadSlotState(currentDb);
+  } catch (e) {
+    idbDisabled = true;
+    currentDb = null;
+    loadLegacyAll();
+    try { AppLog.error('storage', 'IndexedDB init failed, using localStorage fallback: ' + (e && e.message)); } catch (_) {}
+  }
+  snapshotBooks();
+}
+let storageReady;
+if (idbDisabled) {
+  // No indexedDB (old browsers, jsdom): v201 behavior, synchronous.
+  loadLegacyAll();
+  snapshotBooks();
+  storageReady = Promise.resolve();
+} else {
+  // The async init is kicked off at the end of js/041-idb.js (which loads
+  // right after this file): storageInit must not *start* before idbOpenDb
+  // et al. exist. (The legacy branch above is unaffected — synchronous.)
+  storageReady = null;
+}
+
+/* Write-through, serialized: rapid saves can't interleave transactions, and
+   — the v201 lesson — a failed write is logged and toasted, never swallowed.
+   Arrays are snapshotted at enqueue so a slot switch can't redirect a queued
+   write into the wrong database. */
+let storageWriteChain = Promise.resolve();
+function storageWriteThrough(label, fn) {
+  storageWriteChain = storageWriteChain.then(fn, fn).catch(e => {
+    try { AppLog.error('storage', label + ' write failed: ' + (e && e.message)); } catch (_) {}
+    try { toast('Couldn\'t save — export a backup!'); } catch (_) {}
+  });
+  return storageWriteChain;
+}
+/* Test hook: resolves when all queued write-throughs have settled. */
+function storageDrain() { return storageWriteChain; }
+
+function persistBooks() {
+  if (idbDisabled) { saveLegacyLibrary(); return; }
+  const db = currentDb, snap = library.slice();
+  if (!db) { try { AppLog.error('storage', 'persistBooks: no open database'); } catch (_) {} return; }
+  storageWriteThrough('library', () => idbPutAllBooks(db, snap));
+}
+function persistTombstones() {
+  if (idbDisabled) { saveLegacyTombstones(); return; }
+  const db = currentDb, snap = tombstones.slice();
+  if (!db) return;
+  storageWriteThrough('tombstones', () => idbKvPut(db, 'tombstones', snap));
+}
+function persistTombFloor() {
+  if (idbDisabled) { saveLegacyTombFloor(); return; }
+  const db = currentDb, floor = tombstoneFloor;
+  if (!db) return;
+  storageWriteThrough('tombstoneFloor', () => idbKvPut(db, 'tombFloor', floor));
+}
+function persistUpNext() {
+  if (idbDisabled) { saveLegacyUpNext(); return; }
+  const db = currentDb, snap = upNext.slice();
+  if (!db) return;
+  storageWriteThrough('upNext', () => idbKvPut(db, 'upNext', snap));
+}
+
+function saveLibrary(opts) {
+  opts = opts || {};
+  stampMtimes();
+  persistBooks();
+  if (!opts.noCloud) scheduleCloudPush();
+}
+function saveTombstones() { persistTombstones(); }
+function saveTombFloor() { persistTombFloor(); }
+function saveUpNext() { persistUpNext(); }
+
 // Central removal path: drops the book locally and records a tombstone.
 function removeBook(id) {
   library = library.filter(b => b.id !== id);
@@ -141,29 +316,21 @@ function longestStreak() {
   });
   return best;
 }
-function saveLibrary(opts) {
-  opts = opts || {};
-  const now = Date.now();
-  for (const b of library) {
-    const s = bookSnap(b);
-    if (bookSnapshots.get(b.id) !== s) { b._mtime = now; bookSnapshots.set(b.id, bookSnap(b)); }
-  }
-  try { localStorage.setItem(libKey(), JSON.stringify(library)); }
-  catch (e) { toast('Storage full — export a backup!'); }
-  if (!opts.noCloud) scheduleCloudPush();
+
+// Switch the on-device library between users (null = signed out).
+// Serialized: a sign-out followed by a fast sign-in can't interleave the
+// async slot switches. Legacy backend: the v201 implementation, synchronous.
+let localUserChain = Promise.resolve();
+function setLocalUser(uid) {
+  if (idbDisabled) { setLocalUserLegacy(uid); return undefined; }
+  // A rejected switch must not poison later switches: run the next switch
+  // even if the previous one failed (its own error is still returned to
+  // this caller via the chained promise).
+  localUserChain = localUserChain.then(() => setLocalUserIdb(uid), () => setLocalUserIdb(uid));
+  return localUserChain;
 }
 
-// Switch the on-device library between users (null = signed out). On the
-// first sign-in on a device, an existing offline library is adopted into the
-// new per-user slot instead of being abandoned.
-//
-// v136: marks whose sign-out hand-back the offline shelf currently holds, so
-// a *different* user signing in later won't adopt someone else's books.
-const OFFLINE_OWNER_KEY = 'spicyshelves.offline.owner';
-function offlineOwner() {
-  try { return localStorage.getItem(OFFLINE_OWNER_KEY); } catch (e) { return null; }
-}
-function setLocalUser(uid) {
+function setLocalUserLegacy(uid) {
   if (uid === localUid) return;
   const prevUid = localUid;
   try { localStorage.setItem(libKey(), JSON.stringify(library)); } catch (e) {}
@@ -176,7 +343,7 @@ function setLocalUser(uid) {
   const owner = offlineOwner();
   localUid = uid || null;
   bookSnapshots.clear();
-  let next = loadLibrary();
+  let next = loadLegacyLibrary();
   // The offline shelf is adoptable unless it's another user's hand-back.
   const adoptable = !owner || owner === uid;
   if (uid && next.length === 0 && hadBooks && adoptable) {
@@ -202,7 +369,7 @@ function setLocalUser(uid) {
   }
   library = next;
   library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
-  let nextTombs = loadTombstones();
+  let nextTombs = loadLegacyTombstones();
   if (uid && nextTombs.length === 0 && hadTombs && adoptable) {
     nextTombs = tombstones;
     try {
@@ -213,7 +380,7 @@ function setLocalUser(uid) {
   tombstones = nextTombs;
   // v142: the floor roams with the tombstones on first-sign-in adoption, and
   // the per-user slot keeps its own otherwise.
-  let nextFloor = loadTombFloor();
+  let nextFloor = loadLegacyTombFloor();
   if (uid && nextFloor === 0 && hadFloor && adoptable) {
     nextFloor = tombstoneFloor;
     try {
@@ -222,13 +389,64 @@ function setLocalUser(uid) {
     } catch (e) {}
   }
   tombstoneFloor = nextFloor;
-  upNext = loadUpNext(); // v74: queue is per-user too
+  upNext = loadLegacyUpNext(); // v74: queue is per-user too
+}
+
+async function setLocalUserIdb(uid) {
+  if (uid === localUid) return;
+  // Let in-flight write-throughs land in the outgoing slot before switching.
+  await storageDrain();
+  const prevUid = localUid;
+  const prev = { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext };
+  const hadBooks = prev.library.length > 0;
+  const hadTombs = prev.tombstones.length > 0;
+  const hadFloor = prev.tombstoneFloor > 0;
+  const owner = offlineOwner();
+  // Belt-and-braces flush of the outgoing slot (write-through already did it).
+  try { await idbPersistSlot(prevUid, prev); }
+  catch (e) { try { AppLog.error('storage', 'slot flush failed: ' + (e && e.message)); } catch (_) {} }
+  localUid = uid || null;
+  bookSnapshots.clear();
+  currentDb = await idbOpenSlot(localUid);
+  await migrateSlotFromLegacy(currentDb);
+  await loadSlotState(currentDb);
+  // The offline shelf is adoptable unless it's another user's hand-back.
+  // (v136/v142 semantics, now across IDB slots instead of localStorage keys.)
+  const adoptable = !owner || owner === uid;
+  if (uid && library.length === 0 && hadBooks && adoptable) {
+    // First sign-in: the offline shelf moves into the new account's slot.
+    library = prev.library; tombstones = prev.tombstones;
+    tombstoneFloor = prev.tombstoneFloor; upNext = prev.upNext;
+    await idbPersistSlot(localUid, { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext });
+    await idbClearBooks(await idbOpenSlot(prevUid)).catch(() => {}); // moved, not copied
+    try { localStorage.removeItem(OFFLINE_OWNER_KEY); } catch (e) {}
+    // v202: legacy localStorage partition keys are read-only — kept as the
+    // grace-period fallback, not deleted.
+  } else if (!uid && library.length === 0 && hadBooks) {
+    // v136: signing out hands the library back to the shared offline slot.
+    // The per-user slot keeps its copy too, so signing back in finds it.
+    library = prev.library; tombstones = prev.tombstones;
+    tombstoneFloor = prev.tombstoneFloor; upNext = prev.upNext;
+    if (prevUid) { try { localStorage.setItem(OFFLINE_OWNER_KEY, prevUid); } catch (e) {} }
+    await idbPersistSlot(localUid, { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext });
+  }
+  snapshotBooks();
+}
+
+// v136: marks whose sign-out hand-back the offline shelf currently holds, so
+// a *different* user signing in later won't adopt someone else's books.
+// Tiny flag — stays in localStorage.
+const OFFLINE_OWNER_KEY = 'spicyshelves.offline.owner';
+function offlineOwner() {
+  try { return localStorage.getItem(OFFLINE_OWNER_KEY); } catch (e) { return null; }
 }
 
 /* ---------------- library recovery (v136) ---------------- */
 // Every on-device library partition: the shared offline slot plus one per
 // signed-in user. Settings → "Find my library" lists them so a library that
 // looks empty (e.g. after signing out) can be found and restored.
+// v202: lists the legacy localStorage partitions (grace-period fallback);
+// the live data now lives in IndexedDB.
 function libraryPartitions() {
   const out = [];
   try {
@@ -259,4 +477,3 @@ function restorePartition(key) {
   saveLibrary();
   return library.length;
 }
-

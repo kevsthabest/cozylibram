@@ -140,7 +140,7 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   runInWindow(`
     localStorage.setItem('spicyshelves.library.v1',
       JSON.stringify([{ id: 'b1', title: 'Offline Book', authors: ['A U Thor'], status: 'tbr' }]));
-    library = loadLibrary();
+    library = loadLegacyLibrary();
   `);
   window.__sbStub.fire('SIGNED_IN', { id: 'user-1', email: 'wife@example.com' });
   await tick(6);

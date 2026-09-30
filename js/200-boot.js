@@ -33,6 +33,10 @@ try {
 // Boot: no backend (or offline chosen) → straight to the library, classic
 // behavior. Backend configured → sign-in gate first; initCloud() enters the
 // app automatically when a session already exists.
+//
+// v202: the library now persists in IndexedDB. One async init (open +
+// migrate + load) runs before anything renders; the legacy localStorage
+// backend (old browsers, test env) boots synchronously exactly like v201.
 function boot() {
   let offline = false;
   try { offline = localStorage.getItem(OFFLINE_KEY) === '1'; } catch (e) {}
@@ -46,8 +50,14 @@ function boot() {
   } else renderGate();
 }
 
-boot();
-initCloud();
+if (idbDisabled) {
+  boot();
+  initCloud();
+} else {
+  // storageInit() never rejects (it falls back internally); the rejection
+  // branch is belt-and-braces so a blank screen is impossible.
+  storageReady.then(() => { boot(); initCloud(); }, () => { boot(); initCloud(); });
+}
 
 // New zips ship often — ask the service worker for an update on every
 // launch so devices pick up the latest version without a manual nudge.

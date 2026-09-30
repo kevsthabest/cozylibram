@@ -469,22 +469,43 @@ async function inferBookTropes(book, opts) {
 
 /* ---------------- Admin all-libraries backfill (v159) ----------------
    Trope Lab (admin-only) can backfill every user's books, not just the
-   local library. The admin book list is a minimal projection
-   ({key, book}) persisted in localStorage so a backfill survives reloads;
+   local library. The admin book list is a minimal projection ({key, book});
    all-libraries jobs are keyed by book_key (stable across users), and the
    queue resolver falls back to the projection when the local library has
-   no such id. Cleared together with the queue. */
+   no such id. Cleared together with the queue.
+   v202: the projection is no longer persisted to localStorage (it duplicated
+   the library). It lives in memory for the scan session and is rebuilt on
+   demand from the in-memory library when empty. Consequence: after a reload,
+   a resumed backfill can only resolve books in the local library — jobs for
+   other users' books are dropped as deleted. Re-run the scan to rebuild the
+   full projection. */
 
-const TROPE_ADMIN_BOOKS_KEY = 'cozylibram.tropeadminbooks.v1';
-let tropeAdminBookCache = null;
+const TROPE_ADMIN_BOOKS_KEY = 'cozylibram.tropeadminbooks.v1'; // v202: legacy key, removed on first load
+let tropeAdminBookCache = null; // null = not built yet
+let tropeAdminLegacyDropped = false;
+
+/* Rebuild the {key, book} projection from the in-memory library. Same
+   minimal bibliographic shape the admin scan builds from Supabase rows. */
+function tropeAdminBooksRebuild() {
+  const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
+  return lib.filter(b => b).map(b => ({
+    key: bookKeyFor(b),
+    book: {
+      title: b.title || '',
+      authors: b.authors || [],
+      categories: b.categories || [],
+      isbn: b.isbn || '',
+      description: String(b.description || '').slice(0, 2000),
+    },
+  }));
+}
 
 function tropeAdminBooksLoad() {
-  if (tropeAdminBookCache) return tropeAdminBookCache;
-  try {
-    const raw = localStorage.getItem(TROPE_ADMIN_BOOKS_KEY);
-    const arr = raw ? JSON.parse(raw) : null;
-    tropeAdminBookCache = Array.isArray(arr) ? arr : [];
-  } catch (e) { tropeAdminBookCache = []; }
+  if (!tropeAdminLegacyDropped) {
+    tropeAdminLegacyDropped = true;
+    try { localStorage.removeItem(TROPE_ADMIN_BOOKS_KEY); } catch (e) {}
+  }
+  if (tropeAdminBookCache === null) tropeAdminBookCache = tropeAdminBooksRebuild();
   return tropeAdminBookCache;
 }
 
@@ -496,18 +517,14 @@ function tropeAdminBookById(id) {
   return null;
 }
 
-/* Persist the admin projection (built by Trope Lab on scan). */
+/* Keep the admin projection in memory for the scan session (v202: no
+   localStorage persistence). */
 function tropeAdminBooksSave(list) {
   tropeAdminBookCache = Array.isArray(list) ? list : [];
-  try {
-    localStorage.setItem(TROPE_ADMIN_BOOKS_KEY,
-      JSON.stringify(tropeAdminBookCache));
-  } catch (e) {}
 }
 
 function tropeAdminBooksClear() {
-  tropeAdminBookCache = [];
-  try { localStorage.removeItem(TROPE_ADMIN_BOOKS_KEY); } catch (e) {}
+  tropeAdminBookCache = null;
 }
 
 /* ---------------- Provider/model override (v160) ----------------
