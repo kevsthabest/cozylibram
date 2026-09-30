@@ -46,13 +46,54 @@ function visionPickPhoto(onPick) {
       if (!f) return;
       const deliver = input._deliver || visionSend;
       const r = new FileReader();
-      r.onload = () => deliver(String(r.result || ''));
+      // v201: downscale before upload — a full-res phone photo blows past
+      // the endpoint's ~2.6MB cap (instant 400) and uploads slowly on mobile.
+      r.onload = async () => deliver(await visionDownscale(String(r.result || ''), 1024));
       r.readAsDataURL(f);
     });
     document.body.appendChild(input);
   }
   input._deliver = onPick || visionSend;
   input.click();
+}
+
+// v201: downscale a data-URL image so its long edge is <= maxDim,
+// re-encoded as JPEG. The vision endpoint caps uploads at ~2.6MB and the
+// model reads spines/covers fine at 1024px — a 12MP phone photo would
+// otherwise fail instantly (400) or crawl on mobile data. Resolves with
+// the ORIGINAL data URL on any failure (or if decoding takes longer than
+// timeoutMs), so this can never break the flow.
+function visionDownscale(dataUrl, maxDim, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const safety = setTimeout(() => done(dataUrl), timeoutMs || 8000);
+    const done = (v) => { if (!settled) { settled = true; clearTimeout(safety); resolve(v); } };
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth, h = img.naturalHeight;
+          const scale = Math.min(1, (maxDim || 1024) / Math.max(w, h));
+          if (!(scale < 1)) return done(dataUrl);
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * scale));
+          c.height = Math.max(1, Math.round(h * scale));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          done(c.toDataURL('image/jpeg', 0.85));
+        } catch (e) { done(dataUrl); }
+      };
+      img.onerror = () => done(dataUrl);
+      img.src = dataUrl;
+    } catch (e) { done(dataUrl); }
+  });
+}
+
+// v201: paint into the LIVE #scan-result node, re-acquired every time. A
+// background render() mid-flow replaces the node; painting into a stale
+// reference would be invisible (the "Reading…" then nothing bug).
+function visionPaint(html) {
+  const m = document.getElementById('scan-result');
+  if (m) m.innerHTML = html;
 }
 
 function visionSetBusy(busy) {
@@ -74,22 +115,25 @@ function visionReadCover() {
 
 async function visionSend(dataUrl) {
   if (visionBusy || !dataUrl) return;
-  const mount = document.getElementById('scan-result');
-  if (!mount) return;
+  if (!document.getElementById('scan-result')) return;
   visionSetBusy(true);
-  mount.innerHTML = '<p class="note">Reading the cover…</p>';
+  visionPaint('<p class="note">Reading the cover…</p>');
+  // v201: a stalled upload/model call must end visibly, not hang forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
     const r = await fetch('/api/read-cover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl, mode: 'single' }),
+      signal: ctrl.signal,
     });
     if (r.status === 503) {
-      mount.innerHTML = '<p class="note">Cover reading isn\u2019t set up on this server yet (it needs an API key). Type the ISBN instead.</p>';
+      visionPaint('<p class="note">Cover reading isn\u2019t set up on this server yet (it needs an API key). Type the ISBN instead.</p>');
       return;
     }
     if (r.status === 429) {
-      mount.innerHTML = '<p class="note">Too many cover reads — wait a minute and try again.</p>';
+      visionPaint('<p class="note">Too many cover reads — wait a minute and try again.</p>');
       return;
     }
     if (!r.ok) throw new Error('http ' + r.status);
@@ -97,32 +141,37 @@ async function visionSend(dataUrl) {
     // Never trust the model's ISBN without the check digit.
     const isbn = res.isbn && isbnCheckOk(res.isbn) ? res.isbn : null;
     if (isbn) {
-      isbnLookupUI(isbn, mount, 'vision');
+      const m = document.getElementById('scan-result');
+      if (m) isbnLookupUI(isbn, m, 'vision');
       return;
     }
     const q = [res.title, res.author].filter(Boolean).join(' ');
     if (q.length >= 2) {
-      mount.innerHTML = '<p class="note">No ISBN on the cover — searching for \u201c' + esc(q) + '\u201d…</p>';
+      visionPaint('<p class="note">No ISBN on the cover — searching for \u201c' + esc(q) + '\u201d…</p>');
       try {
         searchResults = await searchBooks(q);
       } catch (e) {
-        mount.innerHTML = '<p class="note">Search failed — check your connection.</p>';
+        visionPaint('<p class="note">Search failed — check your connection.</p>');
         return;
       }
       if (!searchResults.length) {
-        mount.innerHTML = '<p class="note">No matches for \u201c' + esc(q) + '\u201d. Try the ISBN, or add it manually.</p>';
+        visionPaint('<p class="note">No matches for \u201c' + esc(q) + '\u201d. Try the ISBN, or add it manually.</p>');
         return;
       }
-      paintSearchResults(mount);
+      const m2 = document.getElementById('scan-result');
+      if (m2) paintSearchResults(m2);
       return;
     }
-    mount.innerHTML = '<p class="note">Couldn\u2019t read the cover — try a clearer photo, or type the ISBN.</p>';
+    visionPaint('<p class="note">Couldn\u2019t read the cover — try a clearer photo, or type the ISBN.</p>');
   } catch (e) {
     // v200: log it — caught fetch failures never reach the Logs tab's
     // uncaught-error hook, so without this the failure is invisible there.
     if (typeof AppLog !== 'undefined') AppLog.error('vision', 'cover read failed: ' + ((e && e.message) || e));
-    mount.innerHTML = '<p class="note">Cover reading failed — check your connection and try again.</p>';
+    visionPaint(e && e.name === 'AbortError'
+      ? '<p class="note">Cover reading timed out — try a smaller photo or a better connection.</p>'
+      : '<p class="note">Cover reading failed — check your connection and try again.</p>');
   } finally {
+    clearTimeout(timer);
     visionSetBusy(false);
   }
 }

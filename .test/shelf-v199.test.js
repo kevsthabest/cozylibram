@@ -189,6 +189,47 @@ async function main() {
   ok('client: failed scan paints a message', mountHTML().includes('Shelf scan failed'));
   ok('client: failed scan is logged to the Logs tab',
     runInWindowRet(`typeof AppLog !== 'undefined' && AppLog.entries('error').some(e => e.tag === 'shelf')`));
+
+  // v201: a re-render mid-scan replaces #scan-result — the review list must
+  // land in the LIVE node, not the stale reference (the "Reading…" then
+  // nothing bug).
+  runInWindow(`
+    window.fetch = async () => {
+      await new Promise(r => setTimeout(r, 150)); // model "thinking"
+      return new Response(JSON.stringify({
+        books: [{ title: 'Fourth Wing', author: 'Rebecca Yarros', confidence: 'high' }],
+      }), { status: 200 });
+    };
+    window.searchBooks = async (q) => [{ title: 'Fourth Wing', authors: ['Rebecca Yarros'] }];
+    shelfBusy = false;
+    shelfSend('data:image/jpeg;base64,FAKE');
+    // Simulate renderAdd() rebuilding the panel mid-flight.
+    setTimeout(() => {
+      document.getElementById('scan-result').outerHTML = '<div id="scan-result"></div>';
+    }, 60);
+  `);
+  await tick(600);
+  ok('client: review list survives a mid-scan re-render',
+    mountHTML().includes('Fourth Wing') && mountHTML().includes('spine'));
+
+  // v201: an aborted (timed-out) model call gets its own message + log entry.
+  runInWindow(`
+    window.fetch = async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; };
+    if (typeof AppLog !== 'undefined') AppLog.clear();
+    shelfBusy = false;
+  `);
+  runInWindow(`shelfSend('data:image/jpeg;base64,FAKE')`);
+  await tick(120);
+  ok('client: timed-out scan says so', mountHTML().includes('timed out'));
+  ok('client: timed-out scan is logged',
+    runInWindowRet(`typeof AppLog !== 'undefined' && AppLog.entries('error').some(e => e.tag === 'shelf')`));
+
+  // v201: visionDownscale never breaks the flow — undecodable input falls
+  // back to the original data URL (JSDOM can't decode images at all).
+  runInWindow(`window.__downscaleP = visionDownscale('data:image/jpeg;base64,FAKE', 1024, 50).then(v => { window.__downscaleV = v; });`);
+  await tick(300);
+  ok('client: visionDownscale falls back to the original',
+    runInWindowRet(`window.__downscaleV`) === 'data:image/jpeg;base64,FAKE');
 }
 
 main().then(() => {

@@ -7,6 +7,12 @@
 // Scoring: the model's own confidence plus a token-overlap check against
 // the catalog result. Foil, vertical text and tiny print stay "check this"
 // rather than being trusted — review beats a wrong add.
+//
+// v201: every paint goes through the LIVE #scan-result node (re-acquired
+// each time), and the model fetch has a 90s abort timeout. A background
+// render() mid-flow replaces the node — painting into a stale reference
+// was invisible ("Reading…" then nothing) — and a stalled upload used to
+// hang forever with no message and nothing in the Logs tab.
 
 let shelfBusy = false;
 let shelfResults = []; // [{spine, book, status}] — status: ready|review|have|missing
@@ -56,36 +62,44 @@ function shelfScan() {
 
 async function shelfSend(dataUrl) {
   if (shelfBusy || !dataUrl) return;
-  const mount = document.getElementById('scan-result');
-  if (!mount) return;
+  if (!document.getElementById('scan-result')) return;
   shelfBusy = true;
   visionSetBusy(true);
-  mount.innerHTML = '<p class="note">Reading the spines…</p>';
+  // v201: re-acquire the live node on every paint — see the header note.
+  const paint = (html) => {
+    const m = document.getElementById('scan-result');
+    if (m) m.innerHTML = html;
+  };
+  paint('<p class="note">Reading the spines…</p>');
+  // v201: a stalled upload/model call must end visibly, not hang forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
     const r = await fetch('/api/read-cover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl, mode: 'shelf' }),
+      signal: ctrl.signal,
     });
     if (r.status === 503) {
-      mount.innerHTML = '<p class="note">Shelf scanning isn\u2019t set up on this server yet (it needs an API key).</p>';
+      paint('<p class="note">Shelf scanning isn\u2019t set up on this server yet (it needs an API key).</p>');
       return;
     }
     if (r.status === 429) {
-      mount.innerHTML = '<p class="note">Too many scans — wait a minute and try again.</p>';
+      paint('<p class="note">Too many scans — wait a minute and try again.</p>');
       return;
     }
     if (!r.ok) throw new Error('http ' + r.status);
     const res = await r.json();
     const spines = (res.books || []).filter(b => b && (b.title || b.author));
     if (!spines.length) {
-      mount.innerHTML = '<p class="note">Couldn\u2019t read any spines — try closer, straight-on, in good light.</p>';
+      paint('<p class="note">Couldn\u2019t read any spines — try closer, straight-on, in good light.</p>');
       return;
     }
     shelfResults = [];
     const n = Math.min(spines.length, SHELF_MAX_LOOKUPS);
     for (let i = 0; i < n; i++) {
-      mount.innerHTML = '<p class="note">Reading the spines… looking up ' + (i + 1) + ' / ' + n + '</p>';
+      paint('<p class="note">Reading the spines… looking up ' + (i + 1) + ' / ' + n + '</p>');
       const spine = spines[i];
       let entry = { spine, book: null, status: 'missing' };
       try {
@@ -101,13 +115,16 @@ async function shelfSend(dataUrl) {
       shelfResults.push(entry);
       if (i < n - 1) await new Promise(res2 => setTimeout(res2, 250)); // be nice to the catalogs
     }
-    paintShelfResults(mount);
+    paintShelfResults();
   } catch (e) {
     // v200: log it — caught fetch failures never reach the Logs tab's
     // uncaught-error hook, so without this the failure is invisible there.
     if (typeof AppLog !== 'undefined') AppLog.error('shelf', 'scan failed: ' + ((e && e.message) || e));
-    mount.innerHTML = '<p class="note">Shelf scan failed — check your connection and try again.</p>';
+    paint(e && e.name === 'AbortError'
+      ? '<p class="note">Shelf scan timed out — try a smaller photo or a better connection.</p>'
+      : '<p class="note">Shelf scan failed — check your connection and try again.</p>');
   } finally {
+    clearTimeout(timer);
     shelfBusy = false;
     visionSetBusy(false);
   }
@@ -126,7 +143,11 @@ function shelfSpineLabel(entry) {
       ? ' <span class="note">(' + esc(entry.spine.confidence) + ' confidence)</span>' : '');
 }
 
-function paintShelfResults(mount) {
+function paintShelfResults() {
+  // v201: grab the live node — the caller may have been awaiting across a
+  // re-render. Bail quietly if the user navigated away mid-scan.
+  const mount = document.getElementById('scan-result');
+  if (!mount) return;
   const ready = shelfResults.filter(e => e.status === 'ready' && !e._added);
   mount.innerHTML =
     '<p class="note"><strong>' + shelfResults.length + ' spine' +
@@ -160,8 +181,7 @@ function paintShelfResults(mount) {
     const n = bulkAddBooks(books, 'shelf');
     shelfResults.forEach(e => { if (e.status === 'ready' && e.book) e._added = true; });
     // bulkAddBooks re-renders (tearing down #scan-result); repaint the review.
-    const m2 = document.getElementById('scan-result');
-    if (m2) paintShelfResults(m2);
+    paintShelfResults();
   });
 
   mount.querySelectorAll('.shelf-add').forEach(btn =>
