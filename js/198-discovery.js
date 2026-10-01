@@ -326,10 +326,11 @@ async function maybeAutoReleaseCheck() {
 
 /* ---------------- Discover landing (v121, restyled v175) ----------------
    "What are you in the mood for?" per the UI mockup: a featured Surprise Me
-   card, five tiles (My Favorites / Similar Books / Authors / New Releases /
-   Recommended), a Search-the-Library-&-Beyond row, and a From-Your-Coven section. Every
-   tile routes to a real feature; the release check runs inline under the
-   New Releases tile. */
+   card, four tiles (My Favorites / Similar Books / Authors / New Releases),
+   a full-width Recommended banner (v234 UX-06: the fifth tile sat orphaned
+   on its own grid row), a Search-the-Library-&-Beyond row, and a
+   From-Your-Coven section. Every tile routes to a real feature; the release
+   check runs inline under the New Releases tile. */
 function discTile(ic, title, blurb, target) {
   return '<button class="disc-tile" data-dtile="' + target + '">' +
     '<span class="disc-ic">' + icon(ic) + '</span>' +
@@ -388,10 +389,17 @@ function renderDiscover() {
     discTile('covers', 'Similar Books', 'Like this one', 'similar') +
     discTile('user', 'Authors', 'Your favorite authors', 'authors') +
     discTile('calendar', 'New Releases', 'Fresh picks', 'releases') +
-    discTile('crystal', 'Recommended', 'Picked for your taste', 'recommended') +
     '</div>' +
 
     '<div id="disc-sim" hidden></div>' +
+
+    // v234 (UX-06): Recommended gets the Surprise Me treatment — a full-width
+    // banner instead of an orphaned fifth tile.
+    '<button class="disc-surprise" data-dtile="recommended">' +
+    '<span class="disc-ic">' + icon('crystal') + '</span>' +
+    '<span class="disc-tx"><b>Recommended</b><small>Picked for your taste</small></span>' +
+    '<span class="disc-go" aria-hidden="true">→</span></button>' +
+
     '<div id="disc-reco" hidden></div>' +
 
     '<button class="disc-search" data-dtile="search">' +
