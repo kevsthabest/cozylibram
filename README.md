@@ -6,7 +6,7 @@ library. The library lives on-device in IndexedDB (fully offline-capable);
 sign-in syncs it to Supabase for cloud backup, multi-device sync, and
 social shelves.
 
-![Library](docs/screenshots/library.png)
+![Library (desktop)](docs/screenshots/library.png) ![Library (mobile)](docs/screenshots/library-mobile.png)
 
 ## What it does
 
@@ -31,7 +31,7 @@ social shelves.
   content warnings, mood chips, extra genres, and a blended community
   rating (ISBN-verified)
 
-![Book detail](docs/screenshots/book-modal.png)
+![Book detail (desktop)](docs/screenshots/book-modal.png) ![Book detail (mobile)](docs/screenshots/book-modal-mobile.png)
 
 **Discovery**
 - **Discover tab**: new releases from your authors (checked automatically
@@ -47,7 +47,9 @@ social shelves.
   distribution, top tropes, current-read progress — plus a detailed
   stats explorer
 
-![Discover](docs/screenshots/discover.png) ![Stats](docs/screenshots/stats.png)
+![Discover (desktop)](docs/screenshots/discover.png) ![Discover (mobile)](docs/screenshots/discover-mobile.png)
+
+![Stats (desktop)](docs/screenshots/stats.png) ![Stats (mobile)](docs/screenshots/stats-mobile.png)
 
 **Coven (private social)**
 - Invite-code friends, read-only shelf browsing, per-shelf privacy
