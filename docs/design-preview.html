@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cozy Libram — Design Preview (current styles, 2026-10-01)</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { background: #0b0b10; color: #eee; font-family: 'Inter', system-ui, sans-serif; margin: 0; padding: 24px 16px 60px; }
+  .pv-head { max-width: 1200px; margin: 0 auto 18px; }
+  .pv-head h1 { font-family: 'Playfair Display', Georgia, serif; font-size: 26px; margin: 0 0 6px; }
+  .pv-head p { color: #9a93a8; font-size: 14px; margin: 0; max-width: 70ch; }
+  .pv-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; max-width: 1200px; margin: 0 auto; }
+  .pv-panel { border-radius: 18px; overflow: hidden; border: 1px solid #3a3345; background: var(--bg); color: var(--ink); }
+  .pv-panel > h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 18px; margin: 0; padding: 14px 18px 4px; }
+  .pv-panel > h2 small { display: block; font-family: 'Inter', sans-serif; font-size: 12px; color: var(--faint); font-weight: 400; margin-top: 2px; }
+  .pv-sec { padding: 12px 18px; border-top: 1px solid var(--line); }
+  .pv-sec:first-of-type { border-top: none; }
+  .pv-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); margin: 0 0 10px; }
+  .pv-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  /* mini modal sheet excerpt */
+  .pv-sheet { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; position: relative; }
+  .pv-sheet h3 { margin: 0 0 2px; font-size: 17px; }
+  .pv-sheet .author { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  /* heat cells */
+  .pv-heat { display: flex; gap: 5px; }
+  .heat-cell { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line); }
+  /* toast sample */
+  .pv-toast { background: var(--card2); border: 1px solid var(--accent); color: var(--ink); border-radius: 999px; padding: 10px 20px; font-size: 14px; display: inline-block; }
+  /* fake bottom nav */
+  .pv-nav { display: flex; background: var(--nav-bg); border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }
+  .pv-nav span { flex: 1; text-align: center; padding: 12px 0; font-size: 11px; color: var(--faint); }
+  .pv-nav span.on { color: var(--accent); font-weight: 700; }
+  .pv-note { font-size: 13px; color: var(--faint); }
+  .pv-tagline { color: var(--faint); font-size: 12px; margin: 2px 0 0; }
+</style>
+</head>
+<body>
+<div class="pv-head">
+  <h1>Cozy Libram — current-state design preview</h1>
+  <p>Representative components rendered with the <b>live</b> <code>styles.css</code>
+  (no proposed changes applied), one panel per theme. This is the baseline for the
+  2026-10-01 design review. Compare: default accent is identical rose on all three;
+  the heatmap ramp is hardcoded pink; small muted text is the v224 contrast story.</p>
+</div>
+<div class="pv-panels">
+
+  <div class="pv-panel" data-theme="dark">
+    <h2>Dark <small>default theme · rose accent</small></h2>
+    <div class="pv-sec">
+      <p class="pv-label">Brand</p>
+      <div class="app-header" style="padding:0;display:block;text-align:left">
+        <h1>Cozy Libram</h1>
+        <p class="tagline">her dark little library</p>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Chips / badges</p>
+      <div class="pv-row">
+        <button class="chip active">TBR</button>
+        <button class="chip">Reading</button>
+        <span class="badge status-reading">Reading</span>
+        <span class="badge spice">🌶 3</span>
+        <span class="badge">★ 4.2</span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Book card</p>
+      <div class="book-card">
+        <div class="cover-wrap"><span>📕</span></div>
+        <div class="book-meta">
+          <h3>A Court of Thorns and Roses</h3>
+          <p class="author">Sarah J. Maas</p>
+          <div class="badges"><span class="badge status-reading">Reading</span><span class="badge spice">Spice 3</span></div>
+          <div class="progress-line slim"><div class="fill" style="width:62%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Buttons</p>
+      <div class="pv-row">
+        <button class="btn">＋ TBR</button>
+        <button class="btn ghost">Share</button>
+        <button class="btn danger">Remove</button>
+        <button class="btn small">Small</button>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Mini modal sheet</p>
+      <div class="pv-sheet">
+        <h3>Fourth Wing</h3>
+        <p class="author">Rebecca Yarros</p>
+        <p class="pv-note">The sheet grabs the theme's vine art on desktop and the
+        accent for its primary actions. Swipe-down-to-close is JS, not visible here.</p>
+        <div class="pv-row" style="margin-top:10px"><button class="btn">Start reading</button></div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Heatmap cells (hardcoded rose)</p>
+      <div class="pv-heat">
+        <span class="heat-cell l1"></span><span class="heat-cell l2"></span>
+        <span class="heat-cell l3"></span><span class="heat-cell l4"></span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Toast / empty-state divider</p>
+      <div class="pv-row"><span class="pv-toast">Saved to your library</span></div>
+      <div class="empty" style="padding:20px"><p class="pv-note">Nothing here yet</p><div class="empty-div"></div></div>
+    </div>
+    <div class="pv-nav"><span class="on">Library</span><span>Discover</span><span>Add</span><span>Stats</span><span>Coven</span></div>
+  </div>
+
+  <div class="pv-panel" data-theme="twilight">
+    <h2>Twilight <small>celestial indigo · rose accent (default)</small></h2>
+    <div class="pv-sec">
+      <p class="pv-label">Brand</p>
+      <div class="app-header" style="padding:0;display:block;text-align:left">
+        <h1>Cozy Libram</h1>
+        <p class="tagline">her dark little library</p>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Chips / badges</p>
+      <div class="pv-row">
+        <button class="chip active">TBR</button>
+        <button class="chip">Reading</button>
+        <span class="badge status-reading">Reading</span>
+        <span class="badge spice">🌶 3</span>
+        <span class="badge">★ 4.2</span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Book card</p>
+      <div class="book-card">
+        <div class="cover-wrap"><span>📕</span></div>
+        <div class="book-meta">
+          <h3>A Court of Thorns and Roses</h3>
+          <p class="author">Sarah J. Maas</p>
+          <div class="badges"><span class="badge status-reading">Reading</span><span class="badge spice">Spice 3</span></div>
+          <div class="progress-line slim"><div class="fill" style="width:62%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Buttons</p>
+      <div class="pv-row">
+        <button class="btn">＋ TBR</button>
+        <button class="btn ghost">Share</button>
+        <button class="btn danger">Remove</button>
+        <button class="btn small">Small</button>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Mini modal sheet</p>
+      <div class="pv-sheet">
+        <h3>Fourth Wing</h3>
+        <p class="author">Rebecca Yarros</p>
+        <p class="pv-note">Twilight's vine is a crescent moon + constellations —
+        genuinely bespoke art, unlike the moon ornament below.</p>
+        <div class="pv-row" style="margin-top:10px"><button class="btn">Start reading</button></div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Heatmap cells (hardcoded rose — clashes here)</p>
+      <div class="pv-heat">
+        <span class="heat-cell l1"></span><span class="heat-cell l2"></span>
+        <span class="heat-cell l3"></span><span class="heat-cell l4"></span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Discover moon / empty-state divider</p>
+      <div class="pv-row"><span class="disc-moon"></span></div>
+      <div class="empty" style="padding:20px"><p class="pv-note">Nothing here yet</p><div class="empty-div"></div></div>
+    </div>
+    <div class="pv-nav"><span class="on">Library</span><span>Discover</span><span>Add</span><span>Stats</span><span>Coven</span></div>
+  </div>
+
+  <div class="pv-panel" data-theme="verdant">
+    <h2>Verdant <small>botanical green · rose accent (default)</small></h2>
+    <div class="pv-sec">
+      <p class="pv-label">Brand</p>
+      <div class="app-header" style="padding:0;display:block;text-align:left">
+        <h1>Cozy Libram</h1>
+        <p class="tagline">her dark little library</p>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Chips / badges</p>
+      <div class="pv-row">
+        <button class="chip active">TBR</button>
+        <button class="chip">Reading</button>
+        <span class="badge status-reading">Reading</span>
+        <span class="badge spice">🌶 3</span>
+        <span class="badge">★ 4.2</span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Book card</p>
+      <div class="book-card">
+        <div class="cover-wrap"><span>📕</span></div>
+        <div class="book-meta">
+          <h3>A Court of Thorns and Roses</h3>
+          <p class="author">Sarah J. Maas</p>
+          <div class="badges"><span class="badge status-reading">Reading</span><span class="badge spice">Spice 3</span></div>
+          <div class="progress-line slim"><div class="fill" style="width:62%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Buttons</p>
+      <div class="pv-row">
+        <button class="btn">＋ TBR</button>
+        <button class="btn ghost">Share</button>
+        <button class="btn danger">Remove</button>
+        <button class="btn small">Small</button>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Mini modal sheet</p>
+      <div class="pv-sheet">
+        <h3>Fourth Wing</h3>
+        <p class="author">Rebecca Yarros</p>
+        <p class="pv-note">Verdant's vine is fern fronds + berries — the
+        subject-specific art direction at its best.</p>
+        <div class="pv-row" style="margin-top:10px"><button class="btn">Start reading</button></div>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Heatmap cells (hardcoded rose — clashes here)</p>
+      <div class="pv-heat">
+        <span class="heat-cell l1"></span><span class="heat-cell l2"></span>
+        <span class="heat-cell l3"></span><span class="heat-cell l4"></span>
+      </div>
+    </div>
+    <div class="pv-sec">
+      <p class="pv-label">Discover moon / empty-state divider</p>
+      <div class="pv-row"><span class="disc-moon"></span></div>
+      <div class="empty" style="padding:20px"><p class="pv-note">Nothing here yet</p><div class="empty-div"></div></div>
+    </div>
+    <div class="pv-nav"><span class="on">Library</span><span>Discover</span><span>Add</span><span>Stats</span><span>Coven</span></div>
+  </div>
+
+</div>
+<div class="pv-head" style="margin-top:18px">
+  <p>Open this file from the repo (<code>docs/design-preview.html</code>) — it reads
+  <code>../styles.css</code> live, so it always shows the current stylesheet.
+  Reviewed 2026-10-01; see <code>docs/design-review-2026-10-01.md</code>.</p>
+</div>
+</body>
+</html>
