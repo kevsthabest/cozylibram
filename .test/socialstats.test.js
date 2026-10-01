@@ -34,10 +34,14 @@ ok('gap breaks streak', window.statStreak([bk({ log: [{ d: daysAgo(0), from: 1, 
 ok('dateFinished counts as a reading day', window.statStreak([bk({ dateFinished: new Date().toISOString() })]) >= 1);
 ok('empty books, empty streak', window.statStreak([]) === 0);
 
-// statPersonBooks aggregates
+// statPersonBooks aggregates — book 2's dates stay relative so the "this
+// month" and "5 days" assertions hold no matter when the suite runs (the old
+// hardcoded 2026-09 dates broke the month count on Oct 1).
+const fin2 = new Date(); fin2.setHours(12, 0, 0, 0);
+const start2 = new Date(fin2); start2.setDate(start2.getDate() - 5);
 const agg = window.statPersonBooks([
   bk(Object.assign({ status: 'read', myRating: 5, dateFinished: new Date().toISOString(), pages: 400 }, G('Fiction / Romance'))),
-  bk(Object.assign({ status: 'read', myRating: 4, dateStarted: '2026-09-01', dateFinished: '2026-09-06', pages: 300 }, G('Fiction / Fantasy'))),
+  bk(Object.assign({ status: 'read', myRating: 4, dateStarted: start2.toISOString(), dateFinished: fin2.toISOString(), pages: 300 }, G('Fiction / Fantasy'))),
   bk({ status: 'tbr', title: 'Buddy', authors: ['Zed'], isbn: '111' }),
   bk({ status: 'dnf', title: 'Nope' }),
   bk(Object.assign({ status: 'read', ratings: { spice: 4 } }, G('Fiction / Romance'))),
