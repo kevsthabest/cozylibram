@@ -267,11 +267,11 @@ function renderSettings() {
     }));
 
   document.getElementById('bk-export').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ app: 'spicy-shelves', version: 1, exported: new Date().toISOString(), books: library }, null, 2)],
+    const blob = new Blob([JSON.stringify({ app: 'cozy-libram', version: 1, exported: new Date().toISOString(), books: library }, null, 2)],
       { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'spicy-shelves-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.download = 'cozy-libram-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Backup downloaded 💾');

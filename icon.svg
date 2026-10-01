@@ -8,5 +8,5 @@
     <rect x="-120" y="-8" width="240" height="16" rx="8"/>
     <rect x="-84" y="16" width="168" height="12" rx="6" opacity="0.7"/>
   </g>
-  <text x="256" y="72" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="44" fill="#f3e9f5">Spicy</text>
+  <text x="256" y="72" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="34" fill="#f3e9f5">Cozy Libram</text>
 </svg>
