@@ -1,1 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d"><title id="t">Candlelight flame (themed example)</title><desc id="d">Candle flame with sparkles.</desc><path d="M140,200 C106,186.4 116.2,159.2 140,142.2 C163.8,159.2 174,186.4 140,200 Z" fill="#a87b24" stroke="none"/><path d="M140,196.6 C124.7,186.4 129.8,169.4 140,162.6 C150.2,169.4 155.3,186.4 140,196.6 Z" fill="#e5488f" stroke="none"/><path d="M210.0,78.0 l3.4,8.6 l8.6,3.4 l-8.6,3.4 l-3.4,8.6 l-3.4-8.6 l-8.6-3.4 l8.6-3.4 z M240.0,162.0 l2.2,5.8 l5.8,2.2 l-5.8,2.2 l-2.2,5.8 l-2.2-5.8 l-5.8-2.2 l5.8-2.2 z" fill="#c08a24" stroke="none"/><circle cx="92" cy="120" r="3" fill="#c08a24" stroke="none"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
+<title id="t">Candlelight flame moon</title>
+<desc id="d">A candle-flame moon with a dripping wax candle below and sparks rising into the dark.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M150 60 C180 105 192 142 150 180 C108 142 120 105 150 60 Z" stroke="#c08a24" stroke-width="4"/>
+<path d="M150 98 C163 122 167 142 150 160 C133 142 137 122 150 98 Z" stroke="#a87b24" stroke-width="1.8"/>
+<path d="M150 180 L150 196" stroke="#a87b24" stroke-width="1.8"/>
+<path d="M130 196 L130 256 Q130 263 137 263 L163 263 Q170 263 170 256 L170 196" stroke="#c08a24" stroke-width="1.8"/>
+<path d="M142 196 C142 208 145 214 149 214 C153 214 156 208 156 196" stroke="#a87b24" stroke-width="1.8"/>
+<path d="M105 40 l2.6 6.8 6.8 2.6-6.8 2.6-2.6 6.8-2.6-6.8-6.8-2.6 6.8-2.6z" stroke="#c08a24" stroke-width="1.8"/>
+<path d="M200 52 l2 5.4 5.4 2-5.4 2-2 5.4-2-5.4-5.4-2 5.4-2z" stroke="#c08a24" stroke-width="1.8"/>
+<path d="M150 22 l1.7 4.4 4.4 1.7-4.4 1.7-1.7 4.4-1.7-4.4-4.4-1.7 4.4-1.7z" stroke="#c08a24" stroke-width="1.8"/>
+<g fill="#a87b24" stroke="none"><circle cx="125" cy="72" r="2"/><circle cx="182" cy="86" r="2"/><circle cx="88" cy="120" r="2"/></g>
+</g></svg>

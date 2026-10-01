@@ -1,1 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d"><title id="t">Hearthside ember glow (themed example)</title><desc id="d">Glowing ember with radiating sparks.</desc><circle cx="150" cy="150" r="30" fill="#ff8a5a" opacity=".9" stroke="none"/><circle cx="150" cy="150" r="18" fill="#e5488f" opacity=".85" stroke="none"/><g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#d9a44f" stroke-width="3"><path d="M210,150 l7,0M90,150 l-7,0M150,210 l0,7M150,90 l0,-7M192,192 l5,5M108,192 l-5,5M192,108 l5,-5M108,108 l-5,-5"/></g><path d="M225.0,80.0 l2.8,7.2 l7.2,2.8 l-7.2,2.8 l-2.8,7.2 l-2.8-7.2 l-7.2-2.8 l7.2-2.8 z" fill="#d9a44f" stroke="none"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
+<title id="t">Hearthside ember moon over wheat</title>
+<desc id="d">A glowing amber moon rising over hand-drawn wheat stalks, with drifting embers.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#d9a44f">
+<circle cx="150" cy="100" r="50" stroke-width="4"/>
+<path d="M120 86 C130 78 144 76 156 80" stroke-width="1.8"/>
+<g stroke-width="1.8">
+<path d="M92 270 C94 244 93 220 96 200"/>
+<path d="M96 196 l-10 -7 M96 196 l10 -7"/>
+<path d="M96 186 l-10 -7 M96 186 l10 -7"/>
+<path d="M96 176 l-10 -7 M96 176 l10 -7"/>
+<path d="M96 166 l-10 -7 M96 166 l10 -7"/>
+<path d="M150 272 C150 246 151 222 150 200"/>
+<path d="M150 196 l-13 -8 M150 196 l13 -8"/>
+<path d="M150 184 l-13 -8 M150 184 l13 -8"/>
+<path d="M150 172 l-13 -8 M150 172 l13 -8"/>
+<path d="M150 160 l-13 -8 M150 160 l13 -8"/>
+<path d="M150 150 C150 144 150 140 150 136"/>
+<path d="M208 270 C206 244 207 220 204 200"/>
+<path d="M204 196 l-10 -7 M204 196 l10 -7"/>
+<path d="M204 186 l-10 -7 M204 186 l10 -7"/>
+<path d="M204 176 l-10 -7 M204 176 l10 -7"/>
+<path d="M204 166 l-10 -7 M204 166 l10 -7"/>
+</g>
+<g fill="#d9a44f" stroke="none">
+<circle cx="70" cy="140" r="2.5"/><circle cx="230" cy="150" r="2"/><circle cx="200" cy="58" r="2"/>
+</g>
+</g></svg>

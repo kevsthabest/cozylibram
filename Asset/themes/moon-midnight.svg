@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
+<title id="t">Midnight ringed moon with constellations</title>
+<desc id="d">A gold-ringed moon on a tilted orbit, with tiny hand-drawn constellations and star sparkles.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#f0c46c">
+<circle cx="150" cy="140" r="48" stroke-width="4"/>
+<ellipse cx="150" cy="140" rx="80" ry="60" transform="rotate(-12 150 140)" stroke-width="1.8"/>
+<path d="M128 128 C136 122 148 122 156 128" stroke-width="1.8"/>
+<g stroke-width="1.8">
+<path d="M58 62 L76 54 L94 58 L108 70"/>
+<path d="M232 66 L250 80 L230 90 Z"/>
+</g>
+<g fill="#f0c46c" stroke="none">
+<circle cx="58" cy="62" r="2.2"/><circle cx="76" cy="54" r="2.2"/><circle cx="94" cy="58" r="2.2"/><circle cx="108" cy="70" r="2.2"/>
+<circle cx="232" cy="66" r="2.2"/><circle cx="250" cy="80" r="2.2"/><circle cx="230" cy="90" r="2.2"/>
+<circle cx="90" cy="210" r="2"/>
+<path d="M120 77 l2.2 5.8 5.8 2.2-5.8 2.2-2.2 5.8-2.2-5.8-5.8-2.2 5.8-2.2z"/>
+<path d="M205 198 l2.6 7 7 2.6-7 2.6-2.6 7-2.6-7-7-2.6 7-2.6z"/>
+</g>
+</g></svg>

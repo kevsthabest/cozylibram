@@ -1,7 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Cozy Libram abyss moon and stars (themed example)</title>
-<desc id="d">Themed example in the Asset pack art style: deep teal water.</desc>
+<title id="t">Abyss moon over deep water</title>
+<desc id="d">A teal moon above layered hand-drawn waves, with rising bubbles and shimmering light.</desc>
 <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#7fd6c2" stroke-width="4.0"/>
-<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" stroke="#5aa8a0" stroke-width="1.8"/>
-<g fill="#e3c078" stroke="none"><circle cx="106" cy="51" r="2.5"/><circle cx="247" cy="122" r="2.5"/></g></g></svg>
+<circle cx="150" cy="92" r="46" stroke="#7fd6c2" stroke-width="4"/>
+<path d="M124 80 C134 72 148 70 160 76" stroke="#5aa8a0" stroke-width="1.8"/>
+<g stroke="#5aa8a0" stroke-width="1.8">
+<circle cx="118" cy="148" r="4"/>
+<circle cx="182" cy="158" r="3"/>
+<circle cx="150" cy="138" r="2.5"/>
+<circle cx="205" cy="132" r="2"/>
+<path d="M45 195 Q65 181 85 195 T125 195 T165 195 T205 195 T245 195"/>
+<path d="M55 225 Q75 211 95 225 T135 225 T175 225 T215 225 T255 225"/>
+<path d="M45 255 Q65 241 85 255 T125 255 T165 255 T205 255 T245 255"/>
+</g>
+</g></svg>

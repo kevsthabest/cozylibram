@@ -1,1 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d"><title id="t">Dark crescent moon (themed example)</title><desc id="d">Rose-gold crescent with rose sparkles.</desc><g transform="translate(38,10) scale(0.28)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#d4a24e" stroke-width="11"><path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z"/></g><path d="M218.0,57.0 l3.6,9.4 l9.4,3.6 l-9.4,3.6 l-3.6,9.4 l-3.6-9.4 l-9.4-3.6 l9.4-3.6 z M250.0,141.0 l2.5,6.5 l6.5,2.5 l-6.5,2.5 l-2.5,6.5 l-2.5-6.5 l-6.5-2.5 l6.5-2.5 z M196.0,183.0 l2.0,5.0 l5.0,2.0 l-5.0,2.0 l-2.0,5.0 l-2.0-5.0 l-5.0-2.0 l5.0-2.0 z" fill="#e5488f" stroke="none"/><circle cx="232" cy="118" r="3" fill="#d4a24e" stroke="none"/><circle cx="176" cy="140" r="2.4" fill="#d4a24e" stroke="none"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
+<title id="t">Dark garden moon with laurel</title>
+<desc id="d">A rose-gold crescent moon framed by hand-drawn laurel sprigs.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#d4a24e">
+<path d="M140 42 C198 56 225 113 206 164 C188 214 134 237 86 216 C124 207 151 178 155 141 C159 102 143 68 116 48 C124 44 132 42 140 42z" stroke-width="4"/>
+<g stroke-width="1.8">
+<path d="M58 252 C66 214 70 176 66 138"/>
+<g transform="translate(64,150) rotate(-50)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<g transform="translate(67,178) rotate(35)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<g transform="translate(66,206) rotate(-45)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<g transform="translate(62,234) rotate(30)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<path d="M242 252 C234 214 230 176 234 138"/>
+<g transform="translate(236,150) rotate(50)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+<g transform="translate(233,178) rotate(-35)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+<g transform="translate(234,206) rotate(-45)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+<g transform="translate(238,234) rotate(-30)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+</g>
+<g fill="#d4a24e" stroke="none"><circle cx="150" cy="252" r="2.5"/><circle cx="100" cy="88" r="2"/><circle cx="205" cy="92" r="2"/></g>
+</g></svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 700" role="img" aria-labelledby="t d">
+<title id="t">Midnight constellation vine</title>
+<desc id="d">A trailing vertical vine of fine gold linework studded with four-point stars, crescent moon buds, and stardust.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#f0c46c" stroke-width="1.8">
+<path d="M55,700 C40,600 70,540 50,450 C35,380 60,320 48,240 C42,190 55,150 50,110"/>
+<path d="M115,700 C130,620 100,560 118,470 C132,400 105,340 120,260 C126,220 118,190 122,160"/>
+</g>
+<g fill="#f0c46c" stroke="none">
+<path d="M52 173 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M48 333 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M55 493 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M50 613 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M120 193 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M116 353 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<path d="M122 513 l2 5.2 5.2 2-5.2 2-2 5.2-2-5.2-5.2-2 5.2-2z"/>
+<circle cx="70" cy="120" r="1.8"/><circle cx="40" cy="220" r="1.8"/><circle cx="62" cy="380" r="1.8"/>
+<circle cx="44" cy="540" r="1.8"/><circle cx="70" cy="660" r="1.8"/>
+<circle cx="130" cy="150" r="1.8"/><circle cx="108" cy="420" r="1.8"/><circle cx="128" cy="600" r="1.8"/>
+</g>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#f0c46c" stroke-width="1.5">
+<g transform="translate(60,260)"><path d="M1 -6 C-4 -4 -6 2 -4 6 C-2 9 3 10 6 7 C2 6 -1 2 -1 -1 C-1 -4 0 -5 1 -6z"/></g>
+<g transform="translate(45,430)"><path d="M1 -6 C-4 -4 -6 2 -4 6 C-2 9 3 10 6 7 C2 6 -1 2 -1 -1 C-1 -4 0 -5 1 -6z"/></g>
+<g transform="translate(58,570)"><path d="M1 -6 C-4 -4 -6 2 -4 6 C-2 9 3 10 6 7 C2 6 -1 2 -1 -1 C-1 -4 0 -5 1 -6z"/></g>
+<g transform="translate(112,280)"><path d="M1 -6 C-4 -4 -6 2 -4 6 C-2 9 3 10 6 7 C2 6 -1 2 -1 -1 C-1 -4 0 -5 1 -6z"/></g>
+<g transform="translate(124,440)"><path d="M1 -6 C-4 -4 -6 2 -4 6 C-2 9 3 10 6 7 C2 6 -1 2 -1 -1 C-1 -4 0 -5 1 -6z"/></g>
+</g></svg>

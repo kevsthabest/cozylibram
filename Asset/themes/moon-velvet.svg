@@ -1,7 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Cozy Libram velvet moon and stars (themed example)</title>
-<desc id="d">Themed example in the Asset pack art style: wine-dark romance.</desc>
+<title id="t">Velvet wine moon with rose petals</title>
+<desc id="d">A wine-dark moon scattered with hand-drawn rose petals on a curling stem.</desc>
 <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#dfa08a" stroke-width="4.0"/>
-<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" stroke="#d98aa5" stroke-width="1.8"/>
-<g fill="#e8b4a0" stroke="none"><circle cx="106" cy="51" r="2.5"/><circle cx="247" cy="122" r="2.5"/></g></g></svg>
+<circle cx="138" cy="128" r="52" stroke="#d98aa5" stroke-width="4"/>
+<path d="M108 112 C118 102 134 98 148 104" stroke="#dfa08a" stroke-width="1.8"/>
+<g transform="translate(214,186) rotate(28)">
+<path d="M0 0 C-13 -11 -15 -29 -3 -42 C11 -31 11 -11 0 0 Z" stroke="#d98aa5" stroke-width="1.8"/>
+</g>
+<g transform="translate(246,148) rotate(-32)">
+<path d="M0 0 C-13 -11 -15 -29 -3 -42 C11 -31 11 -11 0 0 Z" stroke="#dfa08a" stroke-width="1.8"/>
+</g>
+<g transform="translate(182,228) rotate(52)">
+<path d="M0 0 C-13 -11 -15 -29 -3 -42 C11 -31 11 -11 0 0 Z" stroke="#dfa08a" stroke-width="1.8"/>
+</g>
+<g transform="translate(88,196) rotate(-18)">
+<path d="M0 0 C-13 -11 -15 -29 -3 -42 C11 -31 11 -11 0 0 Z" stroke="#d98aa5" stroke-width="1.8"/>
+</g>
+<path d="M150 252 C162 238 176 228 192 222" stroke="#d98aa5" stroke-width="1.8"/>
+<path d="M168 236 q14 -3 19 -19 q-17 1 -19 19z" stroke="#dfa08a" stroke-width="1.8"/>
+<g fill="#d98aa5" stroke="none"><circle cx="70" cy="90" r="2"/><circle cx="240" cy="230" r="2"/></g>
+</g></svg>

@@ -37,8 +37,8 @@ ok('emptyState: big icon still rendered', es.includes("icon(o.icon || 'covers')"
 
 // every theme maps both slots to real files
 for (const t of THEMES) {
-  const moonFile = t === 'midnight' ? 'Asset/moon-sparkle.svg' : `Asset/themes/moon-${t}.svg`;
-  const divFile = t === 'midnight' ? 'Asset/divider-botanical.svg' : `Asset/themes/divider-${t}.svg`;
+  const moonFile = `Asset/themes/moon-${t}.svg`;
+  const divFile = `Asset/themes/divider-${t}.svg`;
   ok(`css: ${t} disc-moon -> ${moonFile}`,
     css.includes(`[data-theme="${t}"] .disc-moon { background-image: url("${moonFile}"); }`));
   ok(`css: ${t} empty-div -> ${divFile}`,

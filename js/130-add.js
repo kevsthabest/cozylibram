@@ -434,7 +434,7 @@ function paintSearchResults(box) {
     c.addEventListener('click', async () => {
       const b = searchResults[Number(c.dataset.i)];
       if (!b) return;
-      if (b._added || alreadyHave(b)) { if (!b._added) toast('Already on your shelves 📚'); return; }
+      if (b._added || alreadyHave(b)) { if (!b._added) toast('Already on your shelves'); return; }
       const enriched = Object.assign({}, b, { id: uid() });
       if (!enriched._olKey) await enrichRatings(enriched); // Google-sourced: blend OL ratings
       await enrichOLBook(enriched, enriched._olKey); // OL-sourced: description/subjects/tropes

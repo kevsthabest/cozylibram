@@ -1,7 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Cozy Libram verdant moon and stars (themed example)</title>
-<desc id="d">Themed example in the Asset pack art style: greenhouse botanical.</desc>
+<title id="t">Verdant full moon behind monstera leaves</title>
+<desc id="d">A full green moon half-hidden by hand-drawn monstera leaves, with golden berries.</desc>
 <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#8aa864" stroke-width="4.0"/>
-<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" stroke="#d4a24e" stroke-width="1.8"/>
-<g fill="#f0e6c8" stroke="none"><circle cx="106" cy="51" r="2.5"/><circle cx="247" cy="122" r="2.5"/></g></g></svg>
+<g stroke="#8aa864" stroke-width="1.8">
+<path d="M218 48 C200 52 190 68 194 88 C198 106 214 116 230 112 C246 108 252 90 248 72 C244 56 232 46 218 48 Z"/>
+<path d="M218 48 C216 68 218 92 222 110"/>
+<path d="M196 66 C204 72 212 78 218 86"/>
+<path d="M244 68 C237 74 230 80 226 88"/>
+</g>
+<circle cx="150" cy="125" r="58" stroke="#8aa864" stroke-width="4"/>
+<g stroke="#d4a24e" stroke-width="1.8">
+<path d="M130 105 C138 100 148 100 155 106"/>
+<path d="M165 140 C172 136 180 137 185 142"/>
+</g>
+<path d="M112 132 C84 136 62 160 60 195 C58 228 80 254 108 258 C136 262 158 242 160 212 C162 182 146 150 124 138 C120 135 116 133 112 132 Z" stroke="#8aa864" stroke-width="4"/>
+<g stroke="#8aa864" stroke-width="1.8">
+<path d="M112 132 C106 165 106 210 110 256"/>
+<path d="M66 168 C78 176 90 184 100 194"/>
+<path d="M62 198 C76 204 90 210 102 216"/>
+<path d="M70 228 C82 232 94 236 104 240"/>
+<path d="M154 166 C144 176 134 186 126 196"/>
+<path d="M159 196 C147 202 135 208 127 214"/>
+<path d="M152 226 C142 230 132 234 124 238"/>
+<path d="M110 258 C116 268 122 278 128 288"/>
+</g>
+<g fill="#d4a24e" stroke="none">
+<circle cx="185" cy="235" r="3.4"/><circle cx="193" cy="243" r="3.4"/><circle cx="177" cy="241" r="3.4"/>
+<circle cx="70" cy="120" r="2"/><circle cx="232" cy="200" r="2"/>
+</g>
+</g></svg>

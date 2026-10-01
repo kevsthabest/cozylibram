@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Cozy Libram frost moon and stars (themed example)</title>
-<desc id="d">Themed example in the Asset pack art style: light theme — heavier linework.</desc>
+<title id="t">Frost moon with snowflakes</title>
+<desc id="d">A pale golden moon beside hand-drawn six-point snowflake crystals and falling snow.</desc>
 <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#a87b24" stroke-width="5.4"/>
-<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" stroke="#8b5cf6" stroke-width="2.43"/>
-<g fill="#8b5cf6" stroke="none"><circle cx="106" cy="51" r="2.5"/><circle cx="247" cy="122" r="2.5"/></g></g></svg>
+<circle cx="150" cy="140" r="50" stroke="#a87b24" stroke-width="4"/>
+<g stroke="#8b5cf6" stroke-width="1.8">
+<path d="M50 72 H94 M61 53 L83 91.1 M83 53 L61 91.1"/>
+<circle cx="72" cy="72" r="3"/>
+<path d="M94 72 L88.6 69.5 M94 72 L88.6 74.5 M50 72 L55.4 69.5 M50 72 L55.4 74.5"/>
+<path d="M83 91.1 L78.1 87.6 M83 91.1 L82.5 85.1 M61 53 L65.9 56.4 M61 53 L61.5 58.9"/>
+<path d="M83 53 L82.5 58.9 M83 53 L78.1 56.4 M61 91.1 L61.5 85.1 M61 91.1 L65.9 87.6"/>
+<path d="M213 205 H247 M221.5 190.3 L238.5 219.7 M238.5 190.3 L221.5 219.7"/>
+<circle cx="230" cy="205" r="2.6"/>
+<path d="M247 205 L242.5 202.9 M247 205 L242.5 207.1 M213 205 L217.5 202.9 M213 205 L217.5 207.1"/>
+<path d="M238.5 219.7 L234.4 216.8 M238.5 219.7 L238.1 214.7 M221.5 190.3 L225.6 193.2 M221.5 190.3 L221.9 195.3"/>
+<path d="M238.5 190.3 L238.1 195.3 M238.5 190.3 L234.4 193.2 M221.5 219.7 L221.9 214.7 M221.5 219.7 L225.6 216.8"/>
+</g>
+<g fill="#8b5cf6" stroke="none"><circle cx="118" cy="58" r="2"/><circle cx="196" cy="252" r="2"/><circle cx="58" cy="182" r="2"/></g>
+</g></svg>

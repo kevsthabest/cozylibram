@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Cozy Libram twilight moon and stars (themed example)</title>
-<desc id="d">Themed example in the Asset pack art style: night-sky celestial.</desc>
+<title id="t">Twilight crescent moon in a starfield</title>
+<desc id="d">A hand-drawn violet crescent moon ringed by four-point stars and drifting stardust.</desc>
 <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#8b5cf6" stroke-width="4.0"/>
-<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" stroke="#b9a3f2" stroke-width="1.8"/>
-<g fill="#f0c46c" stroke="none"><path d="M106 45 l1.6800000000000002 4.32 l4.32 1.6800000000000002 l-4.32 1.6800000000000002 l-1.6800000000000002 4.32 l-1.6800000000000002-4.32 l-4.32-1.6800000000000002 l4.32-1.6800000000000002 z"/><path d="M247 116 l1.6800000000000002 4.32 l4.32 1.6800000000000002 l-4.32 1.6800000000000002 l-1.6800000000000002 4.32 l-1.6800000000000002-4.32 l-4.32-1.6800000000000002 l4.32-1.6800000000000002 z"/></g></g></svg>
+<path d="M160 42 C102 56 75 113 94 164 C112 214 166 237 214 216 C176 207 149 178 145 141 C141 102 157 68 184 48 C176 44 168 42 160 42z" stroke="#8b5cf6" stroke-width="4"/>
+<path d="M176 62 C150 76 134 104 136 134 C138 164 154 190 180 202" stroke="#b9a3f2" stroke-width="1.8"/>
+<path d="M219 72 l5 12 12 5-12 5-5 12-5-12-12-5 12-5z M72 82 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M224 167 l4 9 9 4-9 4-4 9-4-9-9-4 9-4z M70 191 l3 7 7 3-7 3-3 7-3-7-7-3 7-3z M248 210 l2.4 6 6 2.4-6 2.4-2.4 6-2.4-6-6-2.4 6-2.4z" stroke="#b9a3f2" stroke-width="1.8"/>
+<g fill="#f0c46c" stroke="none"><path d="M106 45 l1.7 4.3 4.3 1.7-4.3 1.7-1.7 4.3-1.7-4.3-4.3-1.7 4.3-1.7z"/><path d="M247 116 l1.7 4.3 4.3 1.7-4.3 1.7-1.7 4.3-1.7-4.3-4.3-1.7 4.3-1.7z"/></g>
+<g fill="#b9a3f2" stroke="none"><circle cx="120" cy="230" r="2.2"/><circle cx="200" cy="240" r="2.2"/><circle cx="60" cy="140" r="2"/></g>
+</g></svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 80" role="img" aria-labelledby="t d">
+<title id="t">Midnight constellation divider</title>
+<desc id="d">A horizontal gold divider: fine rules ending in a central star flanked by tiny constellations.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#f0c46c">
+<path d="M18 40 H310 M590 40 H882" stroke-width="1.5"/>
+<path d="M392 30 L406 42 L420 32" stroke-width="1.2"/>
+<path d="M480 48 L494 36 L508 46" stroke-width="1.2"/>
+</g>
+<g fill="#f0c46c" stroke="none">
+<path d="M450 24 l4.5 11.5 11.5 4.5-11.5 4.5-4.5 11.5-4.5-11.5-11.5-4.5 11.5-4.5z"/>
+<circle cx="392" cy="30" r="2.2"/><circle cx="406" cy="42" r="2.2"/><circle cx="420" cy="32" r="2.2"/>
+<circle cx="480" cy="48" r="2.2"/><circle cx="494" cy="36" r="2.2"/><circle cx="508" cy="46" r="2.2"/>
+<path d="M330 36 l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1z"/>
+<path d="M570 36 l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1z"/>
+</g></svg>

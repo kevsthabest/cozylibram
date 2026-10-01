@@ -16,12 +16,11 @@ function ok(name, cond) {
   else { fail++; console.log('FAIL - ' + name); }
 }
 
-// v184: all ten themes have bespoke art (midnight reuses the Asset pack vine)
-const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight'];
+// v228: all ten themes have bespoke art (midnight got its own moon/divider/vine)
+const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'midnight', 'dark', 'light', 'hearthside', 'candlelight'];
 const KINDS = ['vine', 'divider', 'moon'];
 
 // 1. art files exist on disk
-ok('Asset/floral-right.svg exists (midnight vine)', fs.existsSync(path.join(ROOT, 'Asset', 'floral-right.svg')));
 for (const t of THEMES) {
   for (const k of KINDS) {
     const p = path.join(ROOT, 'Asset', 'themes', `${k}-${t}.svg`);
@@ -39,8 +38,6 @@ for (const t of THEMES) {
   ok(`styles.css: [data-theme="${t}"] .modal::after -> vine-${t}.svg`,
     css.includes(`[data-theme="${t}"] .modal::after`) && css.includes(`Asset/themes/vine-${t}.svg`));
 }
-ok('styles.css: [data-theme="midnight"] .modal::after -> Asset/floral-right.svg',
-  css.includes('[data-theme="midnight"] .modal::after') && css.includes('Asset/floral-right.svg'));
 
 // no theme is left on the old tinted silhouette
 ok('styles.css: bespoke vine rules clear mask-image',

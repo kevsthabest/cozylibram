@@ -1,1 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d"><title id="t">Light sun (themed example)</title><desc id="d">Daylight counterpart: small sun with rays.</desc><circle cx="150" cy="150" r="34" fill="#c08a24" opacity=".85" stroke="none"/><g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#c08a24" stroke-width="3"><path d="M189.0,150.0 L197.0,150.0 M177.6,177.6 L183.2,183.2 M150.0,189.0 L150.0,197.0 M122.4,177.6 L116.8,183.2 M111.0,150.0 L103.0,150.0 M122.4,122.4 L116.8,116.8 M150.0,111.0 L150.0,103.0 M177.6,122.4 L183.2,116.8"/></g><path d="M232.0,70.0 l2.8,7.2 l7.2,2.8 l-7.2,2.8 l-2.8,7.2 l-2.8-7.2 l-7.2-2.8 l7.2-2.8 z" fill="#a87b24" stroke="none"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
+<title id="t">Light garden sun with laurel</title>
+<desc id="d">A golden daylight sun framed by hand-drawn laurel sprigs.</desc>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#c08a24">
+<circle cx="150" cy="118" r="38" stroke-width="4"/>
+<g stroke-width="1.8">
+<path d="M198 118 L210 118"/>
+<path d="M183.9 84.1 L192.4 75.6"/>
+<path d="M150 70 L150 58"/>
+<path d="M116.1 84.1 L107.6 75.6"/>
+<path d="M102 118 L90 118"/>
+<path d="M116.1 151.9 L107.6 160.4"/>
+<path d="M150 166 L150 178"/>
+<path d="M183.9 151.9 L192.4 160.4"/>
+<path d="M58 258 C66 224 70 192 66 160"/>
+<g transform="translate(64,172) rotate(-50)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<g transform="translate(67,200) rotate(35)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<g transform="translate(66,228) rotate(-45)"><path d="M0 0 C8 -1 14 -7 16 -16 C8 -15 2 -9 0 0 Z"/></g>
+<path d="M242 258 C234 224 230 192 234 160"/>
+<g transform="translate(236,172) rotate(50)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+<g transform="translate(233,200) rotate(-35)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+<g transform="translate(234,228) rotate(45)"><path d="M0 0 C-8 -1 -14 -7 -16 -16 C-8 -15 -2 -9 0 0 Z"/></g>
+</g>
+<g fill="#c08a24" stroke="none"><circle cx="150" cy="252" r="2.5"/><circle cx="96" cy="60" r="2"/><circle cx="208" cy="62" r="2"/></g>
+</g></svg>
