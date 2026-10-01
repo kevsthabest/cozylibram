@@ -454,13 +454,16 @@ function openPreviewModal(t, opts) {
     '<div class="d-panel"><div id="p-tags">' + tagSecHTML() + '</div></div>' +
     '</div></div>';
 
-  const closePreview = () => {
+  // v220: DOM-only teardown — the history entry is owned by overlayOpened.
+  const closePreviewDom = () => {
     document.removeEventListener('keydown', escClose);
     unlockBodyScroll(); // v215: release the background scroll lock
     previewOpenId = null;
     root.innerHTML = '';
   };
-  const escClose = e => { if (e.key === 'Escape') closePreview(); }; // v129: escape closes
+  const ovToken = overlayOpened('modal-root', closePreviewDom); // v220: back-gesture closes
+  const closePreview = () => { overlayClosed(ovToken); closePreviewDom(); }; // v220: programmatic close consumes the entry
+  const escClose = e => { if (e.key === 'Escape' && overlayIsTop(ovToken)) closePreview(); }; // v129: escape closes, v220: topmost only
   document.addEventListener('keydown', escClose);
   document.getElementById('p-x').addEventListener('click', closePreview);
   document.getElementById('p-back').addEventListener('click', e => { if (e.target.id === 'p-back') closePreview(); });
@@ -473,8 +476,8 @@ function openPreviewModal(t, opts) {
     if (nb && nb.id) {
       const id = nb.id;
       track('preview_tbr', { source: opts.source || 'preview' });
-      closePreview();
-      openDetail(id);
+      closePreviewDom(); // v220: DOM teardown first (the unlock+relock around openDetail is synchronous)
+      overlayReplace(ovToken, () => openDetail(id)); // v220: the real modal adopts the history entry
     }
   });
   // Wishlist: the row buttons' addExternalBook path; the button becomes a
@@ -641,14 +644,17 @@ function openCollection(kind, name, fromId) {
     '<div id="c-more"><p class="note">Looking for more books…</p></div>' +
     '</div></div>';
   document.body.appendChild(ov);
-  const close = () => ov.remove();
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('collection', closeDom); // v220: back-gesture closes
+  const close = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
   ov.querySelector('#c-back').addEventListener('click', e => { if (e.target.id === 'c-back') close(); });
   ov.querySelector('#c-x').addEventListener('click', close);
   ov.querySelectorAll('[data-book]').forEach(el =>
     el.addEventListener('click', () => {
       const r = el.getBoundingClientRect(); // capture before close() detaches it
-      close();
-      openDetail(el.dataset.book, { fromRect: r });
+      const id = el.dataset.book;
+      closeDom(); // v220: DOM teardown; the history entry transfers below
+      overlayReplace(ovToken, () => openDetail(id, { fromRect: r })); // v220
     }));
   fillMoreSection(kind, name, fromId, ov.querySelector('#c-more'));
 }
@@ -1296,12 +1302,15 @@ function renderDetailModal(b, viaBook) {
   wirePicker('#f-myrating', 'myRating');
   wireAxRows();
 
-  const escClose = e => { if (e.key === 'Escape') close(); }; // v129: escape closes
-  const close = () => {
+  const escClose = e => { if (e.key === 'Escape' && overlayIsTop(ovToken)) close(); }; // v129: escape closes, v220: topmost only
+  // v220: DOM-only teardown — the history entry is owned by overlayOpened.
+  const closeDom = () => {
     document.removeEventListener('keydown', escClose);
     unlockBodyScroll(); // v215: release the background scroll lock
     root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
   };
+  const ovToken = overlayOpened('modal-root', closeDom); // v220: back-gesture closes the modal
+  const close = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
   document.addEventListener('keydown', escClose);
   root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
     el.addEventListener('click', () => openDetail(el.dataset.sim)));

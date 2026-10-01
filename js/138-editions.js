@@ -72,10 +72,16 @@ async function fetchEditionOptions(book) {
   }
 }
 
-function closeEditionPicker() {
+let editionPickerToken = null; // v220: history entry for the back-gesture
+function closeEditionPickerDom() { // v220: DOM-only teardown
   if (typeof document === 'undefined') return;
   const ov = document.getElementById('edition-picker');
   if (ov) ov.remove();
+}
+function closeEditionPicker() {
+  if (typeof document === 'undefined') return;
+  if (editionPickerToken) { overlayClosed(editionPickerToken); editionPickerToken = null; } // v220
+  closeEditionPickerDom();
 }
 
 function epSubLine(e) {
@@ -87,7 +93,10 @@ function openEditionPicker(bookId) {
   if (typeof document === 'undefined') return;
   const b = (typeof library !== 'undefined' ? library : []).find(x => x.id === bookId);
   if (!b) return;
-  closeEditionPicker();
+  // v220: defensive re-open adopts the existing history entry (no push/back churn)
+  const reopenToken = editionPickerToken; editionPickerToken = null;
+  closeEditionPickerDom();
+  const doOpen = () => {
   const ov = document.createElement('div');
   ov.className = 'cover-picker-backdrop';
   ov.id = 'edition-picker';
@@ -134,6 +143,10 @@ function openEditionPicker(bookId) {
         if (pick) applyEdition(bookId, pick);
       }));
   });
+  editionPickerToken = overlayOpened('picker', closeEditionPickerDom); // v220: back-gesture closes
+  }; // doOpen
+  if (reopenToken) overlayReplace(reopenToken, doOpen); // v220: re-open adopts the entry
+  else doOpen();
 }
 
 // Switch the book to the picked edition and refresh edition-level details.

@@ -124,9 +124,14 @@ function fileToCoverDataURL(file) {
   });
 }
 
-function closeCoverPicker() {
+let coverPickerToken = null; // v220: history entry for the back-gesture
+function closeCoverPickerDom() { // v220: DOM-only teardown
   const ov = document.getElementById('cover-picker');
   if (ov) ov.remove();
+}
+function closeCoverPicker() {
+  if (coverPickerToken) { overlayClosed(coverPickerToken); coverPickerToken = null; } // v220
+  closeCoverPickerDom();
 }
 
 // v216: canonical cover cache. Returns the shared Supabase Storage URL for a
@@ -189,7 +194,10 @@ async function chooseCover(bookId, url) {
 function openCoverPicker(bookId) {
   const b = library.find(x => x.id === bookId);
   if (!b) return;
-  closeCoverPicker();
+  // v220: defensive re-open adopts the existing history entry (no push/back churn)
+  const reopenToken = coverPickerToken; coverPickerToken = null;
+  closeCoverPickerDom();
+  const doOpen = () => {
   const ov = document.createElement('div');
   ov.className = 'cover-picker-backdrop';
   ov.id = 'cover-picker';
@@ -237,6 +245,10 @@ function openCoverPicker(bookId) {
     grid.querySelectorAll('[data-cpurl]').forEach(btn =>
       btn.addEventListener('click', async () => { await chooseCover(bookId, btn.dataset.cpurl); }));
   });
+  coverPickerToken = overlayOpened('picker', closeCoverPickerDom); // v220: back-gesture closes
+  }; // doOpen
+  if (reopenToken) overlayReplace(reopenToken, doOpen); // v220: re-open adopts the entry
+  else doOpen();
 }
 
 // Bulk cover fill (v107): give every coverless book its first loadable cover

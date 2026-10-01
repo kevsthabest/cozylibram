@@ -544,7 +544,9 @@ function openTropeProposalSheet(book) {
     '<button class="btn block" id="tp-submit">Submit proposal</button>' +
     '</div></div>';
   document.body.appendChild(ov);
-  const close = () => ov.remove();
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('sheet', closeDom); // v220: back-gesture closes the sheet
+  const close = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
   ov.querySelector('#tp-back').addEventListener('click', e => { if (e.target.id === 'tp-back') close(); });
   ov.querySelector('#tp-x').addEventListener('click', close);
   ov.querySelectorAll('[data-tpg]').forEach(btn => btn.addEventListener('click', () => {
