@@ -1626,12 +1626,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .bottom-nav button.nav-add.active { color: var(--accent); }
 /* ================= v175: Discover per mockup ================= */
 .disc-hero { text-align: center; padding: 20px 16px 4px; }
-.disc-hero-ic {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 46px; height: 46px; border-radius: 14px; color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.disc-hero-ic svg { width: 24px; height: 24px; }
 .disc-hero h2 { font-size: 22px; margin: 10px 0 4px; }
 .disc-hero p { color: var(--muted); font-size: 14px; margin: 0; }
 .disc-surprise, .disc-search {

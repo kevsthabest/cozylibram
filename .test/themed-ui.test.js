@@ -3,7 +3,8 @@
 // Covered: the Discover hero renders a themed moon ornament slot; the
 // emptyState() helper renders a themed divider slot; styles.css maps both
 // slots per theme to real files; the slots are decorative (aria-hidden) and
-// the original content (sparkles icon, big icon) is preserved.
+// the emptyState's original big icon is preserved. v233: the Discover hero's
+// v175 sparkles badge was dropped to declutter the header (moon only).
 
 const fs = require('fs');
 const path = require('path');
@@ -22,11 +23,11 @@ const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
 const helpers = fs.readFileSync(path.join(ROOT, 'js/050-helpers.js'), 'utf8');
 const discovery = fs.readFileSync(path.join(ROOT, 'js/198-discovery.js'), 'utf8');
 
-// Discover hero renders a themed moon slot, decorative, above the icon badge
+// Discover hero renders a themed moon slot, decorative, as the hero ornament
 ok('discovery: disc-moon slot rendered in disc-hero',
   discovery.includes('disc-hero') && discovery.includes('class="disc-moon"'));
 ok('discovery: disc-moon is aria-hidden', discovery.includes('disc-moon" aria-hidden="true"'));
-ok('discovery: sparkles badge still present', discovery.includes("icon('sparkles')"));
+ok('discovery: sparkles badge removed (v233 declutter)', !discovery.includes('disc-hero-ic'));
 
 // emptyState renders a themed divider slot, decorative, between body and CTA
 const es = helpers.slice(helpers.indexOf('function emptyState'), helpers.indexOf('document.addEventListener'));
