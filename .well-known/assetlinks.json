@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cozylibram.twa",
+      "sha256_cert_fingerprints": [
+        "41:D8:E7:70:01:B0:90:09:19:FF:DA:D8:37:4C:0A:84:14:2D:99:FC:44:62:80:13:85:6B:04:B5:00:5B:44:1A"
+      ]
+    }
+  }
+]

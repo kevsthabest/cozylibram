@@ -1,6 +1,6 @@
 /* Cozy Libram service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'cozy-libram-v230';
+const CACHE = 'cozy-libram-v231';
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
 // objects are CORS-clean with real Content-Length, so size-based eviction
@@ -14,7 +14,7 @@ const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => '
 const VENDOR = ['supabase.min.js', 'quagga.min.js'].map(f => './js/vendor/' + f);
 // v184: bespoke per-theme modal artwork, complete set (all ten themes)
 const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight'].flatMap(t => ['vine', 'divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
-const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './Asset/floral-right.svg'].concat(JS, VENDOR, AVATARS, THEME_ART);
+const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png', './Asset/floral-right.svg'].concat(JS, VENDOR, AVATARS, THEME_ART);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

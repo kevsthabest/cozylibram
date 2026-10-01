@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#14101a"/>
+  <g transform="translate(56,56) scale(0.78125)">
+  <rect width="512" height="512" rx="112" fill="#14101a"/>
+  <g transform="translate(256,236)">
+    <path d="M-90,-70 C-60,-110 -20,-118 0,-84 C20,-118 60,-110 90,-70 C110,-44 104,40 0,110 C-104,40 -110,-44 -90,-70 Z" fill="#e5488f"/>
+    <path d="M-90,-70 C-60,-110 -20,-118 0,-84 L0,110 C-104,40 -110,-44 -90,-70 Z" fill="#c2377a"/>
+  </g>
+  <g transform="translate(256,400)" fill="#d4a24e">
+    <rect x="-120" y="-8" width="240" height="16" rx="8"/>
+    <rect x="-84" y="16" width="168" height="12" rx="6" opacity="0.7"/>
+  </g>
+  <text x="256" y="72" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="34" fill="#f3e9f5">Cozy Libram</text>
+
+  </g>
+</svg>
