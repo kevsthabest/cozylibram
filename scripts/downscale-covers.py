@@ -102,7 +102,7 @@ def load_service_key():
 
 def put_object(name, data, key):
     req = urllib.request.Request(
-        API_BASE + name, data=data, method='PUT',
+        API_BASE + name, data=data, method='POST',
         headers={'Authorization': 'Bearer ' + key,
                  'Content-Type': 'image/jpeg',
                  'x-upsert': 'true',  # objects already exist — this is an in-place replace
