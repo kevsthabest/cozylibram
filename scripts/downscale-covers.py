@@ -25,7 +25,6 @@ import argparse
 import io
 import json
 import os
-import subprocess
 import sys
 import time
 import urllib.request
@@ -33,7 +32,6 @@ import urllib.request
 from PIL import Image
 
 REF = 'dvhimjkrroxuatthiizc'
-SB = '/home/hatch/workspace/skills/supabase/bin/sb-query'
 APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGRESS = os.path.join(APP, 'scripts', 'downscale-progress.jsonl')
 PUBLIC_BASE = f'https://{REF}.supabase.co/storage/v1/object/public/covers/'
@@ -43,14 +41,27 @@ JPEG_Q = 82
 PACE_S = 0.4
 
 
-def sb_query(sql):
-    out = subprocess.run([SB, REF, sql], capture_output=True, text=True, check=True)
-    return json.loads(out.stdout)
-
-
-def list_objects():
-    rows = sb_query("select name from storage.objects where bucket_id='covers' order by name;")
-    return [r['name'] for r in rows]
+def list_objects(key):
+    """Portable bucket listing via the Storage list API (works on any OS —
+    no local sb-query binary needed)."""
+    names = []
+    offset = 0
+    while True:
+        body = json.dumps({'prefix': '', 'limit': 100, 'offset': offset}).encode()
+        req = urllib.request.Request(
+            f'https://{REF}.supabase.co/storage/v1/object/list/covers',
+            data=body, method='POST',
+            headers={'apikey': key,
+                     'Authorization': 'Bearer ' + key,
+                     'Content-Type': 'application/json',
+                     'User-Agent': 'cozy-libram-downscale/1.0'})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            page = json.loads(r.read())
+        if not page:
+            break
+        names.extend(o['name'] for o in page)
+        offset += len(page)
+    return sorted(names)
 
 
 def download(name):
@@ -81,7 +92,7 @@ def log(entry):
 def load_service_key():
     cfg = os.path.join(APP, 'server-config.json')
     if not os.path.exists(cfg):
-        sys.exit('ERROR: --upload needs server-config.json with supabase_service_key '
+        sys.exit('ERROR: server-config.json with supabase_service_key not found '
                  '(same file server.py uses). Refusing to continue.')
     key = (json.load(open(cfg)).get('supabase_service_key') or '').strip()
     if not key:
@@ -113,12 +124,12 @@ def put_object(name, data, key):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--upload', action='store_true', help='PUT downscaled bytes in place (needs server-config.json)')
+    ap.add_argument('--upload', action='store_true', help='PUT downscaled bytes in place')
     ap.add_argument('--write-local', metavar='DIR', help='save downscaled files to DIR instead of uploading')
     ap.add_argument('--redo', action='store_true', help='reprocess files already logged as done')
     args = ap.parse_args()
 
-    key = load_service_key() if args.upload else None
+    key = load_service_key()
     if args.write_local:
         os.makedirs(args.write_local, exist_ok=True)
 
@@ -140,7 +151,7 @@ def main():
         terminal = {'downscaled-dryrun', 'wrote-local', 'uploaded', 'skip',
                     'skip-not-smaller', 'download-failed', 'decode-failed'}
 
-    names = list_objects()
+    names = list_objects(key)
     print(f'{len(names)} objects in covers bucket; {len(done)} already processed, '
           f'mode={"upload" if args.upload else "write-local" if args.write_local else "dry-run"}')
 
