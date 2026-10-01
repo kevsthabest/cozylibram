@@ -31,7 +31,7 @@ function renderGate() {
   setView(
     '<div class="gate-wrap"><div class="gate-card">' +
     '<h1 class="serif">Cozy Libram</h1>' +
-    '<p class="note">her dark little library</p>' +
+    '<p class="note">every spine has a story</p>' +
     '<p class="note" id="gate-status">' + esc(status) + '</p>' +
     (configured ?
       '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
