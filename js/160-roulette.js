@@ -9,6 +9,20 @@ function allPickGenres() {
   return set.sort();
 }
 
+// v235 (UX-19): the TBR's dominant axis — most common primaryAxisKey across
+// TBR books, falling back to spice. Labels the roulette intensity filter
+// ("Spice level", "Scare level", ...) instead of the pepper-only metaphor.
+function dominantPickAxis() {
+  const counts = {};
+  tbrBooks().forEach(b => {
+    const k = primaryAxisKey(b);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  let best = 'spice', bestN = -1;
+  Object.keys(counts).forEach(k => { if (counts[k] > bestN) { best = k; bestN = counts[k]; } });
+  return axisByKey(best);
+}
+
 function pickCandidates() {
   const q = pickState.trope.trim().toLowerCase();
   return tbrBooks().filter(b => {
@@ -24,8 +38,13 @@ function pickCandidates() {
 function renderPick() {
   const tbr = tbrBooks();
   const genres = allPickGenres();
+  // v235 (UX-19): v224 referenced a `domAxis` that was never defined, so
+  // renderPick() threw and Surprise Me went dead. The dominant axis is the
+  // most common primary axis across the TBR; its icon replaces the peppers.
+  const domAxis = dominantPickAxis();
+  const axIcon = icon(domAxis.icon);
   const intensityOpts = [
-    [0, 'Any'], [1, icon('pepper') + '+'], [2, icon('pepper') + icon('pepper') + '+'], [3, icon('pepper') + icon('pepper') + icon('pepper') + '+']
+    [0, 'Any'], [1, axIcon + '+'], [2, axIcon + axIcon + '+'], [3, axIcon + axIcon + axIcon + '+']
   ];
 
   let html = '<h2 class="section serif" style="font-size:26px">' + icon('dice') + ' TBR Roulette</h2>' +
