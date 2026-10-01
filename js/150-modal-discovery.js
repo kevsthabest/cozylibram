@@ -647,6 +647,8 @@ function openCollection(kind, name, fromId) {
   const closeDom = () => ov.remove();
   const ovToken = overlayOpened('collection', closeDom); // v220: back-gesture closes
   const close = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('#c-back .modal'), close); // v227: swipe-down-to-close
   ov.querySelector('#c-back').addEventListener('click', e => { if (e.target.id === 'c-back') close(); });
   ov.querySelector('#c-x').addEventListener('click', close);
   ov.querySelectorAll('[data-book]').forEach(el =>

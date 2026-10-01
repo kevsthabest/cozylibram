@@ -212,6 +212,10 @@ function openCoverPicker(bookId) {
     '<button class="btn ghost" id="cp-cancel">Cancel</button>' +
     '</div></div>';
   document.body.appendChild(ov);
+  // v227: swipe-down-to-close like the edition picker — a downward swipe
+  // must not chain out to pull-to-refresh and reload the tab.
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('.cover-picker'), closeCoverPicker);
   document.getElementById('cp-cancel').addEventListener('click', closeCoverPicker);
   ov.addEventListener('click', e => { if (e.target === ov) closeCoverPicker(); });
   document.getElementById('cp-upload').addEventListener('click', () =>

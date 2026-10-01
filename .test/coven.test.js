@@ -297,6 +297,18 @@ const stub = mkStub();
   ok('superlatives are awarded', slotHTML.indexOf('Superlatives') !== -1);
   ok('buddy read surfaces the shared TBR', slotHTML.indexOf('Buddy Tome') !== -1);
 
+  // v227: remove-friend sheet gets swipe-down-to-close like the other sheets
+  runInWindow(`window.__wiredSheets = [];
+    window.__origWire = wireSheetDrag;
+    wireSheetDrag = function (sheet, onDismiss) {
+      window.__wiredSheets.push(sheet); return window.__origWire(sheet, onDismiss);
+    };
+    openRemoveFriendSheet('f1', 'Test Friend');`);
+  await tick(2);
+  ok('remove-friend sheet wired for swipe-down-to-close',
+    window.__wiredSheets.length === 1 && window.__wiredSheets[0] === q('#rf-back .modal'));
+  q('#rf-cancel').click();
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });

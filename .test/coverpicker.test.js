@@ -95,13 +95,22 @@ const mk = (id, fields) =>
   ok('no token → no Hardcover candidates, no crash',
     !c3.some(c => c.label === 'Hardcover') && c3.some(c => c.label === 'Apple Books'));
 
-  // picker UI renders the options
+  // picker UI renders the options — record swipe-to-close wiring (v227)
+  runInWindow(`window.__wiredSheets = [];
+    window.__origWireSheetDrag = wireSheetDrag;
+    wireSheetDrag = function (sheet, onDismiss) {
+      window.__wiredSheets.push(sheet);
+      return window.__origWireSheetDrag(sheet, onDismiss);
+    };`);
   runInWindow(`openCoverPicker('k1')`);
   await tick(10);
   const picks = window.document.querySelectorAll('#cp-grid .cp-pick');
   ok('picker grid renders candidates', picks.length >= 5);
   ok('current cover marked', !!window.document.querySelector('#cp-grid .cp-pick.current'));
   ok('picker shows count note', window.document.getElementById('cp-note').textContent.includes('tap one'));
+  ok('cover picker sheet gets swipe-down-to-close wired',
+    window.__wiredSheets.length === 1 &&
+    window.__wiredSheets[0] === window.document.querySelector('#cover-picker .cover-picker'));
 
   // choosing a cover persists, refreshes the modal cover, closes the picker
   runInWindow(`document.getElementById('modal-root').innerHTML =

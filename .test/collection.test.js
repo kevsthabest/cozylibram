@@ -84,5 +84,16 @@ q('#c-x').click();
 runInWindow(`openDetail('c4');`);
 ok('no series block without series', !q('#modal-root #m-series'));
 
+// 11. v227: swipe-down-to-close wired on the collection sheet
+runInWindow(`window.__wiredSheets = [];
+  window.__origWire = wireSheetDrag;
+  wireSheetDrag = function (sheet, onDismiss) {
+    window.__wiredSheets.push(sheet); return window.__origWire(sheet, onDismiss);
+  };
+  openCollection('author', 'jane doe', 'c4');`);
+ok('collection sheet gets swipe-down-to-close wired',
+  window.__wiredSheets.length === 1 && window.__wiredSheets[0] === q('#c-back .modal'));
+q('#c-x').click();
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

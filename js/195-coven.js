@@ -534,6 +534,8 @@ function openRemoveFriendSheet(friendId, friendName) {
   const closeDom = () => ov.remove();
   const ovToken = overlayOpened('sheet', closeDom); // v220: back-gesture closes the sheet
   const close = () => { overlayClosed(ovToken); closeDom(); };
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('#rf-back .modal'), close); // v227: swipe-down-to-close
   ov.querySelector('#rf-back').addEventListener('click', e => { if (e.target.id === 'rf-back') close(); });
   ov.querySelector('#rf-x').addEventListener('click', close);
   ov.querySelector('#rf-cancel').addEventListener('click', close);
