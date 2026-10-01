@@ -119,8 +119,8 @@ for signed-in users with a Settings → Privacy opt-out).
 - Test suite in `.test/` (`npm test`) — one feature per version,
   tests green + committed + pushed is the definition of done.
 
-## Roadmap
+## Direction
 
-See [ROADMAP.md](ROADMAP.md) — currently two pillars: a **trope
-intelligence** layer (curated multi-genre trope taxonomy, LLM-seeded
-per-book tropes) and **sustained quality**.
+Two ongoing pillars: a **trope intelligence** layer (curated taxonomy,
+LLM-seeded per-book tropes, discovery) and **sustained quality**
+(one feature per version, tests green, data-safety invariants hold).
