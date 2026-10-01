@@ -50,7 +50,7 @@ async function lookupISBN(isbn) {
 async function lookupISBNFromAPIs(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
   try {
-    const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
+    const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
     const d = await r.json();
     if (d.items && d.items.length) return enrichRatings(normalizeVolume(d.items[0], clean));
   } catch (e) { /* fall through to Open Library */ }
@@ -116,7 +116,7 @@ async function searchBooks(q, source) {
   }
   if (source === 'all' || source === 'gbooks') {
     try {
-      const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
+      const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
       const d = await r.json();
       if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
     } catch (e) { if (source === 'gbooks') throw e; /* fall through to Open Library */ }

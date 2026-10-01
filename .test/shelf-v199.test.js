@@ -15,12 +15,25 @@ async function main() {
   // ============ Part A: Pages function, shelf mode ============
   const fn = await import(path.resolve(__dirname, '../functions/api/read-cover.js'));
   const realFetch = globalThis.fetch;
+  // v225: the /api/* sign-in gate — the function validates the session JWT
+  // against Supabase Auth before doing anything else. withAuth answers that
+  // check from the token so the per-test upstream mocks never see it.
+  const SUPA_URL = 'https://x.supabase.co';
+  const SUPA_ENV = { SUPABASE_URL: SUPA_URL, SUPABASE_ANON_KEY: 'sb1' };
+  const withAuth = (mockFn) => async (url, init) => {
+    if (String(url) === SUPA_URL + '/auth/v1/user') {
+      const good = init && init.headers && init.headers.Authorization === 'Bearer good-token';
+      return new Response(JSON.stringify(good ? { id: 'u1' } : {}), { status: good ? 200 : 401 });
+    }
+    return mockFn(url, init);
+  };
+  globalThis.fetch = withAuth((url, init) => realFetch(url, init));
   let ipN = 0;
   const ctx = (env, body, method) => ({
-    env,
+    env: Object.assign({}, SUPA_ENV, env),
     request: new Request('https://app.test/api/read-cover', {
       method: method || 'POST',
-      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': 'shelf-test-' + (++ipN) },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token', 'cf-connecting-ip': 'shelf-test-' + (++ipN) },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   });
@@ -42,12 +55,12 @@ async function main() {
       { title: 'x'.repeat(400), author: '  ', confidence: 'high' }, // trimmed / blanked
     ],
   };
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = withAuth(async (url, init) => {
     seen = { url, init, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify(shelfPayload) } }],
     }), { status: 200 });
-  };
+  });
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
   ok('endpoint: shelf mode -> 200', r.status === 200);
   const out = await r.json();
@@ -65,20 +78,31 @@ async function main() {
 
   // Cap at 30 spines.
   const many = { books: Array.from({ length: 40 }, (_, i) => ({ title: 'T' + i, author: 'A', confidence: 'high' })) };
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
     choices: [{ message: { content: JSON.stringify(many) } }],
-  }), { status: 200 });
+  }), { status: 200 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
   ok('endpoint: shelf caps at 30 spines', (await r.json()).books.length === 30);
 
   // Garbage model answer -> empty list, not a crash.
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
     choices: [{ message: { content: '{"nope": true}' } }],
-  }), { status: 200 });
+  }), { status: 200 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
   const empty = await r.json();
   ok('endpoint: non-shelf JSON -> empty books list',
     r.status === 200 && Array.isArray(empty.books) && empty.books.length === 0);
+
+  // v225: the sign-in gate.
+  const noAuthReq = {
+    env: Object.assign({}, SUPA_ENV, { VISION_API_KEY: 'k' }),
+    request: new Request('https://app.test/api/read-cover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: IMG, mode: 'shelf' }),
+    }),
+  };
+  ok('endpoint: missing auth header -> 401',
+    (await fn.onRequest(noAuthReq)).status === 401);
   globalThis.fetch = realFetch;
 
   // ============ Part B: client ============

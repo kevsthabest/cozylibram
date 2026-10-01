@@ -135,9 +135,18 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
   /* ---- 3. Proxy ---- */
   const mod = await import(pathToFileURL(path.join(ROOT, 'functions', 'api', 'trope-infer.js')).href);
   const { onRequest } = mod;
+  // v225: the /api/* sign-in gate. The mock answers the Supabase auth check
+  // from the token; upstream assertions below only see provider calls.
+  const SUPA_URL = 'https://x.supabase.co';
+  const penv = (e) => Object.assign({ SUPABASE_URL: SUPA_URL, SUPABASE_ANON_KEY: 'sb1' }, e);
   let upstream = null;
   const enc = new TextEncoder();
   globalThis.fetch = async (url, opts) => {
+    if (String(url) === SUPA_URL + '/auth/v1/user') {
+      const good = opts && opts.headers && opts.headers.Authorization === 'Bearer good-token';
+      return { ok: good, status: good ? 200 : 401,
+        headers: { get: () => null }, json: async () => (good ? { id: 'u1' } : {}) };
+    }
     upstream = { url, opts: JSON.parse(opts.body), auth: opts.headers.Authorization };
     return {
       status: 200,
@@ -145,12 +154,22 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
       arrayBuffer: async () => enc.encode(JSON.stringify(goodBody)).buffer,
     };
   };
-  const req = (body) => ({ method: 'POST', json: async () => body, headers: { get: () => null } });
+  const req = (body, auth) => ({ method: 'POST', json: async () => body,
+    headers: { get: (k) => String(k).toLowerCase() === 'authorization'
+      ? (auth === undefined ? 'Bearer good-token' : auth) : null } });
   const msgs = [{ role: 'user', content: 'hi' }];
 
+  // v225: the sign-in gate.
+  let r = await onRequest({ request: req({ messages: msgs }, null),
+    env: penv({ TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' }) });
+  ok('missing auth header -> 401', r.status === 401);
+  r = await onRequest({ request: req({ messages: msgs }, 'Bearer bad-token'),
+    env: penv({ TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' }) });
+  ok('invalid session token -> 401', r.status === 401);
+
   upstream = null;
-  let r = await onRequest({ request: req({ messages: msgs, max_tokens: 500 }),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' } });
+  r = await onRequest({ request: req({ messages: msgs, max_tokens: 500 }),
+    env: penv({ TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' }) });
   ok('default path: status forwarded', r.status === 200);
   ok('default path: env provider URL + model + key',
     upstream.url === 'https://openrouter.ai/api/v1/chat/completions' &&
@@ -159,32 +178,32 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
 
   upstream = null;
   r = await onRequest({ request: req({ messages: msgs, max_tokens: 500, provider: 'gemini', model: 'gemini-2.0-flash' }),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1', TROPE_KEY_GEMINI: 'GK' } });
+    env: penv({ TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1', TROPE_KEY_GEMINI: 'GK' }) });
   ok('override: gemini URL + per-provider key + client model',
     r.status === 200 &&
     upstream.url === 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' &&
     upstream.opts.model === 'gemini-2.0-flash' && upstream.auth === 'Bearer GK');
 
   r = await onRequest({ request: req({ messages: msgs, provider: 'gemini', model: 'gemini-2.0-flash' }),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' } });
+    env: penv({ TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' }) });
   ok('override without a key -> descriptive 503',
     r.status === 503 && (await r.json()).error.includes("no API key configured for provider 'gemini'"));
 
   r = await onRequest({ request: req({ messages: msgs, provider: 'evil', model: 'x' }),
-    env: { TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' } });
+    env: penv({ TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' }) });
   ok('unknown provider -> 400', r.status === 400);
 
   r = await onRequest({ request: req({ messages: msgs, provider: 'gemini' }),
-    env: { TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' } });
+    env: penv({ TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' }) });
   ok('provider without model -> 400', r.status === 400);
 
   r = await onRequest({ request: req({ messages: msgs, provider: 'gemini', model: 'not a model!!' }),
-    env: { TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' } });
+    env: penv({ TROPE_API_KEY: 'K1', TROPE_MODEL: 'm' }) });
   ok('bad model name -> 400', r.status === 400);
 
   upstream = null;
   r = await onRequest({ request: req({ messages: msgs, max_tokens: 500, provider: 'openrouter', model: 'some-model' }),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' } });
+    env: penv({ TROPE_PROVIDER: 'openrouter', TROPE_MODEL: 'env-model', TROPE_API_KEY: 'K1' }) });
   ok('TROPE_API_KEY still backs the env-default provider',
     r.status === 200 && upstream.auth === 'Bearer K1' && upstream.opts.model === 'some-model');
 

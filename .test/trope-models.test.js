@@ -30,16 +30,28 @@ function ok(name, cond) {
   /* ---- 1. Proxy ---- */
   const mod = await import(pathToFileURL(path.join(ROOT, 'functions', 'api', 'trope-models.js')).href);
   const { onRequest } = mod;
+  // v225: the /api/* sign-in gate — the function validates the session JWT
+  // against Supabase Auth. The mock answers /auth/v1/user from the token and
+  // never touches upstreamCalls, so the upstream-call assertions keep meaning
+  // "calls to the provider".
+  const SUPA = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' };
   let upstreamCalls = [];
   let upstreamHandler = null;
   globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith('/auth/v1/user')) {
+      const tok = (opts.headers || {}).Authorization;
+      return tok === 'Bearer good-token'
+        ? { ok: true, status: 200, json: async () => ({ id: 'u1' }) }
+        : { ok: false, status: 401, json: async () => ({}) };
+    }
     upstreamCalls.push({ url, auth: (opts.headers || {}).Authorization,
       googKey: (opts.headers || {})['x-goog-api-key'] });
     return upstreamHandler(url, opts);
   };
-  const req = (method, provider) => ({
+  const req = (method, provider, auth) => ({
     method,
-    headers: { get: () => null },
+    headers: { get: (k) => String(k).toLowerCase() === 'authorization'
+      ? (auth === undefined ? 'Bearer good-token' : auth) : null },
     url: 'https://cozylibram.pages.dev/api/trope-models' + (provider ? '?provider=' + provider : ''),
   });
   const modelsBody = { data: [{ id: 'llama-3.3-70b-versatile' }, { id: 'x-1', name: 'X One' }] };
@@ -62,27 +74,33 @@ function ok(name, cond) {
   let r = await onRequest({ request: req('POST', 'gemini'), env: {} });
   ok('non-GET -> 405', r.status === 405);
 
-  r = await onRequest({ request: req('GET', ''), env: {} });
+  r = await onRequest({ request: req('GET', ''), env: SUPA });
   ok('missing provider -> 400', r.status === 400);
 
-  r = await onRequest({ request: req('GET', 'evil'), env: {} });
+  r = await onRequest({ request: req('GET', 'evil'), env: SUPA });
   ok('unknown provider -> 400', r.status === 400 && upstreamCalls.length === 0);
 
-  r = await onRequest({ request: req('GET', 'custom'), env: {} });
+  r = await onRequest({ request: req('GET', 'custom'), env: SUPA });
   ok('custom -> 400 with a clear message',
     r.status === 400 && (await r.json()).error.includes('type the model name'));
 
-  r = await onRequest({ request: req('GET', 'ollama'), env: {} });
+  r = await onRequest({ request: req('GET', 'ollama'), env: SUPA });
   ok('ollama -> 400 (Pages edge cannot reach localhost)',
     r.status === 400 && (await r.json()).error.includes('own machine'));
 
-  r = await onRequest({ request: req('GET', 'gemini'), env: { TROPE_API_KEY: 'K1' } });
+  r = await onRequest({ request: req('GET', 'gemini'), env: Object.assign({}, SUPA, { TROPE_API_KEY: 'K1' }) });
   ok('gemini without its key -> descriptive 503',
     r.status === 503 && (await r.json()).error.includes('TROPE_KEY_GEMINI'));
 
+  // v225: the sign-in gate.
+  r = await onRequest({ request: req('GET', 'openrouter', null), env: SUPA });
+  ok('missing auth header -> 401', r.status === 401);
+  r = await onRequest({ request: req('GET', 'openrouter', 'Bearer bad-token'), env: SUPA });
+  ok('invalid session token -> 401', r.status === 401);
+
   upstreamCalls = []; upstreamHandler = okGeminiUpstream;
   r = await onRequest({ request: req('GET', 'gemini'),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_API_KEY: 'K1', TROPE_KEY_GEMINI: 'GK' } });
+    env: Object.assign({}, SUPA, { TROPE_PROVIDER: 'openrouter', TROPE_API_KEY: 'K1', TROPE_KEY_GEMINI: 'GK' }) });
   const gj = await r.json();
   ok('gemini: 200 + native endpoint + x-goog-api-key (not Bearer)',
     r.status === 200 && upstreamCalls.length === 1 &&
@@ -98,7 +116,7 @@ function ok(name, cond) {
   ok('response carries no key material', !JSON.stringify(gj).includes('GK'));
 
   upstreamCalls = []; upstreamHandler = okUpstream;
-  r = await onRequest({ request: req('GET', 'openrouter'), env: {} });
+  r = await onRequest({ request: req('GET', 'openrouter'), env: SUPA });
   ok('openrouter works keyless (public endpoint)',
     r.status === 200 && upstreamCalls.length === 1 &&
     upstreamCalls[0].url === 'https://openrouter.ai/api/v1/models' &&
@@ -106,21 +124,21 @@ function ok(name, cond) {
 
   upstreamCalls = []; upstreamHandler = okUpstream;
   r = await onRequest({ request: req('GET', 'openrouter'),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_API_KEY: 'K1' } });
+    env: Object.assign({}, SUPA, { TROPE_PROVIDER: 'openrouter', TROPE_API_KEY: 'K1' }) });
   ok('TROPE_API_KEY backs the env-default provider',
     r.status === 200 && upstreamCalls[0].auth === 'Bearer K1');
 
   upstreamCalls = [];
   upstreamHandler = () => ({ ok: false, status: 401, json: async () => ({}) });
   r = await onRequest({ request: req('GET', 'groq'),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' } });
+    env: Object.assign({}, SUPA, { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' }) });
   const ej = await r.json();
   ok('upstream 401 -> 502 without leaking the key',
     r.status === 502 && ej.error.includes('401') && !JSON.stringify(ej).includes('QK'));
 
   upstreamHandler = () => ({ ok: true, status: 200, json: async () => { throw new Error('bad json'); } });
   r = await onRequest({ request: req('GET', 'groq'),
-    env: { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' } });
+    env: Object.assign({}, SUPA, { TROPE_PROVIDER: 'openrouter', TROPE_KEY_GROQ: 'QK' }) });
   ok('unparsable upstream body -> 502', r.status === 502);
 
   /* ---- 2. Client tropeModelList ---- */
@@ -130,6 +148,9 @@ function ok(name, cond) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '157-trope-inference.js'), 'utf8'), ctx,
     { filename: '157-trope-inference.js' });
   const probe = src => vm.runInContext(src, ctx);
+  // v225: tropeModelList now calls apiFetch (js/050-helpers.js, not loaded
+  // here) — stub it as a pass-through to the test fetch.
+  ctx.apiFetch = async (url, opts) => ctx.fetch(url, opts);
   let fetchCalls = [];
   ctx.fetch = async (url) => {
     fetchCalls.push(url);

@@ -1,4 +1,5 @@
 import { rateLimit } from '../_lib/rate-limit.js';
+import { authedUser, unauthorized } from '../_lib/require-user.js';
 
 // Cloudflare Pages Function: POST /api/read-cover
 //
@@ -92,6 +93,9 @@ export async function onRequest(context) {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v225 (security): quota-spending endpoint — signed-in callers only.
+  const user = await authedUser(request, env);
+  if (!user) return unauthorized();
   // Vision calls cost more than text — cap harder than trope-infer.
   const limited = rateLimit(request, 'read-cover', 20, 60 * 1000);
   if (limited) return limited;

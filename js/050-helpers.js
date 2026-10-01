@@ -204,4 +204,24 @@ function stars(n) {
   if (!n) return '';
   return '★'.repeat(Math.round(n)) + ' <span style="color:var(--faint)">' + Number(n).toFixed(1) + '</span>';
 }
+/* v225: authed same-origin API fetch. Attaches the Supabase session JWT as
+   `Authorization: Bearer <token>` so the /api/* Pages Functions can verify
+   the caller is signed in. cloudClient() lives in js/090-sync.js — this only
+   calls it at runtime, so script load order doesn't matter. Never throws:
+   any failure (not configured, no session, offline) falls back to a plain
+   fetch and lets the endpoint answer 401. */
+async function apiFetch(path, options) {
+  options = options || {};
+  let token = null;
+  try {
+    const sb = await cloudClient().catch(() => null);
+    if (sb && sb.auth && sb.auth.getSession) {
+      const { data } = await sb.auth.getSession();
+      token = data && data.session && data.session.access_token;
+    }
+  } catch (e) { token = null; }
+  if (!token) return fetch(path, options);
+  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + token });
+  return fetch(path, Object.assign({}, options, { headers }));
+}
 

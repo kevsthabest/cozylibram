@@ -33,6 +33,9 @@ function ok(name, cond) {
     localUid: 'user-1',
     cloudClient: async () => null,
     fetch: async () => { throw new Error('no network in tests'); },
+    // v225: inferBookTropes defaults to apiFetch (js/050-helpers.js, not
+    // loaded here); pass through to the ctx fetch stub, which tests reassign.
+    apiFetch: async (url, opts) => ctx.fetch(url, opts),
   };
   ctx.window = ctx;
   vm.createContext(ctx);

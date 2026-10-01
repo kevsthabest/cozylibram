@@ -149,7 +149,7 @@ async function canonicalizeCoverUrl(url) {
     const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 20000) : null;
     let res;
     try {
-      res = await fetch('/api/cache-cover', {
+      res = await apiFetch('/api/cache-cover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: url }),

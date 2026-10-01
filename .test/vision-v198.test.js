@@ -14,12 +14,25 @@ async function main() {
   // ============ Part A: Pages function ============
   const fn = await import(path.resolve(__dirname, '../functions/api/read-cover.js'));
   const realFetch = globalThis.fetch;
+  // v225: the /api/* sign-in gate — the function validates the session JWT
+  // against Supabase Auth before doing anything else. withAuth answers that
+  // check from the token so the per-test upstream mocks never see it.
+  const SUPA_URL = 'https://x.supabase.co';
+  const SUPA_ENV = { SUPABASE_URL: SUPA_URL, SUPABASE_ANON_KEY: 'sb1' };
+  const withAuth = (mockFn) => async (url, init) => {
+    if (String(url) === SUPA_URL + '/auth/v1/user') {
+      const good = init && init.headers && init.headers.Authorization === 'Bearer good-token';
+      return new Response(JSON.stringify(good ? { id: 'u1' } : {}), { status: good ? 200 : 401 });
+    }
+    return mockFn(url, init);
+  };
+  globalThis.fetch = withAuth((url, init) => realFetch(url, init));
   let ipN = 0;
   const ctx = (env, body, method) => ({
-    env,
+    env: Object.assign({}, SUPA_ENV, env),
     request: new Request('https://app.test/api/read-cover', {
       method: method || 'POST',
-      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': 'test-ip-' + (++ipN) },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token', 'cf-connecting-ip': 'test-ip-' + (++ipN) },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   });
@@ -49,12 +62,12 @@ async function main() {
   ok('endpoint: non-image data URL -> 400', r.status === 400);
 
   // 5b. v198: falls back to the already-configured trope Gemini key.
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = withAuth(async (url, init) => {
     seen = { url, init, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ isbn: null, title: 'T', author: 'A' }) } }],
     }), { status: 200 });
-  };
+  });
   r = await post({ TROPE_KEY_GEMINI: 'gem-key' }, { image: IMG, mode: 'single' });
   ok('endpoint: TROPE_KEY_GEMINI fallback -> 200', r.status === 200);
   ok('endpoint: fallback key attached as Bearer',
@@ -63,19 +76,19 @@ async function main() {
     seen.body.model === 'gemini-3.8-flash');
 
   // 5c. v198: markdown-fenced JSON from the model still parses.
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
     choices: [{ message: { content: '```json\n{"isbn":"9780425189863","title":"T","author":"A"}\n```' } }],
-  }), { status: 200 });
+  }), { status: 200 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   ok('endpoint: fenced JSON parses', (await r.json()).isbn === '9780425189863');
 
   // 5d. Happy path with mocked upstream (full payload).
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = withAuth(async (url, init) => {
     seen = { url, init, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({ isbn: '9780425189863', title: 'Test Title', author: 'Jane Doe' }) } }],
     }), { status: 200 });
-  };
+  });
   r = await post({ VISION_API_KEY: 'sk-test' }, { image: IMG, mode: 'single' });
   const out = await r.json();
   ok('endpoint: happy path -> 200', r.status === 200);
@@ -91,49 +104,72 @@ async function main() {
   ok('endpoint: key never leaks into response', !(await (await post({ VISION_API_KEY: 'sk-test' }, { image: IMG, mode: 'single' })).text()).includes('sk-test'));
 
   // 6. Model garbage -> cleaned, not trusted
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
     choices: [{ message: { content: JSON.stringify({ isbn: 'not-an-isbn!!', title: '  ', author: 42 }) } }],
-  }), { status: 200 });
+  }), { status: 200 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   const out2 = await r.json();
   ok('endpoint: non-ISBN-shaped isbn cleaned to null', out2.isbn === null);
   ok('endpoint: blank/non-string fields cleaned to null', out2.title === null && out2.author === null);
 
   // 7. Upstream failure passes through
-  globalThis.fetch = async () => new Response('{"error":{"message":"bad key"}}', { status: 401 });
+  globalThis.fetch = withAuth(async () => new Response('{"error":{"message":"bad key"}}', { status: 401 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   ok('endpoint: upstream 401 forwarded', r.status === 401);
 
   // 7b. v203: an upstream 503 (model overloaded/unavailable) must NOT be
   // forwarded as 503 — the client reads our 503 as "no API key configured".
-  globalThis.fetch = async () => new Response(
+  globalThis.fetch = withAuth(async () => new Response(
     '{"error":{"code":503,"message":"The model is overloaded.","status":"UNAVAILABLE"}}',
-    { status: 503 });
+    { status: 503 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   ok('endpoint: upstream 503 -> 502, never forwarded', r.status === 502);
   ok('endpoint: upstream 503 body names the real cause',
     (await r.text()).includes('temporarily unavailable'));
 
   // 7c. Other upstream statuses still pass through untouched.
-  globalThis.fetch = async () => new Response('{"error":{"message":"slow down"}}', { status: 429 });
+  globalThis.fetch = withAuth(async () => new Response('{"error":{"message":"slow down"}}', { status: 429 }));
   r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'single' });
   ok('endpoint: upstream 429 still forwarded', r.status === 429);
 
   // 8. Rate limit (20/min) — distinct IP, mocked upstream
-  globalThis.fetch = async () => new Response(JSON.stringify({
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
     choices: [{ message: { content: '{}' } }],
-  }), { status: 200 });
+  }), { status: 200 }));
   const rlCtx = (body) => ({
-    env: { VISION_API_KEY: 'k' },
+    env: Object.assign({}, SUPA_ENV, { VISION_API_KEY: 'k' }),
     request: new Request('https://app.test/api/read-cover', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': 'rl-test-ip' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token', 'cf-connecting-ip': 'rl-test-ip' },
       body: JSON.stringify(body),
     }),
   });
   let last = null;
   for (let i = 0; i < 21; i++) last = await fn.onRequest(rlCtx({ image: IMG, mode: 'single' }));
   ok('endpoint: 21st rapid request -> 429', last.status === 429);
+
+  // v225: the sign-in gate.
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
+    choices: [{ message: { content: '{}' } }],
+  }), { status: 200 }));
+  const noAuth = await fn.onRequest({
+    env: Object.assign({}, SUPA_ENV, { VISION_API_KEY: 'k' }),
+    request: new Request('https://app.test/api/read-cover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: IMG, mode: 'single' }),
+    }),
+  });
+  ok('endpoint: missing auth header -> 401', noAuth.status === 401);
+  const badTok = await fn.onRequest({
+    env: Object.assign({}, SUPA_ENV, { VISION_API_KEY: 'k' }),
+    request: new Request('https://app.test/api/read-cover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer bad-token' },
+      body: JSON.stringify({ image: IMG, mode: 'single' }),
+    }),
+  });
+  ok('endpoint: invalid session token -> 401', badTok.status === 401);
   globalThis.fetch = realFetch;
 
   // ============ Part B: client ============

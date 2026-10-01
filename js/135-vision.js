@@ -122,7 +122,7 @@ async function visionSend(dataUrl) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
-    const r = await fetch('/api/read-cover', {
+    const r = await apiFetch('/api/read-cover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: dataUrl, mode: 'single' }),

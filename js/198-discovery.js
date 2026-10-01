@@ -686,7 +686,7 @@ async function fetchWorkEmbeddings(workIds) {
 }
 
 async function embedTextsClient(texts) {
-  const res = await fetch('/api/embed', {
+  const res = await apiFetch('/api/embed', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ texts: texts }),

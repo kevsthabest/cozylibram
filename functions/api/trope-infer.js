@@ -1,4 +1,5 @@
 import { rateLimit } from '../_lib/rate-limit.js';
+import { authedUser, unauthorized } from '../_lib/require-user.js';
 
 // Cloudflare Pages Function: POST /api/trope-infer
 //
@@ -46,6 +47,9 @@ export async function onRequest(context) {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v225 (security): quota-spending endpoint — signed-in callers only.
+  const user = await authedUser(request, env);
+  if (!user) return unauthorized();
   // v194 (security): unauthenticated internet-facing LLM spend — cap it.
   const limited = rateLimit(request, 'trope-infer', 30, 60 * 1000);
   if (limited) return limited;

@@ -19,6 +19,7 @@
 // back to the remote URL — a cover is never lost here.
 
 import { rateLimit } from '../_lib/rate-limit.js';
+import { authedUser, unauthorized } from '../_lib/require-user.js';
 
 // Hosts we adopt covers from. Verified against live library data 2026-09-30
 // (real hostnames, not guesses): assets.hardcover.app is Hardcover's image
@@ -70,6 +71,9 @@ export async function onRequest(context) {
   if (request.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
   }
+  // v225 (security): storage-writing endpoint — signed-in callers only.
+  const user = await authedUser(request, env);
+  if (!user) return unauthorized();
   // 300/min: the bulk backfill paces itself at ~150 req/min; a 429 is always
   // survivable (the client keeps the remote URL and moves on).
   const limited = rateLimit(request, 'cache-cover', 300, 60 * 1000);

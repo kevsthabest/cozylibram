@@ -13,6 +13,7 @@ async function main() {
   const ccFn = await import(path.resolve(__dirname, '../functions/api/cache-cover.js'));
   const hcFn = await import(path.resolve(__dirname, '../functions/api/hardcover.js'));
   const gbFn = await import(path.resolve(__dirname, '../functions/api/gbooks/[[path]].js'));
+  const ruFn = await import(path.resolve(__dirname, '../functions/_lib/require-user.js'));
   const ctx = (env, url) => ({ env, request: new Request(url || 'https://app.test/') });
 
   // ---- /config.js: flags only, no secrets ----
@@ -41,8 +42,16 @@ async function main() {
   // ---- /api/hardcover ----
   const realFetch = globalThis.fetch;
   const seenHc = [];
+  const AUTH_URL = 'https://x.supabase.co/auth/v1/user';
+  const authMock = (init) => {
+    const tok = init && init.headers && init.headers.Authorization;
+    return tok === 'Bearer good-token'
+      ? new Response(JSON.stringify({ id: 'u1' }), { status: 200 })
+      : new Response(JSON.stringify({}), { status: 401 });
+  };
   globalThis.fetch = async (url, init) => {
     seenHc.push({ url, init });
+    if (String(url) === AUTH_URL) return authMock(init);
     if (url === 'https://api.hardcover.app/v1/graphql' &&
         init.headers['Authorization'] === 'Bearer realtoken') {
       return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 });
@@ -51,22 +60,48 @@ async function main() {
   };
   // SEC-03: the proxy allowlists the query shapes the app actually sends.
   const HC_QUERY = 'query { search(query: "x", query_type: "Book", per_page: 5) { results } }';
+  // v225: every /api/* call carries a session JWT; the env needs the Supabase pair.
+  const hcEnv = (env) => Object.assign(
+    { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' }, env);
   const hcCtx = (env, body) => ({
-    env,
+    env: hcEnv(env),
     request: new Request('https://app.test/api/hardcover', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' },
       body: JSON.stringify(body === undefined ? { query: HC_QUERY } : body),
     }),
   });
 
   const hcOk = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 'realtoken' }));
   ok('hc: 200 on success', hcOk.status === 200);
+  const hcUpstream = seenHc.find((c) => String(c.url) === 'https://api.hardcover.app/v1/graphql');
   ok('hc: token attached server-side, never echoed',
-    seenHc[0].init.headers['Authorization'] === 'Bearer realtoken' &&
+    !!hcUpstream && hcUpstream.init.headers['Authorization'] === 'Bearer realtoken' &&
     (await hcOk.text()).indexOf('realtoken') === -1);
   ok('hc: query forwarded in body',
-    JSON.parse(seenHc[0].init.body).query === HC_QUERY);
+    !!hcUpstream && JSON.parse(hcUpstream.init.body).query === HC_QUERY);
+  // v225: the sign-in gate.
+  ok('hc: session validated against Supabase auth',
+    seenHc.some((c) => String(c.url) === AUTH_URL &&
+      c.init.headers.Authorization === 'Bearer good-token'));
+  const hcNoAuth = await hcFn.onRequest({
+    env: hcEnv({ HARDCOVER_TOKEN: 't' }),
+    request: new Request('https://app.test/api/hardcover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: HC_QUERY }),
+    }),
+  });
+  ok('hc: missing auth header -> 401', hcNoAuth.status === 401);
+  const hcBadTok = await hcFn.onRequest({
+    env: hcEnv({ HARDCOVER_TOKEN: 't' }),
+    request: new Request('https://app.test/api/hardcover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer bad-token' },
+      body: JSON.stringify({ query: HC_QUERY }),
+    }),
+  });
+  ok('hc: invalid session token -> 401', hcBadTok.status === 401);
 
   const hcGet = await hcFn.onRequest({ env: { HARDCOVER_TOKEN: 't' }, request: new Request('https://app.test/api/hardcover') });
   ok('hc: GET rejected (405)', hcGet.status === 405);
@@ -97,15 +132,16 @@ async function main() {
 
   // ---- /api/gbooks ----
   const seenGb = [];
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === AUTH_URL) return authMock(init);
     seenGb.push(url);
     return new Response(JSON.stringify({ items: [] }), { headers: { 'Content-Type': 'application/json' } });
   };
   const gbCtx = (env, method) => ({
-    env,
+    env: hcEnv(env),
     params: { path: ['books', 'v1', 'volumes'] },
     request: new Request('https://app.test/api/gbooks/books/v1/volumes?q=isbn%3A123&key=CLIENTKEY',
-      { method: method || 'GET' }),
+      { method: method || 'GET', headers: { 'Authorization': 'Bearer good-token' } }),
   });
 
   const gbOk = await gbFn.onRequest(gbCtx({ GOOGLE_BOOKS_KEY: 'serverkey' }));
@@ -114,14 +150,22 @@ async function main() {
   ok('gb: client key stripped', seenGb[0].indexOf('CLIENTKEY') === -1);
   ok('gb: query preserved', seenGb[0].indexOf('q=isbn') !== -1);
   ok('gb: targets googleapis', seenGb[0].indexOf('https://www.googleapis.com/books/v1/volumes') === 0);
+  // v225: the sign-in gate.
+  const gbNoAuth = await gbFn.onRequest({
+    env: hcEnv({ GOOGLE_BOOKS_KEY: 'serverkey' }),
+    params: { path: ['books', 'v1', 'volumes'] },
+    request: new Request('https://app.test/api/gbooks/books/v1/volumes?q=isbn%3A123'),
+  });
+  ok('gb: missing auth header -> 401', gbNoAuth.status === 401);
 
   const gbAnon = await gbFn.onRequest(gbCtx({}));
   ok('gb: forwards anonymously when no key', gbAnon.status === 200 && seenGb[1].indexOf('key=') === -1);
 
   const gbEvil = await gbFn.onRequest({
-    env: { GOOGLE_BOOKS_KEY: 'serverkey' },
+    env: hcEnv({ GOOGLE_BOOKS_KEY: 'serverkey' }),
     params: { path: ['books', 'v1', 'mylibrary', 'bookshelves'] },
-    request: new Request('https://app.test/api/gbooks/books/v1/mylibrary/bookshelves'),
+    request: new Request('https://app.test/api/gbooks/books/v1/mylibrary/bookshelves',
+      { headers: { 'Authorization': 'Bearer good-token' } }),
   });
   ok('gb: non-volumes path -> 404', gbEvil.status === 404);
   const gbPost = await gbFn.onRequest(gbCtx({ GOOGLE_BOOKS_KEY: 'k' }, 'POST'));
@@ -137,6 +181,7 @@ async function main() {
   let storageMode = 'ok'; // 'ok' | 'duplicate'
   globalThis.fetch = async (url, init) => {
     const u = String(url);
+    if (u === AUTH_URL) return authMock(init); // v225: sign-in gate
     if (u === 'https://covers.openlibrary.org/b/id/1-L.jpg') {
       return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
     }
@@ -165,7 +210,7 @@ async function main() {
   const ccReq = (body, method) => ({
     env: ccEnv,
     request: new Request('https://app.test/api/cache-cover', Object.assign(
-      { method: method || 'POST', headers: { 'Content-Type': 'application/json' } },
+      { method: method || 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' } },
       (method || 'POST') === 'GET' ? {} : {
         body: body === undefined
           ? JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' })
@@ -174,9 +219,28 @@ async function main() {
   });
   const ccGet = await ccFn.onRequest(ccReq(undefined, 'GET'));
   ok('cc: GET rejected (405)', ccGet.status === 405);
+  // v225: the sign-in gate.
+  const ccNoAuth = await ccFn.onRequest({
+    env: ccEnv,
+    request: new Request('https://app.test/api/cache-cover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' }),
+    }),
+  });
+  ok('cc: missing auth header -> 401', ccNoAuth.status === 401);
+  const ccBadTok = await ccFn.onRequest({
+    env: ccEnv,
+    request: new Request('https://app.test/api/cache-cover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer bad-token' },
+      body: JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' }),
+    }),
+  });
+  ok('cc: invalid session token -> 401', ccBadTok.status === 401);
   const ccNoEnv = await ccFn.onRequest({
-    env: {},
-    request: new Request('https://app.test/api/cache-cover', { method: 'POST' }),
+    env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' },
+    request: new Request('https://app.test/api/cache-cover', {
+      method: 'POST', headers: { 'Authorization': 'Bearer good-token' },
+    }),
   });
   ok('cc: missing service key -> 503', ccNoEnv.status === 503);
   const ccHttp = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.test/x.jpg' })));
@@ -195,7 +259,7 @@ async function main() {
   const ccBadBody = await ccFn.onRequest({
     env: ccEnv,
     request: new Request('https://app.test/api/cache-cover', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not json{',
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' }, body: 'not json{',
     }),
   });
   ok('cc: unparseable body -> 400', ccBadBody.status === 400);
@@ -234,6 +298,35 @@ async function main() {
   ok('cc: non-image content-type -> 502', ccNotImg.status === 502);
   const ccBig = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/big.jpg' })));
   ok('cc: over-4MB image -> 502', ccBig.status === 502);
+  // ---- functions/_lib/require-user (v225) ----
+  // Reuse the hardcover fetch mock shape: auth URL answers from the token.
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === AUTH_URL) return authMock(init);
+    throw new Error('unexpected upstream ' + url);
+  };
+  const ruReq = (auth) => new Request('https://app.test/api/x', auth === undefined
+    ? {}
+    : { headers: { 'Authorization': auth } });
+  const ruEnv = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' };
+  const ruUser = await ruFn.authedUser(ruReq('Bearer good-token'), ruEnv);
+  ok('require-user: valid session -> user object', !!ruUser && ruUser.id === 'u1');
+  ok('require-user: missing header -> null',
+    await ruFn.authedUser(ruReq(), ruEnv) === null);
+  ok('require-user: malformed header -> null',
+    await ruFn.authedUser(ruReq('Token abc'), ruEnv) === null);
+  ok('require-user: Supabase 401 -> null',
+    await ruFn.authedUser(ruReq('Bearer bad-token'), ruEnv) === null);
+  ok('require-user: missing env -> null',
+    await ruFn.authedUser(ruReq('Bearer good-token'), {}) === null);
+  ok('require-user: service key fallback works',
+    !!await ruFn.authedUser(ruReq('Bearer good-token'),
+      { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'svc1' }));
+  const ruDenied = ruFn.unauthorized();
+  ok('require-user: unauthorized() is a 401 JSON',
+    ruDenied.status === 401 &&
+    (ruDenied.headers.get('Content-Type') || '').includes('application/json') &&
+    JSON.parse(await ruDenied.text()).error === 'sign-in required');
+
   globalThis.fetch = realFetch;
 
   // ---- /cover-proxy (unchanged contract) ----

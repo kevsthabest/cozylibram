@@ -452,7 +452,7 @@ function sleepMs(ms) {
    for tests. */
 async function inferBookTropes(book, opts) {
   opts = opts || {};
-  const fetchFn = opts.fetchFn || fetch;
+  const fetchFn = opts.fetchFn || apiFetch;
   const delayFn = opts.delayFn || sleepMs;
   const { system, user } = buildTropePrompt(book);
   /* v156: mutable — truncation/unparseable retries double the budget.
@@ -497,6 +497,14 @@ async function inferBookTropes(book, opts) {
       ? Number(resp.headers.get('retry-after')) : NaN;
 
     if (resp.status === 401 || resp.status === 403) {
+      // v225: a 401 carrying {error:'sign-in required'} is OUR gate, not the
+      // provider — the session expired. Don't blame the API key.
+      let gateErr = null;
+      try { gateErr = await resp.json(); } catch (e) { gateErr = null; }
+      if (gateErr && gateErr.error === 'sign-in required') {
+        throw TropeInferError('Your sign-in expired — please sign in again.',
+          { fatal: true, status: 401 });
+      }
       throw TropeInferError('provider rejected the request (HTTP ' + resp.status +
         ') - check the API key', { fatal: true, status: resp.status });
     }
@@ -667,7 +675,7 @@ async function tropeModelList(provider) {
   provider = String(provider || '').trim().toLowerCase();
   if (!provider) throw new Error('no provider');
   if (tropeModelListCache[provider]) return tropeModelListCache[provider];
-  const r = await fetch('/api/trope-models?provider=' + encodeURIComponent(provider));
+  const r = await apiFetch('/api/trope-models?provider=' + encodeURIComponent(provider));
   let body = null;
   try { body = await r.json(); } catch (e) { body = null; }
   if (!r.ok) throw new Error((body && body.error) || ('HTTP ' + r.status));

@@ -24,7 +24,7 @@ async function hcGraphQL(query) {
   // is unchanged.
   let r;
   try {
-    r = await fetch(HC_API, {
+    r = await apiFetch(HC_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query })
@@ -40,10 +40,17 @@ async function hcGraphQL(query) {
     // query itself uses a blocked operation. Surface the server's own message
     // in that case instead of blaming the token.
     let detail = '';
+    let gateErr = null;
     try {
       const dj = await r.json();
       detail = (dj && dj.errors && dj.errors[0] && dj.errors[0].message) || dj.message || '';
+      gateErr = dj && dj.error;
     } catch (e) {}
+    // v225: a 401 carrying {error:'sign-in required'} is OUR gate, not
+    // Hardcover — the session expired. Don't blame the server token.
+    if (gateErr === 'sign-in required') {
+      throw new Error('Your sign-in expired — please sign in again.');
+    }
     if (r.status === 403 && detail && /not permitted|forbidden|blocked|ilike/i.test(detail)) {
       throw new Error('Hardcover blocked this query (HTTP 403): ' + detail);
     }

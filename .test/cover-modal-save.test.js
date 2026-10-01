@@ -11,6 +11,10 @@ function buildDom() {
   const window = dom.window;
   window.fetch = async () => { throw new Error('no network in tests'); };
   window.SPICY_CONFIG = { supabaseUrl: 'https://xyz.supabase.co', supabaseAnonKey: 'anon-key' };
+  // v225: apiFetch() asks cloudClient() for the session JWT first; without a
+  // stub the Supabase lib script never finishes loading under JSDOM and the
+  // lookup hangs. No session here — the cover path falls back to plain fetch.
+  window.__sbStub = { auth: { getSession: async () => ({ data: { session: null } }) } };
   harness.loadApp(window);
   return window;
 }
