@@ -2161,6 +2161,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   /* brand lives in the sidebar now; the account menu stays docked top-right */
   .app-header { padding: 0; }
   .app-header .brand { display: none; }
+  /* v222: the ❦ divider follows the brand into the sidebar instead of
+     floating orphaned at the top-center of the page */
+  .app-header::after { display: none; }
+  .nav-brand { position: relative; }
+  .nav-brand::after {
+    content: '❦';
+    position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+    color: var(--accent-deep); opacity: 0.55; font-size: 13px;
+  }
 }
 
 /* v213: "why" chips on Recommended-for-you cards — smaller than .chip,
