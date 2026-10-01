@@ -243,6 +243,37 @@ def rate_limit_ok(name, ip):
     return True
 
 
+# SEC-03 (2026-10-01): allowlist the Hardcover query shapes the app actually
+# sends. Mirrors functions/api/hardcover.js. Every app query is an anonymous
+# `query { <root>(...) { ... } }` whose root field is one of these
+# (js/070-hardcover.js and its callers); anything else is rejected with 403.
+# A single anonymous query operation is read-only by construction (a mutation
+# needs the `mutation` operation keyword), and introspection is blocked
+# explicitly.
+_HC_ALLOWED_ROOTS = frozenset({'search', 'books', 'editions', 'series'})
+_HC_QUERY_RE = re.compile(r'^\s*query\s*\{')
+_HC_ROOT_RE = re.compile(r'^\s*query\s*\{\s*([A-Za-z_][A-Za-z0-9_]*)')
+_HC_STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
+_HC_OP_KEYWORDS_RE = re.compile(r'\b(mutation|subscription)\b', re.IGNORECASE)
+_HC_SECOND_OP_RE = re.compile(r'\}\s*(query|mutation|subscription)\b', re.IGNORECASE)
+
+def hc_query_allowed(query):
+    q = str(query or '')
+    if not _HC_QUERY_RE.match(q):
+        return False
+    # Strip string literals first: a book titled "Mutation" must neither
+    # trip the keyword checks nor hide an attack inside a string.
+    stripped = _HC_STRING_RE.sub('""', q).lower()
+    if '__schema' in stripped or '__type' in stripped:
+        return False
+    if _HC_OP_KEYWORDS_RE.search(stripped):
+        return False
+    if _HC_SECOND_OP_RE.search(stripped):
+        return False  # multi-operation docs can't run without operationName anyway
+    m = _HC_ROOT_RE.match(q)
+    return bool(m) and m.group(1) in _HC_ALLOWED_ROOTS
+
+
 class _SSRFRedirectHandler(urllib.request.HTTPRedirectHandler):
     """v194 (security): re-check every redirect hop against the SSRF guard.
     urllib follows redirects without re-validating, so a cover host could
@@ -260,8 +291,28 @@ _COVER_OPENER = urllib.request.build_opener(_SSRFRedirectHandler)
 
 
 class Handler(SimpleHTTPRequestHandler):
+    # SEC-01a (2026-10-01): never serve secrets or VCS internals, no matter
+    # who reaches the port. The v53 LAN/WAN gating was removed at the owner's
+    # request, so this blocklist is the remaining guard. 404 (not 403) so the
+    # existence of these paths isn't confirmed.
+    _BLOCKED_EXACT = {'/server-config.json', '/.git'}
+    _BLOCKED_SUFFIXES = ('.pem', '.key')
+    _BLOCKED_BASENAMES = {'.env'}
+
+    def _path_blocked(self, raw_path):
+        p = urllib.parse.unquote(raw_path.split('?')[0])
+        if p in self._BLOCKED_EXACT or p.startswith('/.git/'):
+            return True
+        base = p.rsplit('/', 1)[-1]
+        if base in self._BLOCKED_BASENAMES or base.startswith('.env.'):
+            return True
+        return base.endswith(self._BLOCKED_SUFFIXES)
+
     def do_GET(self):
         path = self.path.split('?')[0]
+        if self._path_blocked(path):
+            self.send_error(404)
+            return
         if path == '/health':
             body = b'{"status":"ok","service":"spicy-shelves"}'
             self.send_response(200)
@@ -292,6 +343,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.handle_api_trope_models()
             return
         super().do_GET()
+
+    def do_HEAD(self):
+        # Same blocklist as do_GET: SimpleHTTPRequestHandler serves HEAD
+        # separately, and headers alone would confirm a secret file exists.
+        if self._path_blocked(self.path.split('?')[0]):
+            self.send_error(404)
+            return
+        super().do_HEAD()
 
     def do_POST(self):
         path = self.path.split('?')[0]
@@ -336,6 +395,9 @@ class Handler(SimpleHTTPRequestHandler):
             query = json.loads(raw).get('query') or ''
             if not isinstance(query, str) or not query or len(query) > 8000:
                 self.send_error(400, 'bad request')
+                return
+            if not hc_query_allowed(query):
+                self.send_error(403, 'query shape not allowed')
                 return
             token = load_token()
             if not token:

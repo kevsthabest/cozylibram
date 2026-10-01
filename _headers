@@ -3,3 +3,13 @@
 # keep the old worker (and old cache name) after a deploy.
 /sw.js
   Cache-Control: no-store
+# SEC-06 (2026-10-01): clickjacking + transport hardening. No full CSP yet —
+# inline classic scripts everywhere make that a bigger lift; these two are
+# safe on their own. X-Frame-Options covers older browsers, frame-ancestors
+# the modern ones.
+/*
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

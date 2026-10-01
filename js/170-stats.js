@@ -78,7 +78,7 @@ function dayDetailHTML(byDay, k) {
     (acts.length ? acts.map(a => {
       const pages = a.finished ? 0 : Math.max(0, a.to - a.from);
       const pct = (!a.finished && a.b.pageCount) ? ' (' + Math.round(pages / a.b.pageCount * 100) + '%)' : '';
-      return '<div class="cal-book" data-id="' + a.b.id + '">' + coverHTML(a.b) +
+      return '<div class="cal-book" data-id="' + esc(a.b.id) + '">' + coverHTML(a.b) +
         '<div><h4>' + esc(a.b.title) + '</h4>' +
         (a.finished ? '<p>Finished</p>'
           : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
@@ -469,7 +469,7 @@ function recordsHTML() {
   const cards = [];
   const card = (icon, label, b, stat) => {
     if (!b) return;
-    cards.push('<div class="record-card" data-id="' + b.id + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
+    cards.push('<div class="record-card" data-id="' + esc(b.id) + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
       coverHTML(b) + '<div class="rtitle">' + esc(b.title) + '</div>' +
       '<div class="rstat">' + stat + '</div></div>');
   };
@@ -609,14 +609,14 @@ function renderYearInBooks(yr) {
     '%;background:' + gcols[i] + '"></div></div>' +
     '<span class="num">' + n + '</span></div>').join('');
   const books = d.topBooks.map((b, i) =>
-    '<div class="book-card" data-id="' + b.id + '">' + coverHTML(b) +
+    '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
     '<div class="book-meta"><h3>#' + (i + 1) + ' ' + esc(b.title) + '</h3>' +
     '<p class="author">' + esc((b.authors || []).join(', ')) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
     '</div></div>').join('');
   const recs = [];
-  if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), icon('covers') + ' Longest: ' + d.longest.title.slice(0, 22)));
+  if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), icon('covers') + ' Longest: ' + esc(d.longest.title.slice(0, 22))));
   if (d.bigDay) recs.push(stat(d.bigDay.pages, icon('doc') + ' Biggest day'));
-  if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' ' + icon('series'), icon('pencil') + ' ' + d.topAuthor[0].slice(0, 22)));
+  if (d.topAuthor) recs.push(stat(d.topAuthor[1] + ' ' + icon('series'), icon('pencil') + ' ' + esc(d.topAuthor[0].slice(0, 22))));
   if (d.five) recs.push(stat('♥ ' + d.five, '5-star reads'));
   setView(back + pills +
     '<div class="yib-hero"><div class="yib-kicker">Cozy Libram</div>' +
@@ -938,7 +938,7 @@ function renderStats() {
   const nowReading = reading.length
     ? '<div class="stat-sub">' + icon('reading') + ' Currently reading</div><div class="now-reading">' + reading.map(b => {
         const pct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : 0;
-        return '<div class="book-card" data-id="' + b.id + '">' + coverHTML(b) +
+        return '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
           '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
           '<p class="author">' + esc(b.authors.join(', ')) + '</p>' +
           (b.pageCount ? '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +

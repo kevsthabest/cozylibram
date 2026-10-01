@@ -8,7 +8,7 @@ function collectionRowHTML(b) {
       (b.series.position != null && b.series.position !== '' ? ' #' + esc(String(b.series.position)) : '') + ' · '
     : '') +
     esc((b.authors || []).join(', ') || 'Unknown author') + ' · ' + STATUS[b.status];
-  return '<button class="crow" data-book="' + b.id + '">' +
+  return '<button class="crow" data-book="' + esc(b.id) + '">' +
     (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
       : '<span class="cnocover">' + icon('covers') + '</span>') +
     '<span class="ctext"><b>' + esc(b.title) + '</b><small>' + sub + '</small></span>' +
@@ -100,7 +100,7 @@ function renderSeries() {
       const key = String(s.name).trim().toLowerCase();
       const pct = Math.round(s.read / s.books.length * 100);
       const covers = s.books.slice(0, 6).map(b =>
-        '<button class="sr-cover" data-id="' + b.id + '" aria-label="' + esc(b.title) + '">' +
+        '<button class="sr-cover" data-id="' + esc(b.id) + '" aria-label="' + esc(b.title) + '">' +
         (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
                  : '<span class="sr-nocover">' + icon('covers') + '</span>') + '</button>').join('');
       const posTag = (s.next && s.next.series && s.next.series.position != null && s.next.series.position !== '')
@@ -113,7 +113,7 @@ function renderSeries() {
         (s.books.length > 6 ? '<span class="sr-more">+' + (s.books.length - 6) + '</span>' : '') + '</div>' +
         '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
         (s.next
-          ? '<button class="sr-next" data-id="' + s.next.id + '">' + icon('upnext') + ' Next: <b>' + esc(s.next.title) +
+          ? '<button class="sr-next" data-id="' + esc(s.next.id) + '">' + icon('upnext') + ' Next: <b>' + esc(s.next.title) +
             '</b>' + posTag + ' <span class="cgo">›</span></button>'
           : (s.read === s.books.length
               ? '<div class="sr-done">' + icon('read') + ' Everything you own is read</div>'

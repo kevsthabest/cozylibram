@@ -85,6 +85,9 @@ const PROP_VALUES = {
   axis: ['spice', 'scare', 'suspense', 'adventure'],
   from: ['tbr', 'reading', 'read', 'dnf'],
   to:   ['tbr', 'reading', 'read', 'dnf'],
+  // Preview kinds are fixed internal constants (150-modal-discovery.js:326);
+  // without this entry any kind value was stored unvalidated.
+  kind: ['reco', 'release', 'coven-reco', 'friend', 'external'],
 };
 
 const ANALYTICS_OPT_KEY   = 'spicyshelves.analytics'; // '0' = opted out

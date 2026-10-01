@@ -49,12 +49,14 @@ async function main() {
     }
     return new Response(JSON.stringify({ errors: [{ message: 'blocked' }] }), { status: 403 });
   };
+  // SEC-03: the proxy allowlists the query shapes the app actually sends.
+  const HC_QUERY = 'query { search(query: "x", query_type: "Book", per_page: 5) { results } }';
   const hcCtx = (env, body) => ({
     env,
     request: new Request('https://app.test/api/hardcover', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body === undefined ? { query: 'query { x }' } : body),
+      body: JSON.stringify(body === undefined ? { query: HC_QUERY } : body),
     }),
   });
 
@@ -64,7 +66,7 @@ async function main() {
     seenHc[0].init.headers['Authorization'] === 'Bearer realtoken' &&
     (await hcOk.text()).indexOf('realtoken') === -1);
   ok('hc: query forwarded in body',
-    JSON.parse(seenHc[0].init.body).query === 'query { x }');
+    JSON.parse(seenHc[0].init.body).query === HC_QUERY);
 
   const hcGet = await hcFn.onRequest({ env: { HARDCOVER_TOKEN: 't' }, request: new Request('https://app.test/api/hardcover') });
   ok('hc: GET rejected (405)', hcGet.status === 405);
@@ -72,10 +74,26 @@ async function main() {
   ok('hc: missing query -> 400', hcBad.status === 400);
   const hcBig = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' }, { query: 'x'.repeat(9000) }));
   ok('hc: oversized query -> 400', hcBig.status === 400);
-  const hcNone = await hcFn.onRequest(hcCtx({}, { query: 'query { x }' }));
+  const hcNone = await hcFn.onRequest(hcCtx({}, { query: HC_QUERY }));
   ok('hc: no token -> 503', hcNone.status === 503);
-  const hcUp = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 'wrong' }, { query: 'query { x }' }));
+  const hcUp = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 'wrong' }, { query: HC_QUERY }));
   ok('hc: upstream 403 forwarded', hcUp.status === 403);
+  // SEC-03 allowlist: anything outside the app's query shapes is rejected.
+  const hcMut = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' },
+    { query: 'mutation { update_books(_set: {title: "x"}) { affected_rows } }' }));
+  ok('hc: mutation -> 403', hcMut.status === 403);
+  const hcIntro = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' },
+    { query: 'query { __schema { types { name } } }' }));
+  ok('hc: introspection -> 403', hcIntro.status === 403);
+  const hcRoot = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' },
+    { query: 'query { users { id email } }' }));
+  ok('hc: unknown root -> 403', hcRoot.status === 403);
+  const hcNamed = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' },
+    { query: 'query Foo { books { id } }' }));
+  ok('hc: named operation -> 403', hcNamed.status === 403);
+  const hcMulti = await hcFn.onRequest(hcCtx({ HARDCOVER_TOKEN: 't' },
+    { query: HC_QUERY + ' mutation { delete_books { affected_rows } }' }));
+  ok('hc: smuggled second operation -> 403', hcMulti.status === 403);
 
   // ---- /api/gbooks ----
   const seenGb = [];

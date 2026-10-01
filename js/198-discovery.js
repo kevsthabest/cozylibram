@@ -346,7 +346,7 @@ function similarSeedHTML() {
   if (!seeds.length)
     return '<p class="note">Rate a few books 4\u2605 or tap the \u2661 on a favorite — your top books will show up here as starting points.</p>';
   return '<p class="note">Like which one?</p><div class="sim-seeds">' + seeds.map(b =>
-    '<button class="sim-seed" data-seed="' + b.id + '" aria-label="Find books like ' + esc(b.title) + '">' +
+    '<button class="sim-seed" data-seed="' + esc(b.id) + '" aria-label="Find books like ' + esc(b.title) + '">' +
     (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
              : '<span class="sim-nocover">' + icon('covers') + '</span>') +
     '<small>' + esc(b.title) + '</small></button>').join('') + '</div>';
