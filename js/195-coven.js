@@ -464,26 +464,15 @@ function renderCovenFriendMain() {
   circleUpgradeAvatars(document.getElementById('view'));
 }
 let circBookMap = {};
+// v219: the read-only friend shelf browser opens the shared preview modal
+// (replacing its own tiny overlay) — description, tropes, genres, with +TBR
+// adding a clean copy per the v97 rule and Wishlist as usual.
 function openCovenBook(b) {
-  const close = () => ov.remove();
-  const badges = ['<span class="badge status-' + b.status + '">' + esc(STATUS[b.status] || b.status) + '</span>', ownedBadge(b)];
-  if (b.publicRating) badges.push('<span class="badge">★ ' + Number(b.publicRating).toFixed(1) + '</span>');
-  badges.push(ratingBadges(b));
-  if (b.myRating > 0) badges.push('<span class="badge">' + '♥'.repeat(b.myRating) + '</span>');
-  const ov = document.createElement('div');
-  ov.className = 'collection-overlay';
-  ov.innerHTML =
-    '<div class="modal-backdrop" id="cb-back" style="z-index:70"><div class="modal" role="dialog">' +
-    '<button class="modal-close" id="cb-x">✕</button>' +
-    '<div class="cb-head">' + coverHTML(b, '') +
-    '<div><h2 class="serif" style="margin:0 0 4px">' + esc(b.title || 'Untitled') + '</h2>' +
-    '<p class="note">' + esc((b.authors || []).join(', ')) + '</p>' +
-    '<div>' + badges.join(' ') + '</div></div></div>' +
-    '<p class="note">On ' + esc(circFriend.name) + '’s shelf — read-only.</p>' +
-    '</div></div>';
-  document.body.appendChild(ov);
-  ov.querySelector('#cb-back').addEventListener('click', e => { if (e.target.id === 'cb-back') close(); });
-  ov.querySelector('#cb-x').addEventListener('click', close);
+  openPreviewModal(previewTransient(b, 'friend'), {
+    source: 'coven-shelf',
+    contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
+    onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null
+  });
 }
 
 /* ---------------- Trope proposals (v155) ----------------

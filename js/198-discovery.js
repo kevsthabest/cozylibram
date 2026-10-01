@@ -142,6 +142,11 @@ function releaseResultsHTML(list) {
 }
 
 function wireReleaseResults(box, list) {
+  box.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', e => {
+    if (e.target.closest('[data-add]') || e.target.closest('[data-dis]')) return;
+    const c = list[Number(card.dataset.i)];
+    if (c) openReleasePreview(c);
+  }));
   box.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     const c = list[Number(btn.dataset.add)];
@@ -737,6 +742,37 @@ function addRecoBook(c) {
 }
 
 let visibleRecos = []; // ranked [{c, sim}] currently on screen
+let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219)
+
+// v219: tapping a recommendation opens the read-only preview modal —
+// description, tropes, genres. The +TBR / dismiss buttons keep their
+// stopPropagation so tapping them never opens the preview.
+function openRecoPreview(r) {
+  const c = r.c;
+  const why = [];
+  if (c.loveAuthor) why.push('<span class="why-chip">' + icon('heart') + ' ' + esc(c.loveAuthor) + '</span>');
+  recoSharedTropes((c.title || '') + ' ' + (c.description || ''), visibleRecoLoved).slice(0, 2)
+    .forEach(t => why.push('<span class="why-chip">✦ ' + esc(t) + '</span>'));
+  if (r.sim != null) why.push('<span class="why-chip">≈' + Math.round(r.sim * 100) + '% match</span>');
+  openPreviewModal(previewTransient(c, 'reco'), {
+    source: 'discovery-reco',
+    why: why,
+    onAddTBR: () => addRecoBook(c) // returns the new book (or null) — preview hands off to its real modal
+  });
+}
+
+// v219: same treatment for New Releases results.
+function openReleasePreview(c) {
+  const why = [];
+  const cd = releaseCountdown(c.releaseDate);
+  if (cd) why.push('<span class="why-chip">' + icon('calendar') + ' Releases ' +
+    esc(fmtDate(c.releaseDate)) + ' · ' + cd + '</span>');
+  openPreviewModal(previewTransient(c, 'release'), {
+    source: 'new-release',
+    why: why,
+    onAddTBR: () => addReleaseBook(c)
+  });
+}
 
 function recoCardHTML(r, i, lovedIds) {
   const c = r.c;
@@ -755,6 +791,11 @@ function recoCardHTML(r, i, lovedIds) {
 }
 
 function wireRecoResults(box) {
+  box.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', e => {
+    if (e.target.closest('[data-add]') || e.target.closest('[data-dis]')) return;
+    const r = visibleRecos[Number(card.dataset.i)];
+    if (r) openRecoPreview(r);
+  }));
   box.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     const r = visibleRecos[Number(btn.dataset.add)];
@@ -777,6 +818,7 @@ function renderRecoResults(ranked, lovedIds, embedded) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
   visibleRecos = ranked;
+  visibleRecoLoved = lovedIds || [];
   if (!ranked.length) {
     box.innerHTML = '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
     return;

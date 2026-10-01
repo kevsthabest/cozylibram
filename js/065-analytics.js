@@ -38,6 +38,9 @@ const EVENT_DEFS = {
   release_discovery_opened: { c: 'discovery', p: [] },
   release_auto_check:      { c: 'discovery', p: ['book_count'] }, // v149: silent weekly sweep
   recommendation_opened:    { c: 'discovery', p: ['source'] },
+  book_preview_opened:     { c: 'discovery', p: ['source', 'kind'] }, // v219: read-only preview modal
+  preview_tbr:             { c: 'discovery', p: ['source'] }, // v219: +TBR from the preview
+  preview_wishlist:        { c: 'discovery', p: ['source'] }, // v219: wishlist from the preview
   discover_opened:          { c: 'discovery', p: [] }, // v121: Discover landing
   roulette_opened:          { c: 'discovery', p: [] },
   roulette_spun:            { c: 'discovery', p: [] },

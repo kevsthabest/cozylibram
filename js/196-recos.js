@@ -82,16 +82,22 @@ function refreshRecos() {
     slot.querySelectorAll('[data-reco-add]').forEach(btn => {
       btn.addEventListener('click', () => recoAddToTBR(Number(btn.dataset.recoAdd)));
     });
+    // v219: tapping the row itself opens the read-only preview modal
+    slot.querySelectorAll('.circle-row').forEach((row, i) => {
+      row.addEventListener('click', e => {
+        if (e.target.closest('[data-reco-add]')) return;
+        const r = recos[i];
+        if (r) openCovenRecoPreview(r, i);
+      });
+    });
   }).catch(() => {});
 }
 
-// Add a recommendation to the TBR shelf. The friend's personal data
-// (their rating, progress, dates) never comes along — just the book.
-function recoAddToTBR(idx) {
-  const r = recoCache[idx];
-  if (!r) return;
-  const src = r.book;
-  const nb = {
+// v219: clean-copy builder shared by the +TBR button and the preview modal.
+// The friend's personal data (their rating, progress, dates) never comes
+// along — just the book, per the v97 rule.
+function covenCleanCopy(src) {
+  return {
     id: uid(),
     title: src.title || 'Untitled',
     authors: (src.authors || []).slice(),
@@ -107,8 +113,31 @@ function recoAddToTBR(idx) {
     publishedDate: src.publishedDate || '',
     _mtime: Date.now(),
   };
-  if (addBook(nb, false, 'recommendation')) {
-    track('friend_recommendation_used');
-    renderCoven(); // re-render picks up the now-owned book
-  }
+}
+
+// Add a recommendation to the TBR shelf. Returns the new book's id (v219),
+// or null when the add didn't happen (already on her shelves).
+function recoAddToTBR(idx) {
+  const r = recoCache[idx];
+  if (!r) return null;
+  const added = addBook(covenCleanCopy(r.book), false, 'recommendation');
+  if (!added) return null;
+  track('friend_recommendation_used');
+  renderCoven(); // re-render picks up the now-owned book
+  return added.id;
+}
+
+// v219: tapping a friend recommendation opens the read-only preview modal.
+function openCovenRecoPreview(r, idx) {
+  const names = r.ratings.map(x => esc(String(x.name).split(' ')[0])).join(', ');
+  const why = ['<span class="why-chip">' + icon('heart') + ' loved by ' + names + '</span>'];
+  if (r.avg) why.push('<span class="why-chip">' + stars(r.avg) + '</span>');
+  openPreviewModal(previewTransient(r.book, 'coven-reco'), {
+    source: 'coven-reco',
+    why: why,
+    onAddTBR: () => {
+      const id = recoAddToTBR(idx);
+      return id ? { id: id } : null;
+    }
+  });
 }

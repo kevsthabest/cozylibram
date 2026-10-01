@@ -310,99 +310,213 @@ function externalRowHTML(x, i) {
     '<button class="btn small" data-extadd="' + i + '">+ Wishlist</button></div>';
 }
 
-/* ---- external book detail sheet (v60): tap a missing/discovered book to see
-   its details. Enriches live via ISBN lookup (Google Books → Open Library),
-   falling back to a title+author search when there is no ISBN. ---- */
-function openExternalDetail(x) {
-  const ov = document.createElement('div');
-  ov.className = 'collection-overlay';
-  const sub = (x.position != null && x.position !== '' ? '#' + esc(String(x.position)) + ' · ' : '') +
-    (x.seriesName ? esc(x.seriesName) + ' · ' : '') + esc(x.author || 'Unknown author');
-  ov.innerHTML =
-    '<div class="modal-backdrop" id="x-back" style="z-index:80"><div class="modal" role="dialog">' +
-    '<button class="modal-close" id="x-x">✕</button>' +
-    '<div class="ext-detail">' +
-    (x.cover ? '<img class="ext-cover" src="' + esc(x.cover) + '" alt="" onerror="this.remove()">'
-      : '<div class="ext-nocover">' + icon('covers') + '</div>') +
-    '<h2 class="serif">' + esc(x.title) + '</h2>' +
-    '<p class="note">' + sub + '</p>' +
-    '<div id="x-meta"><p class="note">Looking up details…</p></div>' +
-    '<div id="x-desc"></div>' +
-    '<button class="btn" id="x-wish" style="width:100%;margin-top:14px">' + icon('gift') + ' Wishlist</button>' +
-    '</div></div></div>';
-  document.body.appendChild(ov);
-  const close = () => ov.remove();
-  ov.querySelector('#x-back').addEventListener('click', e => { if (e.target.id === 'x-back') close(); });
-  ov.querySelector('#x-x').addEventListener('click', close);
-  let added = false;
-  ov.querySelector('#x-wish').addEventListener('click', () => {
-    if (added) return;
-    added = true;
-    addEnrichedToWishlist(x, ov._full);
-    const btn = ov.querySelector('#x-wish');
-    if (btn) btn.outerHTML = '<p class="note" style="text-align:center">' + icon('gift') + ' In your wishlist</p>';
-    toast('Added to wishlist 💝');
-  });
-  // enrich in the background; the sheet stays usable meanwhile
-  (async () => {
-    let full = null;
-    try {
-      if (x.isbn) full = await lookupISBN(x.isbn);
-      if (!full) {
-        const res = await searchBooks((x.title || '') + ' ' + (x.author || ''));
-        const nt = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-        full = ((res || []).find(r => nt(r.title) === nt(x.title)) || (res || [])[0]) || null;
-      }
-    } catch (e) { /* show what we have */ }
-    ov._full = full;
-    const metaBox = ov.querySelector('#x-meta');
-    if (!metaBox) return; // sheet was closed already
-    if (!full) {
-      metaBox.innerHTML = '<p class="note">Couldn\'t pull full details for this one.</p>';
-      return;
+/* ---- book preview modal (v219): read-only detail view for books that are
+   NOT on her shelves — Discovery recos, New Releases, Coven recos, friend
+   shelves, missing-by-author/series. Retires the v60 openExternalDetail
+   sheet: every surface that showed an unowned book tappably now opens this.
+
+   Design note: a dedicated renderer into the SAME #modal-root, reusing the
+   sheet chrome, close paths, scroll lock and the v215 drag gesture — not a
+   second modal system. renderDetailModal is deliberately untouched: the
+   preview path cannot write to the library by construction (no draft, no
+   saveLibrary/removeBook/share/upNext/logPages/quotes/notes calls), and the
+   transient book's synthetic id never enters `library`. ---- */
+
+// Normalize any external/discovered book shape into a transient preview book.
+// kind: 'reco' | 'release' | 'coven-reco' | 'friend' | 'external'
+function previewTransient(src, kind) {
+  const s = src || {};
+  const authors = Array.isArray(s.authors) ? s.authors.slice()
+    : (s.author ? [s.author] : []);
+  let series = null; // -> { name, position }
+  if (s.series && typeof s.series === 'object') {
+    series = { name: s.series.name || '', position: s.series.position };
+  } else if (s.seriesName) {
+    series = { name: s.seriesName, position: s.position };
+  } else if (s.series) { // coven recos carry series as a plain string
+    series = { name: s.series, position: s.seriesPos };
+  }
+  const isbns = (s.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
+  const isbn = s.isbn || isbns.find(i => i.length === 13) || isbns[0] || '';
+  return {
+    id: 'preview-' + uid(),
+    preview: true,
+    kind: kind || 'external',
+    title: s.title || 'Untitled',
+    authors: authors,
+    cover: s.cover || '',
+    description: s.description || '',
+    pageCount: s.pageCount || s.pages || null,
+    publishedDate: s.publishedDate || '',
+    releaseDate: s.releaseDate || '',
+    isbn: isbn,
+    series: series,
+    tropes: (s.tropes || []).slice(),
+    categories: (s.categories || s.genres || []).slice(),
+    publicRating: s.publicRating || null,
+    ratingsCount: s.ratingsCount || 0,
+    hcId: s.hcId || null,
+    // normalized external shape for the Wishlist path (addExternalBook)
+    _ext: {
+      title: s.title || 'Untitled',
+      author: authors[0] || s.author || '',
+      cover: s.cover || '',
+      isbn: isbn,
+      position: series ? series.position : (s.position != null ? s.position : null),
+      seriesName: series ? series.name : null
     }
-    const bits = [];
-    if (full.pageCount) bits.push(full.pageCount + ' pages');
-    const yr = String(full.publishedDate || '').slice(0, 4);
-    if (/^\d{4}$/.test(yr)) bits.push(yr);
-    if (full.publicRating) bits.push('★ ' + full.publicRating +
-      (full.ratingsCount ? ' (' + full.ratingsCount + ')' : ''));
-    metaBox.innerHTML = bits.length
-      ? '<p class="ext-bits">' + bits.map(esc).join(' · ') + '</p>' : '';
-    if (full.description) {
-      const d = ov.querySelector('#x-desc');
-      if (d) d.innerHTML = '<p class="ext-desc">' + esc(full.description) + '</p>';
-    }
-    const img = ov.querySelector('.ext-cover');
-    if (full.cover && img && img.getAttribute('src') !== full.cover) img.src = full.cover;
-  })();
+  };
 }
 
-// Add an external book to the wishlist, keeping any enriched metadata.
-function addEnrichedToWishlist(x, full) {
-  const ex = {
-    title: (full && full.title) || x.title,
-    author: ((full && full.authors && full.authors[0]) || x.author || ''),
-    cover: (full && full.cover) || x.cover || '',
-    isbn: (full && full.isbn) || x.isbn || '',
-    position: x.position != null ? x.position
-      : (full && full.series && full.series.position),
-    seriesName: x.seriesName || (full && full.series && full.series.name) || null,
+// Which sections the preview renders for a transient — pure, unit-tested.
+// The ONLY writers are the +TBR / Wishlist buttons, via opts callbacks.
+function previewSections(t) {
+  return {
+    description: !!t.description,
+    tropes: (t.tropes || []).length > 0,
+    genres: (t.categories || []).length > 0,
+    series: !!(t.series && t.series.name),
+    actions: true
   };
-  const book = addExternalBook(ex);
-  if (full) {
-    if (full.description) book.description = full.description;
-    if (full.pageCount) book.pageCount = full.pageCount;
-    if (full.publishedDate) book.publishedDate = full.publishedDate;
-    if (full.categories && full.categories.length) book.categories = full.categories;
-    if (full.publicRating) {
-      book.publicRating = full.publicRating;
-      book.ratingsCount = full.ratingsCount || 0;
+}
+
+let previewOpenId = null; // guards the async enrichment against a closed modal
+
+// opts: { why: [html chips], contextNote, source, onAddTBR: () => book|null }
+function openPreviewModal(t, opts) {
+  opts = opts || {};
+  const root = document.getElementById('modal-root');
+  if (!root || !t) return;
+  previewOpenId = t.id;
+  lockBodyScroll(); // v215: the library behind must not scroll while open
+  const why = (opts.why || []).filter(Boolean);
+  const seriesLine = t.series && t.series.name
+    ? '<span>' + icon('sparkles') + ' ' + esc(t.series.name) +
+      (t.series.position != null && t.series.position !== ''
+        ? ' #' + esc(String(t.series.position)) : '') + '</span>' : '';
+  const metaHTML = () =>
+    (t.pageCount ? '<span>' + icon('reading') + ' ' + t.pageCount + ' pages</span>' : '') +
+    (t.publishedDate ? '<span>' + icon('calendar') + ' ' + esc(String(t.publishedDate).slice(0, 4)) + '</span>' : '') +
+    (t.isbn ? '<span>' + icon('barcode') + ' ISBN ' + esc(t.isbn) + '</span>' : '') +
+    seriesLine;
+  const descId = 'p-desc';
+  const descHTML = () =>
+    (t.description
+      ? '<div class="m-desc" id="' + descId + '"><p>' +
+        esc(String(t.description).replace(/<[^>]*>/g, '')) + '</p>' +
+        '<button class="taplink" id="' + descId + '-toggle">Read more</button></div>'
+      : '');
+  const tagSecHTML = () => {
+    let h = '';
+    if ((t.tropes || []).length) {
+      h += '<div class="field"><label>' + icon('sparkles') + ' Tropes</label><div class="chips">' +
+        t.tropes.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
-    book.axes = autoDetectAxes(book);
-    saveLibrary();
+    if ((t.categories || []).length) {
+      h += '<div class="field"><label>' + icon('doc') + ' Genres</label><div class="chips">' +
+        t.categories.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
+    }
+    return h;
+  };
+  const wireDescToggle = () => {
+    const w = document.getElementById(descId);
+    if (!w) return;
+    const p = w.querySelector('p'), tg = document.getElementById(descId + '-toggle');
+    if (!p || !tg) return;
+    if (p.scrollHeight <= p.clientHeight + 2) tg.style.display = 'none';
+    tg.addEventListener('click', () => {
+      const open = w.classList.toggle('open');
+      tg.textContent = open ? 'Show less' : 'Read more';
+    });
+  };
+
+  root.innerHTML =
+    '<div class="modal-backdrop" id="p-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book preview">' +
+    '<div class="sheet-grabber" aria-hidden="true"></div>' + // v215: drag-to-dismiss affordance (touch)
+    '<button class="d-back" id="p-x" aria-label="Close">←</button>' +
+    '<div class="d-hero">' +
+    '<div class="d-cover">' + coverHTML(t, 'd-cov') + '</div>' +
+    '<div class="d-hero-text">' +
+    '<h2 class="serif">' + esc(t.title) + '</h2>' +
+    '<p class="author">' + (t.authors.length ? esc(t.authors.join(', ')) : 'Unknown author') + '</p>' +
+    (t.publicRating ? '<div class="pub-rating">' + stars(t.publicRating) +
+      ' <span class="note-inline">· ' + t.ratingsCount + ' ratings</span></div>' : '') +
+    '<div class="d-meta" id="p-meta">' + metaHTML() + '</div>' +
+    (releaseCountdown(t.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') +
+      ' Releases ' + esc(fmtDate(t.releaseDate)) + ' · ' + releaseCountdown(t.releaseDate) + '</div>' : '') +
+    (opts.contextNote ? '<p class="note">' + esc(opts.contextNote) + '</p>' : '') +
+    '</div>' +
+    '<div class="d-primary-row"><button class="btn primary d-primary" id="p-tbr">＋ TBR</button>' +
+    '<button class="btn ghost" id="p-wish">' + icon('gift') + ' Wishlist</button></div>' +
+    (why.length ? '<div class="why-chips">' + why.join('') + '</div>' : '') +
+    '<div id="p-descread">' + descHTML() + '</div>' +
+    '</div>' +
+    '<div class="d-panel"><div id="p-tags">' + tagSecHTML() + '</div></div>' +
+    '</div></div>';
+
+  const closePreview = () => {
+    document.removeEventListener('keydown', escClose);
+    unlockBodyScroll(); // v215: release the background scroll lock
+    previewOpenId = null;
+    root.innerHTML = '';
+  };
+  const escClose = e => { if (e.key === 'Escape') closePreview(); }; // v129: escape closes
+  document.addEventListener('keydown', escClose);
+  document.getElementById('p-x').addEventListener('click', closePreview);
+  document.getElementById('p-back').addEventListener('click', e => { if (e.target.id === 'p-back') closePreview(); });
+  wireSheetDrag(root.querySelector('#p-back .modal'), closePreview); // v215: drag-to-dismiss
+
+  // +TBR: add via the surface's existing add path, then hand off to the REAL
+  // library modal for the newly added book.
+  document.getElementById('p-tbr').addEventListener('click', () => {
+    const nb = opts.onAddTBR ? opts.onAddTBR() : null;
+    if (nb && nb.id) {
+      const id = nb.id;
+      track('preview_tbr', { source: opts.source || 'preview' });
+      closePreview();
+      openDetail(id);
+    }
+  });
+  // Wishlist: the row buttons' addExternalBook path; the button becomes a
+  // confirmation, like the retired v60 sheet.
+  document.getElementById('p-wish').addEventListener('click', () => {
+    addExternalBook(t._ext);
+    const btn = document.getElementById('p-wish');
+    if (btn) btn.outerHTML = '<p class="note" style="text-align:center">' + icon('gift') + ' In your wishlist</p>';
+    track('preview_wishlist', { source: opts.source || 'preview' });
+    toast('Added to wishlist 💝');
+  });
+
+  // Sparse rows (missing-by-author/series) carry no description — enrich
+  // exactly like the v60 sheet did: ISBN lookup, then title+author search.
+  if (!t.description && t.isbn) {
+    const myId = t.id;
+    (async () => {
+      let full = null;
+      try { full = await lookupISBN(t.isbn); } catch (e) { /* show what we have */ }
+      if (!full) {
+        try {
+          const res = await searchBooks((t.title || '') + ' ' + (t.authors[0] || ''));
+          const nt = s => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+          full = ((res || []).find(r => nt(r.title) === nt(t.title)) || (res || [])[0]) || null;
+        } catch (e) { /* show what we have */ }
+      }
+      if (!full || previewOpenId !== myId || !document.getElementById('p-back')) return;
+      if (full.description) t.description = full.description;
+      if (full.pageCount) t.pageCount = full.pageCount;
+      if (full.publishedDate) t.publishedDate = full.publishedDate;
+      if (full.categories && full.categories.length) t.categories = full.categories.slice();
+      if (full.tropes && full.tropes.length) t.tropes = full.tropes.slice();
+      if (full.publicRating) { t.publicRating = full.publicRating; t.ratingsCount = full.ratingsCount || 0; }
+      document.getElementById('p-meta').innerHTML = metaHTML();
+      document.getElementById('p-descread').innerHTML = descHTML();
+      document.getElementById('p-tags').innerHTML = tagSecHTML();
+      wireDescToggle();
+    })();
+  } else {
+    wireDescToggle();
   }
-  return book;
+  track('book_preview_opened', { source: opts.source || 'preview', kind: t.kind });
 }
 
 // Fill a "more books" box: the overlay's #c-more, or the modal's inline
@@ -443,11 +557,16 @@ async function fillMoreSection(kind, name, fromId, box, bare) {
         btn.outerHTML = '<span class="c-added">' + icon('gift') + ' In wishlist</span>';
         toast('Added to wishlist 💝');
       }));
-    // v60: tapping the row itself opens the detail sheet
+    // v219: tapping the row itself opens the read-only preview modal
     box.querySelectorAll('[data-ext]').forEach(row =>
       row.addEventListener('click', (e) => {
         if (e.target.closest('[data-extadd]')) return;
-        openExternalDetail(rows[Number(row.dataset.ext)]);
+        const x = rows[Number(row.dataset.ext)];
+        if (!x) return;
+        openPreviewModal(previewTransient(x, 'external'), {
+          source: kind === 'author' ? 'author-missing' : 'series-missing',
+          onAddTBR: () => addExternalBook(x)
+        });
       }));
   } catch (e) {
     // v77: hcGraphQL errors are specific now (token rejected / network /

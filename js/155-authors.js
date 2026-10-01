@@ -110,11 +110,16 @@ async function fillMissingBooks(name) {
         btn.outerHTML = '<span class="c-added">' + icon('gift') + ' In wishlist</span>';
         toast('Added to wishlist 💝');
       }));
-    // v60: tapping a missing book opens its detail sheet
+    // v219: tapping a missing book opens the read-only preview modal
     box.querySelectorAll('[data-miss]').forEach(row =>
       row.addEventListener('click', (e) => {
         if (e.target.closest('[data-madd]')) return;
-        openExternalDetail(rows[Number(row.dataset.miss)]);
+        const x = rows[Number(row.dataset.miss)];
+        if (!x) return;
+        openPreviewModal(previewTransient(x, 'external'), {
+          source: 'author-missing',
+          onAddTBR: () => addExternalBook(x)
+        });
       }));
   } catch (e) {
     box.innerHTML = '<p class="note">Couldn\'t look up their other books right now.</p>';
