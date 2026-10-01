@@ -74,7 +74,7 @@ social shelves.
 No build step, no dependencies — it's static files.
 
 ```bash
-cd booktok
+cd cozylibram
 python3 server.py        # serves on http://localhost:8000
 ```
 
