@@ -108,13 +108,25 @@ const tick = (n = 10) => new Promise(r => { const f = () => --n <= 0 ? r() : set
   await tick();
   ok('uploaded cover preserved', String(window.eval(`library[2].cover`)).indexOf('data:') === 0);
 
-  // picker UI renders
+  // picker UI renders — record swipe-to-close wiring (v226)
+  runInWindow(`window.__wiredSheets = [];
+    window.__origWireSheetDrag = wireSheetDrag;
+    wireSheetDrag = function (sheet, onDismiss) {
+      window.__wiredSheets.push(sheet);
+      return window.__origWireSheetDrag(sheet, onDismiss);
+    };`);
   runInWindow(`openEditionPicker('e1')`);
   await tick(14);
   ok('picker overlay opens', !!window.document.getElementById('edition-picker'));
   ok('edition rows render', window.document.querySelectorAll('#ep-list .ep-pick').length === 3);
   ok('current edition marked', !!window.document.querySelector('#ep-list .ep-pick.current'));
   ok('manual ISBN fallback present', !!window.document.getElementById('ep-isbn'));
+  ok('picker sheet gets swipe-down-to-close wired',
+    window.__wiredSheets.length === 1 &&
+    window.__wiredSheets[0] === window.document.querySelector('#edition-picker .cover-picker'));
+  ok('cover-picker CSS blocks pull-to-refresh chaining',
+    /\.cover-picker\s*\{[^}]*overscroll-behavior:\s*contain/.test(
+      require('fs').readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8')));
 
   // tapping a row switches the edition and closes the picker
   window.document.querySelector('#ep-list .ep-pick:not(.current)').click();

@@ -111,6 +111,11 @@ function openEditionPicker(bookId) {
     '<div class="cp-actions" style="margin-top:12px">' +
     '<button class="btn ghost" id="ep-cancel">Cancel</button></div></div>';
   document.body.appendChild(ov);
+  // v226: swipe-down-to-close like the book modal — without it a downward
+  // swipe chains past the picker and the browser fires pull-to-refresh,
+  // reloading the tab instead of closing the panel.
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('.cover-picker'), closeEditionPicker);
   document.getElementById('ep-cancel').addEventListener('click', closeEditionPicker);
   ov.addEventListener('click', e => { if (e.target === ov) closeEditionPicker(); });
   document.getElementById('ep-apply').addEventListener('click', () => {
