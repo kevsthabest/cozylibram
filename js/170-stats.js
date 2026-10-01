@@ -611,7 +611,7 @@ function renderYearInBooks(yr) {
   const books = d.topBooks.map((b, i) =>
     '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
     '<div class="book-meta"><h3>#' + (i + 1) + ' ' + esc(b.title) + '</h3>' +
-    '<p class="author">' + esc((b.authors || []).join(', ')) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
+    '<p class="author">' + esc(displayAuthors(b.authors)) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
     '</div></div>').join('');
   const recs = [];
   if (d.longest) recs.push(stat(fmtBig(d.longest.pageCount), icon('covers') + ' Longest: ' + esc(d.longest.title.slice(0, 22))));
@@ -624,12 +624,9 @@ function renderYearInBooks(yr) {
     '<div class="yib-sub">' + d.n + ' books · ' + fmtBig(d.pages) + ' pages · ' + d.days + ' reading days</div></div>' +
     '<div class="search-row" style="margin:12px 0"><button class="btn" id="yib-share">' + icon('share') + ' Share image</button>' +
     '<button class="btn ghost" id="yib-copy">' + icon('copy') + ' Copy text</button></div>' +
-    '<div class="stat-row">' +
-    stat(d.n, 'Books read') +
-    stat(fmtBig(d.pages), 'Pages') +
-    stat(d.avg != null ? '♥ ' + d.avg.toFixed(1) : '–', 'Avg rating') +
-    stat(d.streak > 0 ? '🔥 ' + d.streak : '–', 'Day streak') +
-    '</div>' +
+    // v224 (UX-03): the stat-row that sat here duplicated the hero's yib-sub
+    // line above ("N books · M pages · N reading days") — removed. The "Year
+    // records" stat-row further down stays.
     (genres ? '<div class="stat-sub yib-sec">Top genres</div><div class="dist">' + genres + '</div>' : '') +
     (books ? '<div class="stat-sub yib-sec">Highest rated</div><div class="now-reading">' + books + '</div>' : '') +
     (recs.length ? '<div class="stat-sub yib-sec">Year records</div><div class="stat-row">' + recs.join('') + '</div>' : ''));
@@ -940,7 +937,7 @@ function renderStats() {
         const pct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : 0;
         return '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
           '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-          '<p class="author">' + esc(b.authors.join(', ')) + '</p>' +
+          '<p class="author">' + esc(displayAuthors(b.authors)) + '</p>' +
           (b.pageCount ? '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
             '<p class="author" style="margin-top:4px">' + (b.progress || 0) + ' / ' + b.pageCount + ' pages · ' + pct + '%</p>' : '') +
           '</div></div>';

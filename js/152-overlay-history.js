@@ -103,6 +103,27 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('popstate', __overlayOnPopState);
 }
 
+// v224 (UX-23): full-view routes (author detail, series view) are not
+// overlays, but the Android back-gesture still needs somewhere to go —
+// without a history entry the gesture exits the app. A route registers a
+// 'route' slot entry whose closer navigates back; any go() consumes it.
+let routeBackToken = null;
+let routeBackFn = null;
+function routeBackOpened(onBack) {
+  // Re-renders (e.g. the series filter chips) keep the existing entry and
+  // just refresh where it leads — only the first open pushes history.
+  if (routeBackToken) { routeBackFn = onBack; return; }
+  routeBackFn = onBack;
+  routeBackToken = overlayOpened('route', () => {
+    routeBackToken = null;
+    const fn = routeBackFn; routeBackFn = null;
+    try { fn(); } catch (e) { /* never break navigation */ }
+  });
+}
+function routeBackClosed() {
+  if (routeBackToken) { overlayClosed(routeBackToken); routeBackToken = null; routeBackFn = null; }
+}
+
 // Test-only introspection (not part of the app contract).
 function __overlayHistoryReset() {
   ovStack = []; ovSuppressPop = false; ovAdoptNext = false;

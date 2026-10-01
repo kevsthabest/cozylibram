@@ -438,7 +438,7 @@ function openPreviewModal(t, opts) {
     '<div class="d-cover">' + coverHTML(t, 'd-cov') + '</div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(t.title) + '</h2>' +
-    '<p class="author">' + (t.authors.length ? esc(t.authors.join(', ')) : 'Unknown author') + '</p>' +
+    '<p class="author">' + (t.authors.length ? esc(displayAuthors(t.authors)) : 'Unknown author') + '</p>' +
     (t.publicRating ? '<div class="pub-rating">' + stars(t.publicRating) +
       ' <span class="note-inline">· ' + t.ratingsCount + ' ratings</span></div>' : '') +
     '<div class="d-meta" id="p-meta">' + metaHTML() + '</div>' +
@@ -870,6 +870,9 @@ function renderDetailModal(b, viaBook) {
     icon(OWNED_META[o].ic) + ' ' + OWNED_META[o].label + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
+  // v224 (UX-11): rating/axis taps commit live now, so snapshot the rating
+  // state at open — the Save-time diff still reports what actually changed.
+  const ratingBefore = { myRating: b.myRating || 0, ratings: Object.assign({}, b.ratings || {}) };
 
   // v67: previously-read default from history — a finish older than 60 days
   // means she read it before tracking, so don't stamp or log today.
@@ -1000,7 +1003,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
-      ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(a) + '</button>').join(', ')
+      ? b.authors.map(a => '<button class="taplink" data-author="' + esc(a) + '">' + esc(displayAuthorName(a)) + '</button>').join(', ')
       : 'Unknown author') + '</p>' +
     (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + ' <span class="note-inline">· ' + b.ratingsCount + ' ratings</span></div>' : '') +
     '<div class="d-meta">' +
@@ -1013,7 +1016,8 @@ function renderDetailModal(b, viaBook) {
     (releaseCountdown(b.releaseDate) ? '<div class="pub-rating release-line">' + icon('calendar') + ' Releases ' + esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' : '') +
     '</div>' +
     '<div class="d-primary-row"><button class="btn primary d-primary" id="m-primary"></button>' +
-    '<button class="fav-btn d-fav2' + (draft.favorite ? ' on' : '') + '" id="f-fav2" aria-label="Toggle favorite">' + icon('heart') + '</button></div>' +
+    '<button class="fav-btn d-fav2' + (draft.favorite ? ' on' : '') + '" id="f-fav2" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
+    '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button></div>' +
     descHTML('m-desc-hero', 'd-hero-desc') +
     '</div>' +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
@@ -1029,7 +1033,8 @@ function renderDetailModal(b, viaBook) {
     // v131: your rating — hearts + word label, now on the Details tab.
     '<div class="field"><label>Your rating</label>' +
     '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
-    '<span class="rate-word" id="f-myrating-word">' + RATING_WORDS[b.myRating || 0] + '</span></div></div>' +
+    '<span class="rate-word' + (b.myRating ? '' : ' plain') + '" id="f-myrating-word">' +
+    (b.myRating ? RATING_WORDS[b.myRating] : 'Unrated') + '</span></div></div>' +
     '<div id="m-progress"></div>' +
 
     // v182: mockup tappable rows — tap to expand, pick, collapse.
@@ -1116,6 +1121,7 @@ function renderDetailModal(b, viaBook) {
     '</div>' +
 
     '<div class="modal-actions">' +
+    '<span class="save-hint" id="m-savehint" hidden>' + icon('warn') + ' Swiping away discards unsaved changes</span>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
 
@@ -1171,6 +1177,14 @@ function renderDetailModal(b, viaBook) {
   });
 
   // wire controls (work on the draft copy until Save)
+  // v224 (UX-11): rating/axis taps commit live — a swipe-to-close can no
+  // longer silently discard them. Text fields still go through Save.
+  const syncRatingLive = () => {
+    b.myRating = draft.myRating;
+    b.axes = draft.axes.slice();
+    b.ratings = Object.assign({}, draft.ratings);
+    saveLibrary();
+  };
   const renderAxSection = () => {
     document.getElementById('f-axrows').innerHTML = draft.axes.map(axRowHTML).join('');
     document.getElementById('f-axadd').innerHTML = axAddHTML();
@@ -1189,17 +1203,20 @@ function renderDetailModal(b, viaBook) {
         row.querySelector('.segnum').textContent = nv || '–';
         const a = axisByKey(k); // v132: level word follows the value
         row.querySelector('.axword').textContent = nv ? a.levels[nv - 1] : 'Tap to rate';
+        syncRatingLive(); // v224 (UX-11)
       }));
       const rm = row.querySelector('[data-axrm]');
       if (rm) rm.addEventListener('click', () => {
         draft.axes = draft.axes.filter(x => x !== k);
         delete draft.ratings[k];
         renderAxSection();
+        syncRatingLive(); // v224 (UX-11)
       });
     });
     root.querySelectorAll('#f-axadd [data-axadd]').forEach(c => c.addEventListener('click', () => {
       draft.axes = draft.axes.concat(c.dataset.axadd);
       renderAxSection();
+      syncRatingLive(); // v224 (UX-11)
     }));
   };
 
@@ -1295,12 +1312,26 @@ function renderDetailModal(b, viaBook) {
           x.classList.toggle('on', i < draft[key]));
         if (key === 'myRating') { // v131: live word label in the header
           const w = document.getElementById('f-myrating-word');
-          if (w) w.textContent = RATING_WORDS[draft[key] || 0];
+          if (w) {
+            const rv = draft[key] || 0;
+            w.textContent = rv ? RATING_WORDS[rv] : 'Unrated'; // v224 (UX-09)
+            w.classList.toggle('plain', !rv);
+          }
+          syncRatingLive(); // v224 (UX-11): hearts commit live
         }
       }));
   };
   wirePicker('#f-myrating', 'myRating');
   wireAxRows();
+  // v224 (UX-01/02): the sticky bar names the unsaved-changes risk, but only
+  // while a text field is focused — ratings/axes commit live (UX-11).
+  const saveHint = document.getElementById('m-savehint');
+  if (saveHint) {
+    root.querySelectorAll('input.text-input, textarea.text-input').forEach(el => {
+      el.addEventListener('focus', () => { saveHint.hidden = false; });
+      el.addEventListener('blur', () => { saveHint.hidden = true; });
+    });
+  }
 
   const escClose = e => { if (e.key === 'Escape' && overlayIsTop(ovToken)) close(); }; // v129: escape closes, v220: topmost only
   // v220: DOM-only teardown — the history entry is owned by overlayOpened.
@@ -1608,6 +1639,8 @@ function renderDetailModal(b, viaBook) {
     moreMenu.hidden = true;
     shareBookCard(b.id);
   });
+  // v224 (UX-10): Share also sits in the primary row, next to the heart.
+  document.getElementById('m-share2').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);
@@ -1630,9 +1663,9 @@ function renderDetailModal(b, viaBook) {
     draft.cover = b.cover; // v168: the cover picker saves immediately too — don't clobber it
     draft.isbn = b.isbn; // v210: the edition picker saves immediately too — don't clobber it
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
-      status: b.status, myRating: b.myRating || 0, title: b.title, notes: b.notes,
+      status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
-      pageCount: b.pageCount, ratings: Object.assign({}, b.ratings || {}),
+      pageCount: b.pageCount, ratings: ratingBefore.ratings, // v224 (UX-11): live taps predate Save
     };
     Object.assign(b, draft);
     // v74: starting (or finishing) a book takes it off the Up Next queue —

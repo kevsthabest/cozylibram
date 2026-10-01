@@ -6,7 +6,7 @@
   --card2: #2c2040;
   --ink: #f3e9f5;
   --muted: #b9a8c4;
-  --faint: #7d6b8a;
+  --faint: #8d7b9a; /* v224 (UX-16): was #7d6b8a at ~4.1:1 — now ≈4.6:1 for AA on small labels */
   --accent: #e5488f;
   --accent-deep: #c2377a;
   --gold: #d4a24e;
@@ -352,6 +352,11 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  /* v224 (UX-15): 44px minimum touch target — padding widened, look preserved */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 /* v153: trope-intelligence chips — AI-inferred ones get a subtle accent tint
@@ -444,6 +449,8 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   color: #fff;
 }
 .btn.ghost { background: var(--bg2); border: 1px solid var(--line); color: var(--ink); }
+/* v224 (UX-15): 44px minimum touch targets on the small button variants */
+.btn.small, .btn.sm { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .btn.small { padding: 8px 16px; font-size: 13px; }
 .btn.danger { background: var(--bg2); border: 1px solid var(--danger); color: var(--danger); }
 .btn.block { display: block; width: 100%; margin: 10px 0; }
@@ -652,7 +659,18 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   border-top: 1px solid var(--line);
   margin: 18px -18px 0;
   padding: 12px 18px 0;
+  flex-wrap: wrap;
 }
+/* v224 (UX-01/02): the unsaved-changes hint lives in the sticky bar and only
+   appears while a text field is focused — no nagging, no layout shift. */
+.save-hint {
+  flex: 1 1 100%;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 12px; color: var(--muted); text-align: center;
+  padding: 0 0 8px;
+}
+.save-hint[hidden] { display: none; }
+.save-hint svg { width: 14px; height: 14px; flex: none; }
 /* v111: collapsible sections in the book modal */
 .m-collapsible { border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; }
 .m-collapsible > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-weight: 700; cursor: pointer; }
@@ -1092,7 +1110,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   color: var(--faint); font-weight: 700; margin-bottom: 4px;
 }
 .hrate-row { display: flex; align-items: center; gap: 10px; }
-.hrate-row .picker button { padding: 7px 9px; font-size: 19px; }
+.hrate-row .picker button { padding: 7px 9px; font-size: 19px; min-height: 44px; min-width: 44px; } /* v224 (UX-15): 44px targets */
 .rate-word { font-size: 13.5px; font-weight: 700; color: var(--accent); }
 .axrow { display: flex; flex-direction: column; gap: 7px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .axrow:last-child { border-bottom: none; }
@@ -1291,7 +1309,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* where-to-buy row */
 .buy-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.buy-row .btn { flex: 1 1 30%; text-align: center; text-decoration: none; }
+.buy-row .btn { flex: 1 1 30%; text-align: center; text-decoration: none; min-height: 44px; /* v224 (UX-18) */ display: inline-flex; align-items: center; justify-content: center; }
 .note-inline { font-weight: 400; opacity: .6; font-size: .85em; }
 
 /* collection sheet: external "more books" section */
@@ -1514,6 +1532,21 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .set-group[open] > summary::after { transform: rotate(-90deg); }
 .set-group > :not(summary) { margin-left: 16px; margin-right: 16px; }
 .set-group > :last-child { margin-bottom: 16px; }
+/* v224 (UX-14): the import result is a summary banner, not a toast. */
+.import-done {
+  margin: 14px 0; padding: 16px; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+}
+.import-done .ticon { width: 30px; height: 30px; color: var(--ok); }
+.import-done p { margin: 8px 0 4px; font-size: 14px; }
+.import-done .btn { margin-top: 10px; }
+/* v224 (UX-24): on wide screens the settings accordion groups flow into two
+   columns instead of one long scroll. */
+@media (min-width: 900px) {
+  #view:has(> .set-group) { columns: 2; column-gap: 16px; }
+  #view > .set-group { break-inside: avoid; }
+  #view > .view-head, #view > .stat-row { column-span: all; }
+}
 /* v117: grouped settings — icon+title+tag summary, subsection headers */
 .set-st { display: flex; flex-direction: column; gap: 2px; }
 .set-tt { display: flex; align-items: center; gap: 8px; font-size: 17px; }
@@ -1831,11 +1864,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .add-scan-btn svg { width: 22px; height: 22px; vertical-align: -4px; margin-right: 8px; }
 .add-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--faint); font-size: 13px; }
 .add-or::before, .add-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-.add-bulk { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.add-bulk summary { padding: 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; }
-.add-bulk summary::-webkit-details-marker { display: none; }
-.add-bulk summary svg { width: 20px; height: 20px; flex: none; }
-.add-bulk #add-bulk-body { padding: 0 14px 14px; }
+/* v224 (UX-25/UX-13): the bulk-ISBN and import rows sit side by side, full
+   width, instead of hiding bulk inside a <details> disclosure. */
+.add-alt { display: flex; gap: 10px; margin-top: 18px; }
+.add-alt .btn { flex: 1 1 0; }
+#add-bulk-body, #add-import-body { margin-top: 10px; }
+#add-bulk-body[hidden], #add-import-body[hidden] { display: none; margin: 0; }
 
 /* ================= v173: home redesign (greeting + reading hero + tiles) ================= */
 .home-greet { padding: 4px 2px 0; }
@@ -2092,6 +2126,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .rate-word {
   background: var(--bg2); border: 1px solid var(--line);
   border-radius: 999px; padding: 4px 12px; font-size: 13px;
+}
+/* v224 (UX-09): an unrated book shows plain muted text, not a tappable-looking pill */
+.rate-word.plain {
+  background: none; border: none; border-radius: 0; padding: 4px 0;
+  color: var(--muted); font-weight: 500;
 }
 
 /* --- reading log summary card --- */

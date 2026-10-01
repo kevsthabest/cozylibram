@@ -198,8 +198,22 @@ function detectImportFormat(text, filename) {
   return null;
 }
 
+// v224 (UX-14): the import result is a summary banner with a way back to the
+// shelf -- not a toast that vanishes while she wonders what happened.
+function importDoneBannerHTML(parts) {
+  return '<div class="import-done">' + icon('check') +
+    '<p><b>' + esc(parts.join(' \u00b7 ')) + '</b></p>' +
+    '<p class="note">Your library was updated -- duplicates were skipped, never added twice.</p>' +
+    '<button class="btn ghost" data-import-done>View in library</button></div>';
+}
+function wireImportDoneBanner(mount) {
+  if (!mount) return;
+  const btn = mount.querySelector('[data-import-done]');
+  if (btn) btn.addEventListener('click', () => go('library'));
+}
+
 // Add parsed books: dedupe against the shelf, normalize, one save + render.
-function importForeignBooks(books, label, source) {
+function importForeignBooks(books, label, source, mountId) {
   let added = 0, skipped = 0;
   const fresh = [];
   for (const raw of books) {
@@ -217,14 +231,42 @@ function importForeignBooks(books, label, source) {
   for (let i = fresh.length - 1; i >= 0; i--) library.unshift(fresh[i]);
   saveLibrary();
   render();
-  toast('Imported ' + added + ' book' + (added === 1 ? '' : 's') + ' from ' + label +
-    (skipped ? ' (' + skipped + ' already on shelves)' : '') + ' ✨');
+  // v224 (UX-14): summary banner in the hub instead of a vanishing toast.
+  var imMount = mountId ? document.getElementById(mountId) : null;
+  if (imMount) {
+    imMount.innerHTML = importDoneBannerHTML(
+      [added + ' added'].concat(skipped ? [skipped + ' skipped'] : []));
+    wireImportDoneBanner(imMount);
+  }
   track('import_completed', { source: source || 'manual', book_count: added });
   return { added: added, skipped: skipped };
 }
 
-function handleImportFile(file) {
-  const mount = document.getElementById('im-result');
+
+// v224 (UX-13): the import hub is shared between Settings and the Add screen.
+// pfx prefixes the element ids so both can exist without colliding.
+function importHubHTML(pfx) {
+  return '<p class="note"><b>Import from other apps.</b> Goodreads, StoryGraph, Bookmory, or a plain list of ISBNs ' +
+    '\u2014 pick the export file and the app figures out the rest. Import merges by ISBN, so books you already have are skipped, never duplicated.</p>' +
+    '<input type="file" id="' + pfx + '-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
+    '<button class="btn ghost block" id="' + pfx + '-pick">' + icon('download') + ' Choose an export file</button>' +
+    '<div id="' + pfx + '-result"></div>';
+}
+function wireImportHub(pfx) {
+  const pick = document.getElementById(pfx + '-pick');
+  const file = document.getElementById(pfx + '-file');
+  if (!pick || !file) return;
+  pick.addEventListener('click', () => file.click());
+  file.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) handleImportFile(f, pfx + '-result');
+    e.target.value = '';
+  });
+}
+
+// v224 (UX-13): the hub lives on the Add screen too, so the mount is a parameter.
+function handleImportFile(file, mountId) {
+  const mount = document.getElementById(mountId || 'im-result');
   const name = String(file.name || '').toLowerCase();
   // Bookmory ships a binary ZIP (Database.bookmory) — handled separately.
   if (name.includes('bookmory')) { handleBookmoryFile(file, mount); return; }
@@ -247,7 +289,7 @@ function handleImportFile(file) {
     const dupe = books.filter(b => b.title && alreadyHave(b)).length;
     const preview = books.slice(0, 5).map(b =>
       '<div class="result-card"><div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-      '<p class="author">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</p></div></div>').join('');
+      '<p class="author">' + esc(displayAuthors(b.authors) || 'Unknown author') + '</p></div></div>').join('');
     mount.innerHTML =
       '<p class="note">Detected: <b>' + esc(fmt.name) + '</b> — ' + books.length + ' books' +
       (dupe ? ' (' + dupe + ' already on your shelves, will be skipped)' : '') + '</p>' +
@@ -256,7 +298,7 @@ function handleImportFile(file) {
       '<button class="btn block" id="im-go">Import ' + books.length + ' books</button>' +
       '<p class="note">Where to get it: ' + esc(fmt.hint) + '</p>';
     document.getElementById('im-go').addEventListener('click', () => {
-      importForeignBooks(books, fmt.name, fmt.id === 'isbn-list' ? 'isbn_list' : fmt.id);
+      importForeignBooks(books, fmt.name, fmt.id === 'isbn-list' ? 'isbn_list' : fmt.id, mount.id);
       mount.innerHTML = '';
     });
   };
@@ -265,6 +307,8 @@ function handleImportFile(file) {
 
 // An ISBN-list file goes through the same lookup pipeline as the Bulk tab.
 function importISBNListFile(text, mount) {
+  // v224 (UX-14): banner in the hub on completion.
+  const mountId = mount && mount.id;
   const isbns = parseISBNList(text);
   mount.innerHTML = '<p class="note">Detected: <b>ISBN list</b> — ' + isbns.length + ' ISBNs. Looking them up…</p>' +
     '<p class="note" id="im-prog"></p><div id="im-res"></div>';
@@ -284,7 +328,8 @@ function importISBNListFile(text, mount) {
     document.getElementById('im-go').addEventListener('click', () => {
       const n = bulkAddBooks(found.map(rr => rr.book), 'isbn_list');
       track('import_completed', { source: 'isbn_list', book_count: n });
-      mount.innerHTML = '';
+      const m = mountId ? document.getElementById(mountId) : mount;
+      if (m) { m.innerHTML = importDoneBannerHTML([n + ' added']); wireImportDoneBanner(m); }
     });
   });
 }

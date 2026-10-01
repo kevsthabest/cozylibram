@@ -45,7 +45,7 @@ function bookCard(b, i) {
   return '<div class="book-card' + anim + '" data-id="' + esc(b.id) + '">' +
     coverHTML(b, '', coverFav(b)) +
     '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-    '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
+    '<p class="author">' + esc(displayAuthors(b.authors) || 'Unknown author') + '</p>' +
     '<div class="badges">' + badges.join('') + '</div>' + progHTML + '</div></div>';
 }
 

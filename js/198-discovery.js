@@ -133,7 +133,7 @@ function releaseResultsHTML(list) {
     '<div class="grid">' + list.map((c, i) =>
       '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c) +
       '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
-      '<p class="author">' + esc(c.authors.join(', ')) + '</p>' +
+      '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
       '<div class="up-pill">' + icon('calendar') + ' ' + esc(fmtDate(c.releaseDate)) + ' · ' + releaseCountdown(c.releaseDate) + '</div>' +
       '</div><div style="align-self:center;display:flex;gap:6px">' +
       '<button class="btn small" data-add="' + i + '">＋ Add</button>' +
@@ -339,13 +339,15 @@ function discTile(ic, title, blurb, target) {
 // v175: "Similar Books — like this one": pick a seed from her highest-rated
 // books and favorites; tapping one opens its detail sheet, whose Discovery
 // section already lists similar books from her shelves.
+// v224 (UX-06): the section carries a proper label now, not just the prompt.
 function similarSeedHTML() {
+  const head = '<h3 class="wish-section">' + icon('covers') + ' Similar Books</h3>';
   const seeds = library.filter(b => b.favorite || (b.myRating || 0) >= 4)
     .sort((a, b) => ((b.myRating || 0) - (a.myRating || 0)) || ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)))
     .slice(0, 6);
   if (!seeds.length)
-    return '<p class="note">Rate a few books 4\u2605 or tap the \u2661 on a favorite — your top books will show up here as starting points.</p>';
-  return '<p class="note">Like which one?</p><div class="sim-seeds">' + seeds.map(b =>
+    return head + '<p class="note">Rate a few books 4\u2605 or tap the \u2661 on a favorite — your top books will show up here as starting points.</p>';
+  return head + '<p class="note">Like which one?</p><div class="sim-seeds">' + seeds.map(b =>
     '<button class="sim-seed" data-seed="' + esc(b.id) + '" aria-label="Find books like ' + esc(b.title) + '">' +
     (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
              : '<span class="sim-nocover">' + icon('covers') + '</span>') +
@@ -783,7 +785,7 @@ function recoCardHTML(r, i, lovedIds) {
   if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
   return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c) +
     '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
-    '<p class="author">' + esc(c.authors.join(', ')) + '</p>' +
+    '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
     (chips.length ? '<div class="why-chips">' + chips.join('') + '</div>' : '') +
     '</div><div style="align-self:center;display:flex;gap:6px">' +
     '<button class="btn small" data-add="' + i + '">\uFF0B TBR</button>' +
@@ -819,11 +821,12 @@ function renderRecoResults(ranked, lovedIds, embedded) {
   if (!box) return;
   visibleRecos = ranked;
   visibleRecoLoved = lovedIds || [];
+  // v224 (UX-06): the section label stays up in every state — empty or loaded.
   if (!ranked.length) {
-    box.innerHTML = '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
+    box.innerHTML = recoHeadHTML() + '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
     return;
   }
-  box.innerHTML = '<h3 class="wish-section">' + icon('crystal') + ' Recommended for you</h3>' +
+  box.innerHTML = recoHeadHTML() +
     (embedded ? '' : '<p class="note">\u2726 Taste matching is still warming up \u2014 showing fresh picks from your favorite authors.</p>') +
     '<div class="grid">' + ranked.map((r, i) => recoCardHTML(r, i, lovedIds)).join('') + '</div>' +
     '<p class="note" style="text-align:center"><button class="btn ghost small" id="reco-refresh">\u21BB Refresh</button></p>';
@@ -833,25 +836,30 @@ function renderRecoResults(ranked, lovedIds, embedded) {
   track('reco_viewed', { count: ranked.length, embedded: !!embedded });
 }
 
+// v224 (UX-06): the Recommended section label renders in every state,
+// including loading and the early-return empty states below.
+function recoHeadHTML() {
+  return '<h3 class="wish-section">' + icon('crystal') + ' Recommended for you</h3>';
+}
 async function refreshRecommendations() {
   const box = document.getElementById('disc-reco');
   if (!box) return;
-  box.innerHTML = '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
+  box.innerHTML = recoHeadHTML() + '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
   try {
     // v214: profile books are finished reads AND favorites (favorites anchor
     // the profile at top weight, so a thin rating history still works).
     const profBooks = library.filter(b => b && (b.status === 'read' || b.favorite));
     if (!profBooks.length) {
-      box.innerHTML = '<p class="note">Finish a few books or tap \u2661 on some favorites \u2014 your taste profile grows from the books you love.</p>';
+      box.innerHTML = recoHeadHTML() + '<p class="note">Finish a few books or tap \u2661 on some favorites \u2014 your taste profile grows from the books you love.</p>';
       return;
     }
     const authors = topLovedAuthors(6);
     if (!authors.length) {
-      box.innerHTML = '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
+      box.innerHTML = recoHeadHTML() + '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
       return;
     }
     if (!hcReady()) {
-      box.innerHTML = '<p class="note">Connect Hardcover in Settings \u2192 Hardcover to browse recommendations.</p>';
+      box.innerHTML = recoHeadHTML() + '<p class="note">Connect Hardcover in Settings \u2192 Hardcover to browse recommendations.</p>';
       return;
     }
     // Taste profile: weighted mean of her read books' and favorites'

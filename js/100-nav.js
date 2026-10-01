@@ -17,6 +17,7 @@ function navTab(v) {
 }
 function go(v) {
   stopScan();
+  if (typeof routeBackClosed === 'function') routeBackClosed(); // v224 (UX-23): route entries die on navigation
   if (rouletteTimer) { clearInterval(rouletteTimer); rouletteTimer = null; }
   view = v;
   animateIn = true;

@@ -35,7 +35,7 @@ function renderSettings() {
   /* ---- Account ---- */
   const htmlLogin =
     '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
-    'The app works fine without it — everything stays on this device.</p>' +
+    'Sign-in keeps your library backed up and synced across devices.</p>' +
     '<p class="note" id="ac-status">Checking…</p>' +
     '<div id="ac-signedout">' +
     '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
@@ -68,10 +68,7 @@ function renderSettings() {
     '<button class="btn ghost block" id="bk-import">' + icon('upload') + ' Import from file</button>' +
     '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
     '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
-    '<p class="note" style="margin-top:14px"><b>Import from other apps.</b> One front door for every backup: Goodreads, StoryGraph, Hardcover, Bookmory, a list of ISBNs… pick the export file and the app figures out the rest.</p>' +
-    '<input type="file" id="im-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
-    '<button class="btn ghost block" id="im-pick">' + icon('download') + ' Choose an export file</button>' +
-    '<div id="im-result"></div>';
+    importHubHTML('im');
 
   const htmlData =
     '<p class="note">Delete everything on this device and in your cloud account. <b>This cannot be undone</b> — export a backup first.</p>' +
@@ -428,13 +425,8 @@ function renderSettings() {
     });
   });
 
-  document.getElementById('im-pick').addEventListener('click', () =>
-    document.getElementById('im-file').click());
-  document.getElementById('im-file').addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (f) handleImportFile(f);
-    e.target.value = '';
-  });
+  // v224 (UX-13): the import hub is shared with the Add screen.
+  wireImportHub('im');
 
   // Hardcover wiring
   document.getElementById('pc-backfill').addEventListener('click', () => backfillPageCounts());

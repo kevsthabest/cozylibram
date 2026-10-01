@@ -46,9 +46,10 @@ function authorIndex() {
 function authorRowHTML(e) {
   const sub = e.owned.length + ' owned' +
     (e.wanted.length ? ' · ' + e.wanted.length + ' on wishlist' : '');
+  const dn = displayAuthorName(e.name); // v224 (UX-05): normalized display
   return '<button class="crow author-row" data-author="' + esc(e.name) + '">' +
-    '<span class="aavatar">' + esc(e.name.trim().charAt(0).toUpperCase()) + '</span>' +
-    '<span class="ctext"><b>' + esc(e.name) + '</b><small>' + esc(sub) + '</small></span>' +
+    '<span class="aavatar">' + esc(dn.trim().charAt(0).toUpperCase()) + '</span>' +
+    '<span class="ctext"><b>' + esc(dn) + '</b><small>' + esc(sub) + '</small></span>' +
     '<span class="cgo">›</span></button>';
 }
 
@@ -134,7 +135,7 @@ function renderAuthorDetail() {
   const owned = library.filter(b => match(b) && b.owned !== 'tobuy').sort(byTitle);
   const wanted = library.filter(b => match(b) && b.owned === 'tobuy').sort(byTitle);
   let html = '<div class="view-head"><button class="btn ghost sm" id="a-back">← Back</button></div>' +
-    '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' ' + esc(name) + '</h2>' +
+    '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' ' + esc(displayAuthorName(name)) + '</h2>' +
     '<p class="note">' + owned.length + ' owned' +
     (wanted.length ? ' · ' + wanted.length + ' on wishlist' : '') + '</p></div>';
   html += '<h3 class="serif sec-h">On your shelves</h3>';
@@ -149,6 +150,9 @@ function renderAuthorDetail() {
     '<div id="a-missing"><p class="note">Looking up their other books…</p></div>';
   setView(html);
   document.getElementById('a-back').addEventListener('click', () => go('authors'));
+  // v224 (UX-23): the back-gesture returns to the author list instead of
+  // exiting the app.
+  if (typeof routeBackOpened === 'function') routeBackOpened(() => go('authors'));
   document.querySelectorAll('#view [data-book]').forEach(el =>
     el.addEventListener('click', () => openDetail(el.dataset.book)));
   fillMissingBooks(name);

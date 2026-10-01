@@ -34,6 +34,11 @@ const seed = (id, over) => {
     saveLibrary(); openBookFromEl(null, '${id}');`);
 };
 
+// v224 (UX-09): an unrated book shows plain muted "Unrated" text — no pill.
+seed('r0', { myRating: 0 });
+ok('unrated shows plain Unrated text', q('#f-myrating-word').textContent === 'Unrated');
+ok('unrated word has no pill styling', q('#f-myrating-word').classList.contains('plain'));
+
 // --- your rating on the Details tab (v174: moved out of the header) ---
 seed('r1', {});
 ok('rating picker lives on the Details tab', !!q('#dtab-details #f-myrating'));
@@ -48,7 +53,7 @@ ok('tapping 5th heart fills all five', qa('#f-myrating button.on').length === 5)
 ok('word label updates to Loved it', q('#f-myrating-word').textContent === 'Loved it');
 qa('#f-myrating button')[4].click(); // tap again clears
 ok('tap again clears rating', qa('#f-myrating button.on').length === 0);
-ok('word label resets', q('#f-myrating-word').textContent === 'Tap to rate');
+ok('word label resets', q('#f-myrating-word').textContent === 'Unrated'); // v224 (UX-09): plain "Unrated", not a tappable-looking pill
 
 // --- segmented mood bars ---
 seed('r2', {});

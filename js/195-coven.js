@@ -312,17 +312,10 @@ function renderCovenMain(code, lists, priv) {
     lists.friends.forEach(f => {
       html += circleRowHTML(f.profile, f.name,
         '<button class="btn ghost sm" data-view="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Shelves</button>' +
-        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '">Remove</button>');
+        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>');
     });
     html += '</div>';
   }
-
-  // v155: trope proposals — the coven votes, admin reviews in Trope Lab.
-  html += '<h2 class="section serif">Trope proposals</h2><div class="circle-card">' +
-    '<p class="note">Missing a trope? Propose it — the ' + covenName().toLowerCase() +
-    ' votes, and popular proposals get reviewed.</p>' +
-    '<button class="btn ghost sm" id="cc-propose">＋ Propose a trope</button>' +
-    '<div id="cc-proposals" class="circle-list"><p class="note">Loading…</p></div></div>';
 
   // Privacy
   html += '<h2 class="section serif">Privacy</h2><div class="circle-card">' +
@@ -336,6 +329,13 @@ function renderCovenMain(code, lists, priv) {
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
         STATUS[s] + '</button>').join('') +
     '</div></div></div>';
+
+  // v155: trope proposals — the coven votes, admin reviews in Trope Lab.
+  html += '<h2 class="section serif">Trope proposals</h2><div class="circle-card">' +
+    '<p class="note">Missing a trope? Propose it — the ' + covenName().toLowerCase() +
+    ' votes, and popular proposals get reviewed.</p>' +
+    '<button class="btn ghost sm" id="cc-propose">＋ Propose a trope</button>' +
+    '<div id="cc-proposals" class="circle-list"><p class="note">Loading…</p></div></div>';
 
   setView(html);
 
@@ -376,10 +376,9 @@ function renderCovenMain(code, lists, priv) {
     circShelf = 'all';
     go('coven-friend');
   }));
-  document.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', async () => {
-    if (!window.confirm('Remove this friend? They’ll lose access to your shelves.')) return;
-    try { await circleRemove(b.dataset.remove); rerender(); }
-    catch (e) { toast('Couldn’t remove: ' + ((e && e.message) || e)); }
+  document.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
+    // v224 (UX-21): the app's own confirm sheet, not a blocking window.confirm.
+    openRemoveFriendSheet(b.dataset.remove, b.dataset.name || 'this friend');
   }));
   document.querySelectorAll('#cc-share button').forEach(b => b.addEventListener('click', async () => {
     const share = b.dataset.v === '1';
@@ -515,6 +514,33 @@ async function renderCovenProposals() {
   } catch (e) {
     box.innerHTML = '<p class="note">Couldn’t load proposals.</p>';
   }
+}
+
+/* v224 (UX-21): confirm removing a friend with the app's own sheet pattern
+   (collection-overlay + modal-backdrop + overlayOpened), not window.confirm. */
+function openRemoveFriendSheet(friendId, friendName) {
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="rf-back"><div class="modal" role="dialog" aria-label="Remove friend">' +
+    '<button class="modal-close" id="rf-x">\u2715</button>' +
+    '<h2 class="serif">Remove friend?</h2>' +
+    '<p class="note"><b>' + esc(friendName) + '</b> will lose access to your shelves.</p>' +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="rf-cancel">Keep friend</button>' +
+    '<button class="btn danger" id="rf-yes">Remove</button></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('sheet', closeDom); // v220: back-gesture closes the sheet
+  const close = () => { overlayClosed(ovToken); closeDom(); };
+  ov.querySelector('#rf-back').addEventListener('click', e => { if (e.target.id === 'rf-back') close(); });
+  ov.querySelector('#rf-x').addEventListener('click', close);
+  ov.querySelector('#rf-cancel').addEventListener('click', close);
+  ov.querySelector('#rf-yes').addEventListener('click', async () => {
+    try { await circleRemove(friendId); close(); rerender(); }
+    catch (e) { toast('Couldn\u2019t remove: ' + ((e && e.message) || e)); }
+  });
 }
 
 /* Proposal form sheet. `book` is optional — when launched from a book modal

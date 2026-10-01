@@ -41,7 +41,11 @@ function seed() {
 seed();
 run('renderLibrary()');
 const html1 = q('#view').innerHTML;
-ok('home: greeting hero leads', !!q('.home-greet') && q('.home-greet').textContent.includes('Good'));
+// v224 (UX-04): with a book in progress the greeting names it instead of a
+// generic time-of-day hello.
+ok('home: greeting hero leads', !!q('.home-greet'));
+ok('home: greeting names the reading book', q('.home-greet').textContent.includes('Reading One') ||
+  q('.home-greet').textContent.includes('chapter'));
 ok('home: currently reading section present', html1.indexOf('Currently Reading') !== -1);
 ok('home: hero shows progress + percentage', (() => {
   const h = q('.cr-hero');

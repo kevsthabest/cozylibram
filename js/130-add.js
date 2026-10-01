@@ -26,8 +26,11 @@ function renderAdd() {
     '<div class="chips" id="s-src" style="margin-top:10px">' +
     srcs.map(s => '<button class="chip' + (searchSource === s[0] ? ' active' : '') + '" data-s="' + s[0] + '">' + s[1] + '</button>').join('') +
     '</div><div id="s-results" style="margin-top:12px"></div>' +
-    '<details class="add-bulk"><summary>' + icon('clipboard') + ' Pasting a stack of ISBNs?</summary>' +
-    '<div id="add-bulk-body"></div></details>';
+    '<div class="add-alt">' +
+    '<button class="btn ghost small" id="add-bulk-toggle" aria-expanded="false">' + icon('clipboard') + ' Bulk ISBN</button>' +
+    '<button class="btn ghost small" id="add-import-toggle" aria-expanded="false">' + icon('download') + ' Import a library</button></div>' +
+    '<div id="add-bulk-body" hidden></div>' +
+    '<div id="add-import-body" hidden></div>';
   setView(html);
 
   // Scanner expands inline below the button; collapsing stops the camera.
@@ -91,13 +94,28 @@ function renderAdd() {
       if (input.value.trim().length >= 2) run(); // re-run under the new source
     }));
 
-  // Bulk import renders lazily on first open.
-  const bulk = document.querySelector('.add-bulk');
-  bulk.addEventListener('toggle', () => {
-    if (bulk.open && !bulk.dataset.wired) {
-      bulk.dataset.wired = '1';
-      renderBulkInto(document.getElementById('add-bulk-body'));
-    }
+  // v224 (UX-25/UX-13): Bulk ISBN and the import hub are full rows now —
+  // no more <details> disclosure. Both render lazily on first open.
+  const addAltToggle = (btnId, bodyId, onOpen) => {
+    const btn = document.getElementById(btnId);
+    const body = document.getElementById(bodyId);
+    btn.addEventListener('click', () => {
+      const open = body.hidden;
+      document.getElementById('add-bulk-body').hidden = true;
+      document.getElementById('add-import-body').hidden = true;
+      document.getElementById('add-bulk-toggle').setAttribute('aria-expanded', 'false');
+      document.getElementById('add-import-toggle').setAttribute('aria-expanded', 'false');
+      if (open) {
+        body.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        if (!body.dataset.wired) { body.dataset.wired = '1'; onOpen(body); }
+      }
+    });
+  };
+  addAltToggle('add-bulk-toggle', 'add-bulk-body', renderBulkInto);
+  addAltToggle('add-import-toggle', 'add-import-body', (body) => {
+    body.innerHTML = importHubHTML('add-im');
+    wireImportHub('add-im');
   });
 
   if (addTab === 'search') input.focus(); // deep link from Discover / onboarding
@@ -351,7 +369,7 @@ async function isbnLookupUI(isbn, mount, source) {
     if (book) {
       mount.innerHTML = '<div class="result-card">' + coverHTML(book) +
         '<div class="book-meta"><h3>' + esc(book.title) + '</h3>' +
-        '<p class="author">' + esc(book.authors.join(', ')) + '</p>' +
+        '<p class="author">' + esc(displayAuthors(book.authors)) + '</p>' +
         (book.publicRating ? '<div class="pub-rating">' + stars(book.publicRating) + ' (' + book.ratingsCount + ' ratings)</div>' : '') +
         '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
         '<button class="btn small" id="rc-add">Add to TBR</button>' +
@@ -404,7 +422,7 @@ function paintSearchResults(box) {
     const have = b._added || alreadyHave(b);
     return '<div class="book-card" data-i="' + i + '"' + (have ? ' style="opacity:0.4"' : '') + '>' + coverHTML(b) +
       '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-      '<p class="author">' + esc(b.authors.join(', ')) +
+      '<p class="author">' + esc(displayAuthors(b.authors)) +
       (b.publishedDate ? ' · ' + esc(b.publishedDate.slice(0, 4)) : '') + '</p>' +
       (b.publicRating ? '<div class="pub-rating">' + stars(b.publicRating) + '</div>' : '') +
       '</div><div style="align-self:center">' +
@@ -498,7 +516,7 @@ function renderBulkInto(body) {
       '<div class="result-card">' +
       (r.book ? coverHTML(r.book) : '<div class="cover-ph"></div>') +
       '<div class="book-meta"><h3>' + esc(r.book ? r.book.title : r.isbn) + '</h3>' +
-      '<p class="author">' + esc(r.book ? r.book.authors.join(', ') : 'no match in Google Books / Open Library') + '</p>' +
+      '<p class="author">' + esc(r.book ? displayAuthors(r.book.authors) : 'no match in Google Books / Open Library') + '</p>' +
       chip(r) + '</div></div>').join('') +
       (found.length
         ? '<button class="btn block" id="b-add">Add ' + found.length + ' book' +

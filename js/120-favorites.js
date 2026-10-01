@@ -104,11 +104,11 @@ function upNextMove(id, dir) {
 }
 function upNextShelfHTML() {
   const books = upNextBooks();
-  let html = '<div class="un-strip"><div class="recent-head"><h3 class="serif">⏭️ Up Next</h3>' +
+  let html = '<div class="un-strip"><div class="recent-head"><h3 class="serif">' + icon('upnext') + ' Up Next</h3>' +
     (books.length ? '<button class="btn ghost sm" id="un-manage">Manage</button>' : '') + '</div>';
   if (!books.length) {
     html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">' +
-      'Queue up what to read next — open any book and tap <b>⏭️ Up Next</b>.</p></div>';
+      'Queue up what to read next \u2014 open any book and tap <b>' + icon('upnext') + ' Up Next</b>.</p></div>';
   } else {
     html += '<div class="recent-row">' + books.slice(0, 8).map((b, i) => {
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
@@ -312,7 +312,22 @@ function homeGreetingHTML() {
   // the long-standing "beautiful" default.
   const g = (typeof loadProfile === 'function' && loadProfile().gender) || '';
   const term = g === 'm' ? 'handsome' : g === 'other' ? 'friend' : 'beautiful';
-  return '<section class="home-sec home-greet"><h2 class="serif">Good ' + tod + ', ' + term + ' ' + icon('covers') + '</h2>' +
+  // v224 (UX-04): when a book is in progress the greeting names it — the
+  // shelf knows what she's reading, so the hello should too.
+  const reading = typeof library !== 'undefined'
+    ? library.filter(b => b.status === 'reading')
+        .sort((a, b) => String(b._mtime || '').localeCompare(String(a._mtime || '')))[0]
+    : null;
+  let greet;
+  if (reading) {
+    const t = reading.title || 'your book';
+    greet = (h >= 22 || h < 2) ? 'One more chapter, ' + term + '?'
+      : h >= 5 && h < 12 ? 'A new chapter awaits, ' + term
+      : 'Back to ' + t + ', ' + term + '?';
+  } else {
+    greet = 'Good ' + tod + ', ' + term;
+  }
+  return '<section class="home-sec home-greet"><h2 class="serif">' + esc(greet) + ' ' + icon('covers') + '</h2>' +
     '<p>What are you in the mood for?</p></section>';
 }
 

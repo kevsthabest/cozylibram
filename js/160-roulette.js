@@ -49,11 +49,15 @@ function renderPick() {
   }
   html += '<div class="stat-sub">Trope or tag</div>' +
     '<input id="pk-trope" class="text-input" placeholder="e.g. enemies to lovers, dragons…" value="' + esc(pickState.trope) + '">' +
-    '<div class="stat-sub">How intense?</div><div class="chips">' +
+    '<div class="stat-sub">' + esc(domAxis.label) + ' level</div><div class="chips">' +
     intensityOpts.map(([v, l]) => '<button class="chip' + (pickState.minIntensity === v ? ' active' : '') +
       '" data-s="' + v + '">' + l + '</button>').join('') + '</div>';
   html += '<div class="stat-sub">Queue</div><div class="chips">' +
-    '<button class="chip' + (pickState.upNextOnly ? ' active' : '') + '" id="pk-upnext">⏭️ Up Next only (' + upNext.length + ')</button></div>';
+    '<button class="chip' + (pickState.upNextOnly ? ' active' : '') + '" id="pk-upnext">' + icon('upnext') + ' Up Next only (' + upNext.length + ')</button></div>';
+  // v224 (UX-20): one tap back to the unfiltered spin.
+  const filtersActive = pickState.genres.length || pickState.trope || pickState.minIntensity || pickState.upNextOnly;
+  html += '<p class="note" style="text-align:right;margin:2px 0 0"><button class="taplink" id="pk-reset"' +
+    (filtersActive ? '' : ' disabled style="opacity:.4;cursor:default"') + '>Reset filters</button></p>';
   html += '</div>';
 
   html += '<p class="note" id="pick-count"></p>' +
@@ -85,6 +89,15 @@ function renderPick() {
     pickState.upNextOnly = !pickState.upNextOnly;
     e.currentTarget.classList.toggle('active', pickState.upNextOnly);
     updatePickCount();
+  });
+  // v224 (UX-20): reset all filters and re-render.
+  document.getElementById('pk-reset').addEventListener('click', (e) => {
+    if (e.currentTarget.disabled) return;
+    pickState.genres = [];
+    pickState.trope = '';
+    pickState.minIntensity = 0;
+    pickState.upNextOnly = false;
+    renderPick();
   });
   document.getElementById('pk-spin').addEventListener('click', runRoulette);
 }
@@ -150,7 +163,7 @@ function showWinner(b) {
       ? '<img src="' + esc(b.cover) + '" alt="" onerror="this.remove()">'
       : icon('covers')) + '</div>' +
     '<h3 class="serif">' + esc(b.title) + '</h3>' +
-    '<p class="author">' + esc(b.authors.join(', ') || 'Unknown author') + '</p>' +
+    '<p class="author">' + esc(displayAuthors(b.authors) || 'Unknown author') + '</p>' +
     (b.description ? '<p class="winner-desc">' + esc(b.description.slice(0, 220)) +
       (b.description.length > 220 ? '…' : '') + '</p>' : '') +
     '<div class="badges" style="justify-content:center">' + pills + '</div>' +

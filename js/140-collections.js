@@ -123,6 +123,9 @@ function renderSeries() {
   }
   setView(html);
   document.getElementById('sr-back').addEventListener('click', () => go(seriesReturn));
+  // v224 (UX-23): the back-gesture returns to the originating view instead
+  // of exiting the app.
+  if (typeof routeBackOpened === 'function') routeBackOpened(() => go(seriesReturn));
   document.querySelectorAll('#view .chips .chip').forEach(c =>
     c.addEventListener('click', () => {
       seriesFilter = c.dataset.f;

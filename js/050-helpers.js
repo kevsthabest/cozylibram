@@ -7,6 +7,23 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function uid() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* v224 (UX-05): one display normalization for author names — unicode-normalize,
+   collapse stray whitespace, strip publisher suffixes (Inc/LLC/Ltd/Co), and
+   title-case uniformly-cased names ("H D CARLTON" -> "H D Carlton"). Mixed-case
+   names ("McDonald", "bell hooks") are left as-is. Display only — records keep
+   their raw strings. */
+function displayAuthorName(n) {
+  let s = String(n || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s*\b(Inc|LLC|Ltd|Co)\.?$/i, '').trim();
+  if (/[a-zA-Z]/.test(s) && (s === s.toUpperCase() || s === s.toLowerCase())) {
+    s = s.toLowerCase().replace(/(^|[\s\-–—.'("])\p{L}/gu,
+      m => m.toUpperCase());
+  }
+  return s;
+}
+function displayAuthors(arr) {
+  return (arr || []).map(displayAuthorName).filter(Boolean).join(', ');
+}
 // v79: cohesive line-art icon set (inline SVG, inherits text color). Used for
 // the library toolbar and view headers instead of mixed emoji glyphs.
 const ICONS = {

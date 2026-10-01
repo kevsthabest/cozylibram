@@ -407,7 +407,7 @@ async function handleBookmoryFile(file, mount) {
     const dupe = books.filter(b => b.title && (alreadyHave(b) || library.some(x => x.id === b.id))).length;
     const preview = books.slice(0, 5).map(b =>
       '<div class="result-card"><div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
-      '<p class="author">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</p></div></div>').join('');
+      '<p class="author">' + esc(displayAuthors(b.authors) || 'Unknown author') + '</p></div></div>').join('');
     const corruptNote = parsed.skippedTitles.length
       ? '<p class="note">' + icon('warn') + ' ' + parsed.skippedTitles.length + ' record' +
         (parsed.skippedTitles.length === 1 ? ' was' : 's were') +
@@ -424,7 +424,7 @@ async function handleBookmoryFile(file, mount) {
       '<p class="note">Statuses, ratings, page logs and favorites come along. ' +
       'Her written reading notes live only in the Bookmory app — they aren\'t in the export file.</p>';
     document.getElementById('im-go').addEventListener('click', () => {
-      importBookmoryBooks(books, parsed.skippedTitles);
+      importBookmoryBooks(books, parsed.skippedTitles, mount && mount.id);
       mount.innerHTML = '';
     });
   } catch (e) {
@@ -437,7 +437,7 @@ async function handleBookmoryFile(file, mount) {
 // Add parsed books: stable bm- ids mean a second import of the same file
 // updates the books in place instead of duplicating them. In-app-only data
 // (spice ratings, her notes, Hardcover-enriched series) is never overwritten.
-function importBookmoryBooks(books, skippedTitles) {
+function importBookmoryBooks(books, skippedTitles, mountId) {
   let added = 0, updated = 0, skipped = 0;
   const fresh = [];
   for (const raw of books) {
@@ -474,7 +474,14 @@ function importBookmoryBooks(books, skippedTitles) {
   if (updated) bits.push(updated + ' updated');
   if (skipped) bits.push(skipped + ' already on shelves');
   if (skippedTitles && skippedTitles.length) bits.push(skippedTitles.length + ' corrupted in the export');
-  toast('Bookmory import: ' + bits.join(', ') + ' ✨');
+  // v224 (UX-14): summary banner in the hub instead of a vanishing toast.
+  var bmMount = mountId ? document.getElementById(mountId) : null;
+  if (bmMount) {
+    bmMount.innerHTML = importDoneBannerHTML(bits.map(function(x) {
+      return x.replace(' already on shelves', ' skipped');
+    }));
+    wireImportDoneBanner(bmMount);
+  }
   track('import_completed', { source: 'bookmory', book_count: added });
   return { added: added, updated: updated, skipped: skipped };
 }
