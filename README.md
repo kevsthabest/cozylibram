@@ -123,6 +123,4 @@ for signed-in users with a Settings → Privacy opt-out).
 
 See [ROADMAP.md](ROADMAP.md) — currently two pillars: a **trope
 intelligence** layer (curated multi-genre trope taxonomy, LLM-seeded
-per-book tropes, community refinement) and **sustained quality**.
-The implementation plan lives in
-[TROPE_INTELLIGENCE_PLAN.md](TROPE_INTELLIGENCE_PLAN.md).
+per-book tropes) and **sustained quality**.
