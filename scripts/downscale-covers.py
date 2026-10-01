@@ -195,9 +195,16 @@ def main():
                 entry['put_status'] = status
                 log(entry)
             except Exception as e:
-                log({'name': name, 'action': 'upload-failed', 'error': str(e)[:120],
-                     'kb_before': entry['kb_before']})
-                print(f'[{i+1}/{len(names)}] {name[:12]}… upload failed: {e}', flush=True)
+                detail = str(e)[:200]
+                server_body = ''
+                if hasattr(e, 'read'):  # HTTPError: capture Supabase's real message
+                    try:
+                        server_body = e.read().decode('utf-8', 'replace')[:400]
+                    except Exception:
+                        pass
+                log({'name': name, 'action': 'upload-failed', 'error': detail,
+                     'server': server_body, 'kb_before': entry['kb_before']})
+                print(f'[{i+1}/{len(names)}] {name[:12]}… upload failed: {e} :: {server_body}', flush=True)
             time.sleep(PACE_S)
         elif args.write_local:
             with open(os.path.join(args.write_local, name), 'wb') as f:
