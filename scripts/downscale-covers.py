@@ -105,6 +105,7 @@ def put_object(name, data, key):
         API_BASE + name, data=data, method='PUT',
         headers={'Authorization': 'Bearer ' + key,
                  'Content-Type': 'image/jpeg',
+                 'x-upsert': 'true',  # objects already exist — this is an in-place replace
                  'User-Agent': 'cozy-libram-downscale/1.0'})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
