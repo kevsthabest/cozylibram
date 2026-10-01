@@ -9,6 +9,33 @@
 // into the account on first sign-in — see setLocalUser.
 let gateEnteredUid = null;
 
+// v230: rotating taglines — a fresh one every login. The header tagline in
+// index.html and the meta/manifest descriptions keep the canonical
+// "every spine has a story"; these cycle through the shortlist below.
+const TAGLINES = [
+  'every spine has a story',
+  'your shelves, your story',
+  'for readers who live between the pages',
+  'cozy shelves for wild stories',
+  'where the tbr never ends',
+  'read boldly, rest softly',
+];
+function taglineIndex() {
+  try {
+    const n = parseInt(localStorage.getItem('cozylibram.tagline') || '0', 10);
+    return Number.isFinite(n) && n >= 0 ? n % TAGLINES.length : 0;
+  } catch (e) { return 0; }
+}
+function currentTagline() { return TAGLINES[taglineIndex()]; }
+function advanceTagline() {
+  const next = (taglineIndex() + 1) % TAGLINES.length;
+  try { localStorage.setItem('cozylibram.tagline', String(next)); } catch (e) {}
+}
+function applyHeaderTagline(t) {
+  const el = document.querySelector('.app-header .tagline');
+  if (el) el.textContent = t;
+}
+
 function renderGate() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
@@ -31,7 +58,7 @@ function renderGate() {
   setView(
     '<div class="gate-wrap"><div class="gate-card">' +
     '<h1 class="serif">Cozy Libram</h1>' +
-    '<p class="note">every spine has a story</p>' +
+    '<p class="note">' + esc(currentTagline()) + '</p>' +
     '<p class="note" id="gate-status">' + esc(status) + '</p>' +
     (configured ?
       '<input id="gate-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
@@ -184,6 +211,8 @@ async function enterApp(user) {
   } catch (e) {}
   hideGate();
   view = 'library';
+  applyHeaderTagline(currentTagline()); // v230: this login's tagline…
+  advanceTagline(); // …then rotate so the next login gets a fresh one.
   render();
   renderTopbar();
   analyticsSessionBoot(); // v118: session_started + onboarding funnel events
