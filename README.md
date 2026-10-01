@@ -2,9 +2,9 @@
 
 A mobile-first, installable web app (PWA) for tracking a book collection —
 built for a prolific dark-romance reader, now the household's shared
-library. The library lives on-device in `localStorage` (fully offline);
-optional Supabase login adds per-user cloud backup, multi-device sync,
-and social shelves.
+library. The library lives on-device in IndexedDB (fully offline-capable);
+sign-in syncs it to Supabase for cloud backup, multi-device sync, and
+social shelves.
 
 ![Library](docs/screenshots/library.png)
 
@@ -15,8 +15,8 @@ and social shelves.
   Quagga2 fallback, manual ISBN as backup)
 - 🔍 Title/author search across Google Books, Open Library, and Hardcover
 - ⌨️ Bulk ISBN import — paste a stack, paced lookup, one-tap add
-- 📥 Import hub: Goodreads CSV, StoryGraph CSV, ISBN lists, Bookmory
-  backups (parsed in-browser, no server), Hardcover CSV exports
+- 📥 Import hub: Goodreads CSV, StoryGraph CSV, Hardcover CSV, ISBN
+  lists, Bookmory backups (parsed in-browser, no server)
 
 **Shelves & personal layer**
 - Shelves: To Be Read · Currently Reading · Read · Did Not Finish, plus
@@ -25,8 +25,8 @@ and social shelves.
 - Personal ♥ rating (1–5) and genre-aware intensity axes — 🌶️ Spice for
   romance, 👻 Scare for horror, 😰 Suspense for thrillers, ⚔️ Adventure
   for fantasy/sci-fi — auto-detected per book, 1–5 each
-- Trope tags, page tracking with a daily reading log, calendar, streaks,
-  notes, and saved quotes
+- Trope tags (AI-assisted), page tracking with a daily reading log,
+  calendar, streaks, notes, and saved quotes
 - Hardcover enrichment in the background: series name + position,
   content warnings, mood chips, extra genres, and a blended community
   rating (ISBN-verified)
@@ -34,10 +34,10 @@ and social shelves.
 ![Book detail](docs/screenshots/book-modal.png)
 
 **Discovery**
-- **Discover tab**: new releases from your top authors (checked
-  automatically weekly), "More like this" strips, series collections
-  with "owns X of Y" progress badges and missing-in-series lookup
-- **Authors tab** with missing-by-author lookup
+- **Discover tab**: new releases from your authors (checked automatically
+  weekly via a silent sweep), "More like this" strips, series collections
+  with "owns X of Y" progress badges and missing-in-series lookup,
+  plus an Authors view with missing-by-author lookup
 - 🎲 **TBR Roulette**: set your mood — genre, tropes, minimum spice —
   and spin; slot-machine animation lands a winner with one-tap
   **Start reading**
@@ -63,8 +63,9 @@ and social shelves.
   toasting; manual syncs report what changed
 
 **Feel**
-- 8 accent themes, cohesive line-art icon set, 3-step onboarding,
-  thoughtful empty states, full PWA (installable, offline covers)
+- 10 themes, 12 accent colors, cohesive line-art icon set, 3-step
+  onboarding, thoughtful empty states, full PWA (installable, offline
+  covers via a size-capped cache)
 
 ## Run it locally
 
@@ -97,27 +98,32 @@ Metadata providers need keys, and they never touch the browser:
 If a token was ever pasted anywhere public (chat logs, screenshots),
 revoke it at hardcover.app and make a fresh one.
 
-## Optional: Supabase cloud sync
+## Supabase tables
 
-See `supabase/README.md`. Tables: `books`, `deleted_books`, `profiles`
+See `supabase/README.md`. Core: `books`, `deleted_books`, `profiles`
 (per-user RLS), `circle_links`/`circle_invites` (Coven),
 `analytics_events` + `app_admins` (first-party analytics, default-on
-for signed-in users with a Settings → Privacy opt-out).
+for signed-in users with a Settings → Privacy opt-out). Trope metadata:
+`works`, `editions`, `book_trope_claims` (migrations v202–v208, applied
+to the live database).
 
 ## Tech notes
 
-- Single-page vanilla JS — numbered classic scripts (`js/000-core.js`
+- Single-page vanilla JS — 49 numbered classic scripts (`js/000-core.js`
   … `js/200-boot.js`), zero runtime dependencies, no build step.
 - Book schema: `id, isbn, title, authors[], cover, description,
   pageCount, publishedDate, categories[], publicRating, ratingsCount,
   status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],
-  tropesAuto[], axes[], progress, log[], quotes[], notes, series{},
-  contentWarnings[], moods[], owned, favorite`, plus sync (`_mtime`)
-  and enrichment (`hcEnriched`) bookkeeping.
-- Service worker precaches the app; bump `APP_VERSION` to force a
-  full asset refetch.
-- Test suite in `.test/` (`npm test`) — one feature per version,
-  tests green + committed + pushed is the definition of done.
+  tropesAuto[], tropesAI[], axes[], progress, log[], quotes[], notes,
+  series{}, contentWarnings[], moods[], owned, favorite`, plus sync
+  (`_mtime`) and enrichment (`hcEnriched`) bookkeeping.
+- Service worker precaches the app; bump `APP_VERSION`
+  (`js/181-appversion.js`) **and** the `sw.js` cache name together to
+  force a full asset refetch (paired by `appversion.test.js`).
+- Test suite in `.test/` (117 files, jsdom — run with
+  `node .test/<name>.test.js`; `package.json` has no test script) —
+  one feature per version, tests green + committed + pushed is the
+  definition of done.
 
 ## Direction
 
