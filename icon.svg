@@ -1,12 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#14101a"/>
-  <g transform="translate(256,236)">
-    <path d="M-90,-70 C-60,-110 -20,-118 0,-84 C20,-118 60,-110 90,-70 C110,-44 104,40 0,110 C-104,40 -110,-44 -90,-70 Z" fill="#e5488f"/>
-    <path d="M-90,-70 C-60,-110 -20,-118 0,-84 L0,110 C-104,40 -110,-44 -90,-70 Z" fill="#c2377a"/>
+  <defs>
+    <linearGradient id="cl-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f2257"/>
+      <stop offset="1" stop-color="#161028"/>
+    </linearGradient>
+    <linearGradient id="cl-page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef8ff"/>
+      <stop offset="1" stop-color="#b7d2ec"/>
+    </linearGradient>
+    <radialGradient id="cl-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8f76d6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#8f76d6" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="cl-mooncut">
+      <circle cx="256" cy="148" r="58" fill="#fff"/>
+      <circle cx="285" cy="131" r="50" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#cl-bg)"/>
+  <g fill="#f5eeda">
+    <circle cx="70" cy="80" r="4" opacity="0.9"/><circle cx="140" cy="58" r="3" opacity="0.7"/>
+    <circle cx="200" cy="95" r="2.5" opacity="0.6"/><circle cx="332" cy="66" r="3.5" opacity="0.8"/>
+    <circle cx="402" cy="102" r="4" opacity="0.9"/><circle cx="452" cy="182" r="3" opacity="0.7"/>
+    <circle cx="60" cy="202" r="3" opacity="0.7"/><circle cx="118" cy="158" r="2.5" opacity="0.55"/>
+    <circle cx="382" cy="222" r="2.5" opacity="0.55"/><circle cx="442" cy="300" r="3.5" opacity="0.8"/>
+    <circle cx="56" cy="322" r="3" opacity="0.7"/><circle cx="92" cy="422" r="4" opacity="0.85"/>
+    <circle cx="162" cy="452" r="3" opacity="0.7"/><circle cx="352" cy="452" r="3.5" opacity="0.75"/>
+    <circle cx="432" cy="402" r="3" opacity="0.7"/><circle cx="252" cy="58" r="2.5" opacity="0.6"/>
+    <circle cx="300" cy="112" r="2" opacity="0.5"/><circle cx="36" cy="120" r="2.5" opacity="0.6"/>
   </g>
-  <g transform="translate(256,400)" fill="#d4a24e">
-    <rect x="-120" y="-8" width="240" height="16" rx="8"/>
-    <rect x="-84" y="16" width="168" height="12" rx="6" opacity="0.7"/>
-  </g>
-  <text x="256" y="72" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="34" fill="#f3e9f5">Cozy Libram</text>
+  <circle cx="256" cy="148" r="58" fill="#f2e3ac" mask="url(#cl-mooncut)"/>
+  <ellipse cx="256" cy="340" rx="190" ry="120" fill="url(#cl-glow)"/>
+  <path d="M256 284 C 198 254, 128 258, 86 288 L86 402 C 128 372, 198 368, 256 402 C 314 368, 384 372, 426 402 L426 288 C 384 258, 314 254, 256 284 Z"
+        fill="#221a40"/>
+  <path d="M256 300 C 212 276, 156 276, 112 300 L112 384 C 156 360, 212 360, 256 384 Z"
+        fill="url(#cl-page)" stroke="#1d1433" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M256 300 C 300 276, 356 276, 400 300 L400 384 C 356 360, 300 360, 256 384 Z"
+        fill="url(#cl-page)" stroke="#1d1433" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M150 318 C 185 306, 215 306, 238 318" fill="none" stroke="#8fa9c8" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
+  <path d="M150 342 C 185 330, 215 330, 238 342" fill="none" stroke="#8fa9c8" stroke-width="7" stroke-linecap="round" opacity="0.4"/>
+  <path d="M274 318 C 297 306, 327 306, 362 318" fill="none" stroke="#8fa9c8" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
+  <path d="M274 342 C 297 330, 327 330, 362 342" fill="none" stroke="#8fa9c8" stroke-width="7" stroke-linecap="round" opacity="0.4"/>
+  <line x1="256" y1="300" x2="256" y2="384" stroke="#1d1433" stroke-width="12" stroke-linecap="round"/>
 </svg>
