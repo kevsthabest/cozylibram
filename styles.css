@@ -350,6 +350,17 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 /* v237: read-only chip rows (preview modal tropes/genres) wrap onto multiple
    lines — the hidden-scrollbar horizontal scroll can't be reached with a mouse. */
 .chips.wrap { flex-wrap: wrap; overflow: visible; padding-bottom: 2px; }
+/* v238: on desktop (fine pointer) chip rows get a slim UI-matching scrollbar
+   instead of a hidden one — middle-mouse autoscroll is no longer the only
+   way to reach the overflow. Touch keeps the hidden native scroller. */
+@media (hover: hover) and (pointer: fine) {
+  .chips:not(.wrap) { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  .chips:not(.wrap)::-webkit-scrollbar { display: block; height: 6px; }
+  .chips:not(.wrap)::-webkit-scrollbar-track { background: transparent; }
+  .chips:not(.wrap)::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .chips.dragging { cursor: grabbing; }
+  .chips.dragging * { user-select: none; }
+}
 .chip {
   flex: 0 0 auto;
   border: 1px solid var(--line);

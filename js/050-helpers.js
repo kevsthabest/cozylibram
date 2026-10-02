@@ -225,3 +225,41 @@ async function apiFetch(path, options) {
   return fetch(path, Object.assign({}, options, { headers }));
 }
 
+
+/* v238: drag-to-scroll for horizontal chip rows (desktop mouse). Touch
+   scrolls natively; with a mouse the hidden scroller left no affordance at
+   all (middle-click autoscroll was the only way). Module scope — runs once;
+   chip rows are re-rendered constantly so this delegates from the document.
+   A real drag swallows the click that follows it so chips don't toggle
+   mid-drag; a plain click is untouched. */
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  const row = e.target && e.target.closest ? e.target.closest('.chips:not(.wrap)') : null;
+  if (!row || row.scrollWidth <= row.clientWidth + 1) return;
+  const startX = e.clientX, startScroll = row.scrollLeft;
+  let dragged = false;
+  const move = ev => {
+    const dx = ev.clientX - startX;
+    if (Math.abs(dx) <= 6) return;
+    if (!dragged) { dragged = true; row.classList.add('dragging'); }
+    row.scrollLeft = startScroll - dx;
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    row.classList.remove('dragging');
+    if (dragged) {
+      const kill = ev2 => {
+        ev2.stopPropagation();
+        ev2.preventDefault();
+        document.removeEventListener('click', kill, true);
+      };
+      document.addEventListener('click', kill, true);
+      setTimeout(() => document.removeEventListener('click', kill, true), 50);
+    }
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+});
