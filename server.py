@@ -221,6 +221,7 @@ _RATE_LIMITS = {
     'read-cover': (20, 60),     # v197: vision calls cost more than text
     'hardcover': (120, 60),
     'gbooks': (120, 60),
+    'inventaire': (120, 60),
     'trope-models': (60, 60),
     'cover-proxy': (120, 60),
     'cache-cover': (300, 60),   # v216: bulk backfill paces itself at ~150/min
@@ -338,6 +339,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path.startswith('/api/gbooks/'):
             self.handle_api_gbooks()
+            return
+        if path.startswith('/api/inventaire/'):
+            self.handle_api_inventaire()
             return
         if path == '/api/trope-models':
             self.handle_api_trope_models()
@@ -963,6 +967,47 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             try:
                 self.send_error(502, 'gbooks fetch failed')
+            except Exception:
+                pass
+
+    def handle_api_inventaire(self):
+        """GET /api/inventaire/entities?... → Inventaire API.
+
+        Mirrors functions/api/inventaire/[[path]].js. Only the entities
+        endpoint is allowed; no key needed — the identifying User-Agent
+        Inventaire asks for is set server-side.
+        """
+        if not self._check_rate('inventaire'):
+            return
+        try:
+            parts = self.path.split('?', 1)
+            subpath = parts[0][len('/api/inventaire/'):]
+            if subpath != 'entities':
+                self.send_error(404)
+                return
+            qs = parts[1] if len(parts) > 1 else ''
+            url = 'https://inventaire.io/api/entities' + ('?' + qs if qs else '')
+            req = urllib.request.Request(
+                url, headers={'User-Agent': 'CozyLibram/1.0 inventaire-proxy'})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                data = r.read(2 * 1024 * 1024)
+                ctype = r.headers.get('Content-Type', 'application/json')
+                status = r.status
+            self.send_response(status)
+            self.send_header('Content-Type', ctype)
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read(256 * 1024)
+            self.send_response(e.code)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception:
+            try:
+                self.send_error(502, 'inventaire fetch failed')
             except Exception:
                 pass
 

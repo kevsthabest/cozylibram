@@ -61,6 +61,13 @@ async function lookupISBNFromAPIs(isbn) {
     const d = await r.json();
     if (d.items && d.items.length) { trackProvider('gbooks', 'isbn'); return enrichRatings(normalizeVolume(d.items[0], clean)); }
   } catch (e) { /* fall through to Open Library */ }
+  // v244: Inventaire between Google Books and Open Library — its editions
+  // are bootstrapped from the BnF by ISBN, so French/small-press ISBNs
+  // Google Books misses often land here.
+  try {
+    const inv = await invLookupISBN(clean);
+    if (inv) { trackProvider('inventaire', 'isbn'); return enrichRatings(inv); }
+  } catch (e) { /* fall through to Open Library */ }
   try {
     const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(clean) +
       '&fields=title,author_name,cover_i,isbn,first_publish_year,ratings_average,ratings_count&limit=1');
@@ -77,8 +84,8 @@ async function lookupISBNFromAPIs(isbn) {
       return b;
     }
   } catch (e) { /* fall through to Hardcover */ }
-  // v196: Hardcover as the third ISBN source — catches books Google Books and
-  // Open Library don't know (indie / KU titles). Skipped for 12-digit UPCs:
+  // v196: Hardcover as the fourth ISBN source — catches books Google Books,
+  // Inventaire and Open Library don't know (indie / KU titles). Skipped for 12-digit UPCs:
   // those aren't ISBNs and no catalog maps them to a book. Typesense search
   // is fuzzy, so the doc's isbns[] must contain the scanned ISBN — a
   // near-miss title is worse than no match.

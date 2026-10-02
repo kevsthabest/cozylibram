@@ -172,7 +172,7 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
     JSON.stringify(defs.provider_used.p) === '["provider","context"]');
   const pvals = runInWindow(`PROP_VALUES`);
   ok('provider enum covers the backends',
-    JSON.stringify(pvals.provider) === '["gbooks","openlibrary","hardcover","cache"]');
+    JSON.stringify(pvals.provider) === '["gbooks","openlibrary","hardcover","cache","inventaire"]');
   ok('context enum covers search/isbn',
     JSON.stringify(pvals.context) === '["search","isbn"]');
 

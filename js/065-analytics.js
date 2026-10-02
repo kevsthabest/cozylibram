@@ -92,7 +92,7 @@ const PROP_VALUES = {
   kind: ['reco', 'release', 'coven-reco', 'friend', 'external'],
   // v243: metadata providers for provider_used — which backend served
   // search/lookup data. Enum-only: no query text, ISBN, or titles.
-  provider: ['gbooks', 'openlibrary', 'hardcover', 'cache'],
+  provider: ['gbooks', 'openlibrary', 'hardcover', 'cache', 'inventaire'],
   context: ['search', 'isbn'],
 };
 
