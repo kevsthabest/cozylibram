@@ -166,6 +166,16 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   ok('event count stays in the 20–45 range', // v219: 42 with the preview events
     Object.keys(defs).length >= 20 && Object.keys(defs).length <= 45);
 
+  // 15b. v243: provider_used event for metadata-backend measurement.
+  ok('provider_used declared with provider+context props',
+    defs.provider_used && defs.provider_used.c === 'discovery' &&
+    JSON.stringify(defs.provider_used.p) === '["provider","context"]');
+  const pvals = runInWindow(`PROP_VALUES`);
+  ok('provider enum covers the backends',
+    JSON.stringify(pvals.provider) === '["gbooks","openlibrary","hardcover","cache"]');
+  ok('context enum covers search/isbn',
+    JSON.stringify(pvals.context) === '["search","isbn"]');
+
   // 16. SQL security model.
   const sql = fs.readFileSync('/home/hatch/workspace/booktok/supabase/analytics.sql', 'utf8');
   ok('analytics_events table created', /create table if not exists analytics_events/.test(sql));

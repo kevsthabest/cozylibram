@@ -64,6 +64,9 @@ function ev(uid, name, cat, props, created) {
       ev('u1', 'roulette_spun', 'discovery', {}, '2026-09-20T10:11:00Z'),
       ev('u1', 'roulette_book_opened', 'discovery', {}, '2026-09-20T10:12:00Z'),
       ev('u1', 'roulette_book_started', 'discovery', {}, '2026-09-20T10:13:00Z'),
+      ev('u1', 'provider_used', 'discovery', { provider: 'gbooks', context: 'search' }, '2026-09-20T10:14:00Z'),
+      ev('u1', 'provider_used', 'discovery', { provider: 'gbooks', context: 'isbn' }, '2026-09-20T10:15:00Z'),
+      ev('u1', 'provider_used', 'discovery', { provider: 'cache', context: 'isbn' }, '2026-09-20T10:16:00Z'),
       ev('u2', 'session_started', 'session', {}, '2026-09-21T09:00:00Z'),
       ev('u2', 'book_added', 'library', { source: 'search' }, '2026-09-21T09:05:00Z'),
       ev('u2', 'roulette_opened', 'discovery', {}, '2026-09-21T09:10:00Z'),
@@ -94,6 +97,9 @@ function ev(uid, name, cat, props, created) {
     ok('multi-user: import source books summed', a.importSources.goodreads.books === 120 && a.importSources.goodreads.completed === 1);
     ok('multi-user: import source failure recorded', a.importSources.storygraph.failed === 1 && a.importSources.storygraph.started === 1);
     ok('multi-user: add sources split', a.addSources.search === 2 && a.addSources.isbn_list === 1);
+    ok('v243: provider usage split by backend and context',
+      a.providerUsage.gbooks.search === 1 && a.providerUsage.gbooks.isbn === 1 &&
+      a.providerUsage.cache.isbn === 1 && (a.providerUsage.cache.search || 0) === 0);
     ok('multi-user: activity sorted by recency', a.userActivity[0].uid === 'u4' && a.userActivity.length === 4);
     ok('multi-user: top category detected', a.userActivity.find(u => u.uid === 'u1').topCategory === 'discovery');
   }

@@ -27,13 +27,20 @@ function gbProxyUrl(googleUrl) {
   } catch (e) { return googleUrl; }
 }
 
+// v243: provider_used analytics — which metadata backend served data, so
+// Google Books reliance can be measured against the alternatives.
+// Enum-only (no query text, no ISBNs); safe to call when track() is absent.
+function trackProvider(provider, context) {
+  try { track('provider_used', { provider: provider, context: context }); } catch (e) {}
+}
+
 // ISBN lookup with the shared metadata cache in front: a cache hit returns
 // instantly with zero API calls; a miss runs the normal API path and stores
 // the result so the next user gets it from Supabase.
 async function lookupISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   const snap = await metaCacheGet(clean);
-  if (snap) return bookFromMeta(snap, clean);
+  if (snap) { trackProvider('cache', 'isbn'); return bookFromMeta(snap, clean); }
   const book = await lookupISBNFromAPIs(clean);
   if (book && book.isbn) {
     // v192: key the canonical row by the ENTERED isbn, not the API-returned
@@ -52,7 +59,7 @@ async function lookupISBNFromAPIs(isbn) {
   try {
     const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
     const d = await r.json();
-    if (d.items && d.items.length) return enrichRatings(normalizeVolume(d.items[0], clean));
+    if (d.items && d.items.length) { trackProvider('gbooks', 'isbn'); return enrichRatings(normalizeVolume(d.items[0], clean)); }
   } catch (e) { /* fall through to Open Library */ }
   try {
     const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(clean) +
@@ -65,6 +72,7 @@ async function lookupISBNFromAPIs(isbn) {
         b.publicRating = Math.round(doc.ratings_average * 10) / 10;
         b.ratingsCount = doc.ratings_count;
       }
+      trackProvider('openlibrary', 'isbn');
       await enrichOLBook(b, b._olKey);
       return b;
     }
@@ -82,7 +90,7 @@ async function lookupISBNFromAPIs(isbn) {
         const n = String(i).replace(/[^0-9X]/gi, '').toUpperCase();
         return n === clean || isbn13of(n) === want13;
       }));
-      if (hit) return hcDocToBook(hit);
+      if (hit) { trackProvider('hardcover', 'isbn'); return hcDocToBook(hit); }
     } catch (e) { /* no match */ }
   }
   return null;
@@ -112,22 +120,22 @@ async function searchBooks(q, source) {
   const gate = (books) => source === 'all' ? books.filter(b => resultMatchesQuery(b, toks)) : books;
   if (source === 'all' || source === 'hardcover') {
     const hc = gate(await hcSearchBooks(q));
-    if (hc.length || source === 'hardcover') return hc;
+    if (hc.length || source === 'hardcover') { trackProvider('hardcover', 'search'); return hc; }
   }
   if (source === 'all' || source === 'gbooks') {
     try {
       const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(q) + '&langRestrict=en&maxResults=12'));
       const d = await r.json();
-      if (d.items && d.items.length) return d.items.map(v => normalizeVolume(v));
+      if (d.items && d.items.length) { trackProvider('gbooks', 'search'); return d.items.map(v => normalizeVolume(v)); }
     } catch (e) { if (source === 'gbooks') throw e; /* fall through to Open Library */ }
-    if (source === 'gbooks') return [];
+    if (source === 'gbooks') { trackProvider('gbooks', 'search'); return []; }
   }
   if (source === 'all' || source === 'openlibrary') {
     const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
       '&fields=title,author_name,cover_i,isbn,first_publish_year&limit=12');
     const d = await r.json();
     const ol = gate((d.docs || []).map(olDocToBook));
-    if (ol.length || source === 'openlibrary') return ol;
+    if (ol.length || source === 'openlibrary') { trackProvider('openlibrary', 'search'); return ol; }
   }
   return [];
 }

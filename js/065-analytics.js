@@ -33,6 +33,7 @@ const EVENT_DEFS = {
   book_dnf:             { c: 'library',   p: [] },
   // discovery
   search_performed:         { c: 'discovery', p: [] },
+  provider_used:            { c: 'discovery', p: ['provider', 'context'] }, // v243: which metadata backend served data
   author_discovery_opened:  { c: 'discovery', p: [] },
   similar_books_opened:     { c: 'discovery', p: [] },
   release_discovery_opened: { c: 'discovery', p: [] },
@@ -89,6 +90,10 @@ const PROP_VALUES = {
   // Preview kinds are fixed internal constants (150-modal-discovery.js:326);
   // without this entry any kind value was stored unvalidated.
   kind: ['reco', 'release', 'coven-reco', 'friend', 'external'],
+  // v243: metadata providers for provider_used — which backend served
+  // search/lookup data. Enum-only: no query text, ISBN, or titles.
+  provider: ['gbooks', 'openlibrary', 'hardcover', 'cache'],
+  context: ['search', 'isbn'],
 };
 
 const ANALYTICS_OPT_KEY   = 'spicyshelves.analytics'; // '0' = opted out
