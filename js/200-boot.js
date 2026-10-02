@@ -40,6 +40,15 @@ try {
 // migrate + load) runs before anything renders; the legacy localStorage
 // backend (old browsers, test env) boots synchronously exactly like v201.
 function boot() {
+  // v240: invite deep links (#/invite/<token>) — stash before the gate so a
+  // sign-up redirect can't lose the token; enterApp consumes it after sign-in.
+  try {
+    const m = /^#\/invite\/([A-Za-z0-9\-_]{6,})/.exec(location.hash || '');
+    if (m) {
+      try { sessionStorage.setItem('cozylibram.invite', m[1]); } catch (e) {}
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch (e) {}
   // v204: the retired offline-mode flags are never honored again — drop any
   // copies left over from before signed-out mode was deprecated.
   try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}

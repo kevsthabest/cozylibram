@@ -186,9 +186,13 @@ create policy "remove links" on circle_links
   for delete
   using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
--- Invite codes: short shareable codes so friends can find each other without
--- exposing anyone's email. Codes are public-by-design; only the code and the
--- user id live here.
+-- Invite codes: 12-char URL-safe crypto-random tokens (72 bits, unguessable)
+-- that double as the invite-link slug: #/invite/<code>. Codes are
+-- public-by-design (any authenticated user can read them) but not
+-- enumerable; only the code and the user id live here. Rotate the code to
+-- kill a shared link. Acceptance is one-sided via accept_circle_invite():
+-- the token proves the inviter's consent, so the invitee's Accept creates
+-- the friendship immediately.
 create table if not exists circle_invites (
   user_id uuid primary key references auth.users (id) on delete cascade,
   code text not null unique,

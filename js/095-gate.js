@@ -210,7 +210,11 @@ async function enterApp(user) {
     if (touched) touchProfile(p);
   } catch (e) {}
   hideGate();
-  view = 'library';
+  // v240: invite deep link — land on the coven tab so the stashed token
+  // renders its accept card (works for brand-new accounts too).
+  let inviteToken = null;
+  try { inviteToken = sessionStorage.getItem('cozylibram.invite') || null; } catch (e) {}
+  view = inviteToken ? 'coven' : 'library';
   applyHeaderTagline(currentTagline()); // v230: this login's tagline…
   advanceTagline(); // …then rotate so the next login gets a fresh one.
   render();

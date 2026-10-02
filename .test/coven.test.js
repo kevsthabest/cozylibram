@@ -1,5 +1,7 @@
-// Coven (v96): friend links via invite codes, request inbox, privacy, and
-// read-only shared shelves. Supabase RLS itself is server-side (see
+// Coven (v96): friend links via invite links, request inbox, privacy, and
+// read-only shared shelves. v240 replaced the 6-char invite codes with
+// 12-char URL-safe tokens (#/invite/<token>) and one-sided acceptance via
+// the accept_circle_invite rpc. Supabase RLS itself is server-side (see
 // supabase/schema.sql); these tests cover the app's queries and UI flows
 // against a stub client.
 const { JSDOM } = require('jsdom');
@@ -118,51 +120,89 @@ const mkStub = () => {
 };
 
 const A = 'user-aaa', B = 'user-bbb', C = 'user-ccc', D = 'user-ddd';
-const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '", email: "' + uid + '@x.y" }' : 'null') + ';');
+// Mirrors cloudUser.id for the accept_circle_invite rpc stub (Node side can't
+// read the window's global lexical bindings directly).
+let currentUid = null;
+const useAs = (uid) => { currentUid = uid; runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '", email: "' + uid + '@x.y" }' : 'null') + ';'); };
 const stub = mkStub();
+// v240: server-side one-sided invite acceptance (mirrors the SQL function).
+stub.rpc = (fn, args) => {
+  if (fn !== 'accept_circle_invite') return Promise.resolve({ data: null, error: { message: 'unknown rpc ' + fn } });
+  const me = currentUid;
+  if (!me) return Promise.resolve({ data: null, error: { message: 'not signed in' } });
+  const inv = stub.db.circle_invites.find(r => r.code === args.p_token);
+  if (!inv) return Promise.resolve({ data: null, error: { message: 'invite not found' } });
+  if (inv.user_id === me) return Promise.resolve({ data: null, error: { message: 'own invite' } });
+  stub.db.circle_links = stub.db.circle_links.filter(r =>
+    !((r.requester_id === me && r.addressee_id === inv.user_id) || (r.requester_id === inv.user_id && r.addressee_id === me)));
+  stub.db.circle_links.push({ requester_id: me, addressee_id: inv.user_id, status: 'accepted', created_at: new Date().toISOString() });
+  return Promise.resolve({ data: inv.user_id, error: null });
+};
 
 (async () => {
   await tick(3);
   window.__sbStub = stub;
   const codeOf = async (uid) => { useAs(uid); return probe('ensureInviteCode()'); };
 
-  // ---- invite codes ----
+  // ---- invite tokens (v240: 12-char URL-safe, doubles as the link slug) ----
   const codeA = await codeOf(A);
-  ok('invite code is 6 unambiguous chars', /^[A-Z0-9]{6}$/.test(codeA));
+  ok('invite token is 12 URL-safe chars', /^[A-Za-z0-9\-_]{12}$/.test(codeA));
   const codeA2 = await codeOf(A);
-  ok('invite code is stable per user', codeA2 === codeA);
+  ok('invite token is stable per user', codeA2 === codeA);
   const codeB = await codeOf(B);
-  ok('different users get different codes', codeB !== codeA);
+  ok('different users get different tokens', codeB !== codeA);
 
-  const send = (code) => probe('circleSendRequest(' + JSON.stringify(code) + ')');
+  // legacy 6-char rows rotate to tokens lazily on read
+  stub.db.circle_invites.push({ user_id: 'user-legacy', code: 'ABCDEF' });
+  useAs('user-legacy');
+  const codeLegacy = await probe('ensureInviteCode()'); await tick();
+  ok('legacy code is rotated to a token', /^[A-Za-z0-9\-_]{12}$/.test(codeLegacy) && codeLegacy !== 'ABCDEF');
 
-  // ---- send request ----
+  // ---- token parsing ----
+  ok('bare token parses', probe('parseInviteToken(' + JSON.stringify(codeB) + ')') === codeB);
+  ok('full link parses to its token',
+    probe("parseInviteToken('https://cozylibram.pages.dev/#/invite/" + codeB + "')") === codeB);
+  ok('garbage input is rejected', probe("parseInviteToken('hello world')") === '');
+  ok('link builder uses the #/invite/ slug',
+    probe('inviteLinkFor(' + JSON.stringify(codeB) + ')') === 'http://localhost:8000/#/invite/' + codeB);
+
+  const resolve = (raw) => probe('resolveInviteToken(' + JSON.stringify(raw) + ')');
+  const accept = (tok) => probe('acceptInviteToken(' + JSON.stringify(tok) + ')');
+
+  // ---- resolve + one-sided accept ----
   useAs(A);
-  await send(codeB); await tick();
-  ok('request creates a pending link', stub.db.circle_links.some(
-    r => r.requester_id === A && r.addressee_id === B && r.status === 'pending'));
+  const inv = await resolve(codeB); await tick();
+  ok('resolve finds the inviter', inv.userId === B && inv.token === codeB);
+  await accept(inv.token); await tick();
+  ok('accept creates the friendship immediately (no pending round-trip)', stub.db.circle_links.some(
+    r => r.requester_id === A && r.addressee_id === B && r.status === 'accepted'));
 
-  // ---- send validations ----
+  // ---- invite validations ----
   let err = '';
-  try { await send(codeA); } catch (e) { err = e.message; }
-  ok('cannot request yourself', /your own code/.test(err));
+  try { await resolve(codeA); } catch (e) { err = e.message; }
+  ok('cannot invite yourself', /your own invite link/.test(err));
   err = '';
-  try { await send('ZZZZZZ'); } catch (e) { err = e.message; }
-  ok('unknown code is rejected', /No one uses that code/.test(err));
+  try { await resolve('k7X2mQ9aZ4wB'); } catch (e) { err = e.message; }
+  ok('unknown token is rejected', /no longer valid/.test(err));
   err = '';
-  try { await send(codeB); } catch (e) { err = e.message; }
-  ok('duplicate request is rejected', /already pending/.test(err));
+  try { await resolve('not a link'); } catch (e) { err = e.message; }
+  ok('garbage input is rejected before lookup', /doesn’t look like an invite link/.test(err));
   err = '';
-  try { await send('abc'); } catch (e) { err = e.message; }
-  ok('short code is rejected', /full 6-character/.test(err));
+  try { await resolve(codeB); } catch (e) { err = e.message; }
+  ok('already-friends resolve is rejected', /already in each other/.test(err));
 
-  // ---- accept ----
+  // ---- rotation invalidates the old link ----
+  useAs(B);
+  const codeB2 = await probe('rotateInviteCode()'); await tick();
+  ok('rotation issues a fresh token', codeB2 !== codeB && /^[A-Za-z0-9\-_]{12}$/.test(codeB2));
+  useAs(A);
+  err = '';
+  try { await resolve(codeB); } catch (e) { err = e.message; }
+  ok('rotated link is rejected', /no longer valid/.test(err));
+
+  // ---- profiles for the friend list ----
   stub.db.profiles[A] = { user_id: A, first_name: 'Ann', last_name: 'Reader', avatar_id: 'raven', avatar_path: '' };
   stub.db.profiles[B] = { user_id: B, first_name: 'Ben', last_name: '', avatar_id: '', avatar_path: '' };
-  useAs(B);
-  await probe('circleAnswer(' + JSON.stringify(A) + ', true)'); await tick();
-  ok('accept marks the link accepted', stub.db.circle_links.some(
-    r => r.requester_id === A && r.addressee_id === B && r.status === 'accepted'));
 
   // ---- reverse pending row is cleaned up on accept ----
   stub.db.circle_links.push({ requester_id: D, addressee_id: C, status: 'pending', created_at: new Date().toISOString() });
@@ -180,33 +220,33 @@ const stub = mkStub();
   ok('friend name comes from their profile', lists.friends[0].name === 'Ann Reader');
   ok('no pending requests remain', lists.received.length === 0 && lists.sent.length === 0);
 
-  // ---- already-friends request is rejected ----
-  useAs(A); err = '';
-  try { await send(codeB); } catch (e) { err = e.message; }
-  ok('cannot re-request a friend', /already in each other/.test(err));
-
-  // ---- decline + re-request ----
-  const codeC = await codeOf(C), codeD = await codeOf(D);
-  // (C and D are already friends from the collapse test; use a fresh pair)
+  // ---- decline + re-invite after decline ----
   const E = 'user-eee', F = 'user-fff';
-  await codeOf(E); const codeF = await codeOf(F);
-  useAs(E); await send(codeF); await tick();
+  const codeF = await codeOf(F);
+  stub.db.circle_links.push({ requester_id: E, addressee_id: F, status: 'pending', created_at: new Date().toISOString() });
   useAs(F);
   await probe('circleAnswer(' + JSON.stringify(E) + ', false)'); await tick();
   ok('decline marks the link declined', stub.db.circle_links.some(
     r => r.requester_id === E && r.addressee_id === F && r.status === 'declined'));
   useAs(E);
-  const codeF2 = await codeOf(F);
-  useAs(E); await send(codeF2); await tick();
+  await accept(codeF); await tick(); // E re-invites via F's link after the decline
   const ef = stub.db.circle_links.filter(
     r => (r.requester_id === E && r.addressee_id === F) || (r.requester_id === F && r.addressee_id === E));
-  ok('re-request after decline starts fresh', ef.length === 1 && ef[0].status === 'pending' && ef[0].requester_id === E);
+  ok('re-invite after decline starts fresh', ef.length === 1 && ef[0].status === 'accepted' && ef[0].requester_id === E);
+
+  // ---- accept is idempotent ----
+  await accept(codeF); await tick();
+  const ef2 = stub.db.circle_links.filter(
+    r => (r.requester_id === E && r.addressee_id === F) || (r.requester_id === F && r.addressee_id === E));
+  ok('double accept leaves exactly one link', ef2.length === 1 && ef2[0].status === 'accepted');
 
   // ---- cancel sent request ----
-  useAs(E);
-  await probe('circleCancel(' + JSON.stringify(F) + ')'); await tick();
+  const G = 'user-ggg', H = 'user-hhh';
+  stub.db.circle_links.push({ requester_id: G, addressee_id: H, status: 'pending', created_at: new Date().toISOString() });
+  useAs(G);
+  await probe('circleCancel(' + JSON.stringify(H) + ')'); await tick();
   ok('cancel removes the sent request', !stub.db.circle_links.some(
-    r => r.requester_id === E && r.addressee_id === F));
+    r => r.requester_id === G && r.addressee_id === H));
 
   // ---- remove friend ----
   useAs(A);
@@ -241,9 +281,24 @@ const stub = mkStub();
   useAs(A);
   await probe('renderCoven()'); await tick(5);
   const viewText = q('#view').textContent;
-  ok('coven shows the invite code', (q('#cc-code') || {}).textContent === codeA);
+  ok('coven shows the share-link button', !!q('#cc-share'));
+  ok('coven shows the add-friend input', !!q('#cc-input'));
   ok('coven shows the privacy section', viewText.indexOf('Privacy') !== -1);
   ok('nav has a coven tab', !!window.document.querySelector('.bottom-nav [data-nav="coven"]'));
+
+  // ---- v240: deep-link token renders the accept card ----
+  const I = 'user-iii', J = 'user-jjj';
+  const codeI = await codeOf(I);
+  stub.db.profiles[I] = { user_id: I, first_name: 'Ivy', last_name: 'Novel', avatar_id: '', avatar_path: '' };
+  useAs(J);
+  window.sessionStorage.setItem('cozylibram.invite', codeI);
+  await probe('renderCoven()'); await tick(5);
+  ok('invite accept card appears for a deep link',
+    !!q('#cc-accept') && (q('#view') || {}).textContent.indexOf('Ivy Novel') !== -1);
+  q('#cc-accept').click(); await tick(5);
+  ok('accepting the deep-link invite befriends immediately', stub.db.circle_links.some(
+    r => r.requester_id === J && r.addressee_id === I && r.status === 'accepted'));
+  ok('token is consumed after accept', window.sessionStorage.getItem('cozylibram.invite') === null);
 
   // ---- friend shelf view ----
   stub.db.profiles[B] = { user_id: B, first_name: 'Ben', last_name: '', avatar_id: 'moon', avatar_path: '' };

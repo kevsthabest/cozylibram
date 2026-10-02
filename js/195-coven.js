@@ -1,7 +1,7 @@
 'use strict';
 
 /* ---------------- Coven (v96): friends + shared shelves ---------------- */
-// Your private reading coven: invite friends with a short code, answer
+// Your private reading coven: invite friends with a shareable link, answer
 // requests, browse each other's shelves (read-only). All sharing is enforced
 // by Supabase RLS — see supabase/schema.sql. The coven needs the cloud; the
 // section prompts for sign-in when offline or signed out.
@@ -35,18 +35,46 @@ let circShelf = 'all';   // shelf filter in the friend view
 let circBooks = [];      // friend's visible books (this session's view)
 const circProfiles = {}; // user_id -> profile row cache (names, avatars)
 
-/* ---------- invite codes ---------- */
-const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+/* ---------- invite links ---------- */
+// v240: invite links replaced the old 6-char codes. The token is a 12-char
+// URL-safe crypto-random string (72 bits) — unguessable, so invite codes are
+// no longer enumerable. It doubles as the link slug: #/invite/<token>.
+const INVITE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 function genInviteCode() {
-  const bytes = new Uint8Array(6);
+  const bytes = new Uint8Array(12);
   try { window.crypto.getRandomValues(bytes); }
-  catch (e) { for (let i = 0; i < 6; i++) bytes[i] = Math.floor(Math.random() * 256); }
+  catch (e) { for (let i = 0; i < 12; i++) bytes[i] = Math.floor(Math.random() * 256); }
   let s = '';
-  for (let i = 0; i < 6; i++) s += CODE_CHARS[bytes[i] % CODE_CHARS.length];
+  for (let i = 0; i < 12; i++) s += INVITE_CHARS[bytes[i] % 64];
   return s;
 }
-function normalizeCode(s) {
-  return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Accept a bare token or a pasted invite link/URL; '' when unusable.
+function parseInviteToken(s) {
+  const t = String(s || '').trim();
+  const m = /invite\/([A-Za-z0-9\-_]{6,})/.exec(t);
+  const tok = m ? m[1] : t;
+  return /^[A-Za-z0-9\-_]{10,16}$/.test(tok) ? tok : '';
+}
+function inviteLinkFor(code) {
+  return location.origin + '/#/invite/' + code;
+}
+// A token arriving via deep link (#/invite/<token>) waits here until the
+// coven tab renders its accept card.
+let pendingInviteToken = null;
+function clearPendingInvite() {
+  pendingInviteToken = null;
+  try { sessionStorage.removeItem('cozylibram.invite'); } catch (e) {}
+}
+async function storeInviteCode(code) {
+  const sb = await cloudClient();
+  for (let t = 0; t < 5; t++) {
+    const c = t === 0 ? code : genInviteCode();
+    const up = await sb.from('circle_invites').upsert({ user_id: cloudUser.id, code: c }, { onConflict: 'user_id' });
+    if (!up.error) return c;
+    // Token collision with someone else's → try another; other errors bail.
+    if (!/duplicate|unique|conflict/i.test(String((up.error && up.error.message) || ''))) throw up.error;
+  }
+  throw new Error('Couldn’t save the invite link — try again.');
 }
 async function ensureInviteCode() {
   const sb = await cloudClient().catch(() => null);
@@ -54,16 +82,28 @@ async function ensureInviteCode() {
   try {
     const got = await sb.from('circle_invites').select('code').eq('user_id', cloudUser.id).maybeSingle();
     if (got.error) throw got.error;
-    if (got.data && got.data.code) return got.data.code;
-    for (let t = 0; t < 5; t++) {
-      const code = genInviteCode();
-      const up = await sb.from('circle_invites').upsert({ user_id: cloudUser.id, code: code }, { onConflict: 'user_id' });
-      if (!up.error) return code;
-      // Code collision with someone else's → try another; other errors bail.
-      if (!/duplicate|unique|conflict/i.test(String((up.error && up.error.message) || ''))) throw up.error;
-    }
+    // v240: rotate legacy short codes to the new token format lazily.
+    if (got.data && got.data.code && got.data.code.length >= 10) return got.data.code;
+    return await storeInviteCode(genInviteCode());
   } catch (e) { /* offline — the coven needs the cloud */ }
   return '';
+}
+async function rotateInviteCode() {
+  return storeInviteCode(genInviteCode());
+}
+async function shareInviteLink(code) {
+  const url = inviteLinkFor(code);
+  const text = 'Join my ' + covenName() + ' on Cozy Libram — tap the link and we’re connected.';
+  track('invite_link_shared');
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Cozy Libram', text: text, url: url }); }
+    catch (e) { if (!e || e.name !== 'AbortError') toast('Couldn’t open the share sheet'); }
+    return;
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(url);
+    toast('Invite link copied — send it to a friend');
+  } catch (e) { toast('Couldn’t copy the link'); }
 }
 
 /* ---------- friend links ---------- */
@@ -78,27 +118,35 @@ async function circleLinkBetween(a, b) {
   if (r2.error) throw r2.error;
   return r2.data || null;
 }
-async function circleSendRequest(rawCode) {
+// Look up who owns an invite token. Returns { token, userId, profile, name }.
+async function resolveInviteToken(raw) {
   const sb = await cloudClient();
-  const code = normalizeCode(rawCode);
-  if (code.length < 6) throw new Error('Enter the full 6-character invite code.');
-  const found = await sb.from('circle_invites').select('user_id').eq('code', code).maybeSingle();
+  const token = parseInviteToken(raw);
+  if (!token) throw new Error('That doesn’t look like an invite link — paste the full link.');
+  const found = await sb.from('circle_invites').select('user_id').eq('code', token).maybeSingle();
   if (found.error) throw found.error;
-  if (!found.data) throw new Error('No one uses that code — double-check it and try again.');
+  if (!found.data) throw new Error('This invite link is no longer valid — ask for a fresh one.');
   const them = found.data.user_id;
-  if (them === cloudUser.id) throw new Error('That’s your own code — share it with a friend instead.');
+  if (them === cloudUser.id) throw new Error('That’s your own invite link — share it with a friend instead.');
   const existing = await circleLinkBetween(cloudUser.id, them);
   if (existing) {
     if (existing.status === 'accepted') throw new Error('You’re already in each other’s ' + covenName().toLowerCase() + '.');
     if (existing.status === 'pending') throw new Error('A request between you is already pending.');
-    // declined before → clear the old row and start fresh
-    const del = await sb.from('circle_links').delete()
-      .eq('requester_id', existing.requester_id).eq('addressee_id', existing.addressee_id);
-    if (del.error) throw del.error;
   }
-  const ins = await sb.from('circle_links')
-    .insert({ requester_id: cloudUser.id, addressee_id: them, status: 'pending' });
-  if (ins.error) throw ins.error;
+  let prof = null, nm = 'A reader';
+  try {
+    prof = await circleFriendProfile(them);
+    if (prof) nm = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || 'A reader';
+  } catch (e) { /* name stays generic */ }
+  return { token: token, userId: them, profile: prof, name: nm };
+}
+// One-sided accept: the token proves the inviter's consent, so this creates
+// the friendship immediately (server-side via accept_circle_invite — the
+// plain insert policy deliberately only allows pending rows).
+async function acceptInviteToken(token) {
+  const sb = await cloudClient();
+  const r = await sb.rpc('accept_circle_invite', { p_token: token });
+  if (r.error) throw r.error;
 }
 async function circleAnswer(them, accept) {
   const sb = await cloudClient();
@@ -250,12 +298,18 @@ function renderCoven() {
   }
   setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
     '<p class="note" style="text-align:center">Loading your ' + covenName().toLowerCase() + '…</p>');
+  // v240: an invite deep link stashed at boot (or tapped while signed in)
+  // waits here until the tab renders its accept card.
+  if (!pendingInviteToken) {
+    try { pendingInviteToken = sessionStorage.getItem('cozylibram.invite') || null; } catch (e) {}
+  }
   Promise.all([ensureInviteCode(), circleLists(), circlePrivacy()])
     .then(([code, lists, priv]) => {
       renderCovenMain(code, lists, priv);
       circleUpgradeAvatars(document.getElementById('view'));
       if (typeof refreshRecos === 'function') refreshRecos();
       if (typeof refreshCovenStats === 'function') refreshCovenStats();
+      consumePendingInvite();
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
@@ -270,20 +324,63 @@ function circleRowHTML(p, name, actions, sub) {
     '<div class="circle-meta"><b>' + esc(name) + '</b>' + (sub ? '<span class="note">' + sub + '</span>' : '') + '</div>' +
     '<div class="circle-actions">' + actions + '</div></div>';
 }
+function renderInviteAccept(slot, inv) {
+  slot.innerHTML =
+    '<div class="circle-row invite-accept">' +
+    (inv.profile ? circAvatarHTML(inv.profile, 'c-avatar') : '<span class="c-avatar"></span>') +
+    '<div class="circle-meta"><b>' + esc(inv.name) + '</b>' +
+    '<span class="note">invited you to their ' + esc(covenName().toLowerCase()) + '</span></div>' +
+    '<div class="circle-actions"><button class="btn sm" id="cc-accept">Accept</button>' +
+    '<button class="btn ghost sm" id="cc-dismiss">Dismiss</button></div></div>';
+  slot.querySelector('#cc-accept').addEventListener('click', async () => {
+    try {
+      await acceptInviteToken(inv.token);
+      track('friend_request_accepted');
+      toast('You’re in each other’s ' + covenName().toLowerCase() + ' now');
+      clearPendingInvite();
+      renderCoven();
+    } catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
+  });
+  slot.querySelector('#cc-dismiss').addEventListener('click', () => {
+    clearPendingInvite();
+    slot.innerHTML = '';
+  });
+}
+// A deep-link token (or a pasted link) waiting on the coven tab: resolve it
+// into the accept card, or surface why it's unusable.
+function consumePendingInvite() {
+  if (!pendingInviteToken) return;
+  const slot = document.getElementById('cc-accept-slot');
+  const msg = document.getElementById('cc-msg');
+  if (!slot) { clearPendingInvite(); return; }
+  slot.innerHTML = '<p class="note" style="text-align:center">Checking that invite…</p>';
+  resolveInviteToken(pendingInviteToken).then(inv => {
+    const s2 = document.getElementById('cc-accept-slot');
+    if (s2) renderInviteAccept(s2, inv);
+  }).catch(e => {
+    clearPendingInvite();
+    const m2 = document.getElementById('cc-msg');
+    if (m2) m2.textContent = (e && e.message) || e;
+    const s2 = document.getElementById('cc-accept-slot');
+    if (s2) s2.innerHTML = '';
+  });
+}
 function renderCovenMain(code, lists, priv) {
   const shelves = ['tbr', 'reading', 'read', 'dnf'];
   let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
     '<p class="note" style="text-align:center">Your private reading ' + covenName().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
     '<div class="circle-card">' +
-      '<div class="field"><label>Your invite code</label>' +
-        '<div class="search-row"><b class="invite-code" id="cc-code">' + esc(code || '…') + '</b>' +
-        '<button class="btn ghost sm" id="cc-copy">' + icon('copy') + ' Copy</button></div></div>' +
-      '<p class="note">Share it with someone you trust — they enter it below to request you.</p>' +
+      '<div class="field"><label>Invite a friend</label>' +
+      '<p class="note">Share your personal invite link — they tap it, sign in (or create an account), and you’re connected. Nothing to type.</p>' +
+      '<div class="search-row"><button class="btn" id="cc-share">' + icon('share') + ' Share invite link</button>' +
+      '<button class="btn ghost sm" id="cc-rotate">New link</button></div>' +
+      '<p class="note">Making a new link invalidates the old one.</p></div>' +
       '<div class="field"><label>Add a friend</label>' +
-        '<div class="search-row"><input id="cc-input" class="text-input" placeholder="Friend’s invite code" ' +
-        'autocapitalize="characters" autocomplete="off" spellcheck="false">' +
-        '<button class="btn" id="cc-send">Send request</button></div></div>' +
-      '<p class="note" id="cc-msg"></p>' +
+        '<div class="search-row"><input id="cc-input" class="text-input" placeholder="Paste an invite link" ' +
+        'autocapitalize="none" autocomplete="off" spellcheck="false">' +
+        '<button class="btn" id="cc-send">Continue</button></div>' +
+      '<p class="note" id="cc-msg"></p></div>' +
+      '<div id="cc-accept-slot"></div>' +
     '</div>';
 
   html += '<div id="reco-slot"></div><div id="stats-slot"></div>';
@@ -306,7 +403,7 @@ function renderCovenMain(code, lists, priv) {
   // Friends
   html += '<h2 class="section serif" id="cc-friends">My ' + covenName() + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
   if (!lists.friends.length) {
-    html += '<p class="note" style="text-align:center">No friends yet — share your invite code above.</p>';
+    html += '<p class="note" style="text-align:center">No friends yet — share your invite link above.</p>';
   } else {
     html += '<div class="circle-list">';
     lists.friends.forEach(f => {
@@ -343,20 +440,20 @@ function renderCovenMain(code, lists, priv) {
   const rerender = () => renderCoven();
   document.getElementById('cc-propose').addEventListener('click', () => openTropeProposalSheet(null));
   renderCovenProposals();
-  document.getElementById('cc-copy').addEventListener('click', () => {
-    const c = document.getElementById('cc-code').textContent;
-    const done = () => toast('Invite code copied');
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(c).then(done, done);
-    else done();
+  document.getElementById('cc-share').addEventListener('click', () => shareInviteLink(code));
+  document.getElementById('cc-rotate').addEventListener('click', async () => {
+    try {
+      code = await rotateInviteCode();
+      toast('New invite link made — the old one no longer works');
+    } catch (e) { toast('Couldn’t make a new link: ' + ((e && e.message) || e)); }
   });
   document.getElementById('cc-send').addEventListener('click', async () => {
     const input = document.getElementById('cc-input');
     const msg = document.getElementById('cc-msg');
+    const slot = document.getElementById('cc-accept-slot');
+    msg.textContent = '';
     try {
-      await circleSendRequest(input.value);
-      track('friend_request_sent');
-      toast('Request sent');
-      rerender();
+      renderInviteAccept(slot, await resolveInviteToken(input.value));
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {

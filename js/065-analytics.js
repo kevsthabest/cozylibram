@@ -56,6 +56,7 @@ const EVENT_DEFS = {
   coven_opened:               { c: 'social', p: [] },
   friend_request_sent:        { c: 'social', p: [] },
   friend_request_accepted:    { c: 'social', p: [] },
+  invite_link_shared:         { c: 'social', p: [] }, // v240: invite link shared via sheet/clipboard
   shared_shelf_viewed:        { c: 'social', p: [] },
   // NOTE: the spec's buddy_read_created/buddy_read_joined are intentionally
   // absent — buddy reads in this app are a computed display (shared TBRs),
