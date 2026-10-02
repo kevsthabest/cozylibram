@@ -233,7 +233,13 @@ function renderSettings() {
 
 
   // Appearance wiring
-  document.getElementById('st-back').addEventListener('click', () => go('library'));
+  document.getElementById('st-back').addEventListener('click', () => {
+    // v242: a signed-out visitor (e.g. an invite-link recipient who opened
+    // Settings from the menu) goes back to the sign-in gate, not an empty
+    // library. Mirrors leaveApp()'s return-to-gate.
+    if (signedIn()) go('library');
+    else { renderTopbar(); renderGate(); }
+  });
   document.getElementById('th-theme').addEventListener('change', e => {
     localStorage.setItem('theme', e.target.value);
     applyTheme();

@@ -175,6 +175,17 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await window.cloudSignOut();
   await tick();
   ok('gate shown after sign-out', !!q('#gate-signin'));
+  // v242: no stray profile circle on the login prompt — the account menu
+  // button is hidden while the gate is showing.
+  ok('menu button hidden on the gate', q('#menu-btn').style.display === 'none');
+  // v242: a signed-out visitor reaching Settings (Back) returns to the
+  // gate, not an empty library.
+  runInWindow('go(\'settings\');');
+  await tick();
+  ok('settings reachable while signed out', !!q('#st-back'));
+  q('#st-back').click();
+  await tick();
+  ok('signed-out settings back returns to the gate', !!q('#gate-signin') && !q('#view .toolbar'));
   ok('offline shelf stays empty after sign-out',
     lsBooks('spicyshelves.library.v1').length === 0);
   ok('no owner marker written', lsGet('spicyshelves.offline.owner') === null);
@@ -222,6 +233,8 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   await tick(8);
   ok('new password saved via updateUser', window.__sbStub.pwUpdated === 'newsecret1');
   ok('signed in after password reset', !!q('#view .toolbar'));
+  // v242: the menu button hidden by the gate is restored on sign-in.
+  ok('menu button restored after sign-in', q('#menu-btn').style.display !== 'none');
 
   await window.handlePasswordRecovery(window.__sbStub, 'bad-code');
   await tick(2);

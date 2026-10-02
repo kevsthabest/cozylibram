@@ -39,6 +39,11 @@ function applyHeaderTagline(t) {
 function renderGate() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
+  // v242: the gate is a focused sign-in screen — hide the account menu
+  // button. While signed out its only item is Settings, and the stray
+  // profile circle on the login prompt confused invite-link recipients.
+  const mb = document.getElementById('menu-btn');
+  if (mb) mb.style.display = 'none';
   const configured = cloudConfigured();
   const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   const shelfCount = (typeof library !== 'undefined' && library) ? library.length : 0;
@@ -218,6 +223,8 @@ async function enterApp(user) {
   applyHeaderTagline(currentTagline()); // v230: this login's tagline…
   advanceTagline(); // …then rotate so the next login gets a fresh one.
   render();
+  const mb = document.getElementById('menu-btn');
+  if (mb) mb.style.display = ''; // v242: restore the menu button hidden by renderGate()
   renderTopbar();
   analyticsSessionBoot(); // v118: session_started + onboarding funnel events
   adoptLegacyMetadata(user);
