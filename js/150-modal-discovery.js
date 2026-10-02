@@ -588,6 +588,23 @@ async function fillMoreSection(kind, name, fromId, box, bare) {
 
 /* ---- v133: series books inline in Series & Discovery — the series name is
    display-only now; the books themselves are listed right away, no tap-through. ---- */
+// v239: manual series tagging — name (autocompletes the library's existing
+// series) + position. Committed via the sticky Save bar; a hand-set series
+// is never overwritten by enrichment (seriesManual flag, see 070-hardcover).
+function seriesEditHTML(b, id) {
+  const names = [...new Set(library
+    .filter(x => x.id !== id && x.series && x.series.name)
+    .map(x => String(x.series.name).trim()).filter(Boolean))]
+    .sort((a, c) => a.localeCompare(c));
+  const cur = b.series || {};
+  return '<div class="series-edit">' +
+    '<input id="f-series" class="text-input" list="f-series-list" autocomplete="off"' +
+    ' placeholder="Series name — e.g. Delta-V" value="' + esc(cur.name || '') + '">' +
+    '<datalist id="f-series-list">' + names.map(n => '<option value="' + esc(n) + '">').join('') + '</datalist>' +
+    '<input id="f-series-pos" class="text-input" inputmode="decimal" placeholder="#"' +
+    ' aria-label="Position in series" value="' + esc(cur.position == null ? '' : String(cur.position)) + '">' +
+    '</div>';
+}
 function seriesInlineHTML(b, id) {
   if (!(b.series && b.series.name)) return '';
   const key = String(b.series.name).trim().toLowerCase();
@@ -863,7 +880,10 @@ function renderDetailModal(b, viaBook) {
   const draft = Object.assign({}, b, {
     tropes: (b.tropes || []).slice(),
     ratings: Object.assign({}, b.ratings),
-    axes: (b.axes || []).slice()
+    axes: (b.axes || []).slice(),
+    // v239: deep-copy the series object so typing in the series editor
+    // doesn't mutate the saved book before Save.
+    series: b.series ? { name: b.series.name || '', position: b.series.position } : null
   });
   if (draft.owned === true) draft.owned = 'owned'; // v148: tolerate legacy booleans
   else if (draft.owned === false) draft.owned = 'tobuy';
@@ -1074,6 +1094,7 @@ function renderDetailModal(b, viaBook) {
 
     '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
+    seriesEditHTML(b, id) +
     '<div id="m-series-wrap">' + seriesInlineHTML(b, id) + '</div>' +
     '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
     (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
@@ -1652,6 +1673,17 @@ function renderDetailModal(b, viaBook) {
       .map(t => t.trim().toLowerCase()).filter(Boolean);
     draft.notes = document.getElementById('f-notes').value;
     draft.releaseDate = document.getElementById('f-releasedate').value || '';
+    // v239: manual series tagging — a name sets seriesManual so enrichment
+    // never clobbers it; clearing the name removes the series entirely.
+    const sName = document.getElementById('f-series').value.trim();
+    const sPos = document.getElementById('f-series-pos').value.trim();
+    if (sName) {
+      draft.series = { name: sName, position: sPos || null };
+      draft.seriesManual = true;
+    } else {
+      draft.series = null;
+      draft.seriesManual = false;
+    }
     draft.previouslyRead = document.getElementById('f-prevread').checked;
     const totalEl = document.getElementById('f-pagecount');
     draft.pageCount = Math.max(0, Number(totalEl.value) || 0) || null;

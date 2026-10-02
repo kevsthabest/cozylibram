@@ -112,10 +112,13 @@ function applyHardcoverDoc(book, doc) {
   if (Array.isArray(doc.content_warnings) && doc.content_warnings.length)
     book.contentWarnings = Array.from(new Set(doc.content_warnings.map(String)));
   const fs = doc.featured_series;
-  if (fs && fs.series && fs.series.name) {
-    book.series = { name: fs.series.name, position: (fs.position != null ? fs.position : (fs.details || null)) };
-  } else if (Array.isArray(doc.series_names) && doc.series_names.length) {
-    book.series = { name: doc.series_names[0], position: null };
+  // v239: a manually-tagged series wins — enrichment never overwrites it.
+  if (!book.seriesManual) {
+    if (fs && fs.series && fs.series.name) {
+      book.series = { name: fs.series.name, position: (fs.position != null ? fs.position : (fs.details || null)) };
+    } else if (Array.isArray(doc.series_names) && doc.series_names.length) {
+      book.series = { name: doc.series_names[0], position: null };
+    }
   }
   if (Array.isArray(doc.moods) && doc.moods.length)
     book.moods = Array.from(new Set(doc.moods.map(String))).slice(0, 8);

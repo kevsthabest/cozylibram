@@ -361,6 +361,10 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   .chips.dragging { cursor: grabbing; }
   .chips.dragging * { user-select: none; }
 }
+/* v239: manual series tagging row (book modal, Series & Discovery) */
+.series-edit { display: flex; gap: 8px; margin: 8px 0 2px; }
+.series-edit #f-series { flex: 1; min-width: 0; }
+.series-edit #f-series-pos { flex: 0 0 64px; width: 64px; text-align: center; }
 .chip {
   flex: 0 0 auto;
   border: 1px solid var(--line);

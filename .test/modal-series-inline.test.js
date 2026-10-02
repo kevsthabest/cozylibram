@@ -74,3 +74,38 @@ setTimeout(() => {
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail) process.exitCode = 1;
 }, 400);
+
+// --- v239: manual series tagging ---
+setTimeout(() => {
+  // tag the standalone book as #3 of The Great Saga via the modal editor
+  runInWindow(`openBookFromEl(null, 's3');`);
+  q('#f-series').value = 'The Great Saga';
+  q('#f-series-pos').value = '3';
+  q('#m-save').click();
+  const s3 = window.eval(`library.find(b => b.id === 's3')`);
+  ok('save writes the manual series', s3.series && s3.series.name === 'The Great Saga' && String(s3.series.position) === '3');
+  ok('manual series sets the seriesManual flag', s3.seriesManual === true);
+  // reopening shows it in the inline block, sorted after #2
+  runInWindow(`openBookFromEl(null, 's3');`);
+  ok('inline block appears for the newly-tagged book',
+    !!q('#m-series') && q('#m-series label').textContent.includes('Book 3'));
+  const rows3 = Array.from(window.document.querySelectorAll('#m-series [data-book]')).map(r => r.dataset.book);
+  ok('tagged book sees its shelf-mates, sorted by position',
+    rows3.length === 3 && rows3[0] === 's0' && rows3[1] === 's1' && rows3[2] === 's2');
+  // enrichment must not clobber a manual series
+  const kept = window.eval(`(() => { const b = library.find(x => x.id === 's3');
+    applyHardcoverDoc(b, { series_names: ['Some Other Series'] }); return b.series.name; })()`);
+  ok('enrichment keeps a manual series', kept === 'The Great Saga');
+  // ...but still applies when nothing was set by hand
+  const applied = window.eval(`(() => { const b = library.find(x => x.id === 's1');
+    applyHardcoverDoc(b, { series_names: ['The Great Saga'] }); return b.series.name; })()`);
+  ok('enrichment still applies without the manual flag', applied === 'The Great Saga');
+  // clearing the name removes the series and the flag
+  runInWindow(`openBookFromEl(null, 's3');`);
+  q('#f-series').value = '';
+  q('#m-save').click();
+  const cleared = window.eval(`(() => { const b = library.find(x => x.id === 's3'); return [b.series, b.seriesManual]; })()`);
+  ok('clearing the name removes the series and flag', cleared[0] === null && cleared[1] === false);
+  console.log(`\n${pass} passed, ${fail} failed (incl. v239)`);
+  if (fail) process.exitCode = 1;
+}, 800);
