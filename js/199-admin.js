@@ -117,14 +117,16 @@ function aggregateAnalytics(rows) {
 
   // v243: metadata provider breakdown — which backend served search/lookup
   // data (measures Google Books reliance vs the alternatives).
+  // v245: pagecount context added (page-count backfill source order).
   const providers = {};
   rows.forEach(r => {
     if (r.event_name !== 'provider_used') return;
     const p = (r.properties && r.properties.provider) || 'unknown';
     const c = (r.properties && r.properties.context) || 'unknown';
-    const o = (providers[p] = providers[p] || { search: 0, isbn: 0 });
+    const o = (providers[p] = providers[p] || { search: 0, isbn: 0, pagecount: 0 });
     if (c === 'search') o.search++;
     else if (c === 'isbn') o.isbn++;
+    else if (c === 'pagecount') o.pagecount++;
   });
 
   const activity = uids.map(u => {
@@ -328,12 +330,14 @@ async function renderAdminBody() {
     }).join('');
     const addSrcRows = Object.keys(a.addSources).sort((x, y) => a.addSources[y] - a.addSources[x]).map(s =>
       '<tr><td>' + esc(s) + '</td><td class="num">' + a.addSources[s] + '</td></tr>').join('');
-    // v243: metadata provider breakdown.
-    const provRows = Object.keys(a.providerUsage).sort((x, y) =>
-      (a.providerUsage[y].search + a.providerUsage[y].isbn) - (a.providerUsage[x].search + a.providerUsage[x].isbn)).map(p => {
+    // v243: metadata provider breakdown. v245: pagecount column.
+    const provRows = Object.keys(a.providerUsage).sort((x, y) => {
+      const tot = o => o.search + o.isbn + o.pagecount;
+      return tot(a.providerUsage[y]) - tot(a.providerUsage[x]);
+    }).map(p => {
       const o = a.providerUsage[p];
       return '<tr><td>' + esc(p) + '</td><td class="num">' + o.search + '</td><td class="num">' + o.isbn +
-        '</td><td class="num">' + (o.search + o.isbn) + '</td></tr>';
+        '</td><td class="num">' + o.pagecount + '</td><td class="num">' + (o.search + o.isbn + o.pagecount) + '</td></tr>';
     }).join('');
     const userRows = a.userActivity.slice(0, 50).map(u =>
       '<tr><td><code>' + esc(u.uid.slice(0, 8)) + '</code></td><td>' + esc(fmtDate(u.lastActive)) +
@@ -363,8 +367,8 @@ async function renderAdminBody() {
       '<tbody>' + (addSrcRows || '<tr><td colspan="2" class="note">No adds in this range.</td></tr>') + '</tbody></table></div></div>' +
       '<div class="ob-card"><h3 class="serif">Metadata providers</h3>' +
       '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Provider</th><th class="num">Search</th>' +
-      '<th class="num">ISBN lookup</th><th class="num">Total</th></tr></thead>' +
-      '<tbody>' + (provRows || '<tr><td colspan="4" class="note">No provider data in this range (v243+).</td></tr>') + '</tbody></table></div>' +
+      '<th class="num">ISBN lookup</th><th class="num">Page count</th><th class="num">Total</th></tr></thead>' +
+      '<tbody>' + (provRows || '<tr><td colspan="5" class="note">No provider data in this range (v243+).</td></tr>') + '</tbody></table></div>' +
       '<p class="note">Which backend served metadata — measures Google Books reliance vs Open Library / Hardcover / shared cache.</p></div>' +
       '<div class="ob-card"><h3 class="serif">User activity</h3>' +
       '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Last active</th>' +

@@ -2,8 +2,10 @@
 
 /* ---------------- page-count lookup ---------------- */
 // Fills total pages by ISBN when metadata didn't include it.
-// Google Books ISBN-targeted query often hits a different edition record
-// than title search; Open Library editions are the fallback.
+// v245: source order is Hardcover → Inventaire → Open Library →
+// Google Books. Hardcover first (strongest catalog for these shelves);
+// Google Books last (its ToS/attribution baggage, pending the v243
+// usage review).
 async function fetchPageCountByISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean) return null;
@@ -12,29 +14,58 @@ async function fetchPageCountByISBN(isbn) {
     const snap = await metaCacheGet(clean);
     if (snap && snap.pageCount > 0) return snap.pageCount;
   } catch (e) { /* fall through to APIs */ }
+  const norm = s => String(s || '').replace(/[^0-9X]/gi, '').toUpperCase();
+  const want13 = (typeof isbn13of === 'function') ? isbn13of(clean) : norm(clean);
+
+  // 1. Hardcover — verify the doc's isbns[] holds the scanned ISBN first:
+  // Typesense search is fuzzy (same guard as the v196 ISBN waterfall).
+  try {
+    if (typeof hcSearchDocs === 'function') {
+      const docs = await hcSearchDocs(clean);
+      const hit = docs.find(d => (d.isbns || []).some(i => {
+        const n = norm(i);
+        return n === norm(clean) || (typeof isbn13of === 'function' && isbn13of(n) === want13);
+      }));
+      if (hit && hit.pages > 0) { trackProvider('hardcover', 'pagecount'); return hit.pages; }
+    }
+  } catch (e) { /* fall through to Inventaire */ }
+  // 2. Inventaire edition P1104 (pages) via the proxy — one call.
+  try {
+    if (typeof invByUris === 'function') {
+      const d = await invByUris('isbn:' + clean);
+      const edition = (d.entities || {})[((d.redirects || {})['isbn:' + clean])];
+      const pages = edition ? invClaim(edition, 'P1104') : null;
+      if (pages > 0) { trackProvider('inventaire', 'pagecount'); return +pages; }
+    }
+  } catch (e) { /* fall through to Open Library */ }
+  // 3. Open Library editions (public API — plain fetch is fine).
   const get = async (url) => {
     const r = await fetch(url);
     if (!r.ok) throw new Error('http ' + r.status);
     return r.json();
   };
   try {
-    const data = await get(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
-    const items = (data.items || []).map(i => i.volumeInfo || {});
-    const ids = it => (it.industryIdentifiers || []).map(x => String(x.identifier || '').replace(/[^0-9X]/gi, ''));
-    const hit = items.find(it => it.pageCount > 0 && ids(it).includes(clean)) ||
-      items.find(it => it.pageCount > 0);
-    if (hit) return hit.pageCount;
-  } catch (e) { /* fall through to Open Library */ }
-  try {
     const ed = await get('https://openlibrary.org/isbn/' + clean + '.json');
-    if (ed.number_of_pages > 0) return ed.number_of_pages;
+    if (ed.number_of_pages > 0) { trackProvider('openlibrary', 'pagecount'); return ed.number_of_pages; }
     const s = await get('https://openlibrary.org/search.json?isbn=' + clean + '&fields=key&limit=10');
     for (const d of (s.docs || []).slice(0, 5)) {
       try {
         const e2 = await get('https://openlibrary.org' + d.key + '.json');
-        if (e2.number_of_pages > 0) return e2.number_of_pages;
+        if (e2.number_of_pages > 0) { trackProvider('openlibrary', 'pagecount'); return e2.number_of_pages; }
       } catch (e) { /* try next edition */ }
     }
+  } catch (e) { /* fall through to Google Books */ }
+  // 4. Google Books last — apiFetch (not plain fetch) so the v225 sign-in
+  // gate passes. Plain fetch 401'd here, silently skipping GB since v225.
+  try {
+    const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
+    if (!r.ok) throw new Error('http ' + r.status);
+    const data = await r.json();
+    const items = (data.items || []).map(i => i.volumeInfo || {});
+    const ids = it => (it.industryIdentifiers || []).map(x => String(x.identifier || '').replace(/[^0-9X]/gi, ''));
+    const hit = items.find(it => it.pageCount > 0 && ids(it).includes(clean)) ||
+      items.find(it => it.pageCount > 0);
+    if (hit) { trackProvider('gbooks', 'pagecount'); return hit.pageCount; }
   } catch (e) { /* give up */ }
   return null;
 }

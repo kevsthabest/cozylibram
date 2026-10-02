@@ -173,8 +173,8 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   const pvals = runInWindow(`PROP_VALUES`);
   ok('provider enum covers the backends',
     JSON.stringify(pvals.provider) === '["gbooks","openlibrary","hardcover","cache","inventaire"]');
-  ok('context enum covers search/isbn',
-    JSON.stringify(pvals.context) === '["search","isbn"]');
+  ok('context enum covers search/isbn/pagecount',
+    JSON.stringify(pvals.context) === '["search","isbn","pagecount"]');
 
   // 16. SQL security model.
   const sql = fs.readFileSync('/home/hatch/workspace/booktok/supabase/analytics.sql', 'utf8');

@@ -9,15 +9,29 @@ const window = dom.window;
 
 const jok = (j) => ({ ok: true, json: async () => j });
 const no = { ok: false, status: 404 };
+const seenUrls = [];
+const seenEvents = [];
 window.fetch = async (url) => {
   const u = decodeURIComponent(String(url));
+  seenUrls.push(u);
   if (u.includes('googleapis.com') || u.includes('/api/gbooks')) {
     if (u.includes('isbn:1111111111')) return jok({ items: [{ volumeInfo: { pageCount: 384, industryIdentifiers: [{ type: 'ISBN_10', identifier: '1111111111' }] } }] });
     if (u.includes('isbn:6666666666')) return jok({ items: [{ volumeInfo: { pageCount: 500, industryIdentifiers: [{ identifier: '6666666666' }] } }] });
+    if (u.includes('isbn:8888888888')) return jok({ items: [{ volumeInfo: { pageCount: 999, industryIdentifiers: [{ identifier: '8888888888' }] } }] });
     if (u.includes('isbn:2222222222')) return jok({ items: [
       { volumeInfo: { pageCount: 100, industryIdentifiers: [{ identifier: '9999999999' }] } },
       { volumeInfo: { pageCount: 200, industryIdentifiers: [{ identifier: '2222222222' }] } }] });
     return jok({ items: [] });
+  }
+  if (u.includes('/api/inventaire/entities')) {
+    // v245: Inventaire hit only for 7777777777; everything else misses.
+    if (u.includes('uris=isbn:7777777777')) {
+      return jok({ entities: { 'inv:abc': { uri: 'inv:abc', type: 'edition',
+        labels: { fromclaims: 'Inv Book' },
+        claims: { 'wdt:P212': ['7777777777'], 'wdt:P1104': [321] } } },
+        redirects: { 'isbn:7777777777': 'inv:abc' } });
+    }
+    return jok({ entities: {}, redirects: {} });
   }
   if (u.includes('/isbn/3333333333.json')) return jok({ number_of_pages: 250 });
   if (u.includes('/isbn/4444444444.json')) return jok({ title: 'no pages here' });
@@ -29,6 +43,8 @@ window.fetch = async (url) => {
 };
 
 require('./harness').loadApp(window);
+// Spy on analytics without touching the pipeline.
+window.track = (name, props) => { seenEvents.push([name, props]); };
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
@@ -90,6 +106,27 @@ const mk = (id, isbn, pc) => `({ id: '${id}', isbn: '${isbn}', title: 'PC ${id}'
   await tick(150);
   runInWindow(`window.__gpc = (library.find(b => b.id === 'pcg') || {}).pageCount;`);
   ok('addBook background fill', window.__gpc === 500);
+
+  // 11. v245: Inventaire serves page counts (HC miss → Inventaire hit).
+  seenUrls.length = 0; seenEvents.length = 0;
+  ok('Inventaire hit returns pages', await window.fetchPageCountByISBN('7777777777') === 321);
+  ok('provider_used tracked as inventaire/pagecount',
+    seenEvents.some(e => e[0] === 'provider_used' && e[1].provider === 'inventaire' && e[1].context === 'pagecount'));
+
+  // 12. v245: Hardcover first — stubbed doc wins over a GB hit for the same ISBN.
+  const origHc = window.hcSearchDocs;
+  window.hcSearchDocs = async () => [{ isbns: ['8888888888'], pages: 400, title: 'HC Book' }];
+  seenUrls.length = 0; seenEvents.length = 0;
+  ok('Hardcover hit wins over Google Books', await window.fetchPageCountByISBN('8888888888') === 400);
+  ok('GB not consulted on Hardcover hit',
+    !seenUrls.some(u => u.includes('/api/gbooks')));
+  ok('provider_used tracked as hardcover/pagecount',
+    seenEvents.some(e => e[0] === 'provider_used' && e[1].provider === 'hardcover' && e[1].context === 'pagecount'));
+
+  // 13. v245: HC fuzzy guard — doc ISBN must match the scanned ISBN.
+  window.hcSearchDocs = async () => [{ isbns: ['9999999999'], pages: 400, title: 'Wrong Book' }];
+  ok('HC near-miss ISBN falls through to GB', await window.fetchPageCountByISBN('8888888888') === 999);
+  window.hcSearchDocs = origHc;
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

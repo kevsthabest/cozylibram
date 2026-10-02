@@ -93,7 +93,7 @@ const PROP_VALUES = {
   // v243: metadata providers for provider_used — which backend served
   // search/lookup data. Enum-only: no query text, ISBN, or titles.
   provider: ['gbooks', 'openlibrary', 'hardcover', 'cache', 'inventaire'],
-  context: ['search', 'isbn'],
+  context: ['search', 'isbn', 'pagecount'],
 };
 
 const ANALYTICS_OPT_KEY   = 'spicyshelves.analytics'; // '0' = opted out
