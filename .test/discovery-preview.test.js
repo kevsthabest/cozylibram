@@ -71,6 +71,10 @@ const recoSrc = () => ({
     sec.description && sec.tropes === false && sec.genres && sec.series === false && sec.actions);
   const secSparse = probe(`previewSections(${JSON.stringify(t2)})`);
   ok('sections off for a sparse transient', !secSparse.description && !secSparse.tropes && !secSparse.genres);
+  // v237: format tags are not genres
+  ok('bookGenres strips format tags', probe(`bookGenres({categories:['Audiobook','Fiction / Romance']}).join(',')`) === 'Romance');
+  const secJunk = probe(`previewSections({categories:['Audiobook','Ebook']})`);
+  ok('genres section off when only format tags remain', secJunk.genres === false);
 
   // ---- 6. covenCleanCopy: friend's personal data never comes along
   const cc = probe(`covenCleanCopy({ title: 'T', authors: ['A'], myRating: 5, progress: 120, dateFinished: '2026-01-01', notes: 'mine', isbn: '1' })`);

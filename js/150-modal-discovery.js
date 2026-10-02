@@ -374,7 +374,7 @@ function previewSections(t) {
   return {
     description: !!t.description,
     tropes: (t.tropes || []).length > 0,
-    genres: (t.categories || []).length > 0,
+    genres: bookGenres(t).length > 0,
     series: !!(t.series && t.series.name),
     actions: true
   };
@@ -409,12 +409,16 @@ function openPreviewModal(t, opts) {
   const tagSecHTML = () => {
     let h = '';
     if ((t.tropes || []).length) {
-      h += '<div class="field"><label>' + icon('sparkles') + ' Tropes</label><div class="chips">' +
+      h += '<div class="field"><label>' + icon('sparkles') + ' Tropes</label><div class="chips wrap">' +
         t.tropes.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
-    if ((t.categories || []).length) {
-      h += '<div class="field"><label>' + icon('doc') + ' Genres</label><div class="chips">' +
-        t.categories.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
+    // v237: bookGenres strips format tags ("Audiobook" is not a genre); the
+    // wrap class lets the row flow onto multiple lines on desktop, where the
+    // hidden-scrollbar horizontal scroll is unreachable.
+    const pGenres = bookGenres(t);
+    if (pGenres.length) {
+      h += '<div class="field"><label>' + icon('doc') + ' Genres</label><div class="chips wrap">' +
+        pGenres.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
     return h;
   };

@@ -48,11 +48,14 @@ function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES
 
 // Genres come from the Google Books categories saved on each book,
 // e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
+// v237: also strips *format* tags ("Audiobook", "Ebook", "Large Print") —
+// the metadata sources mix those into the genre lists, and they are not genres.
+const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?print)$/i;
 function bookGenres(b) {
   const out = [];
   (b.categories || []).forEach(c => {
     String(c).split('/').map(s => s.trim()).forEach(s => {
-      if (!s || /^(fiction|nonfiction|general)$/i.test(s)) return;
+      if (!s || GENRE_JUNK.test(s)) return;
       if (!out.includes(s)) out.push(s);
     });
   });
