@@ -12,6 +12,29 @@ function allPickGenres() {
 // v235 (UX-19): the TBR's dominant axis — most common primaryAxisKey across
 // TBR books, falling back to spice. Labels the roulette intensity filter
 // ("Spice level", "Scare level", ...) instead of the pepper-only metaphor.
+// v236: trope autocomplete for the roulette filter. TBR tropes come first
+// (they guarantee matches), ranked by how many TBR books carry them; the
+// canonical catalog fills the rest. Pure.
+function tropeSuggestions(q, limit) {
+  const qk = tropeNameKey(q);
+  const counts = {}; // key -> { name, count }
+  tbrBooks().forEach(b => (b.tropes || []).forEach(t => {
+    const k = tropeNameKey(t);
+    if (!k) return;
+    if (!counts[k]) counts[k] = { name: String(t), count: 0 };
+    counts[k].count++;
+  }));
+  const hits = Object.values(counts)
+    .filter(h => !qk || tropeNameKey(h.name).includes(qk))
+    .sort((a, b) => (b.count - a.count) || a.name.localeCompare(b.name));
+  const seen = new Set(Object.keys(counts));
+  const extra = TROPES
+    .filter(t => !seen.has(tropeNameKey(t.name)) && (!qk || tropeNameKey(t.name).includes(qk)))
+    .map(t => ({ name: t.name, count: 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return hits.concat(extra).slice(0, limit || 8);
+}
+
 function dominantPickAxis() {
   const counts = {};
   tbrBooks().forEach(b => {
@@ -34,6 +57,13 @@ function pickCandidates() {
     return true;
   });
 }
+
+// v236: dismiss trope suggestions on outside tap (module scope — runs once,
+// not per render; the box is re-created by each renderPick).
+document.addEventListener('click', e => {
+  const box = document.getElementById('pk-suggest');
+  if (box && !box.hidden && !e.target.closest('.pk-trope-wrap')) box.hidden = true;
+});
 
 function renderPick() {
   const tbr = tbrBooks();
@@ -67,7 +97,9 @@ function renderPick() {
         '" data-g="' + esc(g) + '">' + esc(g) + '</button>').join('') + '</div>';
   }
   html += '<div class="stat-sub">Trope or tag</div>' +
-    '<input id="pk-trope" class="text-input" placeholder="e.g. enemies to lovers, dragons…" value="' + esc(pickState.trope) + '">' +
+    // v236: autocomplete — the wrap anchors the suggestion dropdown.
+    '<div class="pk-trope-wrap"><input id="pk-trope" class="text-input" autocomplete="off" placeholder="e.g. enemies to lovers, dragons…" value="' + esc(pickState.trope) + '">' +
+    '<div id="pk-suggest" class="pk-suggest" hidden></div></div>' +
     '<div class="stat-sub">' + esc(domAxis.label) + ' level</div><div class="chips">' +
     intensityOpts.map(([v, l]) => '<button class="chip' + (pickState.minIntensity === v ? ' active' : '') +
       '" data-s="' + v + '">' + l + '</button>').join('') + '</div>';
@@ -100,10 +132,33 @@ function renderPick() {
     document.querySelectorAll('#view [data-s]').forEach(x => x.classList.toggle('active', x === c));
     updatePickCount();
   }));
-  document.getElementById('pk-trope').addEventListener('input', e => {
-    pickState.trope = e.target.value;
+  // v236: trope autocomplete.
+  const pkTrope = document.getElementById('pk-trope');
+  const pkSuggest = document.getElementById('pk-suggest');
+  const renderTropeSuggest = () => {
+    const list = tropeSuggestions(pkTrope.value, 8);
+    if (!list.length) { pkSuggest.hidden = true; return; }
+    pkSuggest.innerHTML = list.map((s, i) =>
+      '<button type="button" data-ts="' + i + '"><span>' + esc(s.name) + '</span>' +
+      (s.count ? '<span class="pk-count">' + s.count + ' book' + (s.count === 1 ? '' : 's') + '</span>' : '') +
+      '</button>').join('');
+    pkSuggest.hidden = false;
+    pkSuggest.querySelectorAll('[data-ts]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        pkTrope.value = list[Number(btn.dataset.ts)].name;
+        pickState.trope = pkTrope.value;
+        updatePickCount();
+        pkSuggest.hidden = true;
+        pkTrope.focus();
+      }));
+  };
+  pkTrope.addEventListener('input', () => {
+    pickState.trope = pkTrope.value;
     updatePickCount();
+    renderTropeSuggest();
   });
+  pkTrope.addEventListener('focus', renderTropeSuggest);
+  pkTrope.addEventListener('keydown', e => { if (e.key === 'Escape') pkSuggest.hidden = true; });
   document.getElementById('pk-upnext').addEventListener('click', (e) => {
     pickState.upNextOnly = !pickState.upNextOnly;
     e.currentTarget.classList.toggle('active', pickState.upNextOnly);
