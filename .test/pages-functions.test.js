@@ -401,6 +401,11 @@ async function main() {
       const isAdmin = (opts.admins || []).indexOf(uid) !== -1;
       return new Response(JSON.stringify(isAdmin ? [{ user_id: uid }] : []), { status: 200 });
     }
+    if (u.startsWith('https://x.supabase.co/auth/v1/admin/users?'))
+      return new Response(JSON.stringify({ users: [
+        { id: 'u1', email: 'a@x.y', created_at: '2026-01-01T00:00:00Z', last_sign_in_at: null },
+        { id: 'u2', email: 'b@x.y', created_at: '2026-01-02T00:00:00Z', last_sign_in_at: '2026-02-01T00:00:00Z' },
+      ] }), { status: 200 }); // v248: list_users
     if (u.startsWith('https://x.supabase.co/auth/v1/admin/users/'))
       return new Response(JSON.stringify(opts.authDeleteOk === false ? { msg: 'nope' } : {}),
         { status: opts.authDeleteOk === false ? 500 : 200 });
@@ -448,6 +453,20 @@ async function main() {
     request: admReq({ action: 'delete_user', target_user_id: 'victim' }),
   });
   ok('admin-users: no service key -> 500', admNoKey.status === 500);
+  // v248: list_users — admin-only user directory.
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  const admList = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'list_users' }) });
+  const admListJson = JSON.parse(await admList.text());
+  ok('admin-users: list_users -> 200 with the directory',
+    admList.status === 200 && Array.isArray(admListJson.users) && admListJson.users.length === 2 &&
+    admListJson.users[0].user_id === 'u1' && admListJson.users[0].email === 'a@x.y' &&
+    admListJson.users[1].last_sign_in_at === '2026-02-01T00:00:00Z');
+  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['kevin'] });
+  const admListDenied = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'list_users' }) });
+  ok('admin-users: list_users non-admin -> 403', admListDenied.status === 403);
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  const admUnknown = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'nonsense' }) });
+  ok('admin-users: unknown action -> 400', admUnknown.status === 400);
 
   globalThis.fetch = realFetch;
 

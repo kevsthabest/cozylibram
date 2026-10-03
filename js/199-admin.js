@@ -307,6 +307,29 @@ function renderLogsTab() {
 
 let adminModCache = null; // { reports, banned, bannedById }
 
+// v248: admin-only user directory (user_id -> email), so the moderation UI
+// can identify users instead of showing truncated IDs.
+let adminUserDir = {};
+function modUserLabel(uid) {
+  const e = adminUserDir[uid];
+  return e ? e : String(uid).slice(0, 8);
+}
+
+async function fetchUserDirectory() {
+  try {
+    const r = await apiFetch('/api/admin-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list_users' }),
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && Array.isArray(j.users)) {
+      adminUserDir = {};
+      j.users.forEach(u => { if (u.user_id) adminUserDir[u.user_id] = u.email || ''; });
+    }
+  } catch (e) { /* directory unavailable — truncated IDs it is */ }
+}
+
 async function fetchModeration() {
   if (adminModCache) return adminModCache;
   try {
@@ -328,6 +351,7 @@ async function fetchModeration() {
     // dashboard still works.
     adminModCache = { reports: [], banned: [], bannedById: {} };
   }
+  await fetchUserDirectory(); // v248: best-effort, fails soft
   return adminModCache;
 }
 
@@ -340,8 +364,8 @@ const REPORT_REASON_LABELS = {
 function moderationHTML(mod) {
   const rl = r => REPORT_REASON_LABELS[r] || r;
   const reportRows = mod.reports.map(r =>
-    '<tr><td><code>' + esc(String(r.reported_user_id).slice(0, 8)) + '</code></td>' +
-    '<td><code>' + esc(String(r.reporter_id).slice(0, 8)) + '</code></td>' +
+    '<tr><td>' + esc(modUserLabel(r.reported_user_id)) + '</td>' +
+    '<td>' + esc(modUserLabel(r.reporter_id)) + '</td>' +
     '<td>' + esc(rl(r.reason)) + '</td>' +
     '<td>' + esc(String(r.details || '').slice(0, 80)) + '</td>' +
     '<td>' + esc(fmtDate(r.created_at)) + '</td>' +
@@ -349,7 +373,7 @@ function moderationHTML(mod) {
       '" data-uid="' + esc(r.reported_user_id) + '">Ban</button> ' +
     '<button class="btn ghost sm" data-mod-dismiss="' + esc(r.id) + '">Dismiss</button></td></tr>').join('');
   const bannedRows = mod.banned.map(b =>
-    '<tr><td><code>' + esc(String(b.user_id).slice(0, 8)) + '</code></td>' +
+    '<tr><td>' + esc(modUserLabel(b.user_id)) + '</td>' +
     '<td>' + esc(b.reason || '—') + '</td>' +
     '<td>' + esc(fmtDate(b.banned_at)) + '</td>' +
     '<td class="nowrap"><button class="btn ghost sm" data-mod-unban="' + esc(b.user_id) + '">Unban</button> ' +
@@ -405,7 +429,7 @@ function wireModeration(body) {
     catch (e) { toast('Couldn\u2019t: ' + ((e && e.message) || e)); }
   };
   body.querySelectorAll('[data-mod-ban]').forEach(b => b.addEventListener('click', () => {
-    if (!confirm('Ban user ' + b.dataset.modBan.slice(0, 8) + '? They will be signed out immediately.')) return;
+    if (!confirm('Ban user ' + modUserLabel(b.dataset.modBan) + '? They will be signed out immediately.')) return;
     run('User banned', () => modBan(b.dataset.modBan));
   }));
   body.querySelectorAll('[data-mod-unban]').forEach(b => b.addEventListener('click', () => {
@@ -415,16 +439,16 @@ function wireModeration(body) {
     run('Report dismissed', () => modSetReportStatus(b.dataset.modDismiss, 'dismissed'));
   }));
   body.querySelectorAll('[data-mod-report-ban]').forEach(b => b.addEventListener('click', () => {
-    if (!confirm('Ban user ' + String(b.dataset.uid).slice(0, 8) + '? They will be signed out immediately.')) return;
+    if (!confirm('Ban user ' + modUserLabel(b.dataset.uid) + '? They will be signed out immediately.')) return;
     run('User banned', async () => {
       await modBan(b.dataset.uid);
       await modSetReportStatus(b.dataset.modReportBan, 'actioned');
     });
   }));
   body.querySelectorAll('[data-mod-delete]').forEach(b => b.addEventListener('click', () => {
-    const uid = b.dataset.modDelete;
-    if (!confirm('DELETE user ' + uid.slice(0, 8) + ' permanently?\n\nThis wipes their library and deletes their account. It cannot be undone.')) return;
-    if (!confirm('Last chance — really delete ' + uid.slice(0, 8) + '?')) return;
+    const uid = b.dataset.modDelete, label = modUserLabel(uid);
+    if (!confirm('DELETE user ' + label + ' permanently?\n\nThis wipes their library and deletes their account. It cannot be undone.')) return;
+    if (!confirm('Last chance — really delete ' + label + '?')) return;
     run('User deleted', () => modDeleteUser(uid));
   }));
 }
@@ -476,7 +500,7 @@ async function renderAdminBody() {
       const action = mod.bannedById[u.uid]
         ? '<button class="btn ghost sm" data-mod-unban="' + esc(u.uid) + '">Unban</button>'
         : '<button class="btn ghost sm" data-mod-ban="' + esc(u.uid) + '">Ban</button>';
-      return '<tr><td><code>' + esc(u.uid.slice(0, 8)) + '</code></td><td>' + esc(fmtDate(u.lastActive)) +
+      return '<tr><td>' + esc(modUserLabel(u.uid)) + '</td><td>' + esc(fmtDate(u.lastActive)) +
         '</td><td class="num">' + u.events + '</td><td>' + esc(u.topCategory) + '</td><td>' + action + '</td></tr>';
     }).join('');
     body.innerHTML = modHTML +
@@ -511,7 +535,7 @@ async function renderAdminBody() {
       '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Last active</th>' +
       '<th class="num">Events</th><th>Top area</th><th></th></tr></thead>' +
       '<tbody>' + userRows + '</tbody></table></div>' +
-      '<p class="note">Users shown as truncated account IDs — activity only, never library contents.</p></div>';
+      '<p class="note">Users identified by email — activity only, never library contents.</p></div>';
     wireModeration(body);
   } catch (e) {
     body.innerHTML = '<div class="empty"><div class="big">' + icon('warn') + '</div>' +

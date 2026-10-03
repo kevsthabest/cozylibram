@@ -126,6 +126,18 @@ window.__stubClient = { from: (t) => tableStub(t) };
   ok('empty reports show the empty state', emptyCards.indexOf('No open reports.') !== -1);
   ok('banned card hidden when nobody is banned', emptyCards.indexOf('Banned users') === -1);
 
+  /* ---- 7. v248: user directory labels ---- */
+  ok('modUserLabel falls back to truncated id without a directory',
+    run('modUserLabel("reported-uuid-2")') === 'reported');
+  run('adminUserDir = { "reported-uuid-2": "spammer@x.y", "reporter-uuid-1": "reporter@x.y", "banned-uuid-9": "banned@x.y" };');
+  ok('modUserLabel prefers the email', run('modUserLabel("reported-uuid-2")') === 'spammer@x.y');
+  const emailCards = run('moderationHTML(' + JSON.stringify(mod) + ')');
+  ok('reports card shows emails', emailCards.indexOf('spammer@x.y') !== -1 && emailCards.indexOf('reporter@x.y') !== -1);
+  ok('banned card shows emails', emailCards.indexOf('banned@x.y') !== -1);
+  ok('visible cells use emails, not truncated ids',
+    emailCards.indexOf('>spammer@x.y<') !== -1 && emailCards.indexOf('<code>reported') === -1);
+  run('adminUserDir = {};');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('TEST CRASH:', e); process.exit(1); });

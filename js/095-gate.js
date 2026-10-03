@@ -282,7 +282,7 @@ async function leaveApp() {
   try { await setLocalUser(null); }
   catch (e) { try { AppLog.error('storage', 'sign-out slot switch failed: ' + (e && e.message)); } catch (_) {} }
   isAppAdmin = false; // v119: drop admin state + cached analytics on sign-out
-  adminRowsCache = {}; adminAggCache = {}; adminModCache = null; // v246
+  adminRowsCache = {}; adminAggCache = {}; adminModCache = null; adminUserDir = {}; // v246/v248
   renderTopbar();
   renderGate();
 }

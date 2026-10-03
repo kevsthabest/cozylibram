@@ -1,5 +1,10 @@
 // v246: admin-only user management (Observatory → Users).
 //
+// POST { action: 'list_users' }
+//   Returns [{ user_id, email, created_at, last_sign_in_at }] for every auth
+//   user, via the Auth admin API. Lets the Observatory identify users by
+//   email instead of truncated IDs. (v248)
+//
 // POST { action: 'delete_user', target_user_id }
 //   Fully removes a user: wipes their per-user rows, deletes their
 //   user_reports (as reporter or reported), then deletes the auth user via
@@ -32,33 +37,29 @@ function json(status, obj) {
   });
 }
 
-export async function onRequest({ request, env }) {
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'POST only' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
+// v248: admin-only user directory (id -> email) for the Observatory.
+async function listUsers(supaUrl, svcHeaders) {
+  const users = [];
+  for (let page = 1; page <= 50; page++) {
+    const r = await fetch(supaUrl + '/auth/v1/admin/users?per_page=100&page=' + page, { headers: svcHeaders });
+    if (!r.ok) return json(500, { error: 'user list failed' });
+    const j = await r.json().catch(() => null);
+    const batch = (j && (j.users || j)) || [];
+    if (!Array.isArray(batch) || !batch.length) break;
+    batch.forEach(u => users.push({
+      user_id: u.id,
+      email: u.email || '',
+      created_at: u.created_at || null,
+      last_sign_in_at: u.last_sign_in_at || null,
+    }));
+    if (batch.length < 100) break;
   }
-  const caller = await authedUser(request, env);
-  if (!caller) return unauthorized();
-  if (caller.banned) return forbiddenBanned();
-  const supaUrl = String((env && env.SUPABASE_URL) || '').replace(/\/+$/, '');
-  const svcKey = (env && env.SUPABASE_SERVICE_KEY) || '';
-  if (!supaUrl || !svcKey) return json(500, { error: 'server misconfigured' });
+  return json(200, { users });
+}
 
-  const body = await request.json().catch(() => null);
-  const action = body && body.action;
-  const target = body && String(body.target_user_id || '');
-  if (action !== 'delete_user' || !target) return json(400, { error: 'action=delete_user and target_user_id required' });
+async function deleteUser(supaUrl, svcHeaders, rest, caller, target) {
+  if (!target) return json(400, { error: 'target_user_id required' });
   if (target === caller.id) return json(400, { error: 'cannot delete your own account here' });
-
-  const svcHeaders = { apikey: svcKey, Authorization: 'Bearer ' + svcKey, 'Content-Type': 'application/json' };
-  const rest = (path, opts) => fetch(supaUrl + '/rest/v1/' + path, Object.assign({ headers: svcHeaders }, opts || {}));
-
-  // Caller must be an admin.
-  const adm = await rest('app_admins?user_id=eq.' + encodeURIComponent(caller.id) + '&select=user_id');
-  if (!adm.ok) return json(500, { error: 'admin check failed' });
-  if (!(await adm.json().catch(() => [])).length) return json(403, { error: 'admin only' });
 
   // Never delete another admin through this endpoint.
   const tgtAdm = await rest('app_admins?user_id=eq.' + encodeURIComponent(target) + '&select=user_id');
@@ -91,4 +92,34 @@ export async function onRequest({ request, env }) {
     return json(500, { error: 'auth deletion failed', detail: detail.slice(0, 200) });
   }
   return json(200, { ok: true });
+}
+
+export async function onRequest({ request, env }) {
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'POST only' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const caller = await authedUser(request, env);
+  if (!caller) return unauthorized();
+  if (caller.banned) return forbiddenBanned();
+  const supaUrl = String((env && env.SUPABASE_URL) || '').replace(/\/+$/, '');
+  const svcKey = (env && env.SUPABASE_SERVICE_KEY) || '';
+  if (!supaUrl || !svcKey) return json(500, { error: 'server misconfigured' });
+
+  const body = await request.json().catch(() => null);
+  const action = body && body.action;
+
+  const svcHeaders = { apikey: svcKey, Authorization: 'Bearer ' + svcKey, 'Content-Type': 'application/json' };
+  const rest = (path, opts) => fetch(supaUrl + '/rest/v1/' + path, Object.assign({ headers: svcHeaders }, opts || {}));
+
+  // Caller must be an admin (both actions).
+  const adm = await rest('app_admins?user_id=eq.' + encodeURIComponent(caller.id) + '&select=user_id');
+  if (!adm.ok) return json(500, { error: 'admin check failed' });
+  if (!(await adm.json().catch(() => [])).length) return json(403, { error: 'admin only' });
+
+  if (action === 'list_users') return listUsers(supaUrl, svcHeaders);
+  if (action === 'delete_user') return deleteUser(supaUrl, svcHeaders, rest, caller, String((body && body.target_user_id) || ''));
+  return json(400, { error: 'unknown action' });
 }
