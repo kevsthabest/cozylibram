@@ -453,6 +453,19 @@ function wireModeration(body) {
   }));
 }
 
+/* Pure: user activity rows with Ban/Unban + Delete actions. */
+function userActivityRowsHTML(activity, bannedById) {
+  return activity.slice(0, 50).map(u => {
+    const toggle = bannedById[u.uid]
+      ? '<button class="btn ghost sm" data-mod-unban="' + esc(u.uid) + '">Unban</button>'
+      : '<button class="btn ghost sm" data-mod-ban="' + esc(u.uid) + '">Ban</button>';
+    return '<tr><td>' + esc(modUserLabel(u.uid)) + '</td><td>' + esc(fmtDate(u.lastActive)) +
+      '</td><td class="num">' + u.events + '</td><td>' + esc(u.topCategory) + '</td>' +
+      '<td class="nowrap">' + toggle + ' ' +
+      '<button class="btn ghost sm danger" data-mod-delete="' + esc(u.uid) + '">Delete</button></td></tr>';
+  }).join('');
+}
+
 async function renderAdminBody() {
   const body = document.getElementById('ob-body');
   if (!body) return;
@@ -496,13 +509,7 @@ async function renderAdminBody() {
       return '<tr><td>' + esc(p) + '</td><td class="num">' + o.search + '</td><td class="num">' + o.isbn +
         '</td><td class="num">' + o.pagecount + '</td><td class="num">' + (o.search + o.isbn + o.pagecount) + '</td></tr>';
     }).join('');
-    const userRows = a.userActivity.slice(0, 50).map(u => {
-      const action = mod.bannedById[u.uid]
-        ? '<button class="btn ghost sm" data-mod-unban="' + esc(u.uid) + '">Unban</button>'
-        : '<button class="btn ghost sm" data-mod-ban="' + esc(u.uid) + '">Ban</button>';
-      return '<tr><td>' + esc(modUserLabel(u.uid)) + '</td><td>' + esc(fmtDate(u.lastActive)) +
-        '</td><td class="num">' + u.events + '</td><td>' + esc(u.topCategory) + '</td><td>' + action + '</td></tr>';
-    }).join('');
+    const userRows = userActivityRowsHTML(a.userActivity, mod.bannedById);
     body.innerHTML = modHTML +
       (a.capped ? '<p class="note">' + icon('warn') + ' Over 20,000 events — showing the most recent 20,000.</p>' : '') +
       '<div class="ob-grid">' +

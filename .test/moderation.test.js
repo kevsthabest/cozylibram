@@ -136,6 +136,17 @@ window.__stubClient = { from: (t) => tableStub(t) };
   ok('banned card shows emails', emailCards.indexOf('banned@x.y') !== -1);
   ok('visible cells use emails, not truncated ids',
     emailCards.indexOf('>spammer@x.y<') !== -1 && emailCards.indexOf('<code>reported') === -1);
+  /* ---- 8. v249: user activity rows carry Ban/Unban + Delete ---- */
+  run('adminUserDir = { "u-clean": "clean@x.y", "u-banned": "banned2@x.y" };');
+  const actRows = run(`userActivityRowsHTML([
+    { uid: 'u-clean', lastActive: '2026-10-03T01:00:00Z', events: 5, topCategory: 'session' },
+    { uid: 'u-banned', lastActive: '2026-10-03T02:00:00Z', events: 9, topCategory: 'books' },
+  ], { 'u-banned': true })`);
+  ok('activity rows show emails', actRows.indexOf('clean@x.y') !== -1 && actRows.indexOf('banned2@x.y') !== -1);
+  ok('clean user gets Ban + Delete',
+    actRows.indexOf('data-mod-ban="u-clean"') !== -1 && actRows.indexOf('data-mod-delete="u-clean"') !== -1);
+  ok('banned user gets Unban + Delete',
+    actRows.indexOf('data-mod-unban="u-banned"') !== -1 && actRows.indexOf('data-mod-delete="u-banned"') !== -1);
   run('adminUserDir = {};');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
