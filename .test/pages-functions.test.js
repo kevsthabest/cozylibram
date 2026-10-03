@@ -134,6 +134,8 @@ async function main() {
   const seenGb = [];
   globalThis.fetch = async (url, init) => {
     if (String(url) === AUTH_URL) return authMock(init);
+    if (String(url).startsWith('https://x.supabase.co/rest/v1/banned_users'))
+      return new Response(JSON.stringify([]), { status: 200 }); // v246: ban check — caller clean
     seenGb.push(url);
     return new Response(JSON.stringify({ items: [] }), { headers: { 'Content-Type': 'application/json' } });
   };
@@ -326,6 +328,126 @@ async function main() {
     ruDenied.status === 401 &&
     (ruDenied.headers.get('Content-Type') || '').includes('application/json') &&
     JSON.parse(await ruDenied.text()).error === 'sign-in required');
+
+  // ---- v246: banned users are rejected ----
+  // authMock answers u1 for 'Bearer good1' and 'Bearer banned1'.
+  const banAuthMock = (init) => {
+    const tok = init && init.headers && init.headers.Authorization;
+    return tok === 'Bearer good-token' || tok === 'Bearer banned-token'
+      ? new Response(JSON.stringify({ id: 'u1' }), { status: 200 })
+      : new Response(JSON.stringify({}), { status: 401 });
+  };
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === AUTH_URL) return banAuthMock(init);
+    if (String(url).startsWith('https://x.supabase.co/rest/v1/banned_users')) {
+      const tok = init && init.headers && init.headers.Authorization;
+      const banned = tok === 'Bearer banned-token';
+      return new Response(JSON.stringify(banned ? [{ user_id: 'u1' }] : []), { status: 200 });
+    }
+    throw new Error('unexpected upstream ' + url);
+  };
+  const bannedUser = await ruFn.authedUser(ruReq('Bearer banned-token'), ruEnv);
+  ok('require-user: banned session -> user flagged banned',
+    !!bannedUser && bannedUser.id === 'u1' && bannedUser.banned === true);
+  const cleanUser = await ruFn.authedUser(ruReq('Bearer good-token'), ruEnv);
+  ok('require-user: clean session -> user not flagged',
+    !!cleanUser && cleanUser.id === 'u1' && !cleanUser.banned);
+  const ruBanned = ruFn.forbiddenBanned();
+  ok('require-user: forbiddenBanned() is a 403 JSON',
+    ruBanned.status === 403 &&
+    (ruBanned.headers.get('Content-Type') || '').includes('application/json') &&
+    JSON.parse(await ruBanned.text()).error === 'account suspended');
+  // Ban lookup failure fails open (the client-side sign-out is the other check).
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === AUTH_URL) return banAuthMock(init);
+    throw new Error('ban table unreachable');
+  };
+  const failOpenUser = await ruFn.authedUser(ruReq('Bearer banned-token'), ruEnv);
+  ok('require-user: ban lookup failure fails open',
+    !!failOpenUser && failOpenUser.id === 'u1' && !failOpenUser.banned);
+  // End-to-end: a banned caller gets 403 from a quota endpoint.
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === AUTH_URL) return banAuthMock(init);
+    if (String(url).startsWith('https://x.supabase.co/rest/v1/banned_users')) {
+      const tok = init && init.headers && init.headers.Authorization;
+      return new Response(JSON.stringify(tok === 'Bearer banned-token' ? [{ user_id: 'u1' }] : []), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: { ok: true } }), { status: 200 });
+  };
+  const hcBannedCtx = {
+    env: hcEnv({ HARDCOVER_TOKEN: 'realtoken' }),
+    request: new Request('https://app.test/api/hardcover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer banned-token' },
+      body: JSON.stringify({ query: HC_QUERY }),
+    }),
+  };
+  const hcBanned = await hcFn.onRequest(hcBannedCtx);
+  ok('hardcover: banned caller -> 403', hcBanned.status === 403);
+
+  // ---- v246: /api/admin-users (delete_user) ----
+  const admFn = await import(path.resolve(__dirname, '../functions/api/admin-users.js'));
+  const admCalls = [];
+  const ADM_AUTH = 'https://x.supabase.co/auth/v1/user';
+  const admFetch = (opts) => async (url, init) => {
+    const u = String(url);
+    admCalls.push({ url: u, method: (init && init.method) || 'GET' });
+    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: opts.caller }), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/banned_users'))
+      return new Response(JSON.stringify([]), { status: 200 }); // caller not banned
+    if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) {
+      const m = /user_id=eq\.([^&]+)/.exec(u);
+      const uid = m ? decodeURIComponent(m[1]) : '';
+      const isAdmin = (opts.admins || []).indexOf(uid) !== -1;
+      return new Response(JSON.stringify(isAdmin ? [{ user_id: uid }] : []), { status: 200 });
+    }
+    if (u.startsWith('https://x.supabase.co/auth/v1/admin/users/'))
+      return new Response(JSON.stringify(opts.authDeleteOk === false ? { msg: 'nope' } : {}),
+        { status: opts.authDeleteOk === false ? 500 : 200 });
+    if ((init && init.method) === 'DELETE')
+      return new Response(JSON.stringify([]), { status: 200 }); // wipe
+    throw new Error('unexpected upstream ' + u);
+  };
+  const admEnv = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1', SUPABASE_SERVICE_KEY: 'svc1' };
+  const admReq = (body) => new Request('https://app.test/api/admin-users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' },
+    body: JSON.stringify(body),
+  });
+  // Non-admin caller -> 403.
+  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['kevin'] });
+  const admDenied = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
+  ok('admin-users: non-admin -> 403', admDenied.status === 403);
+  // Admin cannot delete themself.
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  const admSelf = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'kevin' }) });
+  ok('admin-users: self-delete refused', admSelf.status === 400);
+  // Admin cannot delete another admin.
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin', 'wifey'] });
+  const admTarget2 = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'wifey' }) });
+  ok('admin-users: admin target refused', admTarget2.status === 400);
+  // Happy path: wipe + auth delete.
+  admCalls.length = 0;
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  const admOk = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
+  const admOkJson = JSON.parse(await admOk.text());
+  const wiped = ['books', 'profiles', 'deleted_books', 'circle_invites', 'circle_links', 'user_reports', 'banned_users', 'analytics_events', 'trope_votes', 'trope_proposal_votes'];
+  ok('admin-users: happy path -> 200 ok', admOk.status === 200 && admOkJson.ok === true);
+  ok('admin-users: all per-user tables wiped',
+    wiped.every(t => admCalls.some(c => c.method === 'DELETE' && c.url.indexOf('/rest/v1/' + t + '?') !== -1)));
+  ok('admin-users: auth user deleted via admin API',
+    admCalls.some(c => c.method === 'DELETE' && c.url === 'https://x.supabase.co/auth/v1/admin/users/victim'));
+  // Auth deletion failure -> 500.
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'], authDeleteOk: false });
+  const admFail = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
+  ok('admin-users: auth delete failure -> 500', admFail.status === 500);
+  // Missing service key -> 500 misconfigured.
+  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  const admNoKey = await admFn.onRequest({
+    env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' },
+    request: admReq({ action: 'delete_user', target_user_id: 'victim' }),
+  });
+  ok('admin-users: no service key -> 500', admNoKey.status === 500);
 
   globalThis.fetch = realFetch;
 

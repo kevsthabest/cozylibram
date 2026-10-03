@@ -36,6 +36,20 @@ function applyHeaderTagline(t) {
   if (el) el.textContent = t;
 }
 
+// v246: pending suspension notice, consumed by the next renderGate() after a
+// banned user is signed back out.
+let gateNotice = null;
+
+// v246: fail open — a network blip must never lock a legitimate user out.
+// The /api/* ban check in require-user.js is the hard enforcement.
+async function isBannedUser(uid) {
+  try {
+    const sb = await cloudClient();
+    const { data } = await sb.from('banned_users').select('user_id').eq('user_id', uid).maybeSingle();
+    return !!data;
+  } catch (e) { return false; }
+}
+
 function renderGate() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
@@ -48,7 +62,11 @@ function renderGate() {
   const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   const shelfCount = (typeof library !== 'undefined' && library) ? library.length : 0;
   let status;
-  if (!configured) {
+  if (gateNotice) {
+    // v246: a banned user was just signed back out.
+    status = gateNotice;
+    gateNotice = null;
+  } else if (!configured) {
     status = 'Sign-in isn\u2019t set up on this server yet.';
   } else if (!online) {
     status = 'You\u2019re offline \u2014 connect to the internet to sign in.';
@@ -197,6 +215,14 @@ function hideGate() {
 async function enterApp(user) {
   if (gateEnteredUid === user.id) return;
   gateEnteredUid = user.id;
+  // v246: banned users are signed straight back out before anything loads.
+  if (await isBannedUser(user.id)) {
+    gateEnteredUid = null;
+    gateNotice = 'This account has been suspended.';
+    try { await cloudSignOut(); } catch (e) {}
+    toast('This account has been suspended.');
+    return;
+  }
   // v204: drop the retired offline-mode flags (the choice no longer exists).
   try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}
   // v202: async in the IndexedDB backend — the slot must be loaded before render().
@@ -256,7 +282,7 @@ async function leaveApp() {
   try { await setLocalUser(null); }
   catch (e) { try { AppLog.error('storage', 'sign-out slot switch failed: ' + (e && e.message)); } catch (_) {} }
   isAppAdmin = false; // v119: drop admin state + cached analytics on sign-out
-  adminRowsCache = {}; adminAggCache = {};
+  adminRowsCache = {}; adminAggCache = {}; adminModCache = null; // v246
   renderTopbar();
   renderGate();
 }

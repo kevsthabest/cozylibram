@@ -1,5 +1,5 @@
 import { rateLimit } from '../_lib/rate-limit.js';
-import { authedUser, unauthorized } from '../_lib/require-user.js';
+import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
 
 // Cloudflare Pages Function: POST /api/embed
 //
@@ -55,6 +55,7 @@ export async function onRequest(context) {
   // v225 (security): quota-spending endpoint — signed-in callers only.
   const user = await authedUser(request, env);
   if (!user) return unauthorized();
+  if (user.banned) return forbiddenBanned(); // v246: suspended accounts
   // v194 (security): same treatment as the other /api/* proxies — the
   // endpoint spends server-side inference quota and is publicly reachable.
   const limited = rateLimit(request, 'embed', 30, 60 * 1000);

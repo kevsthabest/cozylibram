@@ -9,7 +9,7 @@
 // v225 (security): quota-spending endpoint — signed-in callers only.
 
 import { rateLimit } from '../../_lib/rate-limit.js';
-import { authedUser, unauthorized } from '../../_lib/require-user.js';
+import { authedUser, unauthorized, forbiddenBanned } from '../../_lib/require-user.js';
 
 const ALLOWED_PATHS = new Set(['entities']);
 
@@ -20,6 +20,7 @@ export async function onRequest(context) {
   }
   const user = await authedUser(request, env);
   if (!user) return unauthorized();
+  if (user.banned) return forbiddenBanned(); // v246: suspended accounts
   const limited = rateLimit(request, 'inventaire', 120, 60 * 1000);
   if (limited) return limited;
   const path = (params.path || []).join('/');

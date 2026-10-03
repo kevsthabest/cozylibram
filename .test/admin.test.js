@@ -202,6 +202,9 @@ function ev(uid, name, cat, props, created) {
     // The fifth/sixth (v166) are the review queue: book_tropes rows
     // (book_key cache key, trope ids, confidence) and trope_votes rows
     // (votes + voter ids) — still no titles, descriptions, or notes.
+    // The seventh/eighth (v246) are the moderation queue: user_reports rows
+    // (ids, reason, reporter-written details) and banned_users rows —
+    // abuse metadata only, never library contents.
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
@@ -209,6 +212,8 @@ function ev(uid, name, cat, props, created) {
       'user_id, isbn, data->title, data->authors, data->categories, data->description',
       'book_key, trope_id, confidence, source',
       'book_key, trope_id, vote, user_id',
+      'id,reporter_id,reported_user_id,reason,details,created_at',
+      'user_id,reason,banned_at,banned_by',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&

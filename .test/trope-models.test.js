@@ -44,6 +44,8 @@ function ok(name, cond) {
         ? { ok: true, status: 200, json: async () => ({ id: 'u1' }) }
         : { ok: false, status: 401, json: async () => ({}) };
     }
+    if (String(url).startsWith('https://x.supabase.co/rest/v1/banned_users'))
+      return { ok: true, status: 200, json: async () => [] }; // v246: ban check - caller clean
     upstreamCalls.push({ url, auth: (opts.headers || {}).Authorization,
       googKey: (opts.headers || {})['x-goog-api-key'] });
     return upstreamHandler(url, opts);

@@ -24,6 +24,8 @@ async function main() {
       const good = init && init.headers && init.headers.Authorization === 'Bearer good-token';
       return new Response(JSON.stringify(good ? { id: 'u1' } : {}), { status: good ? 200 : 401 });
     }
+    if (String(url).startsWith(SUPA_URL + '/rest/v1/banned_users'))
+      return new Response(JSON.stringify([]), { status: 200 }); // v246: ban check - caller clean
     return mockFn(url, init);
   };
   globalThis.fetch = withAuth((url, init) => realFetch(url, init));

@@ -391,7 +391,8 @@ function renderCovenMain(code, lists, priv) {
     lists.received.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '">Accept</button>' +
-        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>', 'wants to join your ' + covenName().toLowerCase());
+        '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>' +
+        '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>', 'wants to join your ' + covenName().toLowerCase());
     });
     lists.sent.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
@@ -409,7 +410,8 @@ function renderCovenMain(code, lists, priv) {
     lists.friends.forEach(f => {
       html += circleRowHTML(f.profile, f.name,
         '<button class="btn ghost sm" data-view="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Shelves</button>' +
-        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>');
+        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>' +
+        '<button class="btn ghost sm" data-report="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Report</button>');
     });
     html += '</div>';
   }
@@ -476,6 +478,9 @@ function renderCovenMain(code, lists, priv) {
   document.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
     // v224 (UX-21): the app's own confirm sheet, not a blocking window.confirm.
     openRemoveFriendSheet(b.dataset.remove, b.dataset.name || 'this friend');
+  }));
+  document.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
+    openReportSheet(b.dataset.report, b.dataset.name || 'this user');
   }));
   document.querySelectorAll('#cc-share button').forEach(b => b.addEventListener('click', async () => {
     const share = b.dataset.v === '1';
@@ -640,6 +645,66 @@ function openRemoveFriendSheet(friendId, friendName) {
     try { await circleRemove(friendId); close(); rerender(); }
     catch (e) { toast('Couldn\u2019t remove: ' + ((e && e.message) || e)); }
   });
+}
+
+/* v246: report a user for abuse. Uses the app's own sheet pattern
+   (collection-overlay + modal-backdrop + overlayOpened), not window.confirm. */
+const REPORT_REASONS = [
+  ['spam', 'Spam'],
+  ['harassment', 'Harassment'],
+  ['inappropriate', 'Inappropriate content'],
+  ['fake_account', 'Fake account'],
+  ['other', 'Other'],
+];
+function openReportSheet(userId, userName) {
+  if (!cloudUser || userId === cloudUser.id) return;
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="rp-back"><div class="modal" role="dialog" aria-label="Report user">' +
+    '<button class="modal-close" id="rp-x">\u2715</button>' +
+    '<h2 class="serif">Report ' + esc(userName) + '?</h2>' +
+    '<p class="note">Reports go to the app administrator, who reviews them in the Libram Observatory.</p>' +
+    '<div class="field"><label for="rp-reason">Reason</label>' +
+    '<select id="rp-reason">' + REPORT_REASONS.map(r => '<option value="' + r[0] + '">' + r[1] + '</option>').join('') + '</select></div>' +
+    '<div class="field"><label for="rp-details">Details (optional)</label>' +
+    '<textarea id="rp-details" rows="3" maxlength="1000" placeholder="What happened?"></textarea></div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="rp-cancel">Cancel</button>' +
+    '<button class="btn danger" id="rp-send">Send report</button></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('sheet', closeDom); // v220: back-gesture closes the sheet
+  const close = () => { overlayClosed(ovToken); closeDom(); };
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('#rp-back .modal'), close); // v227: swipe-down-to-close
+  ov.querySelector('#rp-back').addEventListener('click', e => { if (e.target.id === 'rp-back') close(); });
+  ov.querySelector('#rp-x').addEventListener('click', close);
+  ov.querySelector('#rp-cancel').addEventListener('click', close);
+  ov.querySelector('#rp-send').addEventListener('click', async () => {
+    const reason = ov.querySelector('#rp-reason').value;
+    const details = ov.querySelector('#rp-details').value.trim();
+    ov.querySelector('#rp-send').disabled = true;
+    try {
+      await submitUserReport(userId, reason, details);
+      close();
+      toast('Report sent — thank you');
+    } catch (e) {
+      ov.querySelector('#rp-send').disabled = false;
+      toast('Couldn\u2019t send report: ' + ((e && e.message) || e));
+    }
+  });
+}
+async function submitUserReport(reportedUserId, reason, details) {
+  const sb = await cloudClient();
+  const { error } = await sb.from('user_reports').insert({
+    reporter_id: cloudUser.id,
+    reported_user_id: reportedUserId,
+    reason,
+    details: details || '',
+  });
+  if (error) throw error;
 }
 
 /* Proposal form sheet. `book` is optional — when launched from a book modal

@@ -300,20 +300,153 @@ function renderLogsTab() {
   paint();
 }
 
+/* ---------------- User moderation (v246) ----------------
+   Abuse reports filed from the coven tab land here, and admins can
+   ban (reversible), unban, or permanently delete users. Banned users
+   are signed out client-side and rejected by every /api/* function. */
+
+let adminModCache = null; // { reports, banned, bannedById }
+
+async function fetchModeration() {
+  if (adminModCache) return adminModCache;
+  try {
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) throw new Error('offline');
+    const [rep, ban] = await Promise.all([
+      sb.from('user_reports').select('id,reporter_id,reported_user_id,reason,details,created_at')
+        .eq('status', 'open').order('created_at', { ascending: false }).limit(200),
+      sb.from('banned_users').select('user_id,reason,banned_at,banned_by')
+        .order('banned_at', { ascending: false }),
+    ]);
+    if (rep.error) throw rep.error;
+    if (ban.error) throw ban.error;
+    const bannedById = {};
+    (ban.data || []).forEach(b => { bannedById[b.user_id] = true; });
+    adminModCache = { reports: rep.data || [], banned: ban.data || [], bannedById };
+  } catch (e) {
+    // Moderation tables missing or unreachable — the rest of the
+    // dashboard still works.
+    adminModCache = { reports: [], banned: [], bannedById: {} };
+  }
+  return adminModCache;
+}
+
+const REPORT_REASON_LABELS = {
+  spam: 'Spam', harassment: 'Harassment', inappropriate: 'Inappropriate content',
+  fake_account: 'Fake account', other: 'Other',
+};
+
+/* Pure: moderation data -> HTML cards. */
+function moderationHTML(mod) {
+  const rl = r => REPORT_REASON_LABELS[r] || r;
+  const reportRows = mod.reports.map(r =>
+    '<tr><td><code>' + esc(String(r.reported_user_id).slice(0, 8)) + '</code></td>' +
+    '<td><code>' + esc(String(r.reporter_id).slice(0, 8)) + '</code></td>' +
+    '<td>' + esc(rl(r.reason)) + '</td>' +
+    '<td>' + esc(String(r.details || '').slice(0, 80)) + '</td>' +
+    '<td>' + esc(fmtDate(r.created_at)) + '</td>' +
+    '<td class="nowrap"><button class="btn ghost sm" data-mod-report-ban="' + esc(r.id) +
+      '" data-uid="' + esc(r.reported_user_id) + '">Ban</button> ' +
+    '<button class="btn ghost sm" data-mod-dismiss="' + esc(r.id) + '">Dismiss</button></td></tr>').join('');
+  const bannedRows = mod.banned.map(b =>
+    '<tr><td><code>' + esc(String(b.user_id).slice(0, 8)) + '</code></td>' +
+    '<td>' + esc(b.reason || '—') + '</td>' +
+    '<td>' + esc(fmtDate(b.banned_at)) + '</td>' +
+    '<td class="nowrap"><button class="btn ghost sm" data-mod-unban="' + esc(b.user_id) + '">Unban</button> ' +
+    '<button class="btn ghost sm danger" data-mod-delete="' + esc(b.user_id) + '">Delete</button></td></tr>').join('');
+  let html = '<div class="ob-card"><h3 class="serif">Reports</h3>' +
+    '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Reported user</th><th>Reporter</th>' +
+    '<th>Reason</th><th>Details</th><th>Filed</th><th></th></tr></thead>' +
+    '<tbody>' + (reportRows || '<tr><td colspan="6" class="note">No open reports.</td></tr>') + '</tbody></table></div>' +
+    '<p class="note">Users report each other from the ' + esc(covenName()) + ' tab — abuse reports land here for review.</p></div>';
+  if (mod.banned.length) {
+    html += '<div class="ob-card"><h3 class="serif">Banned users</h3>' +
+      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Reason</th><th>Banned</th><th></th></tr></thead>' +
+      '<tbody>' + bannedRows + '</tbody></table></div>' +
+      '<p class="note">Banned users are signed out and blocked from every /api/* endpoint. ' +
+      'Delete removes the account and all of its data permanently — it cannot be undone.</p></div>';
+  }
+  return html;
+}
+
+async function modBan(uid) {
+  const sb = await cloudClient();
+  const { error } = await sb.from('banned_users').insert({
+    user_id: uid, reason: 'manual ban from Observatory', banned_by: (cloudUser && cloudUser.id) || null,
+  });
+  if (error) throw error;
+}
+async function modUnban(uid) {
+  const sb = await cloudClient();
+  const { error } = await sb.from('banned_users').delete().eq('user_id', uid);
+  if (error) throw error;
+}
+async function modSetReportStatus(id, status) {
+  const sb = await cloudClient();
+  const { error } = await sb.from('user_reports').update({
+    status, handled_by: (cloudUser && cloudUser.id) || null, handled_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
+}
+async function modDeleteUser(uid) {
+  const r = await apiFetch('/api/admin-users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete_user', target_user_id: uid }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+}
+
+function wireModeration(body) {
+  const refresh = async () => { adminModCache = null; await renderAdminBody(); };
+  const run = async (label, fn) => {
+    try { await fn(); toast(label); await refresh(); }
+    catch (e) { toast('Couldn\u2019t: ' + ((e && e.message) || e)); }
+  };
+  body.querySelectorAll('[data-mod-ban]').forEach(b => b.addEventListener('click', () => {
+    if (!confirm('Ban user ' + b.dataset.modBan.slice(0, 8) + '? They will be signed out immediately.')) return;
+    run('User banned', () => modBan(b.dataset.modBan));
+  }));
+  body.querySelectorAll('[data-mod-unban]').forEach(b => b.addEventListener('click', () => {
+    run('User unbanned', () => modUnban(b.dataset.modUnban));
+  }));
+  body.querySelectorAll('[data-mod-dismiss]').forEach(b => b.addEventListener('click', () => {
+    run('Report dismissed', () => modSetReportStatus(b.dataset.modDismiss, 'dismissed'));
+  }));
+  body.querySelectorAll('[data-mod-report-ban]').forEach(b => b.addEventListener('click', () => {
+    if (!confirm('Ban user ' + String(b.dataset.uid).slice(0, 8) + '? They will be signed out immediately.')) return;
+    run('User banned', async () => {
+      await modBan(b.dataset.uid);
+      await modSetReportStatus(b.dataset.modReportBan, 'actioned');
+    });
+  }));
+  body.querySelectorAll('[data-mod-delete]').forEach(b => b.addEventListener('click', () => {
+    const uid = b.dataset.modDelete;
+    if (!confirm('DELETE user ' + uid.slice(0, 8) + ' permanently?\n\nThis wipes their library and deletes their account. It cannot be undone.')) return;
+    if (!confirm('Last chance — really delete ' + uid.slice(0, 8) + '?')) return;
+    run('User deleted', () => modDeleteUser(uid));
+  }));
+}
+
 async function renderAdminBody() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   const key = adminRangeKey();
   try {
+    const mod = await fetchModeration();
+    const modHTML = moderationHTML(mod);
     if (!adminAggCache[key]) {
       const rows = await fetchAnalyticsRows();
       adminAggCache[key] = aggregateAnalytics(rows);
     }
     const a = adminAggCache[key];
     if (!a.totalEvents) {
-      body.innerHTML = '<div class="empty"><div class="big">' + icon('chart') + '</div>' +
+      body.innerHTML = modHTML +
+        '<div class="empty"><div class="big">' + icon('chart') + '</div>' +
         '<h2 class="serif">No analytics yet</h2><p>Events appear here once signed-in users start using the app' +
         (adminRange === 'all' ? '.' : ' in this date range.') + '</p></div>';
+      wireModeration(body);
       return;
     }
     const card = (label, val) =>
@@ -339,10 +472,14 @@ async function renderAdminBody() {
       return '<tr><td>' + esc(p) + '</td><td class="num">' + o.search + '</td><td class="num">' + o.isbn +
         '</td><td class="num">' + o.pagecount + '</td><td class="num">' + (o.search + o.isbn + o.pagecount) + '</td></tr>';
     }).join('');
-    const userRows = a.userActivity.slice(0, 50).map(u =>
-      '<tr><td><code>' + esc(u.uid.slice(0, 8)) + '</code></td><td>' + esc(fmtDate(u.lastActive)) +
-      '</td><td class="num">' + u.events + '</td><td>' + esc(u.topCategory) + '</td></tr>').join('');
-    body.innerHTML =
+    const userRows = a.userActivity.slice(0, 50).map(u => {
+      const action = mod.bannedById[u.uid]
+        ? '<button class="btn ghost sm" data-mod-unban="' + esc(u.uid) + '">Unban</button>'
+        : '<button class="btn ghost sm" data-mod-ban="' + esc(u.uid) + '">Ban</button>';
+      return '<tr><td><code>' + esc(u.uid.slice(0, 8)) + '</code></td><td>' + esc(fmtDate(u.lastActive)) +
+        '</td><td class="num">' + u.events + '</td><td>' + esc(u.topCategory) + '</td><td>' + action + '</td></tr>';
+    }).join('');
+    body.innerHTML = modHTML +
       (a.capped ? '<p class="note">' + icon('warn') + ' Over 20,000 events — showing the most recent 20,000.</p>' : '') +
       '<div class="ob-grid">' +
       card('Active users', a.activeUsers) + card('New signups', a.newSignups) +
@@ -372,9 +509,10 @@ async function renderAdminBody() {
       '<p class="note">Which backend served metadata — measures Google Books reliance vs Open Library / Hardcover / shared cache.</p></div>' +
       '<div class="ob-card"><h3 class="serif">User activity</h3>' +
       '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Last active</th>' +
-      '<th class="num">Events</th><th>Top area</th></tr></thead>' +
+      '<th class="num">Events</th><th>Top area</th><th></th></tr></thead>' +
       '<tbody>' + userRows + '</tbody></table></div>' +
       '<p class="note">Users shown as truncated account IDs — activity only, never library contents.</p></div>';
+    wireModeration(body);
   } catch (e) {
     body.innerHTML = '<div class="empty"><div class="big">' + icon('warn') + '</div>' +
       '<h2 class="serif">Couldn\u2019t load analytics</h2><p>' +
