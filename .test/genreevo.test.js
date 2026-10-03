@@ -29,9 +29,10 @@ const seed = (n) => runInWindow(`(function(){
   library.length = 0;
   genreGran = 'quarter';
   // qd: 15th of the month, BACK quarters ago. Use today's day-of-month when
-  // the 15th hasn't happened yet — otherwise qd(0) lands in the future and
-  // genreEvoHTML (correctly) excludes future finish dates.
-  const qd = (back) => { const d = new Date(); d.setDate(Math.min(15, d.getDate())); d.setMonth(d.getMonth() - back * 3); d.setHours(12, 0, 0, 0); return d.toISOString(); };
+  // the 15th hasn't happened yet, at midnight — otherwise qd(0) lands in
+  // the future and genreEvoHTML (correctly) excludes future finish dates.
+  // (Noon was the old choice; it breaks for test runs before midday.)
+  const qd = (back) => { const d = new Date(); d.setDate(Math.min(15, d.getDate())); d.setMonth(d.getMonth() - back * 3); d.setHours(0, 0, 0, 0); return d.toISOString(); };
   const M = (id, title, cats, finQ, extra) => Object.assign({ id, isbn: '', title, authors: ['A'], cover: '',
     description: '', pageCount: 300, publishedDate: '', categories: cats, publicRating: null,
     ratingsCount: 0, status: 'read', ratings: {}, axes: [], myRating: 4, tropes: [],
