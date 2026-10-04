@@ -2454,3 +2454,33 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   padding: 0 4px; }
 .sv-dragdecor .sv-decor { margin: 0; }
 .sv-dragdecor:active { cursor: grabbing; }
+
+/* ---------- Shelf tab: seasonal themes (v255) ---------- */
+.sv-season-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.sv-season-chip { border: 1px solid var(--line); background: var(--card2); color: var(--muted);
+  border-radius: 999px; padding: 9px 16px; font-size: 14px; cursor: pointer; }
+.sv-season-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.sv-shelves { position: relative; }
+.sv-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+.sv-fx span { position: absolute; top: -34px; font-size: 22px; opacity: .85;
+  animation: sv-fx-fall 12s linear infinite; }
+.sv-fx span:nth-child(1) { left: 12%; animation-delay: -2s; }
+.sv-fx span:nth-child(2) { left: 46%; animation-delay: -7s; font-size: 17px; }
+.sv-fx span:nth-child(3) { left: 78%; animation-delay: -10s; font-size: 26px; }
+@keyframes sv-fx-fall { to { transform: translateY(1100px) rotate(24deg); } }
+@media (prefers-reduced-motion: reduce) { .sv-fx { display: none; } }
+/* Halloween: charred boards, ember glow */
+.season-halloween .sv-board { background: linear-gradient(180deg, #4a2a18 0%, #38200f 45%, #241307 100%);
+  border-bottom-color: #120a04; }
+.season-halloween .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(255,122,26,.25), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+/* Christmas: snow-capped boards, frost glow */
+.season-christmas .sv-board { position: relative;
+  background: linear-gradient(180deg, #5d3b22 0%, #4a2e19 45%, #38220f 100%); }
+.season-christmas .sv-board::before { content: ''; position: absolute; top: -3px; left: 2px; right: 2px;
+  height: 9px; background: linear-gradient(180deg, #ffffff, rgba(255,255,255,.15));
+  border-radius: 40% 60% 55% 45% / 90% 90% 10% 10%; opacity: .95; pointer-events: none; }
+.season-christmas .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(170,210,255,.2), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
