@@ -136,6 +136,68 @@ function ecQuadSize(quad, maxDim) {
   return [Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))];
 }
 
+// ---------- locked-rectangle helpers (v274b) ----------
+// Books are always 90° rectangles, so the editor defaults to a locked
+// rectangle: corner drags resize (opposite corner anchored), a rotate
+// handle straightens tilt, dragging inside moves. Free-quad mode stays
+// available behind the lock toggle for badly skewed shots.
+var EC_ALPHA = [0, 1, 1, 0], EC_BETA = [0, 0, 1, 1]; // rect-space coords per corner (TL TR BR BL)
+
+function ecQuadCenter(q) {
+  return [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4,
+          (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
+}
+
+function ecQuadAxes(q) {
+  var ux = q[1][0] - q[0][0], uy = q[1][1] - q[0][1];
+  var vx = q[3][0] - q[0][0], vy = q[3][1] - q[0][1];
+  var ul = Math.hypot(ux, uy) || 1, vl = Math.hypot(vx, vy) || 1;
+  return { u: [ux / ul, uy / ul], v: [vx / vl, vy / vl] };
+}
+
+// Resize a rectangle by dragging corner i to P; the opposite corner stays
+// anchored and the 90° angles are preserved. Returns the new quad.
+function ecLockedResize(q, i, P) {
+  var k = (i + 2) % 4;
+  var ax = ecQuadAxes(q);
+  var dx = P[0] - q[k][0], dy = P[1] - q[k][1];
+  var du = dx * ax.u[0] + dy * ax.u[1], dv = dx * ax.v[0] + dy * ax.v[1];
+  var sau = EC_ALPHA[i] - EC_ALPHA[k], sbv = EC_BETA[i] - EC_BETA[k]; // ±1
+  var w = Math.max(20, du / sau), h = Math.max(20, dv / sbv);
+  var ox = q[k][0] - EC_ALPHA[k] * w * ax.u[0] - EC_BETA[k] * h * ax.v[0];
+  var oy = q[k][1] - EC_ALPHA[k] * w * ax.u[1] - EC_BETA[k] * h * ax.v[1];
+  return [0, 1, 2, 3].map(function (j) {
+    return [ox + EC_ALPHA[j] * w * ax.u[0] + EC_BETA[j] * h * ax.v[0],
+            oy + EC_ALPHA[j] * w * ax.u[1] + EC_BETA[j] * h * ax.v[1]];
+  });
+}
+
+function ecRotateQuad(q, delta) {
+  var c = ecQuadCenter(q), cos = Math.cos(delta), sin = Math.sin(delta);
+  return q.map(function (p) {
+    var x = p[0] - c[0], y = p[1] - c[1];
+    return [c[0] + x * cos - y * sin, c[1] + x * sin + y * cos];
+  });
+}
+
+// Fit the closest rectangle to a free quad (used when re-enabling the lock).
+function ecSnapToRect(q) {
+  var c = ecQuadCenter(q);
+  var ax = ecQuadAxes(q);
+  var ux = ax.u[0], uy = ax.u[1];
+  var vx = -uy, vy = ux; // re-orthogonalized
+  if (vx * ax.v[0] + vy * ax.v[1] < 0) { vx = -vx; vy = -vy; }
+  var w = (Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) +
+           Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1])) / 2;
+  var h = (Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) +
+           Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1])) / 2;
+  var ox = c[0] - (w * ux + h * vx) / 2, oy = c[1] - (w * uy + h * vy) / 2;
+  return [0, 1, 2, 3].map(function (j) {
+    return [ox + EC_ALPHA[j] * w * ux + EC_BETA[j] * h * vx,
+            oy + EC_ALPHA[j] * w * uy + EC_BETA[j] * h * vy];
+  });
+}
+
 // Canvas wrapper around ecWarpPixels (browser only).
 function ecWarpCanvas(srcCanvas, quad, outW, outH) {
   try {
@@ -208,21 +270,28 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     '<p class="ec-sub">' + esc(faceLabel) + (subLabel ? ' · ' + esc(subLabel) : '') + '</p></div>' +
     '<div class="ec-stage" id="ec-ed-stage">' +
       '<img id="ec-ed-img" alt="">' +
-      '<svg id="ec-ed-svg" aria-hidden="true"><polygon id="ec-ed-poly" points=""/><g id="ec-ed-handles"></g></svg>' +
+      '<svg id="ec-ed-svg" aria-hidden="true"><polygon id="ec-ed-poly" points=""/>' +
+      '<g id="ec-ed-handles"></g><circle id="ec-ed-rot" data-rot="1" class="ec-rot" r="0"/></svg>' +
     '</div>' +
     '<div class="ec-prevrow"><canvas id="ec-ed-prev"></canvas><span>Live preview — drag a corner to straighten</span></div>' +
     '<div class="ec-actions">' +
+      '<button class="btn ghost sm" id="ec-ed-lock">90° lock: on</button>' +
       '<button class="btn ghost" id="ec-ed-retake">Retake</button>' +
       '<button class="btn primary" id="ec-ed-use">Use this photo</button>' +
     '</div></div>';
   document.body.appendChild(ov);
+  // Long-press context menu (Android) must not hijack corner drags.
+  ov.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   var img = ov.querySelector('#ec-ed-img');
   var svg = ov.querySelector('#ec-ed-svg');
   var poly = ov.querySelector('#ec-ed-poly');
   var handlesG = ov.querySelector('#ec-ed-handles');
+  var rotH = ov.querySelector('#ec-ed-rot');
+  var lockBtn = ov.querySelector('#ec-ed-lock');
   var prev = ov.querySelector('#ec-ed-prev');
   var W = 0, H = 0, quad = null, srcCanvas = null, prevQueued = false, tornDown = false;
+  var locked = true; // 90° rectangle mode; toggle for the free quad
 
   var domTeardown = function () {
     if (tornDown) return; tornDown = true;
@@ -242,8 +311,8 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.style.width = r.width + 'px';
     svg.style.height = r.height + 'px';
-    // handles stay ~30 CSS px regardless of photo resolution
-    var hr = 30 * (W / r.width);
+    // handles stay ~20 CSS px regardless of photo resolution (v275: smaller)
+    var hr = 20 * (W / r.width);
     var sw = 4 * (W / r.width);
     poly.setAttribute('stroke-width', sw);
     var circles = handlesG.querySelectorAll('circle');
@@ -272,7 +341,29 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     quad.forEach(function (p, i) {
       if (circles[i]) { circles[i].setAttribute('cx', p[0]); circles[i].setAttribute('cy', p[1]); }
     });
+    // rotate handle: above the top-edge midpoint, only in locked mode
+    var r = img.getBoundingClientRect();
+    if (r.width && locked) {
+      var ax = ecQuadAxes(quad);
+      var mx = (quad[0][0] + quad[1][0]) / 2, my = (quad[0][1] + quad[1][1]) / 2;
+      var off = 52 * (W / r.width);
+      rotH.setAttribute('cx', mx - ax.v[0] * off);
+      rotH.setAttribute('cy', my - ax.v[1] * off);
+      rotH.setAttribute('r', 20 * (W / r.width));
+      rotH.style.display = '';
+    } else {
+      rotH.style.display = 'none';
+    }
   };
+
+  var setLocked = function (v) {
+    locked = v;
+    if (locked && quad) quad = ecSnapToRect(quad);
+    lockBtn.textContent = locked ? '90° lock: on' : '90° lock: off';
+    drawQuad();
+    queuePreview();
+  };
+  lockBtn.addEventListener('click', function () { setLocked(!locked); });
 
   var queuePreview = function () {
     if (prevQueued || !srcCanvas || !quad || tornDown) return;
@@ -296,23 +387,58 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     ];
   };
 
-  var dragI = -1;
-  handlesG.addEventListener('pointerdown', function (e) {
-    var t = e.target.closest('circle');
-    if (!t) return;
-    dragI = +t.getAttribute('data-i');
-    try { t.setPointerCapture(e.pointerId); } catch (err) {}
+  // Unified gestures (v275): corner drag resizes (locked: opposite corner
+  // anchored, 90° kept; unlocked: free quad), the ring handle rotates,
+  // dragging inside the quad moves it.
+  var gesture = null; // 'corner' | 'rotate' | 'move'
+  var cornerI = -1, rotStart = 0, moveStart = null, quadStart = null;
+  svg.addEventListener('pointerdown', function (e) {
+    if (tornDown || !quad) return;
+    var rotT = e.target.closest('[data-rot]');
+    var cT = e.target.closest('circle[data-i]');
+    if (rotT && locked) {
+      var c = ecQuadCenter(quad), p0 = toImage(e.clientX, e.clientY);
+      rotStart = Math.atan2(p0[1] - c[1], p0[0] - c[0]);
+      gesture = 'rotate';
+      try { rotT.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    } else if (cT) {
+      cornerI = +cT.getAttribute('data-i');
+      gesture = 'corner';
+      try { cT.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    }
+  });
+  poly.addEventListener('pointerdown', function (e) {
+    if (tornDown || !quad || gesture) return;
+    gesture = 'move';
+    moveStart = toImage(e.clientX, e.clientY);
+    quadStart = quad.map(function (p) { return [p[0], p[1]]; });
+    try { poly.setPointerCapture(e.pointerId); } catch (err) {}
     e.preventDefault();
   });
-  handlesG.addEventListener('pointermove', function (e) {
-    if (dragI < 0) return;
-    quad[dragI] = toImage(e.clientX, e.clientY);
+  svg.addEventListener('pointermove', function (e) {
+    if (!gesture || tornDown || !quad) return;
+    var p = toImage(e.clientX, e.clientY);
+    if (gesture === 'corner') {
+      quad = locked
+        ? ecLockedResize(quad, cornerI, p)
+        : quad.map(function (qp, j) { return j === cornerI ? p : qp; });
+    } else if (gesture === 'rotate') {
+      var c = ecQuadCenter(quad);
+      var a = Math.atan2(p[1] - c[1], p[0] - c[0]);
+      quad = ecRotateQuad(quad, a - rotStart);
+      rotStart = a;
+    } else if (gesture === 'move') {
+      var dx = p[0] - moveStart[0], dy = p[1] - moveStart[1];
+      quad = quadStart.map(function (qp) { return [qp[0] + dx, qp[1] + dy]; });
+    }
     drawQuad();
     queuePreview();
   });
-  var endDrag = function () { dragI = -1; };
-  handlesG.addEventListener('pointerup', endDrag);
-  handlesG.addEventListener('pointercancel', endDrag);
+  var endGesture = function () { gesture = null; cornerI = -1; };
+  svg.addEventListener('pointerup', endGesture);
+  svg.addEventListener('pointercancel', endGesture);
 
   ov.querySelector('#ec-ed-retake').addEventListener('click', function () {
     domTeardown();

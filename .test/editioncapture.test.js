@@ -135,5 +135,60 @@ ok('capture back returns to the step (handoff, no dead overlay)',
 run(`document.getElementById('ec-st-cancel').click();`);
 ok('cancel tears down the wizard and session', !q('#ec-wizard') && run(`EC`) === null);
 
+/* ---- 13. editor overlay chrome (v275) ---- */
+run(`ecOpenEditor('data:image/jpeg;base64,AAA', 'Spine', 'Dust jacket', function(){}, function(){});`);
+ok('editor builds with lock toggle defaulting on',
+  !!q('#ec-editor #ec-ed-lock') && q('#ec-editor #ec-ed-lock').textContent === '90° lock: on');
+ok('editor suppresses the long-press context menu',
+  !!q('#ec-editor') && !!q('#ec-editor #ec-ed-rot'));
+run(`document.getElementById('ec-ed-lock').click();`);
+ok('lock toggle switches to free mode',
+  q('#ec-editor #ec-ed-lock').textContent === '90° lock: off');
+run(`document.getElementById('ec-ed-retake').click();`);
+ok('retake tears down the editor', !q('#ec-editor'));
+
+/* ---- 12. locked-rectangle editor math (v275) ---- */
+const rectOk = run(`(() => {
+  const dot = (a, b) => a[0]*b[0] + a[1]*b[1];
+  const isRect = (q) => [0,1,2,3].every(i => {
+    const e1 = [q[(i+1)%4][0]-q[i][0], q[(i+1)%4][1]-q[i][1]];
+    const e2 = [q[(i+3)%4][0]-q[i][0], q[(i+3)%4][1]-q[i][1]];
+    return Math.abs(dot(e1, e2)) < 1e-6;
+  });
+  // drag TL corner of a 100x200 rect out to (10,5): BR must stay anchored
+  const q = [[0,0],[100,0],[100,200],[0,200]];
+  const r = ecLockedResize(q, 0, [10, 5]);
+  if (!isRect(r)) return 'not-rect';
+  if (Math.abs(r[2][0]-100) > 1e-6 || Math.abs(r[2][1]-200) > 1e-6) return 'opposite-moved';
+  // new size should be 90x195
+  const w = Math.hypot(r[1][0]-r[0][0], r[1][1]-r[0][1]);
+  const h = Math.hypot(r[3][0]-r[0][0], r[3][1]-r[0][1]);
+  if (Math.abs(w-90) > 1e-6 || Math.abs(h-195) > 1e-6) return 'size ' + w + 'x' + h;
+  return 'ok';
+})()`);
+ok('locked resize keeps 90° and anchors the opposite corner', rectOk === 'ok');
+
+const snapOk = run(`(() => {
+  const dot = (a, b) => a[0]*b[0] + a[1]*b[1];
+  // skewed trapezoid -> snapped rectangle
+  const r = ecSnapToRect([[10,0],[90,5],[100,100],[0,95]]);
+  return [0,1,2,3].every(i => {
+    const e1 = [r[(i+1)%4][0]-r[i][0], r[(i+1)%4][1]-r[i][1]];
+    const e2 = [r[(i+3)%4][0]-r[i][0], r[(i+3)%4][1]-r[i][1]];
+    return Math.abs(dot(e1, e2)) < 1e-6;
+  });
+})()`);
+ok('snap-to-rect restores right angles', snapOk === true);
+
+const rotOk = run(`(() => {
+  const q = [[0,0],[100,0],[100,100],[0,100]];
+  const r = ecRotateQuad(q, Math.PI / 2);
+  // center stays (50,50); TL corner (0,0) -> (100,0)
+  const c = ecQuadCenter(r);
+  return Math.abs(c[0]-50) < 1e-9 && Math.abs(c[1]-50) < 1e-9 &&
+         Math.abs(r[0][0]-100) < 1e-9 && Math.abs(r[0][1]-0) < 1e-9;
+})()`);
+ok('rotate-quad turns 90° around the center', rotOk === true);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
