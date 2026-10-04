@@ -137,19 +137,65 @@ const SHELF_DECOR = {
 };
 const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights'];
 
-// Enabled decorations for a shelf group (device-local, like the order).
-function shelfDecor(group) {
+// Decorations, v254: ordered instances [{d, at}] where `at` is the number
+// of book-items before the instance in the flat layout (0 = very start).
+// Decorations are shelf furniture: they keep their slot while books are
+// rearranged around them. Drag a decoration anywhere; long-press removes it.
+// Migrates the v252 plain-id arrays (treated as end-of-shelf).
+function shelfDecorRaw(group) {
   const o = shelfOrder();
   if (!o.decor) o.decor = {};
-  if (!Array.isArray(o.decor[group])) o.decor[group] = ['plant', 'candle'];
-  return o.decor[group].filter(id => SHELF_DECOR[id]);
+  if (!Array.isArray(o.decor[group])) {
+    o.decor[group] = [{ d: 'plant', at: 1e9 }, { d: 'candle', at: 1e9 }];
+  }
+  return o.decor[group];
 }
-function shelfSetDecor(group, ids) {
+function shelfDecorItems(group) {
+  return shelfDecorRaw(group)
+    .map(x => (typeof x === 'string' ? { d: x, at: 1e9 } : x))
+    .filter(x => x && SHELF_DECOR[x.d])
+    .map(x => ({ d: x.d, at: Math.max(0, x.at | 0) }));
+}
+function shelfSaveDecor(group, list) {
   const o = shelfOrder();
   if (!o.decor) o.decor = {};
-  o.decor[group] = ids.filter(id => SHELF_DECOR[id]);
+  o.decor[group] = list;
   saveShelfOrder(o);
   shelfOrderCache = o;
+}
+function shelfDecorAdd(group, decorId, bookCount) {
+  if (!SHELF_DECOR[decorId]) return;
+  const list = shelfDecorItems(group);
+  if (list.filter(x => x.d === decorId).length >= 3 || list.length >= 6) return;
+  list.push({ d: decorId, at: bookCount });
+  shelfSaveDecor(group, list);
+}
+function shelfDecorRemove(group, di) {
+  const list = shelfDecorItems(group);
+  list.splice(di, 1);
+  shelfSaveDecor(group, list);
+}
+function shelfDecorMove(group, di, at) {
+  const list = shelfDecorItems(group);
+  if (!list[di]) return;
+  list[di] = { d: list[di].d, at: Math.max(0, at | 0) };
+  shelfSaveDecor(group, list);
+}
+// Pure: splice decor instances into the flat book-item list at their `at`
+// slots (counted in book-items, decor items don't shift each other).
+function shelfMergeDecor(bookItems, decors) {
+  const items = bookItems.slice();
+  (decors || []).forEach((dec, di) => {
+    if (!SHELF_DECOR[dec.d]) return;
+    let seen = 0, idx = items.length;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'decor') continue;
+      seen++;
+      if (seen > dec.at) { idx = i; break; }
+    }
+    items.splice(idx, 0, { kind: 'decor', decorId: dec.d, di, w: SHELF_DECOR[dec.d].w });
+  });
+  return items;
 }
 
 // Flat layout items from ordered books: consecutive laid-down books form
@@ -219,7 +265,9 @@ function shelfSpineHTML(book) {
   const spec = shelfSpineSpec(book);
   const title = book.title || 'Untitled';
   const author = shelfBookAuthor(book);
-  const geom = 'width:' + spec.w + 'px;height:' + spec.h + 'px;';
+  // v254: a whisper of tilt (±1°) so the shelf feels hand-placed, not stamped.
+  const tilt = (((shelfHash(book.id + '|tilt') % 5) - 2) * 0.5).toFixed(1);
+  const geom = 'width:' + spec.w + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
   if (book.spinePhoto) {
     return '<div class="spine photo" data-id="' + esc(book.id) + '" style="' + geom +
       'background-image:url(&quot;' + book.spinePhoto + '&quot;)" title="' + esc(title) + '">' +
@@ -228,6 +276,7 @@ function shelfSpineHTML(book) {
   return '<div class="spine" data-id="' + esc(book.id) + '" style="' + geom +
     'background:linear-gradient(90deg,' + spec.c2 + ',' + spec.c1 + ' 55%,' + spec.c2 + ')"' +
     ' title="' + esc(title) + '">' +
+    '<span class="sp-pages" aria-hidden="true"></span>' +
     '<span class="sp-t">' + esc(title) + '</span>' +
     (author ? '<span class="sp-a">' + esc(author) + '</span>' : '') + '</div>';
 }
@@ -258,6 +307,10 @@ function shelfStackHTML(books) {
 function shelfItemHTML(item) {
   if (item.kind === 'face') return shelfFaceHTML(item.books[0]);
   if (item.kind === 'stack') return shelfStackHTML(item.books);
+  if (item.kind === 'decor') {
+    return '<div class="sv-dragdecor" data-decor="' + item.decorId + '" data-di="' + item.di +
+      '" title="' + SHELF_DECOR[item.decorId].label + '">' + SHELF_DECOR[item.decorId].html + '</div>';
+  }
   return shelfSpineHTML(item.books[0]);
 }
 
@@ -266,22 +319,23 @@ function renderShelf() {
   const counts = {};
   SHELF_GROUPS.forEach(g => { counts[g] = shelfGroupBooks(books, g).length; });
   const shown = shelfBooks();
-  const decor = shelfDecor(shelfGroup);
+  const bookItems = shelfLayoutItems(shown);
+  const items = shelfMergeDecor(bookItems, shelfDecorItems(shelfGroup));
   const vw = ((document.getElementById('view') || {}).clientWidth || 360);
-  const budget = Math.max(250, Math.min(430, vw)) - 44 - (decor.length ? 90 : 0);
-  const rows = shelfFillRows(shelfLayoutItems(shown), budget);
+  const hasDecor = items.some(i => i.kind === 'decor');
+  const budget = Math.max(250, Math.min(430, vw)) - 44 - (hasDecor ? 90 : 0);
+  const rows = shelfFillRows(items, budget);
   let shelvesHTML;
   if (!shown.length) {
     shelvesHTML = '<div class="sv-empty">' + icon('shelf') +
       '<p>Nothing on this shelf yet.</p>' +
       '<button class="btn" id="svEmptyAdd">Add a book</button></div>';
   } else {
-    shelvesHTML = rows.map((row, i) => {
-      const d = decor.length ? SHELF_DECOR[decor[i % decor.length]] : null;
-      return '<div class="sv-shelf"><div class="sv-books">' +
-        row.map(shelfItemHTML).join('') + (d ? d.html : '') +
-        '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>';
-    }).join('');
+    shelvesHTML = rows.map((row) =>
+      '<div class="sv-shelf"><div class="sv-books">' +
+      row.map(shelfItemHTML).join('') +
+      '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>'
+    ).join('');
   }
   setView(
     '<div class="shelfview">' +
@@ -322,7 +376,7 @@ function wireShelf() {
   if (cancel) cancel.addEventListener('click', () => { pendingSpinePhoto = null; renderShelf(); });
   const shelves = document.getElementById('svShelves');
   if (!shelves) return;
-  shelves.querySelectorAll('.spine, .faceout, .hstack').forEach(sp => {
+  shelves.querySelectorAll('.spine, .faceout, .hstack, .sv-dragdecor').forEach(sp => {
     sp.addEventListener('pointerdown', e => shelfPointerDown(e, sp));
     sp.addEventListener('click', e => shelfSpineClick(e, sp));
   });
@@ -330,15 +384,18 @@ function wireShelf() {
 
 function shelfPointerDown(e, sp) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const isDecor = sp.hasAttribute('data-decor');
   const id = sp.dataset.id;
   const d = shelfDrag = {
     id, el: sp, x0: e.clientX, y0: e.clientY, live: false, ghost: null, ph: null,
+    isDecor, di: Number(sp.dataset.di),
     timer: setTimeout(() => {
       shelfCleanupDragListeners(d);
       shelfDrag = null;
       shelfIgnoreClickUntil = Date.now() + 600;
       try { if (navigator.vibrate) navigator.vibrate(25); } catch (_) {}
-      shelfOpenPhotoSheet(id);
+      if (isDecor) shelfOpenDecorRemoveSheet(Number(sp.dataset.di));
+      else shelfOpenPhotoSheet(id);
     }, 550),
   };
   const move = (ev) => {
@@ -396,7 +453,8 @@ function shelfStartGhost(d, e) {
 function shelfMoveGhost(d, e) {
   d.ghost.style.left = (e.clientX - d.offX) + 'px';
   d.ghost.style.top = (e.clientY - d.offY) + 'px';
-  const spines = Array.from(document.querySelectorAll('#svShelves .spine, #svShelves .faceout, #svShelves .hstack'))
+  const spines = Array.from(document.querySelectorAll(
+    '#svShelves .spine, #svShelves .faceout, #svShelves .hstack, #svShelves .sv-dragdecor'))
     .filter(el => el !== d.el && el !== d.ghost);
   let before = null, bestRow = null, bestDy = Infinity;
   for (const el of spines) {
@@ -415,6 +473,26 @@ function shelfMoveGhost(d, e) {
 }
 
 function shelfDropGhost(d) {
+  if (d.isDecor) {
+    // Decorations keep a book-index slot: count book-items before the
+    // placeholder in flat DOM order, then re-render from data.
+    let at = 0;
+    const els = [];
+    document.querySelectorAll('#svShelves .sv-books').forEach(row => {
+      Array.from(row.children).forEach(el => els.push(el));
+    });
+    for (const el of els) {
+      if (el === d.ph) break;
+      if (el.classList.contains('spine') || el.classList.contains('faceout') ||
+          el.classList.contains('hstack')) at++;
+    }
+    if (d.ghost) d.ghost.remove();
+    if (d.ph) d.ph.remove();
+    shelfIgnoreClickUntil = Date.now() + 400;
+    shelfDecorMove(shelfGroup, d.di, at);
+    renderShelf();
+    return;
+  }
   if (d.ph.parentNode) d.ph.parentNode.insertBefore(d.el, d.ph);
   d.el.classList.remove('drag-src');
   if (d.ghost) d.ghost.remove();
@@ -443,6 +521,7 @@ function shelfCommitOrder(ids) {
 
 function shelfSpineClick(e, sp) {
   if (Date.now() < shelfIgnoreClickUntil) return;
+  if (sp.hasAttribute('data-decor')) return; // decorations: drag/long-press only
   const id = sp.dataset.id;
   if (pendingSpinePhoto) {
     const url = pendingSpinePhoto;
@@ -515,31 +594,51 @@ function shelfOpenPhotoSheet(id) {
   });
 }
 
-// Decorations tray: toggle which decorations live on this shelf group.
+// Decorations tray: tap to add an instance (up to 3 per kind); drag it
+// anywhere on the shelf; long-press it to remove.
 function shelfOpenDecorSheet() {
   const group = shelfGroup;
-  const renderChips = (sheet) => {
-    const cur = shelfDecor(group);
-    sheet.querySelectorAll('[data-d]').forEach(ch =>
-      ch.classList.toggle('active', cur.indexOf(ch.dataset.d) !== -1));
-  };
   const { sheet, close } = shelfSheetShell('Decorations',
-    '<p class="sv-review-hint">Choose what lives on your ' + SHELF_GROUP_LABEL[group] + ' shelves</p>' +
-    '<div class="sv-decor-grid">' + SHELF_DECOR_ORDER.map(id =>
-      '<button class="sv-decor-chip" data-d="' + id + '">' + SHELF_DECOR[id].label + '</button>'
-    ).join('') + '</div>' +
+    '<p class="sv-review-hint">Tap to add to your ' + SHELF_GROUP_LABEL[group] +
+    ' shelves — drag decorations anywhere, long-press one to remove it</p>' +
+    '<div class="sv-decor-grid" id="svDecorGrid"></div>' +
     '<button class="sv-sheet-btn ghost" id="svDecorDone">Done</button>');
-  renderChips(sheet);
-  sheet.querySelectorAll('[data-d]').forEach(ch =>
-    ch.addEventListener('click', () => {
-      const cur = shelfDecor(group);
-      const id = ch.dataset.d;
-      const next = cur.indexOf(id) !== -1 ? cur.filter(x => x !== id) : cur.concat([id]);
-      shelfSetDecor(group, next);
-      renderChips(sheet);
-      renderShelf(); // refresh the shelves behind the sheet
-    }));
+  const paintChips = () => {
+    const counts = {};
+    shelfDecorItems(group).forEach(x => { counts[x.d] = (counts[x.d] || 0) + 1; });
+    const grid = document.getElementById('svDecorGrid');
+    if (!grid) return;
+    grid.innerHTML = SHELF_DECOR_ORDER.map(id =>
+      '<button class="sv-decor-chip' + (counts[id] ? ' active' : '') + '" data-d="' + id + '">' +
+      SHELF_DECOR[id].label + (counts[id] ? ' <span class="n">×' + counts[id] + '</span>' : '') + '</button>'
+    ).join('');
+    grid.querySelectorAll('[data-d]').forEach(ch =>
+      ch.addEventListener('click', () => {
+        shelfDecorAdd(group, ch.dataset.d, shelfBooks().length);
+        paintChips();
+        renderShelf(); // refresh the shelves behind the sheet
+      }));
+  };
+  paintChips();
   document.getElementById('svDecorDone').addEventListener('click', close);
+}
+
+// Long-press a decoration: offer removal.
+function shelfOpenDecorRemoveSheet(di) {
+  const items = shelfDecorItems(shelfGroup);
+  const it = items[di];
+  if (!it || !SHELF_DECOR[it.d]) return;
+  const label = SHELF_DECOR[it.d].label;
+  const { close } = shelfSheetShell(esc(label),
+    '<button class="sv-sheet-btn danger" id="svDecorRm">Remove from shelf</button>' +
+    '<button class="sv-sheet-btn ghost" id="svDecorCancel">Cancel</button>');
+  document.getElementById('svDecorCancel').addEventListener('click', close);
+  document.getElementById('svDecorRm').addEventListener('click', () => {
+    shelfDecorRemove(shelfGroup, di);
+    close();
+    renderShelf();
+    toast(label + ' removed');
+  });
 }
 
 // Camera capture via the native camera (file input + capture="environment",

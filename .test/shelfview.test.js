@@ -150,13 +150,40 @@ ok('greedy row fill',
 ok('oversize item still gets a row', run(`shelfFillRows([{w:500}], 250).length`) === 1);
 ok('empty items', run(`shelfFillRows([], 250).length`) === 0);
 
-/* ---- 15. decor persistence (v252) ---- */
+/* ---- 15. decor instances (v254: movable, placed by book-index slot) ---- */
 run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
-ok('decor defaults to plant+candle', run(`shelfDecor('tbr').join(',')`) === 'plant,candle');
-run(`shelfSetDecor('tbr', ['mug','lights','nope']);`);
-ok('decor persists, unknown ids filtered', run(`shelfDecor('tbr').join(',')`) === 'mug,lights');
-ok('decor registry has five entries', run(`SHELF_DECOR_ORDER.length`) === 5);
+ok('decor defaults to plant+candle at end', (() => {
+  const d = run(`shelfDecorItems('tbr')`);
+  return d.length === 2 && d[0].d === 'plant' && d[1].d === 'candle';
+})());
+run(`shelfDecorAdd('tbr', 'mug', 4);`);
+ok('decor add appends at end slot', (() => {
+  const d = run(`shelfDecorItems('tbr')`);
+  return d.length === 3 && d[2].d === 'mug' && d[2].at === 4;
+})());
+run(`shelfDecorAdd('tbr', 'mug', 4); shelfDecorAdd('tbr', 'mug', 4); shelfDecorAdd('tbr', 'mug', 4);`);
+ok('decor caps at 3 per kind', run(`shelfDecorItems('tbr').filter(x=>x.d==='mug').length`) === 3);
+run(`shelfDecorMove('tbr', 0, 2);`);
+ok('decor move sets slot', run(`shelfDecorItems('tbr')[0].at`) === 2);
+run(`shelfDecorRemove('tbr', 0);`);
+ok('decor remove drops the instance', run(`shelfDecorItems('tbr')[0].d`) === 'candle');
+ok('legacy string arrays migrate', (run(`shelfOrderCache={decor:{tbr:['lights']}}`),
+  run(`shelfDecorItems('tbr')`)[0].d === 'lights'));
+ok('unknown decor ids filtered', (run(`shelfOrderCache={decor:{tbr:[{d:'nope',at:0}]}}`),
+  run(`shelfDecorItems('tbr').length`) === 0));
 run(`localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
+
+/* ---- 15b. shelfMergeDecor: pure slot merge ---- */
+ok('merge inserts at book-index slots', run(`JSON.stringify(shelfMergeDecor(
+  [{kind:'spine'},{kind:'spine'},{kind:'spine'}],
+  [{d:'plant', at:0}, {d:'candle', at:2}]
+).map(i=>i.kind+':'+(i.decorId||'')))`) === JSON.stringify(['decor:plant','spine:','spine:','decor:candle','spine:']));
+ok('merge clamps huge slots to end', run(`shelfMergeDecor(
+  [{kind:'spine'}], [{d:'plant', at:999}]
+)[1].kind`) === 'decor');
+ok('merge skips unknown decor', run(`shelfMergeDecor(
+  [{kind:'spine'}], [{d:'nope', at:0}]
+).length`) === 1);
 
 /* ---- 16. render smoke: poses + decor button ---- */
 run(`library = [
@@ -173,6 +200,16 @@ ok('stack carries both book ids', q('#svShelves .hstack').dataset.ids === 'f2,f3
 ok('decor button in header', !!q('#svDecor'));
 ok('long-press sheet offers three poses', (run(`shelfOpenPhotoSheet('f4')`),
   qa('#svSheet [data-pose]').length === 3));
+
+/* ---- 19. v254 render: 3D bits + draggable decor ---- */
+run(`shelfCloseSheet(); library = [{id:'g1', title:'Up Book', status:'tbr'}];
+shelfGroup='tbr'; shelfOrderCache={}; renderShelf();`);
+ok('spine carries page-block sliver', qa('#svShelves .spine .sp-pages').length === 1);
+ok('spine has deterministic tilt', /rotate\(-?[\d.]+deg\)/.test(q('#svShelves .spine').style.transform));
+ok('decor renders as draggable item', qa('#svShelves .sv-dragdecor').length === 2);
+ok('dragdecor exposes decor id', q('#svShelves .sv-dragdecor').dataset.decor === 'plant');
+run(`library = [];`);
+
 /* ---- 17. spineBoxCropRect (v253): 0-1000 x-range -> pixel rect ---- */
 const br = run(`spineBoxCropRect(1000, 800, 100, 200)`);
 ok('box maps to pixel strip', br.x === 100 && br.w > 0);
