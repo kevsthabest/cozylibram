@@ -14,7 +14,7 @@
    env). A failed open at runtime is also recoverable — js/040-storage.js
    falls back to localStorage for the session. */
 
-const IDB_VERSION = 1; // bump when the store layout changes
+const IDB_VERSION = 2; // v284: add binary edition asset store
 
 function idbOpenDb(name) {
   return new Promise((resolve, reject) => {
@@ -25,6 +25,7 @@ function idbOpenDb(name) {
       const db = req.result;
       if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'k' });
+      if (!db.objectStoreNames.contains('editionAssets')) db.createObjectStore('editionAssets', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error('indexedDB open failed for ' + name));
@@ -92,6 +93,37 @@ function idbClearBooks(db) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error || new Error('idbClearBooks failed'));
     tx.onabort = () => reject(tx.error || new Error('idbClearBooks aborted'));
+  });
+}
+
+/* v284: binary edition assets live outside the books store. Structured
+   clone preserves Blob objects without base64 inflation. These helpers are
+   intentionally independent of the book save path so normal cloud sync never
+   serializes image bytes. */
+function idbAssetPut(db, asset) {
+  if (!asset || !asset.id) return Promise.reject(new Error('idbAssetPut: asset id required'));
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction('editionAssets', 'readwrite'); }
+    catch (e) { reject(e); return; }
+    tx.objectStore('editionAssets').put(asset);
+    tx.oncomplete = () => resolve(asset.id);
+    tx.onerror = () => reject(tx.error || new Error('idbAssetPut failed'));
+    tx.onabort = () => reject(tx.error || new Error('idbAssetPut aborted'));
+  });
+}
+function idbAssetGet(db, id) {
+  return idbRequest(db.transaction('editionAssets', 'readonly').objectStore('editionAssets').get(id));
+}
+function idbAssetDelete(db, id) {
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction('editionAssets', 'readwrite'); }
+    catch (e) { reject(e); return; }
+    tx.objectStore('editionAssets').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('idbAssetDelete failed'));
+    tx.onabort = () => reject(tx.error || new Error('idbAssetDelete aborted'));
   });
 }
 
