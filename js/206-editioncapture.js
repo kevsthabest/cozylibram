@@ -868,6 +868,40 @@ function ecDetectQuadForCanvas(canvas) {
   } catch (e) { return null; }
 }
 
+/* v287: best-of-burst capture. Motion and sharpness are measured on a
+   tiny grayscale copy; the full-resolution frame is retained only for the
+   winning candidate. This avoids sending or storing a burst. */
+function ecBurstFrameScore(canvas, previous) {
+  try {
+    var w = 96, h = Math.max(1, Math.round(96 * canvas.height / canvas.width));
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(canvas, 0, 0, w, h);
+    var px = x.getImageData(0, 0, w, h).data, g = new Float32Array(w * h);
+    var dark = 0, bright = 0;
+    for (var i = 0, p = 0; i < g.length; i++, p += 4) {
+      g[i] = px[p] * .299 + px[p + 1] * .587 + px[p + 2] * .114;
+      if (g[i] < 10) dark++;
+      if (g[i] > 245) bright++;
+    }
+    var lap = 0, count = 0;
+    for (var y = 1; y < h - 1; y++) for (var xx = 1; xx < w - 1; xx++) {
+      var q = y * w + xx;
+      var v = g[q - w] + g[q - 1] + g[q + 1] + g[q + w] - 4 * g[q];
+      lap += v * v; count++;
+    }
+    var lapVar = count ? lap / count : 0, motion = 0;
+    if (previous && previous.length === g.length) {
+      for (var j = 0; j < g.length; j++) motion += Math.abs(g[j] - previous[j]);
+      motion /= g.length;
+    }
+    var sharpness = Math.max(0, Math.min(100, 100 * (1 - Math.exp(-lapVar / 220))));
+    var stability = previous ? Math.max(0, Math.min(100, 100 - motion * 2.2)) : 100;
+    var exposure = Math.max(0, Math.min(100, 100 - ((dark + bright) / g.length) * 500));
+    return { score: sharpness * .55 + stability * .30 + exposure * .15, gray: g };
+  } catch (e) { return { score: 0, gray: null }; }
+}
+
 function ecCaptureFace(face, subLabel, stepLabel, cb) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
@@ -1005,31 +1039,51 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
     if (autoOn && !tornDown && stream) raf = requestAnimationFrame(loop);
   };
 
-  var doAutoCapture = function (rect) {
-    var vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw) { resumeScan(); return; }
-    var c = document.createElement('canvas');
-    c.width = vw; c.height = vh;
-    try { c.getContext('2d').drawImage(video, 0, 0); }
-    catch (e) { resumeScan(); return; }
-    var s = vw / EC_SCAN_W;
-    var quad = rect.quad.map(function (p) { return [p[0] * s, p[1] * s]; });
-    var size = ecQuadSize(quad, EC_MAX_DIM);
-    var w = ecWarpCanvas(c, quad, size[0], size[1]);
-    if (!w) {
-      if (typeof toast === 'function') toast('Auto-scan missed \u2014 hold steadier');
-      resumeScan();
-      return;
+  var captureBurst = function (count) {
+    return new Promise(function (resolve) {
+      var frames = [], prev = null, i = 0;
+      var take = function () {
+        if (tornDown || !video.videoWidth) { resolve(frames); return; }
+        var c = document.createElement('canvas');
+        c.width = video.videoWidth; c.height = video.videoHeight;
+        try {
+          c.getContext('2d').drawImage(video, 0, 0);
+          var m = ecBurstFrameScore(c, prev);
+          prev = m.gray;
+          frames.push({ canvas: c, score: m.score });
+          setMsg('Capturing ' + (i + 1) + '/' + count + ' — hold still');
+        } catch (e) {}
+        i++;
+        if (i >= count) { resolve(frames); return; }
+        setTimeout(take, 90);
+      };
+      take();
+    });
+  };
+
+  var finishBurstCapture = function (frames, fallbackRect, confirmAuto) {
+    if (!frames || !frames.length) { resumeScan(); return; }
+    frames.sort(function (x, y) { return y.score - x.score; });
+    var best = frames[0], c = best.canvas, quad = ecDetectQuadForCanvas(c);
+    if (!quad && fallbackRect) {
+      var s = c.width / EC_SCAN_W;
+      quad = fallbackRect.quad.map(function (p) { return [p[0] * s, p[1] * s]; });
     }
+    if (!quad) { if (typeof toast === 'function') toast('Could not lock onto the book — try again'); resumeScan(); return; }
+    var size = ecQuadSize(quad, EC_MAX_DIM), w = ecWarpCanvas(c, quad, size[0], size[1]);
+    if (!w) { if (typeof toast === 'function') toast('Capture missed — hold steadier'); resumeScan(); return; }
     var warpedUrl = null, fullUrl = null;
-    try {
-      warpedUrl = w.toDataURL('image/jpeg', 0.9);
-      fullUrl = c.toDataURL('image/jpeg', 0.92);
-    } catch (e) { resumeScan(); return; }
+    try { warpedUrl = w.toDataURL('image/jpeg', 0.9); fullUrl = c.toDataURL('image/jpeg', 0.92); }
+    catch (e) { resumeScan(); return; }
     domTeardown();
     ecHandoff(function () {
-      return ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb);
+      if (confirmAuto) return ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb);
+      return cb(warpedUrl, { warped: true, burstScore: best.score });
     });
+  };
+
+  var doAutoCapture = function (rect) {
+    captureBurst(8).then(function (frames) { finishBurstCapture(frames, rect, true); });
   };
 
   var snapCanvas = function () {
@@ -1095,16 +1149,19 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
     fr.readAsDataURL(f);
   });
   ov.querySelector('#ec-cap-snap').addEventListener('click', function () {
-    var c = snapCanvas();
-    if (!c) {
-      if (typeof toast === 'function') toast('Capture failed \u2014 try again');
+    if (!video.videoWidth) {
+      if (typeof toast === 'function') toast('Capture failed — try again');
       return;
     }
-    var quad = ecDetectQuadForCanvas(c);
-    var url = null;
-    try { url = c.toDataURL('image/jpeg', 0.92); } catch (e) {}
-    if (url) gotPhoto(url, quad ? { quad: quad } : undefined);
-    else if (typeof toast === 'function') toast('Capture failed \u2014 try again');
+    stopScan();
+    captureBurst(5).then(function (frames) {
+      if (!frames.length) { if (typeof toast === 'function') toast('Capture failed — try again'); return; }
+      frames.sort(function (x, y) { return y.score - x.score; });
+      var c = frames[0].canvas, quad = ecDetectQuadForCanvas(c), url = null;
+      try { url = c.toDataURL('image/jpeg', 0.92); } catch (e) {}
+      if (url) gotPhoto(url, quad ? { quad: quad, burstScore: frames[0].score } : undefined);
+      else if (typeof toast === 'function') toast('Capture failed — try again');
+    });
   });
   return token;
 }
