@@ -1,8 +1,8 @@
 'use strict';
 
-/* ---- Metadata check (v46): compare every ISBN book against Open Library
-   (free, no key) then Google Books (home-server key) and flag mismatches in
-   title, authors, page count, publish year, and missing covers.
+/* ---- Metadata check (v46): compare every ISBN book against Hardcover
+   (home-server token) then Open Library (free, no key) and flag mismatches
+   in title, authors, page count, publish year, and missing covers.
    Nothing is overwritten on its own — she reviews each difference and
    applies per book or all at once. Books without an ISBN can't be checked. */
 
@@ -25,9 +25,10 @@ function normTitle(t) {
     .trim();
 }
 
-// One metadata lookup by ISBN. Open Library first (no key, one call); the
-// returned doc must actually list the queried ISBN, otherwise a wrong-edition
-// match would flag phantom differences. Google Books is the fallback.
+// One metadata lookup by ISBN. v270: Hardcover first (home-server token;
+// replaces the old Google Books fallback), then Open Library (no key).
+// The returned doc must actually list the queried ISBN, otherwise a
+// wrong-edition match would flag phantom differences.
 async function fetchMetaByISBN(isbn) {
   const clean = isbnDigits(isbn);
   if (!clean) return null;
@@ -46,6 +47,22 @@ async function fetchMetaByISBN(isbn) {
     if (!r.ok) throw new Error('http ' + r.status);
     return r.json();
   };
+  // v270: Hardcover first — same ISBN guard as the page-count waterfall.
+  try {
+    if (typeof hcSearchDocs === 'function') {
+      const docs = await hcSearchDocs(clean);
+      const hit = docs.find(d => (d.isbns || []).some(i => isbnDigits(i) === clean));
+      if (hit) {
+        return {
+          title: hit.title || '',
+          authors: (hit.author_names || []).map(String),
+          pageCount: hit.pages || null,
+          year: parseYear(hit.release_date),
+          cover: (hit.image && hit.image.url) || ''
+        };
+      }
+    }
+  } catch (e) { /* fall through to Open Library */ }
   try {
     const d = await get('https://openlibrary.org/search.json?isbn=' + encodeURIComponent(clean) +
       '&fields=key,title,author_name,isbn,number_of_pages_median,first_publish_year,cover_i&limit=5');
@@ -60,24 +77,7 @@ async function fetchMetaByISBN(isbn) {
         cover: hit.cover_i ? 'https://covers.openlibrary.org/b/id/' + hit.cover_i + '-L.jpg' : ''
       };
     }
-  } catch (e) { /* fall through to Google Books */ }
-  try {
-    const d = await get(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
-      encodeURIComponent(clean) + '&langRestrict=en&maxResults=5'));
-    const items = (d.items || []).map(i => i.volumeInfo || {});
-    const ids = it => (it.industryIdentifiers || []).map(x => isbnDigits(x.identifier));
-    const hit = items.find(it => ids(it).includes(clean));
-    if (hit) {
-      const img = hit.imageLinks || {};
-      return {
-        title: hit.title || '',
-        authors: hit.authors || [],
-        pageCount: hit.pageCount || null,
-        year: parseYear(hit.publishedDate),
-        cover: String(img.thumbnail || img.smallThumbnail || '').replace(/^http:/, 'https:')
-      };
-    }
-  } catch (e) { /* give up */ }
+  } catch (e) { /* no more sources — give up */ }
   return null;
 }
 
