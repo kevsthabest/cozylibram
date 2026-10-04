@@ -382,17 +382,21 @@ localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`)
 
 /* ---- 26. v262: touch ergonomics ---- */
 ok('drag slop is generous', run(`SHELF_DRAG_SLOP_PX`) === 18);
-ok('touch slop constant', run(`SHELF_TOUCH_SLOP_PX`) === 7);
-ok('spine html carries widened hit box', (() => {
+ok('spine html keeps visual width (no box-model tricks)', (() => {
   const b = { id: 'slop1', title: 'T' };
   const w = run(`shelfSpineSpec(${JSON.stringify(b)}).w`);
   const html = run(`shelfSpineHTML(${JSON.stringify(b)})`);
-  return html.indexOf('width:' + (w + 14) + 'px') !== -1;
+  return html.indexOf('width:' + w + 'px') !== -1;
 })());
-ok('row budget still uses visual width', (() => {
-  const w = run(`shelfSpineSpec({id:'slop1', title:'T'}).w`);
-  const items = run(`shelfLayoutItems([{id:'slop1', title:'T', status:'tbr'}])`);
-  return items.length === 1 && items[0].w === w + 4; // +4 gap allowance, no hit slop
+ok('hit slop lives on .spine::after (v263, no paint side effects)', (() => {
+  const css = fs.readFileSync(ROOT + '/styles.css', 'utf8');
+  return /\.spine::after\s*\{[^}]*inset:\s*-7px/.test(css) &&
+    !/\.spine\s*\{[^}]*border:\s*7px solid transparent/.test(css);
+})());
+ok('gold bands consolidated on ::before', (() => {
+  const css = fs.readFileSync(ROOT + '/styles.css', 'utf8');
+  const m = /\.spine::before\s*\{([^}]*)\}/.exec(css);
+  return !!m && m[1].includes('linear-gradient') && m[1].includes('top / 100% 3px');
 })());
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
