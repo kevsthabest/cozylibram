@@ -604,7 +604,7 @@ async function main() {
   globalThis.fetch = realFetch;
 
   // ---- public edition repository API (v288) ----
-  const editionApiFn = await import(path.resolve(__dirname, '../functions/api/editions/[[isbn]].js'));
+  const editionApiFn = await import(path.resolve(__dirname, '../functions/api/editions/[isbn].js'));
   globalThis.fetch = async (url) => {
     const u = new URL(String(url));
     if (u.pathname === '/rest/v1/editions')
