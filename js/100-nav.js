@@ -8,6 +8,7 @@ const NAV_PARENT = {
   discover: 'discover', pick: 'discover', authors: 'discover', author: 'discover',
   add: 'add',
   stats: 'stats',
+  shelf: 'shelf',
   coven: 'coven', 'coven-friend': 'coven',
   settings: 'settings', // v171: sidebar settings entry highlights itself
 };

@@ -31,11 +31,11 @@ const run = (code) => window.eval(code);
 const q = (sel) => window.document.querySelector(sel);
 const qa = (sel) => Array.from(window.document.querySelectorAll(sel));
 
-// --- 1. Bottom nav: exactly five tabs in the right order ---
+// --- 1. Bottom nav: seven tabs in the right order (v250 adds Shelf) ---
 const tabs = qa('.bottom-nav button').map(b => b.dataset.nav);
-ok('nav: six entries (five primary + desktop-only settings, v171)', tabs.length === 6);
-ok('nav: order is library/discover/add/stats/coven/settings',
-  JSON.stringify(tabs) === JSON.stringify(['library', 'discover', 'add', 'stats', 'coven', 'settings']));
+ok('nav: seven entries (six primary + desktop-only settings, v171; v250 adds Shelf)', tabs.length === 7);
+ok('nav: order is library/discover/add/stats/shelf/coven/settings',
+  JSON.stringify(tabs) === JSON.stringify(['library', 'discover', 'add', 'stats', 'shelf', 'coven', 'settings']));
 const addBtn = q('.bottom-nav button.nav-add');
 ok('nav: add is the visually distinct center action',
   !!addBtn && addBtn.dataset.nav === 'add' && qa('.bottom-nav button').indexOf(addBtn) === 2);
