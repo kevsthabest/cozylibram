@@ -224,14 +224,26 @@ async function b3dPoolFaces(isbn) {
     if (!isbn || typeof cloudClient !== 'function') return out;
     var sb = await cloudClient().catch(function () { return null; });
     if (!sb) return out;
-    var res = await sb.from('edition_images')
-      .select('face,appearance,bucket,path').eq('isbn', isbn);
-    (res.data || []).forEach(function (r) {
+    var canonical = await sb.from('edition_asset_slots')
+      .select('face,appearance,canonical_asset:edition_assets(bucket,path)')
+      .eq('isbn', isbn);
+    (canonical.data || []).forEach(function (r) {
+      var a = r.canonical_asset;
+      if (!a || !a.path || !r.face) return;
+      var url = null;
+      try { url = sb.storage.from(a.bucket || 'edition-images').getPublicUrl(a.path).data.publicUrl; }
+      catch (e) { return; }
+      if (!url) return;
+      var ap = r.appearance || 'jacket';
+      out[ap] = out[ap] || {};
+      out[ap][r.face] = url;
+    });
+    var legacy = await sb.from('edition_images').select('face,appearance,bucket,path').eq('isbn', isbn);
+    (legacy.data || []).forEach(function (r) {
       if (!r.path || !r.face) return;
       var url = null;
-      try {
-        url = sb.storage.from(r.bucket || 'edition-images').getPublicUrl(r.path).data.publicUrl;
-      } catch (e) { return; }
+      try { url = sb.storage.from(r.bucket || 'edition-images').getPublicUrl(r.path).data.publicUrl; }
+      catch (e) { return; }
       if (!url) return;
       var ap = r.appearance || 'jacket';
       out[ap] = out[ap] || {};
@@ -241,13 +253,44 @@ async function b3dPoolFaces(isbn) {
   return out;
 }
 
+async function b3dLocalFaces(book, revokeList) {
+  var refs = (book && book.editionFaceRefs) || {};
+  var legacy = (book && book.editionFaces) || {};
+  var out = {};
+  var aps = ['jacket', 'board', 'slipcase'];
+  for (var ai = 0; ai < aps.length; ai++) {
+    var ap = aps[ai];
+    var faces = refs[ap] || {};
+    var legacyFaces = legacy[ap] || {};
+    var keys = Object.keys(faces);
+    if (!keys.length) keys = Object.keys(legacyFaces);
+    if (!keys.length) continue;
+    out[ap] = {};
+    for (var i = 0; i < keys.length; i++) {
+      var face = keys[i], url = null;
+      if (faces[face] && typeof currentDb !== 'undefined' && currentDb && typeof idbAssetGet === 'function') {
+        try {
+          var asset = await idbAssetGet(currentDb, faces[face]);
+          if (asset && asset.blob) {
+            url = URL.createObjectURL(asset.blob);
+            if (revokeList) revokeList.push(url);
+          }
+        } catch (e) {}
+      }
+      if (!url && legacyFaces[face]) url = legacyFaces[face];
+      if (url) out[ap][face] = url;
+    }
+  }
+  return out;
+}
+
 // Resolve the faces to render: local scans win, pool fills gaps, procedural
 // art covers the rest. Returns { appearance, tex: {face: url|null(real scan?)},
 // real: {face: bool}, dims }.
-async function b3dResolveFaces(book) {
-  var local = (book && book.editionFaces) || {};
+async function b3dResolveFaces(book, revokeList, poolOverride) {
+  var local = await b3dLocalFaces(book, revokeList);
   var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
-  var pool = await b3dPoolFaces(isbn);
+  var pool = poolOverride || await b3dPoolFaces(isbn);
   var pick = b3dPickAppearance(local) || b3dPickAppearance(pool) || 'jacket';
   var other = pick === 'jacket' ? 'board' : 'jacket';
   var merged = b3dMergeFaces(local[pick], pool[pick], pool[other]);
@@ -261,9 +304,7 @@ async function b3dResolveFaces(book) {
     appearance: pick,
     other: (local[other] && Object.keys(local[other]).length) || (pool[other] && Object.keys(pool[other]).length)
       ? other : null,
-    urls: merged,
-    real: real,
-    dims: b3dDims(frontSize, spineSize),
+    urls: merged, real: real, dims: b3dDims(frontSize, spineSize), local: local, pool: pool
   };
 }
 
@@ -299,12 +340,15 @@ function b3dOpenViewer(bookId) {
     ? overlayOpened('b3d-view', function () { teardownGL(); domTeardown(); })
     : null;
 
-  var renderer = null, raf = 0, disposables = [];
+  var renderer = null, raf = 0, disposables = [], localObjectUrls = [], buildGeneration = 0, poolCache = null;
   var teardownGL = function () {
+    buildGeneration++;
     if (raf) { try { cancelAnimationFrame(raf); } catch (e) {} raf = 0; }
     window.removeEventListener('resize', onResize);
     disposables.forEach(function (d) { try { d.dispose(); } catch (e) {} });
     disposables = [];
+    localObjectUrls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) {} });
+    localObjectUrls = [];
     if (renderer) { try { renderer.dispose(); } catch (e) {} renderer = null; }
   };
   var track = function (d) { disposables.push(d); return d; };
@@ -331,6 +375,7 @@ function b3dOpenViewer(bookId) {
 
   var build = async function (appearance) {
     teardownGL();
+    var myGeneration = buildGeneration;
     loadEl.style.display = '';
     var THREE;
     try {
@@ -340,24 +385,26 @@ function b3dOpenViewer(bookId) {
       loadEl.style.display = 'none';
       return;
     }
-    var resolved = await b3dResolveFaces(book);
+    var resolved = await b3dResolveFaces(book, localObjectUrls, poolCache);
+    if (!poolCache) poolCache = resolved.pool;
+    if (myGeneration !== buildGeneration || tornDown) return;
     if (tornDown) return;
     if (appearance) {
       // Rebuild with the other appearance (same book, no re-resolve needed
       // beyond swapping the merged set).
-      var local = (book.editionFaces || {})[appearance] || {};
-      var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
-      var pool = await b3dPoolFaces(isbn);
+      var local = resolved.local || {};
+      var pool = resolved.pool || {};
       var other = appearance === 'jacket' ? 'board' : 'jacket';
       resolved = {
         appearance: appearance,
-        other: resolved.other,
-        urls: b3dMergeFaces(local, pool[appearance], pool[other]),
+        other: (local[other] && Object.keys(local[other]).length) || (pool[other] && Object.keys(pool[other]).length)
+          ? other : null,
+        urls: b3dMergeFaces(local[appearance], pool[appearance], pool[other]),
         real: {},
-        dims: resolved.dims,
+        dims: resolved.dims, local: local, pool: pool
       };
       ['front', 'back', 'spine', 'fore_edge'].forEach(function (f) {
-        resolved.real[f] = !!(resolved.urls[f] && local[f]);
+        resolved.real[f] = !!(resolved.urls[f] && local[appearance] && local[appearance][f]);
       });
     }
 
@@ -385,7 +432,7 @@ function b3dOpenViewer(bookId) {
     texSpine = await getTex(resolved.urls.spine, function () { return b3dSpineCanvas(book); });
     texFore = await getTex(resolved.urls.fore_edge, b3dPageCanvas);
     texPage = pageTex;
-    if (tornDown) return;
+    if (myGeneration !== buildGeneration || tornDown) return;
 
     try {
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -497,7 +544,7 @@ function b3dOpenViewer(bookId) {
     var tRY = 0.55, tRX = 0.14, auto = true;
     var pinchD0 = 0, camD0 = 0;
     canvas.style.touchAction = 'none';
-    canvas.addEventListener('pointerdown', function (e) {
+    var onPointerDown = function (e) {
       canvas.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, [e.clientX, e.clientY]);
       auto = false;
@@ -506,8 +553,8 @@ function b3dOpenViewer(bookId) {
         pinchD0 = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]);
         camD0 = camDist;
       }
-    });
-    canvas.addEventListener('pointermove', function (e) {
+    };
+    var onPointerMove = function (e) {
       if (!pointers.has(e.pointerId)) return;
       var prev = pointers.get(e.pointerId);
       var dx = e.clientX - prev[0], dy = e.clientY - prev[1];
@@ -521,16 +568,29 @@ function b3dOpenViewer(bookId) {
         camDist = Math.min(10, Math.max(2.6, camD0 * pinchD0 / Math.max(1, d)));
         placeCam();
       }
-    });
+    };
     var endPointer = function (e) { pointers.delete(e.pointerId); };
-    canvas.addEventListener('pointerup', endPointer);
-    canvas.addEventListener('pointercancel', endPointer);
-    canvas.addEventListener('wheel', function (e) {
+    var onWheel = function (e) {
       e.preventDefault();
       auto = false;
       camDist = Math.min(10, Math.max(2.6, camDist * (1 + e.deltaY * 0.0011)));
       placeCam();
-    }, { passive: false });
+    };
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    disposables.push({
+      dispose: function () {
+        canvas.removeEventListener('pointerdown', onPointerDown);
+        canvas.removeEventListener('pointermove', onPointerMove);
+        canvas.removeEventListener('pointerup', endPointer);
+        canvas.removeEventListener('pointercancel', endPointer);
+        canvas.removeEventListener('wheel', onWheel);
+        pointers.clear();
+      }
+    });
 
     window.addEventListener('resize', onResize);
     onResize();
