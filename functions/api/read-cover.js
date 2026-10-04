@@ -1,5 +1,6 @@
 import { rateLimit } from '../_lib/rate-limit.js';
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
+import { geminiFetch } from '../_lib/gemini.js';
 
 // Cloudflare Pages Function: POST /api/read-cover
 //
@@ -179,44 +180,43 @@ export async function onRequest(context) {
   const isShelf = mode === 'shelf';
   const isSpine = mode === 'spine';
   const prompt = isShelf ? PROMPT_SHELF : isSpine ? PROMPT_SPINE : PROMPT_SINGLE;
-  let upstream;
-  try {
-    upstream = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + key,
-        'User-Agent': 'CozyLibram/1.0 read-cover',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: isShelf ? 2000 : 300,
-        response_format: { type: 'json_object' },
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: image } },
-          ],
-        }],
-      }),
-    });
-  } catch (e) {
-    return jsonErr(502, 'vision provider unreachable');
-  }
-  if (!upstream.ok) {
-    const status = upstream.status;
+  // v265: retry on 429/503 — Google rate-limits briefly-exhausted quotas.
+  const g = await geminiFetch(GEMINI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key,
+      'User-Agent': 'CozyLibram/1.0 read-cover',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      max_tokens: isShelf ? 2000 : 300,
+      response_format: { type: 'json_object' },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: image } },
+        ],
+      }],
+    }),
+  });
+  if (!g.ok) {
+    if (g.networkError) return jsonErr(502, 'vision provider unreachable');
+    const status = g.status;
     // v203: an upstream 503 (model overloaded/unavailable) must NOT be
     // forwarded as-is — the client reads OUR 503 as "no API key configured",
     // which misled real users when Google's model 503'd with a valid key.
     // Surface it as a 502 (bad gateway) with a clear body instead, so a 503
     // from this endpoint unambiguously means "not set up".
     if (status === 503) return jsonErr(502, 'vision model temporarily unavailable (upstream 503)');
-    // Forward other upstream statuses so the client's 401/403/429 handling works.
-    // Never leak the key: the body is the provider's, which contains no secret.
-    return new Response(await upstream.text(), { status });
+    // Forward other upstream statuses (including 429 after retries are
+    // exhausted) so the client's 429 handling works. Never leak the key:
+    // the body is the provider's, which contains no secret.
+    return new Response(await g.res.text(), { status });
   }
+  const upstream = g.res;
   let parsed;
   try {
     const content = parseModelJsonRaw((await upstream.json()).choices[0].message.content);

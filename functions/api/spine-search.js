@@ -7,6 +7,7 @@
 //                              sources: [{ uri, title }] }
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
 import { rateLimit } from '../_lib/rate-limit.js';
+import { geminiFetch } from '../_lib/gemini.js';
 
 const json = (status, obj) => new Response(JSON.stringify(obj),
   { status, headers: { 'Content-Type': 'application/json' } });
@@ -99,21 +100,22 @@ export async function onRequest({ request, env }) {
   const model = (env.VISION_MODEL || 'gemini-3.8-flash').trim();
   if (!MODEL_RE.test(model)) return json(503, { error: 'bad VISION_MODEL' });
 
-  let upstream;
-  try {
-    upstream = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        tools: [{ google_search: {} }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1500 },
-        contents: [{ role: 'user', parts: [{ text: PROMPT(title, author) }] }],
-      }),
-    });
-  } catch (e) {
-    return json(502, { error: 'vision provider unreachable' });
+  // v265: retry on 429/503 — Google rate-limits briefly-exhausted quotas.
+  const g = await geminiFetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      tools: [{ google_search: {} }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 1500 },
+      contents: [{ role: 'user', parts: [{ text: PROMPT(title, author) }] }],
+    }),
+  });
+  if (!g.ok) {
+    if (g.networkError) return json(502, { error: 'vision provider unreachable' });
+    if (g.status === 429) return json(502, { error: 'Gemini is rate-limiting this key right now — wait a minute and try again' });
+    return json(502, { error: 'vision provider error (upstream ' + g.status + ')' });
   }
-  if (!upstream.ok) return json(502, { error: 'vision provider error (upstream ' + upstream.status + ')' });
+  const upstream = g.res;
   let data;
   try { data = await upstream.json(); }
   catch (e) { return json(502, { error: 'vision provider returned an unreadable answer' }); }
