@@ -34,11 +34,12 @@ ok('meta theme-color light', q('meta[name="theme-color"]').getAttribute('content
 // 3. Settings renders the theme picker as a dropdown (v99: settings was getting crowded)
 window.renderSettings();
 const themeSel = q('#th-theme');
-const themeOpts = qa('#th-theme option');
 const swatches = qa('#th-accent .sw');
 ok('theme picker is a select dropdown', themeSel && themeSel.tagName === 'SELECT');
-ok('ten theme options', themeOpts.length === 10);
-ok('theme option values', themeOpts.map(o => o.value).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant,midnight,velvet,abyss,frost');
+ok('ten base theme options', qa('#th-theme > option').length === 10);
+ok('theme option values', qa('#th-theme > option').map(o => o.value).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant,midnight,velvet,abyss,frost');
+ok('seasonal optgroup holds seven', qa('#th-theme optgroup[label="Seasonal"] option').length === 7);
+const themeOpts = qa('#th-theme option');
 ok('options show the per-theme social name', themeOpts.every(o => o.textContent.includes('·')));
 ok('dark option names the coven', themeOpts.find(o => o.value === 'dark').textContent.includes('Coven'));
 ok('twilight option names the night court', themeOpts.find(o => o.value === 'twilight').textContent.includes('Night Court'));

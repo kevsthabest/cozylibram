@@ -187,6 +187,70 @@
   --floral-tint: #8b5cf6;
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
+/* ---------- seasonal themes (v257) ---------- */
+[data-theme="haunt"] {
+  --bg: #150e1c; --bg2: #1c1226; --card: #221630; --card2: #2b1c3d;
+  --ink: #f5e8f0; --muted: #c2a8c8; --faint: #9a7fa3;
+  --accent: #e0722a; --accent-deep: #b0511a;
+  --gold: #d4a24e; --line: #3d2a52;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(21, 14, 28, 1); --glow: #33184a; --floral-tint: #e0722a;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+[data-theme="yuletide"] {
+  --bg: #0c1811; --bg2: #102016; --card: #142a1c; --card2: #1a3524;
+  --ink: #f0f4ec; --muted: #a9c2ae; --faint: #7f9a85;
+  --accent: #d43a55; --accent-deep: #a11f3c;
+  --gold: #d4a24e; --line: #234434;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(12, 24, 17, 1); --glow: #14301e; --floral-tint: #d43a55;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+[data-theme="fete"] {
+  --bg: #0f1330; --bg2: #151a3d; --card: #1a2049; --card2: #222a55;
+  --ink: #f2ecdc; --muted: #b3abd0; --faint: #877fa5;
+  --accent: #c08a24; --accent-deep: #96690f;
+  --gold: #e3b94f; --line: #2c3462;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(15, 19, 48, 1); --glow: #232a5e; --floral-tint: #c08a24;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+[data-theme="amour"] {
+  --bg: #1d0e15; --bg2: #26121c; --card: #2f1622; --card2: #3b1c2b;
+  --ink: #f8e9ee; --muted: #cda4b2; --faint: #a17b89;
+  --accent: #e5488f; --accent-deep: #c2377a;
+  --gold: #d4a24e; --line: #4c2333;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(29, 14, 21, 1); --glow: #3f1c2c; --floral-tint: #e5488f;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+[data-theme="shamrock"] {
+  --bg: #0c1e13; --bg2: #112a19; --card: #163620; --card2: #1d4429;
+  --ink: #ecf5e8; --muted: #a4c8ab; --faint: #7ba184;
+  --accent: #6fce9e; --accent-deep: #4da878;
+  --gold: #d4a24e; --line: #234d30;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(12, 30, 19, 1); --glow: #163d22; --floral-tint: #6fce9e;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+[data-theme="pastel"] {
+  --bg: #f7f2fa; --bg2: #efe7f4; --card: #fffdf9; --card2: #f4ecf8;
+  --ink: #3a2c44; --muted: #6f5b79; --faint: #7d6a87;
+  --accent: #b9a3f2; --accent-deep: #9378dd;
+  --gold: #a87b24; --line: #ddd0e6;
+  --ok: #3e8e52; --danger: #c64f4f;
+  --nav-bg: rgba(247, 242, 250, 1); --glow: #e8dcf2; --floral-tint: #b9a3f2;
+  --info: #3f7fc6; --shadow-c: rgba(90,70,110,.18);
+}
+[data-theme="harvest"] {
+  --bg: #191007; --bg2: #211409; --card: #2a1a0d; --card2: #352112;
+  --ink: #f5e9d6; --muted: #c8a87e; --faint: #9d7f5c;
+  --accent: #c47b4a; --accent-deep: #9a5a32;
+  --gold: #d4a24e; --line: #453015;
+  --ok: #7bc98a; --danger: #e56b6b;
+  --nav-bg: rgba(25, 16, 7, 1); --glow: #3a2410; --floral-tint: #c47b4a;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
 /* accent overrides (rose is the default, defined above) */
 [data-accent="violet"] { --accent: #8b5cf6; --accent-deep: #6d3fd4; }
 [data-accent="gold"] { --accent: #c08a24; --accent-deep: #96690f; }
@@ -2461,14 +2525,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border-radius: 999px; padding: 9px 16px; font-size: 14px; cursor: pointer; }
 .sv-season-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .sv-shelves { position: relative; }
-.sv-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
-.sv-fx span { position: absolute; top: -34px; font-size: 22px; opacity: .85;
-  animation: sv-fx-fall 12s linear infinite; }
-.sv-fx span:nth-child(1) { left: 12%; animation-delay: -2s; }
-.sv-fx span:nth-child(2) { left: 46%; animation-delay: -7s; font-size: 17px; }
-.sv-fx span:nth-child(3) { left: 78%; animation-delay: -10s; font-size: 26px; }
-@keyframes sv-fx-fall { to { transform: translateY(1100px) rotate(24deg); } }
-@media (prefers-reduced-motion: reduce) { .sv-fx { display: none; } }
 /* Halloween: charred boards, ember glow */
 .season-halloween .sv-board { background: linear-gradient(180deg, #4a2a18 0%, #38200f 45%, #241307 100%);
   border-bottom-color: #120a04; }
@@ -2517,3 +2573,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .season-thanksgiving .sv-shadow { background:
   radial-gradient(ellipse at center, rgba(255,170,60,.22), transparent 70%),
   radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+
+/* ---------- seasonal theme nudge (v257) ---------- */
+.season-nudge { display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 12px; margin-bottom: 12px; box-shadow: 0 2px 8px var(--shadow-c); }
+.sn-icon { font-size: 26px; flex: none; }
+.sn-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sn-text b { font-size: 14px; }
+.sn-text span { font-size: 12px; color: var(--muted); }
+.sn-x { flex: none; border: 0; background: none; color: var(--faint); font-size: 16px;
+  padding: 8px; cursor: pointer; }

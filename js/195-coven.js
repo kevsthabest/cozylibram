@@ -18,6 +18,13 @@ const COVEN_NAMES = {
   velvet:      'Rose Court',
   abyss:       'The Deep',
   frost:       'Winter Court',
+  haunt:       'Crypt',
+  yuletide:    'Yule Court',
+  fete:        'Gala',
+  amour:       "Lovers' Court",
+  shamrock:    'Emerald Court',
+  pastel:      'Spring Court',
+  harvest:     'Harvest Court',
 };
 function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
 function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }
