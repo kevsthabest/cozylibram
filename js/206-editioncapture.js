@@ -19,7 +19,14 @@
         contains no background by construction and is safe to share.
 
    The warp is a plain homography solved in JS (no dependency): four
-   source corners -> rectangle, inverse-mapped with bilinear sampling. */
+   source corners -> rectangle, inverse-mapped with bilinear sampling.
+
+   v275: the editor defaults to a locked 90° rectangle (corner drags
+   resize with the opposite corner anchored; a rotate handle straightens
+   tilt; dragging inside moves). A lock toggle frees the quad for badly
+   skewed shots. v277: handles are small visible dots with fat invisible
+   grab halos; the editor swallows the long-press context menu; a "page
+   edges?" step skips the sprayed-edge capture for plain page blocks. */
 
 var EC_FACES = [
   { id: 'spine', label: 'Spine', skippable: false, guide: 'tall',
@@ -271,7 +278,10 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     '<div class="ec-stage" id="ec-ed-stage">' +
       '<img id="ec-ed-img" alt="">' +
       '<svg id="ec-ed-svg" aria-hidden="true"><polygon id="ec-ed-poly" points=""/>' +
-      '<g id="ec-ed-handles"></g><circle id="ec-ed-rot" data-rot="1" class="ec-rot" r="0"/></svg>' +
+      '<g id="ec-ed-handles"></g>' +
+      '<g id="ec-ed-rotg" data-rot="1" style="display:none">' +
+      '<circle class="ec-halo" id="ec-ed-rothalo"/><circle class="ec-rot" id="ec-ed-rot"/>' +
+      '</g></svg>' +
     '</div>' +
     '<div class="ec-prevrow"><canvas id="ec-ed-prev"></canvas><span>Live preview — drag a corner to straighten</span></div>' +
     '<div class="ec-actions">' +
@@ -287,7 +297,9 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
   var svg = ov.querySelector('#ec-ed-svg');
   var poly = ov.querySelector('#ec-ed-poly');
   var handlesG = ov.querySelector('#ec-ed-handles');
-  var rotH = ov.querySelector('#ec-ed-rot');
+  var rotG = ov.querySelector('#ec-ed-rotg');
+  var rotHalo = ov.querySelector('#ec-ed-rothalo');
+  var rotDot = ov.querySelector('#ec-ed-rot');
   var lockBtn = ov.querySelector('#ec-ed-lock');
   var prev = ov.querySelector('#ec-ed-prev');
   var W = 0, H = 0, quad = null, srcCanvas = null, prevQueued = false, tornDown = false;
@@ -311,24 +323,36 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.style.width = r.width + 'px';
     svg.style.height = r.height + 'px';
-    // handles stay ~20 CSS px regardless of photo resolution (v275: smaller)
-    var hr = 20 * (W / r.width);
+    // v277: small visible dots (~14 CSS px) with fat invisible grab halos
+    // (~30 CSS px) — easy to grab without covering the corner.
+    var hr = 14 * (W / r.width);
+    var halo = 30 * (W / r.width);
     var sw = 4 * (W / r.width);
     poly.setAttribute('stroke-width', sw);
-    var circles = handlesG.querySelectorAll('circle');
-    if (circles.length !== 4) {
+    var groups = handlesG.querySelectorAll('g[data-i]');
+    if (groups.length !== 4) {
       handlesG.innerHTML = '';
       quad.forEach(function (p, i) {
+        var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('data-i', i);
+        var h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        h.setAttribute('r', halo);
+        h.setAttribute('class', 'ec-halo');
         var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         c.setAttribute('r', hr);
         c.setAttribute('class', 'ec-handle');
-        c.setAttribute('data-i', i);
-        handlesG.appendChild(c);
+        g.appendChild(h);
+        g.appendChild(c);
+        handlesG.appendChild(g);
       });
-      circles = handlesG.querySelectorAll('circle');
     } else {
-      circles.forEach(function (c) { c.setAttribute('r', hr); });
+      groups.forEach(function (g) {
+        g.querySelector('.ec-halo').setAttribute('r', halo);
+        g.querySelector('.ec-handle').setAttribute('r', hr);
+      });
     }
+    rotHalo.setAttribute('r', halo);
+    rotDot.setAttribute('r', hr);
     drawQuad();
   };
 
@@ -337,9 +361,9 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
   var drawQuad = function () {
     if (!quad || tornDown) return;
     poly.setAttribute('points', quad.map(function (p) { return p[0] + ',' + p[1]; }).join(' '));
-    var circles = handlesG.querySelectorAll('circle');
+    var groups = handlesG.querySelectorAll('g[data-i]');
     quad.forEach(function (p, i) {
-      if (circles[i]) { circles[i].setAttribute('cx', p[0]); circles[i].setAttribute('cy', p[1]); }
+      if (groups[i]) groups[i].setAttribute('transform', 'translate(' + p[0] + ',' + p[1] + ')');
     });
     // rotate handle: above the top-edge midpoint, only in locked mode
     var r = img.getBoundingClientRect();
@@ -347,12 +371,11 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
       var ax = ecQuadAxes(quad);
       var mx = (quad[0][0] + quad[1][0]) / 2, my = (quad[0][1] + quad[1][1]) / 2;
       var off = 52 * (W / r.width);
-      rotH.setAttribute('cx', mx - ax.v[0] * off);
-      rotH.setAttribute('cy', my - ax.v[1] * off);
-      rotH.setAttribute('r', 20 * (W / r.width));
-      rotH.style.display = '';
+      rotG.setAttribute('transform',
+        'translate(' + (mx - ax.v[0] * off) + ',' + (my - ax.v[1] * off) + ')');
+      rotG.style.display = '';
     } else {
-      rotH.style.display = 'none';
+      rotG.style.display = 'none';
     }
   };
 
@@ -395,7 +418,7 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
   svg.addEventListener('pointerdown', function (e) {
     if (tornDown || !quad) return;
     var rotT = e.target.closest('[data-rot]');
-    var cT = e.target.closest('circle[data-i]');
+    var cT = e.target.closest('[data-i]');
     if (rotT && locked) {
       var c = ecQuadCenter(quad), p0 = toImage(e.clientX, e.clientY);
       rotStart = Math.atan2(p0[1] - c[1], p0[0] - c[0]);
@@ -589,10 +612,12 @@ function ecFaceDef(id) {
 }
 
 // Pure step-list builder (tested): appearances x faces, jacket first.
-function ecBuildSteps(appearances) {
+// hasEdges === false drops the fore-edge face (plain page blocks need no photo).
+function ecBuildSteps(appearances, hasEdges) {
   var steps = [];
   (appearances || []).forEach(function (ap) {
     EC_FACES.forEach(function (f) {
+      if (f.id === 'fore_edge' && hasEdges === false) return;
       steps.push({ appearance: ap, face: f.id, skippable: !!f.skippable });
     });
   });
@@ -638,12 +663,36 @@ function ecRenderAppearance() {
   ov.querySelector('#ec-ap-cancel').addEventListener('click', ecCancelScan);
   var go = function (aps) {
     EC.appearances = aps;
-    EC.steps = ecBuildSteps(aps);
-    EC.idx = 0;
-    ecRenderStep();
+    ecRenderEdges();
   };
   ov.querySelector('#ec-ap-jacket').addEventListener('click', function () { go(['jacket']); });
   ov.querySelector('#ec-ap-both').addEventListener('click', function () { go(['jacket', 'board']); });
+  return EC.token;
+}
+
+// v277: plain page blocks skip the sprayed-edge capture entirely.
+function ecRenderEdges() {
+  if (typeof document === 'undefined' || !EC) return null;
+  var ov = ecWizardShell(
+    '<div class="ec-head"><h3 class="serif">Page edges</h3>' +
+    '<p class="ec-sub">' + esc(EC.appearances.map(ecAppearanceLabel).join(' + ')) + '</p></div>' +
+    '<p class="ec-hint">Are the page edges decorated — sprayed, stenciled, or printed? ' +
+    'A plain paperback doesn\u2019t need this photo.</p>' +
+    '<div class="ec-pick">' +
+    '<button class="btn ghost big" id="ec-edge-yes">Decorated edges</button>' +
+    '<button class="btn ghost big" id="ec-edge-no">Plain pages</button>' +
+    '</div>' +
+    '<div class="ec-actions"><button class="btn ghost" id="ec-edge-back">Back</button></div>');
+  EC.token = (typeof overlayOpened === 'function') ? overlayOpened('ec-wizard', ecCancelScan) : null;
+  ov.querySelector('#ec-edge-back').addEventListener('click', ecRenderAppearance);
+  var go = function (hasEdges) {
+    EC.hasEdges = hasEdges;
+    EC.steps = ecBuildSteps(EC.appearances, hasEdges);
+    EC.idx = 0;
+    ecRenderStep();
+  };
+  ov.querySelector('#ec-edge-yes').addEventListener('click', function () { go(true); });
+  ov.querySelector('#ec-edge-no').addEventListener('click', function () { go(false); });
   return EC.token;
 }
 

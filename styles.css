@@ -2688,7 +2688,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 #ec-ed-svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); touch-action: none; }
 #ec-ed-poly { fill: rgba(201, 168, 106, .12); stroke: #fff; stroke-dasharray: 10 6; }
 .ec-handle { fill: #fff; stroke: #222; stroke-width: 3; cursor: grab; touch-action: none; }
-.ec-rot { fill: none; stroke: var(--accent, #c9a86a); stroke-width: 5; cursor: grab; touch-action: none; }
+.ec-halo { fill: rgba(0, 0, 0, 0); pointer-events: all; cursor: grab; touch-action: none; }
+.ec-rot { fill: var(--accent, #c9a86a); stroke: #222; stroke-width: 2; cursor: grab; touch-action: none; }
 .ec-prevrow { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .ec-prevrow canvas { width: 84px; height: 84px; object-fit: contain; background: #000; border-radius: 8px;
   border: 1px solid var(--line, #3a2b3d); }
