@@ -1694,13 +1694,17 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
     var uid = await ecPoolUid(sb);
     if (!uid) return false;
 
-    // v284: contributions are immutable assets. A canonical slot is only
-    // created when this edition/surface has no canonical asset yet; later
-    // contributions remain candidates instead of clobbering one another.
+    // v286: every upload is an immutable candidate. The database trigger
+    // continuously chooses the best non-rejected candidate, so a better
+    // later scan can replace a weak first upload without deleting evidence.
     var editionRes = await sb.from('editions').select('id').eq('isbn', isbn).maybeSingle();
     var editionId = editionRes && editionRes.data ? editionRes.data.id : null;
     if (!editionId) return false;
 
+    var quality = null;
+    if (typeof editionAnalyzeDataUrl === 'function') {
+      try { quality = await editionAnalyzeDataUrl(dataUrl); } catch (e) { quality = null; }
+    }
     var blob = await (await fetch(dataUrl)).blob();
     var bytes = await blob.arrayBuffer();
     var digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -1725,11 +1729,21 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
         appearance: appearance,
         bucket: 'edition-images',
         path: path,
+        width: quality && quality.width || null,
+        height: quality && quality.height || null,
         format: 'image/jpeg',
         byte_size: blob.size,
         sha256: hash,
         source_type: 'capture',
-        source_user_id: uid
+        source_user_id: uid,
+        quality_score: quality && quality.quality || null,
+        sharpness_score: quality && quality.sharpness || null,
+        exposure_score: quality && quality.exposure || null,
+        perspective_score: quality && quality.perspective || null,
+        coverage_score: quality && quality.coverage || null,
+        glare_score: quality && quality.glare || null,
+        resolution_score: quality && quality.resolution || null,
+        stability_score: quality && quality.stability || null
       }).select('id').single();
       if (row.error) {
         var raced = await sb.from('edition_assets').select('id').eq('bucket', 'edition-images').eq('path', path).maybeSingle();
