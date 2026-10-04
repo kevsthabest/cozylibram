@@ -40,7 +40,7 @@ export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: JSON_HEADERS });
   if (request.method !== 'GET') return json(405, { error: 'method not allowed' });
 
-  const { rateLimit } = await import('../_lib/rate-limit.js');
+  const { rateLimit } = await import('../../_lib/rate-limit.js');
   const limited = rateLimit(request, 'public-edition-api', 120, 60 * 1000);
   if (limited) return limited;
 
