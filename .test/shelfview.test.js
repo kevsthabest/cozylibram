@@ -506,6 +506,61 @@ localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`)
   ok('sheet closed after fallback', !q('#svSheet'));
   ok('no stream left running', run(`shelfCamStream`) === null);
   try { delete navigator.mediaDevices; } catch (e) {}
+  /* ---- 29. v273: edition_images pool (face/appearance keyed) ---- */
+  run(`window.__eiCalls = [];
+    window.__eiRows = [{ bucket: 'spine-photos', path: 'spines/9780143127748.jpg', appearance: 'jacket' }];
+    window.__eiChain = () => ({ eq: () => window.__eiChain(),
+      maybeSingle: async () => { window.__eiCalls.push('seen'); return { data: null }; },
+      limit: async () => ({ data: window.__eiRows }) });
+    cloudClient = async () => ({
+      from: (t) => ({
+        select: () => window.__eiChain(),
+        upsert: async (row, opts) => {
+          window.__eiCalls.push('upsert:' + t + ':' + JSON.stringify(row));
+          return { data: null, error: null };
+        },
+      }),
+      storage: { from: (b) => ({
+        upload: async (path) => { window.__eiCalls.push('upload:' + b + ':' + path); return { error: null }; },
+        getPublicUrl: (path) => ({ data: { publicUrl: 'https://cdn.example/' + b + '/' + path } }),
+      }) },
+    });`);
+  // stub fetch->blob and FileReader for the dataUrl round-trip
+  const shareOk = await run(`(async () => {
+    window.__fetchOrig = window.fetch;
+    window.fetch = async (u) => u.indexOf('data:image') === 0
+      ? { blob: async () => new Blob(['x'], { type: 'image/jpeg' }) }
+      : window.__fetchOrig(u);
+    try { return await spinePhotoShare({ isbn: '9780143127748' }, 'data:image/jpeg;base64,AAA', true); }
+    finally { window.fetch = window.__fetchOrig; }
+  })()`);
+  ok('share uploads to the edition-images bucket', run(`window.__eiCalls`).some(c =>
+    c === 'upload:edition-images:spine/jacket/9780143127748.jpg'));
+  ok('share upserts face=spine appearance=jacket', run(`window.__eiCalls`).some(c =>
+    c.indexOf('upsert:edition_images:') === 0 && c.indexOf('"face":"spine"') !== -1 &&
+    c.indexOf('"appearance":"jacket"') !== -1 && c.indexOf('"bucket":"edition-images"') !== -1));
+  ok('share reports success', shareOk === true);
+  const adoptOk = await run(`(async () => {
+    window.__fetchOrig2 = window.fetch;
+    window.fetch = async (u) => u.indexOf('https://cdn.example/') === 0
+      ? { blob: async () => new Blob(['y'], { type: 'image/jpeg' }) }
+      : window.__fetchOrig2(u);
+    window.__frOrig = window.FileReader;
+    window.FileReader = function () {};
+    window.FileReader.prototype.readAsDataURL = function () {
+      this.result = 'data:image/jpeg;base64,BBB';
+      if (this.onload) this.onload();
+    };
+    try {
+      const b = { id: 'adopt1', isbn: '9780143127748' };
+      const r = await spinePhotoAdopt(b);
+      return r && b.spinePhoto === 'data:image/jpeg;base64,BBB';
+    } finally {
+      window.fetch = window.__fetchOrig2;
+      window.FileReader = window.__frOrig;
+    }
+  })()`);
+  ok('adopt resolves the legacy bucket from the row', adoptOk === true);
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

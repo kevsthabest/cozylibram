@@ -1235,6 +1235,13 @@ function spinePhotoISBN(book) {
   const d = String(raw).replace(/[^0-9X]/gi, '').toUpperCase();
   return /^(?:\d{13}|\d{10}|\d{9}X)$/.test(d) ? d : null;
 }
+// v273: the shared pool is edition_images (face/appearance keyed, API-ready).
+// spinePhotoShare contributes the AI-cropped spine as face='spine',
+// appearance='jacket'. Rows are bucket-aware: legacy v259 rows still point
+// at the spine-photos bucket.
+function editionImagePath(isbn, face, appearance) {
+  return face + '/' + appearance + '/' + isbn + '.jpg';
+}
 async function spinePhotoShare(book, dataUrl, aiCropped) {
   try {
     if (!aiCropped) return false; // safety: only anonymous tight crops
@@ -1242,13 +1249,16 @@ async function spinePhotoShare(book, dataUrl, aiCropped) {
     if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
     const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
     if (!sb) return false;
-    const seen = await sb.from('spine_photos').select('isbn').eq('isbn', isbn).maybeSingle();
+    const seen = await sb.from('edition_images').select('isbn')
+      .eq('isbn', isbn).eq('face', 'spine').eq('appearance', 'jacket').maybeSingle();
     if (seen && seen.data) return true; // already in the pool
     const blob = await (await fetch(dataUrl)).blob();
-    const path = 'spines/' + isbn + '.jpg';
-    const up = await sb.storage.from('spine-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    const path = editionImagePath(isbn, 'spine', 'jacket');
+    const up = await sb.storage.from('edition-images').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
     if (up.error && up.error.statusCode !== '409' && !/exists/i.test(up.error.message || '')) return false;
-    await sb.from('spine_photos').upsert({ isbn, path }, { onConflict: 'isbn', ignoreDuplicates: true });
+    await sb.from('edition_images').upsert(
+      { isbn, face: 'spine', appearance: 'jacket', bucket: 'edition-images', path },
+      { onConflict: 'isbn,face,appearance', ignoreDuplicates: true });
     return true;
   } catch (e) { return false; }
 }
@@ -1263,10 +1273,14 @@ async function spinePhotoAdopt(book) {
     spineLookupDone.add(book.id);
     const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
     if (!sb) return false;
-    const row = await sb.from('spine_photos').select('path').eq('isbn', isbn).maybeSingle();
-    const path = row && row.data && row.data.path;
+    // v273: edition_images; prefer the jacket spine, fall back to any appearance.
+    const res = await sb.from('edition_images').select('bucket,path,appearance')
+      .eq('isbn', isbn).eq('face', 'spine').limit(5);
+    const rows = (res && res.data) || [];
+    const row = rows.find(r => r.appearance === 'jacket') || rows[0];
+    const path = row && row.path;
     if (!path) return false;
-    const pub = sb.storage.from('spine-photos').getPublicUrl(path);
+    const pub = sb.storage.from(row.bucket || 'edition-images').getPublicUrl(path);
     const url = pub && pub.data && pub.data.publicUrl;
     if (!url) return false;
     const blob = await (await fetch(url)).blob();
