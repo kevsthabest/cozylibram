@@ -1027,6 +1027,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
     '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button>' +
     '<button class="btn ghost sm" id="m-scanfaces">' + icon('camera') + ' Scan Edition</button>' +
+    '<button class="btn ghost sm" id="m-measurethick">Measure thickness</button>' +
     '<button class="btn ghost sm" id="m-view3d">' + icon('eye') + ' View in 3D</button></div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
@@ -1389,6 +1390,8 @@ function renderDetailModal(b, viaBook) {
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));
+  // v287: calibrated physical thickness capture using an ID-1 reference card.
+  document.getElementById('m-measurethick').addEventListener('click', () => editionMeasureThickness(id));
   // v279: 3D edition viewer (spine/covers/sprayed edges from scanned faces).
   document.getElementById('m-view3d').addEventListener('click', () => b3dOpenViewer(id));
   // v210: edition picker — change which edition of the book she owns.
