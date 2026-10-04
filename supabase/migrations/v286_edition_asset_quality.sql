@@ -32,6 +32,38 @@ create policy "edition_assets contributor insert" on public.edition_assets
     )
   );
 
+-- Tighten the v284 contributor policies: contributors can edit/delete
+-- their own unmoderated evidence, but cannot self-verify or point a canonical
+-- slot at somebody else's candidate.
+drop policy if exists "edition_assets contributor update" on public.edition_assets;
+create policy "edition_assets contributor update" on public.edition_assets
+  for update to authenticated
+  using (
+    (source_user_id = auth.uid() and not verified and not rejected)
+    or is_admin()
+  )
+  with check (
+    (source_user_id = auth.uid() and not verified and not rejected)
+    or is_admin()
+  );
+
+drop policy if exists "edition_asset_slots contributor update" on public.edition_asset_slots;
+create policy "edition_asset_slots contributor update" on public.edition_asset_slots
+  for update to authenticated
+  using (selected_by = auth.uid() or is_admin())
+  with check (
+    is_admin()
+    or (
+      selected_by = auth.uid()
+      and exists (
+        select 1 from public.edition_assets a
+        where a.id = edition_asset_slots.canonical_asset_id
+          and a.source_user_id = auth.uid()
+          and not a.rejected
+      )
+    )
+  );
+
 create schema if not exists private;
 
 create or replace function private.edition_assets_select_best(
@@ -152,7 +184,8 @@ begin
     coalesce(new.face, old.face),
     coalesce(new.appearance, old.appearance)
   );
-  return coalesce(new, old);
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
