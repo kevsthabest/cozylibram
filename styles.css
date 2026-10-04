@@ -2431,3 +2431,26 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sv-decor-chip { border: 1px solid var(--line); background: var(--card2); color: var(--muted);
   border-radius: 999px; padding: 9px 16px; font-size: 14px; cursor: pointer; }
 .sv-decor-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---------- Shelf tab: 3D depth (v254) ---------- */
+/* page-block sliver across the top of every spine */
+.sp-pages { position: absolute; top: 0; left: 2px; right: 2px; height: 7px;
+  border-radius: 2px 5px 0 0;
+  background: repeating-linear-gradient(90deg, #ece4cf 0 2px, #d9cfb4 2px 3px);
+  box-shadow: 0 2px 2px rgba(0,0,0,.45), inset 0 -1px 1px rgba(0,0,0,.25); }
+.spine { box-shadow: inset -4px 0 6px rgba(0,0,0,.5), inset 3px 0 4px rgba(255,255,255,.07),
+  4px 7px 10px rgba(0,0,0,.55); }
+/* face-out thickness: page block on the right edge, hinge shade on the left */
+.faceout::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 9px;
+  background: linear-gradient(90deg, rgba(0,0,0,.5), transparent); z-index: 2; pointer-events: none; }
+.faceout::after { content: ''; position: absolute; right: 0; top: 1.5%; bottom: 1.5%; width: 11px;
+  background: repeating-linear-gradient(0deg, #ece4cf 0 2px, #d3c8ab 2px 3px);
+  border-radius: 0 3px 3px 0; box-shadow: -2px 0 3px rgba(0,0,0,.4); z-index: 2; pointer-events: none; }
+/* shelf board front face */
+.sv-board { border-bottom: 3px solid #2c1e12; }
+/* draggable decoration wrapper */
+.sv-dragdecor { flex: none; align-self: flex-end; display: flex; align-items: flex-end;
+  cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none;
+  padding: 0 4px; }
+.sv-dragdecor .sv-decor { margin: 0; }
+.sv-dragdecor:active { cursor: grabbing; }
