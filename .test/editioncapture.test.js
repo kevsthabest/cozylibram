@@ -433,14 +433,16 @@ ok('review thumbs have Enhance buttons',
 run(`document.querySelector('#ec-wizard [data-ec-enhance="jacket:spine"]').click();`);
 ok('enhance picker opens with both modes',
   !!q('#ec-enhance #ec-eh-sharpen') && !!q('#ec-enhance #ec-eh-restore'));
-// Compare overlay renders standalone and Keep fires the callback.
+// Compare overlay renders standalone and Keep fires the context store.
 run(`window.__kept = null;
-ecEnhanceCompare('data:image/jpeg;base64,AAA', 'data:image/jpeg;base64,BBB', 'jacket', 'spine',
-  function () { window.__kept = 'yes'; });`);
+EC.eh = { label: function () { return 'Spine'; },
+  store: function (u) { window.__kept = u; }, after: function () {} };
+ecEnhanceCompare('data:image/jpeg;base64,AAA', 'data:image/jpeg;base64,BBB');`);
 ok('compare overlay shows before/after with keep/discard',
   !!q('#ec-enhance #ec-eh-keep') && !!q('#ec-enhance #ec-eh-discard'));
 run(`document.getElementById('ec-eh-keep').click();`);
-ok('compare Keep fires onKeep and closes', run(`window.__kept`) === 'yes' && !q('#ec-enhance'));
+ok('compare Keep stores the enhanced URL and closes',
+  run(`window.__kept`) === 'data:image/jpeg;base64,BBB' && !q('#ec-enhance'));
 run(`document.getElementById('ec-rv-cancel').click();`);
 
 // Async: ecRunEnhance posts image+mode and resolves the enhanced URL.
@@ -474,6 +476,42 @@ ecRunEnhance('data:image/jpeg;base64,IN', 'sharpen').then(
   e => { window.__ehRes2 = e.message; window.__ehDone2 = true; });`);
   await flush('window.__ehDone2');
   ok('enhance 429 rejects with a busy message', /busy/i.test(run(`window.__ehRes2`)));
+
+  // v282: saved faces can be enhanced from the appearance screen.
+  run(`library = [{ id: 'ecb6', title: 'Enhance Saved',
+    editionFaces: { jacket: { spine: 'data:image/jpeg;base64,OLD' } } }];
+ecStartScan('ecb6');`);
+  ok('saved faces have enhance buttons', !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  run(`window.__ehDone3 = false;
+window.fetch = async () => ({ ok: true, status: 200,
+  json: async () => ({ image: 'data:image/jpeg;base64,NEW' }) });
+document.querySelector('#ec-wizard [data-ec-eh="jacket:spine"]').click();`);
+  ok('saved-face enhance opens the picker', !!q('#ec-enhance #ec-eh-sharpen'));
+  run(`document.getElementById('ec-eh-sharpen').click();
+ecRunEnhance && null;
+(function wait() {
+  if (document.getElementById('ec-eh-keep')) {
+    document.getElementById('ec-eh-keep').click();
+    window.__ehDone3 = true;
+  } else setTimeout(wait, 30);
+})();`);
+  await flush('window.__ehDone3');
+  ok('kept enhancement is stored on the saved face',
+    run(`library[0].editionFaces.jacket.spine`) === 'data:image/jpeg;base64,NEW' &&
+    !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  run(`document.getElementById('ec-ap-cancel').click();`);
+
+  // v282: rescan with "Plain pages" clears a stale saved fore-edge.
+  run(`window.__saved = false;
+library = [{ id: 'ecb7', title: 'Clear Me',
+  editionFaces: { jacket: { spine: 'data:image/jpeg;base64,S', fore_edge: 'data:image/jpeg;base64,BAD' } } }];
+EC = { bookId: 'ecb7', token: null, appearances: ['jacket'], hasEdges: false,
+  results: { jacket: { spine: 'data:image/jpeg;base64,NEWSPINE' } } };
+ecSaveAll().then(() => { window.__saved = true; });`);
+  await flush('window.__saved');
+  ok('plain-pages rescan drops the stale fore-edge and keeps the new spine',
+    run(`JSON.stringify(library[0].editionFaces.jacket)`) ===
+      JSON.stringify({ spine: 'data:image/jpeg;base64,NEWSPINE' }));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
