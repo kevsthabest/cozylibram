@@ -179,6 +179,22 @@ ok('confirm "adjust corners" opens the editor', !!q('#ec-editor'));
 run(`document.getElementById('ec-ed-retake').click();`);
 ok('editor retake from the confirm path tears down cleanly', !q('#ec-editor'));
 
+/* ---- 13. existing faces show on the appearance screen with removal ---- */
+run(`library = [{ id: 'ecb3', title: 'Managed Book',
+  editionFaces: { jacket: { spine: 'data:image/jpeg;base64,xx', fore_edge: 'data:image/jpeg;base64,yy' } } }];
+ecStartScan('ecb3');`);
+ok('appearance screen lists already-scanned faces',
+  !!q('#ec-wizard [data-ec-rm="jacket:spine"]') && !!q('#ec-wizard [data-ec-rm="jacket:fore_edge"]'));
+run(`document.querySelector('#ec-wizard [data-ec-rm="jacket:fore_edge"]').click();`);
+ok('removing a face drops it from the book and the list',
+  !q('#ec-wizard [data-ec-rm="jacket:fore_edge"]') &&
+  !!q('#ec-wizard [data-ec-rm="jacket:spine"]') &&
+  run(`JSON.stringify(Object.keys(library[0].editionFaces.jacket))`) === '["spine"]');
+run(`document.querySelector('#ec-wizard [data-ec-rm="jacket:spine"]').click();`);
+ok('removing the last face clears the section',
+  !q('#ec-wizard .ec-existing') && run(`!('editionFaces' in library[0])`) === true);
+run(`document.getElementById('ec-ap-cancel').click();`);
+
 /* ---- 13. editor overlay chrome (v275) ---- */
 run(`ecOpenEditor('data:image/jpeg;base64,AAA', 'Spine', 'Dust jacket', function(){}, function(){});`);
 ok('editor builds with lock toggle defaulting on',
@@ -378,6 +394,31 @@ const det8 = run(`(() => {
          ecFaceAspectOk(port, null) === false;
 })()`);
 ok('per-face aspect gate filters wrong shapes', det8 === true);
+
+// ---- v280 existing-face management ----
+const ex1 = run(`JSON.stringify(ecExistingFaces({
+  editionFaces: { jacket: { spine: 'a', front: 'b' }, board: {} }
+}))`);
+ok('existing faces group by appearance, empties skipped',
+  ex1 === JSON.stringify({ jacket: ['spine', 'front'] }));
+ok('no faces -> empty object',
+  run(`JSON.stringify(ecExistingFaces({}))`) === '{}');
+
+const ex2 = run(`(() => {
+  const b = { editionFaces: { jacket: { spine: 'a', front: 'b' } } };
+  const r1 = ecRemoveFace(b, 'jacket', 'spine');
+  const r2 = ecRemoveFace(b, 'jacket', 'nope');
+  const left = JSON.stringify(b.editionFaces);
+  const r3 = ecRemoveFace(b, 'jacket', 'front');
+  return JSON.stringify({ r1, r2, left, gone: !('editionFaces' in b), r3 });
+})()`);
+{
+  const r = JSON.parse(ex2);
+  ok('removeFace deletes the face and reports', r.r1 === true &&
+    r.left === JSON.stringify({ jacket: { front: 'b' } }));
+  ok('removeFace reports missing faces', r.r2 === false);
+  ok('last face cleans up the whole editionFaces', r.r3 === true && r.gone === true);
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

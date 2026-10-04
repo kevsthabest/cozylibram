@@ -2722,3 +2722,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .b3d-appear .btn.active { border-color: var(--accent, #c9a86a); color: var(--accent, #c9a86a); }
 .b3d-appear .btn:disabled { opacity: 0.35; }
 .b3d-hint { margin: 0; font-size: 12.5px; opacity: 0.65; text-align: center; }
+
+/* ---------- scan: existing faces manager (v280) ---------- */
+.ec-existing { margin: 2px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
+.ec-existing .ec-hint { margin: 0 0 8px; }
+.ec-exrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ec-exrow:last-child { margin-bottom: 0; }
+.ec-exap { font-size: 12px; opacity: 0.6; min-width: 52px; }
+.ec-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px;
+  padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); }
+.ec-chipx { border: 0; background: rgba(255, 255, 255, 0.1); color: inherit; border-radius: 50%;
+  width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 14px; }
