@@ -140,11 +140,44 @@ ok('first face step renders',
 ok('spine goes first', q('#ec-wizard h3').textContent === 'Spine');
 run(`document.getElementById('ec-st-photo').click();`);
 ok('capture sheet opens with a face guide', !!q('#ec-capture .ec-guide-tall'));
+ok('capture sheet has the auto-scan UI',
+  !!q('#ec-capture #ec-scanfx') && !!q('#ec-capture #ec-scanbar') &&
+  !!q('#ec-capture #ec-cap-auto'));
+// jsdom has no camera: auto-scan starts off; the toggle still flips state.
+ok('auto-scan starts off without a camera',
+  q('#ec-capture #ec-cap-auto').textContent === 'Auto-scan: off');
+run(`document.getElementById('ec-cap-auto').click();`);
+ok('auto-scan toggle flips on',
+  q('#ec-capture #ec-cap-auto').textContent === 'Auto-scan: on');
 run(`document.getElementById('ec-cap-back').click();`);
 ok('capture back returns to the step (handoff, no dead overlay)',
   !!q('#ec-wizard #ec-st-photo') && !q('#ec-capture'));
 run(`document.getElementById('ec-st-cancel').click();`);
 ok('cancel tears down the wizard and session', !q('#ec-wizard') && run(`EC`) === null);
+
+/* ---- 12. confirm sheet (auto-scan handoff) ---- */
+run(`window.__cf = null;
+ecOpenConfirm('data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+  'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+  [[0,0],[10,0],[10,10],[0,10]],
+  { label: 'Spine', guide: 'tall' }, 'Jacket', 'step 1 of 4',
+  function (url, opts) { window.__cf = { url: url.slice(0, 22), warped: !!(opts && opts.warped) }; });`);
+ok('confirm sheet renders with use/adjust/retake',
+  !!q('#ec-confirm #ec-cf-use') && !!q('#ec-confirm #ec-cf-adjust') && !!q('#ec-confirm #ec-cf-retake'));
+run(`document.getElementById('ec-cf-use').click();`);
+ok('confirm "use this" hands the warped photo back flagged as warped',
+  run(`JSON.stringify(window.__cf)`) === JSON.stringify({ url: 'data:image/gif;base64,', warped: true }) &&
+  !q('#ec-confirm'));
+run(`window.__cf = null;
+ecOpenConfirm('data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+  'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+  [[0,0],[10,0],[10,10],[0,10]],
+  { label: 'Spine', guide: 'tall' }, 'Jacket', 'step 1 of 4',
+  function (url, opts) { window.__cf = true; });`);
+run(`document.getElementById('ec-cf-adjust').click();`);
+ok('confirm "adjust corners" opens the editor', !!q('#ec-editor'));
+run(`document.getElementById('ec-ed-retake').click();`);
+ok('editor retake from the confirm path tears down cleanly', !q('#ec-editor'));
 
 /* ---- 13. editor overlay chrome (v275) ---- */
 run(`ecOpenEditor('data:image/jpeg;base64,AAA', 'Spine', 'Dust jacket', function(){}, function(){});`);
@@ -200,6 +233,151 @@ const rotOk = run(`(() => {
          Math.abs(r[0][0]-100) < 1e-9 && Math.abs(r[0][1]-0) < 1e-9;
 })()`);
 ok('rotate-quad turns 90° around the center', rotOk === true);
+
+// ---- v278 auto-scan detection: synthetic image fixtures ----
+const detPrelude = `
+function synthGray(w, h, rects) {
+  const g = new Uint8ClampedArray(w*h);
+  for (let i = 0; i < w*h; i++) g[i] = 18;
+  (rects || []).forEach(r => {
+    const a = (r.ang || 0) * Math.PI/180, cos = Math.cos(a), sin = Math.sin(a);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = x - r.cx, dy = y - r.cy;
+      const lx = dx*cos + dy*sin, ly = -dx*sin + dy*cos;
+      if (Math.abs(lx) <= r.rw/2 && Math.abs(ly) <= r.rh/2) g[y*w+x] = (r.val == null ? 220 : r.val);
+    }
+    (r.bars || []).forEach(b => { // interior "text" partitions
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const dx = x - r.cx, dy = y - r.cy;
+        const lx = dx*cos + dy*sin, ly = -dx*sin + dy*cos;
+        if (Math.abs(lx) <= r.rw/2 && ly >= b.y0 && ly <= b.y1) g[y*w+x] = b.val;
+      }
+    });
+  });
+  return g;
+}
+function angMod(a, b) {
+  let d = Math.abs(a - b) % Math.PI;
+  return Math.min(d, Math.PI - d);
+}
+`;
+
+// axis-aligned book
+const det1 = run(detPrelude + `(() => {
+  const g = synthGray(240, 320, [{ cx: 120, cy: 160, rw: 80, rh: 160, ang: 0 }]);
+  const r = ecDetectBookRect(g, 240, 320);
+  if (!r) return 'none';
+  return JSON.stringify({ cx: Math.round(r.cx), cy: Math.round(r.cy),
+    w: Math.round(r.w), h: Math.round(r.h), portrait: r.h >= r.w });
+})()`);
+{
+  const r = JSON.parse(det1);
+  ok('detects an axis-aligned book', r !== 'none' &&
+    Math.abs(r.cx - 120) <= 10 && Math.abs(r.cy - 160) <= 10 &&
+    Math.abs(r.w - 80) <= 16 && Math.abs(r.h - 160) <= 24 && r.portrait === true);
+}
+
+// rotated book
+const det2 = run(detPrelude + `(() => {
+  const g = synthGray(240, 320, [{ cx: 120, cy: 160, rw: 70, rh: 150, ang: 14 }]);
+  const r = ecDetectBookRect(g, 240, 320);
+  if (!r) return 'none';
+  return JSON.stringify({ cx: Math.round(r.cx), w: Math.round(r.w), h: Math.round(r.h),
+    angDiff: angMod(r.angle, 14 * Math.PI/180) });
+})()`);
+{
+  const r = JSON.parse(det2);
+  ok('detects a rotated book with the right angle', r !== 'none' &&
+    Math.abs(r.cx - 120) <= 12 && Math.abs(r.w - 70) <= 18 &&
+    Math.abs(r.h - 150) <= 26 && r.angDiff < 0.22);
+}
+
+// cover text partitions must not break detection (morphological opening)
+const det3 = run(detPrelude + `(() => {
+  const bars = [];
+  for (let y = -60; y < 60; y += 18) bars.push({ y0: y, y1: y + 7, val: 40 });
+  const g = synthGray(240, 320, [{ cx: 120, cy: 160, rw: 90, rh: 170, ang: -8, bars }]);
+  const r = ecDetectBookRect(g, 240, 320);
+  if (!r) return 'none';
+  return JSON.stringify({ cx: Math.round(r.cx), cy: Math.round(r.cy) });
+})()`);
+{
+  const r = JSON.parse(det3);
+  ok('survives interior text partitions', r !== 'none' &&
+    Math.abs(r.cx - 120) <= 14 && Math.abs(r.cy - 160) <= 14);
+}
+
+// empty frame -> null
+const det4 = run(detPrelude + `(() => {
+  const g = synthGray(240, 320, []);
+  return ecDetectBookRect(g, 240, 320) === null;
+})()`);
+ok('empty frame detects nothing', det4 === true);
+
+// book touching the border -> null (must be fully in view)
+const det5 = run(detPrelude + `(() => {
+  const g = synthGray(240, 320, [{ cx: 120, cy: 300, rw: 120, rh: 160, ang: 0 }]);
+  return ecDetectBookRect(g, 240, 320) === null;
+})()`);
+ok('border-touching book is rejected', det5 === true);
+
+// no mirror: asymmetric rect keeps left/right after warp
+const det6 = run(detPrelude + `(() => {
+  const W = 240, H = 320;
+  const g = synthGray(W, H, [{ cx: 120, cy: 160, rw: 90, rh: 170, ang: 6 }]);
+  const a = 6 * Math.PI/180, cos = Math.cos(a), sin = Math.sin(a);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = x - 120, dy = y - 160;
+    const lx = dx*cos + dy*sin, ly = -dx*sin + dy*cos;
+    if (Math.abs(lx) <= 45 && Math.abs(ly) <= 85 && lx < -4) g[y*W+x] = 60;
+  }
+  const r = ecDetectBookRect(g, W, H);
+  if (!r) return 'none';
+  const rgba = new Uint8ClampedArray(W*H*4);
+  for (let i = 0; i < W*H; i++) {
+    rgba[i*4] = rgba[i*4+1] = rgba[i*4+2] = g[i]; rgba[i*4+3] = 255;
+  }
+  const size = ecQuadSize(r.quad, 400);
+  const out = ecWarpPixels(rgba, W, H, r.quad, size[0], size[1]).data;
+  let l = 0, lc = 0, rr = 0, rc = 0;
+  for (let y = 0; y < size[1]; y++) for (let x = 0; x < size[0]; x++) {
+    const v = out[(y*size[0]+x)*4];
+    if (x < size[0]/3) { l += v; lc++; } else if (x > size[0]*2/3) { rr += v; rc++; }
+  }
+  return JSON.stringify({ left: l/lc, right: rr/rc });
+})()`);
+{
+  const r = JSON.parse(det6);
+  ok('warped output is not mirrored', r !== 'none' && r.left < r.right - 20);
+}
+
+// stability tracker
+const det7 = run(`(() => {
+  const tr = ecNewScanTracker();
+  const mk = (dx) => ({ cx: 120+dx, cy: 160, w: 80, h: 160, angle: 0.02 });
+  let last = null;
+  for (let i = 0; i < 5; i++) last = ecScanTrack(tr, mk(i * 0.4));
+  const before = last.stable === false && last.progress > 0;
+  last = ecScanTrack(tr, mk(2.2));
+  const stable = last.stable === true;
+  const reset = ecScanTrack(tr, null);
+  const tr2 = ecNewScanTracker();
+  let s2 = null;
+  for (let i = 0; i < 6; i++) s2 = ecScanTrack(tr2, i < 3 ? mk(0) : { cx: 200, cy: 100, w: 40, h: 200, angle: 1.2 });
+  return before && stable && reset.stable === false && s2.stable === false;
+})()`);
+ok('stability tracker needs 6 steady frames and resets', det7 === true);
+
+// per-face aspect gate
+const det8 = run(`(() => {
+  const tall = { guide: 'tall' }, port = { guide: 'portrait' };
+  return ecFaceAspectOk(tall, { w: 40, h: 160 }) === true &&
+         ecFaceAspectOk(tall, { w: 100, h: 120 }) === false &&
+         ecFaceAspectOk(port, { w: 100, h: 150 }) === true &&
+         ecFaceAspectOk(port, { w: 40, h: 200 }) === false &&
+         ecFaceAspectOk(port, null) === false;
+})()`);
+ok('per-face aspect gate filters wrong shapes', det8 === true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

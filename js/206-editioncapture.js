@@ -26,7 +26,12 @@
    tilt; dragging inside moves). A lock toggle frees the quad for badly
    skewed shots. v277: handles are small visible dots with fat invisible
    grab halos; the editor swallows the long-press context menu; a "page
-   edges?" step skips the sprayed-edge capture for plain page blocks. */
+   edges?" step skips the sprayed-edge capture for plain page blocks.
+   v278: auto-scan — live edge detection on the viewfinder (Sobel +
+   morphology + min-area rect, pure and unit-tested) draws the detected
+   book outline and auto-captures after 6 steady frames; the warped face
+   goes to a confirm sheet (Use / Adjust corners / Retake). Manual snaps
+   and chosen photos get the detected quad as an editor pre-fit. */
 
 var EC_FACES = [
   { id: 'spine', label: 'Spine', skippable: false, guide: 'tall',
@@ -205,6 +210,335 @@ function ecSnapToRect(q) {
   });
 }
 
+/* ---------- auto-scan book detection (v278) ----------
+   Pure image pipeline (no DOM): downscaled grayscale in, rotated rectangle
+   out. Finds the book as the largest interior region after morphological
+   opening (erases cover text/partitions, keeps the book blob), fits a
+   min-area rectangle to its convex hull, and verifies edge density along
+   the rect perimeter. Returns { quad, cx, cy, w, h, angle } in input px
+   (quad normalized: portrait winding, short edge first) or null. */
+
+function ecToGray(rgba, w, h) {
+  var g = new Uint8ClampedArray(w * h);
+  for (var i = 0; i < w * h; i++) {
+    g[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
+  }
+  return g;
+}
+
+function ecBlur3(g, w, h) {
+  var o = new Uint8ClampedArray(w * h);
+  for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+    var s = 0, n = 0;
+    for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+      var xx = x + dx, yy = y + dy;
+      if (xx >= 0 && xx < w && yy >= 0 && yy < h) { s += g[yy * w + xx]; n++; }
+    }
+    o[y * w + x] = s / n;
+  }
+  return o;
+}
+
+function ecSobel(g, w, h) {
+  var mag = new Uint16Array(w * h), max = 0;
+  for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
+    var i = y * w + x;
+    var gx = -g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1] + g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1];
+    var gy = -g[i - w - 1] - 2 * g[i - w] - g[i - w + 1] + g[i + w - 1] + 2 * g[i + w] + g[i + w + 1];
+    var m = Math.abs(gx) + Math.abs(gy);
+    mag[i] = m;
+    if (m > max) max = m;
+  }
+  return { mag: mag, max: max };
+}
+
+function ecThreshold(mag, w, h, t) {
+  var o = new Uint8Array(w * h), c = 0;
+  for (var i = 0; i < w * h; i++) if (mag[i] > t) { o[i] = 1; c++; }
+  return { bin: o, count: c };
+}
+
+function ecDilate(bin, w, h, iters) {
+  var cur = bin;
+  for (var k = 0; k < (iters || 1); k++) {
+    var o = new Uint8Array(w * h);
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var v = 0;
+      for (var dy = -1; dy <= 1 && !v; dy++) for (var dx = -1; dx <= 1; dx++) {
+        var xx = x + dx, yy = y + dy;
+        if (xx >= 0 && xx < w && yy >= 0 && yy < h && cur[yy * w + xx]) { v = 1; break; }
+      }
+      o[y * w + x] = v;
+    }
+    cur = o;
+  }
+  return cur;
+}
+
+function ecErode(bin, w, h, iters) {
+  var cur = bin;
+  for (var k = 0; k < (iters || 1); k++) {
+    var o = new Uint8Array(w * h);
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var v = 1;
+      for (var dy = -1; dy <= 1 && v; dy++) for (var dx = -1; dx <= 1; dx++) {
+        var xx = x + dx, yy = y + dy;
+        if (xx < 0 || xx >= w || yy < 0 || yy >= h || !cur[yy * w + xx]) { v = 0; break; }
+      }
+      o[y * w + x] = v;
+    }
+    cur = o;
+  }
+  return cur;
+}
+
+// Iterative flood fill through pixels where bin==1, marking mark[]=1.
+// Returns the filled pixel indices.
+function ecFloodFill(bin, w, h, sx, sy, mark) {
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return [];
+  var stack = [sy * w + sx], pts = [];
+  while (stack.length) {
+    var i = stack.pop();
+    if (mark[i] || !bin[i]) continue;
+    mark[i] = 1;
+    pts.push(i);
+    var x = i % w, y = (i / w) | 0;
+    if (x > 0) stack.push(i - 1);
+    if (x < w - 1) stack.push(i + 1);
+    if (y > 0) stack.push(i - w);
+    if (y < h - 1) stack.push(i + w);
+  }
+  return pts;
+}
+
+// Background = everything reachable from the image border through non-edge
+// pixels (edges are walls).
+function ecFillBackground(edges, w, h) {
+  var open = new Uint8Array(w * h);
+  for (var i = 0; i < w * h; i++) open[i] = edges[i] ? 0 : 1;
+  var bg = new Uint8Array(w * h);
+  for (var x = 0; x < w; x++) {
+    ecFloodFill(open, w, h, x, 0, bg);
+    ecFloodFill(open, w, h, x, h - 1, bg);
+  }
+  for (var y = 0; y < h; y++) {
+    ecFloodFill(open, w, h, 0, y, bg);
+    ecFloodFill(open, w, h, w - 1, y, bg);
+  }
+  return bg;
+}
+
+// Largest connected component of a binary mask, scored by area biased
+// toward the frame center (the user aims at the book).
+function ecLargestComponent(mask, w, h) {
+  var seen = new Uint8Array(w * h);
+  var best = null, bestScore = 0;
+  var ccx = w / 2, ccy = h / 2, maxd = Math.hypot(ccx, ccy) || 1;
+  for (var i = 0; i < w * h; i++) {
+    if (!mask[i] || seen[i]) continue;
+    var pts = ecFloodFill(mask, w, h, i % w, (i / w) | 0, seen);
+    if (!pts.length) continue;
+    var sx = 0, sy = 0, tb = false;
+    for (var k = 0; k < pts.length; k++) {
+      var p = pts[k], x = p % w, y = (p / w) | 0;
+      sx += x; sy += y;
+      if (x < 2 || y < 2 || x > w - 3 || y > h - 3) tb = true;
+    }
+    var cx = sx / pts.length, cy = sy / pts.length;
+    var score = pts.length * (1.35 - Math.hypot(cx - ccx, cy - ccy) / maxd);
+    if (score > bestScore) {
+      bestScore = score;
+      best = { pts: pts, area: pts.length, cx: cx, cy: cy, touchesBorder: tb };
+    }
+  }
+  return best;
+}
+
+// Andrew's monotone chain.
+function ecConvexHull(pts) {
+  var p = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+  var u = [];
+  for (var i = 0; i < p.length; i++) {
+    if (!i || p[i][0] !== p[i - 1][0] || p[i][1] !== p[i - 1][1]) u.push(p[i]);
+  }
+  if (u.length < 3) return u;
+  var cross = function (o, a, b) {
+    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  };
+  var lower = [], upper = [], i;
+  for (i = 0; i < u.length; i++) {
+    while (lower.length >= 2 &&
+           cross(lower[lower.length - 2], lower[lower.length - 1], u[i]) <= 0) lower.pop();
+    lower.push(u[i]);
+  }
+  for (i = u.length - 1; i >= 0; i--) {
+    while (upper.length >= 2 &&
+           cross(upper[upper.length - 2], upper[upper.length - 1], u[i]) <= 0) upper.pop();
+    upper.push(u[i]);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+// Minimum-area enclosing rectangle (a side is flush with a hull edge).
+function ecMinAreaRect(hull) {
+  var n = hull.length, bi = 0, best = null;
+  for (var i = 0; i < n; i++) {
+    var p1 = hull[i], p2 = hull[(i + 1) % n];
+    var ang = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+    var cos = Math.cos(-ang), sin = Math.sin(-ang);
+    var minx = 1e18, maxx = -1e18, miny = 1e18, maxy = -1e18;
+    for (var j = 0; j < n; j++) {
+      var x = hull[j][0] * cos - hull[j][1] * sin;
+      var y = hull[j][0] * sin + hull[j][1] * cos;
+      if (x < minx) minx = x; if (x > maxx) maxx = x;
+      if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+    var area = (maxx - minx) * (maxy - miny);
+    if (!best || area < best.area) {
+      best = { area: area, ang: ang, minx: minx, maxx: maxx, miny: miny, maxy: maxy };
+      bi = i;
+    }
+  }
+  var c2 = Math.cos(best.ang), s2 = Math.sin(best.ang);
+  var quad = [[best.minx, best.miny], [best.maxx, best.miny],
+              [best.maxx, best.maxy], [best.minx, best.maxy]].map(function (pt) {
+    return [pt[0] * c2 - pt[1] * s2, pt[0] * s2 + pt[1] * c2];
+  });
+  return { quad: quad, w: best.maxx - best.minx, h: best.maxy - best.miny, angle: best.ang, edge: bi };
+}
+
+// Normalize a detected quad for the warp: clockwise winding (matching the
+// warp's destination order, so output is never mirrored) and starting at
+// the shortest edge (so output is always portrait, w <= h).
+function ecNormQuad(quad) {
+  var q = quad.slice(), i;
+  var s = 0;
+  for (i = 0; i < 4; i++) {
+    var a = q[i], b = q[(i + 1) % 4];
+    s += a[0] * b[1] - b[0] * a[1];
+  }
+  if (s < 0) q = [q[0], q[3], q[2], q[1]];
+  var len = function (p, r) { return Math.hypot(p[0] - r[0], p[1] - r[1]); };
+  var bi2 = 0, bl = 1e18;
+  for (i = 0; i < 4; i++) {
+    var l = len(q[i], q[(i + 1) % 4]);
+    if (l < bl) { bl = l; bi2 = i; }
+  }
+  return [q[bi2], q[(bi2 + 1) % 4], q[(bi2 + 2) % 4], q[(bi2 + 3) % 4]];
+}
+
+// Fraction of the quad perimeter lying on/near edge pixels (validation).
+function ecPerimeterDensity(edges, w, h, quad) {
+  var on = 0, total = 0;
+  for (var e = 0; e < 4; e++) {
+    var a = quad[e], b = quad[(e + 1) % 4];
+    var steps = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1])));
+    for (var sN = 0; sN <= steps; sN++) {
+      var x = Math.round(a[0] + (b[0] - a[0]) * sN / steps);
+      var y = Math.round(a[1] + (b[1] - a[1]) * sN / steps);
+      var hit = false;
+      for (var dy = -1; dy <= 1 && !hit; dy++) for (var dx = -1; dx <= 1; dx++) {
+        var xx = x + dx, yy = y + dy;
+        if (xx >= 0 && xx < w && yy >= 0 && yy < h && edges[yy * w + xx]) { hit = true; break; }
+      }
+      if (hit) on++;
+      total++;
+    }
+  }
+  return total ? on / total : 0;
+}
+
+function ecDetectBookRect(gray, w, h) {
+  var n = w * h;
+  var blur = ecBlur3(gray, w, h);
+  var se = ecSobel(blur, w, h);
+  if (se.max < 120) return null; // too flat to see edges
+  var t = Math.max(30, Math.min(110, se.max * 0.16));
+  var th = ecThreshold(se.mag, w, h, t);
+  if (th.count < n * 0.004 || th.count > n * 0.4) return null;
+  // Path 1: the book outline is the largest edge component (cover text
+  // stays as separate small components, or merges harmlessly inside).
+  var edges = ecDilate(th.bin, w, h, 3);
+  var r = ecRectFromPixels(edges, ecLargestComponent(edges, w, h), edges, w, h);
+  if (r) return r;
+  // Path 2 (fallback): interior opening — largest interior blob after
+  // morphological opening erases text partitions.
+  var edges1 = ecDilate(th.bin, w, h, 1);
+  var bg = ecFillBackground(edges1, w, h);
+  var interior = new Uint8Array(n);
+  for (var i = 0; i < n; i++) interior[i] = (!edges1[i] && !bg[i]) ? 1 : 0;
+  var opened = ecErode(interior, w, h, 4);
+  var comp = ecLargestComponent(opened, w, h);
+  if (!comp || comp.area < n * 0.04 || comp.touchesBorder) return null;
+  var rest = ecDilate(opened, w, h, 4);
+  var mark = new Uint8Array(n);
+  var blob = ecFloodFill(rest, w, h, Math.round(comp.cx), Math.round(comp.cy), mark);
+  if (blob.length < n * 0.05) return null;
+  var pts = [];
+  for (var k = 0; k < blob.length; k += 3) pts.push([blob[k] % w, ((blob[k] / w) | 0)]);
+  return ecRectFromPixels(edges1, { pts: pts, touchesBorder: false }, edges1, w, h);
+}
+
+// Fit a validated book rect to a pixel cloud (edge-component or blob).
+function ecRectFromPixels(edges, comp, vedges, w, h) {
+  var n = w * h;
+  if (!comp || !comp.pts || comp.pts.length < 40 || comp.touchesBorder) return null;
+  var pts = [];
+  for (var k = 0; k < comp.pts.length; k += 2) {
+    pts.push([comp.pts[k] % w, ((comp.pts[k] / w) | 0)]);
+  }
+  var hull = ecConvexHull(pts);
+  if (hull.length < 4) return null;
+  var quad = ecNormQuad(ecMinAreaRect(hull).quad);
+  var w0 = Math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1]);
+  var h0 = Math.hypot(quad[3][0] - quad[0][0], quad[3][1] - quad[0][1]);
+  if (w0 < 1 || h0 / w0 < 1 || h0 / w0 > 8) return null;
+  var area = w0 * h0;
+  if (area < n * 0.06 || area > n * 0.94) return null;
+  if (ecPerimeterDensity(vedges, w, h, quad) < 0.3) return null;
+  return {
+    quad: quad,
+    cx: (quad[0][0] + quad[2][0]) / 2, cy: (quad[0][1] + quad[2][1]) / 2,
+    w: w0, h: h0,
+    angle: Math.atan2(quad[1][1] - quad[0][1], quad[1][0] - quad[0][0]),
+  };
+}
+
+// --- stability tracking: N consecutive similar rects -> auto-capture ---
+function ecNewScanTracker() { return { hist: [] }; }
+
+function ecAngDiff(a, b) {
+  var d = a - b;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+function ecScanTrack(tr, rect) {
+  if (!rect) { tr.hist.length = 0; return { stable: false, progress: 0 }; }
+  tr.hist.push(rect);
+  if (tr.hist.length > 8) tr.hist.shift();
+  var n = tr.hist.length;
+  if (n < 6) return { stable: false, progress: n / 6 };
+  var a = tr.hist[0], ok = true;
+  for (var i = 1; i < n; i++) {
+    var b = tr.hist[i];
+    if (Math.hypot(a.cx - b.cx, a.cy - b.cy) > 7 ||
+        Math.abs(a.w - b.w) / a.w > 0.09 || Math.abs(a.h - b.h) / a.h > 0.09 ||
+        Math.abs(ecAngDiff(a.angle, b.angle)) > 0.07) { ok = false; break; }
+  }
+  return { stable: ok, progress: ok ? 1 : 0 };
+}
+
+// Lenient per-face shape gate for auto-capture (normalized: w <= h).
+function ecFaceAspectOk(face, rect) {
+  if (!rect || !rect.w) return false;
+  var aspect = rect.h / rect.w;
+  if (face.guide === 'tall') return aspect >= 1.8;
+  return aspect <= 2.8;
+}
+
 // Canvas wrapper around ecWarpPixels (browser only).
 function ecWarpCanvas(srcCanvas, quad, outW, outH) {
   try {
@@ -266,7 +600,7 @@ function ecBackToStep() {
 // Full-screen sheet: photo with 4 draggable corners + live warped preview.
 // onUse(warpedDataUrl); onRetake() returns to the face step. Returns the
 // overlay token.
-function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
+function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake, initialQuad) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
   ov.className = 'ec-backdrop';
@@ -489,8 +823,14 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
       ecHandoff(function () { ecBackToStep(); return EC ? EC.token : null; });
       return;
     }
-    var ix = W * 0.06, iy = H * 0.06;
-    quad = [[ix, iy], [W - ix, iy], [W - ix, H - iy], [ix, H - iy]];
+    if (initialQuad && initialQuad.length === 4) {
+      try { quad = ecSnapToRect(initialQuad); }
+      catch (e) { quad = null; }
+    }
+    if (!quad) {
+      var ix = W * 0.06, iy = H * 0.06;
+      quad = [[ix, iy], [W - ix, iy], [W - ix, H - iy], [ix, H - iy]];
+    }
     ecDataUrlToCanvas(dataUrl).then(function (c) {
       if (tornDown) return;
       srcCanvas = c;
@@ -507,6 +847,27 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake) {
 // Generic face capture: live camera with an aspect guide, or library photo.
 // cb(dataUrl) — full frame; the editor does the cropping. Returns the
 // overlay token. Back (button or gesture) returns to the face step.
+var EC_SCAN_W = 240; // analysis width for auto-scan (px)
+
+// Detect a book quad in a full-size canvas; returns the quad in canvas
+// coords or null. Used to pre-fit the editor after a manual snap.
+function ecDetectQuadForCanvas(canvas) {
+  try {
+    var vw = canvas.width, vh = canvas.height;
+    if (!vw || !vh || typeof document === 'undefined') return null;
+    var aw = EC_SCAN_W, ah = Math.max(1, Math.round(EC_SCAN_W * vh / vw));
+    var ac = document.createElement('canvas');
+    ac.width = aw; ac.height = ah;
+    var actx = ac.getContext('2d');
+    actx.drawImage(canvas, 0, 0, aw, ah);
+    var d = actx.getImageData(0, 0, aw, ah);
+    var r = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah);
+    if (!r) return null;
+    var s = vw / aw;
+    return r.quad.map(function (p) { return [p[0] * s, p[1] * s]; });
+  } catch (e) { return null; }
+}
+
 function ecCaptureFace(face, subLabel, stepLabel, cb) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
@@ -515,22 +876,41 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
   ov.innerHTML =
     '<div class="ec-sheet" role="dialog" aria-label="Photograph the ' + esc(face.label) + '">' +
     '<div class="ec-head"><h3 class="serif">' + esc(face.label) + '</h3>' +
-    '<p class="ec-sub">' + esc(subLabel) + (stepLabel ? ' · ' + esc(stepLabel) : '') + '</p></div>' +
+    '<p class="ec-sub">' + esc(subLabel) + (stepLabel ? ' \u00b7 ' + esc(stepLabel) : '') + '</p></div>' +
     '<div class="ec-vf"><video id="ec-video" playsinline muted autoplay></video>' +
+      '<canvas id="ec-scanfx" aria-hidden="true"></canvas>' +
       '<div class="ec-guide ec-guide-' + face.guide + '" aria-hidden="true"></div></div>' +
-    '<p class="ec-hint">' + esc(face.hint) + '</p>' +
+    '<div class="ec-scanbar" id="ec-scanbar" aria-hidden="true"><i id="ec-scanfill"></i></div>' +
+    '<p class="ec-hint" id="ec-scanmsg">Point at the book \u2014 hold steady to auto-scan</p>' +
+    '<p class="ec-hint" id="ec-cap-hint" hidden>' + esc(face.hint) + '</p>' +
     '<input type="file" id="ec-file" accept="image/*" hidden>' +
     '<div class="ec-actions">' +
       '<button class="btn ghost" id="ec-cap-back">Back</button>' +
+      '<button class="btn ghost sm" id="ec-cap-auto">Auto-scan: on</button>' +
       '<button class="btn ghost" id="ec-cap-lib">Choose photo</button>' +
       '<button class="btn primary" id="ec-cap-snap">Capture</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   var video = ov.querySelector('#ec-video');
+  var fx = ov.querySelector('#ec-scanfx');
+  var fxCtx = fx.getContext('2d');
+  var scanBar = ov.querySelector('#ec-scanbar');
+  var scanFill = ov.querySelector('#ec-scanfill');
+  var scanMsg = ov.querySelector('#ec-scanmsg');
+  var capHint = ov.querySelector('#ec-cap-hint');
+  var autoBtn = ov.querySelector('#ec-cap-auto');
   var stream = null, tornDown = false;
+  var autoOn = true, raf = 0, lastTick = 0, scanDone = false;
+  var tracker = ecNewScanTracker();
+  var analysis = document.createElement('canvas');
+  var actx = analysis.getContext('2d');
 
+  var stopScan = function () {
+    if (raf) { try { cancelAnimationFrame(raf); } catch (e) {} raf = 0; }
+  };
   var domTeardown = function () {
     if (tornDown) return; tornDown = true;
+    stopScan();
     if (stream) { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} stream = null; }
     var n = document.getElementById('ec-capture');
     if (n) n.remove();
@@ -539,19 +919,133 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
     ? overlayOpened('ec-capture', function () { domTeardown(); ecBackToStep(); })
     : null;
 
-  var snap = function () {
+  var setAuto = function (on) {
+    autoOn = on;
+    autoBtn.textContent = 'Auto-scan: ' + (on ? 'on' : 'off');
+    tracker = ecNewScanTracker();
+    scanFill.style.width = '0';
+    var show = on && !!stream;
+    scanBar.style.display = show ? '' : 'none';
+    scanMsg.hidden = !show;
+    capHint.hidden = show;
+    fx.style.display = show ? '' : 'none';
+    stopScan();
+    if (on && !tornDown && !scanDone && stream) {
+      lastTick = 0;
+      raf = requestAnimationFrame(loop);
+    }
+  };
+
+  // Draw the detected quad on the overlay (video-source pixel space).
+  var drawFx = function (rect) {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw) return;
+    if (fx.width !== vw || fx.height !== vh) { fx.width = vw; fx.height = vh; }
+    fxCtx.clearRect(0, 0, vw, vh);
+    if (!rect) return;
+    var s = vw / EC_SCAN_W;
+    fxCtx.save();
+    fxCtx.strokeStyle = '#7fd08a';
+    fxCtx.lineWidth = Math.max(3, vw / 280);
+    fxCtx.beginPath();
+    rect.quad.forEach(function (p, i) {
+      var x = p[0] * s, y = p[1] * s;
+      if (i) fxCtx.lineTo(x, y); else fxCtx.moveTo(x, y);
+    });
+    fxCtx.closePath();
+    fxCtx.stroke();
+    fxCtx.fillStyle = '#7fd08a';
+    rect.quad.forEach(function (p) {
+      fxCtx.beginPath();
+      fxCtx.arc(p[0] * s, p[1] * s, Math.max(5, vw / 160), 0, 6.2832);
+      fxCtx.fill();
+    });
+    fxCtx.restore();
+  };
+
+  var setMsg = function (t) { if (scanMsg.textContent !== t) scanMsg.textContent = t; };
+
+  var loop = function (t) {
+    raf = 0;
+    if (tornDown || scanDone || !autoOn) return;
+    raf = requestAnimationFrame(loop);
+    if (t - lastTick < 140) return;
+    lastTick = t;
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+    var aw = EC_SCAN_W, ah = Math.max(1, Math.round(EC_SCAN_W * vh / vw));
+    if (analysis.width !== aw || analysis.height !== ah) { analysis.width = aw; analysis.height = ah; }
+    var d = null;
+    try {
+      actx.drawImage(video, 0, 0, aw, ah);
+      d = actx.getImageData(0, 0, aw, ah);
+    } catch (e) { return; }
+    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah);
+    var shapeOk = !!(rect && ecFaceAspectOk(face, rect));
+    drawFx(rect);
+    var st = ecScanTrack(tracker, shapeOk ? rect : null);
+    scanFill.style.width = Math.round(st.progress * 100) + '%';
+    if (!rect) setMsg('Point at the book \u2014 keep it fully in view');
+    else if (!shapeOk) setMsg('Wrong shape for the ' + face.label.toLowerCase() + ' \u2014 re-aim');
+    else if (!st.stable) setMsg('Hold steady\u2026');
+    else {
+      setMsg('Captured');
+      scanDone = true;
+      stopScan();
+      doAutoCapture(rect);
+    }
+  };
+
+  var resumeScan = function () {
+    scanDone = false;
+    tracker = ecNewScanTracker();
+    scanFill.style.width = '0';
+    setMsg('Point at the book \u2014 hold steady to auto-scan');
+    lastTick = 0;
+    if (autoOn && !tornDown && stream) raf = requestAnimationFrame(loop);
+  };
+
+  var doAutoCapture = function (rect) {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw) { resumeScan(); return; }
+    var c = document.createElement('canvas');
+    c.width = vw; c.height = vh;
+    try { c.getContext('2d').drawImage(video, 0, 0); }
+    catch (e) { resumeScan(); return; }
+    var s = vw / EC_SCAN_W;
+    var quad = rect.quad.map(function (p) { return [p[0] * s, p[1] * s]; });
+    var size = ecQuadSize(quad, EC_MAX_DIM);
+    var w = ecWarpCanvas(c, quad, size[0], size[1]);
+    if (!w) {
+      if (typeof toast === 'function') toast('Auto-scan missed \u2014 hold steadier');
+      resumeScan();
+      return;
+    }
+    var warpedUrl = null, fullUrl = null;
+    try {
+      warpedUrl = w.toDataURL('image/jpeg', 0.9);
+      fullUrl = c.toDataURL('image/jpeg', 0.92);
+    } catch (e) { resumeScan(); return; }
+    domTeardown();
+    ecHandoff(function () {
+      return ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb);
+    });
+  };
+
+  var snapCanvas = function () {
     try {
       if (!video.videoWidth) return null;
       var c = document.createElement('canvas');
       c.width = video.videoWidth; c.height = video.videoHeight;
       c.getContext('2d').drawImage(video, 0, 0);
-      return c.toDataURL('image/jpeg', 0.92);
+      return c;
     } catch (e) { return null; }
   };
-  // Hand the photo to the editor, adopting this overlay's history entry.
-  var gotPhoto = function (url) {
+  // Hand the photo to the wizard, adopting this overlay's history entry.
+  // opts.quad pre-fits the editor; opts.warped stores the photo directly.
+  var gotPhoto = function (url, opts) {
     domTeardown();
-    ecHandoff(function () { return cb(url); });
+    ecHandoff(function () { return cb(url, opts); });
   };
 
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -562,10 +1056,14 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
         video.srcObject = s;
         var p = video.play();
         if (p && p.catch) p.catch(function () {});
+        setAuto(true);
       })
-      .catch(function () { if (typeof toast === 'function') toast('Camera unavailable — choose a photo instead'); });
+      .catch(function () { if (typeof toast === 'function') toast('Camera unavailable \u2014 choose a photo instead'); });
+  } else {
+    setAuto(false);
   }
 
+  autoBtn.addEventListener('click', function () { setAuto(!autoOn); });
   ov.querySelector('#ec-cap-back').addEventListener('click', function () {
     domTeardown();
     ecHandoff(function () { ecRenderStep(); return EC ? EC.token : null; });
@@ -579,15 +1077,81 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
     var fr = new FileReader();
     fr.onload = function () {
       var url = String(fr.result || '');
-      gotPhoto(url.indexOf('data:image') === 0 ? url : null);
+      if (url.indexOf('data:image') !== 0) return;
+      try {
+        var img = new Image();
+        img.onload = function () {
+          var c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img, 0, 0);
+          var quad = ecDetectQuadForCanvas(c);
+          gotPhoto(url, quad ? { quad: quad } : undefined);
+        };
+        img.onerror = function () { gotPhoto(url); };
+        img.src = url;
+      } catch (err) { gotPhoto(url); }
     };
     fr.onerror = function () { if (typeof toast === 'function') toast('Could not read that photo'); };
     fr.readAsDataURL(f);
   });
   ov.querySelector('#ec-cap-snap').addEventListener('click', function () {
-    var url = snap();
-    if (url) gotPhoto(url);
-    else if (typeof toast === 'function') toast('Capture failed — try again');
+    var c = snapCanvas();
+    if (!c) {
+      if (typeof toast === 'function') toast('Capture failed \u2014 try again');
+      return;
+    }
+    var quad = ecDetectQuadForCanvas(c);
+    var url = null;
+    try { url = c.toDataURL('image/jpeg', 0.92); } catch (e) {}
+    if (url) gotPhoto(url, quad ? { quad: quad } : undefined);
+    else if (typeof toast === 'function') toast('Capture failed \u2014 try again');
+  });
+  return token;
+}
+
+// Confirm sheet after an auto-scan: the warped face is already straightened.
+function ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb) {
+  if (typeof document === 'undefined') return null;
+  var ov = document.createElement('div');
+  ov.className = 'ec-backdrop';
+  ov.id = 'ec-confirm';
+  ov.innerHTML =
+    '<div class="ec-sheet" role="dialog" aria-label="Confirm the ' + esc(face.label) + ' scan">' +
+    '<div class="ec-head"><h3 class="serif">Look right?</h3>' +
+    '<p class="ec-sub">' + esc(face.label) + ' \u00b7 ' + esc(subLabel) + '</p></div>' +
+    '<div class="ec-confirmimg"><img alt="Scanned ' + esc(face.label) + '"></div>' +
+    '<div class="ec-actions">' +
+      '<button class="btn ghost" id="ec-cf-retake">Retake</button>' +
+      '<button class="btn ghost" id="ec-cf-adjust">Adjust corners</button>' +
+      '<button class="btn primary" id="ec-cf-use">Use this</button>' +
+    '</div></div>';
+  ov.querySelector('img').src = warpedUrl;
+  document.body.appendChild(ov);
+  var tornDown = false;
+  var domTeardown = function () {
+    if (tornDown) return; tornDown = true;
+    var n = document.getElementById('ec-confirm');
+    if (n) n.remove();
+  };
+  var token = (typeof overlayOpened === 'function')
+    ? overlayOpened('ec-confirm', function () { domTeardown(); ecBackToStep(); })
+    : null;
+  ov.querySelector('#ec-cf-use').addEventListener('click', function () {
+    domTeardown();
+    ecHandoff(function () { return cb(warpedUrl, { warped: true }); });
+  });
+  ov.querySelector('#ec-cf-adjust').addEventListener('click', function () {
+    domTeardown();
+    ecHandoff(function () {
+      return ecOpenEditor(fullUrl, face.label, subLabel,
+        function (warped) { return cb(warped); },
+        function () { ecBackToStep(); return EC ? EC.token : null; },
+        quad);
+    });
+  });
+  ov.querySelector('#ec-cf-retake').addEventListener('click', function () {
+    domTeardown();
+    ecHandoff(function () { return ecCaptureFace(face, subLabel, stepLabel, cb); });
   });
   return token;
 }
@@ -721,14 +1285,22 @@ function ecRenderStep() {
   ov.querySelector('#ec-st-photo').addEventListener('click', function () {
     ecCloseWizard(); // DOM only; the handoff adopts the history entry
     ecHandoff(function () {
-      return ecCaptureFace(face, apLabel, stepLabel, function (url) {
+      return ecCaptureFace(face, apLabel, stepLabel, function (url, opts) {
         if (!url) { ecRenderStep(); return EC ? EC.token : null; }
+        if (opts && opts.warped) {
+          // Auto-scan already straightened the face: store it directly.
+          (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = url;
+          EC.idx++;
+          ecRenderStep();
+          return EC ? EC.token : null;
+        }
         return ecOpenEditor(url, face.label, apLabel, function (warped) {
           (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = warped;
           EC.idx++;
           ecRenderStep();
           return EC ? EC.token : null;
-        }, function () { ecRenderStep(); return EC ? EC.token : null; });
+        }, function () { ecRenderStep(); return EC ? EC.token : null; },
+        opts && opts.quad);
       });
     });
   });
