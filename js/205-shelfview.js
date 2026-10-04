@@ -192,14 +192,14 @@ const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
 // restyles the boards; the shelf picks one by date until overridden.
 // v256: New Year's, Valentine's, St. Patrick's, Easter, Thanksgiving.
 const SHELF_SEASONS = {
-  none: { label: 'All year', icon: '📚', decor: [], fx: [] },
-  newyear: { label: "New Year's", icon: '🎆', decor: ['fireworks', 'champagne', 'popper'], fx: ['✨', '🎉', '✨'] },
-  valentine: { label: "Valentine's", icon: '💕', decor: ['rose', 'hearts', 'loveletter'], fx: ['💕', '🌹', '💗'] },
-  stpatrick: { label: "St. Patrick's", icon: '☘️', decor: ['shamrock', 'rainbow', 'clover'], fx: ['☘️', '🌈', '🍀'] },
-  easter: { label: 'Easter', icon: '🐰', decor: ['bunny', 'easteregg', 'chick'], fx: ['🌷', '🥚', '🌸'] },
-  thanksgiving: { label: 'Thanksgiving', icon: '🦃', decor: ['turkey', 'pie', 'leaves'], fx: ['🍂', '🍁', '🍂'] },
-  halloween: { label: 'Halloween', icon: '🎃', decor: ['pumpkin', 'ghost', 'bat'], fx: ['🦇', '👻', '🦇'] },
-  christmas: { label: 'Christmas', icon: '🎄', decor: ['tree', 'snowman', 'stocking'], fx: ['❄', '❆', '❄'] },
+  none: { label: 'All year', icon: '📚', decor: [] },
+  newyear: { label: "New Year's", icon: '🎆', decor: ['fireworks', 'champagne', 'popper'] },
+  valentine: { label: "Valentine's", icon: '💕', decor: ['rose', 'hearts', 'loveletter'] },
+  stpatrick: { label: "St. Patrick's", icon: '☘️', decor: ['shamrock', 'rainbow', 'clover'] },
+  easter: { label: 'Easter', icon: '🐰', decor: ['bunny', 'easteregg', 'chick'] },
+  thanksgiving: { label: 'Thanksgiving', icon: '🦃', decor: ['turkey', 'pie', 'leaves'] },
+  halloween: { label: 'Halloween', icon: '🎃', decor: ['pumpkin', 'ghost', 'bat'] },
+  christmas: { label: 'Christmas', icon: '🎄', decor: ['tree', 'snowman', 'stocking'] },
 };
 
 // Easter Sunday via the Anonymous Gregorian algorithm (valid 1583-4099).
@@ -459,11 +459,6 @@ function renderShelf() {
       '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>'
     ).join('');
   }
-  const season = shelfSeason();
-  const fx = (SHELF_SEASONS[season] || {}).fx || [];
-  const fxHTML = fx.length
-    ? '<div class="sv-fx" aria-hidden="true">' + fx.map(f => '<span>' + f + '</span>').join('') + '</div>'
-    : '';
   setView(
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
@@ -476,7 +471,7 @@ function renderShelf() {
       ? '<div class="sv-assign">' + icon('camera') + ' Tap a spine to place this photo' +
         ' <button id="svAssignCancel">Cancel</button></div>'
       : '') +
-    '<div class="sv-shelves season-' + season + '" id="svShelves">' + fxHTML + shelvesHTML + '</div>' +
+    '<div class="sv-shelves season-' + shelfSeason() + '" id="svShelves">' + shelvesHTML + '</div>' +
     (shown.length
       ? '<div class="sv-hint">Drag to rearrange &middot; long-press a book for display &amp; photo options</div>'
       : '') +

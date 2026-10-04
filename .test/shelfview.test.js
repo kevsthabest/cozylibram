@@ -238,7 +238,7 @@ run(`shelfSetSeason('halloween');
 library = [{id:'h1', title:'Spooky Book', status:'tbr'}];
 shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
 ok('shelf carries season class', q('#svShelves').className.indexOf('season-halloween') !== -1);
-ok('season fx floats', qa('#svShelves .sv-fx span').length === 3);
+ok('no falling fx (removed v257)', qa('#svShelves .sv-fx').length === 0);
 run(`shelfOpenDecorSheet();`);
 ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 8);
 run(`shelfCloseSheet(); library = []; shelfOrderCache=null;
@@ -274,7 +274,7 @@ run(`shelfSetSeason('newyear');
 library = [{id:'n1', title:'Fresh Start', status:'tbr'}];
 shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
 ok('new year shelf class', q('#svShelves').className.indexOf('season-newyear') !== -1);
-ok('new year fx floats', qa('#svShelves .sv-fx span').length === 3);
+ok('still no falling fx', qa('#svShelves .sv-fx').length === 0);
 run(`library = []; shelfOrderCache=null;
 localStorage.removeItem('spicyshelves.shelforder.v1');`);
 

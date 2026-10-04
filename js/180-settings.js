@@ -79,11 +79,13 @@ function renderSettings() {
     '<div id="bk-found"></div>';
 
   /* ---- Appearance ---- */
+  const themeOpt = th =>
+    '<option value="' + th.key + '"' + (getTheme() === th.key ? ' selected' : '') + '>' +
+    th.name + ' · ' + covenNameFor(th.key) + '</option>';
   const htmlTheme =
     '<div class="field"><label>Theme</label><select id="th-theme" class="text-input">' +
-    THEMES.map(th =>
-      '<option value="' + th.key + '"' + (getTheme() === th.key ? ' selected' : '') + '>' +
-      th.name + ' · ' + covenNameFor(th.key) + '</option>').join('') +
+    THEMES.filter(t => !t.season).map(themeOpt).join('') +
+    '<optgroup label="Seasonal">' + THEMES.filter(t => t.season).map(themeOpt).join('') + '</optgroup>' +
     '</select><p class="note">Each theme gives your social circle its own name.</p></div>' +
     '<div class="field"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>

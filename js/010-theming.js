@@ -12,6 +12,14 @@ const THEMES = [
   { key: 'velvet',      name: 'Velvet',      meta: '#1c1219' },
   { key: 'abyss',       name: 'Abyss',       meta: '#0b1416' },
   { key: 'frost',       name: 'Frost',       meta: '#edf1f6' },
+  // v257: seasonal themes — always pickable, nudged while their season runs.
+  { key: 'haunt',       name: 'Haunt',       meta: '#150e1c', season: 'halloween' },
+  { key: 'yuletide',    name: 'Yuletide',    meta: '#0c1811', season: 'christmas' },
+  { key: 'fete',        name: 'Fête',        meta: '#0f1330', season: 'newyear' },
+  { key: 'amour',       name: 'Amour',       meta: '#1d0e15', season: 'valentine' },
+  { key: 'shamrock',    name: 'Shamrock',    meta: '#0c1e13', season: 'stpatrick' },
+  { key: 'pastel',      name: 'Pastel',      meta: '#f7f2fa', season: 'easter' },
+  { key: 'harvest',     name: 'Harvest',     meta: '#191007', season: 'thanksgiving' },
 ];
 const ACCENTS = [
   { key: 'rose',   name: 'Rose',   color: '#e5488f' },
@@ -36,6 +44,65 @@ function themeMeta(key) {
   return th ? th.meta : '#14101a';
 }
 function getAccent() { return localStorage.getItem('accent') || 'rose'; }
+// v257: season -> full look (theme + accent). The nudge offers it; the
+// user's existing theme is never switched without a tap.
+const SEASON_THEMES = {
+  newyear:      { theme: 'fete',     accent: 'gold',   blurb: 'Happy New Year' },
+  valentine:    { theme: 'amour',    accent: 'blush',  blurb: "Valentine's Day is coming" },
+  stpatrick:    { theme: 'shamrock', accent: 'mint',   blurb: "St. Patrick's Day is coming" },
+  easter:       { theme: 'pastel',   accent: 'lilac',  blurb: 'Easter is coming' },
+  thanksgiving: { theme: 'harvest',  accent: 'copper', blurb: 'Thanksgiving is coming' },
+  halloween:    { theme: 'haunt',    accent: 'ember',  blurb: 'Spooky season is here' },
+  christmas:    { theme: 'yuletide', accent: 'crimson', blurb: 'The holidays are coming' },
+};
+function seasonThemeNudge() {
+  const season = (typeof shelfSeason === 'function') ? shelfSeason() : 'none';
+  const st = SEASON_THEMES[season];
+  if (!st || getTheme() === st.theme) return null;
+  try {
+    if (localStorage.getItem('seasonThemeNudge:' + season)) return null;
+  } catch (e) {}
+  return season;
+}
+function seasonThemeNudgeHTML() {
+  const season = seasonThemeNudge();
+  if (!season) return '';
+  const st = SEASON_THEMES[season];
+  const th = THEMES.find(t => t.key === st.theme) || { name: st.theme };
+  const icon = (typeof SHELF_SEASONS !== 'undefined' && SHELF_SEASONS[season])
+    ? SHELF_SEASONS[season].icon : '✨';
+  return '<div class="season-nudge" id="seasonNudge">' +
+    '<span class="sn-icon" aria-hidden="true">' + icon + '</span>' +
+    '<div class="sn-text"><b>' + esc(st.blurb) + '</b><span>Try the ' + esc(th.name) + ' theme</span></div>' +
+    '<button class="btn sm" id="snApply">Try it</button>' +
+    '<button class="sn-x" id="snDismiss" aria-label="Dismiss">✕</button></div>';
+}
+function seasonThemeDismiss(season) {
+  try { localStorage.setItem('seasonThemeNudge:' + season, '1'); } catch (e) {}
+}
+function wireSeasonNudge() {
+  const apply = document.getElementById('snApply');
+  if (!apply) return;
+  const season = seasonThemeNudge();
+  const st = season && SEASON_THEMES[season];
+  if (!st) return;
+  apply.addEventListener('click', () => {
+    try {
+      localStorage.setItem('theme', st.theme);
+      localStorage.setItem('accent', st.accent);
+    } catch (e) {}
+    seasonThemeDismiss(season);
+    applyTheme();
+    render();
+    toast('Theme: ' + (THEMES.find(t => t.key === st.theme) || {}).name);
+  });
+  const x = document.getElementById('snDismiss');
+  if (x) x.addEventListener('click', () => {
+    seasonThemeDismiss(season);
+    const el = document.getElementById('seasonNudge');
+    if (el) el.remove();
+  });
+}
 function applyTheme() {
   const t = getTheme(), a = getAccent();
   document.documentElement.dataset.theme = t;

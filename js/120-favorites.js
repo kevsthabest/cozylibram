@@ -402,7 +402,8 @@ function renderLibrary() {
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
   const isHome = filter === 'all' && ownFilter === 'all' && !query.trim();
 
-  let html = (isHome && library.length ? libraryHomeHTML(counts) : '') +
+  let html = (isHome ? seasonThemeNudgeHTML() : '') +
+    (isHome && library.length ? libraryHomeHTML(counts) : '') +
     '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">' + icon('list') + '</button>' +
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">' + icon('covers') + '</button></div>' +
@@ -433,6 +434,7 @@ function renderLibrary() {
     html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
   }
   setView(html);
+  wireSeasonNudge(); // v257: one-tap seasonal theme offer
   tileGuard(); // v57: enforce uniform 2:3 cover boxes even if styles.css is stale
 
   document.getElementById('q').addEventListener('input', e => {
