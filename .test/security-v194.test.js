@@ -98,7 +98,7 @@ ok('vendor: sources documented', /supabase-js@2\.117\.2/.test(read('js/vendor/SO
 /* ---- 4. service worker precaches the vendor libs ---- */
 
 const sw = read('sw.js');
-ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'quagga\.min\.js'\]/.test(sw));
+ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'quagga\.min\.js', 'three\.min\.js'\]/.test(sw));
 ok('sw: vendor files in ASSETS', /\.concat\(JS, VENDOR, AVATARS/.test(sw));
 
 /* ---- 5. Pages Functions rate limiter ---- */
