@@ -1629,7 +1629,12 @@ async function ecSaveAll() {
           source: 'capture'
         });
         b.editionFaceRefs[ap0][face0] = id0;
-        if (face0 === 'spine') b.spinePhotoAssetId = id0;
+        if (face0 === 'spine') {
+          b.spinePhotoAssetId = id0;
+          // Compatibility view for the existing shelf renderer. This field
+          // is transitional; the binary source of truth is the IDB asset.
+          b.spinePhoto = data0;
+        }
       } catch (e) {
         // Never discard the only local copy if the asset store fails.
         b.editionFaces = b.editionFaces || {};
