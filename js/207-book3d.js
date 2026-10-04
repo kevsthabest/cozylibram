@@ -20,7 +20,7 @@
 
 // Physical proportions from real scanned face sizes (both share the book's
 // height, so aspect ratios are enough). H is fixed at 2 units.
-function b3dDims(frontSize, spineSize) {
+function b3dDims(frontSize, spineSize, physical) {
   var H = 2, coverW = 1.3, thick = 0.26;
   if (frontSize && frontSize.h > 0) {
     var fa = frontSize.w / frontSize.h;
@@ -29,6 +29,13 @@ function b3dDims(frontSize, spineSize) {
   if (spineSize && spineSize.h > 0) {
     var sa = spineSize.w / spineSize.h;
     thick = Math.min(0.75, Math.max(0.1, H * sa));
+  }
+  /* A calibrated physical measurement is preferred when it exists. The
+     height is still normalized to H=2, so an absolute mm value only changes
+     thickness when a physical book height is also known. */
+  if (physical && Number(physical.thicknessMm) > 0 && Number(physical.heightMm) > 0) {
+    thick = Math.min(0.75, Math.max(0.1,
+      H * Number(physical.thicknessMm) / Number(physical.heightMm)));
   }
   return { H: H, coverW: coverW, thick: thick };
 }
@@ -300,11 +307,22 @@ async function b3dResolveFaces(book, revokeList, poolOverride) {
   });
   var frontSize = merged.front ? await b3dImageSize(merged.front) : null;
   var spineSize = merged.spine && real.spine ? await b3dImageSize(merged.spine) : null;
+  var physical = { thicknessMm: Number(book && book.thicknessMm) || 0,
+    heightMm: Number(book && book.heightMm) || 0 };
+  if (!physical.thicknessMm && typeof cloudClient === 'function' && isbn) {
+    try {
+      var dsb = await cloudClient().catch(function () { return null; });
+      if (dsb) {
+        var dr = await dsb.from('editions').select('thickness_mm').eq('isbn', isbn).maybeSingle();
+        if (dr && dr.data) physical.thicknessMm = Number(dr.data.thickness_mm) || 0;
+      }
+    } catch (e) {}
+  }
   return {
     appearance: pick,
     other: (local[other] && Object.keys(local[other]).length) || (pool[other] && Object.keys(pool[other]).length)
       ? other : null,
-    urls: merged, real: real, dims: b3dDims(frontSize, spineSize), local: local, pool: pool
+    urls: merged, real: real, dims: b3dDims(frontSize, spineSize, physical), local: local, pool: pool
   };
 }
 
