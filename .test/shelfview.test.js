@@ -210,6 +210,40 @@ ok('decor renders as draggable item', qa('#svShelves .sv-dragdecor').length === 
 ok('dragdecor exposes decor id', q('#svShelves .sv-dragdecor').dataset.decor === 'plant');
 run(`library = [];`);
 
+/* ---- 20. v255 seasons ---- */
+ok('october defaults to halloween', run(`shelfDefaultSeason(new Date(2026, 9, 15))`) === 'halloween');
+ok('december defaults to christmas', run(`shelfDefaultSeason(new Date(2026, 11, 25))`) === 'christmas');
+ok('june defaults to none', run(`shelfDefaultSeason(new Date(2026, 5, 1))`) === 'none');
+run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
+ok('season auto-detects until overridden', run(`shelfSeason()`).length > 0);
+run(`shelfSetSeason('halloween');`);
+ok('season persists', run(`shelfOrder().season`) === 'halloween');
+ok('tray offers halloween set, not christmas', (() => {
+  const t = run(`shelfTrayDecor()`);
+  return t.indexOf('pumpkin') !== -1 && t.indexOf('ghost') !== -1 && t.indexOf('tree') === -1;
+})());
+run(`shelfSetSeason('christmas');`);
+ok('tray offers christmas set, not halloween', (() => {
+  const t = run(`shelfTrayDecor()`);
+  return t.indexOf('tree') !== -1 && t.indexOf('snowman') !== -1 && t.indexOf('pumpkin') === -1;
+})());
+run(`shelfSetSeason('none');`);
+ok('tray hides seasonal decor when none', (() => {
+  const t = run(`shelfTrayDecor()`);
+  return t.indexOf('pumpkin') === -1 && t.indexOf('tree') === -1 && t.indexOf('plant') !== -1;
+})());
+run(`shelfSetSeason('nope');`);
+ok('invalid season ignored', run(`shelfSeason()`) === 'none');
+run(`shelfSetSeason('halloween');
+library = [{id:'h1', title:'Spooky Book', status:'tbr'}];
+shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
+ok('shelf carries season class', q('#svShelves').className.indexOf('season-halloween') !== -1);
+ok('season fx floats', qa('#svShelves .sv-fx span').length === 3);
+run(`shelfOpenDecorSheet();`);
+ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 3);
+run(`shelfCloseSheet(); library = []; shelfOrderCache=null;
+localStorage.removeItem('spicyshelves.shelforder.v1');`);
+
 /* ---- 17. spineBoxCropRect (v253): 0-1000 x-range -> pixel rect ---- */
 const br = run(`spineBoxCropRect(1000, 800, 100, 200)`);
 ok('box maps to pixel strip', br.x === 100 && br.w > 0);

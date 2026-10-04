@@ -134,8 +134,57 @@ const SHELF_DECOR = {
       [[18, 12], [36, 19], [55, 21.5], [74, 19], [92, 12]].map(function (pt, i) {
         return '<circle cx="' + pt[0] + '" cy="' + pt[1] + '" r="3.2" fill="#ffd76a" class="tw" style="animation-delay:' + (i * 0.4) + 's"/>';
       }).join('') + '</svg></div>' },
+  // v255: seasonal sets — only offered while their season is active.
+  pumpkin: { label: 'Pumpkin', w: 44, season: 'halloween',
+    html: '<span class="sv-decor" style="font-size:30px" title="Pumpkin">🎃</span>' },
+  ghost: { label: 'Ghost', w: 40, season: 'halloween',
+    html: '<span class="sv-decor" style="font-size:30px" title="Ghost">👻</span>' },
+  bat: { label: 'Bat', w: 44, season: 'halloween',
+    html: '<span class="sv-decor" style="font-size:26px" title="Bat">🦇</span>' },
+  tree: { label: 'Christmas tree', w: 46, season: 'christmas',
+    html: '<span class="sv-decor" style="font-size:32px" title="Christmas tree">🎄</span>' },
+  snowman: { label: 'Snowman', w: 44, season: 'christmas',
+    html: '<span class="sv-decor" style="font-size:30px" title="Snowman">⛄</span>' },
+  stocking: { label: 'Stocking', w: 40, season: 'christmas',
+    html: '<span class="sv-decor" style="font-size:28px" title="Stocking">🧦</span>' },
 };
-const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights'];
+const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
+  'pumpkin', 'ghost', 'bat', 'tree', 'snowman', 'stocking'];
+// v255: seasonal shelf themes. Each season unlocks its decor set and
+// restyles the boards; the shelf picks one by date until overridden.
+const SHELF_SEASONS = {
+  none: { label: 'All year', icon: '📚', decor: [], fx: [] },
+  halloween: { label: 'Halloween', icon: '🎃', decor: ['pumpkin', 'ghost', 'bat'], fx: ['🦇', '👻', '🦇'] },
+  christmas: { label: 'Christmas', icon: '🎄', decor: ['tree', 'snowman', 'stocking'], fx: ['❄', '❆', '❄'] },
+};
+
+// Active shelf season (device-local): auto-detected by date until the
+// user picks one explicitly in the decorations tray.
+function shelfDefaultSeason(d) {
+  const m = (d || new Date()).getMonth();
+  if (m === 9) return 'halloween';
+  if (m === 11) return 'christmas';
+  return 'none';
+}
+function shelfSeason() {
+  const o = shelfOrder();
+  return (o.season && SHELF_SEASONS[o.season]) ? o.season : shelfDefaultSeason();
+}
+function shelfSetSeason(s) {
+  if (!SHELF_SEASONS[s]) return;
+  const o = shelfOrder();
+  o.season = s;
+  saveShelfOrder(o);
+  shelfOrderCache = o;
+}
+// Decorations the tray offers right now: year-round + the active season's set.
+function shelfTrayDecor() {
+  const seasonal = (SHELF_SEASONS[shelfSeason()] || {}).decor || [];
+  return SHELF_DECOR_ORDER.filter(id => {
+    const dec = SHELF_DECOR[id];
+    return dec && (!dec.season || seasonal.indexOf(id) !== -1);
+  });
+}
 
 // Decorations, v254: ordered instances [{d, at}] where `at` is the number
 // of book-items before the instance in the flat layout (0 = very start).
@@ -337,6 +386,11 @@ function renderShelf() {
       '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>'
     ).join('');
   }
+  const season = shelfSeason();
+  const fx = (SHELF_SEASONS[season] || {}).fx || [];
+  const fxHTML = fx.length
+    ? '<div class="sv-fx" aria-hidden="true">' + fx.map(f => '<span>' + f + '</span>').join('') + '</div>'
+    : '';
   setView(
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
@@ -349,7 +403,7 @@ function renderShelf() {
       ? '<div class="sv-assign">' + icon('camera') + ' Tap a spine to place this photo' +
         ' <button id="svAssignCancel">Cancel</button></div>'
       : '') +
-    '<div class="sv-shelves" id="svShelves">' + shelvesHTML + '</div>' +
+    '<div class="sv-shelves season-' + season + '" id="svShelves">' + fxHTML + shelvesHTML + '</div>' +
     (shown.length
       ? '<div class="sv-hint">Drag to rearrange &middot; long-press a book for display &amp; photo options</div>'
       : '') +
@@ -595,20 +649,38 @@ function shelfOpenPhotoSheet(id) {
 }
 
 // Decorations tray: tap to add an instance (up to 3 per kind); drag it
-// anywhere on the shelf; long-press it to remove.
+// anywhere on the shelf; long-press it to remove. Season chips switch the
+// seasonal theme and unlock its decorations.
 function shelfOpenDecorSheet() {
   const group = shelfGroup;
   const { sheet, close } = shelfSheetShell('Decorations',
     '<p class="sv-review-hint">Tap to add to your ' + SHELF_GROUP_LABEL[group] +
     ' shelves — drag decorations anywhere, long-press one to remove it</p>' +
+    '<div class="sv-season-row" id="svSeasonRow"></div>' +
     '<div class="sv-decor-grid" id="svDecorGrid"></div>' +
     '<button class="sv-sheet-btn ghost" id="svDecorDone">Done</button>');
+  const paintSeasons = () => {
+    const cur = shelfSeason();
+    const row = document.getElementById('svSeasonRow');
+    if (!row) return;
+    row.innerHTML = Object.keys(SHELF_SEASONS).map(s =>
+      '<button class="sv-season-chip' + (s === cur ? ' active' : '') + '" data-s="' + s + '">' +
+      SHELF_SEASONS[s].icon + ' ' + SHELF_SEASONS[s].label + '</button>'
+    ).join('');
+    row.querySelectorAll('[data-s]').forEach(ch =>
+      ch.addEventListener('click', () => {
+        shelfSetSeason(ch.dataset.s);
+        paintSeasons();
+        paintChips();
+        renderShelf();
+      }));
+  };
   const paintChips = () => {
     const counts = {};
     shelfDecorItems(group).forEach(x => { counts[x.d] = (counts[x.d] || 0) + 1; });
     const grid = document.getElementById('svDecorGrid');
     if (!grid) return;
-    grid.innerHTML = SHELF_DECOR_ORDER.map(id =>
+    grid.innerHTML = shelfTrayDecor().map(id =>
       '<button class="sv-decor-chip' + (counts[id] ? ' active' : '') + '" data-d="' + id + '">' +
       SHELF_DECOR[id].label + (counts[id] ? ' <span class="n">×' + counts[id] + '</span>' : '') + '</button>'
     ).join('');
@@ -619,6 +691,7 @@ function shelfOpenDecorSheet() {
         renderShelf(); // refresh the shelves behind the sheet
       }));
   };
+  paintSeasons();
   paintChips();
   document.getElementById('svDecorDone').addEventListener('click', close);
 }
