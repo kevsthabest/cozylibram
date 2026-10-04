@@ -583,8 +583,11 @@ async function tropeLabSb() {
    stale when its rows predate the bundled taxonomy version OR the live
    taxonomy rev (bumped on every Trope Lab approval). `current` defaults
    to the live values; rows without taxonomy_rev count as rev 1
-   (the pre-v157 baseline). */
-function tropeLabCoverage(books, rows, current) {
+   (the pre-v157 baseline).
+   v271: `claimed` is an optional Set of bookKeyFor() keys whose work has a
+   non-rejected claim in book_trope_claims. The backfill writes work-keyed
+   claims, so a book with claims but no legacy rows still counts as tagged. */
+function tropeLabCoverage(books, rows, current, claimed) {
   current = current || { version: TROPE_TAXONOMY_VERSION, rev: TropeTaxonomy.rev() };
   const byKey = {};
   (rows || []).forEach(r => {
@@ -598,11 +601,58 @@ function tropeLabCoverage(books, rows, current) {
   (books || []).forEach(b => {
     const key = bookKeyFor(b);
     const e = byKey[key];
-    if (!e) missing.push(b);
+    if (!e) {
+      if (claimed && claimed.has(key)) tagged++;
+      else missing.push(b);
+    }
     else if (e.version < current.version || e.rev < current.rev) stale.push(b);
     else tagged++;
   });
   return { total: (books || []).length, tagged, missing, stale };
+}
+
+/* v271: bookKeyFor() keys whose work holds a non-rejected claim in
+   book_trope_claims. Maps work -> ISBNs (editions) and work -> title/author
+   norm (works) so books match the same way bookKeyFor keys them.
+   Returns a Set, or null when the tables can't be read (caller falls back
+   to legacy-only coverage). */
+async function tropeLabClaimedKeys(sb) {
+  try {
+    const { data: claimRows, error: cErr } = await sb.from('book_trope_claims')
+      .select('work_id').neq('status', 'rejected').limit(20000);
+    if (cErr) throw cErr;
+    const workIds = [...new Set((claimRows || []).map(r => r && r.work_id).filter(Boolean))];
+    if (!workIds.length) return new Set();
+    const out = new Set();
+    const digits = s => String(s || '').replace(/[^0-9X]/gi, '');
+    const to13 = s => {
+      const d = digits(s);
+      if (d.length === 13) return d;
+      try { return (typeof isbn13of === 'function') ? (isbn13of(d) || d) : d; }
+      catch (e) { return d; }
+    };
+    try {
+      const { data: edRows } = await sb.from('editions')
+        .select('isbn, work_id').in('work_id', workIds).limit(20000);
+      (edRows || []).forEach(r => {
+        const d = digits(r && r.isbn);
+        if (!d) return;
+        out.add('isbn:' + d);
+        const d13 = to13(d);
+        if (d13 !== d) out.add('isbn:' + d13);
+      });
+    } catch (e) { /* editions unreadable — title/author matching still works */ }
+    try {
+      const { data: wRows } = await sb.from('works')
+        .select('id, title_norm, author_norm').in('id', workIds).limit(20000);
+      (wRows || []).forEach(w => {
+        if (w && w.title_norm) out.add('t:' + w.title_norm + ':' + (w.author_norm || ''));
+      });
+    } catch (e) { /* works unreadable — ISBN matching still works */ }
+    return out;
+  } catch (e) {
+    return null;
+  }
 }
 
 function tropeLabWireQueue() {
@@ -1038,7 +1088,7 @@ async function renderTropeLab() {
     } else {
       sbError = 'not signed in';
     }
-    cov = tropeLabCoverage(books, rows);
+    cov = tropeLabCoverage(books, rows, undefined, await tropeLabClaimedKeys(sb));
   } catch (e) {
     sbError = (e && e.message) || 'scan failed';
     cov = { total: 0, tagged: 0, missing: [], stale: [] };
@@ -1275,7 +1325,8 @@ async function tropeLabAllLibrariesScan() {
       rows = r2.data || [];
       tropeLabLastRows = rows;
     }
-    const cov = tropeLabCoverage(entries.map(e => e.book), rows);
+    const cov = tropeLabCoverage(entries.map(e => e.book), rows, undefined,
+      await tropeLabClaimedKeys(sb));
     const keyOf = b => bookKeyFor(b);
     const missingKeys = cov.missing.map(keyOf);
     const staleKeys = cov.stale.map(keyOf);

@@ -264,6 +264,59 @@ async function main() {
     { version: 1, rev: 3 })`);
   ok('rev-aware staleness: old rev is stale, current rev is tagged, missing rev counts as rev 1',
     cov2.total === 3 && cov2.tagged === 1 && cov2.stale.length === 2);
+  // v271: books whose work has a non-rejected claim count as tagged even
+  // with no legacy book_tropes rows (the backfill writes claims now).
+  const cov3 = probe(`tropeLabCoverage(
+    [{id:'a',title:'Claimed Book',authors:['Ann']}],
+    [],
+    undefined,
+    new Set([bookKeyFor({title:'Claimed Book',authors:['Ann']})]))`);
+  ok('coverage treats claimed work as tagged without legacy rows',
+    cov3.total === 1 && cov3.tagged === 1 && cov3.missing.length === 0);
+  const cov4 = probe(`tropeLabCoverage(
+    [{id:'a',title:'Claimed Book',authors:['Ann']}],
+    [],
+    undefined,
+    new Set())`);
+  ok('coverage without claims still reports missing',
+    cov4.total === 1 && cov4.tagged === 0 && cov4.missing.length === 1);
+  const cov5 = probe(`tropeLabCoverage(
+    [{id:'a',title:'Claimed Book',authors:['Ann']}],
+    [],
+    undefined,
+    null)`);
+  ok('coverage with null claimed set falls back to legacy behavior',
+    cov5.total === 1 && cov5.missing.length === 1);
+
+  // ---- v271: queue dual-write — claims + legacy rows, filtered to kept ----
+  probe('TropeQueue.reset()');
+  const legacyRows = [];
+  const claimCalls = [];
+  window.__dwBooks = { b1: { id: 'b1', title: 'DW', authors: ['A'], description: 'd' } };
+  window.__legacyRows = legacyRows;
+  window.__claimCalls = claimCalls;
+  window.eval(`
+    window.__origResolveWork = resolveWork;
+    resolveWork = async () => 'work-9';
+    TropeQueue.configure({
+      resolveBook: id => window.__dwBooks[id] || null,
+      upsertRows: async rows => { window.__legacyRows.push(...rows); },
+      upsertClaims: async (workId, tropes, meta) => {
+        window.__claimCalls.push({ workId, tropes, meta });
+        return tropes.filter(t => t.trope_id !== 'slow-burn').map(t => t.trope_id);
+      },
+      onEvent: () => {},
+    });`);
+  window.fetch = async () => mockResp(200, chatBody('{"tropes":[{"id":"dragons","confidence":0.9},{"id":"slow-burn","confidence":0.7}]}', 'm1'));
+  probe("TropeQueue.enqueue(['b1'])");
+  probe('TropeQueue.start()');
+  await new Promise(r => setTimeout(r, 300));
+  ok('claims writer called with the resolved work id',
+    claimCalls.length === 1 && claimCalls[0].workId === 'work-9');
+  ok('legacy rows mirror only the claims-kept tropes',
+    legacyRows.length === 1 && legacyRows[0].trope_id === 'dragons' &&
+    legacyRows[0].book_key === probe(`bookKeyFor(${JSON.stringify({ title: 'DW', authors: ['A'] })})`));
+  window.eval(`resolveWork = window.__origResolveWork; TropeQueue.reset();`);
 
   // index.html + sw.js wiring
   ok('index.html includes 157-trope-inference.js', html.includes('js/157-trope-inference.js'));

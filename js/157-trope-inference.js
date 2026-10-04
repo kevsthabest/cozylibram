@@ -732,7 +732,7 @@ const TropeQueue = {
   _pumping: false,
   _resolveBook: null, // id -> book (set by the app)
   _upsertRows: null,  // async (rows) -> void (set by the app)
-  _upsertClaims: null, // v206: async (workId, tropes, meta) -> void (set by the app)
+  _upsertClaims: null, // v206: async (workId, tropes, meta) -> Promise<trope_id[]> kept (set by the app)
   _getClaimHashes: null, // v208: async (workId) -> [input_hash] (set by the app)
   _onEvent: null,     // (state) -> void, UI refresh hook
 
@@ -874,30 +874,37 @@ const TropeQueue = {
                Resolve it, then record the AI's tropes as candidate claims
                (the writer filters out rejected/confirmed tropes, so
                re-inference can never resurrect a rejection or demote a
-               confirmation). The legacy book_tropes write stays as the
-               fallback for books whose work can't be resolved.
+               confirmation).
                v208: high-confidence claims with quoted evidence
                auto-publish (status confirmed, source ai); the writer
-               decides per trope. */
+               decides per trope.
+               v271: dual-write the legacy book_tropes rows as well — Trope
+               Lab coverage and the review queue still read the legacy
+               table. Only tropes the claims writer actually kept are
+               mirrored, so rejections stay rejected everywhere. When no
+               work resolves, the legacy write is the only record. */
+            let keptIds = null;
             if (workId && this._upsertClaims) {
-              await this._upsertClaims(workId,
+              keptIds = await this._upsertClaims(workId,
                 res.tropes.map(t => ({ trope_id: t.id, confidence: t.confidence,
                                        evidence: t.evidence || [] })),
                 { model: res.model || null,
                   inputHash: tropeInputHash(book) });
               try { TropeStore.invalidate('w:' + workId); } catch (e) {}
-            } else {
-              const rows = res.tropes.map(t => ({
+            }
+            const keep = keptIds ? new Set(keptIds) : null;
+            const rows = res.tropes
+              .filter(t => !keep || keep.has(t.id))
+              .map(t => ({
                 book_key: key, trope_id: t.id, source: 'llm',
                 confidence: t.confidence, model: res.model || null,
                 taxonomy_version: TROPE_TAXONOMY_VERSION,
                 taxonomy_rev: TropeTaxonomy.rev(),
                 updated_at: new Date().toISOString(),
               }));
-              // Empty inference is a legitimate result — but per the plan we
-              // never cache "no tropes", so zero rows = nothing to upsert.
-              if (rows.length && this._upsertRows) await this._upsertRows(rows);
-            }
+            // Empty inference is a legitimate result — but per the plan we
+            // never cache "no tropes", so zero rows = nothing to upsert.
+            if (rows.length && this._upsertRows) await this._upsertRows(rows);
             this._state.done++;
             delete this._state.failed[key];
             } // end v208 skipInference else
@@ -1171,7 +1178,7 @@ function ensureTropeQueueWired() {
       const del = await sb.from('book_trope_claims').delete().in('id', regenIds);
       if (del.error) throw del.error;
     }
-    if (!fresh.length) return;
+    if (!fresh.length) return [];
     const rows = fresh.map(t => {
       const auto = tropeAutoPublish({ confidence: t.confidence,
                                       evidence: t.evidence || [] });
@@ -1189,6 +1196,9 @@ function ensureTropeQueueWired() {
     });
     const ins = await sb.from('book_trope_claims').insert(rows);
     if (ins.error) throw ins.error;
+    // v271: return the trope_ids actually written so the queue can mirror
+    // exactly this set into the legacy book_tropes table.
+    return fresh.map(t => t.trope_id);
   };
   /* v208: input hashes + models of existing claims for one work, for the
      queue's reprocess cache. Never throws. */

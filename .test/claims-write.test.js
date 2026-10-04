@@ -162,7 +162,11 @@ function ok(name, cond) {
     ok('pump completes via claims path', r.done === 1);
     ok('claims inserted on the pump path',
       r.calls.some(c => c === 'insert:dragons'));
-    ok('legacy book_tropes write NOT used when work resolves', r.legacyRows === null);
+    // v271: dual-write — the legacy table mirrors the claims-kept tropes so
+    // Trope Lab coverage and the review queue keep working.
+    ok('legacy book_tropes write mirrors claims-kept tropes when work resolves',
+      Array.isArray(r.legacyRows) && r.legacyRows.length === 1 &&
+      r.legacyRows[0].trope_id === 'dragons' && r.legacyRows[0].book_key);
     probe('TropeQueue.reset()');
   }
 
