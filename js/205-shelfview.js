@@ -101,6 +101,98 @@ function saveShelfOrder(o) {
   try { localStorage.setItem(shelfOrderKey(), JSON.stringify(o)); } catch (e) {}
 }
 
+/* ---------------- poses & decorations (v252) ---------------- */
+
+// Per-book display pose: 'up' (spine, default), 'down' (laid flat in a
+// stack), 'face' (cover facing out, bookstore style). Stored on the book so
+// it syncs; 'up' is the absence of the field.
+const SHELF_POSES = ['up', 'down', 'face'];
+function shelfPoseOf(book) {
+  const p = book && book.shelfPose;
+  return p === 'down' || p === 'face' ? p : 'up';
+}
+function shelfSetPose(book, pose) {
+  if (!book) return;
+  if (pose === 'up') delete book.shelfPose; else book.shelfPose = pose;
+  saveLibrary();
+  renderShelf();
+}
+
+// Decoration registry: id -> label, HTML, reserved width.
+const SHELF_DECOR = {
+  plant: { label: 'Plant', w: 76,
+    html: '<div class="sv-decor sv-plant" aria-hidden="true"><div class="leaves"><i></i><i></i><i></i><i></i></div><div class="pot"></div></div>' },
+  candle: { label: 'Candle', w: 56,
+    html: '<div class="sv-decor sv-candle" aria-hidden="true"><div class="flame"></div><div class="wax"></div><div class="plate"></div></div>' },
+  mug: { label: 'Mug', w: 64,
+    html: '<div class="sv-decor sv-mug" aria-hidden="true"><div class="steam"><i></i><i></i></div><div class="cup"><i class="handle"></i></div></div>' },
+  books: { label: 'Book stack', w: 118,
+    html: '<div class="sv-decor sv-dstack" aria-hidden="true"><div class="sv-dbook"></div><div class="sv-dbook"></div><div class="sv-dbook"></div></div>' },
+  lights: { label: 'Fairy lights', w: 110,
+    html: '<div class="sv-decor sv-lights" aria-hidden="true"><svg viewBox="0 0 110 34">' +
+      '<path d="M4 6 Q 55 34 106 6" stroke="#6b5a48" stroke-width="1.5" fill="none"/>' +
+      [[18, 12], [36, 19], [55, 21.5], [74, 19], [92, 12]].map(function (pt, i) {
+        return '<circle cx="' + pt[0] + '" cy="' + pt[1] + '" r="3.2" fill="#ffd76a" class="tw" style="animation-delay:' + (i * 0.4) + 's"/>';
+      }).join('') + '</svg></div>' },
+};
+const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights'];
+
+// Enabled decorations for a shelf group (device-local, like the order).
+function shelfDecor(group) {
+  const o = shelfOrder();
+  if (!o.decor) o.decor = {};
+  if (!Array.isArray(o.decor[group])) o.decor[group] = ['plant', 'candle'];
+  return o.decor[group].filter(id => SHELF_DECOR[id]);
+}
+function shelfSetDecor(group, ids) {
+  const o = shelfOrder();
+  if (!o.decor) o.decor = {};
+  o.decor[group] = ids.filter(id => SHELF_DECOR[id]);
+  saveShelfOrder(o);
+  shelfOrderCache = o;
+}
+
+// Flat layout items from ordered books: consecutive laid-down books form
+// one horizontal stack (max 4); face-outs and uprights are single items.
+function shelfLayoutItems(books) {
+  const items = [];
+  let pending = [];
+  const flush = () => {
+    if (pending.length) {
+      items.push({ kind: 'stack', books: pending.splice(0), w: 132 });
+    }
+  };
+  (books || []).forEach(b => {
+    const pose = shelfPoseOf(b);
+    if (pose === 'down') {
+      pending.push(b);
+      if (pending.length >= 4) flush();
+    } else {
+      flush();
+      items.push({
+        kind: pose === 'face' ? 'face' : 'spine',
+        books: [b],
+        w: pose === 'face' ? 128 : shelfSpineSpec(b).w + 4,
+      });
+    }
+  });
+  flush();
+  return items;
+}
+
+// Greedy row fill by pixel budget.
+function shelfFillRows(items, budget) {
+  const rows = [];
+  let cur = [], used = 0;
+  (items || []).forEach(it => {
+    if (cur.length && used + it.w > budget) { rows.push(cur); cur = []; used = 0; }
+    cur.push(it);
+    used += it.w;
+  });
+  if (cur.length) rows.push(cur);
+  return rows;
+}
+
 /* ---------------- view ---------------- */
 
 let shelfGroup = 'tbr';
@@ -140,17 +232,44 @@ function shelfSpineHTML(book) {
     (author ? '<span class="sp-a">' + esc(author) + '</span>' : '') + '</div>';
 }
 
-const SHELF_PLANT_HTML =
-  '<div class="sv-decor sv-plant" aria-hidden="true"><div class="leaves"><i></i><i></i><i></i><i></i></div><div class="pot"></div></div>';
-const SHELF_CANDLE_HTML =
-  '<div class="sv-decor sv-candle" aria-hidden="true"><div class="flame"></div><div class="wax"></div><div class="plate"></div></div>';
+function shelfFaceHTML(book) {
+  const spec = shelfSpineSpec(book);
+  const title = book.title || 'Untitled';
+  const inner = book.cover
+    ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy" draggable="false">'
+    : '<div class="faceout-gen" style="background:linear-gradient(135deg,' + spec.c1 + ',' + spec.c2 + ')"><span>' + esc(title) + '</span></div>';
+  return '<div class="faceout" data-id="' + esc(book.id) + '" title="' + esc(title) + '">' + inner + '</div>';
+}
+
+function shelfStackHTML(books) {
+  const ids = books.map(b => b.id).join(',');
+  const top = books[books.length - 1] || {};
+  const layers = books.map(b => {
+    const spec = shelfSpineSpec(b);
+    const w = 96 + ((shelfHash(b.id) >>> 5) % 24);
+    return '<div class="sv-hbook" style="width:' + w + 'px;background:linear-gradient(180deg,' +
+      spec.c1 + ',' + spec.c2 + ')"><span>' + esc(b.title || 'Untitled') + '</span></div>';
+  }).join('');
+  // Interactions apply to the top book of the stack.
+  return '<div class="hstack" data-ids="' + esc(ids) + '" data-id="' + esc(top.id || '') +
+    '" title="' + esc(top.title || 'Untitled') + '">' + layers + '</div>';
+}
+
+function shelfItemHTML(item) {
+  if (item.kind === 'face') return shelfFaceHTML(item.books[0]);
+  if (item.kind === 'stack') return shelfStackHTML(item.books);
+  return shelfSpineHTML(item.books[0]);
+}
 
 function renderShelf() {
   const books = typeof library !== 'undefined' ? library : [];
   const counts = {};
   SHELF_GROUPS.forEach(g => { counts[g] = shelfGroupBooks(books, g).length; });
   const shown = shelfBooks();
-  const rows = shelfChunk(shown, SHELF_ROW_SIZE);
+  const decor = shelfDecor(shelfGroup);
+  const vw = ((document.getElementById('view') || {}).clientWidth || 360);
+  const budget = Math.max(250, Math.min(430, vw)) - 44 - (decor.length ? 90 : 0);
+  const rows = shelfFillRows(shelfLayoutItems(shown), budget);
   let shelvesHTML;
   if (!shown.length) {
     shelvesHTML = '<div class="sv-empty">' + icon('shelf') +
@@ -158,17 +277,17 @@ function renderShelf() {
       '<button class="btn" id="svEmptyAdd">Add a book</button></div>';
   } else {
     shelvesHTML = rows.map((row, i) => {
-      const decor = i === 0 ? SHELF_PLANT_HTML
-        : (i === rows.length - 1 ? SHELF_CANDLE_HTML : '');
+      const d = decor.length ? SHELF_DECOR[decor[i % decor.length]] : null;
       return '<div class="sv-shelf"><div class="sv-books">' +
-        row.map(shelfSpineHTML).join('') + decor +
+        row.map(shelfItemHTML).join('') + (d ? d.html : '') +
         '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>';
     }).join('');
   }
   setView(
     '<div class="shelfview">' +
-    '<div class="sv-head"><h2>Shelf</h2>' +
-    '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div>' +
+    '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
+    '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
+    '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(g =>
       '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
       SHELF_GROUP_LABEL[g] + ' <span class="n">' + counts[g] + '</span></button>').join('') + '</div>' +
@@ -178,7 +297,7 @@ function renderShelf() {
       : '') +
     '<div class="sv-shelves" id="svShelves">' + shelvesHTML + '</div>' +
     (shown.length
-      ? '<div class="sv-hint">Drag a spine to rearrange &middot; long-press for spine photo</div>'
+      ? '<div class="sv-hint">Drag to rearrange &middot; long-press a book for display &amp; photo options</div>'
       : '') +
     '</div>'
   );
@@ -195,13 +314,15 @@ function wireShelf() {
     ch.addEventListener('click', () => { shelfGroup = ch.dataset.g; renderShelf(); }));
   const cam = document.getElementById('svCam');
   if (cam) cam.addEventListener('click', () => shelfStartCapture(null));
+  const decorBtn = document.getElementById('svDecor');
+  if (decorBtn) decorBtn.addEventListener('click', () => shelfOpenDecorSheet());
   const emptyAdd = document.getElementById('svEmptyAdd');
   if (emptyAdd) emptyAdd.addEventListener('click', () => go('add'));
   const cancel = document.getElementById('svAssignCancel');
   if (cancel) cancel.addEventListener('click', () => { pendingSpinePhoto = null; renderShelf(); });
   const shelves = document.getElementById('svShelves');
   if (!shelves) return;
-  shelves.querySelectorAll('.spine').forEach(sp => {
+  shelves.querySelectorAll('.spine, .faceout, .hstack').forEach(sp => {
     sp.addEventListener('pointerdown', e => shelfPointerDown(e, sp));
     sp.addEventListener('click', e => shelfSpineClick(e, sp));
   });
@@ -275,7 +396,7 @@ function shelfStartGhost(d, e) {
 function shelfMoveGhost(d, e) {
   d.ghost.style.left = (e.clientX - d.offX) + 'px';
   d.ghost.style.top = (e.clientY - d.offY) + 'px';
-  const spines = Array.from(document.querySelectorAll('#svShelves .spine'))
+  const spines = Array.from(document.querySelectorAll('#svShelves .spine, #svShelves .faceout, #svShelves .hstack'))
     .filter(el => el !== d.el && el !== d.ghost);
   let before = null, bestRow = null, bestDy = Infinity;
   for (const el of spines) {
@@ -298,9 +419,17 @@ function shelfDropGhost(d) {
   d.el.classList.remove('drag-src');
   if (d.ghost) d.ghost.remove();
   if (d.ph) d.ph.remove();
-  // Read the flat DOM order across all rows — that IS the new shelf order.
-  const ids = Array.from(document.querySelectorAll('#svShelves .spine'))
-    .map(el => el.dataset.id).filter(Boolean);
+  // Read the flat DOM order across all rows — stacks expand back to ids.
+  const ids = [];
+  document.querySelectorAll('#svShelves .sv-books').forEach(row => {
+    Array.from(row.children).forEach(el => {
+      if (el.classList.contains('hstack') && el.dataset.ids) {
+        el.dataset.ids.split(',').forEach(id => { if (id) ids.push(id); });
+      } else if (el.dataset && el.dataset.id) {
+        ids.push(el.dataset.id);
+      }
+    });
+  });
   shelfCommitOrder(ids);
 }
 
@@ -346,22 +475,34 @@ function shelfSheetShell(title, bodyHTML) {
   sheet.innerHTML = '<div class="sv-sheet-title">' + title + '</div>' + bodyHTML;
   document.body.appendChild(scrim);
   document.body.appendChild(sheet);
-  requestAnimationFrame(() => sheet.classList.add('open'));
+  // rAF is unavailable in some test DOMs — fall back to a direct class add.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => sheet.classList.add('open'));
+  else sheet.classList.add('open');
   const close = () => shelfCloseSheet();
   scrim.addEventListener('click', close);
   if (typeof overlayOpened === 'function') shelfSheetToken = overlayOpened('shelf-photo', close);
   return { sheet, close };
 }
 
-// Long-press action sheet for one spine.
+// Long-press action sheet for one book: display pose + spine photo.
 function shelfOpenPhotoSheet(id) {
   const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === id);
   if (!book) return;
-  const { close } = shelfSheetShell(esc(book.title || 'Untitled'),
+  const pose = shelfPoseOf(book);
+  const { sheet, close } = shelfSheetShell(esc(book.title || 'Untitled'),
+    '<div class="sv-seg" role="group" aria-label="Display style">' +
+    [['up', 'Upright'], ['down', 'Laid down'], ['face', 'Face out']].map(p =>
+      '<button data-pose="' + p[0] + '" class="' + (pose === p[0] ? 'active' : '') + '">' + p[1] + '</button>'
+    ).join('') + '</div>' +
     '<button class="sv-sheet-btn" id="svPhotoTake">' + icon('camera') + ' Photograph spine</button>' +
     (book.spinePhoto
       ? '<button class="sv-sheet-btn danger" id="svPhotoRemove">Remove spine photo</button>' : '') +
     '<button class="sv-sheet-btn ghost" id="svSheetCancel">Cancel</button>');
+  sheet.querySelectorAll('[data-pose]').forEach(b =>
+    b.addEventListener('click', () => {
+      shelfSetPose(book, b.dataset.pose); // re-renders #view; the sheet lives on body
+      sheet.querySelectorAll('[data-pose]').forEach(x => x.classList.toggle('active', x === b));
+    }));
   document.getElementById('svSheetCancel').addEventListener('click', close);
   document.getElementById('svPhotoTake').addEventListener('click', () => { close(); shelfStartCapture(id); });
   const rm = document.getElementById('svPhotoRemove');
@@ -372,6 +513,33 @@ function shelfOpenPhotoSheet(id) {
     renderShelf();
     toast('Spine photo removed');
   });
+}
+
+// Decorations tray: toggle which decorations live on this shelf group.
+function shelfOpenDecorSheet() {
+  const group = shelfGroup;
+  const renderChips = (sheet) => {
+    const cur = shelfDecor(group);
+    sheet.querySelectorAll('[data-d]').forEach(ch =>
+      ch.classList.toggle('active', cur.indexOf(ch.dataset.d) !== -1));
+  };
+  const { sheet, close } = shelfSheetShell('Decorations',
+    '<p class="sv-review-hint">Choose what lives on your ' + SHELF_GROUP_LABEL[group] + ' shelves</p>' +
+    '<div class="sv-decor-grid">' + SHELF_DECOR_ORDER.map(id =>
+      '<button class="sv-decor-chip" data-d="' + id + '">' + SHELF_DECOR[id].label + '</button>'
+    ).join('') + '</div>' +
+    '<button class="sv-sheet-btn ghost" id="svDecorDone">Done</button>');
+  renderChips(sheet);
+  sheet.querySelectorAll('[data-d]').forEach(ch =>
+    ch.addEventListener('click', () => {
+      const cur = shelfDecor(group);
+      const id = ch.dataset.d;
+      const next = cur.indexOf(id) !== -1 ? cur.filter(x => x !== id) : cur.concat([id]);
+      shelfSetDecor(group, next);
+      renderChips(sheet);
+      renderShelf(); // refresh the shelves behind the sheet
+    }));
+  document.getElementById('svDecorDone').addEventListener('click', close);
 }
 
 // Camera capture via the native camera (file input + capture="environment",
