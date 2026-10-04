@@ -611,16 +611,61 @@ function spineCropToDataURL(dataUrl, targetW) {
         clearTimeout(safety);
         try {
           const r = spineCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height);
-          const targetH = Math.max(1, Math.round(targetW * (r.h / r.w)));
-          const c = document.createElement('canvas');
-          c.width = targetW; c.height = targetH;
-          c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, targetW, targetH);
-          done(c.toDataURL('image/jpeg', 0.85));
+          done(shelfDrawCrop(img, r, targetW) || dataUrl);
         } catch (e) { done(dataUrl); }
       };
       img.onerror = () => { clearTimeout(safety); done(dataUrl); };
       img.src = dataUrl;
     } catch (e) { clearTimeout(safety); done(dataUrl); }
+  });
+}
+
+// Pixel rect for a 0-1000 x-range spine box on a w×h photo: the box's
+// horizontal strip at full height, then the 1:5.2 center crop inside it.
+// Returns null when the box is unusable (missing, inverted, a sliver).
+function spineBoxCropRect(w, h, x0, x1) {
+  if (x0 == null || x1 == null || x0 === '' || x1 === '') return null;
+  x0 = Number(x0); x1 = Number(x1);
+  if (!isFinite(x0) || !isFinite(x1)) return null;
+  x0 = Math.max(0, Math.min(1000, x0));
+  x1 = Math.max(0, Math.min(1000, x1));
+  if (x1 - x0 < 5) return null;
+  const sx = Math.round(x0 / 1000 * w);
+  const stripW = Math.round(x1 / 1000 * w) - sx;
+  const inner = spineCropRect(stripW, h);
+  return { x: sx + inner.x, y: inner.y, w: inner.w, h: inner.h };
+}
+
+// Shared canvas core: draw rect r of img into a targetW-wide JPEG data URL.
+function shelfDrawCrop(img, r, targetW) {
+  try {
+    const targetH = Math.max(1, Math.round(targetW * (r.h / r.w)));
+    const c = document.createElement('canvas');
+    c.width = targetW; c.height = targetH;
+    c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, targetW, targetH);
+    return c.toDataURL('image/jpeg', 0.85);
+  } catch (e) { return null; }
+}
+
+// Crop a 0-1000 x-range box out of a photo data URL to spine aspect.
+// Resolves with a small JPEG data URL, or null when the box is unusable.
+function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v || null); } };
+    const safety = setTimeout(() => done(null), 8000);
+    try {
+      const img = new Image();
+      img.onload = () => {
+        clearTimeout(safety);
+        try {
+          const r = spineBoxCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height, x0, x1);
+          done(r ? shelfDrawCrop(img, r, targetW) : null);
+        } catch (e) { done(null); }
+      };
+      img.onerror = () => { clearTimeout(safety); done(null); };
+      img.src = dataUrl;
+    } catch (e) { clearTimeout(safety); done(null); }
   });
 }
 

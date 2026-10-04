@@ -105,6 +105,36 @@ async function main() {
   };
   ok('endpoint: missing auth header -> 401',
     (await fn.onRequest(noAuthReq)).status === 401);
+
+  // v253: spine boxes for auto spine-photo cropping.
+  const boxPayload = {
+    books: [
+      { title: 'Fourth Wing', author: 'Rebecca Yarros', confidence: 'high', x0: 100, x1: 180 },
+      { title: 'Iron Flame', author: 'Rebecca Yarros', confidence: 'high', x0: -20, x1: 1400 }, // clamped
+      { title: 'Sliver', author: 'A', confidence: 'high', x0: 500, x1: 502 }, // too narrow: dropped
+      { title: 'Inverted', author: 'B', confidence: 'high', x0: 700, x1: 600 }, // inverted: dropped
+      { title: 'NoBox', author: 'C', confidence: 'high' }, // no box: no photo, still listed
+      { title: 'Junk', author: 'D', confidence: 'high', x0: 'left', x1: null }, // non-numeric: dropped
+    ],
+  };
+  globalThis.fetch = withAuth(async (url, init) => {
+    seen = { url, init, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(boxPayload) } }],
+    }), { status: 200 });
+  });
+  r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
+  const boxed = await r.json();
+  ok('endpoint: shelf prompt asks for x0/x1 spine edges',
+    seen.body.messages[0].content[0].text.includes('"x0"') &&
+    seen.body.messages[0].content[0].text.includes('"x1"'));
+  const bw = (t) => boxed.books.find(b => b.title === t);
+  ok('endpoint: valid box passes through', bw('Fourth Wing').x0 === 100 && bw('Fourth Wing').x1 === 180);
+  ok('endpoint: out-of-range box clamped', bw('Iron Flame').x0 === 0 && bw('Iron Flame').x1 === 1000);
+  ok('endpoint: sliver box dropped', bw('Sliver').x0 === undefined && bw('Sliver').x1 === undefined);
+  ok('endpoint: inverted box dropped', bw('Inverted').x0 === undefined);
+  ok('endpoint: missing box stays missing', bw('NoBox').x0 === undefined);
+  ok('endpoint: non-numeric box dropped', bw('Junk').x0 === undefined);
   globalThis.fetch = realFetch;
 
   // ============ Part B: client ============

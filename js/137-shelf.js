@@ -16,6 +16,8 @@
 
 let shelfBusy = false;
 let shelfResults = []; // [{spine, book, status}] — status: ready|review|have|missing
+let shelfScanPhoto = null; // v253: the downscaled scan photo, kept so spine
+// regions can be cropped from it when books are added (auto spine photos).
 
 const SHELF_MAX_LOOKUPS = 20;
 
@@ -64,6 +66,7 @@ async function shelfSend(dataUrl) {
   if (shelfBusy || !dataUrl) return;
   if (!document.getElementById('scan-result')) return;
   shelfBusy = true;
+  shelfScanPhoto = dataUrl; // v253: kept for spine-photo cropping on add
   visionSetBusy(true);
   // v201: re-acquire the live node on every paint — see the header note.
   const paint = (html) => {
@@ -149,6 +152,20 @@ function shelfSpineLabel(entry) {
       ? ' <span class="note">(' + esc(entry.spine.confidence) + ' confidence)</span>' : '');
 }
 
+// v253: crop this scan entry's spine region out of the kept scan photo.
+// Resolves with a small JPEG data URL, or null when the model gave no
+// usable box (older scans, unreadable positions) — the book is still
+// added, just with a generated spine.
+async function shelfScanSpinePhoto(entry) {
+  try {
+    if (!shelfScanPhoto || !entry || !entry.spine) return null;
+    const x0 = entry.spine.x0, x1 = entry.spine.x1;
+    if (x0 == null || x1 == null) return null;
+    if (typeof spineBoxPhotoToDataURL !== 'function') return null;
+    return await spineBoxPhotoToDataURL(shelfScanPhoto, x0, x1, 168);
+  } catch (e) { return null; }
+}
+
 function paintShelfResults() {
   // v201: grab the live node — the caller may have been awaiting across a
   // re-render. Bail quietly if the user navigated away mid-scan.
@@ -181,9 +198,13 @@ function paintShelfResults() {
 
   const addAll = mount.querySelector('#shelf-add-all');
   if (addAll) addAll.addEventListener('click', async () => {
-    const books = shelfResults
-      .filter(e => e.status === 'ready' && !e._added && e.book)
-      .map(e => Object.assign({}, e.book, { id: uid() }));
+    const books = [];
+    for (const e of shelfResults.filter(e => e.status === 'ready' && !e._added && e.book)) {
+      const b = Object.assign({}, e.book, { id: uid() });
+      const photo = await shelfScanSpinePhoto(e); // v253: auto spine photo
+      if (photo) b.spinePhoto = photo;
+      books.push(b);
+    }
     const n = bulkAddBooks(books, 'shelf');
     shelfResults.forEach(e => { if (e.status === 'ready' && e.book) e._added = true; });
     // bulkAddBooks re-renders (tearing down #scan-result); repaint the review.
@@ -197,6 +218,8 @@ function paintShelfResults() {
       const e = shelfResults[Number(card.dataset.i)];
       if (!e || !e.book || e._added || alreadyHave(e.book)) return;
       const enriched = Object.assign({}, e.book, { id: uid() });
+      const photo = await shelfScanSpinePhoto(e); // v253: auto spine photo
+      if (photo) enriched.spinePhoto = photo;
       if (!enriched._olKey) await enrichRatings(enriched);
       await enrichOLBook(enriched, enriched._olKey);
       e._added = true;

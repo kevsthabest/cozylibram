@@ -173,7 +173,30 @@ ok('stack carries both book ids', q('#svShelves .hstack').dataset.ids === 'f2,f3
 ok('decor button in header', !!q('#svDecor'));
 ok('long-press sheet offers three poses', (run(`shelfOpenPhotoSheet('f4')`),
   qa('#svSheet [data-pose]').length === 3));
-run(`shelfCloseSheet(); library = [];`);
+/* ---- 17. spineBoxCropRect (v253): 0-1000 x-range -> pixel rect ---- */
+const br = run(`spineBoxCropRect(1000, 800, 100, 200)`);
+ok('box maps to pixel strip', br.x === 100 && br.w > 0);
+ok('box crop keeps spine aspect', Math.abs(br.h / br.w - 5.2) < 0.05);
+ok('box crop vertically centered', br.y === Math.round((800 - br.h) / 2));
+ok('box clamped inside the image', (() => {
+  const r = run(`spineBoxCropRect(1000, 800, -50, 1200)`);
+  return r.x >= 0 && r.x + r.w <= 1000 && r.y >= 0 && r.y + r.h <= 800;
+})());
+ok('sliver box -> null', run(`spineBoxCropRect(1000, 800, 500, 503)`) === null);
+ok('inverted box -> null', run(`spineBoxCropRect(1000, 800, 700, 600)`) === null);
+ok('missing box -> null', run(`spineBoxCropRect(1000, 800, null, 200)`) === null);
+ok('non-numeric box -> null', run(`spineBoxCropRect(1000, 800, "l", "r")`) === null);
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+/* ---- 18. shelfScanSpinePhoto null paths (v253) ---- */
+(async () => {
+  const n1 = await run(`shelfScanSpinePhoto(null)`);
+  ok('no entry -> null', n1 === null);
+  const n2 = await run(`shelfScanSpinePhoto({spine:{title:'X', x0:100, x1:200}})`);
+  ok('no scan photo -> null', n2 === null);
+  run(`shelfScanPhoto = 'data:image/jpeg;base64,AAA';`);
+  const n3 = await run(`shelfScanSpinePhoto({spine:{title:'X'}})`);
+  ok('no box coords -> null', n3 === null);
+  run(`shelfScanPhoto = null;`);
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})();
