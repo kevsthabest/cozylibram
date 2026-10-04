@@ -674,9 +674,8 @@ function tropeLabProgressHTML() {
   const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
   const failedKeys = Object.keys(s.failedDetail || {});
   const failedRows = failedKeys.slice(0, 50).map(k => {
-    const b = tropeLabResolve(tropeLabKeyToId[k]);
-    const ab = b ? null : tropeAdminBookById(k); // v159: all-libraries jobs
-    return '<tr><td>' + esc(b ? b.title : (ab && ab.title) || k) + '</td><td class="note">' +
+    const t = tropeLabReviewTitle(k); // v276: works-catalog fallback + honest label
+    return '<tr><td>' + esc(t.title) + '</td><td class="note">' +
       esc(s.failedDetail[k]) + '</td></tr>';
   }).join('');
   el.innerHTML =
@@ -769,14 +768,45 @@ function tropeLabReviewVotes(rows, uid) {
 }
 
 /* Resolve a book_key to a display title/authors: local library first,
-   then the persisted all-libraries admin projection. */
+   then the persisted all-libraries admin projection, then the global works
+   catalog (v276: a work row outlives library membership by design, so a
+   book deleted from every library still resolves to its title/author). */
+let tropeLabWorkTitles = {}; // isbn -> { title, authors }, primed per render
+
+async function tropeLabPrimeWorkTitles(sb, keys) {
+  tropeLabWorkTitles = {};
+  try {
+    const isbns = [...new Set((keys || [])
+      .filter(k => typeof k === 'string' && k.indexOf('isbn:') === 0)
+      .map(k => k.slice(5)))];
+    if (!isbns.length) return;
+    const r = await sb.from('editions').select('isbn, works(title, authors)').in('isbn', isbns);
+    if (r.error) throw r.error;
+    (r.data || []).forEach(row => {
+      const w = row && row.works;
+      if (w && row.isbn) tropeLabWorkTitles[row.isbn] =
+        { title: w.title || '', authors: (w.authors || []).join(', ') };
+    });
+  } catch (e) { /* works lookup is best-effort; the honest label below covers misses */ }
+}
+
+function tropeLabIsbnOf(key) {
+  return (typeof key === 'string' && key.indexOf('isbn:') === 0) ? key.slice(5) : null;
+}
+
 function tropeLabReviewTitle(key) {
   try {
     const b = tropeLabResolve(tropeLabKeyToId[key]);
     if (b) return { title: b.title || key, authors: (b.authors || []).join(', ') };
     const ab = tropeAdminBookById(key);
     if (ab) return { title: ab.title || key, authors: (ab.authors || []).join(', ') };
+    const isbn = tropeLabIsbnOf(key);
+    const m = isbn && tropeLabWorkTitles[isbn];
+    if (m && m.title) return { title: m.title, authors: m.authors || '' };
   } catch (e) {}
+  // Honest label for keys no catalog knows — never the raw key.
+  const isbn = tropeLabIsbnOf(key);
+  if (isbn) return { title: 'Removed book · ' + isbn, authors: '' };
   return { title: key, authors: '' };
 }
 
@@ -814,6 +844,9 @@ async function tropeLabReviewHTML() {
     if (r2.error) throw r2.error;
     votes = tropeLabReviewVotes(r2.data || [], uid);
   } catch (e) { votes = {}; }
+  // v276: prime the works-catalog titles so books deleted from every
+  // library still resolve (the work row outlives library membership).
+  try { await tropeLabPrimeWorkTitles(sb, entries.map(e => e.bookKey)); } catch (e) {}
   entries.forEach(e => {
     const t = tropeLabReviewTitle(e.bookKey);
     e.title = t.title;

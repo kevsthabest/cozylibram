@@ -58,6 +58,7 @@ function buildDom() {
       if (table === 'app_admins') return { select: () => harness.chainableSelect([{ user_id: 'u1' }], r => r) };
       if (table === 'tropes') return { select: () => selectBuilder(TROPE_ROWS) };
       if (table === 'book_tropes') return { select: () => selectBuilder(fake.bookTropesRows) };
+      if (table === 'editions') return { select: () => selectBuilder(fake.editionRows || []) };
       if (table === 'trope_votes') return {
         select: () => selectBuilder(fake.tropeVoteRows),
         upsert: async (obj) => {
@@ -200,6 +201,51 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
     const el = window.document.getElementById('tropelab-review');
     ok('empty state when nothing inferred',
       !!el && /No inferred tropes yet/.test(el.textContent));
+  }
+
+  // G: orphan book_key (deleted from every library) resolves via the works catalog.
+  {
+    const { window, fake } = buildDom();
+    await tick();
+    fake.editionRows = [
+      { isbn: '9780439023528', works: { title: 'The Hunger Games', authors: ['Suzanne Collins'] } },
+    ];
+    fake.bookTropesRows = [
+      { book_key: 'isbn:9780439023528', trope_id: 't1', confidence: 0.9, source: 'llm' },
+    ];
+    fake.fire('SIGNED_IN', { id: 'u1', email: 'a@b.c' });
+    await tick(8);
+    runInWindow(window, `adminTab = 'tropes'; isAppAdmin = true; tropeLabReviewShown = 15; renderAdmin()`);
+    let el = null;
+    for (let i = 0; i < 30; i++) {
+      await tick(5);
+      el = window.document.getElementById('tropelab-review');
+      if (el && /Review inferred tropes/.test(el.textContent) && !/Loading/.test(el.textContent)) break;
+    }
+    ok('orphan resolves to the work title', !!el && /The Hunger Games/.test(el.textContent));
+    ok('orphan shows the work author', !!el && /Suzanne Collins/.test(el.textContent));
+    ok('no raw ISBN key shown', !!el && !/isbn:9780439023528/.test(el.textContent));
+  }
+
+  // H: ISBN key unknown to every catalog gets the honest label, never the raw key.
+  {
+    const { window, fake } = buildDom();
+    await tick();
+    fake.bookTropesRows = [
+      { book_key: 'isbn:9780000000000', trope_id: 't1', confidence: 0.9, source: 'llm' },
+    ];
+    fake.fire('SIGNED_IN', { id: 'u1', email: 'a@b.c' });
+    await tick(8);
+    runInWindow(window, `adminTab = 'tropes'; isAppAdmin = true; tropeLabReviewShown = 15; renderAdmin()`);
+    let el = null;
+    for (let i = 0; i < 30; i++) {
+      await tick(5);
+      el = window.document.getElementById('tropelab-review');
+      if (el && /Review inferred tropes/.test(el.textContent) && !/Loading/.test(el.textContent)) break;
+    }
+    ok('unknown ISBN shows honest removed-book label',
+      !!el && /Removed book/.test(el.textContent) && /9780000000000/.test(el.textContent));
+    ok('unknown ISBN never shows the raw key', !!el && !/isbn:9780000000000/.test(el.textContent));
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

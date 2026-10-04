@@ -209,6 +209,10 @@ function ev(uid, name, cat, props, created) {
     // book_trope_claims work_ids, editions isbn->work_id pairs, and works
     // title_norm/author_norm — opaque ids and bibliographic fields only,
     // never shelves, ratings, or notes.
+    // The twelfth (v276) is the Trope Lab orphan-title primer: editions
+    // isbn plus the linked work's title/authors — global bibliographic
+    // catalog data (public book metadata, same class as the v271 works
+    // fields), never user library contents.
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
@@ -221,6 +225,7 @@ function ev(uid, name, cat, props, created) {
       'work_id',
       'isbn, work_id',
       'id, title_norm, author_norm',
+      'isbn, works(title, authors)',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&
