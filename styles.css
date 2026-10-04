@@ -2681,11 +2681,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ec-vf .ec-guide-tall { height: 78%; aspect-ratio: 1 / 4.2; }
 .ec-vf .ec-guide-portrait { height: 78%; aspect-ratio: 2 / 3; }
 .ec-stage { position: relative; display: flex; justify-content: center; align-items: center;
-  background: #000; border-radius: 12px; overflow: hidden; min-height: 200px; max-height: 46vh; }
-.ec-stage img { max-width: 100%; max-height: 46vh; display: block; }
+  background: #000; border-radius: 12px; overflow: hidden; min-height: 200px; max-height: 46vh;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ec-stage img { max-width: 100%; max-height: 46vh; display: block; pointer-events: none;
+  -webkit-user-drag: none; }
 #ec-ed-svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); touch-action: none; }
 #ec-ed-poly { fill: rgba(201, 168, 106, .12); stroke: #fff; stroke-dasharray: 10 6; }
 .ec-handle { fill: #fff; stroke: #222; stroke-width: 3; cursor: grab; touch-action: none; }
+.ec-rot { fill: none; stroke: var(--accent, #c9a86a); stroke-width: 5; cursor: grab; touch-action: none; }
 .ec-prevrow { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .ec-prevrow canvas { width: 84px; height: 84px; object-fit: contain; background: #000; border-radius: 8px;
   border: 1px solid var(--line, #3a2b3d); }
