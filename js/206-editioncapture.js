@@ -1209,13 +1209,51 @@ function ecCancelScan() {
   ecCloseWizard();
 }
 
+// Faces already saved on the book, grouped by appearance: { jacket: ['spine', ...] }.
+function ecExistingFaces(book) {
+  var out = {};
+  var ef = (book && book.editionFaces) || {};
+  Object.keys(ef).forEach(function (ap) {
+    var faces = ef[ap] || {};
+    var ids = Object.keys(faces).filter(function (f) { return !!faces[f]; });
+    if (ids.length) out[ap] = ids;
+  });
+  return out;
+}
+
+// Remove one saved face from the book (cleans up empty appearances).
+// Returns true when something was actually removed.
+function ecRemoveFace(book, appearance, face) {
+  if (!book || !book.editionFaces || !book.editionFaces[appearance]) return false;
+  if (!book.editionFaces[appearance][face]) return false;
+  delete book.editionFaces[appearance][face];
+  if (!Object.keys(book.editionFaces[appearance]).length) delete book.editionFaces[appearance];
+  if (!Object.keys(book.editionFaces).length) delete book.editionFaces;
+  return true;
+}
+
 function ecRenderAppearance() {
   if (typeof document === 'undefined' || !EC) return null;
   var lib = (typeof library !== 'undefined' ? library : []);
   var b = lib.find(function (x) { return x && x.id === EC.bookId; });
+  var existing = ecExistingFaces(b);
+  var exHtml = '';
+  Object.keys(existing).forEach(function (ap) {
+    var chips = existing[ap].map(function (f) {
+      var fd = ecFaceDef(f);
+      return '<span class="ec-chip">' + esc(fd ? fd.label : f) +
+        '<button class="ec-chipx" data-ec-rm="' + esc(ap) + ':' + esc(f) + '" aria-label="Remove">\u00d7</button></span>';
+    }).join('');
+    exHtml += '<div class="ec-exrow"><span class="ec-exap">' + esc(ecAppearanceLabel(ap)) + '</span>' + chips + '</div>';
+  });
+  if (exHtml) {
+    exHtml = '<div class="ec-existing"><p class="ec-hint">Scanned so far — tap \u00d7 to remove a face. ' +
+      'New scans replace existing ones.</p>' + exHtml + '</div>';
+  }
   var ov = ecWizardShell(
     '<div class="ec-head"><h3 class="serif">Scan edition</h3>' +
     '<p class="ec-sub">' + esc((b && b.title) || 'This book') + '</p></div>' +
+    exHtml +
     '<p class="ec-hint">Photograph each face of this copy — spine, sprayed edges, covers. ' +
     'Does it have a dust jacket with <em>different art underneath</em>?</p>' +
     '<div class="ec-pick">' +
@@ -1231,6 +1269,16 @@ function ecRenderAppearance() {
   };
   ov.querySelector('#ec-ap-jacket').addEventListener('click', function () { go(['jacket']); });
   ov.querySelector('#ec-ap-both').addEventListener('click', function () { go(['jacket', 'board']); });
+  ov.querySelectorAll('[data-ec-rm]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var parts = (btn.getAttribute('data-ec-rm') || '').split(':');
+      if (ecRemoveFace(b, parts[0], parts[1])) {
+        if (typeof saveLibrary === 'function') saveLibrary();
+        if (typeof toast === 'function') toast('Face removed');
+      }
+      ecRenderAppearance();
+    });
+  });
   return EC.token;
 }
 
