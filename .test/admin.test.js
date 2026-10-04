@@ -225,6 +225,18 @@ function ev(uid, name, cat, props, created) {
       !/properties\[['"](title|author|isbn)/i.test(src));
   }
 
+  /* ---- v264: Spine Lab result rendering ---- */
+  {
+    const none = run(`spineLabResultHTML({ candidates: [], sources: [] })`);
+    ok('spinelab: empty result explains the fallback', none.includes('No spine found'));
+    const some = run(`spineLabResultHTML({ candidates: [
+      { image_url: 'https://img.example/s.jpg', page_url: 'https://books.example/p', note: 'spine visible' }
+    ], sources: [{ uri: 'https://books.example/p', title: 'Example' }] })`);
+    ok('spinelab: candidate image rendered', some.includes('https://img.example/s.jpg'));
+    ok('spinelab: source page linked', some.includes('https://books.example/p'));
+    ok('spinelab: null data -> empty', run(`spineLabResultHTML(null)`) === '');
+  }
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(2); });

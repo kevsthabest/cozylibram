@@ -2632,3 +2632,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
    the border as a colored aura. Hit slop now lives on .spine::after.) */
 /* Bigger invisible tap area around decorations (wrapper is transparent). */
 .sv-dragdecor { padding: 8px 12px; }
+
+/* ---------- Spine Lab (v264) ---------- */
+.spinelab-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.spinelab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px; margin-top: 12px; }
+.spinelab-cand { border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 8px; background: var(--card2); }
+.spinelab-cand img { width: 100%; height: 180px; object-fit: contain;
+  background: #111; border-radius: 6px; }
+.spinelab-cand .note { font-size: 12px; margin: 6px 0 4px; }
+.spinelab-cand a { font-size: 12px; }
