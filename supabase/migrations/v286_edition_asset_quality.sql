@@ -46,12 +46,31 @@ set search_path = ''
 as $$
 declare
   best_id uuid;
+  existing_id uuid;
+  existing_method text;
   best_isbn text;
   best_bucket text;
   best_path text;
   best_user uuid;
   best_verified boolean;
 begin
+  select canonical_asset_id, selection_method
+    into existing_id, existing_method
+  from public.edition_asset_slots
+  where edition_id = p_edition_id
+    and face = p_face
+    and appearance = p_appearance;
+
+  /* Manual/admin choices are authoritative until that asset is rejected or
+     removed. Automatic quality selection may replace only automatic slots. */
+  if existing_id is not null and existing_method in ('manual', 'admin')
+     and exists (
+       select 1 from public.edition_assets a0
+       where a0.id = existing_id and not a0.rejected
+     ) then
+    return existing_id;
+  end if;
+
   select a.id, a.isbn, a.bucket, a.path, a.source_user_id, a.verified
     into best_id, best_isbn, best_bucket, best_path, best_user, best_verified
   from public.edition_assets a
