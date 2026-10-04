@@ -1,6 +1,6 @@
 /* Cozy Libram service worker — caches the app shell so it installs & opens offline.
    Book metadata still needs internet (Google Books API). */
-const CACHE = 'cozy-libram-v284';
+const CACHE = 'cozy-libram-v285';
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
 // objects are CORS-clean with real Content-Length, so size-based eviction
@@ -9,7 +9,7 @@ const IMG_CACHE_MAX_BYTES = 150 * 1024 * 1024;
 const COVERS_PATH = '/storage/v1/object/public/covers/';
 const EDITION_IMAGES_PATH = '/storage/v1/object/public/edition-images/';
 const EST_BYTES_PER_COVER = 300 * 1024; // fallback when Content-Length is absent
-const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '041-idb.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-inventaire.js', '062-tropes.js', '065-analytics.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '096-onboarding.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '135-vision.js', '136-coverpicker.js', '137-shelf.js', '138-editions.js', '140-collections.js', '150-modal-discovery.js', '152-overlay-history.js', '155-authors.js', '156-trope-taxonomy.js', '157-trope-inference.js', '158-works.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '199-admin.js', '200-boot.js', '205-shelfview.js', '206-editioncapture.js', '207-book3d.js'].map(f => './js/' + f);
+const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '041-idb.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-inventaire.js', '062-tropes.js', '065-analytics.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '096-onboarding.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '135-vision.js', '136-coverpicker.js', '137-shelf.js', '138-editions.js', '140-collections.js', '150-modal-discovery.js', '152-overlay-history.js', '155-authors.js', '156-trope-taxonomy.js', '157-trope-inference.js', '158-works.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '199-admin.js', '200-boot.js', '205-shelfview.js', '206-editioncapture.js', '207-book3d.js', '208-editionassets.js'].map(f => './js/' + f);
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v194 (security): vendored third-party libs, precached like first-party code.
 const VENDOR = ['supabase.min.js', 'quagga.min.js', 'three.min.js'].map(f => './js/vendor/' + f);
