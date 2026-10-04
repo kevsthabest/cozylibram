@@ -1242,6 +1242,7 @@ function ecRenderAppearance() {
     var chips = existing[ap].map(function (f) {
       var fd = ecFaceDef(f);
       return '<span class="ec-chip">' + esc(fd ? fd.label : f) +
+        '<button class="ec-chipse" data-ec-eh="' + esc(ap) + ':' + esc(f) + '" aria-label="Enhance">\u2728</button>' +
         '<button class="ec-chipx" data-ec-rm="' + esc(ap) + ':' + esc(f) + '" aria-label="Remove">\u00d7</button></span>';
     }).join('');
     exHtml += '<div class="ec-exrow"><span class="ec-exap">' + esc(ecAppearanceLabel(ap)) + '</span>' + chips + '</div>';
@@ -1269,6 +1270,12 @@ function ecRenderAppearance() {
   };
   ov.querySelector('#ec-ap-jacket').addEventListener('click', function () { go(['jacket']); });
   ov.querySelector('#ec-ap-both').addEventListener('click', function () { go(['jacket', 'board']); });
+  ov.querySelectorAll('[data-ec-eh]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var parts = (btn.getAttribute('data-ec-eh') || '').split(':');
+      ecEnhancePicker(parts[0], parts[1], ecEnhanceSavedCtx(b, parts[0], parts[1]));
+    });
+  });
   ov.querySelectorAll('[data-ec-rm]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var parts = (btn.getAttribute('data-ec-rm') || '').split(':');
@@ -1443,12 +1450,46 @@ function ecEnhanceClose(then) {
   if (then) then();
 }
 
-function ecEnhancePicker(ap, face) {
-  if (typeof document === 'undefined' || !EC) return null;
+// Where the enhance flow reads/writes. Session faces (review screen) live in
+// EC.results; saved faces (appearance screen) live on the book.
+function ecEnhanceSessionCtx(ap, face) {
+  return {
+    label: function () { return ecEnhanceLabel(ap, face); },
+    getUrl: function () { return EC && EC.results[ap] && EC.results[ap][face]; },
+    store: function (url) {
+      if (!EC) return;
+      (EC.results[ap] = EC.results[ap] || {})[face] = url;
+    },
+    after: function () { ecRenderReview(); },
+  };
+}
+function ecEnhanceSavedCtx(book, ap, face) {
+  return {
+    label: function () { return ecEnhanceLabel(ap, face); },
+    getUrl: function () {
+      return book && book.editionFaces && book.editionFaces[ap] && book.editionFaces[ap][face];
+    },
+    store: function (url) {
+      if (!book) return;
+      book.editionFaces = book.editionFaces || {};
+      (book.editionFaces[ap] = book.editionFaces[ap] || {})[face] = url;
+      if (typeof saveLibrary === 'function') saveLibrary();
+    },
+    after: function () { ecRenderAppearance(); },
+  };
+}
+function ecEnhanceLabel(ap, face) {
   var fd = ecFaceDef(face);
+  return (fd ? fd.label : face) + ' \u00b7 ' + ecAppearanceLabel(ap);
+}
+
+function ecEnhancePicker(ap, face, ctx) {
+  if (typeof document === 'undefined' || !EC) return null;
+  EC.eh = ctx || ecEnhanceSessionCtx(ap, face);
+  if (!EC.eh.getUrl()) return null;
   var ov = ecEnhanceShell(
     '<div class="ec-head"><h3 class="serif">Enhance face</h3>' +
-    '<p class="ec-sub">' + esc(fd ? fd.label : face) + ' \u00b7 ' + esc(ecAppearanceLabel(ap)) + '</p></div>' +
+    '<p class="ec-sub">' + esc(EC.eh.label()) + '</p></div>' +
     '<p class="ec-hint">AI post-processing — you will see before/after and choose.</p>' +
     '<div class="ec-pick">' +
     '<button class="btn ghost big" id="ec-eh-sharpen">Sharpen text &amp; detail</button>' +
@@ -1456,11 +1497,12 @@ function ecEnhancePicker(ap, face) {
     '</div>' +
     '<div class="ec-actions"><button class="btn ghost" id="ec-eh-cancel">Cancel</button></div>',
     'Enhance face');
-  var closer = function () { ecEnhanceClose(function () { ecRenderReview(); }); };
+  var closer = function () { var eh = EC && EC.eh; ecEnhanceClose(function () { if (eh) eh.after(); }); };
   EC.ehToken = (typeof overlayOpened === 'function') ? overlayOpened('ec-enhance', closer) : null;
   ov.querySelector('#ec-eh-cancel').addEventListener('click', function () {
     if (EC.ehToken && typeof overlayClosed === 'function') overlayClosed(EC.ehToken);
-    ecEnhanceClose(function () { ecRenderReview(); });
+    var eh = EC && EC.eh;
+    ecEnhanceClose(function () { if (eh) eh.after(); });
   });
   var go = function (mode) { ecEnhanceProgress(ap, face, mode); };
   ov.querySelector('#ec-eh-sharpen').addEventListener('click', function () { go('sharpen'); });
@@ -1469,27 +1511,27 @@ function ecEnhancePicker(ap, face) {
 }
 
 function ecEnhanceProgress(ap, face, mode) {
-  if (typeof document === 'undefined' || !EC) return null;
-  var url = EC.results[ap] && EC.results[ap][face];
-  if (!url) { ecRenderReview(); return null; }
-  var fd = ecFaceDef(face);
+  if (typeof document === 'undefined' || !EC || !EC.eh) return null;
+  var url = EC.eh.getUrl();
+  if (!url) { EC.eh.after(); return null; }
   var ov = ecEnhanceShell(
     '<div class="ec-head"><h3 class="serif">Enhancing\u2026</h3>' +
-    '<p class="ec-sub">' + esc(fd ? fd.label : face) + ' \u00b7 ' +
+    '<p class="ec-sub">' + esc(EC.eh.label()) + ' \u00b7 ' +
     (mode === 'restore' ? 'Restore damage' : 'Sharpen') + '</p></div>' +
     '<div class="b3d-load"><span class="spinner"></span></div>' +
     '<p class="ec-hint" id="ec-eh-err" hidden></p>' +
     '<div class="ec-actions"><button class="btn ghost" id="ec-eh-back">Back</button></div>',
     'Enhancing face');
-  var closer = function () { ecEnhanceClose(function () { ecRenderReview(); }); };
+  var closer = function () { var eh = EC && EC.eh; ecEnhanceClose(function () { if (eh) eh.after(); }); };
   EC.ehToken = (typeof overlayOpened === 'function') ? overlayOpened('ec-enhance', closer) : null;
   ov.querySelector('#ec-eh-back').addEventListener('click', function () {
     if (EC.ehToken && typeof overlayClosed === 'function') overlayClosed(EC.ehToken);
-    ecEnhanceClose(function () { ecRenderReview(); });
+    var eh = EC && EC.eh;
+    ecEnhanceClose(function () { if (eh) eh.after(); });
   });
   ecRunEnhance(url, mode).then(function (enhanced) {
-    if (!EC) return;
-    ecEnhanceCompare(url, enhanced, ap, face);
+    if (!EC || !EC.eh) return;
+    ecEnhanceCompare(url, enhanced);
   }).catch(function (err) {
     var e = document.querySelector('#ec-eh-err');
     if (e) { e.hidden = false; e.textContent = (err && err.message) || 'Enhancement failed'; }
@@ -1499,17 +1541,12 @@ function ecEnhanceProgress(ap, face, mode) {
   return EC.ehToken;
 }
 
-function ecEnhanceCompare(origUrl, newUrl, ap, face, onKeep) {
-  if (typeof document === 'undefined') return null;
-  var fd = ecFaceDef(face);
-  var keep = onKeep || function () {
-    if (EC) {
-      (EC.results[ap] = EC.results[ap] || {})[face] = newUrl;
-    }
-  };
+function ecEnhanceCompare(origUrl, newUrl) {
+  if (typeof document === 'undefined' || !EC || !EC.eh) return null;
+  var eh = EC.eh;
   var ov = ecEnhanceShell(
     '<div class="ec-head"><h3 class="serif">Before / after</h3>' +
-    '<p class="ec-sub">' + esc(fd ? fd.label : face) + '</p></div>' +
+    '<p class="ec-sub">' + esc(eh.label()) + '</p></div>' +
     '<div class="ec-compare">' +
     '<figure><img id="ec-cmp-before" alt="Before"><figcaption>Before</figcaption></figure>' +
     '<figure><img id="ec-cmp-after" alt="After"><figcaption>After</figcaption></figure>' +
@@ -1521,16 +1558,20 @@ function ecEnhanceCompare(origUrl, newUrl, ap, face, onKeep) {
     'Compare enhancement');
   ov.querySelector('#ec-cmp-before').src = origUrl;
   ov.querySelector('#ec-cmp-after').src = newUrl;
-  var closer = function () { ecEnhanceClose(function () { ecRenderReview(); }); };
+  var closer = function () { var eh2 = EC && EC.eh; ecEnhanceClose(function () { if (eh2) eh2.after(); }); };
   if (typeof overlayOpened === 'function') overlayOpened('ec-enhance', closer);
-  var done = function (fn) {
+  var done = function (storeIt) {
     return function () {
       if (EC && EC.ehToken && typeof overlayClosed === 'function') overlayClosed(EC.ehToken);
-      ecEnhanceClose(function () { if (fn) fn(); ecRenderReview(); });
+      var eh3 = EC && EC.eh;
+      ecEnhanceClose(function () {
+        if (storeIt && eh3) eh3.store(newUrl);
+        if (eh3) eh3.after();
+      });
     };
   };
-  ov.querySelector('#ec-eh-discard').addEventListener('click', done(null));
-  ov.querySelector('#ec-eh-keep').addEventListener('click', done(keep));
+  ov.querySelector('#ec-eh-discard').addEventListener('click', done(false));
+  ov.querySelector('#ec-eh-keep').addEventListener('click', done(true));
   return true;
 }
 
@@ -1541,6 +1582,8 @@ async function ecSaveAll() {
   var b = lib.find(function (x) { return x && x.id === EC.bookId; });
   var results = EC.results;
   var token = EC.token;
+  var hasEdges = EC.hasEdges;
+  var appearances = EC.appearances;
   EC = null;
   ecCloseWizard();
   if (token && typeof overlayClosed === 'function') overlayClosed(token);
@@ -1558,6 +1601,18 @@ async function ecSaveAll() {
       if (face === 'spine' && !b.spinePhoto) b.spinePhoto = faces[face];
     });
   });
+  // v282: answering "Plain pages" is a deliberate statement that this copy has
+  // no decorated edges — drop any stale fore-edge saved by an earlier session
+  // (a rescan that skips the face must not leave the old photo behind).
+  if (hasEdges === false && b.editionFaces) {
+    (appearances || []).forEach(function (ap) {
+      if (b.editionFaces[ap]) {
+        delete b.editionFaces[ap].fore_edge;
+        if (!Object.keys(b.editionFaces[ap]).length) delete b.editionFaces[ap];
+      }
+    });
+    if (!Object.keys(b.editionFaces).length) delete b.editionFaces;
+  }
   if (typeof saveLibrary === 'function') saveLibrary();
   if (isbn) {
     for (var i = 0; i < order.length; i++) {

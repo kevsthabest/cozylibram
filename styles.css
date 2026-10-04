@@ -2741,3 +2741,5 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ec-compare figure { margin: 0; flex: 1; min-width: 0; }
 .ec-compare img { width: 100%; border-radius: 8px; display: block; }
 .ec-compare figcaption { font-size: 12px; opacity: 0.6; text-align: center; margin-top: 4px; }
+.ec-chipse { border: 0; background: transparent; color: inherit; border-radius: 50%;
+  width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 12px; opacity: 0.85; }
