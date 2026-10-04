@@ -398,6 +398,47 @@ ok('gold bands consolidated on ::before', (() => {
   const m = /\.spine::before\s*\{([^}]*)\}/.exec(css);
   return !!m && m[1].includes('linear-gradient') && m[1].includes('top / 100% 3px');
 })());
+/* ---- 27. v266: shelf formats ---- */
+run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
+ok('format defaults to standard', run(`shelfFormat()`) === 'standard');
+run(`shelfSetFormat('compact');`);
+ok('format persists', run(`shelfFormat()`) === 'compact');
+ok('compact density', run(`shelfDensityScale()`) === 0.72);
+run(`shelfSetFormat('showcase');`);
+ok('showcase density', run(`shelfDensityScale()`) === 1.35);
+run(`shelfSetFormat('bogus');`);
+ok('invalid format falls back to standard',
+  run(`shelfFormat()`) === 'standard' && run(`shelfDensityScale()`) === 1);
+const wStd = run(`shelfSetFormat('standard'), shelfSpineSpec({id:'fmt1'}).w`);
+const wCompact = run(`shelfSetFormat('compact'), shelfSpineSpec({id:'fmt1'}).w`);
+const wShow = run(`shelfSetFormat('showcase'), shelfSpineSpec({id:'fmt1'}).w`);
+ok('compact shrinks geometry', wCompact === Math.round(wStd * 0.72));
+ok('showcase enlarges geometry', wShow === Math.round(wStd * 1.35));
+const scols = run(`shelfSplitColumns([
+  {label:'A', books:[1,2,3,4,5,6]},
+  {label:'B', books:[1,2]},
+  {label:'C', books:[1,2,3]}
+])`);
+ok('split balances sections preserving order',
+  scols.length === 2 && scols[0].map(s => s.label).join(',') === 'A' &&
+  scols[1].map(s => s.label).join(',') === 'B,C');
+ok('single section -> one column',
+  run(`shelfSplitColumns([{label:'A', books:[1,2]}])`).length === 1);
+run(`library = [
+  {id:'f1', title:'B1', status:'tbr'},
+  {id:'f2', title:'B2', status:'tbr'},
+  {id:'f3', title:'B3', status:'tbr'},
+  {id:'f4', title:'B4', status:'tbr'}
+];
+shelfGroup='tbr'; shelfOrderCache=null; shelfSetFormat('split'); shelfSetLayout('manual'); renderShelf();`);
+ok('split renders two columns', qa('#svShelves .sv-col').length === 2);
+ok('split keeps all spines', qa('#svShelves .spine').length === 4);
+run(`shelfSetFormat('compact'); renderShelf();`);
+ok('compact sets --svs on the shelf', (q('#svShelves').getAttribute('style') || '').indexOf('--svs') !== -1);
+run(`shelfOpenLayoutSheet();`);
+ok('layout sheet offers four formats', qa('#svSheet [data-f]').length === 4);
+run(`shelfCloseSheet(); shelfSetFormat('standard'); shelfSetLayout('manual'); library = [];
+localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
   ok('non-AI crop never shared', s1 === false);

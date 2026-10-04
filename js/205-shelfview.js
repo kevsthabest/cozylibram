@@ -50,13 +50,16 @@ function shelfHash(str) {
 const SHELF_DRAG_SLOP_PX = 18;
 
 // Deterministic spine geometry + palette slot for a book.
+// v266: compact/showcase formats scale the geometry; inner text scales via
+// the --svs CSS variable on #svShelves.
 function shelfSpineSpec(book) {
   const h = shelfHash((book && book.id) || (book && book.title) || 'x');
   const pal = SHELF_PALETTE[h % SHELF_PALETTE.length];
+  const s = (typeof shelfDensityScale === 'function') ? shelfDensityScale() : 1;
   return {
     c1: pal[0], c2: pal[1],
-    w: 30 + ((h >>> 3) % 15), // >>> : h is uint32; >> would sign-extend
-    h: 172 + ((h >>> 9) % 44),
+    w: Math.round((30 + ((h >>> 3) % 15)) * s), // >>> : h is uint32; >> would sign-extend
+    h: Math.round((172 + ((h >>> 9) % 44)) * s),
   };
 }
 
@@ -146,6 +149,39 @@ function shelfLayoutSections(books, layout) {
     return arr;
   }
   return [{ label: null, books: books.slice() }];
+}
+
+// Shelf formats, v266: 'standard' (classic full-width shelves), 'split'
+// (two side-by-side shelf columns), 'compact' (smaller books, more per
+// shelf), 'showcase' (bigger books, fewer per shelf).
+function shelfFormat() {
+  const o = shelfOrder();
+  const f = o.format;
+  return f === 'split' || f === 'compact' || f === 'showcase' ? f : 'standard';
+}
+function shelfSetFormat(f) {
+  const o = shelfOrder();
+  o.format = (f === 'split' || f === 'compact' || f === 'showcase') ? f : 'standard';
+  saveShelfOrder(o);
+  shelfOrderCache = o;
+}
+// Density multiplier applied to book geometry for compact/showcase.
+function shelfDensityScale() {
+  const f = shelfFormat();
+  return f === 'compact' ? 0.72 : f === 'showcase' ? 1.35 : 1;
+}
+// Split format: distribute sections across two columns, balancing book
+// count while preserving section order. Returns 1-2 columns.
+function shelfSplitColumns(sections) {
+  const cols = [[], []];
+  const total = sections.reduce((n, s) => n + s.books.length, 0);
+  let left = 0;
+  sections.forEach(sec => {
+    const c = (left < total / 2 || !cols[0].length) ? 0 : 1;
+    cols[c].push(sec);
+    if (c === 0) left += sec.books.length;
+  });
+  return cols[1].length ? cols : [cols[0]];
 }
 
 // Device-local shelf arrangement (mirrors upNext: local-only, not synced).
@@ -385,9 +421,10 @@ function shelfMergeDecor(bookItems, decors) {
 function shelfLayoutItems(books) {
   const items = [];
   let pending = [];
+  const ds = (typeof shelfDensityScale === 'function') ? shelfDensityScale() : 1;
   const flush = () => {
     if (pending.length) {
-      items.push({ kind: 'stack', books: pending.splice(0), w: 132 });
+      items.push({ kind: 'stack', books: pending.splice(0), w: Math.round(132 * ds) });
     }
   };
   (books || []).forEach(b => {
@@ -400,7 +437,7 @@ function shelfLayoutItems(books) {
       items.push({
         kind: pose === 'face' ? 'face' : 'spine',
         books: [b],
-        w: pose === 'face' ? 128 : shelfSpineSpec(b).w + 4,
+        w: pose === 'face' ? Math.round(128 * ds) : shelfSpineSpec(b).w + 4,
       });
     }
   });
@@ -478,7 +515,8 @@ function shelfStackHTML(books) {
   const top = books[books.length - 1] || {};
   const layers = books.map(b => {
     const spec = shelfSpineSpec(b);
-    const w = 96 + ((shelfHash(b.id) >>> 5) % 24);
+    const ds = (typeof shelfDensityScale === 'function') ? shelfDensityScale() : 1;
+    const w = Math.round((96 + ((shelfHash(b.id) >>> 5) % 24)) * ds);
     return '<div class="sv-hbook" style="width:' + w + 'px;background:linear-gradient(180deg,' +
       spec.c1 + ',' + spec.c2 + ')"><span>' + esc(b.title || 'Untitled') + '</span></div>';
   }).join('');
@@ -518,15 +556,43 @@ function renderShelf() {
   const budget = Math.max(250, Math.min(430, vw)) - 44 - (hasDecor ? 90 : 0);
   const rows = shelfFillRows(items, budget);
   const layout = shelfLayout();
+  const format = shelfFormat();
   const rowHTML = (row) =>
     '<div class="sv-shelf"><div class="sv-books">' +
     row.map(shelfItemHTML).join('') +
     '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>';
+  const sectionHTML = (sec, secItems, secBudget) =>
+    '<div class="sv-section">' +
+    (sec.label ? '<div class="sv-section-label"><span>' + esc(sec.label) + '</span><em>' + sec.books.length + '</em></div>' : '') +
+    shelfFillRows(secItems, secBudget).map(rowHTML).join('') + '</div>';
   let shelvesHTML;
   if (!shown.length) {
     shelvesHTML = '<div class="sv-empty">' + icon('shelf') +
       '<p>Nothing on this shelf yet.</p>' +
       '<button class="btn" id="svEmptyAdd">Add a book</button></div>';
+  } else if (format === 'split') {
+    // v266: two side-by-side shelf columns; each section stays whole in one
+    // column, decorations ride the last section of the last column.
+    const decors = shelfDecorItems(shelfGroup);
+    let sections = shelfLayoutSections(shown, layout);
+    if (layout === 'manual') {
+      const half = Math.ceil(shown.length / 2);
+      sections = [
+        { label: null, books: shown.slice(0, half) },
+        { label: null, books: shown.slice(half) },
+      ].filter(s => s.books.length);
+    }
+    const colBudget = Math.max(120, Math.floor((Math.max(250, Math.min(430, vw)) - 58) / 2));
+    const cols = shelfSplitColumns(sections);
+    const lastCol = cols[cols.length - 1];
+    shelvesHTML = '<div class="sv-cols">' + cols.map(colSections =>
+      '<div class="sv-col">' + colSections.map(sec => {
+        const isLast = colSections === lastCol && sec === colSections[colSections.length - 1];
+        let secItems = shelfLayoutItems(sec.books);
+        if (isLast) secItems = shelfMergeDecor(secItems, decors);
+        return sectionHTML(sec, secItems, colBudget);
+      }).join('') + '</div>'
+    ).join('') + '</div>';
   } else if (layout === 'manual') {
     shelvesHTML = rows.map(rowHTML).join('');
   } else {
@@ -536,9 +602,7 @@ function renderShelf() {
     shelvesHTML = sections.map((sec, si) => {
       let secItems = shelfLayoutItems(sec.books);
       if (si === sections.length - 1) secItems = shelfMergeDecor(secItems, decors);
-      return '<div class="sv-section">' +
-        (sec.label ? '<div class="sv-section-label"><span>' + esc(sec.label) + '</span><em>' + sec.books.length + '</em></div>' : '') +
-        shelfFillRows(secItems, budget).map(rowHTML).join('') + '</div>';
+      return sectionHTML(sec, secItems, budget);
     }).join('');
   }
   setView(
@@ -554,7 +618,9 @@ function renderShelf() {
       ? '<div class="sv-assign">' + icon('camera') + ' Tap a spine to place this photo' +
         ' <button id="svAssignCancel">Cancel</button></div>'
       : '') +
-    '<div class="sv-shelves season-' + shelfSeason() + '" id="svShelves">' + shelvesHTML + '</div>' +
+    '<div class="sv-shelves season-' + shelfSeason() + '" id="svShelves"' +
+    (shelfDensityScale() !== 1 ? ' style="--svs:' + shelfDensityScale() + '"' : '') +
+    '>' + shelvesHTML + '</div>' +
     (shown.length
       ? '<div class="sv-hint">' + (shelfCanDrag()
         ? 'Drag to rearrange &middot; long-press a book for display &amp; photo options'
@@ -644,6 +710,8 @@ function shelfStartGhost(d, e) {
   const r = d.el.getBoundingClientRect();
   const g = d.el.cloneNode(true);
   g.removeAttribute('data-id');
+  // v266: the ghost leaves #svShelves, so carry the density var with it.
+  try { g.style.setProperty('--svs', shelfDensityScale()); } catch (e) {}
   g.style.cssText += ';position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;' +
     'width:' + r.width + 'px;height:' + r.height + 'px;z-index:300;pointer-events:none;margin:0;';
   g.classList.add('dragging');
@@ -857,9 +925,10 @@ function shelfOpenDecorSheet() {
   document.getElementById('svDecorDone').addEventListener('click', close);
 }
 
-// Shelf layout picker: hand-arranged order or automatic grouping.
+// Shelf layout picker: grouping + shelf format.
 function shelfOpenLayoutSheet() {
   const cur = shelfLayout();
+  const fmt = shelfFormat();
   const { sheet, close } = shelfSheetShell('Shelf layout',
     '<p class="sv-review-hint">Group your shelves automatically, or keep your hand-arranged order</p>' +
     '<div class="sv-layout-opts">' +
@@ -868,10 +937,25 @@ function shelfOpenLayoutSheet() {
      ['genre', 'By genre', 'One shelf per genre']].map(([k, t, d]) =>
       '<button class="sv-layout-opt' + (k === cur ? ' active' : '') + '" data-l="' + k + '">' +
       '<b>' + t + '</b><span>' + d + '</span></button>'
+    ).join('') + '</div>' +
+    '<p class="sv-review-hint" style="margin-top:14px">Shelf format</p>' +
+    '<div class="sv-layout-opts">' +
+    [['standard', 'Standard', 'Classic full-width shelves'],
+     ['split', 'Split', 'Two side-by-side shelf columns'],
+     ['compact', 'Compact', 'Smaller books, more per shelf'],
+     ['showcase', 'Showcase', 'Bigger books, fewer per shelf']].map(([k, t, d]) =>
+      '<button class="sv-layout-opt' + (k === fmt ? ' active' : '') + '" data-f="' + k + '">' +
+      '<b>' + t + '</b><span>' + d + '</span></button>'
     ).join('') + '</div>');
   sheet.querySelectorAll('[data-l]').forEach(b =>
     b.addEventListener('click', () => {
       shelfSetLayout(b.dataset.l);
+      close();
+      renderShelf();
+    }));
+  sheet.querySelectorAll('[data-f]').forEach(b =>
+    b.addEventListener('click', () => {
+      shelfSetFormat(b.dataset.f);
       close();
       renderShelf();
     }));

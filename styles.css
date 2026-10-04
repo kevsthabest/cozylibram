@@ -2643,3 +2643,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   background: #111; border-radius: 6px; }
 .spinelab-cand .note { font-size: 12px; margin: 6px 0 4px; }
 .spinelab-cand a { font-size: 12px; }
+
+/* ---------- shelf formats (v266) ---------- */
+.sv-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; align-items: start; }
+.sv-col { min-width: 0; }
+/* Density scaling: #svShelves carries --svs (0.72 compact, 1.35 showcase);
+   geometry scales in JS, inner type scales here. */
+.sv-books { min-height: calc(208px * var(--svs, 1)); }
+.spine .sp-t { font-size: calc(10.5px * var(--svs, 1)); }
+.spine .sp-a { font-size: calc(8px * var(--svs, 1)); }
+.faceout { width: calc(118px * var(--svs, 1)); height: calc(196px * var(--svs, 1)); }
+.sv-hbook { height: calc(25px * var(--svs, 1)); }
+.sv-hbook span { font-size: calc(9px * var(--svs, 1)); }
+.phototag { width: calc(18px * var(--svs, 1)); height: calc(18px * var(--svs, 1)); }
