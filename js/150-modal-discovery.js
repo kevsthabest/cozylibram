@@ -1025,7 +1025,8 @@ function renderDetailModal(b, viaBook) {
     // description; mobile stacks cover, title, author, rating, meta, action.
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
-    '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button></div>' +
+    '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button>' +
+    '<button class="btn ghost sm" id="m-scanfaces">' + icon('camera') + ' Scan Edition</button></div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
@@ -1385,6 +1386,8 @@ function renderDetailModal(b, viaBook) {
   root.querySelectorAll('.d-tab').forEach(t =>
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
+  // v274: guided multi-face edition scan (spine, sprayed edges, covers).
+  document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));
   // v210: edition picker — change which edition of the book she owns.
   document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
