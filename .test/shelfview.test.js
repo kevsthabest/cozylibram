@@ -278,6 +278,18 @@ ok('still no falling fx', qa('#svShelves .sv-fx').length === 0);
 run(`library = []; shelfOrderCache=null;
 localStorage.removeItem('spicyshelves.shelforder.v1');`);
 
+/* ---- 22. v258: 2D spine boxes ---- */
+ok('2D box hugs vertically', (() => {
+  const r = run(`spineBoxCropRect(1000, 800, 100, 200, 100, 700)`);
+  return r.y >= 80 && r.y + r.h <= 560 && Math.abs(r.h / r.w - 5.2) < 0.05;
+})());
+ok('2D box sliver height -> null', run(`spineBoxCropRect(1000, 800, 100, 200, 400, 410)`) === null);
+ok('2D box inverted y -> null', run(`spineBoxCropRect(1000, 800, 100, 200, 700, 100)`) === null);
+ok('missing y keeps x behavior', (() => {
+  const r = run(`spineBoxCropRect(1000, 800, 100, 200)`);
+  return r.x === 100 && r.y + r.h <= 800;
+})());
+
 /* ---- 17. spineBoxCropRect (v253): 0-1000 x-range -> pixel rect ---- */
 const br = run(`spineBoxCropRect(1000, 800, 100, 200)`);
 ok('box maps to pixel strip', br.x === 100 && br.w > 0);
@@ -301,6 +313,8 @@ ok('non-numeric box -> null', run(`spineBoxCropRect(1000, 800, "l", "r")`) === n
   run(`shelfScanPhoto = 'data:image/jpeg;base64,AAA';`);
   const n3 = await run(`shelfScanSpinePhoto({spine:{title:'X'}})`);
   ok('no box coords -> null', n3 === null);
+  const sd = await run(`spineDetectBox('data:image/jpeg;base64,AAA')`);
+  ok('detect failure -> null (never rejects)', sd === null);
   run(`shelfScanPhoto = null;`);
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

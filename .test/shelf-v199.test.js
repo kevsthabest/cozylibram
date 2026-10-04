@@ -135,6 +135,55 @@ async function main() {
   ok('endpoint: inverted box dropped', bw('Inverted').x0 === undefined);
   ok('endpoint: missing box stays missing', bw('NoBox').x0 === undefined);
   ok('endpoint: non-numeric box dropped', bw('Junk').x0 === undefined);
+
+  // v258: y0/y1 vertical bounds + mode 'spine' for single-spine detection.
+  const box2Payload = {
+    books: [
+      { title: 'Fourth Wing', author: 'R', confidence: 'high', x0: 100, x1: 180, y0: 50, y1: 900 },
+      { title: 'Flat', author: 'R', confidence: 'high', x0: 100, x1: 180, y0: 400, y1: 410 }, // too short: dropped
+      { title: 'NoY', author: 'R', confidence: 'high', x0: 100, x1: 180 }, // no y: x box kept
+    ],
+  };
+  globalThis.fetch = withAuth(async (url, init) => {
+    seen = { url, init, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(box2Payload) } }],
+    }), { status: 200 });
+  });
+r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'shelf' });
+  const boxed2 = await r.json();
+  const b2 = (t) => boxed2.books.find(b => b.title === t);
+  ok('endpoint: shelf prompt asks for y0/y1',
+    seen.body.messages[0].content[0].text.includes('"y0"') &&
+    seen.body.messages[0].content[0].text.includes('"y1"'));
+  ok('endpoint: valid y box passes through', b2('Fourth Wing').y0 === 50 && b2('Fourth Wing').y1 === 900);
+  ok('endpoint: short y box dropped', b2('Flat').y0 === undefined && b2('Flat').y1 === undefined);
+  ok('endpoint: missing y keeps x box', b2('NoY').x0 === 100 && b2('NoY').y0 === undefined);
+
+  const spinePayload = { box: { x0: 300, y0: 40, x1: 420, y1: 960 } };
+  globalThis.fetch = withAuth(async (url, init) => {
+    seen = { url, init, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(spinePayload) } }],
+    }), { status: 200 });
+  });
+r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'spine' });
+  const sp = await r.json();
+  ok('endpoint: spine mode -> 200', r.status === 200);
+  ok('endpoint: spine prompt asks for a tight box',
+    seen.body.messages[0].content[0].text.includes('"box"') &&
+    seen.body.messages[0].content[0].text.includes('tight'));
+  ok('endpoint: spine box passes through', sp.box && sp.box.x0 === 300 && sp.box.y1 === 960);
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
+    choices: [{ message: { content: JSON.stringify({ box: { x0: 1, y0: 2 } }) } }],
+  }), { status: 200 }));
+r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'spine' });
+  ok('endpoint: partial spine box -> null', (await r.json()).box === null);
+  globalThis.fetch = withAuth(async () => new Response(JSON.stringify({
+    choices: [{ message: { content: JSON.stringify({ box: null }) } }],
+  }), { status: 200 }));
+r = await post({ VISION_API_KEY: 'k' }, { image: IMG, mode: 'spine' });
+  ok('endpoint: null spine box stays null', (await r.json()).box === null);
   globalThis.fetch = realFetch;
 
   // ============ Part B: client ============

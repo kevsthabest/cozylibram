@@ -810,15 +810,21 @@ function shelfStartCapture(bookId) {
 }
 
 function shelfReviewCapture(dataUrl, bookId) {
-  // Downscale (reuse the vision pipeline's safe resizer), then crop the
-  // center strip at spine aspect and re-encode small.
+  // Downscale (reuse the vision pipeline's safe resizer), then let the AI
+  // find the spine's tight box and pre-fit the crop to it — falling back
+  // to the center strip when detection finds nothing usable.
   const down = (typeof visionDownscale === 'function')
     ? visionDownscale(dataUrl, 600) : Promise.resolve(dataUrl);
-  down.then(d => spineCropToDataURL(d, 168)).then(cropped => {
+  down.then(d => spineDetectBox(d).then(box => ({ d, box }))).then(({ d, box }) => {
+    const cropP = (box && typeof spineBoxPhotoToDataURL === 'function')
+      ? spineBoxPhotoToDataURL(d, box.x0, box.x1, 168, box.y0, box.y1).then(c => c || spineCropToDataURL(d, 168))
+      : spineCropToDataURL(d, 168);
+    return cropP.then(cropped => ({ cropped, ai: !!box }));
+  }).then(({ cropped, ai }) => {
     const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
     const { close } = shelfSheetShell('Spine photo' + (book ? ' — ' + esc(book.title || '') : ''),
       '<div class="sv-review"><img alt="Cropped spine photo"></div>' +
-      '<p class="sv-review-hint">Cropped to the spine — look right?</p>' +
+      '<p class="sv-review-hint">' + (ai ? 'AI found the spine — look right?' : 'Cropped to the spine — look right?') + '</p>' +
       '<div class="sv-review-actions">' +
       '<button class="sv-sheet-btn ghost" id="svRetake">Retake</button>' +
       '<button class="sv-sheet-btn solid" id="svUsePhoto">Use photo</button>' +
@@ -860,36 +866,77 @@ function spineCropToDataURL(dataUrl, targetW) {
   });
 }
 
-// Pixel rect for a 0-1000 x-range spine box on a w×h photo: the box's
-// horizontal strip at full height, then the 1:5.2 center crop inside it.
+// Pixel rect for a 0-1000 spine box on a w×h photo: the box at full size,
+// then the 1:5.2 spine aspect fitted inside it. y0/y1 are optional — when
+// absent the full image height is used (v253 behavior).
 // Returns null when the box is unusable (missing, inverted, a sliver).
-function spineBoxCropRect(w, h, x0, x1) {
+function spineBoxCropRect(w, h, x0, x1, y0, y1) {
   if (x0 == null || x1 == null || x0 === '' || x1 === '') return null;
   x0 = Number(x0); x1 = Number(x1);
   if (!isFinite(x0) || !isFinite(x1)) return null;
   x0 = Math.max(0, Math.min(1000, x0));
   x1 = Math.max(0, Math.min(1000, x1));
   if (x1 - x0 < 5) return null;
+  let yt0 = 0, yt1 = 1000;
+  if (y0 != null && y0 !== '' && y1 != null && y1 !== '') {
+    const a = Number(y0), b = Number(y1);
+    if (isFinite(a) && isFinite(b)) {
+      yt0 = Math.max(0, Math.min(1000, a));
+      yt1 = Math.max(0, Math.min(1000, b));
+    }
+  }
+  if (yt1 - yt0 < 20) return null;
   const sx = Math.round(x0 / 1000 * w);
-  const stripW = Math.round(x1 / 1000 * w) - sx;
-  const inner = spineCropRect(stripW, h);
-  return { x: sx + inner.x, y: inner.y, w: inner.w, h: inner.h };
+  const bw = Math.round(x1 / 1000 * w) - sx;
+  const sy = Math.round(yt0 / 1000 * h);
+  const bh = Math.round(yt1 / 1000 * h) - sy;
+  const inner = spineCropRect(bw, bh);
+  return { x: sx + inner.x, y: sy + inner.y, w: inner.w, h: inner.h };
+}
+
+// v258: ask the vision model for a tight box around the single prominent
+// spine in a close-up photo. Resolves with {x0,y0,x1,y1} or null — never
+// rejects, so the manual flow always falls back to the center crop.
+function spineDetectBox(dataUrl) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const safety = setTimeout(() => done(null), 25000);
+    try {
+      const fetchFn = (typeof apiFetch === 'function') ? apiFetch : fetch;
+      fetchFn('/api/read-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl, mode: 'spine' }),
+      }).then(r => {
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+      }).then(j => {
+        clearTimeout(safety);
+        const b = j && j.box;
+        done(b && typeof b === 'object' ? b : null);
+      }).catch(() => { clearTimeout(safety); done(null); });
+    } catch (e) { clearTimeout(safety); done(null); }
+  });
 }
 
 // Shared canvas core: draw rect r of img into a targetW-wide JPEG data URL.
+// A whisper of contrast/saturation counteracts the flat look of a crop.
 function shelfDrawCrop(img, r, targetW) {
   try {
     const targetH = Math.max(1, Math.round(targetW * (r.h / r.w)));
     const c = document.createElement('canvas');
     c.width = targetW; c.height = targetH;
-    c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, targetW, targetH);
+    const ctx = c.getContext('2d');
+    try { ctx.filter = 'contrast(1.07) saturate(1.05)'; } catch (e) {}
+    ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, targetW, targetH);
     return c.toDataURL('image/jpeg', 0.85);
   } catch (e) { return null; }
 }
 
 // Crop a 0-1000 x-range box out of a photo data URL to spine aspect.
 // Resolves with a small JPEG data URL, or null when the box is unusable.
-function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW) {
+function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW, y0, y1) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v || null); } };
@@ -899,7 +946,7 @@ function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW) {
       img.onload = () => {
         clearTimeout(safety);
         try {
-          const r = spineBoxCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height, x0, x1);
+          const r = spineBoxCropRect(img.naturalWidth || img.width, img.naturalHeight || img.height, x0, x1, y0, y1);
           done(r ? shelfDrawCrop(img, r, targetW) : null);
         } catch (e) { done(null); }
       };
