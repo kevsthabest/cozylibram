@@ -116,5 +116,14 @@ ok('render() dispatches shelf view', run(`view='shelf'; render();`) === undefine
 ok('shelf icon registered',
   run(`icon('shelf').indexOf('<svg') === 0 && icon('shelf').indexOf('M5 12.5h14') !== -1`));
 
+/* ---- 11. regression: every js/*.js file is wired into index.html ----
+   (v250 shipped 205-shelfview.js without its <script> tag — tapping Shelf
+   threw ReferenceError and did nothing. The test harness loads files from
+   disk, so only this check catches it.) */
+const jsFiles = fs.readdirSync(ROOT + '/js').filter(f => f.endsWith('.js'));
+const missing = jsFiles.filter(f => html.indexOf('src="js/' + f + '"') === -1);
+ok('all js files have a <script> tag in index.html',
+  missing.length === 0 ? true : (console.log('missing:', missing.join(',')), false));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
