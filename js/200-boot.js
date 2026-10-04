@@ -8,6 +8,7 @@ function render() {
   else if (view === 'add') renderAdd();
   else if (view === 'pick') renderPick();
   else if (view === 'stats') renderStats();
+  else if (view === 'shelf') renderShelf();
   else if (view === 'settings') renderSettings();
   else if (view === 'profile') renderProfile();
   else if (view === 'authors') renderAuthors();

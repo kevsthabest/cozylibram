@@ -77,7 +77,7 @@ ok('floral vine rule on modal (desktop)', css.includes('.modal::after') && css.i
 
 // 6. Nav uses custom SVG icons, not emoji (v37: Settings moved to the account menu)
 const navBtns = qa('.bottom-nav button');
-ok('six nav entries (v171: 5 primary + desktop-only settings)', navBtns.length === 6);
+ok('seven nav entries (v171: 5 primary + desktop-only settings; v250 adds Shelf)', navBtns.length === 7);
 ok('every nav button has an inline svg', navBtns.every(b => b.querySelector('svg')));
 ok('no emoji left in nav', !navBtns.some(b => /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(b.textContent)));
 ok('nav svgs are aria-hidden (labels on buttons)', navBtns.every(b => b.querySelector('svg').getAttribute('aria-hidden') === 'true'));
