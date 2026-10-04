@@ -468,6 +468,70 @@ async function main() {
   const admUnknown = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'nonsense' }) });
   ok('admin-users: unknown action -> 400', admUnknown.status === 400);
 
+  // ---- /api/spine-search (v264) ----
+  const ssFn = await import(path.resolve(__dirname, '../functions/api/spine-search.js'));
+  const ssEnv = Object.assign({}, admEnv, { TROPE_KEY_GEMINI: 'gk1' });
+  const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
+  const geminiOk = (text) => new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text }] },
+      groundingMetadata: { groundingChunks: [{ web: { uri: 'https://books.example/p/1', title: 'Example Books' } }] } }],
+  }), { status: 200 });
+  const ssFetch = (opts) => async (url, init) => {
+    const u = String(url);
+    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: opts.caller || 'kevin' }), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/banned_users'))
+      return new Response(JSON.stringify([]), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) {
+      const m = /user_id=eq\.([^&]+)/.exec(u);
+      const uid = m ? decodeURIComponent(m[1]) : '';
+      const isAdmin = (opts.admins || []).indexOf(uid) !== -1;
+      return new Response(JSON.stringify(isAdmin ? [{ user_id: uid }] : []), { status: 200 });
+    }
+    if (u === GEMINI) {
+      if (opts.geminiStatus) return new Response('boom', { status: opts.geminiStatus });
+      return geminiOk(opts.geminiText !== undefined ? opts.geminiText : JSON.stringify({ candidates: [
+        { image_url: 'https://img.example/spine1.jpg', page_url: 'https://books.example/p/1', note: 'spine visible' },
+        { image_url: 'https://img.example/spine1.jpg', page_url: 'https://books.example/p/1', note: 'duplicate' },
+        { image_url: 'not a url', note: 'junk' },
+        { image_url: 'https://img.example/cover.html', note: 'not an image' },
+      ] }));
+    }
+    throw new Error('unexpected upstream ' + u);
+  };
+  const ssReq = (body, auth) => new Request('https://app.test/api/spine-search', {
+    method: 'POST',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, auth === false ? {} : { Authorization: 'Bearer good' }),
+    body: JSON.stringify(body === undefined ? { title: 'Dune', author: 'Frank Herbert' } : body),
+  });
+  const ssGet = new Request('https://app.test/api/spine-search', { method: 'GET' });
+  ok('spine-search: GET -> 405', (await ssFn.onRequest({ env: ssEnv, request: ssGet })).status === 405);
+  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'] });
+  ok('spine-search: no auth -> 401',
+    (await ssFn.onRequest({ env: ssEnv, request: ssReq(undefined, false) })).status === 401);
+  globalThis.fetch = ssFetch({ caller: 'mallory', admins: ['kevin'] });
+  ok('spine-search: non-admin -> 403',
+    (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).status === 403);
+  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'] });
+  ok('spine-search: missing title -> 400',
+    (await ssFn.onRequest({ env: ssEnv, request: ssReq({ title: '  ' }) })).status === 400);
+  const ssRes = await ssFn.onRequest({ env: ssEnv, request: ssReq() });
+  const ssJson = await ssRes.json();
+  ok('spine-search: 200 with cleaned candidates',
+    ssRes.status === 200 && ssJson.candidates.length === 1 &&
+    ssJson.candidates[0].image_url === 'https://img.example/spine1.jpg');
+  ok('spine-search: grounding sources passed through',
+    ssJson.sources.length === 1 && ssJson.sources[0].uri === 'https://books.example/p/1');
+  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'], geminiStatus: 500 });
+  ok('spine-search: upstream 500 -> 502',
+    (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).status === 502);
+  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'], geminiText: 'not json at all https://img.example/a.png' });
+  const ssFb = await (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).json();
+  ok('spine-search: non-JSON answer falls back to URL scraping',
+    ssFb.candidates.length === 1 && ssFb.candidates[0].image_url === 'https://img.example/a.png');
+  ok('cleanSpineSearchCandidates caps at 5',
+    ssFn.cleanSpineSearchCandidates([1, 2, 3, 4, 5, 6, 7].map(i =>
+      ({ image_url: 'https://img.example/' + i + '.jpg' }))).length === 5);
+
   globalThis.fetch = realFetch;
 
   // ---- /cover-proxy (unchanged contract) ----

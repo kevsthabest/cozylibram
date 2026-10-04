@@ -19,7 +19,7 @@ let adminCustomFrom = '';
 let adminCustomTo = '';
 let adminRowsCache = {}; // rangeKey -> rows
 let adminAggCache = {}; // rangeKey -> aggregate
-let adminTab = 'analytics'; // analytics | tropes (Trope Lab) | logs (v167)
+let adminTab = 'analytics'; // analytics | tropes (Trope Lab) | logs (v167) | spine (v264 Spine Lab)
 
 async function refreshAdminStatus() {
   isAppAdmin = false;
@@ -228,6 +228,7 @@ function renderAdmin() {
     '<div class="ob-ranges">' +
     '<button class="btn sm' + (adminTab === 'analytics' ? '' : ' ghost') + '" data-atab="analytics">Analytics</button>' +
     '<button class="btn sm' + (adminTab === 'tropes' ? '' : ' ghost') + '" data-atab="tropes">' + icon('bulb') + ' Trope Lab</button>' +
+    '<button class="btn sm' + (adminTab === 'spine' ? '' : ' ghost') + '" data-atab="spine">' + icon('camera') + ' Spine Lab</button>' +
     '<button class="btn sm' + (adminTab === 'logs' ? '' : ' ghost') + '" data-atab="logs">' + icon('warn') + ' Logs</button>' +
     '</div>' +
     (adminTab === 'analytics' ? rangesHTML : '') +
@@ -249,6 +250,7 @@ function renderAdmin() {
     renderAdminBody();
   });
   if (adminTab === 'tropes') renderTropeLab();
+  else if (adminTab === 'spine') renderSpineLab();
   else if (adminTab === 'logs') renderLogsTab();
   else renderAdminBody();
 }
@@ -910,6 +912,71 @@ async function tropeLabClaimsHTML() {
       tropeLabClaimsHTML(); // re-render: the decided claim leaves the queue
     }));
   });
+}
+
+/* ---------------- v264: Spine Lab ----------------
+   Experiment: can Gemini (web-search grounding) find a book's spine photo?
+   Admin-only diagnostic — results are shown for human judgment, nothing is
+   saved to any library. */
+function spineLabResultHTML(data) {
+  if (!data) return '';
+  const cands = Array.isArray(data.candidates) ? data.candidates : [];
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  let h = '';
+  if (!cands.length) {
+    h += '<div class="ob-card"><h3 class="serif">No spine found</h3>' +
+      '<p class="note">Gemini could not find a clear spine photo for this book. ' +
+      'Photographing the spine remains the reliable path.</p></div>';
+  } else {
+    h += '<div class="ob-card"><h3 class="serif">Spine candidates (' + cands.length + ')</h3>' +
+      '<div class="spinelab-grid">' + cands.map(c =>
+        '<div class="spinelab-cand">' +
+        '<img src="' + esc(c.image_url) + '" alt="spine candidate" loading="lazy">' +
+        (c.note ? '<p class="note">' + esc(c.note) + '</p>' : '') +
+        (c.page_url ? '<a href="' + esc(c.page_url) + '" target="_blank" rel="noopener">source page</a>' : '') +
+        '</div>').join('') + '</div></div>';
+  }
+  if (sources.length) {
+    h += '<div class="ob-card"><h3 class="serif">Search sources</h3><ul class="ob-list">' +
+      sources.map(s => '<li><a href="' + esc(s.uri) + '" target="_blank" rel="noopener">' +
+        esc(s.title || s.uri) + '</a></li>').join('') + '</ul></div>';
+  }
+  return h;
+}
+
+async function renderSpineLab() {
+  const body = document.getElementById('ob-body');
+  if (!body) return;
+  body.innerHTML =
+    '<div class="ob-card"><h3 class="serif">' + icon('camera') + ' Spine search test</h3>' +
+    '<p class="note">Ask Gemini (with web search) to find this book\'s <b>spine</b> photo. ' +
+    'An experiment — nothing is saved. If this works reliably, spine photos could one day come from search instead of the camera.</p>' +
+    '<div class="spinelab-form">' +
+    '<input id="sl-title" class="text-input" placeholder="Book title" autocomplete="off">' +
+    '<input id="sl-author" class="text-input" placeholder="Author (optional)" autocomplete="off">' +
+    '<button class="btn" id="sl-go">Search</button>' +
+    '</div></div>' +
+    '<div id="sl-result"></div>';
+  const go = async () => {
+    const title = document.getElementById('sl-title').value.trim();
+    const author = document.getElementById('sl-author').value.trim();
+    const res = document.getElementById('sl-result');
+    if (!title) { res.innerHTML = '<p class="note">Enter a title first.</p>'; return; }
+    res.innerHTML = '<p class="note">Searching…</p>';
+    try {
+      const r = await apiFetch('/api/spine-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, author }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { res.innerHTML = '<p class="note">Error: ' + esc(data.error || ('http ' + r.status)) + '</p>'; return; }
+      res.innerHTML = spineLabResultHTML(data);
+    } catch (e) {
+      res.innerHTML = '<p class="note">Request failed: ' + esc((e && e.message) || e) + '</p>';
+    }
+  };
+  document.getElementById('sl-go').addEventListener('click', go);
 }
 
 async function renderTropeLab() {
