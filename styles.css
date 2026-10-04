@@ -2604,3 +2604,19 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sv-vf-frame .br { bottom: -4px; right: -4px; border-bottom-width: 4px; border-right-width: 4px;
   border-bottom-right-radius: 10px; }
 .sv-vf-hint { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0 2px; }
+
+/* ---------- shelf layouts (v261) ---------- */
+.sv-section-label { display: flex; align-items: center; gap: 10px;
+  margin: 20px 6px 8px; color: var(--muted); font-size: 12px;
+  letter-spacing: .14em; text-transform: uppercase; }
+.sv-section:first-child .sv-section-label { margin-top: 4px; }
+.sv-section-label::before, .sv-section-label::after { content: ''; flex: 1; height: 1px;
+  background: var(--line); }
+.sv-section-label em { font-style: normal; color: var(--faint); letter-spacing: 0; }
+.sv-layout-opts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.sv-layout-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  border: 1px solid var(--line); background: var(--card2); color: var(--ink);
+  border-radius: var(--radius); padding: 12px 14px; cursor: pointer; text-align: left; }
+.sv-layout-opt b { font-size: 15px; }
+.sv-layout-opt span { font-size: 13px; color: var(--muted); }
+.sv-layout-opt.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }

@@ -88,6 +88,57 @@ function spineCropRect(w, h) {
   return { x: Math.round((w - cw) / 2), y: Math.round((h - ch) / 2), w: cw, h: ch };
 }
 
+// Shelf layouts, v261: 'manual' (hand-arranged, draggable), 'series'
+// (series together in position order), 'genre' (shelves by primary
+// category). Grouped layouts are auto-arranged — drag is disabled there.
+function shelfLayout() {
+  const o = shelfOrder();
+  const l = o.layout;
+  return l === 'series' || l === 'genre' ? l : 'manual';
+}
+function shelfSetLayout(l) {
+  const o = shelfOrder();
+  o.layout = (l === 'series' || l === 'genre') ? l : 'manual';
+  saveShelfOrder(o);
+  shelfOrderCache = o;
+}
+function shelfCanDrag() { return shelfLayout() === 'manual'; }
+// Pure: bucket books into labeled sections for the active layout.
+function shelfLayoutSections(books, layout) {
+  const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''));
+  if (layout === 'series') {
+    const groups = new Map();
+    books.forEach(b => {
+      const name = b && b.series && b.series.name ? String(b.series.name) : '';
+      const key = name ? 's:' + name.toLowerCase() : 's:';
+      if (!groups.has(key)) groups.set(key, { label: name || 'Standalone', books: [] });
+      groups.get(key).books.push(b);
+    });
+    const posNum = b => {
+      const n = parseFloat(b && b.series && b.series.position);
+      return isNaN(n) ? Infinity : n;
+    };
+    const arr = [...groups.values()];
+    arr.forEach(g => g.books.sort((a, b) => (posNum(a) - posNum(b)) || byTitle(a, b)));
+    arr.sort((a, b) => ((a.label === 'Standalone') - (b.label === 'Standalone')) || a.label.localeCompare(b.label));
+    return arr;
+  }
+  if (layout === 'genre') {
+    const groups = new Map();
+    books.forEach(b => {
+      const c = b && Array.isArray(b.categories) && b.categories[0] ? String(b.categories[0]) : '';
+      const key = c ? 'g:' + c.toLowerCase() : 'g:';
+      if (!groups.has(key)) groups.set(key, { label: c || 'Unsorted', books: [] });
+      groups.get(key).books.push(b);
+    });
+    const arr = [...groups.values()];
+    arr.forEach(g => g.books.sort(byTitle));
+    arr.sort((a, b) => ((a.label === 'Unsorted') - (b.label === 'Unsorted')) || a.label.localeCompare(b.label));
+    return arr;
+  }
+  return [{ label: null, books: books.slice() }];
+}
+
 // Device-local shelf arrangement (mirrors upNext: local-only, not synced).
 function shelfOrderKey() {
   return typeof localUid !== 'undefined' && localUid
@@ -457,21 +508,34 @@ function renderShelf() {
   const hasDecor = items.some(i => i.kind === 'decor');
   const budget = Math.max(250, Math.min(430, vw)) - 44 - (hasDecor ? 90 : 0);
   const rows = shelfFillRows(items, budget);
+  const layout = shelfLayout();
+  const rowHTML = (row) =>
+    '<div class="sv-shelf"><div class="sv-books">' +
+    row.map(shelfItemHTML).join('') +
+    '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>';
   let shelvesHTML;
   if (!shown.length) {
     shelvesHTML = '<div class="sv-empty">' + icon('shelf') +
       '<p>Nothing on this shelf yet.</p>' +
       '<button class="btn" id="svEmptyAdd">Add a book</button></div>';
+  } else if (layout === 'manual') {
+    shelvesHTML = rows.map(rowHTML).join('');
   } else {
-    shelvesHTML = rows.map((row) =>
-      '<div class="sv-shelf"><div class="sv-books">' +
-      row.map(shelfItemHTML).join('') +
-      '</div><div class="sv-board"></div><div class="sv-shadow"></div></div>'
-    ).join('');
+    // Grouped layouts: labeled sections; decorations ride the last section.
+    const decors = shelfDecorItems(shelfGroup);
+    const sections = shelfLayoutSections(shown, layout);
+    shelvesHTML = sections.map((sec, si) => {
+      let secItems = shelfLayoutItems(sec.books);
+      if (si === sections.length - 1) secItems = shelfMergeDecor(secItems, decors);
+      return '<div class="sv-section">' +
+        (sec.label ? '<div class="sv-section-label"><span>' + esc(sec.label) + '</span><em>' + sec.books.length + '</em></div>' : '') +
+        shelfFillRows(secItems, budget).map(rowHTML).join('') + '</div>';
+    }).join('');
   }
   setView(
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
+    '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
     '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(g =>
@@ -483,7 +547,9 @@ function renderShelf() {
       : '') +
     '<div class="sv-shelves season-' + shelfSeason() + '" id="svShelves">' + shelvesHTML + '</div>' +
     (shown.length
-      ? '<div class="sv-hint">Drag to rearrange &middot; long-press a book for display &amp; photo options</div>'
+      ? '<div class="sv-hint">' + (shelfCanDrag()
+        ? 'Drag to rearrange &middot; long-press a book for display &amp; photo options'
+        : 'Grouped by ' + layout + ' &middot; switch to My order to rearrange') + '</div>'
       : '') +
     '</div>'
   );
@@ -502,6 +568,8 @@ function wireShelf() {
   if (cam) cam.addEventListener('click', () => shelfStartCapture(null));
   const decorBtn = document.getElementById('svDecor');
   if (decorBtn) decorBtn.addEventListener('click', () => shelfOpenDecorSheet());
+  const layoutBtn = document.getElementById('svLayout');
+  if (layoutBtn) layoutBtn.addEventListener('click', () => shelfOpenLayoutSheet());
   const emptyAdd = document.getElementById('svEmptyAdd');
   if (emptyAdd) emptyAdd.addEventListener('click', () => go('add'));
   const cancel = document.getElementById('svAssignCancel');
@@ -532,6 +600,7 @@ function shelfPointerDown(e, sp) {
   };
   const move = (ev) => {
     if (shelfDrag !== d) return;
+    if (!shelfCanDrag()) return; // v261: grouped layouts are auto-arranged
     const dx = ev.clientX - d.x0, dy = ev.clientY - d.y0;
     if (!d.live && Math.hypot(dx, dy) > 10) {
       clearTimeout(d.timer);
@@ -777,6 +846,26 @@ function shelfOpenDecorSheet() {
   paintSeasons();
   paintChips();
   document.getElementById('svDecorDone').addEventListener('click', close);
+}
+
+// Shelf layout picker: hand-arranged order or automatic grouping.
+function shelfOpenLayoutSheet() {
+  const cur = shelfLayout();
+  const { sheet, close } = shelfSheetShell('Shelf layout',
+    '<p class="sv-review-hint">Group your shelves automatically, or keep your hand-arranged order</p>' +
+    '<div class="sv-layout-opts">' +
+    [['manual', 'My order', 'Your arrangement — drag to rearrange'],
+     ['series', 'By series', 'Series together, in reading order'],
+     ['genre', 'By genre', 'One shelf per genre']].map(([k, t, d]) =>
+      '<button class="sv-layout-opt' + (k === cur ? ' active' : '') + '" data-l="' + k + '">' +
+      '<b>' + t + '</b><span>' + d + '</span></button>'
+    ).join('') + '</div>');
+  sheet.querySelectorAll('[data-l]').forEach(b =>
+    b.addEventListener('click', () => {
+      shelfSetLayout(b.dataset.l);
+      close();
+      renderShelf();
+    }));
 }
 
 // Long-press a decoration: offer removal.

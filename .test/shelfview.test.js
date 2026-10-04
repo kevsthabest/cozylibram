@@ -319,6 +319,50 @@ run(`var __stopped = 0;
 shelfCamStream = { getTracks: () => [{ stop: () => { __stopped++; } }] };
 shelfStopCam();`);
 ok('stopCam stops tracks and clears', run(`__stopped === 1 && shelfCamStream === null`) === true);
+
+/* ---- 25. v261: shelf layouts ---- */
+run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
+ok('layout defaults to manual', run(`shelfLayout()`) === 'manual');
+run(`shelfSetLayout('series');`);
+ok('layout persists', run(`shelfLayout()`) === 'series');
+ok('drag disabled when grouped', run(`shelfCanDrag()`) === false);
+run(`shelfSetLayout('bogus');`);
+ok('invalid layout falls back to manual', run(`shelfLayout()`) === 'manual' && run(`shelfCanDrag()`) === true);
+const secs = run(`shelfLayoutSections([
+  {id:'a', title:'B', series:{name:'Zeta', position:2}},
+  {id:'b', title:'A', series:{name:'Zeta', position:1}},
+  {id:'c', title:'Solo'},
+  {id:'d', title:'C', series:{name:'Alpha', position:'1'}}
+], 'series')`);
+ok('series groups alphabetically, standalone last',
+  secs.map(s => s.label).join(',') === 'Alpha,Zeta,Standalone');
+ok('series ordered by position', secs[1].books.map(b => b.id).join(',') === 'b,a');
+const gsecs = run(`shelfLayoutSections([
+  {id:'a', title:'B', categories:['Fantasy']},
+  {id:'b', title:'A', categories:['fantasy']},
+  {id:'c', title:'C'}
+], 'genre')`);
+ok('genre groups case-insensitively, unsorted last',
+  gsecs.map(s => s.label).join(',') === 'Fantasy,Unsorted');
+ok('genre sorts by title', gsecs[0].books.map(b => b.id).join(',') === 'b,a');
+ok('manual is one unlabelled section', (() => {
+  const m = run(`shelfLayoutSections([{id:'a'}], 'manual')`);
+  return m.length === 1 && m[0].label === null && m[0].books.length === 1;
+})());
+run(`library = [
+  {id:'s1', title:'Book One', status:'tbr', series:{name:'Saga', position:1}},
+  {id:'s2', title:'Book Two', status:'tbr', series:{name:'Saga', position:2}},
+  {id:'s3', title:'Lone', status:'tbr'}
+];
+shelfGroup='tbr'; shelfOrderCache=null; shelfSetLayout('series'); renderShelf();`);
+ok('grouped render shows section labels', qa('#svShelves .sv-section-label').length === 2);
+ok('grouped render keeps spines', qa('#svShelves .spine').length === 3);
+ok('grouped hint mentions My order', q('.sv-hint').textContent.indexOf('My order') !== -1);
+ok('layout button in header', !!q('#svLayout'));
+run(`shelfOpenLayoutSheet();`);
+ok('layout sheet offers three modes', qa('#svSheet [data-l]').length === 3);
+run(`shelfCloseSheet(); shelfSetLayout('manual'); library = [];
+localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
   ok('non-AI crop never shared', s1 === false);
