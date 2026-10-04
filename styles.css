@@ -2584,3 +2584,23 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sn-text span { font-size: 12px; color: var(--muted); }
 .sn-x { flex: none; border: 0; background: none; color: var(--faint); font-size: 16px;
   padding: 8px; cursor: pointer; }
+
+/* ---------- spine viewfinder (v260) ---------- */
+.sv-vf { position: relative; border-radius: 12px; overflow: hidden; background: #000;
+  aspect-ratio: 3 / 4; max-height: 58vh; margin-bottom: 4px; }
+.sv-vf video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sv-vf-mask { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; pointer-events: none; }
+.sv-vf-frame { position: relative; height: 82%; aspect-ratio: 1 / 5.2;
+  border: 2px dashed rgba(255,255,255,.85); border-radius: 8px;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,.55); }
+.sv-vf-frame .c { position: absolute; width: 24px; height: 24px; border: 0 solid #ffd76a; }
+.sv-vf-frame .tl { top: -4px; left: -4px; border-top-width: 4px; border-left-width: 4px;
+  border-top-left-radius: 10px; }
+.sv-vf-frame .tr { top: -4px; right: -4px; border-top-width: 4px; border-right-width: 4px;
+  border-top-right-radius: 10px; }
+.sv-vf-frame .bl { bottom: -4px; left: -4px; border-bottom-width: 4px; border-left-width: 4px;
+  border-bottom-left-radius: 10px; }
+.sv-vf-frame .br { bottom: -4px; right: -4px; border-bottom-width: 4px; border-right-width: 4px;
+  border-bottom-right-radius: 10px; }
+.sv-vf-hint { text-align: center; color: var(--muted); font-size: 13px; margin: 10px 0 2px; }

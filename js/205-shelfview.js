@@ -671,6 +671,7 @@ function shelfSpineClick(e, sp) {
 /* ---------------- spine photo: sheet, capture, review ---------------- */
 
 function shelfCloseSheet() {
+  if (typeof shelfStopCam === 'function') shelfStopCam(); // v260: never leave the camera running
   ['svSheetScrim', 'svSheet'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.remove();
@@ -800,6 +801,19 @@ function shelfOpenDecorRemoveSheet(di) {
 // the same pattern visionPickPhoto uses). bookId may be null (header
 // button) — then the photo waits for the user to tap a spine.
 function shelfStartCapture(bookId) {
+  // v260: in-app viewfinder with a spine-alignment overlay when the camera
+  // is available; otherwise the native picker.
+  if (shelfCanUseCam()) shelfOpenViewfinder(bookId);
+  else shelfNativeCapture(bookId);
+}
+
+function shelfCanUseCam() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+// The pre-v260 native picker, kept as the fallback (denied permission,
+// desktop, or test DOMs).
+function shelfNativeCapture(bookId) {
   let input = document.getElementById('sv-photo-input');
   if (!input) {
     input = document.createElement('input');
@@ -821,6 +835,58 @@ function shelfStartCapture(bookId) {
   }
   input._bookId = bookId;
   input.click();
+}
+
+// v260: viewfinder — live preview with a spine-shaped guide
+// frame so the spine lands centered. Capture grabs the frame straight into
+// the existing review flow.
+let shelfCamStream = null;
+function shelfStopCam() {
+  try {
+    if (shelfCamStream) shelfCamStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+  } catch (e) {}
+  shelfCamStream = null;
+}
+function shelfOpenViewfinder(bookId) {
+  const { sheet, close } = shelfSheetShell('Center the spine',
+    '<div class="sv-vf">' +
+      '<video id="svVideo" playsinline muted autoplay></video>' +
+      '<div class="sv-vf-mask" aria-hidden="true"><div class="sv-vf-frame">' +
+        '<i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>' +
+      '</div></div>' +
+    '</div>' +
+    '<p class="sv-vf-hint">Fit the spine inside the frame, then capture</p>' +
+    '<div class="sv-review-actions">' +
+      '<button class="sv-sheet-btn ghost" id="svVfCancel">Cancel</button>' +
+      '<button class="sv-sheet-btn ghost" id="svVfLibrary">Choose photo</button>' +
+      '<button class="sv-sheet-btn solid" id="svVfSnap">Capture</button>' +
+    '</div>');
+  const video = sheet.querySelector('#svVideo');
+  const done = (next) => { shelfStopCam(); close(); if (next) next(); };
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => {
+      shelfCamStream = stream;
+      video.srcObject = stream;
+      const p = video.play();
+      if (p && p.catch) p.catch(() => {});
+    })
+    .catch(() => done(() => shelfNativeCapture(bookId)));
+  sheet.querySelector('#svVfCancel').addEventListener('click', () => done());
+  sheet.querySelector('#svVfLibrary').addEventListener('click', () => done(() => shelfNativeCapture(bookId)));
+  sheet.querySelector('#svVfSnap').addEventListener('click', () => {
+    const url = shelfSnapFrame(video);
+    done(() => { if (url) shelfReviewCapture(url, bookId); else toast('Capture failed — try again'); });
+  });
+}
+// Grab the current viewfinder frame as a JPEG data URL (null on failure).
+function shelfSnapFrame(video) {
+  try {
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
+    const c = document.createElement('canvas');
+    c.width = video.videoWidth; c.height = video.videoHeight;
+    c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.92);
+  } catch (e) { return null; }
 }
 
 function shelfReviewCapture(dataUrl, bookId) {

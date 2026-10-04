@@ -311,6 +311,14 @@ ok('isbn10 normalizes', run(`spinePhotoISBN({isbn:'0-14-312774-9'})`) === '01431
 ok('isbn10 X check digit', run(`spinePhotoISBN({isbn:'155404X'})`) === null); // too short
 ok('junk isbn -> null', run(`spinePhotoISBN({isbn:'not-an-isbn'})`) === null);
 ok('missing isbn -> null', run(`spinePhotoISBN({})`) === null);
+/* ---- 24. v260: viewfinder ---- */
+ok('no camera in test DOM -> native path', run(`shelfCanUseCam()`) === false);
+ok('snap with no video -> null', run(`shelfSnapFrame(null)`) === null);
+ok('snap with empty video -> null', run(`shelfSnapFrame({})`) === null);
+run(`var __stopped = 0;
+shelfCamStream = { getTracks: () => [{ stop: () => { __stopped++; } }] };
+shelfStopCam();`);
+ok('stopCam stops tracks and clears', run(`__stopped === 1 && shelfCamStream === null`) === true);
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
   ok('non-AI crop never shared', s1 === false);
@@ -332,6 +340,14 @@ ok('missing isbn -> null', run(`spinePhotoISBN({})`) === null);
   const sd = await run(`spineDetectBox('data:image/jpeg;base64,AAA')`);
   ok('detect failure -> null (never rejects)', sd === null);
   run(`shelfScanPhoto = null;`);
+  // denied camera permission falls back to the native file picker
+  run(`navigator.mediaDevices = { getUserMedia: () => Promise.reject(new Error('denied')) };
+    shelfOpenViewfinder('vf1');`);
+  await new Promise(r => setTimeout(r, 60));
+  ok('denied camera falls back to native picker', !!q('#sv-photo-input'));
+  ok('sheet closed after fallback', !q('#svSheet'));
+  ok('no stream left running', run(`shelfCamStream`) === null);
+  try { delete navigator.mediaDevices; } catch (e) {}
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();
