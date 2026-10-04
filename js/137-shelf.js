@@ -153,6 +153,8 @@ function shelfSpineLabel(entry) {
 }
 
 // v253: crop this scan entry's spine region out of the kept scan photo.
+// v258: the model now also returns y0/y1, so the crop hugs the spine
+// vertically instead of taking the full-height strip.
 // Resolves with a small JPEG data URL, or null when the model gave no
 // usable box (older scans, unreadable positions) — the book is still
 // added, just with a generated spine.
@@ -162,7 +164,7 @@ async function shelfScanSpinePhoto(entry) {
     const x0 = entry.spine.x0, x1 = entry.spine.x1;
     if (x0 == null || x1 == null) return null;
     if (typeof spineBoxPhotoToDataURL !== 'function') return null;
-    return await spineBoxPhotoToDataURL(shelfScanPhoto, x0, x1, 168);
+    return await spineBoxPhotoToDataURL(shelfScanPhoto, x0, x1, 168, entry.spine.y0, entry.spine.y1);
   } catch (e) { return null; }
 }
 

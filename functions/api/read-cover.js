@@ -43,19 +43,33 @@ const PROMPT_SHELF = 'You are reading a photo of a bookshelf. List the books ' +
   'uncertain). Also include "x0" and "x1": the approximate left and right ' +
   'edges of that book\'s spine as integers from 0 to 1000 (fractions of the ' +
   'image width, so a spine spanning the middle tenth is roughly x0=450, ' +
-  'x1=550). Use null for a title or author you cannot read; skip spines ' +
+  'x1=550), and "y0" and "y1": the approximate top and bottom edges of the ' +
+  'spine as integers from 0 to 1000 (fractions of the image height). Use null ' +
+  'for a title or author you cannot read; skip spines ' +
   'you cannot read at all. Vertical text, foil, and small print are common ' +
   '— transcribe carefully. Reply with ONLY the JSON object, no other text.';
 
+// v258: single close-up spine photo -> tight bounding box. The client uses
+// it to pre-fit the manual crop UI so the user doesn't have to hunt for
+// the spine edges themselves.
+const PROMPT_SPINE = 'You are looking at a close-up photo of one book spine ' +
+  '(the photo may also show table, background, or neighboring spines at the ' +
+  'edges). Find the single most prominent, centered book spine and return a ' +
+  'JSON object with exactly one key, "box": an object with "x0", "y0", "x1", ' +
+  '"y1" — the tight bounding box of that spine as integers from 0 to 1000 ' +
+  '(fractions of image width/height), hugging the spine edges as closely as ' +
+  'possible and excluding background. If no book spine is visible, return ' +
+  '{"box": null}. Reply with ONLY the JSON object, no other text.';
+
 // v253: sanitize a shelf-mode model answer into
-// [{title, author, confidence, x0?, x1?}]. x0/x1 are the spine's horizontal
-// extent (0-1000); the client crops the spine photo from them when a book
-// is added. Unusable boxes are dropped, never trusted blindly.
+// [{title, author, confidence, x0?, x1?, y0?, y1?}]. x0/x1/y0/y1 are the
+// spine's extent (0-1000); the client crops the spine photo from them when
+// a book is added. Unusable boxes are dropped, never trusted blindly.
 function cleanShelfResult(obj) {
   const out = [];
   const arr = obj && Array.isArray(obj.books) ? obj.books : [];
   const s = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
-  const clampX = (v) => {
+  const clampC = (v) => {
     const n = Number(v);
     if (!Number.isFinite(n)) return null;
     return Math.max(0, Math.min(1000, Math.round(n)));
@@ -67,12 +81,28 @@ function cleanShelfResult(obj) {
     const conf = b.confidence === 'high' || b.confidence === 'medium' || b.confidence === 'low'
       ? b.confidence : 'low';
     const entry = { title, author, confidence: conf };
-    const x0 = clampX(b.x0), x1 = clampX(b.x1);
+    const x0 = clampC(b.x0), x1 = clampC(b.x1);
     if (x0 !== null && x1 !== null && x1 - x0 >= 5) { entry.x0 = x0; entry.x1 = x1; }
+    const y0 = clampC(b.y0), y1 = clampC(b.y1);
+    if (y0 !== null && y1 !== null && y1 - y0 >= 20) { entry.y0 = y0; entry.y1 = y1; }
     out.push(entry);
     if (out.length >= MAX_SHELF_SPINES) break;
   }
   return { books: out };
+}
+
+// v258: sanitize a spine-mode answer into {box: {x0,y0,x1,y1} | null}.
+function cleanSpineResult(obj) {
+  const b = obj && obj.box;
+  if (!b || typeof b !== 'object') return { box: null };
+  const c = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(1000, Math.round(n))) : null;
+  };
+  const x0 = c(b.x0), y0 = c(b.y0), x1 = c(b.x1), y1 = c(b.y1);
+  if (x0 === null || y0 === null || x1 === null || y1 === null) return { box: null };
+  if (x1 - x0 < 5 || y1 - y0 < 20) return { box: null };
+  return { box: { x0, y0, x1, y1 } };
 }
 
 const jsonErr = (status, error) => new Response(JSON.stringify({ error }),
@@ -122,7 +152,7 @@ export async function onRequest(context) {
     return new Response('bad request', { status: 400 });
   }
   const mode = body && body.mode;
-  if (mode !== 'single' && mode !== 'shelf') return new Response('bad request', { status: 400 });
+  if (mode !== 'single' && mode !== 'shelf' && mode !== 'spine') return new Response('bad request', { status: 400 });
   let image = body && body.image;
   if (typeof image !== 'string' || !image.length || image.length > MAX_IMAGE_CHARS) {
     return new Response('bad request', { status: 400 });
@@ -143,7 +173,8 @@ export async function onRequest(context) {
   if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
 
   const isShelf = mode === 'shelf';
-  const prompt = isShelf ? PROMPT_SHELF : PROMPT_SINGLE;
+  const isSpine = mode === 'spine';
+  const prompt = isShelf ? PROMPT_SHELF : isSpine ? PROMPT_SPINE : PROMPT_SINGLE;
   let upstream;
   try {
     upstream = await fetch(GEMINI_URL, {
@@ -185,7 +216,7 @@ export async function onRequest(context) {
   let parsed;
   try {
     const content = parseModelJsonRaw((await upstream.json()).choices[0].message.content);
-    parsed = isShelf ? cleanShelfResult(content) : cleanResult(content);
+    parsed = isShelf ? cleanShelfResult(content) : isSpine ? cleanSpineResult(content) : cleanResult(content);
   } catch (e) {
     return jsonErr(502, 'vision provider returned an unreadable answer');
   }
