@@ -204,7 +204,7 @@ function paintShelfResults() {
     for (const e of shelfResults.filter(e => e.status === 'ready' && !e._added && e.book)) {
       const b = Object.assign({}, e.book, { id: uid() });
       const photo = await shelfScanSpinePhoto(e); // v253: auto spine photo
-      if (photo) b.spinePhoto = photo;
+      if (photo) { b.spinePhoto = photo; spinePhotoShare(b, photo, true); } // v259: AI-box crop, anonymous
       books.push(b);
     }
     const n = bulkAddBooks(books, 'shelf');
@@ -221,7 +221,7 @@ function paintShelfResults() {
       if (!e || !e.book || e._added || alreadyHave(e.book)) return;
       const enriched = Object.assign({}, e.book, { id: uid() });
       const photo = await shelfScanSpinePhoto(e); // v253: auto spine photo
-      if (photo) enriched.spinePhoto = photo;
+      if (photo) { enriched.spinePhoto = photo; spinePhotoShare(enriched, photo, true); } // v259: AI-box crop, anonymous
       if (!enriched._olKey) await enrichRatings(enriched);
       await enrichOLBook(enriched, enriched._olKey);
       e._added = true;

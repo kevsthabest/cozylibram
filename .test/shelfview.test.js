@@ -305,7 +305,23 @@ ok('missing box -> null', run(`spineBoxCropRect(1000, 800, null, 200)`) === null
 ok('non-numeric box -> null', run(`spineBoxCropRect(1000, 800, "l", "r")`) === null);
 
 /* ---- 18. shelfScanSpinePhoto null paths (v253) ---- */
+/* ---- 23. v259: shared spine-photo pool guards ---- */
+ok('isbn13 normalizes', run(`spinePhotoISBN({isbn:'978-0-14-312774-8'})`) === '9780143127748');
+ok('isbn10 normalizes', run(`spinePhotoISBN({isbn:'0-14-312774-9'})`) === '0143127749');
+ok('isbn10 X check digit', run(`spinePhotoISBN({isbn:'155404X'})`) === null); // too short
+ok('junk isbn -> null', run(`spinePhotoISBN({isbn:'not-an-isbn'})`) === null);
+ok('missing isbn -> null', run(`spinePhotoISBN({})`) === null);
 (async () => {
+  const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
+  ok('non-AI crop never shared', s1 === false);
+  const s2 = await run(`spinePhotoShare({title:'No ISBN'}, 'data:image/jpeg;base64,AAA', true)`);
+  ok('no isbn never shared', s2 === false);
+  const s3 = await run(`spinePhotoShare({isbn:'9780143127748'}, null, true)`);
+  ok('no photo never shared', s3 === false);
+  const a1 = await run(`spinePhotoAdopt({id:'x1', isbn:'9780143127748', spinePhoto:'data:image/jpeg;base64,AAA'})`);
+  ok('adopt skips books that have a photo', a1 === false);
+  const a2 = await run(`spinePhotoAdopt({id:'x2', title:'No ISBN'})`);
+  ok('adopt skips books without isbn', a2 === false);
   const n1 = await run(`shelfScanSpinePhoto(null)`);
   ok('no entry -> null', n1 === null);
   const n2 = await run(`shelfScanSpinePhoto({spine:{title:'X', x0:100, x1:200}})`);
