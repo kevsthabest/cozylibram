@@ -603,6 +603,54 @@ async function main() {
 
   globalThis.fetch = realFetch;
 
+  // ---- public edition repository API (v288) ----
+  const editionApiFn = await import(path.resolve(__dirname, '../functions/api/editions/[[isbn]].js'));
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url));
+    if (u.pathname === '/rest/v1/editions')
+      return new Response(JSON.stringify([{
+        id: 'ed1', isbn: '9780143127748', publisher: 'Test Pub', format: 'Hardcover',
+        page_count: 500, publication_date: '2020-01-01', cover_url: 'https://x/cover.jpg',
+        provider_ids: {}, thickness_mm: 28.4, thickness_source: 'measurement',
+        thickness_confidence: 96, thickness_measured_at: '2026-10-04T00:00:00Z',
+        updated_at: '2026-10-04T00:00:00Z'
+      }]), { status: 200 });
+    if (u.pathname === '/rest/v1/edition_asset_slots')
+      return new Response(JSON.stringify([{
+        face: 'spine', appearance: 'jacket', canonical_asset_id: 'a1',
+        selection_method: 'quality', selected_at: '2026-10-04T00:00:00Z'
+      }]), { status: 200 });
+    if (u.pathname === '/rest/v1/edition_assets')
+      return new Response(JSON.stringify([{
+        id: 'a1', face: 'spine', appearance: 'jacket', bucket: 'edition-images',
+        path: 'spine/jacket/abc.jpg', width: 500, height: 1200, format: 'image/jpeg',
+        byte_size: 12345, sha256: 'abc', quality_score: 94.2, verified: true,
+        created_at: '2026-10-04T00:00:00Z', updated_at: '2026-10-04T00:00:00Z'
+      }]), { status: 200 });
+    if (u.pathname === '/rest/v1/edition_measurements')
+      return new Response(JSON.stringify([{
+        thickness_mm: 28.4, confidence: 96, verified: false,
+        method: 'id1-card', created_at: '2026-10-04T00:00:00Z'
+      }]), { status: 200 });
+    throw new Error('unexpected API fetch ' + url);
+  };
+  const apiCtx = (isbn) => ({
+    env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' },
+    request: new Request('https://app.test/api/editions/' + isbn)
+  });
+  const apiRes = await editionApiFn.onRequest(apiCtx('9780143127748'));
+  const apiJson = await apiRes.json();
+  ok('edition API: 200 with canonical data', apiRes.status === 200 &&
+    apiJson.isbn === '9780143127748' &&
+    apiJson.faces['jacket:spine'].id === 'a1' &&
+    apiJson.faces['jacket:spine'].verified === true &&
+    apiJson.edition.dimensions.thickness_mm === 28.4);
+  ok('edition API: public asset URL is content-addressed',
+    apiJson.faces['jacket:spine'].url.endsWith('/edition-images/spine/jacket/abc.jpg'));
+  const apiBad = await editionApiFn.onRequest(apiCtx('not-an-isbn'));
+  ok('edition API: invalid ISBN -> 400', apiBad.status === 400);
+  globalThis.fetch = realFetch;
+
   // ---- /cover-proxy (unchanged contract) ----
   globalThis.fetch = async (url) => {
     if (url === 'https://covers.openlibrary.org/b/id/1-M.jpg') {
