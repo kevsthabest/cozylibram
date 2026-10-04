@@ -45,11 +45,9 @@ function shelfHash(str) {
 
 // v262: touch ergonomics. Finger jitter on a tap used to cross the tiny
 // 10px drag threshold and start a drag, which then swallowed the tap —
-// selection felt broken. The threshold is now generous, and each spine
-// carries invisible touch slop (transparent border + negative margin keep
-// the layout footprint pixel-identical).
+// selection felt broken. The threshold is now generous. (v263: spine hit
+// slop moved to a ::after pseudo-element in CSS — no JS box-model tricks.)
 const SHELF_DRAG_SLOP_PX = 18;
-const SHELF_TOUCH_SLOP_PX = 7;
 
 // Deterministic spine geometry + palette slot for a book.
 function shelfSpineSpec(book) {
@@ -452,7 +450,7 @@ function shelfSpineHTML(book) {
   const author = shelfBookAuthor(book);
   // v254: a whisper of tilt (±1°) so the shelf feels hand-placed, not stamped.
   const tilt = (((shelfHash(book.id + '|tilt') % 5) - 2) * 0.5).toFixed(1);
-  const geom = 'width:' + (spec.w + SHELF_TOUCH_SLOP_PX * 2) + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
+  const geom = 'width:' + spec.w + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
   if (book.spinePhoto) {
     return '<div class="spine photo" data-id="' + esc(book.id) + '" style="' + geom +
       'background-image:url(&quot;' + book.spinePhoto + '&quot;)" title="' + esc(title) + '">' +
@@ -646,20 +644,16 @@ function shelfStartGhost(d, e) {
   const r = d.el.getBoundingClientRect();
   const g = d.el.cloneNode(true);
   g.removeAttribute('data-id');
-  // v262: strip the invisible touch slop so the drag ghost is the visual spine.
-  // (Only .spine carries the slop border — face-outs, stacks, decor don't.)
-  const slop = d.el.classList.contains('spine') ? SHELF_TOUCH_SLOP_PX : 0;
-  const gw = Math.max(8, r.width - slop * 2);
-  g.style.cssText += ';position:fixed;left:' + (r.left + slop) + 'px;top:' + r.top + 'px;' +
-    'width:' + gw + 'px;height:' + r.height + 'px;z-index:300;pointer-events:none;margin:0;border-width:0;';
+  g.style.cssText += ';position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;' +
+    'width:' + r.width + 'px;height:' + r.height + 'px;z-index:300;pointer-events:none;margin:0;';
   g.classList.add('dragging');
   document.body.appendChild(g);
   d.ghost = g;
-  d.offX = e.clientX - (r.left + slop);
+  d.offX = e.clientX - r.left;
   d.offY = e.clientY - r.top;
   const ph = document.createElement('div');
   ph.className = 'spine-ph';
-  ph.style.width = Math.max(8, r.width - slop * 2) + 'px';
+  ph.style.width = r.width + 'px';
   ph.style.height = r.height + 'px';
   d.el.parentNode.insertBefore(ph, d.el);
   d.ph = ph;

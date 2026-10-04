@@ -2349,12 +2349,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   text-shadow: 0 1px 2px rgba(0,0,0,.65); max-height: 66%; overflow: hidden; white-space: nowrap; }
 .spine .sp-a { writing-mode: vertical-rl; font-size: 8px; letter-spacing: .4px;
   color: rgba(245,236,247,.6); margin-top: 8px; max-height: 22%; overflow: hidden; white-space: nowrap; }
-.spine::before, .spine::after { content: ''; position: absolute; left: 5px; right: 5px; height: 3px;
-  background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: .75; border-radius: 2px; }
-.spine::before { top: 9px; }
-.spine::after { bottom: 9px; }
+.spine::before { content: ''; position: absolute; left: 5px; right: 5px; top: 9px; bottom: 9px;
+  background:
+    linear-gradient(90deg, transparent, var(--gold), transparent) top / 100% 3px no-repeat,
+    linear-gradient(90deg, transparent, var(--gold), transparent) bottom / 100% 3px no-repeat;
+  opacity: .75; }
+/* v263: invisible touch slop — ::after extends the hit area 7px on every
+   side without touching the paint (the v262 transparent-border approach
+   leaked: the inline background shorthand reset background-clip). */
+.spine::after { content: ''; position: absolute; inset: -7px; }
 .spine.photo { background-size: cover; background-position: center; }
-.spine.photo::before, .spine.photo::after { display: none; }
+.spine.photo::before { display: none; }
 .phototag { position: absolute; top: 5px; right: 5px; width: 18px; height: 18px; border-radius: 50%;
   background: rgba(20,16,26,.75); display: flex; align-items: center; justify-content: center; }
 .phototag svg { width: 11px; height: 11px; color: var(--gold); }
@@ -2622,9 +2627,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sv-layout-opt.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 /* ---------- touch ergonomics (v262) ---------- */
-/* Invisible touch slop on spines: the transparent border extends the hit
-   area, the negative margin keeps the layout footprint pixel-identical,
-   and background-clip keeps the paint exactly where it was. */
-.spine { border: 7px solid transparent; background-clip: padding-box; margin: -7px; }
+/* (v263: the transparent-border slop below was removed — the inline
+   background shorthand reset background-clip and the gradient bled into
+   the border as a colored aura. Hit slop now lives on .spine::after.) */
 /* Bigger invisible tap area around decorations (wrapper is transparent). */
 .sv-dragdecor { padding: 8px 12px; }
