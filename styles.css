@@ -2484,3 +2484,36 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .season-christmas .sv-shadow { background:
   radial-gradient(ellipse at center, rgba(170,210,255,.2), transparent 70%),
   radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+
+/* ---------- Shelf tab: more seasonal themes (v256) ---------- */
+.sv-season-row { flex-wrap: wrap; }
+/* New Year's: midnight boards, gold trim */
+.season-newyear .sv-board { background: linear-gradient(180deg, #2a3358 0%, #1d2340 45%, #12162b 100%);
+  border-bottom: 3px solid #c9a227; }
+.season-newyear .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(255,215,106,.22), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+/* Valentine's: dusty rose boards */
+.season-valentine .sv-board { background: linear-gradient(180deg, #7a3648 0%, #5c2735 45%, #3f1a24 100%);
+  border-bottom-color: #2a1017; }
+.season-valentine .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(255,130,160,.22), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+/* St. Patrick's: deep green boards */
+.season-stpatrick .sv-board { background: linear-gradient(180deg, #2a6b3d 0%, #1d4f2c 45%, #123420 100%);
+  border-bottom-color: #0a1f12; }
+.season-stpatrick .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(90,220,130,.2), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+/* Easter: soft lilac boards */
+.season-easter .sv-board { background: linear-gradient(180deg, #8d7ea8 0%, #6d5f85 45%, #4d4360 100%);
+  border-bottom-color: #332c40; }
+.season-easter .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(230,180,255,.2), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }
+/* Thanksgiving: harvest boards */
+.season-thanksgiving .sv-board { background: linear-gradient(180deg, #7a4a20 0%, #5c3415 45%, #3d220c 100%);
+  border-bottom-color: #241404; }
+.season-thanksgiving .sv-shadow { background:
+  radial-gradient(ellipse at center, rgba(255,170,60,.22), transparent 70%),
+  radial-gradient(50% 100% at 50% 0, rgba(0,0,0,.5), transparent 70%); }

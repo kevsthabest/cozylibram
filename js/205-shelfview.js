@@ -147,23 +147,96 @@ const SHELF_DECOR = {
     html: '<span class="sv-decor" style="font-size:30px" title="Snowman">⛄</span>' },
   stocking: { label: 'Stocking', w: 40, season: 'christmas',
     html: '<span class="sv-decor" style="font-size:28px" title="Stocking">🧦</span>' },
+  // v256: New Year's
+  fireworks: { label: 'Fireworks', w: 44, season: 'newyear',
+    html: '<span class="sv-decor" style="font-size:30px" title="Fireworks">🎆</span>' },
+  champagne: { label: 'Champagne', w: 40, season: 'newyear',
+    html: '<span class="sv-decor" style="font-size:30px" title="Champagne">🥂</span>' },
+  popper: { label: 'Party popper', w: 40, season: 'newyear',
+    html: '<span class="sv-decor" style="font-size:28px" title="Party popper">🎉</span>' },
+  // v256: Valentine's
+  rose: { label: 'Rose', w: 40, season: 'valentine',
+    html: '<span class="sv-decor" style="font-size:30px" title="Rose">🌹</span>' },
+  hearts: { label: 'Hearts', w: 44, season: 'valentine',
+    html: '<span class="sv-decor" style="font-size:28px" title="Hearts">💕</span>' },
+  loveletter: { label: 'Love letter', w: 40, season: 'valentine',
+    html: '<span class="sv-decor" style="font-size:28px" title="Love letter">💌</span>' },
+  // v256: St. Patrick's
+  shamrock: { label: 'Shamrock', w: 40, season: 'stpatrick',
+    html: '<span class="sv-decor" style="font-size:30px" title="Shamrock">☘️</span>' },
+  rainbow: { label: 'Rainbow', w: 46, season: 'stpatrick',
+    html: '<span class="sv-decor" style="font-size:30px" title="Rainbow">🌈</span>' },
+  clover: { label: 'Four-leaf clover', w: 40, season: 'stpatrick',
+    html: '<span class="sv-decor" style="font-size:30px" title="Four-leaf clover">🍀</span>' },
+  // v256: Easter
+  bunny: { label: 'Bunny', w: 42, season: 'easter',
+    html: '<span class="sv-decor" style="font-size:30px" title="Bunny">🐰</span>' },
+  easteregg: { label: 'Easter egg', w: 40, season: 'easter',
+    html: '<span class="sv-decor" style="font-size:30px" title="Easter egg">🥚</span>' },
+  chick: { label: 'Chick', w: 40, season: 'easter',
+    html: '<span class="sv-decor" style="font-size:28px" title="Chick">🐣</span>' },
+  // v256: Thanksgiving (Canadian)
+  turkey: { label: 'Turkey', w: 46, season: 'thanksgiving',
+    html: '<span class="sv-decor" style="font-size:30px" title="Turkey">🦃</span>' },
+  pie: { label: 'Pumpkin pie', w: 42, season: 'thanksgiving',
+    html: '<span class="sv-decor" style="font-size:30px" title="Pumpkin pie">🥧</span>' },
+  leaves: { label: 'Autumn leaves', w: 44, season: 'thanksgiving',
+    html: '<span class="sv-decor" style="font-size:28px" title="Autumn leaves">🍂</span>' },
 };
 const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
-  'pumpkin', 'ghost', 'bat', 'tree', 'snowman', 'stocking'];
+  'pumpkin', 'ghost', 'bat', 'tree', 'snowman', 'stocking',
+  'fireworks', 'champagne', 'popper', 'rose', 'hearts', 'loveletter',
+  'shamrock', 'rainbow', 'clover', 'bunny', 'easteregg', 'chick',
+  'turkey', 'pie', 'leaves'];
 // v255: seasonal shelf themes. Each season unlocks its decor set and
 // restyles the boards; the shelf picks one by date until overridden.
+// v256: New Year's, Valentine's, St. Patrick's, Easter, Thanksgiving.
 const SHELF_SEASONS = {
   none: { label: 'All year', icon: '📚', decor: [], fx: [] },
+  newyear: { label: "New Year's", icon: '🎆', decor: ['fireworks', 'champagne', 'popper'], fx: ['✨', '🎉', '✨'] },
+  valentine: { label: "Valentine's", icon: '💕', decor: ['rose', 'hearts', 'loveletter'], fx: ['💕', '🌹', '💗'] },
+  stpatrick: { label: "St. Patrick's", icon: '☘️', decor: ['shamrock', 'rainbow', 'clover'], fx: ['☘️', '🌈', '🍀'] },
+  easter: { label: 'Easter', icon: '🐰', decor: ['bunny', 'easteregg', 'chick'], fx: ['🌷', '🥚', '🌸'] },
+  thanksgiving: { label: 'Thanksgiving', icon: '🦃', decor: ['turkey', 'pie', 'leaves'], fx: ['🍂', '🍁', '🍂'] },
   halloween: { label: 'Halloween', icon: '🎃', decor: ['pumpkin', 'ghost', 'bat'], fx: ['🦇', '👻', '🦇'] },
   christmas: { label: 'Christmas', icon: '🎄', decor: ['tree', 'snowman', 'stocking'], fx: ['❄', '❆', '❄'] },
 };
 
+// Easter Sunday via the Anonymous Gregorian algorithm (valid 1583-4099).
+function shelfEasterSunday(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = March, 4 = April
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+// Canadian Thanksgiving: second Monday of October.
+function shelfCanadianThanksgiving(year) {
+  const first = new Date(year, 9, 1);
+  return new Date(year, 9, 1 + ((8 - first.getDay()) % 7) + 7);
+}
 // Active shelf season (device-local): auto-detected by date until the
 // user picks one explicitly in the decorations tray.
 function shelfDefaultSeason(d) {
-  const m = (d || new Date()).getMonth();
-  if (m === 9) return 'halloween';
-  if (m === 11) return 'christmas';
+  d = d || new Date();
+  const y = d.getFullYear();
+  const t = new Date(y, d.getMonth(), d.getDate()).getTime();
+  const inRange = (m0, d0, m1, d1) =>
+    t >= new Date(y, m0, d0).getTime() && t <= new Date(y, m1, d1).getTime();
+  if (inRange(11, 27, 11, 31) || inRange(0, 1, 0, 7)) return 'newyear';
+  if (inRange(1, 1, 1, 14)) return 'valentine';
+  if (inRange(2, 10, 2, 17)) return 'stpatrick';
+  const eas = shelfEasterSunday(y).getTime();
+  if (t >= eas - 7 * 864e5 && t <= eas) return 'easter';
+  const th = shelfCanadianThanksgiving(y).getTime();
+  if (t >= th - 7 * 864e5 && t <= th) return 'thanksgiving';
+  if (d.getMonth() === 9) return 'halloween';
+  if (d.getMonth() === 11) return 'christmas';
   return 'none';
 }
 function shelfSeason() {

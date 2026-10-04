@@ -240,8 +240,42 @@ shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
 ok('shelf carries season class', q('#svShelves').className.indexOf('season-halloween') !== -1);
 ok('season fx floats', qa('#svShelves .sv-fx span').length === 3);
 run(`shelfOpenDecorSheet();`);
-ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 3);
+ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 8);
 run(`shelfCloseSheet(); library = []; shelfOrderCache=null;
+localStorage.removeItem('spicyshelves.shelforder.v1');`);
+
+/* ---- 21. v256 more holidays ---- */
+const eas = d => { const e = run(`shelfEasterSunday(${d})`); return e.getFullYear() + '-' + (e.getMonth() + 1) + '-' + e.getDate(); };
+ok('easter 2026 = apr 5', eas(2026) === '2026-4-5');
+ok('easter 2027 = mar 28', eas(2027) === '2027-3-28');
+ok('easter 2025 = apr 20', eas(2025) === '2025-4-20');
+const thx = d => { const t = run(`shelfCanadianThanksgiving(${d})`); return t.getFullYear() + '-' + (t.getMonth() + 1) + '-' + t.getDate(); };
+ok('thanksgiving 2026 = oct 12', thx(2026) === '2026-10-12');
+ok('thanksgiving 2027 = oct 11', thx(2027) === '2027-10-11');
+const ds = (y, m, d) => run(`shelfDefaultSeason(new Date(${y}, ${m}, ${d}))`);
+ok('jan 3 -> new year', ds(2027, 0, 3) === 'newyear');
+ok('dec 30 -> new year', ds(2026, 11, 30) === 'newyear');
+ok('feb 10 -> valentine', ds(2027, 1, 10) === 'valentine');
+ok('mar 15 -> st patrick', ds(2027, 2, 15) === 'stpatrick');
+ok('easter week -> easter', ds(2027, 2, 25) === 'easter');
+ok('easter sunday -> easter', ds(2027, 2, 28) === 'easter');
+ok('oct 8 2026 -> thanksgiving', ds(2026, 9, 8) === 'thanksgiving');
+ok('oct 20 -> halloween', ds(2026, 9, 20) === 'halloween');
+ok('dec 15 -> christmas', ds(2026, 11, 15) === 'christmas');
+ok('jun 1 -> none', ds(2026, 5, 1) === 'none');
+run(`shelfSetSeason('newyear');`);
+ok('tray offers new year set', (() => {
+  const t = run(`shelfTrayDecor()`);
+  return t.indexOf('fireworks') !== -1 && t.indexOf('champagne') !== -1 && t.indexOf('bunny') === -1;
+})());
+run(`shelfSetSeason('easter');`);
+ok('tray offers easter set', run(`shelfTrayDecor()`).indexOf('bunny') !== -1);
+run(`shelfSetSeason('newyear');
+library = [{id:'n1', title:'Fresh Start', status:'tbr'}];
+shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
+ok('new year shelf class', q('#svShelves').className.indexOf('season-newyear') !== -1);
+ok('new year fx floats', qa('#svShelves .sv-fx span').length === 3);
+run(`library = []; shelfOrderCache=null;
 localStorage.removeItem('spicyshelves.shelforder.v1');`);
 
 /* ---- 17. spineBoxCropRect (v253): 0-1000 x-range -> pixel rect ---- */
