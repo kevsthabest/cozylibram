@@ -416,6 +416,30 @@ function shelfMergeDecor(bookItems, decors) {
   return items;
 }
 
+// v267: split-format decoration merge. Splices decor instances into the flat
+// visual sequence (left column's sections, then the right's) at their `at`
+// slots, counted in book-items across the whole split view — the same order
+// shelfDropGhost counts on drop, so dragging a decoration is WYSIWYG instead
+// of piling everything at the end of the last column.
+function shelfMergeDecorSplit(flatSections, decors) {
+  (decors || []).forEach((dec, di) => {
+    if (!SHELF_DECOR[dec.d]) return;
+    const item = { kind: 'decor', decorId: dec.d, di, w: SHELF_DECOR[dec.d].w };
+    let seen = 0, placed = false;
+    for (const s of flatSections) {
+      for (let i = 0; i < s.items.length; i++) {
+        if (s.items[i].kind === 'decor') continue;
+        seen++;
+        if (seen > dec.at) { s.items.splice(i, 0, item); placed = true; break; }
+      }
+      if (placed) break;
+    }
+    if (!placed && flatSections.length) {
+      flatSections[flatSections.length - 1].items.push(item);
+    }
+  });
+}
+
 // Flat layout items from ordered books: consecutive laid-down books form
 // one horizontal stack (max 4); face-outs and uprights are single items.
 function shelfLayoutItems(books) {
@@ -584,14 +608,19 @@ function renderShelf() {
     }
     const colBudget = Math.max(120, Math.floor((Math.max(250, Math.min(430, vw)) - 58) / 2));
     const cols = shelfSplitColumns(sections);
-    const lastCol = cols[cols.length - 1];
+    // v267: decorations flow with the whole split view in visual
+    // (left-to-right) order — merge by `at` across every section, then hand
+    // each section its slice back for rendering.
+    const flat = [];
+    cols.forEach(colSections => colSections.forEach(sec => {
+      flat.push({ sec, items: shelfLayoutItems(sec.books) });
+    }));
+    shelfMergeDecorSplit(flat, decors);
+    const flatItems = new Map(flat.map(s => [s.sec, s.items]));
     shelvesHTML = '<div class="sv-cols">' + cols.map(colSections =>
-      '<div class="sv-col">' + colSections.map(sec => {
-        const isLast = colSections === lastCol && sec === colSections[colSections.length - 1];
-        let secItems = shelfLayoutItems(sec.books);
-        if (isLast) secItems = shelfMergeDecor(secItems, decors);
-        return sectionHTML(sec, secItems, colBudget);
-      }).join('') + '</div>'
+      '<div class="sv-col">' + colSections.map(sec =>
+        sectionHTML(sec, flatItems.get(sec) || shelfLayoutItems(sec.books), colBudget)
+      ).join('') + '</div>'
     ).join('') + '</div>';
   } else if (layout === 'manual') {
     shelvesHTML = rows.map(rowHTML).join('');
