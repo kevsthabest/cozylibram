@@ -532,6 +532,26 @@ async function main() {
     ssFn.cleanSpineSearchCandidates([1, 2, 3, 4, 5, 6, 7].map(i =>
       ({ image_url: 'https://img.example/' + i + '.jpg' }))).length === 5);
 
+  // ---- geminiFetch retry (v265) ----
+  const { geminiFetch } = await import(path.resolve(__dirname, '../functions/_lib/gemini.js'));
+  let tries = 0;
+  globalThis.fetch = async () => {
+    tries++;
+    return new Response('slow down', { status: tries < 3 ? 429 : 200 });
+  };
+  const gr = await geminiFetch('https://x.test/', {});
+  ok('geminiFetch retries 429 then succeeds', gr.ok === true && tries === 3);
+  tries = 0;
+  globalThis.fetch = async () => { tries++; return new Response('slow', { status: 429 }); };
+  const gf = await geminiFetch('https://x.test/', {}, 2);
+  ok('geminiFetch gives up after tries exhausted', gf.ok === false && gf.status === 429 && tries === 2);
+  globalThis.fetch = async () => new Response('bad', { status: 400 });
+  const g400 = await geminiFetch('https://x.test/', {});
+  ok('geminiFetch does not retry 400', g400.ok === false && g400.status === 400);
+  globalThis.fetch = async () => { throw new Error('down'); };
+  const gnet = await geminiFetch('https://x.test/', {});
+  ok('geminiFetch reports network errors', gnet.ok === false && gnet.networkError === true);
+
   globalThis.fetch = realFetch;
 
   // ---- /cover-proxy (unchanged contract) ----
