@@ -7,18 +7,17 @@ const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'danger
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });
 
-// Mock network: Open Library ISBN search + Google Books ISBN search.
+// Mock network: Open Library ISBN search. Hardcover is stubbed per-test.
 let olDocs = [];
-let gbItems = [];
-let seenGb = [];
 window.fetch = async (url) => {
   const u = String(url);
   if (u.includes('openlibrary.org/search.json?isbn=')) return { ok: true, json: async () => ({ docs: olDocs }) };
-  if (u.includes('googleapis.com/books/v1/volumes') || u.includes('/api/gbooks/books/v1/volumes')) { seenGb.push(u); return { ok: true, json: async () => ({ items: gbItems }) }; }
   throw new Error('unexpected fetch: ' + u);
 };
 
 require('./harness').loadApp(window);
+// Hardcover off by default — stubbed per test below.
+window.hcSearchDocs = async () => [];
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
@@ -57,6 +56,27 @@ const mk = (id, fields) =>
     var vf3 = compareBookMeta(vb3, vm3).map(f => f.field).join(',');`);
   ok('real differences are all flagged', window.eval(`vf3`) === 'title,authors,pageCount,year');
 
+  // --- fetchMetaByISBN: Hardcover first (v270), then Open Library
+  window.hcSearchDocs = async () => [{
+    title: 'HC Title', author_names: ['HC Author'], pages: 250,
+    release_date: '2020-05-01', image: { url: 'https://example.com/hc.jpg' },
+    isbns: ['9781234567890']
+  }];
+  const m0 = await window.eval(`fetchMetaByISBN('9781234567890')`);
+  ok('HC hit maps all fields', m0 && m0.title === 'HC Title' && m0.authors[0] === 'HC Author' &&
+    m0.pageCount === 250 && m0.year === 2020 && m0.cover === 'https://example.com/hc.jpg');
+  window.hcSearchDocs = async () => [];
+
+  // HC doc that doesn't list the ISBN is skipped; Open Library is used
+  window.hcSearchDocs = async () => [{ title: 'Wrong Book', isbns: ['9780000000000'] }];
+  olDocs = [{
+    title: 'OL Title', author_name: ['OL Author'], isbn: ['9781234567890'],
+    number_of_pages_median: 100, first_publish_year: 2001, cover_i: 5
+  }];
+  const m0b = await window.eval(`fetchMetaByISBN('9781234567890')`);
+  ok('HC near-miss ISBN falls through to OL', m0b && m0b.title === 'OL Title');
+  window.hcSearchDocs = async () => [];
+
   // --- fetchMetaByISBN: Open Library exact-ISBN match
   olDocs = [{
     title: 'To Kill a Mockingbird', author_name: ['Harper Lee'],
@@ -69,23 +89,13 @@ const mk = (id, fields) =>
     m1.authors[0] === 'Harper Lee' && m1.pageCount === 320 && m1.year === 1960 &&
     m1.cover === 'https://covers.openlibrary.org/b/id/14351077-L.jpg');
 
-  // OL docs that don't list the ISBN are skipped; Google Books fallback is used
+  // OL docs that don't list the ISBN are skipped; nothing else to try → null
   olDocs = [{ title: 'Wrong Edition', author_name: ['Someone'], isbn: ['9780000000000'] }];
-  gbItems = [{
-    volumeInfo: {
-      title: 'GB Title', authors: ['GB Author'], pageCount: 250, publishedDate: '2020-05-01',
-      industryIdentifiers: [{ identifier: '9781234567890' }],
-      imageLinks: { thumbnail: 'http://example.com/t.jpg' }
-    }
-  }];
   const m2 = await window.eval(`fetchMetaByISBN('9781234567890')`);
-  ok('GB fallback verifies industryIdentifiers', m2 && m2.title === 'GB Title' && m2.pageCount === 250);
-  ok('GB cover upgraded to https', m2 && m2.cover === 'https://example.com/t.jpg');
-  ok('GB fallback requests English volumes (v52)',
-    seenGb.length > 0 && seenGb.every(u => u.indexOf('langRestrict=en') !== -1));
+  ok('OL miss with no other source returns null', m2 === null);
 
   // nothing anywhere → null
-  olDocs = []; gbItems = [];
+  olDocs = [];
   ok('no match returns null', await window.eval(`fetchMetaByISBN('9789999999999')`) === null);
 
   // --- end-to-end: checkLibraryMetadata + applyVerifyFix
