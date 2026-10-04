@@ -105,6 +105,13 @@ const steps2 = run(`JSON.stringify(ecBuildSteps(['jacket','board']).map(s => s.a
 ok('jacket+board builds 8 steps, jacket first',
   JSON.parse(steps2).length === 8 && JSON.parse(steps2)[0] === 'jacket:spine' &&
   JSON.parse(steps2)[4] === 'board:spine');
+const stepsNoEdge = run(`JSON.stringify(ecBuildSteps(['jacket'], false).map(s => s.face))`);
+ok('plain pages drop the fore-edge face',
+  stepsNoEdge === '["spine","front","back"]');
+const stepsNoEdge2 = run(`JSON.stringify(ecBuildSteps(['jacket','board'], false))`);
+ok('plain pages drop fore-edge for both appearances',
+  JSON.parse(stepsNoEdge2).length === 6 &&
+  JSON.parse(stepsNoEdge2).every(s => s.face !== 'fore_edge'));
 
 /* ---- 9. face/appearance catalogs match the v273 DB contract ---- */
 const faces = run(`JSON.stringify(EC_FACES.map(f => f.id))`);
@@ -124,8 +131,12 @@ ok('206 loads after 205 (uses its pool helpers)',
 run(`library = [{ id: 'ecb1', title: 'Test Book', isbn: '9780143127748' }]; ecStartScan('ecb1');`);
 ok('appearance screen renders', !!q('#ec-wizard #ec-ap-jacket'));
 run(`document.getElementById('ec-ap-jacket').click();`);
-ok('first face step renders with 4 steps queued',
-  !!q('#ec-wizard #ec-st-photo') && run(`EC.steps.length`) === 4);
+ok('edges question follows appearance pick', !!q('#ec-wizard #ec-edge-no'));
+run(`document.getElementById('ec-edge-no').click();`);
+ok('plain pages skip fore-edge in the step list',
+  run(`EC.steps.length`) === 3 && run(`EC.steps.every(s => s.face !== 'fore_edge')`) === true);
+ok('first face step renders',
+  !!q('#ec-wizard #ec-st-photo'));
 ok('spine goes first', q('#ec-wizard h3').textContent === 'Spine');
 run(`document.getElementById('ec-st-photo').click();`);
 ok('capture sheet opens with a face guide', !!q('#ec-capture .ec-guide-tall'));
