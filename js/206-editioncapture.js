@@ -1593,39 +1593,77 @@ async function ecSaveAll() {
   ecCloseWizard();
   if (token && typeof overlayClosed === 'function') overlayClosed(token);
   if (!b) return;
+
   var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(b) : null;
-  b.editionFaces = b.editionFaces || {};
+  b.editionFaceRefs = b.editionFaceRefs || {};
   var order = ['jacket', 'board', 'slipcase'];
-  order.forEach(function (ap) {
-    var faces = results[ap];
-    if (!faces) return;
-    b.editionFaces[ap] = b.editionFaces[ap] || {};
-    Object.keys(faces).forEach(function (face) {
-      b.editionFaces[ap][face] = faces[face];
-      // Shelf compatibility: the jacket spine (else any spine) feeds book.spinePhoto.
-      if (face === 'spine' && !b.spinePhoto) b.spinePhoto = faces[face];
-    });
-  });
-  // v282: answering "Plain pages" is a deliberate statement that this copy has
-  // no decorated edges — drop any stale fore-edge saved by an earlier session
-  // (a rescan that skips the face must not leave the old photo behind).
-  if (hasEdges === false && b.editionFaces) {
+
+  // v284: persist captured binaries separately from the book record when the
+  // IndexedDB asset store is available. Keep the old data-URL representation
+  // only as a compatibility fallback for browsers without IndexedDB.
+  var useAssetStore = typeof idbAssetPut === 'function' && typeof currentDb !== 'undefined' && currentDb;
+  for (var oi = 0; oi < order.length; oi++) {
+    var ap0 = order[oi], fs0 = results[ap0];
+    if (!fs0) continue;
+    b.editionFaceRefs[ap0] = b.editionFaceRefs[ap0] || {};
+    var keys0 = Object.keys(fs0);
+    for (var ki = 0; ki < keys0.length; ki++) {
+      var face0 = keys0[ki], data0 = fs0[face0];
+      if (!useAssetStore) {
+        b.editionFaces = b.editionFaces || {};
+        b.editionFaces[ap0] = b.editionFaces[ap0] || {};
+        b.editionFaces[ap0][face0] = data0;
+        continue;
+      }
+      try {
+        var blob0 = await (await fetch(data0)).blob();
+        var id0 = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID() : ('asset-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        await idbAssetPut(currentDb, {
+          id: id0,
+          blob: blob0,
+          isbn: isbn || null,
+          face: face0,
+          appearance: ap0,
+          createdAt: Date.now(),
+          source: 'capture'
+        });
+        b.editionFaceRefs[ap0][face0] = id0;
+        if (face0 === 'spine') b.spinePhotoAssetId = id0;
+      } catch (e) {
+        // Never discard the only local copy if the asset store fails.
+        b.editionFaces = b.editionFaces || {};
+        b.editionFaces[ap0] = b.editionFaces[ap0] || {};
+        b.editionFaces[ap0][face0] = data0;
+      }
+    }
+  }
+
+  // v282: "Plain pages" deliberately removes stale fore-edge captures.
+  if (hasEdges === false) {
     (appearances || []).forEach(function (ap) {
-      if (b.editionFaces[ap]) {
+      if (b.editionFaceRefs[ap]) {
+        delete b.editionFaceRefs[ap].fore_edge;
+        if (!Object.keys(b.editionFaceRefs[ap]).length) delete b.editionFaceRefs[ap];
+      }
+      if (b.editionFaces && b.editionFaces[ap]) {
         delete b.editionFaces[ap].fore_edge;
         if (!Object.keys(b.editionFaces[ap]).length) delete b.editionFaces[ap];
       }
     });
-    if (!Object.keys(b.editionFaces).length) delete b.editionFaces;
   }
+  if (!Object.keys(b.editionFaceRefs).length) delete b.editionFaceRefs;
+  if (b.editionFaces && !Object.keys(b.editionFaces).length) delete b.editionFaces;
+
   if (typeof saveLibrary === 'function') saveLibrary();
+
   if (isbn) {
     for (var i = 0; i < order.length; i++) {
       var ap = order[i], fs = results[ap];
       if (!fs) continue;
       var keys = Object.keys(fs);
       for (var j = 0; j < keys.length; j++) {
-        await ecShareFace(isbn, ap, keys[j], fs[keys[j]]); // eslint-disable-line no-await-in-loop
+        await ecShareFace(isbn, ap, keys[j], fs[keys[j]]);
       }
     }
   }
@@ -1649,25 +1687,88 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
     var sb = await (typeof cloudClient === 'function' ? cloudClient().catch(function () { return null; }) : null);
     if (!sb) return false;
     var uid = await ecPoolUid(sb);
-    var seen = await sb.from('edition_images').select('isbn,uploaded_by')
-      .eq('isbn', isbn).eq('face', face).eq('appearance', appearance).maybeSingle();
-    var replacing = !!(seen && seen.data && uid && seen.data.uploaded_by && seen.data.uploaded_by === uid);
-    if (seen && seen.data && !replacing) return true; // someone else's (or unattributed): first writer wins
+    if (!uid) return false;
+
+    // v284: contributions are immutable assets. A canonical slot is only
+    // created when this edition/surface has no canonical asset yet; later
+    // contributions remain candidates instead of clobbering one another.
+    var editionRes = await sb.from('editions').select('id').eq('isbn', isbn).maybeSingle();
+    var editionId = editionRes && editionRes.data ? editionRes.data.id : null;
+    if (!editionId) return false;
+
     var blob = await (await fetch(dataUrl)).blob();
-    var path = (typeof editionImagePath === 'function')
-      ? editionImagePath(isbn, face, appearance)
-      : (face + '/' + appearance + '/' + isbn + '.jpg');
-    var up = await sb.storage.from('edition-images').upload(path, blob, { contentType: 'image/jpeg', upsert: replacing });
-    if (up.error) {
-      if (!replacing && (up.error.statusCode === '409' || up.error.statusCode === 409 ||
-          /exists/i.test(up.error.message || ''))) return true; // lost the race; the pool has it
-      return false;
+    var bytes = await blob.arrayBuffer();
+    var digest = await crypto.subtle.digest('SHA-256', bytes);
+    var hash = Array.from(new Uint8Array(digest)).map(function (x) {
+      return x.toString(16).padStart(2, '0');
+    }).join('');
+    var path = face + '/' + appearance + '/' + hash + '.jpg';
+
+    var existing = await sb.from('edition_assets').select('id').eq('bucket', 'edition-images').eq('path', path).maybeSingle();
+    var assetId = existing && existing.data ? existing.data.id : null;
+    if (!assetId) {
+      var up = await sb.storage.from('edition-images').upload(path, blob, {
+        contentType: 'image/jpeg', upsert: false
+      });
+      if (up.error && !(up.error.statusCode === '409' || up.error.statusCode === 409 ||
+          /exists/i.test(up.error.message || ''))) return false;
+
+      var row = await sb.from('edition_assets').insert({
+        edition_id: editionId,
+        isbn: isbn,
+        face: face,
+        appearance: appearance,
+        bucket: 'edition-images',
+        path: path,
+        format: 'image/jpeg',
+        byte_size: blob.size,
+        sha256: hash,
+        source_type: 'capture',
+        source_user_id: uid
+      }).select('id').single();
+      if (row.error) {
+        var raced = await sb.from('edition_assets').select('id').eq('bucket', 'edition-images').eq('path', path).maybeSingle();
+        assetId = raced && raced.data ? raced.data.id : null;
+        if (!assetId) return false;
+      } else {
+        assetId = row.data.id;
+      }
     }
-    var row = await sb.from('edition_images').upsert(
-      { isbn: isbn, face: face, appearance: appearance, bucket: 'edition-images', path: path,
-        uploaded_by: uid, updated_at: new Date().toISOString() },
-      { onConflict: 'isbn,face,appearance' });
-    return !(row && row.error);
+
+    var slot = await sb.from('edition_asset_slots')
+      .select('canonical_asset_id')
+      .eq('edition_id', editionId)
+      .eq('face', face)
+      .eq('appearance', appearance)
+      .maybeSingle();
+
+    if (!slot || !slot.data) {
+      await sb.from('edition_asset_slots').insert({
+        edition_id: editionId,
+        isbn: isbn,
+        face: face,
+        appearance: appearance,
+        canonical_asset_id: assetId,
+        selection_method: 'automatic',
+        selected_by: uid
+      });
+    }
+
+    // Compatibility read model: only expose this asset through the legacy
+    // table when it is actually canonical. Existing viewers therefore keep
+    // working while the new repository model is rolled out.
+    var canonical = await sb.from('edition_asset_slots')
+      .select('canonical_asset_id')
+      .eq('edition_id', editionId).eq('face', face).eq('appearance', appearance)
+      .maybeSingle();
+    if (canonical && canonical.data && canonical.data.canonical_asset_id === assetId) {
+      await sb.from('edition_images').upsert({
+        isbn: isbn, edition_id: editionId, face: face, appearance: appearance,
+        bucket: 'edition-images', path: path, uploaded_by: uid,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'isbn,face,appearance' });
+    }
+    return true;
   } catch (e) { return false; }
 }
 
