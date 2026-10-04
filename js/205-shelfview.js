@@ -366,6 +366,7 @@ function shelfFillRows(items, budget) {
 let shelfGroup = 'tbr';
 let shelfOrderCache = null;
 let pendingSpinePhoto = null; // cropped data URL waiting for the user to tap a spine
+let pendingSpinePhotoAi = false; // v259: was it an AI-verified tight crop? (shareable)
 let shelfSheetToken = null;
 
 function shelfOrder() {
@@ -441,6 +442,15 @@ function renderShelf() {
   const counts = {};
   SHELF_GROUPS.forEach(g => { counts[g] = shelfGroupBooks(books, g).length; });
   const shown = shelfBooks();
+  // v259: adopt shared spine photos for ISBN books missing one — one lookup
+  // per book per session; a hit saves and re-renders.
+  if (typeof spinePhotoAdopt === 'function') {
+    shown.forEach(b => {
+      if (b && !b.spinePhoto && spinePhotoISBN(b) && !spineLookupDone.has(b.id)) {
+        spinePhotoAdopt(b).then(hit => { if (hit) renderShelf(); }).catch(() => {});
+      }
+    });
+  }
   const bookItems = shelfLayoutItems(shown);
   const items = shelfMergeDecor(bookItems, shelfDecorItems(shelfGroup));
   const vw = ((document.getElementById('view') || {}).clientWidth || 360);
@@ -495,7 +505,7 @@ function wireShelf() {
   const emptyAdd = document.getElementById('svEmptyAdd');
   if (emptyAdd) emptyAdd.addEventListener('click', () => go('add'));
   const cancel = document.getElementById('svAssignCancel');
-  if (cancel) cancel.addEventListener('click', () => { pendingSpinePhoto = null; renderShelf(); });
+  if (cancel) cancel.addEventListener('click', () => { pendingSpinePhoto = null; pendingSpinePhotoAi = false; renderShelf(); });
   const shelves = document.getElementById('svShelves');
   if (!shelves) return;
   shelves.querySelectorAll('.spine, .faceout, .hstack, .sv-dragdecor').forEach(sp => {
@@ -647,8 +657,12 @@ function shelfSpineClick(e, sp) {
   const id = sp.dataset.id;
   if (pendingSpinePhoto) {
     const url = pendingSpinePhoto;
+    const ai = pendingSpinePhotoAi;
     pendingSpinePhoto = null;
+    pendingSpinePhotoAi = false;
     shelfAssignPhoto(id, url);
+    const bk = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === id);
+    if (ai && bk) spinePhotoShare(bk, url, true); // v259: contribute the anonymous crop
     return;
   }
   openBookFromEl(sp, id);
@@ -815,6 +829,7 @@ function shelfReviewCapture(dataUrl, bookId) {
   // to the center strip when detection finds nothing usable.
   const down = (typeof visionDownscale === 'function')
     ? visionDownscale(dataUrl, 600) : Promise.resolve(dataUrl);
+  if (typeof toast === 'function') toast('Finding the spine…');
   down.then(d => spineDetectBox(d).then(box => ({ d, box }))).then(({ d, box }) => {
     const cropP = (box && typeof spineBoxPhotoToDataURL === 'function')
       ? spineBoxPhotoToDataURL(d, box.x0, box.x1, 168, box.y0, box.y1).then(c => c || spineCropToDataURL(d, 168))
@@ -835,8 +850,11 @@ function shelfReviewCapture(dataUrl, bookId) {
     document.getElementById('svUsePhoto').addEventListener('click', () => {
       if (bookId) {
         shelfAssignPhoto(bookId, cropped);
+        const bk = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
+        if (ai && bk) spinePhotoShare(bk, cropped, true); // v259: contribute the anonymous crop
       } else {
         pendingSpinePhoto = cropped;
+        pendingSpinePhotoAi = ai;
         renderShelf();
         toast('Photo ready — tap a spine to place it');
       }
@@ -894,14 +912,81 @@ function spineBoxCropRect(w, h, x0, x1, y0, y1) {
   return { x: sx + inner.x, y: sy + inner.y, w: inner.w, h: inner.h };
 }
 
+// v259: shared spine-photo pool. AI-verified tight crops (never fallback
+// center-crops, which may include background) are contributed automatically,
+// keyed by ISBN. The crop contains no personal information by construction,
+// so no opt-in is needed — the library itself stays private as before.
+function spinePhotoISBN(book) {
+  const raw = book && (book.isbn13 || book.isbn || '');
+  const d = String(raw).replace(/[^0-9X]/gi, '').toUpperCase();
+  return /^(?:\d{13}|\d{10}|\d{9}X)$/.test(d) ? d : null;
+}
+async function spinePhotoShare(book, dataUrl, aiCropped) {
+  try {
+    if (!aiCropped) return false; // safety: only anonymous tight crops
+    const isbn = spinePhotoISBN(book);
+    if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
+    const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
+    if (!sb) return false;
+    const seen = await sb.from('spine_photos').select('isbn').eq('isbn', isbn).maybeSingle();
+    if (seen && seen.data) return true; // already in the pool
+    const blob = await (await fetch(dataUrl)).blob();
+    const path = 'spines/' + isbn + '.jpg';
+    const up = await sb.storage.from('spine-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    if (up.error && up.error.statusCode !== '409' && !/exists/i.test(up.error.message || '')) return false;
+    await sb.from('spine_photos').upsert({ isbn, path }, { onConflict: 'isbn', ignoreDuplicates: true });
+    return true;
+  } catch (e) { return false; }
+}
+// v259: adopt a shared spine photo for an ISBN book that has none.
+// Best-effort; resolves true when a photo was adopted and saved.
+const spineLookupDone = new Set();
+async function spinePhotoAdopt(book) {
+  try {
+    if (!book || book.spinePhoto) return false;
+    const isbn = spinePhotoISBN(book);
+    if (!isbn || !book.id || spineLookupDone.has(book.id)) return false;
+    spineLookupDone.add(book.id);
+    const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
+    if (!sb) return false;
+    const row = await sb.from('spine_photos').select('path').eq('isbn', isbn).maybeSingle();
+    const path = row && row.data && row.data.path;
+    if (!path) return false;
+    const pub = sb.storage.from('spine-photos').getPublicUrl(path);
+    const url = pub && pub.data && pub.data.publicUrl;
+    if (!url) return false;
+    const blob = await (await fetch(url)).blob();
+    if (!blob || !blob.size) return false;
+    const dataUrl = await new Promise((res) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result || ''));
+      fr.onerror = () => res('');
+      fr.readAsDataURL(blob);
+    });
+    if (dataUrl.indexOf('data:image') !== 0) return false;
+    book.spinePhoto = dataUrl;
+    if (typeof saveLibrary === 'function') saveLibrary();
+    return true;
+  } catch (e) { return false; }
+}
+
 // v258: ask the vision model for a tight box around the single prominent
 // spine in a close-up photo. Resolves with {x0,y0,x1,y1} or null — never
 // rejects, so the manual flow always falls back to the center crop.
+// Failures are logged (Logs tab) with the reason instead of failing silent.
 function spineDetectBox(dataUrl) {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
-    const safety = setTimeout(() => done(null), 25000);
+    const done = (v, reason) => {
+      if (!settled) {
+        settled = true;
+        if (!v && reason && typeof AppLog !== 'undefined') {
+          try { AppLog.error('spine', 'AI spine detect: ' + reason); } catch (e) {}
+        }
+        resolve(v);
+      }
+    };
+    const safety = setTimeout(() => done(null, 'timed out after 25s'), 25000);
     try {
       const fetchFn = (typeof apiFetch === 'function') ? apiFetch : fetch;
       fetchFn('/api/read-cover', {
@@ -914,9 +999,9 @@ function spineDetectBox(dataUrl) {
       }).then(j => {
         clearTimeout(safety);
         const b = j && j.box;
-        done(b && typeof b === 'object' ? b : null);
-      }).catch(() => { clearTimeout(safety); done(null); });
-    } catch (e) { clearTimeout(safety); done(null); }
+        done(b && typeof b === 'object' ? b : null, b ? null : 'model found no spine in the photo');
+      }).catch((e) => { clearTimeout(safety); done(null, 'request failed: ' + ((e && e.message) || e)); });
+    } catch (e) { clearTimeout(safety); done(null, 'setup failed'); }
   });
 }
 
