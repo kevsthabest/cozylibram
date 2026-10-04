@@ -501,7 +501,7 @@ ecRunEnhance && null;
     !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
   run(`document.getElementById('ec-ap-cancel').click();`);
 
-  // v282: rescan with "Plain pages" clears a stale saved fore-edge.
+  // v283: rescan with "Plain pages" clears a stale saved fore-edge.
   run(`window.__saved = false;
 library = [{ id: 'ecb7', title: 'Clear Me',
   editionFaces: { jacket: { spine: 'data:image/jpeg;base64,S', fore_edge: 'data:image/jpeg;base64,BAD' } } }];
@@ -512,6 +512,110 @@ ecSaveAll().then(() => { window.__saved = true; });`);
   ok('plain-pages rescan drops the stale fore-edge and keeps the new spine',
     run(`JSON.stringify(library[0].editionFaces.jacket)`) ===
       JSON.stringify({ spine: 'data:image/jpeg;base64,NEWSPINE' }));
+
+  // v283: pool self-healing — mock the Supabase client with an in-memory pool.
+  run(`window.__pool = {};
+window.__uploads = [];
+window.__moves = [];
+function __chain() {
+  var filters = {};
+  var c = {};
+  c.select = function () { return c; };
+  c.delete = function () { c._del = true; return c; };
+  c.eq = function (k, v) { filters[k] = v; return c; };
+  c.maybeSingle = async function () {
+    var key = filters.isbn + '|' + filters.face + '|' + filters.appearance;
+    var row = window.__pool[key];
+    return { data: row ? { isbn: filters.isbn, uploaded_by: row.uploaded_by } : null };
+  };
+  c.upsert = async function (obj) {
+    var key = obj.isbn + '|' + obj.face + '|' + obj.appearance;
+    window.__pool[key] = { uploaded_by: obj.uploaded_by, path: obj.path };
+    return { error: null };
+  };
+  c.then = function (resolve) {
+    if (c._del) delete window.__pool[filters.isbn + '|' + filters.face + '|' + filters.appearance];
+    resolve({ error: null });
+  };
+  return c;
+}
+window.cloudClient = async function () {
+  return {
+    auth: { getUser: async function () { return { data: { user: { id: 'user-1' } } }; } },
+    from: function () { return __chain(); },
+    storage: { from: function () { return {
+      upload: async function (path, blob, opts) {
+        window.__uploads.push({ path: path, upsert: !!(opts && opts.upsert) });
+        return { error: null };
+      },
+      move: async function (from, to) { window.__moves.push([from, to]); return { error: null }; }
+    }; } }
+  };
+};
+window.fetch = async function () { return { blob: async function () { return {}; } }; };`);
+
+  // First write: uploads with upsert:false, attributes the contributor.
+  run(`window.__shareDone = false;
+ecShareFace('9780000000001', 'jacket', 'spine', 'data:image/jpeg;base64,X')
+  .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
+  await flush('window.__shareDone');
+  ok('pool first write uploads (upsert:false) and attributes the contributor',
+    run(`window.__shareRes`) === true &&
+    JSON.stringify(run(`window.__uploads`)) ===
+      JSON.stringify([{ path: 'spine/jacket/9780000000001.jpg', upsert: false }]) &&
+    run(`window.__pool['9780000000001|spine|jacket'].uploaded_by`) === 'user-1');
+
+  // Another user's image: first writer wins, no upload.
+  run(`window.__pool['9780000000002|spine|jacket'] = { uploaded_by: 'user-2', path: 'spine/jacket/9780000000002.jpg' };
+window.__uploads = [];
+window.__shareDone = false;
+ecShareFace('9780000000002', 'jacket', 'spine', 'data:image/jpeg;base64,Y')
+  .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
+  await flush('window.__shareDone');
+  ok("another contributor's image is left alone (first writer wins)",
+    run(`window.__shareRes`) === true &&
+    run(`window.__uploads`).length === 0 &&
+    run(`window.__pool['9780000000002|spine|jacket'].uploaded_by`) === 'user-2');
+
+  // Own image re-captured: auto-replaces with upsert:true.
+  run(`window.__uploads = [];
+window.__shareDone = false;
+ecShareFace('9780000000001', 'jacket', 'spine', 'data:image/jpeg;base64,Z')
+  .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
+  await flush('window.__shareDone');
+  ok("contributor's new capture auto-replaces their pool image",
+    run(`window.__shareRes`) === true &&
+    JSON.stringify(run(`window.__uploads`)) ===
+      JSON.stringify([{ path: 'spine/jacket/9780000000001.jpg', upsert: true }]));
+
+  // Removing a face you contributed withdraws it from the pool.
+  run(`window.__pool['9780000000003|fore_edge|jacket'] = { uploaded_by: 'user-1', path: 'fore_edge/jacket/9780000000003.jpg' };
+window.__moves = [];
+library = [{ id: 'ecb8', title: 'Withdraw Me', isbn13: '9780000000003',
+  editionFaces: { jacket: { fore_edge: 'data:image/jpeg;base64,BAD' } } }];
+ecStartScan('ecb8');
+document.querySelector('#ec-wizard [data-ec-rm="jacket:fore_edge"]').click();`);
+  await new Promise(function (r) { setTimeout(r, 300); });
+  ok('removing a contributed face withdraws it from the pool',
+    run(`window.__pool['9780000000003|fore_edge|jacket']`) === undefined &&
+    JSON.stringify(run(`window.__moves`)) ===
+      JSON.stringify([['fore_edge/jacket/9780000000003.jpg',
+        'quarantine/withdrawn-fore_edge-jacket-9780000000003.jpg']]) &&
+    !q('#ec-wizard [data-ec-rm="jacket:fore_edge"]'));
+  run(`document.getElementById('ec-ap-cancel').click();`);
+
+  // Removing a face someone else contributed leaves the pool alone.
+  run(`window.__pool['9780000000004|spine|jacket'] = { uploaded_by: 'user-2', path: 'spine/jacket/9780000000004.jpg' };
+window.__moves = [];
+library = [{ id: 'ecb9', title: 'Not Mine', isbn13: '9780000000004',
+  editionFaces: { jacket: { spine: 'data:image/jpeg;base64,S' } } }];
+ecStartScan('ecb9');
+document.querySelector('#ec-wizard [data-ec-rm="jacket:spine"]').click();`);
+  await new Promise(function (r) { setTimeout(r, 300); });
+  ok("removing a face contributed by someone else leaves the pool alone",
+    run(`window.__pool['9780000000004|spine|jacket'].uploaded_by`) === 'user-2' &&
+    run(`window.__moves`).length === 0);
+  run(`document.getElementById('ec-ap-cancel').click();`);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

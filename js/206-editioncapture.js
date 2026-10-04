@@ -1279,11 +1279,16 @@ function ecRenderAppearance() {
   ov.querySelectorAll('[data-ec-rm]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var parts = (btn.getAttribute('data-ec-rm') || '').split(':');
-      if (ecRemoveFace(b, parts[0], parts[1])) {
-        if (typeof saveLibrary === 'function') saveLibrary();
-        if (typeof toast === 'function') toast('Face removed');
-      }
+      if (!ecRemoveFace(b, parts[0], parts[1])) { ecRenderAppearance(); return; }
+      if (typeof saveLibrary === 'function') saveLibrary();
       ecRenderAppearance();
+      // v283: withdrawing a face you contributed also pulls it from the shared
+      // pool, so a bad photo can't linger there after you've deleted it.
+      ecWithdrawFace(b, parts[0], parts[1]).then(function (withdrew) {
+        if (typeof toast === 'function') {
+          toast(withdrew ? 'Face removed, shared copy withdrawn' : 'Face removed');
+        }
+      });
     });
   });
   return EC.token;
@@ -1627,24 +1632,67 @@ async function ecSaveAll() {
   if (typeof toast === 'function') toast('Edition faces saved');
 }
 
-// Contribute one face to the shared pool — only when the pool lacks it.
+// The signed-in user's id for pool attribution, or null.
+async function ecPoolUid(sb) {
+  try {
+    var ug = await sb.auth.getUser();
+    return (ug && ug.data && ug.data.user) ? ug.data.user.id : null;
+  } catch (e) { return null; }
+}
+
+// Contribute one face to the shared pool. First writer wins between users,
+// but the original contributor's newer capture auto-replaces their own image
+// (v283) — a bad first photo can never get permanently stuck.
 async function ecShareFace(isbn, appearance, face, dataUrl) {
   try {
     if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
     var sb = await (typeof cloudClient === 'function' ? cloudClient().catch(function () { return null; }) : null);
     if (!sb) return false;
-    var seen = await sb.from('edition_images').select('isbn')
+    var uid = await ecPoolUid(sb);
+    var seen = await sb.from('edition_images').select('isbn,uploaded_by')
       .eq('isbn', isbn).eq('face', face).eq('appearance', appearance).maybeSingle();
-    if (seen && seen.data) return true; // already in the pool
+    var replacing = !!(seen && seen.data && uid && seen.data.uploaded_by && seen.data.uploaded_by === uid);
+    if (seen && seen.data && !replacing) return true; // someone else's (or unattributed): first writer wins
     var blob = await (await fetch(dataUrl)).blob();
     var path = (typeof editionImagePath === 'function')
       ? editionImagePath(isbn, face, appearance)
       : (face + '/' + appearance + '/' + isbn + '.jpg');
-    var up = await sb.storage.from('edition-images').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-    if (up.error && up.error.statusCode !== '409' && !/exists/i.test(up.error.message || '')) return false;
-    await sb.from('edition_images').upsert(
-      { isbn: isbn, face: face, appearance: appearance, bucket: 'edition-images', path: path },
-      { onConflict: 'isbn,face,appearance', ignoreDuplicates: true });
-    return true;
+    var up = await sb.storage.from('edition-images').upload(path, blob, { contentType: 'image/jpeg', upsert: replacing });
+    if (up.error) {
+      if (!replacing && (up.error.statusCode === '409' || up.error.statusCode === 409 ||
+          /exists/i.test(up.error.message || ''))) return true; // lost the race; the pool has it
+      return false;
+    }
+    var row = await sb.from('edition_images').upsert(
+      { isbn: isbn, face: face, appearance: appearance, bucket: 'edition-images', path: path,
+        uploaded_by: uid, updated_at: new Date().toISOString() },
+      { onConflict: 'isbn,face,appearance' });
+    return !(row && row.error);
+  } catch (e) { return false; }
+}
+
+// v283: withdraw a contributed pool image — quarantine the file (clients can't
+// delete storage objects; renaming frees the canonical path) then drop the row.
+async function ecWithdrawFace(book, appearance, face) {
+  try {
+    var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
+    if (!isbn) return false;
+    var sb = await (typeof cloudClient === 'function' ? cloudClient().catch(function () { return null; }) : null);
+    if (!sb) return false;
+    var uid = await ecPoolUid(sb);
+    if (!uid) return false;
+    var seen = await sb.from('edition_images').select('isbn,uploaded_by')
+      .eq('isbn', isbn).eq('face', face).eq('appearance', appearance).maybeSingle();
+    if (!seen || !seen.data || seen.data.uploaded_by !== uid) return false; // not mine to withdraw
+    var path = (typeof editionImagePath === 'function')
+      ? editionImagePath(isbn, face, appearance)
+      : (face + '/' + appearance + '/' + isbn + '.jpg');
+    try {
+      await sb.storage.from('edition-images').move(path,
+        'quarantine/withdrawn-' + face + '-' + appearance + '-' + isbn + '.jpg');
+    } catch (e) {}
+    var del = await sb.from('edition_images').delete()
+      .eq('isbn', isbn).eq('face', face).eq('appearance', appearance);
+    return !(del && del.error);
   } catch (e) { return false; }
 }
