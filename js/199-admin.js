@@ -1100,9 +1100,9 @@ async function renderEditionAssetLab() {
       const slotMap = {};
       (sr.data || []).forEach(s => { slotMap[s.appearance + ':' + s.face] = s; });
       const publicUrl = (a) => {
-        const base = String((typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) || '').replace(/\/$/, '');
-        return base + '/storage/v1/object/public/' + encodeURIComponent(a.bucket || 'edition-images') + '/' +
-          String(a.path || '').split('/').map(encodeURIComponent).join('/');
+        try {
+          return sb.storage.from(a.bucket || 'edition-images').getPublicUrl(a.path || '').data.publicUrl || '';
+        } catch (e) { return ''; }
       };
       const cards = (ar.data || []).map(a => {
         const key = a.appearance + ':' + a.face, slot = slotMap[key];
