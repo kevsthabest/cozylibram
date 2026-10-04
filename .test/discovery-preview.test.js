@@ -75,6 +75,13 @@ const recoSrc = () => ({
   ok('bookGenres strips format tags', probe(`bookGenres({categories:['Audiobook','Fiction / Romance']}).join(',')`) === 'Romance');
   const secJunk = probe(`previewSections({categories:['Audiobook','Ebook']})`);
   ok('genres section off when only format tags remain', secJunk.genres === false);
+  // v262: Open Library subject headings are not genres
+  ok('bookGenres strips character headings',
+    probe(`bookGenres({categories:['Blomkvist, Mikael (Fictional character)','Salander, Lisbeth (Fictional character)','Suspense fiction']}).join(',')`) === 'Suspense fiction');
+  ok('bookGenres strips OL non-genres',
+    probe(`bookGenres({categories:['Large type books','Accessible book','Mystery']}).join(',')`) === 'Mystery');
+  ok('bookGenres strips overlong headings',
+    probe(`bookGenres({categories:['Swedish fiction translated into English and published after 2000','Thriller']}).join(',')`) === 'Thriller');
 
   // ---- 6. covenCleanCopy: friend's personal data never comes along
   const cc = probe(`covenCleanCopy({ title: 'T', authors: ['A'], myRating: 5, progress: 120, dateFinished: '2026-01-01', notes: 'mine', isbn: '1' })`);

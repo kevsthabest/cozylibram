@@ -2620,3 +2620,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .sv-layout-opt b { font-size: 15px; }
 .sv-layout-opt span { font-size: 13px; color: var(--muted); }
 .sv-layout-opt.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* ---------- touch ergonomics (v262) ---------- */
+/* Invisible touch slop on spines: the transparent border extends the hit
+   area, the negative margin keeps the layout footprint pixel-identical,
+   and background-clip keeps the paint exactly where it was. */
+.spine { border: 7px solid transparent; background-clip: padding-box; margin: -7px; }
+/* Bigger invisible tap area around decorations (wrapper is transparent). */
+.sv-dragdecor { padding: 8px 12px; }

@@ -43,6 +43,14 @@ function shelfHash(str) {
   return h >>> 0;
 }
 
+// v262: touch ergonomics. Finger jitter on a tap used to cross the tiny
+// 10px drag threshold and start a drag, which then swallowed the tap —
+// selection felt broken. The threshold is now generous, and each spine
+// carries invisible touch slop (transparent border + negative margin keep
+// the layout footprint pixel-identical).
+const SHELF_DRAG_SLOP_PX = 18;
+const SHELF_TOUCH_SLOP_PX = 7;
+
 // Deterministic spine geometry + palette slot for a book.
 function shelfSpineSpec(book) {
   const h = shelfHash((book && book.id) || (book && book.title) || 'x');
@@ -126,7 +134,10 @@ function shelfLayoutSections(books, layout) {
   if (layout === 'genre') {
     const groups = new Map();
     books.forEach(b => {
-      const c = b && Array.isArray(b.categories) && b.categories[0] ? String(b.categories[0]) : '';
+      // v262: primary *genre* via bookGenres (strips format tags and library
+      // subject headings), not the raw first category.
+      const gs = (typeof bookGenres === 'function') ? bookGenres(b) : [];
+      const c = gs.length ? String(gs[0]) : '';
       const key = c ? 'g:' + c.toLowerCase() : 'g:';
       if (!groups.has(key)) groups.set(key, { label: c || 'Unsorted', books: [] });
       groups.get(key).books.push(b);
@@ -441,7 +452,7 @@ function shelfSpineHTML(book) {
   const author = shelfBookAuthor(book);
   // v254: a whisper of tilt (±1°) so the shelf feels hand-placed, not stamped.
   const tilt = (((shelfHash(book.id + '|tilt') % 5) - 2) * 0.5).toFixed(1);
-  const geom = 'width:' + spec.w + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
+  const geom = 'width:' + (spec.w + SHELF_TOUCH_SLOP_PX * 2) + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
   if (book.spinePhoto) {
     return '<div class="spine photo" data-id="' + esc(book.id) + '" style="' + geom +
       'background-image:url(&quot;' + book.spinePhoto + '&quot;)" title="' + esc(title) + '">' +
@@ -602,7 +613,7 @@ function shelfPointerDown(e, sp) {
     if (shelfDrag !== d) return;
     if (!shelfCanDrag()) return; // v261: grouped layouts are auto-arranged
     const dx = ev.clientX - d.x0, dy = ev.clientY - d.y0;
-    if (!d.live && Math.hypot(dx, dy) > 10) {
+    if (!d.live && Math.hypot(dx, dy) > SHELF_DRAG_SLOP_PX) {
       clearTimeout(d.timer);
       d.live = true;
       shelfStartGhost(d, ev);
@@ -635,16 +646,20 @@ function shelfStartGhost(d, e) {
   const r = d.el.getBoundingClientRect();
   const g = d.el.cloneNode(true);
   g.removeAttribute('data-id');
-  g.style.cssText += ';position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;' +
-    'width:' + r.width + 'px;height:' + r.height + 'px;z-index:300;pointer-events:none;margin:0;';
+  // v262: strip the invisible touch slop so the drag ghost is the visual spine.
+  // (Only .spine carries the slop border — face-outs, stacks, decor don't.)
+  const slop = d.el.classList.contains('spine') ? SHELF_TOUCH_SLOP_PX : 0;
+  const gw = Math.max(8, r.width - slop * 2);
+  g.style.cssText += ';position:fixed;left:' + (r.left + slop) + 'px;top:' + r.top + 'px;' +
+    'width:' + gw + 'px;height:' + r.height + 'px;z-index:300;pointer-events:none;margin:0;border-width:0;';
   g.classList.add('dragging');
   document.body.appendChild(g);
   d.ghost = g;
-  d.offX = e.clientX - r.left;
+  d.offX = e.clientX - (r.left + slop);
   d.offY = e.clientY - r.top;
   const ph = document.createElement('div');
   ph.className = 'spine-ph';
-  ph.style.width = r.width + 'px';
+  ph.style.width = Math.max(8, r.width - slop * 2) + 'px';
   ph.style.height = r.height + 'px';
   d.el.parentNode.insertBefore(ph, d.el);
   d.ph = ph;
@@ -968,13 +983,48 @@ function shelfOpenViewfinder(bookId) {
   });
 }
 // Grab the current viewfinder frame as a JPEG data URL (null on failure).
+// v262: crops the capture to the guide-frame region, so the photo contains
+// (almost) only the spine — background the user framed out (screens, walls)
+// never enters the image. Falls back to the full frame when the guide rect
+// can't be determined.
 function shelfSnapFrame(video) {
   try {
     if (!video || !video.videoWidth || !video.videoHeight) return null;
     const c = document.createElement('canvas');
-    c.width = video.videoWidth; c.height = video.videoHeight;
-    c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+    const guide = shelfGuideSourceRect(video);
+    if (guide) {
+      c.width = Math.max(1, Math.round(guide.sw));
+      c.height = Math.max(1, Math.round(guide.sh));
+      c.getContext('2d').drawImage(video,
+        guide.sx, guide.sy, guide.sw, guide.sh, 0, 0, c.width, c.height);
+    } else {
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+    }
     return c.toDataURL('image/jpeg', 0.92);
+  } catch (e) { return null; }
+}
+// The guide frame's rect in video-source pixels, or null when it can't be
+// determined. Maps the CSS frame rect through the video's object-fit: cover.
+function shelfGuideSourceRect(video) {
+  try {
+    const frame = document.querySelector('.sv-vf-frame');
+    if (!frame) return null;
+    const vr = video.getBoundingClientRect();
+    const fr = frame.getBoundingClientRect();
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vr.width || !vr.height || !vw || !vh || !fr.width || !fr.height) return null;
+    const scale = Math.max(vr.width / vw, vr.height / vh); // object-fit: cover
+    const ox = (vr.width - vw * scale) / 2;
+    const oy = (vr.height - vh * scale) / 2;
+    let sx = (fr.left - vr.left - ox) / scale;
+    let sy = (fr.top - vr.top - oy) / scale;
+    let sw = fr.width / scale, sh = fr.height / scale;
+    sx = Math.max(0, Math.min(vw - 1, sx));
+    sy = Math.max(0, Math.min(vh - 1, sy));
+    sw = Math.max(1, Math.min(vw - sx, sw));
+    sh = Math.max(1, Math.min(vh - sy, sh));
+    return { sx, sy, sw, sh };
   } catch (e) { return null; }
 }
 
@@ -994,7 +1044,9 @@ function shelfReviewCapture(dataUrl, bookId) {
     const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
     const { close } = shelfSheetShell('Spine photo' + (book ? ' — ' + esc(book.title || '') : ''),
       '<div class="sv-review"><img alt="Cropped spine photo"></div>' +
-      '<p class="sv-review-hint">' + (ai ? 'AI found the spine — look right?' : 'Cropped to the spine — look right?') + '</p>' +
+      '<p class="sv-review-hint">' + (ai
+      ? 'AI found the spine — look right?'
+      : 'AI couldn\'t spot the spine — drag to adjust') + '</p>' +
       '<div class="sv-review-actions">' +
       '<button class="sv-sheet-btn ghost" id="svRetake">Retake</button>' +
       '<button class="sv-sheet-btn solid" id="svUsePhoto">Use photo</button>' +

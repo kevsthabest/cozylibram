@@ -50,12 +50,17 @@ function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES
 // e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
 // v237: also strips *format* tags ("Audiobook", "Ebook", "Large Print") —
 // the metadata sources mix those into the genre lists, and they are not genres.
-const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?print)$/i;
+// v262: Open Library subjects leak library headings into the genre list —
+// character headings ("Blomkvist, Mikael (Fictional character)"), OL-specific
+// non-genres ("Large type books", "Accessible book"), and overlong headings.
+// None of these are genres.
+const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?(print|type( books?)?)|accessible book|protected daisy|in library|overdrive|internet archive)$/i;
+const GENRE_SUBJECT_JUNK = /\((fictional|fictitious|imaginary|legendary|mythical)\b/i;
 function bookGenres(b) {
   const out = [];
   (b.categories || []).forEach(c => {
     String(c).split('/').map(s => s.trim()).forEach(s => {
-      if (!s || GENRE_JUNK.test(s)) return;
+      if (!s || s.length > 48 || GENRE_JUNK.test(s) || GENRE_SUBJECT_JUNK.test(s)) return;
       if (!out.includes(s)) out.push(s);
     });
   });
