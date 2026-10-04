@@ -102,6 +102,12 @@ const WorkStore = {
             { onConflict: 'isbn', ignoreDuplicates: true });
         } catch (e) { /* an unregistered edition doesn't block the work */ }
       }
+      // v272: work identity hub — fold provider IDs the book already
+      // carries (Hardcover id from enrichment, OL work key) into
+      // works.provider_ids. Best-effort; identity capture never blocks
+      // resolution.
+      try { await this._mergeProviderIds(sb, id, providerIdsFromBook(book)); }
+      catch (e) { /* pre-migration DBs lack the column — ignore */ }
       this._cache[ck] = id || null;
       return id || null;
     } catch (e) {
@@ -122,6 +128,28 @@ const WorkStore = {
     if (error) throw error;
     return (data && data.id) || null;
   },
+
+  /* v272: merge provider IDs into a work's provider_ids JSONB. Only fills
+     keys that are absent or different — a capture never clobbers a
+     previously stored identity. No-op when there's nothing to merge. */
+  async _mergeProviderIds(sb, workId, ids) {
+    ids = ids || {};
+    const keys = Object.keys(ids).filter(k => ids[k] != null && ids[k] !== '');
+    if (!sb || !workId || !keys.length) return;
+    const { data, error } = await sb.from('works')
+      .select('provider_ids').eq('id', workId).maybeSingle();
+    if (error) throw error;
+    const cur = (data && data.provider_ids) || {};
+    const merged = { ...cur };
+    let changed = false;
+    for (const k of keys) {
+      if (merged[k] !== ids[k]) { merged[k] = ids[k]; changed = true; }
+    }
+    if (!changed) return;
+    const { error: uErr } = await sb.from('works')
+      .update({ provider_ids: merged }).eq('id', workId);
+    if (uErr) throw uErr;
+  },
 };
 
 /* Convenience wrapper used by the trope read path. Guards for contexts
@@ -131,4 +159,36 @@ async function resolveWork(book, opts) {
     if (typeof WorkStore === 'undefined' || !WorkStore) return null;
     return await WorkStore.resolve(book, opts);
   } catch (e) { return null; }
+}
+
+/* v272: provider IDs a book already carries, keyed by the works.provider_ids
+   conventions (see supabase/migrations/v272_work_provider_ids.sql).
+   Pure — safe to call anywhere. */
+function providerIdsFromBook(book) {
+  const ids = {};
+  try {
+    book = book || {};
+    if (book.hcId != null && String(book.hcId) !== '') ids.hardcover_id = String(book.hcId);
+    const wk = String(book.workKey || '');
+    if (/^\/works\/OL\d+W$/i.test(wk)) ids.openlibrary_id = wk;
+  } catch (e) {}
+  return ids;
+}
+
+/* v272: best-effort attach of provider IDs to a book's work. Never throws
+   and never blocks the caller — identity capture is advisory. Used by
+   flows (like Hardcover enrichment) that learn a provider ID after the
+   work was already resolved. */
+async function workAttachProviderIds(book, ids) {
+  try {
+    if (typeof WorkStore === 'undefined' || !WorkStore) return;
+    const keys = ids && Object.keys(ids).filter(k => ids[k] != null && ids[k] !== '');
+    if (!keys || !keys.length) return;
+    const id = await resolveWork(book);
+    if (!id) return;
+    let sb = null;
+    try { sb = await cloudClient(); } catch (e) { return; }
+    if (!sb) return;
+    await WorkStore._mergeProviderIds(sb, id, ids);
+  } catch (e) {}
 }

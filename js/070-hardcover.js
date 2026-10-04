@@ -150,6 +150,12 @@ function applyHardcoverDoc(book, doc) {
   // trope suggester can pull community tags without another search.
   if (doc.id != null && book.hcId == null) book.hcId = doc.id;
   if (Array.isArray(doc.tags) && doc.tags.length) book._hcDocTags = doc.tags.slice(0, 20);
+  // v272: fold the Hardcover id into the work's provider_ids (fire-and-forget).
+  try {
+    if (book.hcId != null && typeof workAttachProviderIds === 'function') {
+      workAttachProviderIds(book, { hardcover_id: String(book.hcId) });
+    }
+  } catch (e) {}
   book.hcEnriched = true;
 }
 
