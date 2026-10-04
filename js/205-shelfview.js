@@ -489,6 +489,30 @@ let shelfOrderCache = null;
 let pendingSpinePhoto = null; // cropped data URL waiting for the user to tap a spine
 let pendingSpinePhotoAi = false; // v259: was it an AI-verified tight crop? (shareable)
 let shelfSheetToken = null;
+/* v285: shelf photos are binary IDB assets, never book JSON. */
+const shelfAssetUrls = new Map();
+const shelfAssetPending = new Set();
+function shelfSpineAssetId(book) {
+  if (!book) return null;
+  return book.spinePhotoAssetId ||
+    (book.editionFaceRefs && book.editionFaceRefs.jacket && book.editionFaceRefs.jacket.spine) || null;
+}
+function shelfEnsureSpineAsset(book) {
+  const id = shelfSpineAssetId(book);
+  if (!id || typeof idbAssetGet !== 'function' || typeof currentDb === 'undefined' || !currentDb) return Promise.resolve(false);
+  if (shelfAssetUrls.has(id)) return Promise.resolve(true);
+  if (shelfAssetPending.has(id)) return Promise.resolve(false);
+  shelfAssetPending.add(id);
+  return idbAssetGet(currentDb, id).then(function (asset) {
+    if (!asset || !asset.blob) return false;
+    if (shelfAssetUrls.has(id)) return true;
+    shelfAssetUrls.set(id, URL.createObjectURL(asset.blob));
+    return true;
+  }).catch(function () { return false; }).finally(function () {
+    shelfAssetPending.delete(id);
+  });
+}
+
 
 function shelfOrder() {
   if (!shelfOrderCache) shelfOrderCache = loadShelfOrder();
@@ -512,9 +536,13 @@ function shelfSpineHTML(book) {
   // v254: a whisper of tilt (±1°) so the shelf feels hand-placed, not stamped.
   const tilt = (((shelfHash(book.id + '|tilt') % 5) - 2) * 0.5).toFixed(1);
   const geom = 'width:' + spec.w + 'px;height:' + spec.h + 'px;transform:rotate(' + tilt + 'deg);';
-  if (book.spinePhoto) {
+  var assetId = shelfSpineAssetId(book);
+  var photoUrl = assetId ? shelfAssetUrls.get(assetId) : null;
+  /* Legacy data URLs are display-only during migration; new saves never write them. */
+  if (photoUrl || book.spinePhoto) {
+    var bg = photoUrl || book.spinePhoto;
     return '<div class="spine photo" data-id="' + esc(book.id) + '" style="' + geom +
-      'background-image:url(&quot;' + book.spinePhoto + '&quot;)" title="' + esc(title) + '">' +
+      'background-image:url(&quot;' + esc(bg) + '&quot;)" title="' + esc(title) + '">' +
       '<span class="phototag">' + icon('camera') + '</span></div>';
   }
   return '<div class="spine" data-id="' + esc(book.id) + '" style="' + geom +
@@ -566,13 +594,16 @@ function renderShelf() {
   const shown = shelfBooks();
   // v259: adopt shared spine photos for ISBN books missing one — one lookup
   // per book per session; a hit saves and re-renders.
-  if (typeof spinePhotoAdopt === 'function') {
-    shown.forEach(b => {
-      if (b && !b.spinePhoto && spinePhotoISBN(b) && !spineLookupDone.has(b.id)) {
-        spinePhotoAdopt(b).then(hit => { if (hit) renderShelf(); }).catch(() => {});
-      }
-    });
-  }
+  shown.forEach(function (b) {
+    if (!b) return;
+    var aid = shelfSpineAssetId(b);
+    if (aid && !shelfAssetUrls.has(aid)) {
+      shelfEnsureSpineAsset(b).then(function (hit) { if (hit) renderShelf(); }).catch(function () {});
+    } else if (!aid && !b.spinePhoto && typeof spinePhotoAdopt === 'function' &&
+               spinePhotoISBN(b) && !spineLookupDone.has(b.id)) {
+      spinePhotoAdopt(b).then(function (hit) { if (hit) renderShelf(); }).catch(function () {});
+    }
+  });
   const bookItems = shelfLayoutItems(shown);
   const items = shelfMergeDecor(bookItems, shelfDecorItems(shelfGroup));
   const vw = ((document.getElementById('view') || {}).clientWidth || 360);
@@ -1267,32 +1298,52 @@ async function spinePhotoShare(book, dataUrl, aiCropped) {
 const spineLookupDone = new Set();
 async function spinePhotoAdopt(book) {
   try {
-    if (!book || book.spinePhoto) return false;
+    if (!book || shelfSpineAssetId(book)) return false;
     const isbn = spinePhotoISBN(book);
     if (!isbn || !book.id || spineLookupDone.has(book.id)) return false;
     spineLookupDone.add(book.id);
     const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
     if (!sb) return false;
-    // v273: edition_images; prefer the jacket spine, fall back to any appearance.
-    const res = await sb.from('edition_images').select('bucket,path,appearance')
-      .eq('isbn', isbn).eq('face', 'spine').limit(5);
-    const rows = (res && res.data) || [];
-    const row = rows.find(r => r.appearance === 'jacket') || rows[0];
+    let row = null, assetId = null;
+    try {
+      const ed = await sb.from('editions').select('id').eq('isbn', isbn).maybeSingle();
+      if (ed && ed.data) {
+        const slot = await sb.from('edition_asset_slots')
+          .select('canonical_asset_id')
+          .eq('edition_id', ed.data.id).eq('face', 'spine').eq('appearance', 'jacket').maybeSingle();
+        assetId = slot && slot.data && slot.data.canonical_asset_id;
+        if (assetId) {
+          const ar = await sb.from('edition_assets').select('bucket,path')
+            .eq('id', assetId).maybeSingle();
+          if (ar && ar.data) row = ar.data;
+        }
+      }
+    } catch (e) {}
+    if (!row) {
+      const res = await sb.from('edition_images').select('bucket,path,appearance')
+        .eq('isbn', isbn).eq('face', 'spine').limit(5);
+      const rows = (res && res.data) || [];
+      row = rows.find(r => r.appearance === 'jacket') || rows[0];
+    }
     const path = row && row.path;
     if (!path) return false;
     const pub = sb.storage.from(row.bucket || 'edition-images').getPublicUrl(path);
     const url = pub && pub.data && pub.data.publicUrl;
-    if (!url) return false;
+    if (!url || typeof idbAssetPut !== 'function' || typeof currentDb === 'undefined' || !currentDb) return false;
     const blob = await (await fetch(url)).blob();
     if (!blob || !blob.size) return false;
-    const dataUrl = await new Promise((res) => {
-      const fr = new FileReader();
-      fr.onload = () => res(String(fr.result || ''));
-      fr.onerror = () => res('');
-      fr.readAsDataURL(blob);
-    });
-    if (dataUrl.indexOf('data:image') !== 0) return false;
-    book.spinePhoto = dataUrl;
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID() : ('asset-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    await idbAssetPut(currentDb, { id: id, blob: blob, isbn: isbn, face: 'spine',
+      appearance: 'jacket', createdAt: Date.now(), source: 'shared-cache',
+      remoteAssetId: assetId || null, remoteBucket: row.bucket || 'edition-images',
+      remotePath: path });
+    if (!book.editionFaceRefs) book.editionFaceRefs = {};
+    if (!book.editionFaceRefs.jacket) book.editionFaceRefs.jacket = {};
+    book.editionFaceRefs.jacket.spine = id;
+    book.spinePhotoAssetId = id;
+    delete book.spinePhoto;
+    shelfAssetUrls.set(id, URL.createObjectURL(blob));
     if (typeof saveLibrary === 'function') saveLibrary();
     return true;
   } catch (e) { return false; }
@@ -1369,9 +1420,34 @@ function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW, y0, y1) {
   });
 }
 
-function shelfAssignPhoto(bookId, dataUrl) {
+async function shelfAssignPhoto(bookId, dataUrl) {
   const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
-  if (!book) return;
+  if (!book || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/') !== 0) return;
+  try {
+    if (typeof idbAssetPut === 'function' && typeof currentDb !== 'undefined' && currentDb) {
+      var blob = await (await fetch(dataUrl)).blob();
+      var id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID() : ('asset-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      await idbAssetPut(currentDb, { id: id, blob: blob, isbn: spinePhotoISBN(book),
+        face: 'spine', appearance: 'jacket', createdAt: Date.now(), source: 'shelf-capture' });
+      var oldId = shelfSpineAssetId(book);
+      if (oldId && shelfAssetUrls.has(oldId)) {
+        try { URL.revokeObjectURL(shelfAssetUrls.get(oldId)); } catch (e) {}
+        shelfAssetUrls.delete(oldId);
+      }
+      if (!book.editionFaceRefs) book.editionFaceRefs = {};
+      if (!book.editionFaceRefs.jacket) book.editionFaceRefs.jacket = {};
+      book.editionFaceRefs.jacket.spine = id;
+      book.spinePhotoAssetId = id;
+      delete book.spinePhoto;
+      shelfAssetUrls.set(id, URL.createObjectURL(blob));
+      saveLibrary();
+      renderShelf();
+      if (typeof ecShareFace === 'function') ecShareFace(spinePhotoISBN(book), 'jacket', 'spine', dataUrl).catch(function () {});
+      toast('Spine photo saved');
+      return;
+    }
+  } catch (e) {}
   book.spinePhoto = dataUrl;
   saveLibrary();
   renderShelf();
