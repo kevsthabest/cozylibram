@@ -226,6 +226,84 @@ function ok(name, cond) {
     probe('TropeStore.invalidate()');
   }
 
+  /* ---- E. v272 work identity hub: provider_ids capture ---- */
+  ok('providerIdsFromBook picks up hcId', JSON.stringify(
+    probe(`providerIdsFromBook({ title: 'T', hcId: 12345 })`)) === '{"hardcover_id":"12345"}');
+  ok('providerIdsFromBook picks up OL work key', JSON.stringify(
+    probe(`providerIdsFromBook({ title: 'T', workKey: '/works/OL123W' })`)) === '{"openlibrary_id":"/works/OL123W"}');
+  ok('providerIdsFromBook ignores garbage workKey', JSON.stringify(
+    probe(`providerIdsFromBook({ title: 'T', workKey: 'nonsense' })`)) === '{}');
+  ok('providerIdsFromBook empty book -> {}', JSON.stringify(
+    probe('providerIdsFromBook(null)')) === '{}');
+
+  // resolve() merges provider IDs without clobbering existing keys.
+  const fakeSbMerge = ({ existing, calls }) => ({
+    from: (table) => {
+      if (table === 'works') return {
+        select: (cols) => ({
+          eq: (c, v) => (c === 'id'
+            ? { maybeSingle: async () => ({ data: { provider_ids: existing }, error: null }) }
+            : { eq: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
+        }),
+        update: (row) => ({ eq: () => {
+          calls.push('works.update:' + JSON.stringify(row.provider_ids));
+          return Promise.resolve({ data: null, error: null });
+        } }),
+        upsert: (row, opts) => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
+      };
+      if (table === 'editions') return {
+        upsert: async () => ({ data: null, error: null }),
+      };
+      throw new Error('unexpected table ' + table);
+    },
+  });
+  probe(`window.__resolveWith = async (b) => WorkStore.resolve(b, { getClient: async () => window.__fakeSb });`);
+  {
+    // Existing keys preserved, new keys added.
+    const calls = [];
+    vm.runInContext('window.__fakeSb = __sb;',
+      Object.assign(ctx, { __sb: fakeSbMerge({ existing: { hardcover_id: '111' }, calls }) }));
+    probe('WorkStore.clear()');
+    const id = await probe(`window.__resolveWith({ title: 'T', authors: ['A'], hcId: 222, workKey: '/works/OL9W' })`);
+    ok('resolve still returns the work id', id === 'w-1');
+    const upd = calls.find(c => c.indexOf('works.update:') === 0);
+    const merged = upd ? JSON.parse(upd.slice('works.update:'.length)) : {};
+    ok('merge updates changed keys and adds new ones',
+      merged.hardcover_id === '222' && merged.openlibrary_id === '/works/OL9W');
+    probe('WorkStore.clear()');
+  }
+  {
+    // Nothing new to merge -> no update call.
+    const calls = [];
+    vm.runInContext('window.__fakeSb = __sb;',
+      Object.assign(ctx, { __sb: fakeSbMerge({ existing: { hardcover_id: '111' }, calls }) }));
+    probe('WorkStore.clear()');
+    await probe(`window.__resolveWith({ title: 'T2', authors: ['A'], hcId: 111 })`);
+    ok('no update when nothing new to merge', !calls.some(c => c.indexOf('works.update:') === 0));
+    probe('WorkStore.clear()');
+  }
+  {
+    // Pre-migration DB (no provider_ids column): select throws -> resolve still works.
+    const calls = [];
+    const sbNoCol = {
+      from: (table) => {
+        if (table === 'works') return {
+          select: (cols) => cols === 'provider_ids'
+            ? { eq: () => ({ maybeSingle: async () => ({ data: null, error: new Error('column missing') }) }) }
+            : { eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }) },
+          upsert: (row, opts) => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
+        };
+        if (table === 'editions') return { upsert: async () => ({ data: null, error: null }) };
+        throw new Error('unexpected table ' + table);
+      },
+    };
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: sbNoCol }));
+    probe('WorkStore.clear()');
+    const id = await probe(`window.__resolveWith({ title: 'T3', authors: ['A'], hcId: 5 })`);
+    ok('missing column degrades gracefully (resolve still returns id)', id === 'w-1');
+    probe('WorkStore.clear()');
+  }
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR:', e); process.exit(2); });
