@@ -14,15 +14,6 @@ const seenEvents = [];
 window.fetch = async (url) => {
   const u = decodeURIComponent(String(url));
   seenUrls.push(u);
-  if (u.includes('googleapis.com') || u.includes('/api/gbooks')) {
-    if (u.includes('isbn:1111111111')) return jok({ items: [{ volumeInfo: { pageCount: 384, industryIdentifiers: [{ type: 'ISBN_10', identifier: '1111111111' }] } }] });
-    if (u.includes('isbn:6666666666')) return jok({ items: [{ volumeInfo: { pageCount: 500, industryIdentifiers: [{ identifier: '6666666666' }] } }] });
-    if (u.includes('isbn:8888888888')) return jok({ items: [{ volumeInfo: { pageCount: 999, industryIdentifiers: [{ identifier: '8888888888' }] } }] });
-    if (u.includes('isbn:2222222222')) return jok({ items: [
-      { volumeInfo: { pageCount: 100, industryIdentifiers: [{ identifier: '9999999999' }] } },
-      { volumeInfo: { pageCount: 200, industryIdentifiers: [{ identifier: '2222222222' }] } }] });
-    return jok({ items: [] });
-  }
   if (u.includes('/api/inventaire/entities')) {
     // v245: Inventaire hit only for 7777777777; everything else misses.
     if (u.includes('uris=isbn:7777777777')) {
@@ -33,7 +24,10 @@ window.fetch = async (url) => {
     }
     return jok({ entities: {}, redirects: {} });
   }
+  if (u.includes('/isbn/1111111111.json')) return jok({ number_of_pages: 384 });
+  if (u.includes('/isbn/2222222222.json')) return jok({ number_of_pages: 200 });
   if (u.includes('/isbn/3333333333.json')) return jok({ number_of_pages: 250 });
+  if (u.includes('/isbn/6666666666.json')) return jok({ number_of_pages: 500 });
   if (u.includes('/isbn/4444444444.json')) return jok({ title: 'no pages here' });
   if (u.includes('search.json?isbn=4444444444')) return jok({ docs: [{ key: '/books/OL1' }, { key: '/books/OL2' }] });
   if (u.endsWith('/books/OL1.json')) return jok({ title: 'no pages' });
@@ -61,12 +55,13 @@ const mk = (id, isbn, pc) => `({ id: '${id}', isbn: '${isbn}', title: 'PC ${id}'
   tropes: [], progress: 0, dateAdded: new Date().toISOString(), dateFinished: null, notes: '' })`;
 
 (async () => {
-  // 1. Google Books exact-ISBN hit
-  ok('GB hit returns pages', await window.fetchPageCountByISBN('1111111111') === 384);
-  // 2. prefers exact ISBN match over first result with pages
-  ok('exact ISBN preferred', await window.fetchPageCountByISBN('2222222222') === 200);
-  // 3. GB miss -> Open Library edition
-  ok('OL edition fallback', await window.fetchPageCountByISBN('3333333333') === 250);
+  // 1. v269: Google Books removed from the chain — Open Library serves it,
+  // and GB is never consulted.
+  seenUrls.length = 0;
+  ok('OL hit returns pages', await window.fetchPageCountByISBN('1111111111') === 384);
+  ok('GB never consulted', !seenUrls.some(u => u.includes('googleapis.com') || u.includes('/api/gbooks')));
+  // 2. (GB exact-ISBN preference test retired with the GB step.)
+  // 3. OL edition miss -> other editions via search
   // 4. OL edition w/o pages -> other editions via search
   ok('OL other-editions fallback', await window.fetchPageCountByISBN('4444444444') === 300);
   // 5. total miss / empty
@@ -113,19 +108,20 @@ const mk = (id, isbn, pc) => `({ id: '${id}', isbn: '${isbn}', title: 'PC ${id}'
   ok('provider_used tracked as inventaire/pagecount',
     seenEvents.some(e => e[0] === 'provider_used' && e[1].provider === 'inventaire' && e[1].context === 'pagecount'));
 
-  // 12. v245: Hardcover first — stubbed doc wins over a GB hit for the same ISBN.
+  // 12. v245: Hardcover first — stubbed doc wins; GB is gone in v269.
   const origHc = window.hcSearchDocs;
   window.hcSearchDocs = async () => [{ isbns: ['8888888888'], pages: 400, title: 'HC Book' }];
   seenUrls.length = 0; seenEvents.length = 0;
-  ok('Hardcover hit wins over Google Books', await window.fetchPageCountByISBN('8888888888') === 400);
+  ok('Hardcover hit wins', await window.fetchPageCountByISBN('8888888888') === 400);
   ok('GB not consulted on Hardcover hit',
     !seenUrls.some(u => u.includes('/api/gbooks')));
   ok('provider_used tracked as hardcover/pagecount',
     seenEvents.some(e => e[0] === 'provider_used' && e[1].provider === 'hardcover' && e[1].context === 'pagecount'));
 
   // 13. v245: HC fuzzy guard — doc ISBN must match the scanned ISBN.
+  // v269: near-miss falls through to Inventaire/OL (GB removed) → null here.
   window.hcSearchDocs = async () => [{ isbns: ['9999999999'], pages: 400, title: 'Wrong Book' }];
-  ok('HC near-miss ISBN falls through to GB', await window.fetchPageCountByISBN('8888888888') === 999);
+  ok('HC near-miss ISBN falls through, no GB', await window.fetchPageCountByISBN('8888888888') === null);
   window.hcSearchDocs = origHc;
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
