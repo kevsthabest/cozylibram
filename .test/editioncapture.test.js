@@ -420,5 +420,61 @@ const ex2 = run(`(() => {
   ok('last face cleans up the whole editionFaces', r.r3 === true && r.gone === true);
 }
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+/* ---- 14. v281 AI enhance: review buttons, picker, compare ---- */
+// Drive a fresh scan straight to the review screen.
+run(`library = [{ id: 'ecb4', title: 'Enhance Me' }]; ecStartScan('ecb4');`);
+run(`document.getElementById('ec-ap-jacket').click();`);
+run(`document.getElementById('ec-edge-no').click();`);
+// Pretend all three faces were captured, then render the review.
+run(`EC.results = { jacket: { spine: 'data:image/jpeg;base64,S', front: 'data:image/jpeg;base64,F', back: 'data:image/jpeg;base64,B' } };
+EC.idx = EC.steps.length; ecRenderReview();`);
+ok('review thumbs have Enhance buttons',
+  run(`document.querySelectorAll('#ec-wizard [data-ec-enhance]').length`) === 3);
+run(`document.querySelector('#ec-wizard [data-ec-enhance="jacket:spine"]').click();`);
+ok('enhance picker opens with both modes',
+  !!q('#ec-enhance #ec-eh-sharpen') && !!q('#ec-enhance #ec-eh-restore'));
+// Compare overlay renders standalone and Keep fires the callback.
+run(`window.__kept = null;
+ecEnhanceCompare('data:image/jpeg;base64,AAA', 'data:image/jpeg;base64,BBB', 'jacket', 'spine',
+  function () { window.__kept = 'yes'; });`);
+ok('compare overlay shows before/after with keep/discard',
+  !!q('#ec-enhance #ec-eh-keep') && !!q('#ec-enhance #ec-eh-discard'));
+run(`document.getElementById('ec-eh-keep').click();`);
+ok('compare Keep fires onKeep and closes', run(`window.__kept`) === 'yes' && !q('#ec-enhance'));
+run(`document.getElementById('ec-rv-cancel').click();`);
+
+// Async: ecRunEnhance posts image+mode and resolves the enhanced URL.
+(async () => {
+  const flush = async (expr, ms) => {
+    const t0 = Date.now();
+    while (run(`!!(${expr})`) !== true && Date.now() - t0 < (ms || 5000)) {
+      await new Promise(r => setTimeout(r, 20)); // yield so jsdom promises resolve
+    }
+  };
+  run(`window.__ehDone = false;
+window.fetch = async (url, opts) => {
+  window.__ehReq = { url: url, body: JSON.parse(opts.body) };
+  return { ok: true, status: 200, json: async () => ({ image: 'data:image/jpeg;base64,ENH' }) };
+};
+ecRunEnhance('data:image/jpeg;base64,IN', 'restore').then(
+  v => { window.__ehRes = v; window.__ehDone = true; },
+  e => { window.__ehRes = 'ERR:' + e.message; window.__ehDone = true; });`);
+  await flush('window.__ehDone');
+  ok('enhance posts to /api/enhance-face with image+mode',
+    run(`window.__ehReq.url`) === '/api/enhance-face' &&
+    run(`window.__ehReq.body.mode`) === 'restore' &&
+    run(`window.__ehReq.body.image`) === 'data:image/jpeg;base64,IN');
+  ok('enhance resolves the enhanced data URL', run(`window.__ehRes`) === 'data:image/jpeg;base64,ENH');
+
+  // Error path: 429 rejects with a friendly busy message.
+  run(`window.__ehDone2 = false;
+window.fetch = async () => ({ ok: false, status: 429, json: async () => ({}) });
+ecRunEnhance('data:image/jpeg;base64,IN', 'sharpen').then(
+  () => { window.__ehRes2 = 'NO-THROW'; window.__ehDone2 = true; },
+  e => { window.__ehRes2 = e.message; window.__ehDone2 = true; });`);
+  await flush('window.__ehDone2');
+  ok('enhance 429 rejects with a busy message', /busy/i.test(run(`window.__ehRes2`)));
+
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})();

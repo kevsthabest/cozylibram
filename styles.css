@@ -2734,3 +2734,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); }
 .ec-chipx { border: 0; background: rgba(255, 255, 255, 0.1); color: inherit; border-radius: 50%;
   width: 20px; height: 20px; line-height: 1; cursor: pointer; font-size: 14px; }
+
+/* ---------- scan: AI face enhancement (v281) ---------- */
+.ec-thumbbtns { display: flex; gap: 6px; margin-top: 6px; }
+.ec-compare { display: flex; gap: 10px; margin: 4px 0 12px; }
+.ec-compare figure { margin: 0; flex: 1; min-width: 0; }
+.ec-compare img { width: 100%; border-radius: 8px; display: block; }
+.ec-compare figcaption { font-size: 12px; opacity: 0.6; text-align: center; margin-top: 4px; }
