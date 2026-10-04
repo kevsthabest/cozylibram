@@ -1,3 +1,4 @@
 vendored from:
 - supabase: https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2 (UMD, pinned 2026-09-29)
 - quagga: https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js (pinned)
+- three: https://unpkg.com/three@0.159.0/build/three.min.js (UMD, pinned 2026-10-04; lazy-loaded by js/207-book3d.js, precached for offline)

@@ -1026,7 +1026,8 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
     '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button>' +
-    '<button class="btn ghost sm" id="m-scanfaces">' + icon('camera') + ' Scan Edition</button></div>' +
+    '<button class="btn ghost sm" id="m-scanfaces">' + icon('camera') + ' Scan Edition</button>' +
+    '<button class="btn ghost sm" id="m-view3d">' + icon('eye') + ' View in 3D</button></div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
@@ -1388,6 +1389,8 @@ function renderDetailModal(b, viaBook) {
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));
+  // v279: 3D edition viewer (spine/covers/sprayed edges from scanned faces).
+  document.getElementById('m-view3d').addEventListener('click', () => b3dOpenViewer(id));
   // v210: edition picker — change which edition of the book she owns.
   document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
