@@ -116,7 +116,8 @@ set search_path = ''
 as $$
 begin
   perform private.edition_measurements_select_best(coalesce(new.edition_id, old.edition_id));
-  return coalesce(new, old);
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
