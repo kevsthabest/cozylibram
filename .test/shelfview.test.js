@@ -320,6 +320,20 @@ shelfCamStream = { getTracks: () => [{ stop: () => { __stopped++; } }] };
 shelfStopCam();`);
 ok('stopCam stops tracks and clears', run(`__stopped === 1 && shelfCamStream === null`) === true);
 
+/* ---- v262: capture crops to the guide frame ---- */
+run(`document.body.insertAdjacentHTML('beforeend', '<div class="sv-vf-frame" id="tframe"></div>');
+document.getElementById('tframe').getBoundingClientRect = () => ({ left: 100, top: 50, width: 40, height: 208 });`);
+const gr = run(`shelfGuideSourceRect({
+  videoWidth: 1000, videoHeight: 2000,
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 400 })
+})`);
+ok('guide rect maps through object-fit cover',
+  gr && Math.round(gr.sx) === 333 && Math.round(gr.sy) === 500 &&
+  Math.round(gr.sw) === 133 && Math.round(gr.sh) === 693);
+run(`document.getElementById('tframe').remove();`);
+ok('no frame -> null guide rect',
+  run(`shelfGuideSourceRect({ videoWidth: 1000, videoHeight: 2000, getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 400 }) })`) === null);
+
 /* ---- 25. v261: shelf layouts ---- */
 run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
 ok('layout defaults to manual', run(`shelfLayout()`) === 'manual');
@@ -340,10 +354,12 @@ ok('series ordered by position', secs[1].books.map(b => b.id).join(',') === 'b,a
 const gsecs = run(`shelfLayoutSections([
   {id:'a', title:'B', categories:['Fantasy']},
   {id:'b', title:'A', categories:['fantasy']},
-  {id:'c', title:'C'}
+  {id:'c', title:'C'},
+  {id:'d', title:'D', categories:['Blomkvist, Mikael (Fictional character)','Mystery']}
 ], 'genre')`);
 ok('genre groups case-insensitively, unsorted last',
-  gsecs.map(s => s.label).join(',') === 'Fantasy,Unsorted');
+  gsecs.map(s => s.label).join(',') === 'Fantasy,Mystery,Unsorted');
+ok('genre skips subject headings for primary', gsecs[1].books[0].id === 'd');
 ok('genre sorts by title', gsecs[0].books.map(b => b.id).join(',') === 'b,a');
 ok('manual is one unlabelled section', (() => {
   const m = run(`shelfLayoutSections([{id:'a'}], 'manual')`);
@@ -363,6 +379,21 @@ run(`shelfOpenLayoutSheet();`);
 ok('layout sheet offers three modes', qa('#svSheet [data-l]').length === 3);
 run(`shelfCloseSheet(); shelfSetLayout('manual'); library = [];
 localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
+
+/* ---- 26. v262: touch ergonomics ---- */
+ok('drag slop is generous', run(`SHELF_DRAG_SLOP_PX`) === 18);
+ok('touch slop constant', run(`SHELF_TOUCH_SLOP_PX`) === 7);
+ok('spine html carries widened hit box', (() => {
+  const b = { id: 'slop1', title: 'T' };
+  const w = run(`shelfSpineSpec(${JSON.stringify(b)}).w`);
+  const html = run(`shelfSpineHTML(${JSON.stringify(b)})`);
+  return html.indexOf('width:' + (w + 14) + 'px') !== -1;
+})());
+ok('row budget still uses visual width', (() => {
+  const w = run(`shelfSpineSpec({id:'slop1', title:'T'}).w`);
+  const items = run(`shelfLayoutItems([{id:'slop1', title:'T', status:'tbr'}])`);
+  return items.length === 1 && items[0].w === w + 4; // +4 gap allowance, no hit slop
+})());
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
   ok('non-AI crop never shared', s1 === false);

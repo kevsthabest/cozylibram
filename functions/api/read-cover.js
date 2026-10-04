@@ -58,7 +58,11 @@ const PROMPT_SPINE = 'You are looking at a close-up photo of one book spine ' +
   'JSON object with exactly one key, "box": an object with "x0", "y0", "x1", ' +
   '"y1" — the tight bounding box of that spine as integers from 0 to 1000 ' +
   '(fractions of image width/height), hugging the spine edges as closely as ' +
-  'possible and excluding background. If no book spine is visible, return ' +
+  'possible and excluding background. The spine is the physical book\'s bound ' +
+  'edge: its top and bottom are where the BOOK ends — never extend the box ' +
+  'upward into screens, monitors, walls, shelves, or other background, nor ' +
+  'downward past the book. A glowing screen is never part of a book spine. ' +
+  'The spine usually has title text running along its length. If no book spine is visible, return ' +
   '{"box": null}. Reply with ONLY the JSON object, no other text.';
 
 // v253: sanitize a shelf-mode model answer into
