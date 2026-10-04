@@ -48,6 +48,52 @@ export function spineSearchSources(data) {
   return out.slice(0, 8);
 }
 
+// v268: Brave image search — Google's Custom Search JSON API is closed to
+// new customers (early 2026; new projects get a permanent 403 no matter how
+// the project is configured), so Brave is the working image-search backend:
+// free tier, no card, ~1,000 requests/month. Used when BRAVE_SEARCH_API_KEY
+// is configured; the endpoint falls back to the Gemini-grounded search when
+// it isn't.
+export function spineSearchQuery(title, author) {
+  return '"' + title + '"' + (author ? ' ' + author : '') + ' book spine';
+}
+// Map Brave image results to spine candidates: properties.url is the direct
+// image URL, url is the page it was found on.
+export function cleanSpineBraveCandidates(results) {
+  const out = [];
+  const seen = new Set();
+  (Array.isArray(results) ? results : []).forEach(r => {
+    if (out.length >= 5) return;
+    const props = (r && r.properties) || {};
+    const url = typeof props.url === 'string' ? props.url.trim() : '';
+    if (!url || !IMG_RE.test(url) || seen.has(url.toLowerCase())) return;
+    seen.add(url.toLowerCase());
+    out.push({
+      image_url: url.slice(0, 500),
+      page_url: (r.url && String(r.url).startsWith('http')) ? String(r.url).slice(0, 500) : null,
+      note: String(r.title || '').trim().slice(0, 200),
+    });
+  });
+  return out;
+}
+async function spineSearchViaBrave(title, author, key) {
+  const u = 'https://api.search.brave.com/res/v1/images/search?q=' +
+    encodeURIComponent(spineSearchQuery(title, author)) + '&count=8&safesearch=strict';
+  let res;
+  try {
+    res = await fetch(u, { headers: { 'X-Subscription-Token': key, 'Accept': 'application/json' } });
+  } catch (e) { return { error: 'image search unreachable' }; }
+  if (!res.ok) {
+    if (res.status === 429) return { error: 'image search is rate-limiting right now — wait a minute and try again' };
+    if (res.status === 401 || res.status === 403) return { error: 'image search key rejected — check the Brave API key' };
+    return { error: 'image search error (upstream ' + res.status + ')' };
+  }
+  let data;
+  try { data = await res.json(); }
+  catch (e) { return { error: 'image search returned an unreadable answer' }; }
+  return { candidates: cleanSpineBraveCandidates(data.results) };
+}
+
 // Last-resort: pull bare image URLs out of free text when JSON parsing fails.
 export function spineSearchUrlsFromText(text) {
   const out = [];
@@ -94,6 +140,15 @@ export async function onRequest({ request, env }) {
   const title = String((body && body.title) || '').trim().slice(0, 200);
   const author = String((body && body.author) || '').trim().slice(0, 200);
   if (!title) return json(400, { error: 'title is required' });
+
+  // v268: prefer Brave image search (own free quota, no Gemini burn) when its
+  // key is configured.
+  const braveKey = String((env && env.BRAVE_SEARCH_API_KEY) || '').trim();
+  if (braveKey) {
+    const r = await spineSearchViaBrave(title, author, braveKey);
+    if (r.error) return json(502, { error: r.error });
+    return json(200, { candidates: r.candidates, sources: [], via: 'brave' });
+  }
 
   const key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
   if (!key) return json(503, { error: "cover reading isn't set up on this server" });

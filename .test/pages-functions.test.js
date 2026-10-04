@@ -532,6 +532,55 @@ async function main() {
     ssFn.cleanSpineSearchCandidates([1, 2, 3, 4, 5, 6, 7].map(i =>
       ({ image_url: 'https://img.example/' + i + '.jpg' }))).length === 5);
 
+  // ---- /api/spine-search via Brave image search (v268) ----
+  // (Google's Custom Search JSON API is closed to new customers, so Brave is
+  // the working image-search backend.)
+  ok('spineSearchQuery quotes the title', ssFn.spineSearchQuery('Dune', 'Frank Herbert') === '"Dune" Frank Herbert book spine');
+  const braveResults = [
+    { title: 'Dune spine', url: 'https://books.example/dune', properties: { url: 'https://img.example/spine-a.jpg' } },
+    { title: 'dup', url: 'https://books.example/dune2', properties: { url: 'https://img.example/spine-a.jpg' } },
+    { title: 'not an image', url: 'https://books.example/x', properties: { url: 'https://img.example/page.html' } },
+    { title: 'junk', url: 'https://books.example/y', properties: { url: 'not a url' } },
+    { title: 'side view', url: 'https://books.example/z', properties: { url: 'https://img.example/spine-b.png' } },
+  ];
+  const braveClean = ssFn.cleanSpineBraveCandidates(braveResults);
+  ok('cleanSpineBraveCandidates keeps image URLs, dedupes, maps page URL',
+    braveClean.length === 2 &&
+    braveClean[0].image_url === 'https://img.example/spine-a.jpg' &&
+    braveClean[0].page_url === 'https://books.example/dune' &&
+    braveClean[0].note === 'Dune spine' &&
+    braveClean[1].note === 'side view');
+  ok('cleanSpineBraveCandidates caps at 5',
+    ssFn.cleanSpineBraveCandidates([1, 2, 3, 4, 5, 6, 7].map(i =>
+      ({ properties: { url: 'https://img.example/' + i + '.jpg' } }))).length === 5);
+  const BRAVE = 'https://api.search.brave.com/res/v1/images/search';
+  const braveFetch = (opts) => async (url, init) => {
+    const u = String(url);
+    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: 'kevin' }), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) return new Response(JSON.stringify([{ user_id: 'kevin' }]), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/banned_users')) return new Response(JSON.stringify([]), { status: 200 });
+    if (u.startsWith(BRAVE)) {
+      if (opts.braveStatus) return new Response('nope', { status: opts.braveStatus });
+      if (!u.includes('safesearch=strict') || (init.headers || {})['X-Subscription-Token'] !== 'b1')
+        throw new Error('bad Brave request: ' + u);
+      return new Response(JSON.stringify({ results: braveResults }), { status: 200 });
+    }
+    throw new Error('unexpected upstream ' + u);
+  };
+  const braveEnv = Object.assign({}, admEnv, { BRAVE_SEARCH_API_KEY: 'b1', TROPE_KEY_GEMINI: 'gk1' });
+  globalThis.fetch = braveFetch({});
+  const braveRes = await ssFn.onRequest({ env: braveEnv, request: ssReq() });
+  const braveJson = await braveRes.json();
+  ok('spine-search: Brave path returns candidates without touching Gemini',
+    braveRes.status === 200 && braveJson.via === 'brave' && braveJson.candidates.length === 2 &&
+    braveJson.candidates[0].image_url === 'https://img.example/spine-a.jpg');
+  globalThis.fetch = braveFetch({ braveStatus: 401 });
+  const brave401 = await (await ssFn.onRequest({ env: braveEnv, request: ssReq() })).json();
+  ok('spine-search: Brave 401 -> 502 key message', /key/i.test(brave401.error || ''));
+  globalThis.fetch = braveFetch({ braveStatus: 429 });
+  ok('spine-search: Brave 429 -> 502',
+    (await ssFn.onRequest({ env: braveEnv, request: ssReq() })).status === 502);
+
   // ---- geminiFetch retry (v265) ----
   const { geminiFetch } = await import(path.resolve(__dirname, '../functions/_lib/gemini.js'));
   let tries = 0;
