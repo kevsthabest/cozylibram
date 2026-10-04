@@ -2,10 +2,9 @@
 
 /* ---------------- page-count lookup ---------------- */
 // Fills total pages by ISBN when metadata didn't include it.
-// v245: source order is Hardcover → Inventaire → Open Library →
-// Google Books. Hardcover first (strongest catalog for these shelves);
-// Google Books last (its ToS/attribution baggage, pending the v243
-// usage review).
+// v269: source order is Hardcover → Inventaire → Open Library. Google Books
+// was the last resort; it's dropped — Hardcover leads and the remaining
+// free sources cover the rest, avoiding Google's ToS/attribution baggage.
 async function fetchPageCountByISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean) return null;
@@ -54,19 +53,7 @@ async function fetchPageCountByISBN(isbn) {
         if (e2.number_of_pages > 0) { trackProvider('openlibrary', 'pagecount'); return e2.number_of_pages; }
       } catch (e) { /* try next edition */ }
     }
-  } catch (e) { /* fall through to Google Books */ }
-  // 4. Google Books last — apiFetch (not plain fetch) so the v225 sign-in
-  // gate passes. Plain fetch 401'd here, silently skipping GB since v225.
-  try {
-    const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + clean + '&maxResults=5'));
-    if (!r.ok) throw new Error('http ' + r.status);
-    const data = await r.json();
-    const items = (data.items || []).map(i => i.volumeInfo || {});
-    const ids = it => (it.industryIdentifiers || []).map(x => String(x.identifier || '').replace(/[^0-9X]/gi, ''));
-    const hit = items.find(it => it.pageCount > 0 && ids(it).includes(clean)) ||
-      items.find(it => it.pageCount > 0);
-    if (hit) { trackProvider('gbooks', 'pagecount'); return hit.pageCount; }
-  } catch (e) { /* give up */ }
+  } catch (e) { /* fall through — no more sources */ }
   return null;
 }
 

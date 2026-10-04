@@ -39,9 +39,9 @@ async function hardcoverCover(isbn, freshPush) {
   } catch (e) { /* token/query issue — skip silently */ }
 }
 
-// Every candidate cover for this book: current first, then Google Books
-// edition thumbnails, Apple Books artwork, all Open Library covers for the
-// edition and its work, and Hardcover's edition art. Deduped.
+// Every candidate cover for this book: current first, then Hardcover's
+// edition art, Apple Books artwork, all Open Library covers for the edition
+// and its work, and Google Books edition thumbnails last. Deduped.
 async function fetchCoverCandidates(book) {
   const seen = new Set();
   const out = [];
@@ -64,6 +64,7 @@ async function fetchCoverCandidates(book) {
     push(url, label);
   };
   if (isbn) {
+    await hardcoverCover(isbn, freshPush);
     try {
       const r = await fetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' +
         encodeURIComponent(isbn) + '&maxResults=8'));
@@ -85,7 +86,6 @@ async function fetchCoverCandidates(book) {
           freshPush('https://covers.openlibrary.org/b/id/' + id + '-L.jpg', 'Open Library'));
       }
     } catch (e) { /* no OL covers */ }
-    await hardcoverCover(isbn, freshPush);
   } else {
     try {
       const q = 'https://openlibrary.org/search.json?q=' +
