@@ -205,6 +205,10 @@ function ev(uid, name, cat, props, created) {
     // The seventh/eighth (v246) are the moderation queue: user_reports rows
     // (ids, reason, reporter-written details) and banned_users rows —
     // abuse metadata only, never library contents.
+    // The ninth/tenth/eleventh (v271) are the claims-aware coverage scan:
+    // book_trope_claims work_ids, editions isbn->work_id pairs, and works
+    // title_norm/author_norm — opaque ids and bibliographic fields only,
+    // never shelves, ratings, or notes.
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
@@ -214,6 +218,9 @@ function ev(uid, name, cat, props, created) {
       'book_key, trope_id, vote, user_id',
       'id,reporter_id,reported_user_id,reason,details,created_at',
       'user_id,reason,banned_at,banned_by',
+      'work_id',
+      'isbn, work_id',
+      'id, title_norm, author_norm',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&
