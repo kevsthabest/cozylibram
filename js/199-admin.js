@@ -949,7 +949,7 @@ async function renderSpineLab() {
   if (!body) return;
   body.innerHTML =
     '<div class="ob-card"><h3 class="serif">' + icon('camera') + ' Spine search test</h3>' +
-    '<p class="note">Ask Gemini (with web search) to find this book\'s <b>spine</b> photo. ' +
+    '<p class="note">Search the web for this book\'s <b>spine</b> photo (Brave image search). ' +
     'An experiment — nothing is saved. If this works reliably, spine photos could one day come from search instead of the camera.</p>' +
     '<div class="spinelab-form">' +
     '<input id="sl-title" class="text-input" placeholder="Book title" autocomplete="off">' +
