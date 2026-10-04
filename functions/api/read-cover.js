@@ -40,22 +40,36 @@ const PROMPT_SHELF = 'You are reading a photo of a bookshelf. List the books ' +
   'with exactly one key, "books": an array (up to 30) of objects with ' +
   '"title", "author", and "confidence" ("high" for clearly legible spines, ' +
   '"medium" for partly legible or guessed letters, "low" for very ' +
-  'uncertain). Use null for a title or author you cannot read; skip spines ' +
+  'uncertain). Also include "x0" and "x1": the approximate left and right ' +
+  'edges of that book\'s spine as integers from 0 to 1000 (fractions of the ' +
+  'image width, so a spine spanning the middle tenth is roughly x0=450, ' +
+  'x1=550). Use null for a title or author you cannot read; skip spines ' +
   'you cannot read at all. Vertical text, foil, and small print are common ' +
   '— transcribe carefully. Reply with ONLY the JSON object, no other text.';
 
-// v199: sanitize a shelf-mode model answer into [{title, author, confidence}].
+// v253: sanitize a shelf-mode model answer into
+// [{title, author, confidence, x0?, x1?}]. x0/x1 are the spine's horizontal
+// extent (0-1000); the client crops the spine photo from them when a book
+// is added. Unusable boxes are dropped, never trusted blindly.
 function cleanShelfResult(obj) {
   const out = [];
   const arr = obj && Array.isArray(obj.books) ? obj.books : [];
   const s = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
+  const clampX = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(1000, Math.round(n)));
+  };
   for (const b of arr) {
     if (!b || typeof b !== 'object') continue;
     const title = s(b.title), author = s(b.author);
     if (!title && !author) continue; // unreadable — nothing to search
     const conf = b.confidence === 'high' || b.confidence === 'medium' || b.confidence === 'low'
       ? b.confidence : 'low';
-    out.push({ title, author, confidence: conf });
+    const entry = { title, author, confidence: conf };
+    const x0 = clampX(b.x0), x1 = clampX(b.x1);
+    if (x0 !== null && x1 !== null && x1 - x0 >= 5) { entry.x0 = x0; entry.x1 = x1; }
+    out.push(entry);
     if (out.length >= MAX_SHELF_SPINES) break;
   }
   return { books: out };
