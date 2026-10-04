@@ -439,6 +439,44 @@ run(`shelfOpenLayoutSheet();`);
 ok('layout sheet offers four formats', qa('#svSheet [data-f]').length === 4);
 run(`shelfCloseSheet(); shelfSetFormat('standard'); shelfSetLayout('manual'); library = [];
 localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
+/* ---- 28. v267: split-format decorations flow left-to-right ---- */
+run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
+const mflat = run(`(() => {
+  const flat = [
+    { sec: { label: 'A' }, items: [{ kind: 'spine', w: 30 }, { kind: 'spine', w: 30 }] },
+    { sec: { label: 'B' }, items: [{ kind: 'spine', w: 30 }, { kind: 'spine', w: 30 }] },
+  ];
+  shelfMergeDecorSplit(flat, [{ d: 'plant', at: 3 }]);
+  return flat.map(s => s.items.map(i => i.kind).join(','));
+})()`);
+ok('split merge spans sections in visual order',
+  mflat[0] === 'spine,spine' && mflat[1] === 'spine,decor,spine');
+const mflatEnd = run(`(() => {
+  const flat = [{ sec: { label: 'A' }, items: [{ kind: 'spine', w: 30 }] }];
+  shelfMergeDecorSplit(flat, [{ d: 'candle', at: 999 }]);
+  return flat[0].items.map(i => i.kind).join(',');
+})()`);
+ok('split merge past the end lands on the last section', mflatEnd === 'spine,decor');
+run(`library = [
+  { id: 'g1', title: 'B1', status: 'tbr' },
+  { id: 'g2', title: 'B2', status: 'tbr' },
+  { id: 'g3', title: 'B3', status: 'tbr' },
+  { id: 'g4', title: 'B4', status: 'tbr' },
+  { id: 'g5', title: 'B5', status: 'tbr' },
+  { id: 'g6', title: 'B6', status: 'tbr' }
+];
+shelfGroup = 'tbr'; shelfOrderCache = null;
+shelfSetFormat('split'); shelfSetLayout('manual');
+shelfSaveDecor('tbr', [{ d: 'plant', at: 2 }]); renderShelf();`);
+const splitDecors = run(`(() => {
+  const cols = Array.from(document.querySelectorAll('#svShelves .sv-col'));
+  return cols.map(c => c.querySelectorAll('.sv-dragdecor').length);
+})()`);
+ok('split: dropped decoration stays in its visual column',
+  splitDecors.length === 2 && splitDecors[0] === 1 && splitDecors[1] === 0);
+ok('split: all spines still render', qa('#svShelves .spine').length === 6);
+run(`shelfCloseSheet(); shelfSetFormat('standard'); shelfSetLayout('manual'); library = [];
+localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
 (async () => {
   const s1 = await run(`spinePhotoShare({isbn:'9780143127748'}, 'data:image/jpeg;base64,AAA', false)`);
   ok('non-AI crop never shared', s1 === false);
