@@ -125,5 +125,55 @@ const missing = jsFiles.filter(f => html.indexOf('src="js/' + f + '"') === -1);
 ok('all js files have a <script> tag in index.html',
   missing.length === 0 ? true : (console.log('missing:', missing.join(',')), false));
 
+/* ---- 12. poses (v252) ---- */
+ok('shelfPoseOf defaults to up', run(`shelfPoseOf({})`) === 'up' && run(`shelfPoseOf()`) === 'up');
+ok('shelfPoseOf reads down/face',
+  run(`shelfPoseOf({shelfPose:'down'})`) === 'down' && run(`shelfPoseOf({shelfPose:'face'})`) === 'face');
+ok('shelfPoseOf rejects junk', run(`shelfPoseOf({shelfPose:'sideways'})`) === 'up');
+
+/* ---- 13. shelfLayoutItems: stacks, faces, singles ---- */
+run(`var __items = shelfLayoutItems([
+  {id:'a', shelfPose:'down'}, {id:'b', shelfPose:'down'}, {id:'c'},
+  {id:'d', shelfPose:'face'}, {id:'e', shelfPose:'down'},
+]);`);
+ok('consecutive downs form one stack',
+  run(`__items.length`) === 4 && run(`__items[0].kind`) === 'stack' &&
+  run(`__items[0].books.map(b=>b.id).join(',')`) === 'a,b');
+ok('upright and face are single items',
+  run(`__items[1].kind`) === 'spine' && run(`__items[2].kind`) === 'face');
+ok('stack caps at 4 books',
+  run(`shelfLayoutItems([1,2,3,4,5].map(i=>({id:'x'+i, shelfPose:'down'}))).map(i=>i.kind+':'+i.books.length).join('|')`) === 'stack:4|stack:1');
+
+/* ---- 14. shelfFillRows: greedy by budget ---- */
+ok('greedy row fill',
+  run(`JSON.stringify(shelfFillRows([{w:100},{w:100},{w:100}], 250).map(r=>r.length))`) === '[2,1]');
+ok('oversize item still gets a row', run(`shelfFillRows([{w:500}], 250).length`) === 1);
+ok('empty items', run(`shelfFillRows([], 250).length`) === 0);
+
+/* ---- 15. decor persistence (v252) ---- */
+run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
+ok('decor defaults to plant+candle', run(`shelfDecor('tbr').join(',')`) === 'plant,candle');
+run(`shelfSetDecor('tbr', ['mug','lights','nope']);`);
+ok('decor persists, unknown ids filtered', run(`shelfDecor('tbr').join(',')`) === 'mug,lights');
+ok('decor registry has five entries', run(`SHELF_DECOR_ORDER.length`) === 5);
+run(`localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
+
+/* ---- 16. render smoke: poses + decor button ---- */
+run(`library = [
+  {id:'f1', title:'Face Book', status:'tbr', shelfPose:'face', cover:'https://x/y.jpg'},
+  {id:'f2', title:'Flat One', status:'tbr', shelfPose:'down'},
+  {id:'f3', title:'Flat Two', status:'tbr', shelfPose:'down'},
+  {id:'f4', title:'Up Book', status:'tbr'},
+];
+shelfGroup='tbr'; shelfOrderCache={}; renderShelf();`);
+ok('face-out renders', qa('#svShelves .faceout').length === 1);
+ok('face-out shows the cover', !!q('#svShelves .faceout img'));
+ok('laid-down pair forms one stack', qa('#svShelves .hstack').length === 1);
+ok('stack carries both book ids', q('#svShelves .hstack').dataset.ids === 'f2,f3');
+ok('decor button in header', !!q('#svDecor'));
+ok('long-press sheet offers three poses', (run(`shelfOpenPhotoSheet('f4')`),
+  qa('#svSheet [data-pose]').length === 3));
+run(`shelfCloseSheet(); library = [];`);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
