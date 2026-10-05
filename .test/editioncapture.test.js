@@ -513,36 +513,82 @@ ecSaveAll().then(() => { window.__saved = true; });`);
     run(`JSON.stringify(library[0].editionFaces.jacket)`) ===
       JSON.stringify({ spine: 'data:image/jpeg;base64,NEWSPINE' }));
 
-  // v283: pool self-healing — mock the Supabase client with an in-memory pool.
-  run(`window.__pool = {};
+  // v286: pool sharing under the immutable-candidate model. Every upload is a
+  // candidate row in edition_assets at a content-addressed path
+  // (face/appearance/<sha256>.jpg); first writer wins between users, and a
+  // contributor's newer capture becomes a NEW candidate — never an overwrite.
+  // jsdom has no webcrypto subtle and its Image never loads, so polyfill
+  // subtle and stub the never-resolving quality analysis.
+  window.crypto.subtle = require('crypto').webcrypto.subtle;
+  run(`editionAnalyzeDataUrl = async function () { return null; };
+window.__pool = { editions: {}, assets: [], slots: [], legacy: [] };
 window.__uploads = [];
 window.__moves = [];
-function __chain() {
+window.__inserts = [];
+window.__assetSeq = 0;
+window.__blobBytes = 'x';
+window.fetch = async function () {
+  return { blob: async function () { return new Blob([window.__blobBytes], { type: 'image/jpeg' }); } };
+};
+function __findRows(table, filters) {
+  var store = table === 'editions' ? Object.keys(window.__pool.editions).map(function (k) { return window.__pool.editions[k]; })
+    : table === 'edition_assets' ? window.__pool.assets
+    : table === 'edition_asset_slots' ? window.__pool.slots
+    : table === 'edition_images' ? window.__pool.legacy : [];
+  return store.filter(function (r) {
+    return Object.keys(filters).every(function (k) { return r[k] === filters[k]; });
+  });
+}
+function __chain(table) {
   var filters = {};
   var c = {};
-  c.select = function () { return c; };
-  c.delete = function () { c._del = true; return c; };
   c.eq = function (k, v) { filters[k] = v; return c; };
+  c.select = function () { return c; };
+  c.limit = function () { return c; };
+  c.order = function () { return c; };
   c.maybeSingle = async function () {
-    var key = filters.isbn + '|' + filters.face + '|' + filters.appearance;
-    var row = window.__pool[key];
-    return { data: row ? { isbn: filters.isbn, uploaded_by: row.uploaded_by } : null };
+    var rows = __findRows(table, filters);
+    return { data: rows[0] || null, error: null };
   };
-  c.upsert = async function (obj) {
-    var key = obj.isbn + '|' + obj.face + '|' + obj.appearance;
-    window.__pool[key] = { uploaded_by: obj.uploaded_by, path: obj.path };
+  c.single = async function () {
+    var rows = __findRows(table, filters);
+    return rows[0] ? { data: rows[0], error: null } : { data: null, error: { message: 'none' } };
+  };
+  c.insert = function (obj) {
+    var row = Object.assign({}, obj);
+    if (!row.id) row.id = 'asset-' + (++window.__assetSeq);
+    if (table === 'edition_assets') window.__pool.assets.push(row);
+    window.__inserts.push({ table: table, row: row });
+    return { select: function () { return { single: async function () { return { data: { id: row.id }, error: null }; } }; } };
+  };
+  c.upsert = async function (obj, opts) {
+    window.__inserts.push({ table: table, upsert: true, opts: opts || null, row: obj });
+    if (table === 'edition_asset_slots') {
+      var ex = __findRows(table, { edition_id: obj.edition_id, face: obj.face, appearance: obj.appearance })[0];
+      if (ex) { if (!(opts && opts.ignoreDuplicates)) Object.assign(ex, obj); }
+      else window.__pool.slots.push(Object.assign({}, obj));
+    } else if (table === 'edition_images') {
+      var li = __findRows(table, { isbn: obj.isbn, face: obj.face, appearance: obj.appearance })[0];
+      if (li) Object.assign(li, obj); else window.__pool.legacy.push(Object.assign({}, obj));
+    }
     return { error: null };
   };
+  c.delete = function () { c._del = true; return c; };
   c.then = function (resolve) {
-    if (c._del) delete window.__pool[filters.isbn + '|' + filters.face + '|' + filters.appearance];
-    resolve({ error: null });
+    var rows = __findRows(table, filters);
+    if (c._del) rows.forEach(function (r) {
+      var store = table === 'edition_assets' ? window.__pool.assets : window.__pool.legacy;
+      var i = store.indexOf(r);
+      if (i !== -1) store.splice(i, 1);
+    });
+    resolve({ data: rows, error: null });
   };
   return c;
 }
 window.cloudClient = async function () {
   return {
     auth: { getUser: async function () { return { data: { user: { id: 'user-1' } } }; } },
-    from: function () { return __chain(); },
+    from: function (t) { return __chain(t); },
     storage: { from: function () { return {
       upload: async function (path, blob, opts) {
         window.__uploads.push({ path: path, upsert: !!(opts && opts.upsert) });
@@ -551,61 +597,122 @@ window.cloudClient = async function () {
       move: async function (from, to) { window.__moves.push([from, to]); return { error: null }; }
     }; } }
   };
-};
-window.fetch = async function () { return { blob: async function () { return {}; } }; };`);
+};`);
 
-  // First write: uploads with upsert:false, attributes the contributor.
-  run(`window.__shareDone = false;
+  // First write: uploads (upsert:false) at the content-addressed path and
+  // records an immutable candidate row attributed to the contributor.
+  run(`window.__pool.editions['9780000000001'] = { id: 'ed-1', isbn: '9780000000001' };
+window.__uploads = []; window.__inserts = []; window.__blobBytes = 'x';
+window.__shareDone = false;
 ecShareFace('9780000000001', 'jacket', 'spine', 'data:image/jpeg;base64,X')
   .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
   await flush('window.__shareDone');
-  ok('pool first write uploads (upsert:false) and attributes the contributor',
+  const upA = run(`window.__uploads[0] && window.__uploads[0].path`);
+  const hexA = upA && upA.split('/')[2].replace(/\.jpg$/, '');
+  const candA = run(`(window.__inserts.filter(function (i) { return i.table === 'edition_assets'; })[0] || {}).row`);
+  const slotUpA = run(`window.__inserts.filter(function (i) { return i.table === 'edition_asset_slots' && i.upsert; })[0]`);
+  const legUpA = run(`(window.__inserts.filter(function (i) { return i.table === 'edition_images' && i.upsert; })[0] || {}).row`);
+  ok('pool first write uploads (upsert:false) at the sha256 content path',
     run(`window.__shareRes`) === true &&
-    JSON.stringify(run(`window.__uploads`)) ===
-      JSON.stringify([{ path: 'spine/jacket/9780000000001.jpg', upsert: false }]) &&
-    run(`window.__pool['9780000000001|spine|jacket'].uploaded_by`) === 'user-1');
+    run(`window.__uploads`).length === 1 &&
+    /^spine\/jacket\/[0-9a-f]{64}\.jpg$/.test(upA) &&
+    run(`window.__uploads[0].upsert`) === false);
+  ok('pool first write records an immutable candidate attributed to the contributor',
+    candA && candA.edition_id === 'ed-1' && candA.isbn === '9780000000001' &&
+    candA.face === 'spine' && candA.appearance === 'jacket' &&
+    candA.bucket === 'edition-images' && candA.path === upA &&
+    candA.sha256 === hexA && candA.source_type === 'capture' &&
+    candA.source_user_id === 'user-1' && candA.byte_size === 1);
+  ok('pool first write seeds the slot with upsert+ignoreDuplicates (automatic)',
+    slotUpA && slotUpA.opts && slotUpA.opts.onConflict === 'edition_id,face,appearance' &&
+    slotUpA.opts.ignoreDuplicates === true &&
+    slotUpA.row.canonical_asset_id === candA.id &&
+    slotUpA.row.selection_method === 'automatic' && slotUpA.row.selected_by === 'user-1');
+  ok('pool first write exposes the canonical asset through the legacy row',
+    legUpA && legUpA.isbn === '9780000000001' && legUpA.face === 'spine' &&
+    legUpA.appearance === 'jacket' && legUpA.bucket === 'edition-images' &&
+    legUpA.path === upA && legUpA.uploaded_by === 'user-1');
 
-  // Another user's image: first writer wins, no upload.
-  run(`window.__pool['9780000000002|spine|jacket'] = { uploaded_by: 'user-2', path: 'spine/jacket/9780000000002.jpg' };
-window.__uploads = [];
+  // Another contributor's candidate: immutable candidates coexist — the new
+  // upload becomes a second candidate; the other row is never touched.
+  run(`window.__pool.editions['9780000000002'] = { id: 'ed-2', isbn: '9780000000002' };
+window.__pool.assets.push({ id: 'asset-seed', edition_id: 'ed-2', isbn: '9780000000002',
+  face: 'spine', appearance: 'jacket', bucket: 'edition-images',
+  path: 'spine/jacket/' + 'f'.repeat(64) + '.jpg', source_user_id: 'user-2' });
+window.__uploads = []; window.__inserts = []; window.__blobBytes = 'zz';
 window.__shareDone = false;
 ecShareFace('9780000000002', 'jacket', 'spine', 'data:image/jpeg;base64,Y')
   .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
   await flush('window.__shareDone');
-  ok("another contributor's image is left alone (first writer wins)",
+  const upB = run(`window.__uploads[0] && window.__uploads[0].path`);
+  const seedRow = run(`window.__pool.assets.filter(function (r) { return r.id === 'asset-seed'; })[0]`);
+  ok("another contributor's candidate is left alone (immutable candidates coexist)",
+    run(`window.__shareRes`) === true &&
+    run(`window.__uploads`).length === 1 &&
+    /^spine\/jacket\/[0-9a-f]{64}\.jpg$/.test(upB) &&
+    upB !== 'spine/jacket/' + 'f'.repeat(64) + '.jpg' &&
+    run(`window.__pool.assets`).length === 3 &&
+    seedRow && seedRow.source_user_id === 'user-2' &&
+    run(`window.__pool.assets`).every(function (r) { return r.bucket === 'edition-images'; }));
+
+  // Re-sharing identical bytes dedups on the content path: no new upload.
+  run(`window.__uploads = []; window.__inserts = []; window.__blobBytes = 'zz';
+window.__shareDone = false;
+ecShareFace('9780000000002', 'jacket', 'spine', 'data:image/jpeg;base64,Y2')
+  .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
+  await flush('window.__shareDone');
+  ok('re-sharing identical bytes dedups (no duplicate upload or candidate)',
     run(`window.__shareRes`) === true &&
     run(`window.__uploads`).length === 0 &&
-    run(`window.__pool['9780000000002|spine|jacket'].uploaded_by`) === 'user-2');
+    run(`window.__inserts`).filter(function (i) { return i.table === 'edition_assets' && !i.upsert; }).length === 0);
 
-  // Own image re-captured: auto-replaces with upsert:true.
-  run(`window.__uploads = [];
+  // Own new capture: a second immutable candidate, never an overwrite. The
+  // slot already exists (canonical = first candidate), so no slot upsert and
+  // no legacy re-exposure — the new capture is evidence, not canonical.
+  run(`window.__uploads = []; window.__inserts = []; window.__blobBytes = 'x-new';
 window.__shareDone = false;
 ecShareFace('9780000000001', 'jacket', 'spine', 'data:image/jpeg;base64,Z')
   .then(function (r) { window.__shareRes = r; window.__shareDone = true; });`);
   await flush('window.__shareDone');
-  ok("contributor's new capture auto-replaces their pool image",
+  const upD = run(`window.__uploads[0] && window.__uploads[0].path`);
+  ok("contributor's new capture becomes a second candidate (never overwrites)",
     run(`window.__shareRes`) === true &&
-    JSON.stringify(run(`window.__uploads`)) ===
-      JSON.stringify([{ path: 'spine/jacket/9780000000001.jpg', upsert: true }]));
+    run(`window.__uploads`).length === 1 && upD !== upA &&
+    run(`window.__pool.assets`).filter(function (r) { return r.isbn === '9780000000001'; }).length === 2 &&
+    run(`window.__pool.assets`).filter(function (r) { return r.isbn === '9780000000001'; })
+      .every(function (r) { return r.source_user_id === 'user-1'; }) &&
+    run(`window.__inserts`).filter(function (i) { return i.table === 'edition_asset_slots'; }).length === 0 &&
+    run(`window.__pool.legacy`).filter(function (r) { return r.isbn === '9780000000001'; }).length === 1);
 
-  // Removing a face you contributed withdraws it from the pool.
-  run(`window.__pool['9780000000003|fore_edge|jacket'] = { uploaded_by: 'user-1', path: 'fore_edge/jacket/9780000000003.jpg' };
+  // Withdrawing a face you contributed deletes your own candidates via their
+  // STORED paths (quarantine) and the legacy row — true only when something
+  // was actually withdrawn.
+  run(`window.__pool.assets.push({ id: 'cand-wd-1', edition_id: 'ed-3', isbn: '9780000000003',
+  face: 'fore_edge', appearance: 'jacket', bucket: 'edition-images',
+  path: 'fore_edge/jacket/stored-path-abc.jpg', source_user_id: 'user-1' });
+window.__pool.legacy.push({ isbn: '9780000000003', face: 'fore_edge', appearance: 'jacket',
+  bucket: 'edition-images', path: 'fore_edge/jacket/9780000000003.jpg', uploaded_by: 'user-1' });
 window.__moves = [];
 library = [{ id: 'ecb8', title: 'Withdraw Me', isbn13: '9780000000003',
   editionFaces: { jacket: { fore_edge: 'data:image/jpeg;base64,BAD' } } }];
 ecStartScan('ecb8');
 document.querySelector('#ec-wizard [data-ec-rm="jacket:fore_edge"]').click();`);
-  await new Promise(function (r) { setTimeout(r, 300); });
+  await flush('window.__moves.length > 0');
   ok('removing a contributed face withdraws it from the pool',
-    run(`window.__pool['9780000000003|fore_edge|jacket']`) === undefined &&
+    run(`window.__pool.assets`).filter(function (r) { return r.id === 'cand-wd-1'; }).length === 0 &&
+    run(`window.__pool.legacy`).filter(function (r) { return r.isbn === '9780000000003'; }).length === 0 &&
     JSON.stringify(run(`window.__moves`)) ===
-      JSON.stringify([['fore_edge/jacket/9780000000003.jpg',
-        'quarantine/withdrawn-fore_edge-jacket-9780000000003.jpg']]) &&
+      JSON.stringify([['fore_edge/jacket/stored-path-abc.jpg',
+        'quarantine/withdrawn-fore_edge-jacket-9780000000003-candwd1.jpg']]) &&
     !q('#ec-wizard [data-ec-rm="jacket:fore_edge"]'));
   run(`document.getElementById('ec-ap-cancel').click();`);
 
   // Removing a face someone else contributed leaves the pool alone.
-  run(`window.__pool['9780000000004|spine|jacket'] = { uploaded_by: 'user-2', path: 'spine/jacket/9780000000004.jpg' };
+  run(`window.__pool.assets.push({ id: 'asset-other', edition_id: 'ed-4', isbn: '9780000000004',
+  face: 'spine', appearance: 'jacket', bucket: 'edition-images',
+  path: 'spine/jacket/' + 'b'.repeat(64) + '.jpg', source_user_id: 'user-2' });
+window.__pool.legacy.push({ isbn: '9780000000004', face: 'spine', appearance: 'jacket',
+  bucket: 'edition-images', path: 'spine/jacket/9780000000004.jpg', uploaded_by: 'user-2' });
 window.__moves = [];
 library = [{ id: 'ecb9', title: 'Not Mine', isbn13: '9780000000004',
   editionFaces: { jacket: { spine: 'data:image/jpeg;base64,S' } } }];
@@ -613,8 +720,10 @@ ecStartScan('ecb9');
 document.querySelector('#ec-wizard [data-ec-rm="jacket:spine"]').click();`);
   await new Promise(function (r) { setTimeout(r, 300); });
   ok("removing a face contributed by someone else leaves the pool alone",
-    run(`window.__pool['9780000000004|spine|jacket'].uploaded_by`) === 'user-2' &&
-    run(`window.__moves`).length === 0);
+    run(`window.__pool.assets`).filter(function (r) { return r.id === 'asset-other'; }).length === 1 &&
+    run(`window.__pool.legacy`).filter(function (r) { return r.isbn === '9780000000004'; }).length === 1 &&
+    run(`window.__moves`).length === 0 &&
+    !q('#ec-wizard [data-ec-rm="jacket:spine"]'));
   run(`document.getElementById('ec-ap-cancel').click();`);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
