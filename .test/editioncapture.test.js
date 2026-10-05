@@ -3,7 +3,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
-const ROOT = '/tmp/enhance-fix';
+const ROOT = '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
