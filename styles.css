@@ -2681,6 +2681,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ec-vf .ec-guide-tall { height: 78%; aspect-ratio: 1 / 4.2; }
 .ec-vf .ec-guide-portrait { height: 78%; aspect-ratio: 2 / 3; }
 #ec-scanfx { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+#ec-ob-fx { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .ec-scanbar { height: 4px; background: rgba(255, 255, 255, 0.14); border-radius: 2px; margin-top: 10px; overflow: hidden; }
 .ec-scanbar i { display: block; height: 100%; width: 0; background: #7fd08a; transition: width 0.15s linear; }
 .ec-confirmimg { display: flex; justify-content: center; margin: 4px 0 12px; }

@@ -67,6 +67,8 @@ async function setup(steps) {
       return realCE(tag);
     };
     window.__obRect = null;
+    window.__now = 1000000;
+    Date.now = function () { return window.__now; };
     ecDetectBookRect = function () { return window.__obRect ? window.__obRect() : null; };
     ecDetectQuadForCanvas = function () { return [[20,20],[380,20],[380,280],[20,280]]; };
     ecWarpCanvas = function () {
@@ -123,7 +125,22 @@ async function openOrbit() {
   await wait(300);
   ok('skip refused on non-skippable face', q('#ec-ob-title').textContent === 'Spine');
 
-  // ---- 3. manual mode drops into the classic per-face flow ----
+  // ---- 3. graduated no-lock guidance (v295): move closer, then flash tip ----
+  await setup([{ appearance: 'jacket', face: 'spine', skippable: false }]);
+  await openOrbit(); // __obRect stays null: nothing detected
+  await wait(400);
+  ok('initial prompt asks to show the face',
+    q('#ec-ob-msg').textContent === 'Show the spine — hold steady');
+  run(`window.__now += 9000;`);
+  await wait(400);
+  ok('8s with no lock asks the user to move closer',
+    q('#ec-ob-msg').textContent === 'Move closer — fill the dashed guide with the spine');
+  run(`window.__now += 12000;`);
+  await wait(400);
+  ok('20s with no lock mentions the flash trap',
+    q('#ec-ob-msg').textContent.indexOf('flash off') !== -1);
+
+  // ---- 4. manual mode drops into the classic per-face flow ----
   await setup();
   await openOrbit();
   run(`document.getElementById('ec-ob-manual').click();`);

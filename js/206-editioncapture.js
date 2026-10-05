@@ -1179,7 +1179,7 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
 function ecOrbitCapture() {
   if (typeof document === 'undefined' || !EC || !EC.steps || !EC.steps.length) return null;
   var obIdx = 0, obPhase = 'aim', obTornDown = false;
-  var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0, obNudged = false;
+  var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0;
   var obTracker = ecNewScanTracker(), obTorchCleanup = null;
 
   var ov = document.createElement('div');
@@ -1239,7 +1239,7 @@ function ecOrbitCapture() {
     guide.className = 'ec-guide ec-guide-' + face.guide;
     skipBtn.style.display = st.skippable ? '' : 'none';
     obTracker = ecNewScanTracker();
-    obAimSince = Date.now(); obNudged = false;
+    obAimSince = Date.now();
     obPhase = 'aim';
     obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
     obRenderDots();
@@ -1288,7 +1288,7 @@ function ecOrbitCapture() {
 
   var obResume = function () {
     obTracker = ecNewScanTracker();
-    obAimSince = Date.now(); obNudged = false;
+    obAimSince = Date.now();
     obPhase = 'aim';
     obLastTick = 0;
     if (!obTornDown) obRaf = requestAnimationFrame(obLoop);
@@ -1351,18 +1351,23 @@ function ecOrbitCapture() {
     var shapeOk = !!(rect && ecFaceAspectOk(face, rect));
     obDrawFx(rect, vw, vh);
     var trk = ecScanTrack(obTracker, shapeOk ? rect : null);
-    if (!rect) obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
-    else if (!shapeOk) obSetMsg('Wrong shape — show the ' + face.label.toLowerCase());
+    // v295: graduated guidance. A book held too far away is the common
+    // failure (the detector rejects tiny targets), and a flash hotspot
+    // blinds edge detection — say so instead of repeating "hold steady".
+    var noLock = !rect || !shapeOk;
+    if (noLock) {
+      var dt = Date.now() - obAimSince;
+      if (dt > 20000) obSetMsg('Still nothing — move closer, try the flash off, or use Manual mode');
+      else if (dt > 8000) obSetMsg('Move closer — fill the dashed guide with the ' + face.label.toLowerCase());
+      else if (!rect) obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
+      else obSetMsg('Wrong shape — show the ' + face.label.toLowerCase());
+    }
     else if (!trk.stable) obSetMsg('Hold steady\u2026');
     else {
       obPhase = 'burst';
       if (obRaf) { try { cancelAnimationFrame(obRaf); } catch (e) {} obRaf = 0; }
       obBurst(5).then(obFinishBurst);
       return;
-    }
-    if (!obNudged && Date.now() - obAimSince > 25000) {
-      obNudged = true;
-      obSetMsg('Still looking — try Manual mode below, or Skip this face');
     }
   };
 
