@@ -23,7 +23,7 @@ create table if not exists public.edition_assets (
   byte_size bigint,
   sha256 text,
   source_type text not null default 'capture'
-    check (source_type in ('capture','upload','import','perspective_corrected','sharpened','restored','derived')),
+    check (source_type in ('capture','upload','import','migration','perspective_corrected','sharpened','restored','derived')),
   source_user_id uuid references auth.users(id) on delete set null,
   parent_asset_id uuid references public.edition_assets(id) on delete set null,
   capture_session_id text,
