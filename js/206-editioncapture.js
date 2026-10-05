@@ -1168,6 +1168,247 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
   return token;
 }
 
+/* ---------- orbit capture (v294) ----------
+   Hands-free multi-face scan: the user rotates the book through the prompted
+   faces while the viewfinder watches. When the detected quad is stable and
+   matches the target face's aspect, a burst fires, the sharpest frame is
+   warped to the book edges, and the flow advances — no taps, no corner
+   editor. Front/back share an aspect, so prompt order disambiguates them
+   (same as the classic flow). Manual mode (the classic per-face flow) stays
+   one tap away and resumes at the current face. */
+function ecOrbitCapture() {
+  if (typeof document === 'undefined' || !EC || !EC.steps || !EC.steps.length) return null;
+  var obIdx = 0, obPhase = 'aim', obTornDown = false;
+  var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0, obNudged = false;
+  var obTracker = ecNewScanTracker(), obTorchCleanup = null;
+
+  var ov = document.createElement('div');
+  ov.className = 'ec-backdrop';
+  ov.id = 'ec-orbit';
+  ov.innerHTML =
+    '<div class="ec-sheet" role="dialog" aria-label="Orbit scan">' +
+    '<div class="ec-head"><h3 class="serif" id="ec-ob-title"></h3>' +
+    '<p class="ec-sub" id="ec-ob-sub"></p></div>' +
+    '<div class="ec-vf"><video id="ec-ob-video" playsinline muted autoplay></video>' +
+    '<canvas id="ec-ob-fx" aria-hidden="true"></canvas>' +
+    '<div class="ec-guide" id="ec-ob-guide" aria-hidden="true"></div></div>' +
+    '<div class="ec-orbit-dots" id="ec-ob-dots" aria-hidden="true"></div>' +
+    '<p class="ec-hint" id="ec-ob-msg"></p>' +
+    '<div class="ec-actions">' +
+    '<button class="btn ghost" id="ec-ob-cancel">Cancel</button>' +
+    '<button class="btn ghost" id="ec-ob-skip">Skip</button>' +
+    '<button class="btn ghost sm" id="ec-ob-torch" hidden>Flash: off</button>' +
+    '<button class="btn ghost" id="ec-ob-manual">Manual mode</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  var video = ov.querySelector('#ec-ob-video');
+  var fx = ov.querySelector('#ec-ob-fx');
+  var fxCtx = null;
+  try { fxCtx = fx.getContext('2d'); } catch (e) {}
+  var guide = ov.querySelector('#ec-ob-guide');
+  var titleEl = ov.querySelector('#ec-ob-title'), subEl = ov.querySelector('#ec-ob-sub');
+  var msgEl = ov.querySelector('#ec-ob-msg'), dotsEl = ov.querySelector('#ec-ob-dots');
+  var skipBtn = ov.querySelector('#ec-ob-skip');
+  var analysis = document.createElement('canvas'), actx = null;
+  try { actx = analysis.getContext('2d'); } catch (e) {}
+
+  var obTeardownDom = function () {
+    if (obTornDown) return; obTornDown = true;
+    if (obRaf) { try { cancelAnimationFrame(obRaf); } catch (e) {} obRaf = 0; }
+    if (obTorchCleanup) { try { obTorchCleanup(); } catch (e) {} obTorchCleanup = null; }
+    if (obStream) { try { obStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} obStream = null; }
+    var n = document.getElementById('ec-orbit'); if (n) n.remove();
+  };
+  var obToken = (typeof overlayOpened === 'function')
+    ? overlayOpened('ec-orbit', function () { obTeardownDom(); ecCancelScan(); }) : null;
+
+  var obSetMsg = function (t) { if (msgEl.textContent !== t) msgEl.textContent = t; };
+
+  var obRenderDots = function () {
+    var h = '';
+    EC.steps.forEach(function (st, i) {
+      h += '<i class="' + (i < obIdx ? 'done' : i === obIdx ? 'cur' : '') + '"></i>';
+    });
+    dotsEl.innerHTML = h;
+  };
+
+  var obRenderFace = function () {
+    var st = EC.steps[obIdx], face = ecFaceDef(st.face);
+    titleEl.textContent = face.label;
+    subEl.textContent = ecAppearanceLabel(st.appearance) + ' · Face ' + (obIdx + 1) + ' of ' + EC.steps.length;
+    guide.className = 'ec-guide ec-guide-' + face.guide;
+    skipBtn.style.display = st.skippable ? '' : 'none';
+    obTracker = ecNewScanTracker();
+    obAimSince = Date.now(); obNudged = false;
+    obPhase = 'aim';
+    obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
+    obRenderDots();
+  };
+
+  var obDrawFx = function (rect, vw, vh) {
+    if (!fxCtx || !vw) return;
+    if (fx.width !== vw || fx.height !== vh) { fx.width = vw; fx.height = vh; }
+    try {
+      fxCtx.clearRect(0, 0, vw, vh);
+      if (!rect || !rect.quad) return;
+      var sc = vw / EC_SCAN_W;
+      fxCtx.save();
+      fxCtx.strokeStyle = '#7fd08a';
+      fxCtx.lineWidth = Math.max(3, vw / 280);
+      fxCtx.beginPath();
+      rect.quad.forEach(function (p, i) {
+        var x = p[0] * sc, y = p[1] * sc;
+        if (i) fxCtx.lineTo(x, y); else fxCtx.moveTo(x, y);
+      });
+      fxCtx.closePath(); fxCtx.stroke(); fxCtx.restore();
+    } catch (e) {}
+  };
+
+  var obBurst = function (count) {
+    return new Promise(function (resolve) {
+      var frames = [], prev = null, i = 0;
+      var take = function () {
+        if (obTornDown || !video.videoWidth) { resolve(frames); return; }
+        var c = document.createElement('canvas');
+        c.width = video.videoWidth; c.height = video.videoHeight;
+        try {
+          c.getContext('2d').drawImage(video, 0, 0);
+          var m = ecBurstFrameScore(c, prev);
+          prev = m.gray;
+          frames.push({ canvas: c, score: m.score });
+          obSetMsg('Capturing ' + (i + 1) + '/' + count + ' — hold still');
+        } catch (e) {}
+        i++;
+        if (i >= count) { resolve(frames); return; }
+        setTimeout(take, 90);
+      };
+      take();
+    });
+  };
+
+  var obResume = function () {
+    obTracker = ecNewScanTracker();
+    obAimSince = Date.now(); obNudged = false;
+    obPhase = 'aim';
+    obLastTick = 0;
+    if (!obTornDown) obRaf = requestAnimationFrame(obLoop);
+  };
+
+  var obAdvance = function () {
+    obIdx++;
+    if (obIdx >= EC.steps.length) {
+      obTeardownDom();
+      ecHandoff(ecRenderReview);
+      return;
+    }
+    obSetMsg('\u2713 captured');
+    setTimeout(function () {
+      if (obTornDown) return;
+      obRenderFace();
+      obLastTick = 0;
+      obRaf = requestAnimationFrame(obLoop);
+    }, 900);
+  };
+
+  var obFinishBurst = function (frames) {
+    if (!frames.length) { obResume(); return; }
+    frames.sort(function (x, y) { return y.score - x.score; });
+    var c = frames[0].canvas, quad = null, url = null;
+    try { quad = ecDetectQuadForCanvas(c); } catch (e) {}
+    if (quad) {
+      var size = ecQuadSize(quad, EC_MAX_DIM), w = null;
+      try { w = ecWarpCanvas(c, quad, size[0], size[1]); } catch (e) {}
+      if (w) { try { url = w.toDataURL('image/jpeg', 0.9); } catch (e) {} }
+    }
+    if (!url) {
+      if (typeof toast === 'function') toast('Couldn\u2019t crop that one — hold it steadier');
+      obResume();
+      return;
+    }
+    var st = EC.steps[obIdx];
+    (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = url;
+    obPhase = 'captured';
+    obAdvance();
+  };
+
+  var obLoop = function (t) {
+    obRaf = 0;
+    if (obTornDown || obPhase !== 'aim') return;
+    obRaf = requestAnimationFrame(obLoop);
+    if (t - obLastTick < 140) return;
+    obLastTick = t;
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh || !actx) return;
+    var aw = EC_SCAN_W, ah = Math.max(1, Math.round(EC_SCAN_W * vh / vw));
+    if (analysis.width !== aw || analysis.height !== ah) { analysis.width = aw; analysis.height = ah; }
+    var d = null;
+    try {
+      actx.drawImage(video, 0, 0, aw, ah);
+      d = actx.getImageData(0, 0, aw, ah);
+    } catch (e) { return; }
+    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah);
+    var st = EC.steps[obIdx], face = ecFaceDef(st.face);
+    var shapeOk = !!(rect && ecFaceAspectOk(face, rect));
+    obDrawFx(rect, vw, vh);
+    var trk = ecScanTrack(obTracker, shapeOk ? rect : null);
+    if (!rect) obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
+    else if (!shapeOk) obSetMsg('Wrong shape — show the ' + face.label.toLowerCase());
+    else if (!trk.stable) obSetMsg('Hold steady\u2026');
+    else {
+      obPhase = 'burst';
+      if (obRaf) { try { cancelAnimationFrame(obRaf); } catch (e) {} obRaf = 0; }
+      obBurst(5).then(obFinishBurst);
+      return;
+    }
+    if (!obNudged && Date.now() - obAimSince > 25000) {
+      obNudged = true;
+      obSetMsg('Still looking — try Manual mode below, or Skip this face');
+    }
+  };
+
+  ov.querySelector('#ec-ob-cancel').addEventListener('click', function () {
+    obTeardownDom();
+    if (obToken && typeof overlayClosed === 'function') overlayClosed(obToken);
+    ecCancelScan();
+  });
+  skipBtn.addEventListener('click', function () {
+    if (obPhase !== 'aim' || !EC.steps[obIdx].skippable) return;
+    if (obRaf) { try { cancelAnimationFrame(obRaf); } catch (e) {} obRaf = 0; }
+    obAdvance();
+  });
+  ov.querySelector('#ec-ob-manual').addEventListener('click', function () {
+    if (obPhase !== 'aim') return;
+    obTeardownDom();
+    EC.idx = obIdx;
+    ecHandoff(ecRenderStep);
+  });
+
+  // Render the first prompt immediately so the sheet is never empty, even
+  // with no camera (the user can still hit Manual mode).
+  obRenderFace();
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function (s) {
+        if (obTornDown) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; }
+        obStream = s;
+        video.srcObject = s;
+        var p = video.play();
+        if (p && p.catch) p.catch(function () {});
+        if (typeof ecTorchWire === 'function') {
+          obTorchCleanup = ecTorchWire(video, ov.querySelector('#ec-ob-torch'));
+        }
+        obLastTick = 0;
+        obRaf = requestAnimationFrame(obLoop);
+      })
+      .catch(function () {
+        if (typeof toast === 'function') toast('Camera unavailable — use Manual mode instead');
+      });
+  } else {
+    if (typeof toast === 'function') toast('Camera unavailable — use Manual mode instead');
+  }
+  return obToken;
+}
+
 // Confirm sheet after an auto-scan: the warped face is already straightened.
 function ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb) {
   if (typeof document === 'undefined') return null;
@@ -1433,7 +1674,10 @@ function ecRenderEdges() {
     EC.hasEdges = hasEdges;
     EC.steps = ecBuildSteps(EC.appearances, hasEdges);
     EC.idx = 0;
-    ecRenderStep();
+    // v294: orbit capture is the scan flow now — rotate the book through the
+    // prompted faces hands-free. The classic per-face flow remains one tap
+    // away via the orbit sheet's Manual mode button.
+    ecOrbitCapture();
   };
   ov.querySelector('#ec-edge-yes').addEventListener('click', function () { go(true); });
   ov.querySelector('#ec-edge-no').addEventListener('click', function () { go(false); });

@@ -2711,6 +2711,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ed-measure-stage img { display: block; width: 100%; max-height: 54vh; object-fit: contain;
   margin: 0 auto; -webkit-user-drag: none; user-select: none; }
 #edm-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+/* ---------- orbit capture (v294) ---------- */
+.ec-orbit-dots { display: flex; gap: 8px; justify-content: center; padding: 10px 0 2px; }
+.ec-orbit-dots i { width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--accent, #8a7bd8); opacity: .4; }
+.ec-orbit-dots i.done { background: #6fd08a; border-color: #6fd08a; opacity: 1; }
+.ec-orbit-dots i.cur { opacity: 1; box-shadow: 0 0 0 3px rgba(138,123,216,.25); }
 .edm-point { stroke: #111; stroke-width: 3; cursor: grab; }
 /* Radius is set per-draw from JS (scaled to screen px); a CSS r here would
    override the attribute. Halos are invisible fat grab targets. */

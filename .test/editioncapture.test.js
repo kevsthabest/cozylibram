@@ -135,7 +135,12 @@ ok('edges question follows appearance pick', !!q('#ec-wizard #ec-edge-no'));
 run(`document.getElementById('ec-edge-no').click();`);
 ok('plain pages skip fore-edge in the step list',
   run(`EC.steps.length`) === 3 && run(`EC.steps.every(s => s.face !== 'fore_edge')`) === true);
-ok('first face step renders',
+ok('orbit capture is the scan flow now',
+  !!q('#ec-orbit #ec-ob-video'));
+ok('spine goes first in orbit', q('#ec-orbit #ec-ob-title').textContent === 'Spine');
+// Manual mode (no camera in jsdom either) drops to the classic per-face flow.
+run(`document.getElementById('ec-ob-manual').click();`);
+ok('manual mode renders the classic face step',
   !!q('#ec-wizard #ec-st-photo'));
 ok('spine goes first', q('#ec-wizard h3').textContent === 'Spine');
 run(`document.getElementById('ec-st-photo').click();`);
