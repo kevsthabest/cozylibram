@@ -468,14 +468,28 @@ ecRunEnhance('data:image/jpeg;base64,IN', 'restore').then(
     run(`window.__ehReq.body.image`) === 'data:image/jpeg;base64,IN');
   ok('enhance resolves the enhanced data URL', run(`window.__ehRes`) === 'data:image/jpeg;base64,ENH');
 
-  // Error path: 429 rejects with a friendly busy message.
+  // Error path: our limiter's 429 (text body "rate limited") rejects with
+  // the friendly busy message (v292).
   run(`window.__ehDone2 = false;
-window.fetch = async () => ({ ok: false, status: 429, json: async () => ({}) });
+window.fetch = async () => ({ ok: false, status: 429,
+  headers: { get: n => String(n).toLowerCase() === 'content-type' ? 'text/plain' : null },
+  text: async () => 'rate limited', json: async () => ({}) });
 ecRunEnhance('data:image/jpeg;base64,IN', 'sharpen').then(
   () => { window.__ehRes2 = 'NO-THROW'; window.__ehDone2 = true; },
   e => { window.__ehRes2 = e.message; window.__ehDone2 = true; });`);
   await flush('window.__ehDone2');
   ok('enhance 429 rejects with a busy message', /busy/i.test(run(`window.__ehRes2`)));
+
+  // Upstream (Google) quota 429 names the quota instead (v292).
+  run(`window.__ehDone2b = false;
+window.fetch = async () => ({ ok: false, status: 429,
+  headers: { get: n => String(n).toLowerCase() === 'content-type' ? 'application/json' : null },
+  text: async () => '{"error":{"status":"RESOURCE_EXHAUSTED"}}', json: async () => ({}) });
+ecRunEnhance('data:image/jpeg;base64,IN', 'sharpen').then(
+  () => { window.__ehRes2b = 'NO-THROW'; window.__ehDone2b = true; },
+  e => { window.__ehRes2b = e.message; window.__ehDone2b = true; });`);
+  await flush('window.__ehDone2b');
+  ok('enhance upstream-quota 429 names the quota', /quota/i.test(run(`window.__ehRes2b`)));
 
   // v282: saved faces can be enhanced from the appearance screen.
   run(`library = [{ id: 'ecb6', title: 'Enhance Saved',

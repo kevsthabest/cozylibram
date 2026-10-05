@@ -227,6 +227,23 @@ async function apiFetch(path, options) {
   return fetch(path, Object.assign({}, options, { headers }));
 }
 
+/* v292: 429s come from two places and the client blamed "too many requests"
+   for both. Our per-IP limiter answers 429 with the exact text body
+   "rate limited"; an upstream (Google) quota 429 carries the provider's
+   JSON body. This resolves to the honest user-facing message for each. */
+async function api429Message(res, localMsg) {
+  let kind = 'upstream';
+  try {
+    const ct = String((res.headers && res.headers.get('content-type')) || '').toLowerCase();
+    if (ct.indexOf('text/plain') !== -1) {
+      const t = await res.text();
+      if (t.trim() === 'rate limited') kind = 'local';
+    }
+  } catch (e) {}
+  return kind === 'local' ? localMsg :
+    'Google\u2019s AI quota is exhausted for this key right now — check usage in Google AI Studio, then try again later.';
+}
+
 
 /* v238: drag-to-scroll for horizontal chip rows (desktop mouse). Touch
    scrolls natively; with a mouse the hidden scroller left no affordance at

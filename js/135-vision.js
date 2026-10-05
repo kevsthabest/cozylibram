@@ -133,7 +133,7 @@ async function visionSend(dataUrl) {
       return;
     }
     if (r.status === 429) {
-      visionPaint('<p class="note">Too many cover reads — wait a minute and try again.</p>');
+      visionPaint('<p class="note">' + esc(await api429Message(r, 'Too many cover reads — wait a minute and try again.')) + '</p>');
       return;
     }
     // v203: 502 means the model itself errored (e.g. upstream 503 overloaded) —

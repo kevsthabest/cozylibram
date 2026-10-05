@@ -89,7 +89,7 @@ async function shelfSend(dataUrl) {
       return;
     }
     if (r.status === 429) {
-      paint('<p class="note">Too many scans — wait a minute and try again.</p>');
+      paint('<p class="note">' + esc(await api429Message(r, 'Too many scans — wait a minute and try again.')) + '</p>');
       return;
     }
     // v203: 502 means the model itself errored (e.g. upstream 503 overloaded) —

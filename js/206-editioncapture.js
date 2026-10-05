@@ -1545,7 +1545,8 @@ function ecRunEnhance(imageUrl, mode) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: imageUrl, mode: mode }),
   }).then(function (res) {
-    if (res.status === 429) throw new Error('The AI is busy — try again in a minute');
+    if (res.status === 429) return api429Message(res, 'The AI is busy — try again in a minute')
+      .then(function (m) { throw new Error(m); });
     if (res.status === 503) throw new Error('Enhancement is not set up on this server');
     if (!res.ok) throw new Error('Enhancement failed');
     return res.json();
