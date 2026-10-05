@@ -1267,26 +1267,67 @@ function ecCancelScan() {
 }
 
 // Faces already saved on the book, grouped by appearance: { jacket: ['spine', ...] }.
+// Unions the legacy data-URL faces (book.editionFaces) and the binary asset
+// refs (book.editionFaceRefs) — both are real scans the user should see.
 function ecExistingFaces(book) {
   var out = {};
+  var seen = function (ap, face) {
+    if (out[ap] && out[ap].indexOf(face) !== -1) return;
+    out[ap] = out[ap] || [];
+    out[ap].push(face);
+  };
   var ef = (book && book.editionFaces) || {};
   Object.keys(ef).forEach(function (ap) {
     var faces = ef[ap] || {};
-    var ids = Object.keys(faces).filter(function (f) { return !!faces[f]; });
-    if (ids.length) out[ap] = ids;
+    Object.keys(faces).forEach(function (f) { if (faces[f]) seen(ap, f); });
+  });
+  var er = (book && book.editionFaceRefs) || {};
+  Object.keys(er).forEach(function (ap) {
+    var refs = er[ap] || {};
+    Object.keys(refs).forEach(function (f) { if (refs[f]) seen(ap, f); });
   });
   return out;
 }
 
+// Asset id out of a ref, tolerating the v284/v285 plain-string shape and the
+// canonical { assetId, bucket, path, width, height } object shape.
+function ecRefAssetId(ref) {
+  if (!ref) return null;
+  if (typeof ref === 'string') return ref;
+  return ref.assetId || null;
+}
+
 // Remove one saved face from the book (cleans up empty appearances).
+// Reads both stores; removing a binary face also drops its local IDB row so
+// replaced scans don't accumulate blobs forever, and clears the shelf's
+// spine pointer when it named that asset. Best effort, never throws.
 // Returns true when something was actually removed.
 function ecRemoveFace(book, appearance, face) {
-  if (!book || !book.editionFaces || !book.editionFaces[appearance]) return false;
-  if (!book.editionFaces[appearance][face]) return false;
-  delete book.editionFaces[appearance][face];
-  if (!Object.keys(book.editionFaces[appearance]).length) delete book.editionFaces[appearance];
-  if (!Object.keys(book.editionFaces).length) delete book.editionFaces;
-  return true;
+  if (!book || !appearance || !face) return false;
+  var removed = false;
+  var removedAssetId = null;
+  if (book.editionFaces && book.editionFaces[appearance] && book.editionFaces[appearance][face]) {
+    delete book.editionFaces[appearance][face];
+    if (!Object.keys(book.editionFaces[appearance]).length) delete book.editionFaces[appearance];
+    if (!Object.keys(book.editionFaces).length) delete book.editionFaces;
+    removed = true;
+  }
+  if (book.editionFaceRefs && book.editionFaceRefs[appearance] && book.editionFaceRefs[appearance][face]) {
+    removedAssetId = ecRefAssetId(book.editionFaceRefs[appearance][face]);
+    delete book.editionFaceRefs[appearance][face];
+    if (!Object.keys(book.editionFaceRefs[appearance]).length) delete book.editionFaceRefs[appearance];
+    if (!Object.keys(book.editionFaceRefs).length) delete book.editionFaceRefs;
+    removed = true;
+  }
+  if (removedAssetId) {
+    try {
+      if (typeof idbAssetDelete === 'function' && typeof currentDb !== 'undefined' && currentDb) {
+        idbAssetDelete(currentDb, removedAssetId).catch(function () {});
+      }
+    } catch (e) {}
+    if (face === 'spine' && book.spinePhotoAssetId === removedAssetId) delete book.spinePhotoAssetId;
+  }
+  return removed;
 }
 
 function ecRenderAppearance() {
@@ -1637,6 +1678,30 @@ function ecEnhanceCompare(origUrl, newUrl) {
   return true;
 }
 
+// sha256 hex of a Blob (content-addressed pool path), or null on failure.
+async function ecBlobSha256(blob) {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle || !blob) return null;
+    var bytes = await blob.arrayBuffer();
+    var digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(function (x) {
+      return x.toString(16).padStart(2, '0');
+    }).join('');
+  } catch (e) { return null; }
+}
+
+// Pixel dimensions of a data URL, dependency-free. Null when undecodable
+// (e.g. no DOM) — the ref then just carries null width/height.
+function ecDataUrlSize(dataUrl) {
+  return new Promise(function (resolve) {
+    if (typeof Image === 'undefined' || typeof dataUrl !== 'string') { resolve(null); return; }
+    var img = new Image();
+    img.onload = function () { resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 }); };
+    img.onerror = function () { resolve(null); };
+    img.src = dataUrl;
+  });
+}
+
 // Persist: local book fields + shared pool contributions (pool: first writer wins).
 async function ecSaveAll() {
   if (!EC) return;
@@ -1685,12 +1750,28 @@ async function ecSaveAll() {
           createdAt: Date.now(),
           source: 'capture'
         });
-        b.editionFaceRefs[ap0][face0] = id0;
+        // v285+: the ref is the canonical binary shape
+        // { assetId, bucket, path, width, height }. The content-addressed path
+        // matches the shared-pool upload convention so a later share dedups
+        // against this exact object.
+        var hash0 = await ecBlobSha256(blob0);
+        var size0 = await ecDataUrlSize(data0);
+        b.editionFaceRefs[ap0][face0] = {
+          assetId: id0,
+          bucket: 'edition-images',
+          path: face0 + '/' + ap0 + '/' + (hash0 || id0) + '.jpg',
+          width: size0 ? size0.width : null,
+          height: size0 ? size0.height : null
+        };
         if (face0 === 'spine') {
+          // Shelf compatibility: the shelf renderer resolves spinePhotoAssetId
+          // to the local binary, so scanned spines keep showing on the shelf.
+          // Clear any stale embedded data URL — book JSON and sync payloads
+          // must never carry image bytes again.
           b.spinePhotoAssetId = id0;
-          // Compatibility view for the existing shelf renderer. This field
-          // is transitional; the binary source of truth is the IDB asset.
-          b.spinePhoto = data0;
+          if (typeof b.spinePhoto === 'string' && b.spinePhoto.indexOf('data:image/') === 0) {
+            delete b.spinePhoto;
+          }
         }
       } catch (e) {
         // Never discard the only local copy if the asset store fails.
@@ -1819,7 +1900,10 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
       .maybeSingle();
 
     if (!slot || !slot.data) {
-      await sb.from('edition_asset_slots').insert({
+      // unique(edition_id, face, appearance): the trigger usually creates the
+      // slot first, so insert-only-if-absent — a 409 here used to look like
+      // failure. Never overwrite the trigger's row on a race.
+      var si = await sb.from('edition_asset_slots').upsert({
         edition_id: editionId,
         isbn: isbn,
         face: face,
@@ -1827,7 +1911,14 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
         canonical_asset_id: assetId,
         selection_method: 'automatic',
         selected_by: uid
-      });
+      }, { onConflict: 'edition_id,face,appearance', ignoreDuplicates: true });
+      if (si.error) {
+        var racedSlot = await sb.from('edition_asset_slots')
+          .select('canonical_asset_id')
+          .eq('edition_id', editionId).eq('face', face).eq('appearance', appearance)
+          .maybeSingle();
+        if (!racedSlot || !racedSlot.data) return false;
+      }
     }
 
     // Compatibility read model: only expose this asset through the legacy
@@ -1848,8 +1939,16 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
   } catch (e) { return false; }
 }
 
-// v283: withdraw a contributed pool image — quarantine the file (clients can't
-// delete storage objects; renaming frees the canonical path) then drop the row.
+// v285+: withdraw a contributed pool image under the immutable-candidate model.
+// Finds this user's edition_assets candidates for (isbn, face, appearance),
+// quarantines each storage object using its STORED path (never recomputed —
+// new paths are content-addressed), then deletes the candidate row. The
+// contributor self-delete policy permits this; the canonical-selection trigger
+// re-runs on candidate delete and repoints the slot automatically, so the slot
+// is deliberately left alone. The legacy edition_images compat row is
+// withdrawn the same way when owned by this user (ownership on uploaded_by).
+// Returns true only when at least one candidate (or legacy row) was actually
+// withdrawn, so the "shared copy withdrawn" toast stays truthful.
 async function ecWithdrawFace(book, appearance, face) {
   try {
     var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
@@ -1858,18 +1957,32 @@ async function ecWithdrawFace(book, appearance, face) {
     if (!sb) return false;
     var uid = await ecPoolUid(sb);
     if (!uid) return false;
+    var withdrew = false;
+
+    var cands = await sb.from('edition_assets').select('id,bucket,path,source_user_id')
+      .eq('isbn', isbn).eq('face', face).eq('appearance', appearance);
+    var rows = (cands && cands.data) || [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || r.source_user_id !== uid) continue; // not mine to withdraw
+      if (r.path) {
+        var short = String(r.id || '').replace(/-/g, '').slice(0, 8) || 'x';
+        try {
+          await sb.storage.from(r.bucket || 'edition-images').move(r.path,
+            'quarantine/withdrawn-' + face + '-' + appearance + '-' + isbn + '-' + short + '.jpg');
+        } catch (e) {}
+      }
+      var del = await sb.from('edition_assets').delete().eq('id', r.id);
+      if (del && !del.error) withdrew = true;
+    }
+
     var seen = await sb.from('edition_images').select('isbn,uploaded_by')
       .eq('isbn', isbn).eq('face', face).eq('appearance', appearance).maybeSingle();
-    if (!seen || !seen.data || seen.data.uploaded_by !== uid) return false; // not mine to withdraw
-    var path = (typeof editionImagePath === 'function')
-      ? editionImagePath(isbn, face, appearance)
-      : (face + '/' + appearance + '/' + isbn + '.jpg');
-    try {
-      await sb.storage.from('edition-images').move(path,
-        'quarantine/withdrawn-' + face + '-' + appearance + '-' + isbn + '.jpg');
-    } catch (e) {}
-    var del = await sb.from('edition_images').delete()
-      .eq('isbn', isbn).eq('face', face).eq('appearance', appearance);
-    return !(del && del.error);
+    if (seen && seen.data && seen.data.uploaded_by === uid) {
+      var ldel = await sb.from('edition_images').delete()
+        .eq('isbn', isbn).eq('face', face).eq('appearance', appearance);
+      if (ldel && !ldel.error) withdrew = true;
+    }
+    return withdrew;
   } catch (e) { return false; }
 }
