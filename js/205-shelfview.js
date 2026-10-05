@@ -497,16 +497,33 @@ function shelfSpineAssetId(book) {
   return book.spinePhotoAssetId ||
     (book.editionFaceRefs && book.editionFaceRefs.jacket && book.editionFaceRefs.jacket.spine) || null;
 }
+/* v286 (M2): resolve a binary asset ref to bytes. editionAssetBlob
+   (js/208, sibling worker) resolves IDB-first with a network fallback from
+   the public bucket and caches locally, so a ref synced from another device
+   still renders. Until it lands, the local-only IDB read is the fallback;
+   null keeps the generated placeholder. */
+function shelfBlobFromRef(ref) {
+  if (typeof editionAssetBlob === 'function') {
+    try { return Promise.resolve(editionAssetBlob(ref)); } catch (e) { /* fall through */ }
+  }
+  const id = (ref && typeof ref === 'object') ? ref.assetId : ref;
+  if (!id || typeof idbAssetGet !== 'function' || typeof currentDb === 'undefined' || !currentDb) {
+    return Promise.resolve(null);
+  }
+  return idbAssetGet(currentDb, id).then(function (asset) {
+    return (asset && asset.blob) || null;
+  }).catch(function () { return null; });
+}
 function shelfEnsureSpineAsset(book) {
   const id = shelfSpineAssetId(book);
-  if (!id || typeof idbAssetGet !== 'function' || typeof currentDb === 'undefined' || !currentDb) return Promise.resolve(false);
+  if (!id || typeof currentDb === 'undefined' || !currentDb) return Promise.resolve(false);
   if (shelfAssetUrls.has(id)) return Promise.resolve(true);
   if (shelfAssetPending.has(id)) return Promise.resolve(false);
   shelfAssetPending.add(id);
-  return idbAssetGet(currentDb, id).then(function (asset) {
-    if (!asset || !asset.blob) return false;
+  return shelfBlobFromRef(id).then(function (blob) {
+    if (!blob) return false;
     if (shelfAssetUrls.has(id)) return true;
-    shelfAssetUrls.set(id, URL.createObjectURL(asset.blob));
+    shelfAssetUrls.set(id, URL.createObjectURL(blob));
     return true;
   }).catch(function () { return false; }).finally(function () {
     shelfAssetPending.delete(id);
@@ -917,7 +934,9 @@ function shelfOpenPhotoSheet(id) {
       '<button data-pose="' + p[0] + '" class="' + (pose === p[0] ? 'active' : '') + '">' + p[1] + '</button>'
     ).join('') + '</div>' +
     '<button class="sv-sheet-btn" id="svPhotoTake">' + icon('camera') + ' Photograph spine</button>' +
-    (book.spinePhoto
+    /* M5: the button must also appear for binary spines (spinePhotoAssetId /
+       editionFaceRefs), not just the legacy book.spinePhoto data URL. */
+    ((book.spinePhoto || shelfSpineAssetId(book))
       ? '<button class="sv-sheet-btn danger" id="svPhotoRemove">Remove spine photo</button>' : '') +
     '<button class="sv-sheet-btn ghost" id="svSheetCancel">Cancel</button>');
   sheet.querySelectorAll('[data-pose]').forEach(b =>
@@ -929,7 +948,31 @@ function shelfOpenPhotoSheet(id) {
   document.getElementById('svPhotoTake').addEventListener('click', () => { close(); shelfStartCapture(id); });
   const rm = document.getElementById('svPhotoRemove');
   if (rm) rm.addEventListener('click', () => {
+    /* M5: binary spines live in IDB + editionFaceRefs, not book.spinePhoto.
+       Clear every representation, drop the tracked object URL(s), and delete
+       the IDB row(s) via idbAssetDelete (best effort) so replaced blobs
+       never accumulate. */
+    const ids = [];
+    if (book.spinePhotoAssetId) ids.push(book.spinePhotoAssetId);
+    const jr = book.editionFaceRefs && book.editionFaceRefs.jacket;
+    if (jr && jr.spine) ids.push(jr.spine);
+    ids.forEach(function (id) {
+      if (shelfAssetUrls.has(id)) {
+        try { URL.revokeObjectURL(shelfAssetUrls.get(id)); } catch (e) {}
+        shelfAssetUrls.delete(id);
+      }
+      if (typeof idbAssetDelete === 'function' && typeof currentDb !== 'undefined' && currentDb) {
+        try { idbAssetDelete(currentDb, id).catch(function () {}); } catch (e) {}
+      }
+    });
     delete book.spinePhoto;
+    delete book.spinePhotoAssetId;
+    if (book.editionFaceRefs && book.editionFaceRefs.jacket) {
+      delete book.editionFaceRefs.jacket.spine;
+      if (!Object.keys(book.editionFaceRefs.jacket).length) delete book.editionFaceRefs.jacket;
+      if (!Object.keys(book.editionFaceRefs).length) delete book.editionFaceRefs;
+    }
+    if (book.id) spineLookupDone.add(book.id); // don't re-adopt from the pool this session
     saveLibrary();
     close();
     renderShelf();
@@ -1267,12 +1310,49 @@ function spinePhotoISBN(book) {
   return /^(?:\d{13}|\d{10}|\d{9}X)$/.test(d) ? d : null;
 }
 // v273: the shared pool is edition_images (face/appearance keyed, API-ready).
-// spinePhotoShare contributes the AI-cropped spine as face='spine',
-// appearance='jacket'. Rows are bucket-aware: legacy v259 rows still point
-// at the spine-photos bucket.
+// Legacy v259 rows still point at the spine-photos bucket. New contributions
+// go through edition_assets (below); editionImagePath stays for the legacy
+// read paths that still reference it.
 function editionImagePath(isbn, face, appearance) {
   return face + '/' + appearance + '/' + isbn + '.jpg';
 }
+// SHA-256 of image bytes as lowercase hex (content-addressed storage paths).
+async function spinePhotoSha256(bytes) {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(function (x) {
+      return x.toString(16).padStart(2, '0');
+    }).join('');
+  } catch (e) { return null; }
+}
+// Natural dimensions of a data-URL image, or null — best-effort metadata on
+// the candidate row.
+function spinePhotoImageSize(dataUrl) {
+  return new Promise(function (resolve) {
+    try {
+      const img = new Image();
+      const safety = setTimeout(function () { resolve(null); }, 8000);
+      img.onload = function () {
+        clearTimeout(safety);
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        resolve(w && h ? { w: w, h: h } : null);
+      };
+      img.onerror = function () { clearTimeout(safety); resolve(null); };
+      img.src = dataUrl;
+    } catch (e) { resolve(null); }
+  });
+}
+async function spinePhotoUid(sb) {
+  try {
+    const u = await sb.auth.getUser();
+    return (u && u.data && u.data.user) ? u.data.user.id : null;
+  } catch (e) { return null; }
+}
+// v286 (M7): shared spine-photo pool under the immutable-candidate model.
+// AI-verified tight crops contribute as edition_assets candidates — the DB
+// trigger picks the canonical slot and syncs the edition_images read model.
+// The legacy direct edition_images write is gone: it bypassed moderation
+// (no candidate row, no attribution) and was un-withdrawable.
 async function spinePhotoShare(book, dataUrl, aiCropped) {
   try {
     if (!aiCropped) return false; // safety: only anonymous tight crops
@@ -1280,16 +1360,38 @@ async function spinePhotoShare(book, dataUrl, aiCropped) {
     if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
     const sb = await (typeof cloudClient === 'function' ? cloudClient().catch(() => null) : null);
     if (!sb) return false;
-    const seen = await sb.from('edition_images').select('isbn')
-      .eq('isbn', isbn).eq('face', 'spine').eq('appearance', 'jacket').maybeSingle();
-    if (seen && seen.data) return true; // already in the pool
     const blob = await (await fetch(dataUrl)).blob();
-    const path = editionImagePath(isbn, 'spine', 'jacket');
+    if (!blob || !blob.size) return false;
+    const sha = await spinePhotoSha256(await blob.arrayBuffer());
+    if (!sha) return false;
+    // No edition catalog row for this ISBN — nothing to attach the
+    // candidate to; skip silently.
+    const ed = await sb.from('editions').select('id').eq('isbn', isbn).maybeSingle();
+    const editionId = ed && ed.data ? ed.data.id : null;
+    if (!editionId) return false;
+    // RLS requires source_user_id = auth.uid() on insert.
+    const uid = (typeof ecPoolUid === 'function') ? await ecPoolUid(sb) : await spinePhotoUid(sb);
+    if (!uid) return false;
+    const path = 'spine/jacket/' + sha + '.jpg';
+    const existing = await sb.from('edition_assets').select('id')
+      .eq('bucket', 'edition-images').eq('path', path).maybeSingle();
+    if (existing && existing.data) return true; // already a candidate
     const up = await sb.storage.from('edition-images').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-    if (up.error && up.error.statusCode !== '409' && !/exists/i.test(up.error.message || '')) return false;
-    await sb.from('edition_images').upsert(
-      { isbn, face: 'spine', appearance: 'jacket', bucket: 'edition-images', path },
-      { onConflict: 'isbn,face,appearance', ignoreDuplicates: true });
+    if (up.error && up.error.statusCode !== '409' && up.error.statusCode !== 409 && !/exists/i.test(up.error.message || '')) return false;
+    const size = await spinePhotoImageSize(dataUrl);
+    // NOTE: v284's check constraint allows only ('capture','upload','import',
+    // 'perspective_corrected','sharpened','restored','derived') for
+    // source_type, so the spine capture is recorded as 'capture'.
+    // The insert RLS policy also requires edition_id + isbn to match an
+    // editions row — both are set above.
+    const ins = await sb.from('edition_assets').insert({
+      edition_id: editionId, isbn: isbn, face: 'spine', appearance: 'jacket',
+      bucket: 'edition-images', path: path,
+      width: size ? size.w : null, height: size ? size.h : null,
+      format: 'image/jpeg', byte_size: blob.size, sha256: sha,
+      source_type: 'capture', source_user_id: uid
+    });
+    if (ins && ins.error) return false;
     return true;
   } catch (e) { return false; }
 }
@@ -1330,7 +1432,16 @@ async function spinePhotoAdopt(book) {
     const pub = sb.storage.from(row.bucket || 'edition-images').getPublicUrl(path);
     const url = pub && pub.data && pub.data.publicUrl;
     if (!url || typeof idbAssetPut !== 'function' || typeof currentDb === 'undefined' || !currentDb) return false;
-    const blob = await (await fetch(url)).blob();
+    // v286 (M2): route through editionAssetBlob when available (IDB-first
+    // with network fallback); the inline public-URL fetch stays as fallback.
+    let blob = null;
+    if (typeof editionAssetBlob === 'function') {
+      try {
+        blob = await editionAssetBlob({ assetId: assetId || null,
+          bucket: row.bucket || 'edition-images', path: path });
+      } catch (e) { blob = null; }
+    }
+    if (!blob || !blob.size) blob = await (await fetch(url)).blob();
     if (!blob || !blob.size) return false;
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? crypto.randomUUID() : ('asset-' + Date.now() + '-' + Math.random().toString(36).slice(2));

@@ -275,11 +275,21 @@ async function b3dLocalFaces(book, revokeList) {
     out[ap] = {};
     for (var i = 0; i < keys.length; i++) {
       var face = keys[i], url = null;
-      if (faces[face] && typeof currentDb !== 'undefined' && currentDb && typeof idbAssetGet === 'function') {
+      if (faces[face] && typeof currentDb !== 'undefined' && currentDb) {
         try {
-          var asset = await idbAssetGet(currentDb, faces[face]);
-          if (asset && asset.blob) {
-            url = URL.createObjectURL(asset.blob);
+          /* v286 (M2): route binary refs through editionAssetBlob when
+             available (IDB-first with network fallback and local caching,
+             so cross-device refs render); local IDB read stays as fallback. */
+          var faceBlob = null;
+          if (typeof editionAssetBlob === 'function') {
+            try { faceBlob = await editionAssetBlob(faces[face]); } catch (e2) { faceBlob = null; }
+          }
+          if (!faceBlob && typeof idbAssetGet === 'function') {
+            var asset = await idbAssetGet(currentDb, faces[face]);
+            faceBlob = (asset && asset.blob) || null;
+          }
+          if (faceBlob) {
+            url = URL.createObjectURL(faceBlob);
             if (revokeList) revokeList.push(url);
           }
         } catch (e) {}
