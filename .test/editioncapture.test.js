@@ -3,7 +3,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
-const ROOT = '/home/hatch/workspace/booktok';
+const ROOT = '/tmp/enhance-fix';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
@@ -724,6 +724,43 @@ document.querySelector('#ec-wizard [data-ec-rm="jacket:spine"]').click();`);
     run(`window.__pool.legacy`).filter(function (r) { return r.isbn === '9780000000004'; }).length === 1 &&
     run(`window.__moves`).length === 0 &&
     !q('#ec-wizard [data-ec-rm="jacket:spine"]'));
+  run(`document.getElementById('ec-ap-cancel').click();`);
+
+  // Binary faces: the appearance-screen enhance button resolves the asset ref
+  // to a data URL, and Keep stores the enhancement as a new binary asset.
+  run(`window.ecBlobToDataUrl = async function () { return 'data:image/jpeg;base64,BINFACE'; };
+window.ecBlobSha256 = async function () { return 'ee'.repeat(32); };
+window.ecDataUrlSize = async function () { return { width: 120, height: 200 }; };
+window.editionAssetBlob = async function () { return {}; };
+window.fetch = async function (url, opts) {
+  if (url === '/api/enhance-face') {
+    return { ok: true, status: 200, json: async function () { return { image: 'data:image/jpeg;base64,ENH' }; } };
+  }
+  return { blob: async function () { return {}; } };
+};
+window.__ehBinDone = false;
+library = [{ id: 'ecb10', title: 'Binary Enhance', isbn13: '9780000000010',
+  editionFaceRefs: { jacket: { spine: { assetId: 'old-id', bucket: 'edition-images',
+    path: 'spine/jacket/old.jpg', width: 120, height: 200 } } },
+  spinePhotoAssetId: 'old-id' }];
+ecStartScan('ecb10');`);
+  ok('binary saved face has an enhance button', !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  run(`document.querySelector('#ec-wizard [data-ec-eh="jacket:spine"]').click();`);
+  await flush('!!document.getElementById("ec-eh-sharpen")');
+  ok('binary face enhance resolves the ref and opens the picker', !!q('#ec-enhance #ec-eh-sharpen'));
+  run(`document.getElementById('ec-eh-sharpen').click();`);
+  await flush('!!document.getElementById("ec-eh-keep")');
+  run(`document.getElementById('ec-eh-keep').click();
+(function wait() {
+  if (library[0].editionFaceRefs.jacket.spine.assetId !== 'old-id') { window.__ehBinDone = true; }
+  else setTimeout(wait, 30);
+})();`);
+  await flush('window.__ehBinDone');
+  ok('kept enhancement replaces the binary ref (new asset, no data URL)',
+    run(`library[0].editionFaceRefs.jacket.spine.assetId`) !== 'old-id' &&
+    run(`library[0].editionFaceRefs.jacket.spine.path`) === 'spine/jacket/' + 'ee'.repeat(32) + '.jpg' &&
+    run(`library[0].spinePhotoAssetId`) === run(`library[0].editionFaceRefs.jacket.spine.assetId`) &&
+    !run(`library[0].editionFaces`));
   run(`document.getElementById('ec-ap-cancel').click();`);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
