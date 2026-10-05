@@ -1144,16 +1144,24 @@ function shelfOpenViewfinder(bookId) {
     '<div class="sv-review-actions">' +
       '<button class="sv-sheet-btn ghost" id="svVfCancel">Cancel</button>' +
       '<button class="sv-sheet-btn ghost" id="svVfLibrary">Choose photo</button>' +
+      '<button class="sv-sheet-btn ghost" id="svVfTorch" hidden>Flash: off</button>' +
       '<button class="sv-sheet-btn solid" id="svVfSnap">Capture</button>' +
     '</div>');
   const video = sheet.querySelector('#svVideo');
-  const done = (next) => { shelfStopCam(); close(); if (next) next(); };
+  let torchCleanup = null;
+  const done = (next) => {
+    if (torchCleanup) { try { torchCleanup(); } catch (e) {} torchCleanup = null; }
+    shelfStopCam(); close(); if (next) next();
+  };
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
     .then(stream => {
       shelfCamStream = stream;
       video.srcObject = stream;
       const p = video.play();
       if (p && p.catch) p.catch(() => {});
+      if (typeof ecTorchWire === 'function') {
+        torchCleanup = ecTorchWire(video, sheet.querySelector('#svVfTorch'));
+      }
     })
     .catch(() => done(() => shelfNativeCapture(bookId)));
   sheet.querySelector('#svVfCancel').addEventListener('click', () => done());

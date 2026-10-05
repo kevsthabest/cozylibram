@@ -265,3 +265,35 @@ document.addEventListener('pointerdown', e => {
   document.addEventListener('pointerup', up);
   document.addEventListener('pointercancel', up);
 });
+
+/* v290: torch toggle for a live camera viewfinder. Wires btn to the video
+   track's torch constraint; the button stays hidden when unsupported.
+   Returns a cleanup that extinguishes the torch, or null. */
+function ecTorchWire(video, btn) {
+  try {
+    var stream = video && video.srcObject;
+    var track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+    var caps = (track && track.getCapabilities) ? track.getCapabilities() : {};
+    if (!track || !caps.torch || !btn) return null;
+    var on = false;
+    var setLabel = function () { btn.textContent = 'Flash: ' + (on ? 'on' : 'off'); };
+    btn.hidden = false;
+    setLabel();
+    btn.addEventListener('click', function () {
+      var next = !on;
+      try {
+        track.applyConstraints({ advanced: [{ torch: next }] }).then(function () {
+          on = next; setLabel();
+        }, function () {
+          if (typeof toast === 'function') toast('Flash not available on this camera');
+        });
+      } catch (e) {
+        if (typeof toast === 'function') toast('Flash not available on this camera');
+      }
+    });
+    return function () {
+      try { track.applyConstraints({ advanced: [{ torch: false }] }).catch(function () {}); }
+      catch (e) {}
+    };
+  } catch (e) { return null; }
+}

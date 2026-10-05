@@ -921,6 +921,7 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
     '<div class="ec-actions">' +
       '<button class="btn ghost" id="ec-cap-back">Back</button>' +
       '<button class="btn ghost sm" id="ec-cap-auto">Auto-scan: on</button>' +
+      '<button class="btn ghost sm" id="ec-cap-torch" hidden>Flash: off</button>' +
       '<button class="btn ghost" id="ec-cap-lib">Choose photo</button>' +
       '<button class="btn primary" id="ec-cap-snap">Capture</button>' +
     '</div></div>';
@@ -942,9 +943,11 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
   var stopScan = function () {
     if (raf) { try { cancelAnimationFrame(raf); } catch (e) {} raf = 0; }
   };
+  var torchCleanup = null;
   var domTeardown = function () {
     if (tornDown) return; tornDown = true;
     stopScan();
+    if (torchCleanup) { try { torchCleanup(); } catch (e) {} torchCleanup = null; }
     if (stream) { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} stream = null; }
     var n = document.getElementById('ec-capture');
     if (n) n.remove();
@@ -1110,6 +1113,9 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
         video.srcObject = s;
         var p = video.play();
         if (p && p.catch) p.catch(function () {});
+        if (typeof ecTorchWire === 'function') {
+          torchCleanup = ecTorchWire(video, ov.querySelector('#ec-cap-torch'));
+        }
         setAuto(true);
       })
       .catch(function () { if (typeof toast === 'function') toast('Camera unavailable \u2014 choose a photo instead'); });
