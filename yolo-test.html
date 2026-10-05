@@ -139,16 +139,34 @@ detectBtn.addEventListener('click', async () => {
     // draw
     overlay.width = vw; overlay.height = vh;
     octx.clearRect(0, 0, vw, vh);
+    // guide: tall center rect (spine-like) — the geometry filter
+    const gw = vw * 0.22, gh = vh * 0.62;
+    const gx0 = (vw - gw) / 2, gy0 = (vh - gh) / 2, gx1 = gx0 + gw, gy1 = gy0 + gh;
+    octx.strokeStyle = '#fff'; octx.lineWidth = 3; octx.setLineDash([12, 8]);
+    octx.strokeRect(gx0, gy0, gw, gh);
+    octx.setLineDash([]);
+    // best detection = max IoU with guide (class ignored)
+    let bestK = -1, bestIoU = 0;
+    for (const k of keep) {
+      const b = boxes[k];
+      const ix = Math.max(0, Math.min(b[2], gx1) - Math.max(b[0], gx0));
+      const iy = Math.max(0, Math.min(b[3], gy1) - Math.max(b[1], gy0));
+      const inter = ix * iy;
+      const union = (b[2]-b[0])*(b[3]-b[1]) + gw*gh - inter;
+      const iou = union > 0 ? inter / union : 0;
+      if (iou > bestIoU) { bestIoU = iou; bestK = k; }
+    }
     let html = '';
     for (const k of keep) {
       const b = boxes[k], label = COCO[classes[k]] || ('c' + classes[k]);
       const isBook = label === 'book';
-      octx.strokeStyle = isBook ? '#0f0' : '#f00';
-      octx.lineWidth = 4;
+      const isBest = k === bestK;
+      octx.strokeStyle = isBest ? '#ff0' : (isBook ? '#0f0' : '#f00');
+      octx.lineWidth = isBest ? 6 : 4;
       octx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
-      octx.fillStyle = isBook ? '#0f0' : '#f00';
+      octx.fillStyle = isBest ? '#ff0' : (isBook ? '#0f0' : '#f00');
       octx.font = 'bold 28px sans-serif';
-      octx.fillText(label + ' ' + scores[k].toFixed(2), b[0] + 6, b[1] + 32);
+      octx.fillText((isBest ? 'BEST ' : '') + label + ' ' + scores[k].toFixed(2), b[0] + 6, b[1] + 32);
       // mask overlay
       const cf = coeffs[k], mw = 160, mh = 160;
       const mCan = document.createElement('canvas'); mCan.width = mw; mCan.height = mh;
@@ -161,7 +179,7 @@ detectBtn.addEventListener('click', async () => {
       }
       mctx.putImageData(mImg, 0, 0);
       octx.drawImage(mCan, b[0], b[1], b[2] - b[0], b[3] - b[1]);
-      html += '<div>' + label + ' — ' + (scores[k]*100).toFixed(0) + '%</div>';
+      html += '<div>' + (k === bestK ? '<b>BEST&gt; </b>' : '') + label + ' — ' + (scores[k]*100).toFixed(0) + '%</div>';
     }
     resultsEl.innerHTML = html || '<div>No detections</div>';
     setStatus('Done in ' + Math.round(performance.now() - t0) + 'ms. ' + keep.length + ' object(s).');
