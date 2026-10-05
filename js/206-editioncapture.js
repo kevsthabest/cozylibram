@@ -252,6 +252,43 @@ function ecSobel(g, w, h) {
   return { mag: mag, max: max };
 }
 
+// v297: one-pass separated Sobel (|gx|, |gy|) for projection-based
+// guided detection.
+function ecSobelSep(g, w, h) {
+  var gx = new Uint16Array(w * h), gy = new Uint16Array(w * h);
+  for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
+    var i = y * w + x;
+    gx[i] = Math.abs(-g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1] + g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1]);
+    gy[i] = Math.abs(-g[i - w - 1] - 2 * g[i - w] - g[i - w + 1] + g[i + w - 1] + 2 * g[i + w] + g[i + w + 1]);
+  }
+  return { gx: gx, gy: gy };
+}
+
+// v297: guided presence — the longest continuous run of strong directional
+// edges inside the ROI, as a fraction of the ROI's extent. A book face is a
+// rectangle: it always contributes a long straight edge (spine sides,
+// cover top/bottom, page striations). Returns { v, h } fractions.
+function ecGuidePresence(gray, w, h, roi) {
+  var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
+  var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
+  var y0 = Math.max(1, Math.floor(roi.y)), y1 = Math.min(h - 2, Math.ceil(roi.y + roi.h));
+  if (x1 - x0 < 12 || y1 - y0 < 20) return { v: 0, h: 0 };
+  var TH = 100, bestV = 0, bestH = 0, x, y;
+  for (x = x0; x <= x1; x++) {
+    var cv = 0;
+    for (y = y0; y <= y1; y++) {
+      if (se.gx[y * w + x] > TH) { cv++; if (cv > bestV) bestV = cv; } else cv = 0;
+    }
+  }
+  for (y = y0; y <= y1; y++) {
+    var ch = 0;
+    for (x = x0; x <= x1; x++) {
+      if (se.gy[y * w + x] > TH) { ch++; if (ch > bestH) bestH = ch; } else ch = 0;
+    }
+  }
+  return { v: bestV / (y1 - y0), h: bestH / (x1 - x0) };
+}
+
 function ecThreshold(mag, w, h, t) {
   var o = new Uint8Array(w * h), c = 0;
   for (var i = 0; i < w * h; i++) if (mag[i] > t) { o[i] = 1; c++; }
@@ -358,16 +395,6 @@ function ecLargestComponent(mask, w, h) {
   return ecTopComponents(mask, w, h, 1)[0] || null;
 }
 
-// v296: is the rect's center inside the region of interest (expanded a
-// little for forgiveness)? The guide shows the user where the book goes;
-// clutter outside it must not win.
-function ecInRoi(rect, roi) {
-  if (!roi || roi.w < 8 || roi.h < 8) return true;
-  var mx = roi.w * 0.25, my = roi.h * 0.25;
-  return rect.cx >= roi.x - mx && rect.cx <= roi.x + roi.w + mx &&
-         rect.cy >= roi.y - my && rect.cy <= roi.y + roi.h + my;
-}
-
 // Andrew's monotone chain.
 function ecConvexHull(pts) {
   var p = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
@@ -463,8 +490,22 @@ function ecPerimeterDensity(edges, w, h, quad) {
   return total ? on / total : 0;
 }
 
-function ecDetectBookRect(gray, w, h, roi) {
+function ecDetectBookRect(gray, w, h, roi, guide) {
   var n = w * h;
+  // v297: with a guide ROI, verify a book-like edge structure is present and
+  // then trust the guide rect itself. The user framed the shot; the detector's
+  // job is presence, not re-measuring the outline (which background clutter
+  // corrupts). The rect is perfectly stable, so the stability tracker just
+  // gates on continued presence.
+  if (roi && guide) {
+    var pr = ecGuidePresence(gray, w, h, roi);
+    if (Math.max(pr.v, pr.h) >= 0.35) {
+      var qx = roi.x, qy = roi.y;
+      var quad = ecNormQuad([[qx, qy], [qx + roi.w, qy], [qx + roi.w, qy + roi.h], [qx, qy + roi.h]]);
+      return { quad: quad, cx: qx + roi.w / 2, cy: qy + roi.h / 2, w: roi.w, h: roi.h, angle: 0 };
+    }
+    return null;
+  }
   var blur = ecBlur3(gray, w, h);
   var se = ecSobel(blur, w, h);
   if (se.max < 120) return null; // too flat to see edges
@@ -477,12 +518,8 @@ function ecDetectBookRect(gray, w, h, roi) {
   // components and take the first validated rect centered in the ROI, so
   // background clutter outside the guide can no longer win.
   var edges = ecDilate(th.bin, w, h, 3);
-  var comps = roi ? ecTopComponents(edges, w, h, 5) : [ecLargestComponent(edges, w, h)];
-  for (var ci = 0; ci < comps.length; ci++) {
-    var r = ecRectFromPixels(edges, comps[ci], edges, w, h);
-    if (r && (!roi || ecInRoi(r, roi))) return r;
-  }
-  if (roi) return null;
+  var r = ecRectFromPixels(edges, ecLargestComponent(edges, w, h), edges, w, h);
+  if (r) return r;
   // Path 2 (fallback): interior opening — largest interior blob after
   // morphological opening erases text partitions.
   var edges1 = ecDilate(th.bin, w, h, 1);
@@ -1354,7 +1391,15 @@ function ecOrbitCapture() {
     if (!frames.length) { obResume(); return; }
     frames.sort(function (x, y) { return y.score - x.score; });
     var c = frames[0].canvas, quad = null, url = null;
-    try { quad = ecDetectQuadForCanvas(c); } catch (e) {}
+    try {
+      if (obRoi && c.width) {
+        var s = c.width / EC_SCAN_W;
+        quad = ecNormQuad([[obRoi.x * s, obRoi.y * s], [(obRoi.x + obRoi.w) * s, obRoi.y * s],
+                [(obRoi.x + obRoi.w) * s, (obRoi.y + obRoi.h) * s], [obRoi.x * s, (obRoi.y + obRoi.h) * s]]);
+      } else {
+        quad = ecDetectQuadForCanvas(c);
+      }
+    } catch (e) {}
     if (quad) {
       var size = ecQuadSize(quad, EC_MAX_DIM), w = null;
       try { w = ecWarpCanvas(c, quad, size[0], size[1]); } catch (e) {}
@@ -1392,8 +1437,8 @@ function ecOrbitCapture() {
                                video.videoWidth, video.videoHeight, aw, ah);
       } catch (e) { obRoi = null; }
     }
-    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah, obRoi);
     var st = EC.steps[obIdx], face = ecFaceDef(st.face);
+    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah, obRoi, face.guide);
     var shapeOk = !!(rect && ecFaceAspectOk(face, rect));
     obDrawFx(rect, vw, vh);
     var trk = ecScanTrack(obTracker, shapeOk ? rect : null);
