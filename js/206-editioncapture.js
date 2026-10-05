@@ -328,30 +328,44 @@ function ecFillBackground(edges, w, h) {
   return bg;
 }
 
-// Largest connected component of a binary mask, scored by area biased
+// Top-k connected components of a binary mask, scored by area biased
 // toward the frame center (the user aims at the book).
-function ecLargestComponent(mask, w, h) {
+function ecTopComponents(mask, w, h, k) {
   var seen = new Uint8Array(w * h);
-  var best = null, bestScore = 0;
+  var all = [];
   var ccx = w / 2, ccy = h / 2, maxd = Math.hypot(ccx, ccy) || 1;
   for (var i = 0; i < w * h; i++) {
     if (!mask[i] || seen[i]) continue;
     var pts = ecFloodFill(mask, w, h, i % w, (i / w) | 0, seen);
     if (!pts.length) continue;
     var sx = 0, sy = 0, tb = false;
-    for (var k = 0; k < pts.length; k++) {
-      var p = pts[k], x = p % w, y = (p / w) | 0;
+    for (var j = 0; j < pts.length; j++) {
+      var p = pts[j], x = p % w, y = (p / w) | 0;
       sx += x; sy += y;
       if (x < 2 || y < 2 || x > w - 3 || y > h - 3) tb = true;
     }
     var cx = sx / pts.length, cy = sy / pts.length;
-    var score = pts.length * (1.35 - Math.hypot(cx - ccx, cy - ccy) / maxd);
-    if (score > bestScore) {
-      bestScore = score;
-      best = { pts: pts, area: pts.length, cx: cx, cy: cy, touchesBorder: tb };
-    }
+    all.push({ pts: pts, area: pts.length, cx: cx, cy: cy, touchesBorder: tb,
+               score: pts.length * (1.35 - Math.hypot(cx - ccx, cy - ccy) / maxd) });
   }
-  return best;
+  all.sort(function (a, b) { return b.score - a.score; });
+  return all.slice(0, k || 1);
+}
+
+// Largest connected component of a binary mask, scored by area biased
+// toward the frame center (the user aims at the book).
+function ecLargestComponent(mask, w, h) {
+  return ecTopComponents(mask, w, h, 1)[0] || null;
+}
+
+// v296: is the rect's center inside the region of interest (expanded a
+// little for forgiveness)? The guide shows the user where the book goes;
+// clutter outside it must not win.
+function ecInRoi(rect, roi) {
+  if (!roi || roi.w < 8 || roi.h < 8) return true;
+  var mx = roi.w * 0.25, my = roi.h * 0.25;
+  return rect.cx >= roi.x - mx && rect.cx <= roi.x + roi.w + mx &&
+         rect.cy >= roi.y - my && rect.cy <= roi.y + roi.h + my;
 }
 
 // Andrew's monotone chain.
@@ -449,7 +463,7 @@ function ecPerimeterDensity(edges, w, h, quad) {
   return total ? on / total : 0;
 }
 
-function ecDetectBookRect(gray, w, h) {
+function ecDetectBookRect(gray, w, h, roi) {
   var n = w * h;
   var blur = ecBlur3(gray, w, h);
   var se = ecSobel(blur, w, h);
@@ -459,9 +473,16 @@ function ecDetectBookRect(gray, w, h) {
   if (th.count < n * 0.004 || th.count > n * 0.4) return null;
   // Path 1: the book outline is the largest edge component (cover text
   // stays as separate small components, or merges harmlessly inside).
+  // v296: with a region of interest (the on-screen guide), try the top
+  // components and take the first validated rect centered in the ROI, so
+  // background clutter outside the guide can no longer win.
   var edges = ecDilate(th.bin, w, h, 3);
-  var r = ecRectFromPixels(edges, ecLargestComponent(edges, w, h), edges, w, h);
-  if (r) return r;
+  var comps = roi ? ecTopComponents(edges, w, h, 5) : [ecLargestComponent(edges, w, h)];
+  for (var ci = 0; ci < comps.length; ci++) {
+    var r = ecRectFromPixels(edges, comps[ci], edges, w, h);
+    if (r && (!roi || ecInRoi(r, roi))) return r;
+  }
+  if (roi) return null;
   // Path 2 (fallback): interior opening — largest interior blob after
   // morphological opening erases text partitions.
   var edges1 = ecDilate(th.bin, w, h, 1);
@@ -1176,10 +1197,27 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
    editor. Front/back share an aspect, so prompt order disambiguates them
    (same as the classic flow). Manual mode (the classic per-face flow) stays
    one tap away and resumes at the current face. */
+// v296: map the dashed guide's box to analysis pixels. The viewfinder shows
+// the video with object-fit: cover, so the guide rect is mapped through the
+// cover crop back onto the video frame. Pure math — unit tested.
+function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
+  if (!gr || !vr || !gr.width || !vr.width || !vw || !vh) return null;
+  var elA = vr.width / vr.height, vidA = vw / vh;
+  var visW, visH;
+  if (vidA >= elA) { visW = elA / vidA; visH = 1; }
+  else { visW = 1; visH = vidA / elA; }
+  var x0 = (1 - visW) / 2, y0 = (1 - visH) / 2;
+  var vx = x0 + ((gr.left - vr.left) / vr.width) * visW;
+  var vy = y0 + ((gr.top - vr.top) / vr.height) * visH;
+  return { x: vx * aw, y: vy * ah,
+           w: (gr.width / vr.width) * visW * aw,
+           h: (gr.height / vr.height) * visH * ah };
+}
+
 function ecOrbitCapture() {
   if (typeof document === 'undefined' || !EC || !EC.steps || !EC.steps.length) return null;
   var obIdx = 0, obPhase = 'aim', obTornDown = false;
-  var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0;
+  var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0, obRoi = null;
   var obTracker = ecNewScanTracker(), obTorchCleanup = null;
 
   var ov = document.createElement('div');
@@ -1240,10 +1278,12 @@ function ecOrbitCapture() {
     skipBtn.style.display = st.skippable ? '' : 'none';
     obTracker = ecNewScanTracker();
     obAimSince = Date.now();
+    obRoi = null; // recomputed on first loop tick (guide class just changed)
     obPhase = 'aim';
     obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
     obRenderDots();
   };
+
 
   var obDrawFx = function (rect, vw, vh) {
     if (!fxCtx || !vw) return;
@@ -1346,7 +1386,13 @@ function ecOrbitCapture() {
       actx.drawImage(video, 0, 0, aw, ah);
       d = actx.getImageData(0, 0, aw, ah);
     } catch (e) { return; }
-    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah);
+    if (!obRoi) {
+      try {
+        obRoi = ecGuideRoiMath(guide.getBoundingClientRect(), video.getBoundingClientRect(),
+                               video.videoWidth, video.videoHeight, aw, ah);
+      } catch (e) { obRoi = null; }
+    }
+    var rect = ecDetectBookRect(ecToGray(d.data, aw, ah), aw, ah, obRoi);
     var st = EC.steps[obIdx], face = ecFaceDef(st.face);
     var shapeOk = !!(rect && ecFaceAspectOk(face, rect));
     obDrawFx(rect, vw, vh);
