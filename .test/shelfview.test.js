@@ -506,61 +506,161 @@ localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`)
   ok('sheet closed after fallback', !q('#svSheet'));
   ok('no stream left running', run(`shelfCamStream`) === null);
   try { delete navigator.mediaDevices; } catch (e) {}
-  /* ---- 29. v273: edition_images pool (face/appearance keyed) ---- */
-  run(`window.__eiCalls = [];
-    window.__eiRows = [{ bucket: 'spine-photos', path: 'spines/9780143127748.jpg', appearance: 'jacket' }];
-    window.__eiChain = () => ({ eq: () => window.__eiChain(),
-      maybeSingle: async () => { window.__eiCalls.push('seen'); return { data: null }; },
-      limit: async () => ({ data: window.__eiRows }) });
-    cloudClient = async () => ({
-      from: (t) => ({
-        select: () => window.__eiChain(),
-        upsert: async (row, opts) => {
-          window.__eiCalls.push('upsert:' + t + ':' + JSON.stringify(row));
-          return { data: null, error: null };
-        },
-      }),
-      storage: { from: (b) => ({
-        upload: async (path) => { window.__eiCalls.push('upload:' + b + ':' + path); return { error: null }; },
-        getPublicUrl: (path) => ({ data: { publicUrl: 'https://cdn.example/' + b + '/' + path } }),
-      }) },
-    });`);
-  // stub fetch->blob and FileReader for the dataUrl round-trip
+  /* ---- 29. v286: spine share under the immutable-candidate model ---- */
+  // spinePhotoShare inserts an edition_assets candidate row (source_type
+  // 'capture', content-addressed sha256 path) instead of writing
+  // edition_images directly; the legacy write path is gone.
+  window.crypto.subtle = require('crypto').webcrypto.subtle;
+  run(`spinePhotoImageSize = async function () { return { w: 120, h: 300 }; };
+window.__sh = {
+  editions: { '9780143127748': { id: 'ed-s1' } },
+  existingPaths: {},
+  uploads: [],
+  inserts: [],
+  downloads: [],
+  slotAssetId: null,
+  assetRow: null,
+  legacyRows: []
+};
+function __shChain(t) {
+  var filters = {};
+  var c = {};
+  c.eq = function (k, v) { filters[k] = v; return c; };
+  c.select = function () { return c; };
+  c.limit = function () { return c; };
+  c.maybeSingle = async function () {
+    if (t === 'editions') {
+      var e = window.__sh.editions[filters.isbn];
+      return { data: e ? { id: e.id } : null, error: null };
+    }
+    if (t === 'edition_asset_slots') {
+      return { data: window.__sh.slotAssetId ? { canonical_asset_id: window.__sh.slotAssetId } : null, error: null };
+    }
+    if (t === 'edition_assets') {
+      if (filters.id) return { data: window.__sh.assetRow, error: null };
+      if (filters.path) return { data: window.__sh.existingPaths[filters.path] ? { id: 'asset-old' } : null, error: null };
+    }
+    return { data: null, error: null };
+  };
+  c.then = function (resolve) {
+    if (t === 'edition_images') resolve({ data: window.__sh.legacyRows, error: null });
+    else resolve({ data: [], error: null });
+  };
+  c.insert = async function (obj) {
+    window.__sh.inserts.push({ table: t, row: obj });
+    return { error: null };
+  };
+  return c;
+}
+cloudClient = async () => ({
+  auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+  from: (t) => __shChain(t),
+  storage: { from: (b) => ({
+    upload: async (path, blob, opts) => {
+      window.__sh.uploads.push({ bucket: b, path: path, upsert: !!(opts && opts.upsert) });
+      return { error: null };
+    },
+    download: async (path) => {
+      window.__sh.downloads.push(b + ':' + path);
+      return { data: new Blob(['q'], { type: 'image/jpeg' }), error: null };
+    },
+    getPublicUrl: (path) => ({ data: { publicUrl: 'https://cdn.example/' + b + '/' + path } }),
+  }) },
+});`);
+  // stub fetch->blob for the dataUrl round-trip
   const shareOk = await run(`(async () => {
     window.__fetchOrig = window.fetch;
-    window.fetch = async (u) => u.indexOf('data:image') === 0
-      ? { blob: async () => new Blob(['x'], { type: 'image/jpeg' }) }
-      : window.__fetchOrig(u);
+    window.fetch = async (u) => ({ blob: async () => new Blob(['sx'], { type: 'image/jpeg' }) });
     try { return await spinePhotoShare({ isbn: '9780143127748' }, 'data:image/jpeg;base64,AAA', true); }
     finally { window.fetch = window.__fetchOrig; }
   })()`);
-  ok('share uploads to the edition-images bucket', run(`window.__eiCalls`).some(c =>
-    c === 'upload:edition-images:spine/jacket/9780143127748.jpg'));
-  ok('share upserts face=spine appearance=jacket', run(`window.__eiCalls`).some(c =>
-    c.indexOf('upsert:edition_images:') === 0 && c.indexOf('"face":"spine"') !== -1 &&
-    c.indexOf('"appearance":"jacket"') !== -1 && c.indexOf('"bucket":"edition-images"') !== -1));
+  const shUp = run(`window.__sh.uploads[0]`);
+  const shIns = run(`(window.__sh.inserts.filter(function (i) { return i.table === 'edition_assets'; })[0] || {}).row`);
+  const shHex = shUp && shUp.path.split('/')[2].replace(/\.jpg$/, '');
+  ok('share uploads the candidate to the edition-images bucket at a sha256 path',
+    shareOk === true &&
+    run(`window.__sh.uploads`).length === 1 &&
+    shUp.bucket === 'edition-images' &&
+    /^spine\/jacket\/[0-9a-f]{64}\.jpg$/.test(shUp.path) &&
+    shUp.upsert === false);
+  ok('share inserts an edition_assets candidate row (source_type capture, attributed)',
+    shIns && shIns.edition_id === 'ed-s1' && shIns.isbn === '9780143127748' &&
+    shIns.face === 'spine' && shIns.appearance === 'jacket' &&
+    shIns.bucket === 'edition-images' && shIns.path === shUp.path &&
+    shIns.sha256 === shHex && shIns.source_type === 'capture' &&
+    shIns.source_user_id === 'user-1' && shIns.width === 120 && shIns.height === 300);
+  ok('share writes no legacy edition_images row',
+    run(`window.__sh.inserts`).filter(function (i) { return i.table === 'edition_images'; }).length === 0);
   ok('share reports success', shareOk === true);
-  const adoptOk = await run(`(async () => {
+  // Re-sharing identical bytes dedups on the content path: no re-upload.
+  const shareDedup = await run(`(async () => {
+    window.__sh.existingPaths[window.__sh.uploads[0].path] = true;
+    window.__sh.uploads = [];
+    window.__fetchOrig = window.fetch;
+    window.fetch = async (u) => ({ blob: async () => new Blob(['sx'], { type: 'image/jpeg' }) });
+    try { return await spinePhotoShare({ isbn: '9780143127748' }, 'data:image/jpeg;base64,AAA', true); }
+    finally { window.fetch = window.__fetchOrig; }
+  })()`);
+  ok('share dedups an already-shared candidate (no re-upload)',
+    shareDedup === true && run(`window.__sh.uploads`).length === 0);
+
+  /* ---- 30. v286: adopt resolves the canonical asset, IDB-first ---- */
+  // In-memory IDB stand-ins (jsdom has no IndexedDB; currentDb is null).
+  run(`window.__idbStore = {};
+currentDb = { mem: true };
+idbAssetPut = async function (db, rec) { window.__idbStore[rec.id] = rec; };
+idbAssetGet = async function (db, id) { return window.__idbStore[id] || null; };
+window.URL.createObjectURL = function () { return 'blob:fake'; };
+window.__sh.slotAssetId = 'asset-c1';
+window.__sh.assetRow = { bucket: 'edition-images', path: 'spine/jacket/cand1.jpg' };
+window.__sh.downloads = [];`);
+  const adopt1 = await run(`(async () => {
     window.__fetchOrig2 = window.fetch;
-    window.fetch = async (u) => u.indexOf('https://cdn.example/') === 0
-      ? { blob: async () => new Blob(['y'], { type: 'image/jpeg' }) }
-      : window.__fetchOrig2(u);
-    window.__frOrig = window.FileReader;
-    window.FileReader = function () {};
-    window.FileReader.prototype.readAsDataURL = function () {
-      this.result = 'data:image/jpeg;base64,BBB';
-      if (this.onload) this.onload();
-    };
+    window.fetch = async (u) => { throw new Error('network must not be used: ' + u); };
     try {
       const b = { id: 'adopt1', isbn: '9780143127748' };
       const r = await spinePhotoAdopt(b);
-      return r && b.spinePhoto === 'data:image/jpeg;base64,BBB';
-    } finally {
-      window.fetch = window.__fetchOrig2;
-      window.FileReader = window.__frOrig;
-    }
+      window.__adopted1 = b;
+      return r;
+    } finally { window.fetch = window.__fetchOrig2; }
   })()`);
-  ok('adopt resolves the legacy bucket from the row', adoptOk === true);
+  const ad1 = run(`window.__adopted1`);
+  ok('adopt resolves the canonical asset via the slot and reports success', adopt1 === true);
+  ok('adopt stores a local ref (assetId object shape), never a data URL',
+    ad1 && typeof ad1.spinePhotoAssetId === 'string' &&
+    ad1.editionFaceRefs && ad1.editionFaceRefs.jacket &&
+    ad1.editionFaceRefs.jacket.spine === ad1.spinePhotoAssetId &&
+    ad1.spinePhoto === undefined);
+  ok('adopt fetches the candidate from the public bucket on IDB miss',
+    JSON.stringify(run(`window.__sh.downloads`)) === JSON.stringify(['edition-images:spine/jacket/cand1.jpg']));
+  ok('adopt caches the shared blob in IDB (pool cache + local shared-cache row)',
+    run(`window.__idbStore['asset-c1'] && window.__idbStore['asset-c1'].blob.size`) === 1 &&
+    run(`window.__idbStore['asset-c1'].source`) === 'shared-pool' &&
+    run(`window.__idbStore[window.__adopted1.spinePhotoAssetId].source`) === 'shared-cache' &&
+    run(`window.__idbStore[window.__adopted1.spinePhotoAssetId].remoteAssetId`) === 'asset-c1');
+
+  /* ---- 31. v286: adopt falls back to the legacy edition_images row ---- */
+  run(`window.__sh.slotAssetId = null;
+window.__sh.legacyRows = [{ bucket: 'spine-photos', path: 'spines/9780143127748.jpg', appearance: 'jacket' }];`);
+  const adopt2 = await run(`(async () => {
+    window.__fetchOrig3 = window.fetch;
+    window.fetch = async (u) => u.indexOf('https://cdn.example/') === 0
+      ? { blob: async () => new Blob(['y'], { type: 'image/jpeg' }) }
+      : window.__fetchOrig3(u);
+    try {
+      const b = { id: 'adopt2', isbn: '9780143127748' };
+      const r = await spinePhotoAdopt(b);
+      window.__adopted2 = b;
+      return r;
+    } finally { window.fetch = window.__fetchOrig3; }
+  })()`);
+  const ad2 = run(`window.__adopted2`);
+  ok('adopt resolves the legacy bucket from the edition_images row',
+    adopt2 === true &&
+    ad2 && typeof ad2.spinePhotoAssetId === 'string' &&
+    ad2.editionFaceRefs.jacket.spine === ad2.spinePhotoAssetId &&
+    ad2.spinePhoto === undefined &&
+    run(`window.__idbStore[window.__adopted2.spinePhotoAssetId].blob.size`) === 1);
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

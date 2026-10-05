@@ -2,6 +2,10 @@
 // image cache scoped to canonical bucket covers only — the old catch-all
 // that cached every image the device ever rendered is gone — and Settings
 // shows live cover-storage usage plus a clear-cached-covers button.
+// v286: the edition-assets model adds the edition-images bucket to the
+// runtime cache — its objects are immutable content-addressed candidates
+// (face/appearance/<sha256>.jpg), i.e. the same "canonical public bucket
+// asset" class as covers. Still path-scoped, still no catch-all.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -25,7 +29,8 @@ const runInWindow = (js) => {
 ok('image cache has a version-proof name', /const IMG_CACHE = 'cozy-libram-covers'/.test(sw));
 ok('only canonical bucket covers are cached (path-scoped)',
   /\/storage\/v1\/object\/public\/covers\//.test(sw) &&
-  /destination === 'image' && url\.pathname\.indexOf\(COVERS_PATH\) === 0/.test(sw));
+  /\/storage\/v1\/object\/public\/edition-images\//.test(sw) &&
+  /destination === 'image' &&\s*\(\s*url\.pathname\.indexOf\(COVERS_PATH\) === 0 \|\| url\.pathname\.indexOf\(EDITION_IMAGES_PATH\) === 0\s*\)/.test(sw));
 ok('the old catch-all image branch is gone',
   !/if \(e\.request\.destination === 'image'\) \{/.test(sw));
 ok('opaque cross-origin responses are no longer special-cased',

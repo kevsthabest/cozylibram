@@ -213,6 +213,12 @@ function ev(uid, name, cat, props, created) {
     // isbn plus the linked work's title/authors — global bibliographic
     // catalog data (public book metadata, same class as the v271 works
     // fields), never user library contents.
+    // The thirteenth/fourteenth/fifteenth (v286) are the edition-asset
+    // moderation lab: editions bibliographic fields (id, isbn, publisher,
+    // format, page_count), edition_assets candidate metadata and quality
+    // scores (deliberately NOT source_user_id — no contributor PII in the
+    // projection), and edition_asset_slots canonical-slot state. Asset
+    // evidence only, never library contents.
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
@@ -226,6 +232,9 @@ function ev(uid, name, cat, props, created) {
       'isbn, work_id',
       'id, title_norm, author_norm',
       'isbn, works(title, authors)',
+      'id,isbn,publisher,format,page_count',
+      'id,face,appearance,bucket,path,width,height,quality_score,sharpness_score,exposure_score,perspective_score,coverage_score,glare_score,resolution_score,stability_score,verified,rejected,created_at',
+      'face,appearance,canonical_asset_id,selection_method,selected_at',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&
