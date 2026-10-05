@@ -124,5 +124,27 @@ const topk = run(`(function () {
   ok('top components are score-ordered', cs.length === 2 && cs[0] === 120 && cs[1] === 30);
 }
 
+// ---- 9. ecTightenQuad: precise one-time crop (v299) ----
+const tighten = run(prelude + `(function () {
+  var g = synthGray(240, 320, [{ cx: 110, cy: 160, rw: 52, rh: 220 }]);
+  var q = ecTightenQuad(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 }, true);
+  if (!q) return 'null';
+  var xs = q.map(function (p) { return Math.round(p[0]); });
+  var ys = q.map(function (p) { return Math.round(p[1]); });
+  return JSON.stringify({ x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs),
+                          y0: Math.min.apply(null, ys), y1: Math.max.apply(null, ys) });
+})()`);
+{
+  const r = tighten === 'null' ? null : JSON.parse(tighten);
+  ok('tighten finds the book edges (not the guide)', !!r &&
+    Math.abs(r.x0 - 84) <= 6 && Math.abs(r.x1 - 136) <= 6);
+}
+const tightenEmpty = run(prelude + `(function () {
+  var g = new Uint8ClampedArray(240 * 320), x, y;
+  for (y = 0; y < 320; y++) for (x = 0; x < 240; x++) g[y * 240 + x] = 120;
+  return ecTightenQuad(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 }, true) ? 'found' : 'null';
+})()`);
+ok('tighten returns null with no edges', tightenEmpty === 'null');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

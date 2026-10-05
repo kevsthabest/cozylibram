@@ -87,6 +87,10 @@ async function openOrbit() {
     Object.defineProperty(document.getElementById('ec-ob-video'), 'videoHeight', { value: 300, configurable: true });
   `);
 }
+async function tapReady() {
+  run(`document.getElementById('ec-ob-ready').click();`);
+  await wait(150);
+}
 
 (async () => {
   // ---- 1. happy path: two faces auto-capture and land in the review ----
@@ -94,6 +98,7 @@ async function openOrbit() {
   run(`window.__obRect = ${TALL.toString()};`);
   await openOrbit();
   ok('orbit sheet opens on the first face', !!q('#ec-orbit') && q('#ec-ob-title').textContent === 'Spine');
+  await tapReady();
   await wait(4500); // ~6 steady frames + burst + interstitial
   ok('spine auto-captured and stored warped',
     run(`EC.results.jacket.spine`) === 'data:image/jpeg;base64,WARPED');
@@ -105,6 +110,7 @@ async function openOrbit() {
   }
   ok('orbit advances to the next face', !!q('#ec-orbit') && title === 'Front cover');
   run(`window.__obRect = ${PORTRAIT.toString()};`);
+  await tapReady();
   await wait(5000);
   ok('front auto-captured too', run(`EC.results.jacket.front`) === 'data:image/jpeg;base64,WARPED');
   ok('orbit finishes into the review', !!q('#ec-wizard') && !q('#ec-orbit'));
@@ -128,6 +134,7 @@ async function openOrbit() {
   // ---- 3. graduated no-lock guidance (v295): move closer, then flash tip ----
   await setup([{ appearance: 'jacket', face: 'spine', skippable: false }]);
   await openOrbit(); // __obRect stays null: nothing detected
+  await tapReady();
   await wait(400);
   ok('initial prompt asks to show the face',
     q('#ec-ob-msg').textContent === 'Show the spine — hold steady');
@@ -140,7 +147,23 @@ async function openOrbit() {
   ok('20s with no lock mentions the flash trap',
     q('#ec-ob-msg').textContent.indexOf('flash off') !== -1);
 
-  // ---- 4. manual mode drops into the classic per-face flow ----
+  // ---- 4. Ready gate: nothing captures until the user taps Ready ----
+  await setup([{ appearance: 'jacket', face: 'spine', skippable: false }]);
+  run(`window.__obRect = ${TALL.toString()};`);
+  await openOrbit(); // no tapReady yet
+  await wait(400);
+  ok('Ready button shows with positioning prompt',
+    q('#ec-ob-ready') && q('#ec-ob-ready').style.display !== 'none' &&
+    q('#ec-ob-msg').textContent.indexOf('tap Ready') !== -1);
+  await wait(1200); // detection would have locked by now if it were running
+  ok('no auto-capture before Ready', !run(`EC.results.jacket && EC.results.jacket.spine`));
+  await tapReady();
+  ok('Ready starts aiming', q('#ec-ob-ready').style.display === 'none');
+  await wait(4500);
+  ok('capture proceeds after Ready',
+    run(`EC.results.jacket && EC.results.jacket.spine`) === 'data:image/jpeg;base64,WARPED');
+
+  // ---- 5. manual mode drops into the classic per-face flow ----
   await setup();
   await openOrbit();
   run(`document.getElementById('ec-ob-manual').click();`);

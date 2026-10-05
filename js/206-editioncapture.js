@@ -264,6 +264,69 @@ function ecSobelSep(g, w, h) {
   return { gx: gx, gy: gy };
 }
 
+// v299: one-time precise crop for the burst frame. Aiming uses the guide
+// rect (stable); here we measure the book's actual edges once — no flicker
+// risk — and tighten the crop so the 3D view isn't padded with background.
+// Returns a quad in the input coords, or null (caller falls back to guide).
+function ecTightenQuad(gray, w, h, roi, tall) {
+  var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
+  var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
+  var y0 = Math.max(1, Math.floor(roi.y)), y1 = Math.min(h - 2, Math.ceil(roi.y + roi.h));
+  var rw = x1 - x0, rh = y1 - y0;
+  if (rw < 12 || rh < 20) return null;
+  function runsAlong(horizontal) {
+    var n = horizontal ? rh + 1 : rw + 1, runs = [], i, j;
+    for (i = 0; i < n; i++) {
+      var best = 0, cur = 0;
+      for (j = 0; j <= (horizontal ? rw : rh); j++) {
+        var v = horizontal ? se.gy[(y0 + i) * w + x0 + j] : se.gx[(y0 + j) * w + x0 + i];
+        if (v > 100) { cur++; if (cur > best) best = cur; } else cur = 0;
+      }
+      runs.push(best);
+    }
+    return runs;
+  }
+  function tighten(runs, axisLen, expectLen) {
+    var n = runs.length, peaks = [], i, j;
+    for (i = 0; i < n; i++) {
+      if (runs[i] < axisLen * 0.25) continue;
+      var isPeak = true;
+      for (j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) {
+        if (runs[j] > runs[i]) { isPeak = false; break; }
+      }
+      if (isPeak) peaks.push(i);
+    }
+    var bl = -1, br = -1, bs = 0;
+    var minSep = Math.max(8, expectLen * 0.5), maxSep = expectLen * 1.35;
+    for (var a = 0; a < peaks.length; a++) for (var b = a + 1; b < peaks.length; b++) {
+      var sep = peaks[b] - peaks[a];
+      if (sep < minSep || sep > maxSep) continue;
+      var sc = runs[peaks[a]] + runs[peaks[b]];
+      if (sc > bs) { bs = sc; bl = peaks[a]; br = peaks[b]; }
+    }
+    if (bl >= 0) return [bl, br];
+    if (peaks.length) {
+      var bp = peaks[0];
+      for (var k = 1; k < peaks.length; k++) if (runs[peaks[k]] > runs[bp]) bp = peaks[k];
+      if (bp < n / 2) return [bp, Math.min(n - 1, Math.round(bp + expectLen))];
+      return [Math.max(0, Math.round(bp - expectLen)), bp];
+    }
+    return null;
+  }
+  function ok(b, expect) {
+    return !!b && (b[1] - b[0]) >= expect * 0.3 && (b[1] - b[0]) <= expect * 1.35;
+  }
+  var xb = tighten(runsAlong(false), rh, rw);
+  if (!ok(xb, rw)) return null;
+  var gy0 = y0, gy1 = y1;
+  if (!tall) {
+    var yb = tighten(runsAlong(true), rw, rh);
+    if (!ok(yb, rh)) return null;
+    gy0 = y0 + yb[0]; gy1 = y0 + yb[1];
+  }
+  return ecNormQuad([[x0 + xb[0], gy0], [x0 + xb[1], gy0], [x0 + xb[1], gy1], [x0 + xb[0], gy1]]);
+}
+
 // v298: region contrast — the strongest object-vs-surroundings signal over
 // centered candidate strips at several widths. A book bounds a region that
 // differs from what's beside it; texture (floor, wall) does not.
@@ -1330,6 +1393,7 @@ function ecOrbitCapture() {
     '<button class="btn ghost" id="ec-ob-skip">Skip</button>' +
     '<button class="btn ghost sm" id="ec-ob-torch" hidden>Flash: off</button>' +
     '<button class="btn ghost" id="ec-ob-manual">Manual mode</button>' +
+    '<button class="btn primary" id="ec-ob-ready">Ready</button>' +
     '</div></div>';
   document.body.appendChild(ov);
   var video = ov.querySelector('#ec-ob-video');
@@ -1340,6 +1404,7 @@ function ecOrbitCapture() {
   var titleEl = ov.querySelector('#ec-ob-title'), subEl = ov.querySelector('#ec-ob-sub');
   var msgEl = ov.querySelector('#ec-ob-msg'), dotsEl = ov.querySelector('#ec-ob-dots');
   var skipBtn = ov.querySelector('#ec-ob-skip');
+  var readyBtn = ov.querySelector('#ec-ob-ready');
   var analysis = document.createElement('canvas'), actx = null;
   try { actx = analysis.getContext('2d'); } catch (e) {}
 
@@ -1372,11 +1437,25 @@ function ecOrbitCapture() {
     obTracker = ecNewScanTracker();
     obAimSince = Date.now();
     obRoi = null; // recomputed on first loop tick (guide class just changed)
-    obPhase = 'aim';
-    obSetMsg('Show the ' + face.label.toLowerCase() + ' — hold steady');
+    obPhase = 'ready';
+    try { obDrawFx(null, video.videoWidth, video.videoHeight); } catch (e) {}
+    readyBtn.style.display = '';
+    obSetMsg('Position the ' + face.label.toLowerCase() + ' in the guide, then tap Ready');
     obRenderDots();
   };
 
+
+  readyBtn.addEventListener('click', function () {
+    if (obTornDown || obPhase !== 'ready') return;
+    obTracker = ecNewScanTracker();
+    obAimSince = Date.now();
+    obRoi = null;
+    obPhase = 'aim';
+    obLastTick = 0;
+    readyBtn.style.display = 'none';
+    obSetMsg('Show the ' + ecFaceDef(EC.steps[obIdx].face).label.toLowerCase() + ' — hold steady');
+    obRaf = requestAnimationFrame(obLoop);
+  });
 
   var obDrawFx = function (rect, vw, vh) {
     if (!fxCtx || !vw) return;
@@ -1447,11 +1526,21 @@ function ecOrbitCapture() {
     if (!frames.length) { obResume(); return; }
     frames.sort(function (x, y) { return y.score - x.score; });
     var c = frames[0].canvas, quad = null, url = null;
+    var st0 = EC.steps[obIdx], face0 = ecFaceDef(st0.face);
     try {
       if (obRoi && c.width) {
-        var s = c.width / EC_SCAN_W;
-        quad = ecNormQuad([[obRoi.x * s, obRoi.y * s], [(obRoi.x + obRoi.w) * s, obRoi.y * s],
-                [(obRoi.x + obRoi.w) * s, (obRoi.y + obRoi.h) * s], [obRoi.x * s, (obRoi.y + obRoi.h) * s]]);
+        // v299: measure the book's edges once on the sharpest frame and
+        // tighten the crop; fall back to the guide rect.
+        var aw2 = EC_SCAN_W, ah2 = Math.max(1, Math.round(EC_SCAN_W * c.height / c.width));
+        var ac2 = document.createElement('canvas'); ac2.width = aw2; ac2.height = ah2;
+        var ax2 = ac2.getContext('2d');
+        ax2.drawImage(c, 0, 0, aw2, ah2);
+        var dd = ax2.getImageData(0, 0, aw2, ah2);
+        var tight = ecTightenQuad(ecToGray(dd.data, aw2, ah2), aw2, ah2, obRoi, face0.guide === 'tall');
+        var s = c.width / aw2;
+        var q = tight || [[obRoi.x, obRoi.y], [obRoi.x + obRoi.w, obRoi.y],
+                          [obRoi.x + obRoi.w, obRoi.y + obRoi.h], [obRoi.x, obRoi.y + obRoi.h]];
+        quad = ecNormQuad(q).map(function (p) { return [p[0] * s, p[1] * s]; });
       } else {
         quad = ecDetectQuadForCanvas(c);
       }
@@ -1524,12 +1613,12 @@ function ecOrbitCapture() {
     ecCancelScan();
   });
   skipBtn.addEventListener('click', function () {
-    if (obPhase !== 'aim' || !EC.steps[obIdx].skippable) return;
+    if ((obPhase !== 'aim' && obPhase !== 'ready') || !EC.steps[obIdx].skippable) return;
     if (obRaf) { try { cancelAnimationFrame(obRaf); } catch (e) {} obRaf = 0; }
     obAdvance();
   });
   ov.querySelector('#ec-ob-manual').addEventListener('click', function () {
-    if (obPhase !== 'aim') return;
+    if (obPhase !== 'aim' && obPhase !== 'ready') return;
     obTeardownDom();
     EC.idx = obIdx;
     ecHandoff(ecRenderStep);
