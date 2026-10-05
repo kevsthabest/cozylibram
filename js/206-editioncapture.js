@@ -297,7 +297,7 @@ function ecTightenQuad(gray, w, h, roi, tall) {
       if (isPeak) peaks.push(i);
     }
     var bl = -1, br = -1, bs = 0;
-    var minSep = Math.max(8, expectLen * 0.5), maxSep = expectLen * 1.35;
+    var minSep = Math.max(8, expectLen * 0.2), maxSep = expectLen * 1.35;
     for (var a = 0; a < peaks.length; a++) for (var b = a + 1; b < peaks.length; b++) {
       var sep = peaks[b] - peaks[a];
       if (sep < minSep || sep > maxSep) continue;
@@ -314,7 +314,7 @@ function ecTightenQuad(gray, w, h, roi, tall) {
     return null;
   }
   function ok(b, expect) {
-    return !!b && (b[1] - b[0]) >= expect * 0.3 && (b[1] - b[0]) <= expect * 1.35;
+    return !!b && (b[1] - b[0]) >= expect * 0.2 && (b[1] - b[0]) <= expect * 1.35;
   }
   var xb = tighten(runsAlong(false), rh, rw);
   if (!ok(xb, rw)) return null;

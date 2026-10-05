@@ -139,6 +139,19 @@ const tighten = run(prelude + `(function () {
   ok('tighten finds the book edges (not the guide)', !!r &&
     Math.abs(r.x0 - 84) <= 6 && Math.abs(r.x1 - 136) <= 6);
 }
+// v300: narrow spine (under half the guide) still pair-tightens
+const tightenNarrow = run(prelude + `(function () {
+  var g = synthGray(240, 320, [{ cx: 114, cy: 160, rw: 25, rh: 220 }]);
+  var q = ecTightenQuad(g, 240, 320, { x: 85, y: 40, w: 57, h: 240 }, true);
+  if (!q) return 'null';
+  var xs = q.map(function (p) { return Math.round(p[0]); });
+  return JSON.stringify({ x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs) });
+})()`);
+{
+  const r = tightenNarrow === 'null' ? null : JSON.parse(tightenNarrow);
+  ok('narrow spine tightens to its edges', !!r &&
+    Math.abs(r.x0 - 101) <= 6 && Math.abs(r.x1 - 127) <= 6);
+}
 const tightenEmpty = run(prelude + `(function () {
   var g = new Uint8ClampedArray(240 * 320), x, y;
   for (y = 0; y < 320; y++) for (x = 0; x < 240; x++) g[y * 240 + x] = 120;
