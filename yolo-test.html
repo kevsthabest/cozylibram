@@ -167,18 +167,33 @@ detectBtn.addEventListener('click', async () => {
       octx.fillStyle = isBest ? '#ff0' : (isBook ? '#0f0' : '#f00');
       octx.font = 'bold 28px sans-serif';
       octx.fillText((isBest ? 'BEST ' : '') + label + ' ' + scores[k].toFixed(2), b[0] + 6, b[1] + 32);
-      // mask overlay
+      // mask overlay (threshold 0.65 for a tighter boundary)
       const cf = coeffs[k], mw = 160, mh = 160;
       const mCan = document.createElement('canvas'); mCan.width = mw; mCan.height = mh;
       const mctx = mCan.getContext('2d');
       const mImg = mctx.createImageData(mw, mh);
-      for (let p = 0; p < mw * mh; p++) {
+      let mmx0 = mw, mmy0 = mh, mmx1 = 0, mmy1 = 0;
+      for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
+        const p = y * mw + x;
         let s = 0;
         for (let m = 0; m < NM; m++) s += cf[m] * protos[m * mw * mh + p];
-        if (sig(s) > 0.5) { mImg.data[p*4] = isBook ? 0 : 255; mImg.data[p*4+1] = 255; mImg.data[p*4+2] = 0; mImg.data[p*4+3] = 90; }
+        if (sig(s) > 0.65) {
+          mImg.data[p*4] = isBest ? 255 : (isBook ? 0 : 255);
+          mImg.data[p*4+1] = 255; mImg.data[p*4+2] = 0; mImg.data[p*4+3] = 90;
+          if (x < mmx0) mmx0 = x; if (x > mmx1) mmx1 = x;
+          if (y < mmy0) mmy0 = y; if (y > mmy1) mmy1 = y;
+        }
       }
       mctx.putImageData(mImg, 0, 0);
       octx.drawImage(mCan, b[0], b[1], b[2] - b[0], b[3] - b[1]);
+      // tight mask bbox (maps mask coords back through the detection box)
+      if (mmx1 > mmx0) {
+        const tx = v => b[0] + (v / mw) * (b[2] - b[0]);
+        const ty = v => b[1] + (v / mh) * (b[3] - b[1]);
+        octx.strokeStyle = '#0ff'; octx.lineWidth = 3; octx.setLineDash([8, 6]);
+        octx.strokeRect(tx(mmx0), ty(mmy0), tx(mmx1) - tx(mmx0), ty(mmy1) - ty(mmy0));
+        octx.setLineDash([]);
+      }
       html += '<div>' + (k === bestK ? '<b>BEST&gt; </b>' : '') + label + ' — ' + (scores[k]*100).toFixed(0) + '%</div>';
     }
     resultsEl.innerHTML = html || '<div>No detections</div>';
