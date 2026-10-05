@@ -1525,40 +1525,64 @@ function ecOrbitCapture() {
   var obFinishBurst = function (frames) {
     if (!frames.length) { obResume(); return; }
     frames.sort(function (x, y) { return y.score - x.score; });
-    var c = frames[0].canvas, quad = null, url = null;
+    var c = frames[0].canvas;
     var st0 = EC.steps[obIdx], face0 = ecFaceDef(st0.face);
-    try {
-      if (obRoi && c.width) {
-        // v299: measure the book's edges once on the sharpest frame and
-        // tighten the crop; fall back to the guide rect.
-        var aw2 = EC_SCAN_W, ah2 = Math.max(1, Math.round(EC_SCAN_W * c.height / c.width));
-        var ac2 = document.createElement('canvas'); ac2.width = aw2; ac2.height = ah2;
-        var ax2 = ac2.getContext('2d');
-        ax2.drawImage(c, 0, 0, aw2, ah2);
-        var dd = ax2.getImageData(0, 0, aw2, ah2);
-        var tight = ecTightenQuad(ecToGray(dd.data, aw2, ah2), aw2, ah2, obRoi, face0.guide === 'tall');
-        var s = c.width / aw2;
-        var q = tight || [[obRoi.x, obRoi.y], [obRoi.x + obRoi.w, obRoi.y],
-                          [obRoi.x + obRoi.w, obRoi.y + obRoi.h], [obRoi.x, obRoi.y + obRoi.h]];
-        quad = ecNormQuad(q).map(function (p) { return [p[0] * s, p[1] * s]; });
-      } else {
-        quad = ecDetectQuadForCanvas(c);
+    obPhase = 'processing';
+    obSetMsg('Processing…');
+    // Two-stage crop (v301): edge tighten first, YOLO refines on disagreement.
+    var done = function (quad) {
+      if (obTornDown) return;
+      var url = null;
+      if (quad) {
+        var size = ecQuadSize(quad, EC_MAX_DIM), w = null;
+        try { w = ecWarpCanvas(c, quad, size[0], size[1]); } catch (e) {}
+        if (w) { try { url = w.toDataURL('image/jpeg', 0.9); } catch (e) {} }
       }
-    } catch (e) {}
-    if (quad) {
-      var size = ecQuadSize(quad, EC_MAX_DIM), w = null;
-      try { w = ecWarpCanvas(c, quad, size[0], size[1]); } catch (e) {}
-      if (w) { try { url = w.toDataURL('image/jpeg', 0.9); } catch (e) {} }
-    }
-    if (!url) {
-      if (typeof toast === 'function') toast('Couldn\u2019t crop that one — hold it steadier');
-      obResume();
-      return;
-    }
-    var st = EC.steps[obIdx];
-    (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = url;
-    obPhase = 'captured';
-    obAdvance();
+      if (!url) {
+        if (typeof toast === 'function') toast('Couldn\u2019t crop that one — hold it steadier');
+        obResume();
+        return;
+      }
+      var st = EC.steps[obIdx];
+      (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = url;
+      // Keep the full frame + quad so Review → Adjust can re-crop.
+      (EC.fullFrames = EC.fullFrames || {})[st.appearance + ':' + st.face] = c.toDataURL('image/jpeg', 0.85);
+      (EC.quads = EC.quads || {})[st.appearance + ':' + st.face] = quad;
+      obPhase = 'captured';
+      obAdvance();
+    };
+    (async function () {
+      var quad = null;
+      try {
+        if (obRoi && c.width) {
+          var s = c.width / EC_SCAN_W;
+          // Stage 1: edge tighten (fast, precise on clean books).
+          var aw2 = EC_SCAN_W, ah2 = Math.max(1, Math.round(EC_SCAN_W * c.height / c.width));
+          var ac2 = document.createElement('canvas'); ac2.width = aw2; ac2.height = ah2;
+          var ax2 = ac2.getContext('2d');
+          ax2.drawImage(c, 0, 0, aw2, ah2);
+          var dd = ax2.getImageData(0, 0, aw2, ah2);
+          var tight240 = ecTightenQuad(ecToGray(dd.data, aw2, ah2), aw2, ah2, obRoi, face0.guide === 'tall');
+          var edgeQuad = tight240 ? ecNormQuad(tight240).map(function (p) { return [p[0] * s, p[1] * s]; }) : null;
+          // Stage 2: YOLO (robust on damaged/warped books).
+          var yoloQuad = null;
+          try {
+            if (typeof ecYoloDetect === 'function') {
+              var dets = await ecYoloDetect(c);
+              var roiFull = { x: obRoi.x * s, y: obRoi.y * s, w: obRoi.w * s, h: obRoi.h * s };
+              var best = ecYoloBestForGuide(dets, roiFull);
+              yoloQuad = ecYoloQuad(best);
+            }
+          } catch (e) {}
+          var guideQuad = [[obRoi.x * s, obRoi.y * s], [(obRoi.x + obRoi.w) * s, obRoi.y * s],
+                           [(obRoi.x + obRoi.w) * s, (obRoi.y + obRoi.h) * s], [obRoi.x * s, (obRoi.y + obRoi.h) * s]];
+          quad = (typeof ecEnsembleQuad === 'function' ? ecEnsembleQuad(edgeQuad, yoloQuad) : (edgeQuad || yoloQuad)) || guideQuad;
+        } else {
+          quad = ecDetectQuadForCanvas(c);
+        }
+      } catch (e) {}
+      done(quad);
+    })();
   };
 
   var obLoop = function (t) {
@@ -1984,6 +2008,7 @@ function ecRenderReview() {
         '<span>' + esc(f.label) + ' · ' + esc(ecAppearanceLabel(ap)) + '</span>' +
         '<div class="ec-thumbbtns">' +
         '<button class="btn ghost sm" data-ec-retake="' + ap + ':' + f.id + '">Retake</button>' +
+        '<button class="btn ghost sm" data-ec-adjust="' + ap + ':' + f.id + '">Adjust</button>' +
         '<button class="btn ghost sm" data-ec-enhance="' + ap + ':' + f.id + '">\u2728 Enhance</button>' +
         '</div></div>';
     });
@@ -2010,6 +2035,32 @@ function ecRenderReview() {
     btn.addEventListener('click', function () {
       var parts = btn.getAttribute('data-ec-enhance').split(':');
       ecEnhancePicker(parts[0], parts[1]);
+    });
+  });
+  ov.querySelectorAll('[data-ec-adjust]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var parts = btn.getAttribute('data-ec-adjust').split(':');
+      var ap = parts[0], fid = parts[1];
+      var key = ap + ':' + fid;
+      var fullUrl = EC.fullFrames && EC.fullFrames[key];
+      var quad = EC.quads && EC.quads[key];
+      if (!fullUrl) { if (typeof toast === 'function') toast('No full frame saved for manual adjust'); return; }
+      var face = ecFaceDef(fid);
+      // Hide the review while the editor is open; re-render on close.
+      var wiz = document.getElementById('ec-wizard');
+      if (wiz) wiz.style.display = 'none';
+      ecOpenEditor(fullUrl, face.label, ecAppearanceLabel(ap),
+        function (warped) {
+          (EC.results[ap] = EC.results[ap] || {})[fid] = warped;
+          var w2 = document.getElementById('ec-wizard');
+          if (w2) w2.remove();
+          ecRenderReview();
+        },
+        function () {
+          var w2 = document.getElementById('ec-wizard');
+          if (w2) w2.style.display = '';
+        },
+        quad);
     });
   });
   var saveBtn = ov.querySelector('#ec-rv-save');
