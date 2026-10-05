@@ -87,8 +87,19 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
     svg.addEventListener('pointerup', function () { active = -1; });
     svg.addEventListener('pointercancel', function () { active = -1; });
 
+    /* m13: finish through the overlay manager — overlayClosed consumes the
+       history entry pushed by overlayOpened, so a plain ov.remove() never
+       swallows the next back-press. The manager's own back-gesture path
+       (the domCloser above) needs no overlayClosed: it already popped. */
+    var edmFinish = function (ok) {
+      if (token && typeof overlayClosed === 'function') overlayClosed(token);
+      token = null;
+      ov.remove();
+      resolve(ok);
+    };
+
     ov.querySelector('#edm-cancel').addEventListener('click', function () {
-      ov.remove(); resolve(false);
+      edmFinish(false);
     });
     ov.querySelector('#edm-save').addEventListener('click', async function () {
       var refPx = editionMeasureDistance(pts[0], pts[1]);
@@ -99,7 +110,9 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       }
       var a1 = editionMeasureAngle(pts[0], pts[1]);
       var a2 = editionMeasureAngle(pts[2], pts[3]);
-      var angleDelta = Math.abs((((a1 - a2) + 180) % 360) - 180);
+      // m7: +540 (not +180) keeps the wrapped delta in [-180,180) — JS %
+      // keeps the dividend's sign, so ±170°/∓170° pairs read 20°, not 340°.
+      var angleDelta = Math.abs((((a1 - a2) + 540) % 360) - 180);
       var confidence = editionMeasureClamp(100 - angleDelta * 3 - (bookPx < 6 ? 25 : 0), 0, 100);
       var thickness = ED_MEASURE_REF_MM * bookPx / refPx;
       if (!isFinite(thickness) || thickness <= 0 || thickness >= 100) {
@@ -136,7 +149,7 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       if (typeof toast === 'function') toast(saved
         ? 'Thickness measured: ' + book.thicknessMm.toFixed(2) + ' mm'
         : 'Thickness saved locally: ' + book.thicknessMm.toFixed(2) + ' mm');
-      ov.remove(); resolve(true);
+      edmFinish(true);
     });
 
     img.onload = function () {
@@ -148,7 +161,7 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       pts[3] = {x: w * .25, y: h * .68};
       draw();
     };
-    img.onerror = function () { ov.remove(); resolve(false); };
+    img.onerror = function () { edmFinish(false); };
     img.src = dataUrl;
   });
 }
