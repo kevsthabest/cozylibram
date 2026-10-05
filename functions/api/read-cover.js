@@ -26,6 +26,12 @@ import { geminiFetch } from '../_lib/gemini.js';
 // response_format json_object so the model can't ramble, temperature 0.
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+// v293: OpenRouter provider for the vision calls. The endpoint already
+// speaks OpenAI chat-completions, so this is a base-URL + key swap.
+// VISION_OR_MODELS is a comma-separated fallback chain — OpenRouter tries
+// each in order (free vision models by default).
+const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OR_DEFAULT_MODELS = 'qwen/qwen3.8-27b:free,google/gemma-4-31b-it:free';
 const MAX_IMAGE_CHARS = 3500000; // ~2.6MB base64
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._/:+@-]{0,119}$/;
 
@@ -168,39 +174,63 @@ export async function onRequest(context) {
     return new Response('bad request', { status: 400 });
   }
 
-  // v198: Kevin's Gemini key is already configured for trope inference, so
-  // reuse it — VISION_API_KEY is only needed for a separate key.
-  const key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
-  if (!key) {
-    return jsonErr(503, "cover reading isn't set up on this server (set VISION_API_KEY or TROPE_KEY_GEMINI)");
+  // v293: READ_COVER_PROVIDER=openrouter routes the vision calls through
+  // OpenRouter (free vision models by default) instead of the Gemini key.
+  const provider = (env.READ_COVER_PROVIDER || 'gemini').trim().toLowerCase();
+  let key = '', url = GEMINI_URL, bodyModel = null, bodyModels = null;
+  const headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'CozyLibram/1.0 read-cover',
+  };
+  if (provider === 'openrouter') {
+    // OPENROUTER_KEY first, then the already-configured trope key — one less
+    // secret to manage when both ride the same OpenRouter account.
+    key = (env.OPENROUTER_KEY || '').trim() || (env.TROPE_API_KEY || '').trim();
+    if (!key) return jsonErr(503, "cover reading isn't set up on this server (set OPENROUTER_KEY or TROPE_API_KEY)");
+    url = OR_URL;
+    const list = (env.VISION_OR_MODELS || OR_DEFAULT_MODELS).split(',')
+      .map(x => x.trim()).filter(x => x && MODEL_RE.test(x));
+    if (!list.length) return jsonErr(503, 'bad VISION_OR_MODELS');
+    bodyModels = list; // OpenRouter native fallback chain
+    headers['Authorization'] = 'Bearer ' + key;
+    headers['HTTP-Referer'] = 'https://cozylibram.pages.dev';
+    headers['X-Title'] = 'Cozy Libram';
+  } else {
+    // v198: Kevin's Gemini key is already configured for trope inference, so
+    // reuse it — VISION_API_KEY is only needed for a separate key.
+    key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
+    if (!key) {
+      return jsonErr(503, "cover reading isn't set up on this server (set VISION_API_KEY or TROPE_KEY_GEMINI)");
+    }
+    const model = (env.VISION_MODEL || 'gemini-3.8-flash').trim();
+    if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
+    bodyModel = model;
+    headers['Authorization'] = 'Bearer ' + key;
   }
-  const model = (env.VISION_MODEL || 'gemini-3.8-flash').trim();
-  if (!MODEL_RE.test(model)) return jsonErr(503, 'bad VISION_MODEL');
 
   const isShelf = mode === 'shelf';
   const isSpine = mode === 'spine';
   const prompt = isShelf ? PROMPT_SHELF : isSpine ? PROMPT_SPINE : PROMPT_SINGLE;
-  // v265: retry on 429/503 — Google rate-limits briefly-exhausted quotas.
-  const g = await geminiFetch(GEMINI_URL, {
+  // v265: retry on 429/503 — providers rate-limit briefly-exhausted quotas.
+  // v293: on OpenRouter the model list goes in `models` (native fallback
+  // chain); on Gemini it stays the single `model`.
+  const chatBody = {
+    temperature: 0,
+    max_tokens: isShelf ? 2000 : 300,
+    response_format: { type: 'json_object' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: image } },
+      ],
+    }],
+  };
+  if (bodyModels) chatBody.models = bodyModels; else chatBody.model = bodyModel;
+  const g = await geminiFetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + key,
-      'User-Agent': 'CozyLibram/1.0 read-cover',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      max_tokens: isShelf ? 2000 : 300,
-      response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: image } },
-        ],
-      }],
-    }),
+    headers,
+    body: JSON.stringify(chatBody),
   });
   if (!g.ok) {
     if (g.networkError) return jsonErr(502, 'vision provider unreachable');
