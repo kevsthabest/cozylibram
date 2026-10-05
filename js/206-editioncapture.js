@@ -1371,7 +1371,27 @@ function ecRenderAppearance() {
   ov.querySelectorAll('[data-ec-eh]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var parts = (btn.getAttribute('data-ec-eh') || '').split(':');
-      ecEnhancePicker(parts[0], parts[1], ecEnhanceSavedCtx(b, parts[0], parts[1]));
+      var ap = parts[0], face = parts[1];
+      var url = (b.editionFaces && b.editionFaces[ap] && b.editionFaces[ap][face]) || null;
+      var ref = !url && b.editionFaceRefs && b.editionFaceRefs[ap] ? b.editionFaceRefs[ap][face] : null;
+      if (!url && !ref) return;
+      if (!url && ref && typeof editionAssetBlob === 'function') {
+        editionAssetBlob(ref).then(function (blob) {
+          if (!blob) {
+            if (typeof toast === 'function') toast("Couldn't load this face for enhancing");
+            return;
+          }
+          ecBlobToDataUrl(blob).then(function (dataUrl) {
+            ecEnhancePicker(ap, face, ecEnhanceSavedCtx(b, ap, face, dataUrl, true));
+          }, function () {
+            if (typeof toast === 'function') toast("Couldn't load this face for enhancing");
+          });
+        }, function () {
+          if (typeof toast === 'function') toast("Couldn't load this face for enhancing");
+        });
+        return;
+      }
+      ecEnhancePicker(ap, face, ecEnhanceSavedCtx(b, ap, face, url, false));
     });
   });
   ov.querySelectorAll('[data-ec-rm]').forEach(function (btn) {
@@ -1566,17 +1586,61 @@ function ecEnhanceSessionCtx(ap, face) {
     after: function () { ecRenderReview(); },
   };
 }
-function ecEnhanceSavedCtx(book, ap, face) {
+// Saved-face enhance context. resolvedUrl is the face as a data URL (already
+// resolved from a legacy data URL or a binary asset ref); wasBinary selects
+// the binary write-back path (new IDB asset + ref update, never data URLs).
+function ecEnhanceSavedCtx(book, ap, face, resolvedUrl, wasBinary) {
   return {
     label: function () { return ecEnhanceLabel(ap, face); },
     getUrl: function () {
+      if (resolvedUrl) return resolvedUrl;
       return book && book.editionFaces && book.editionFaces[ap] && book.editionFaces[ap][face];
     },
     store: function (url) {
-      if (!book) return;
-      book.editionFaces = book.editionFaces || {};
-      (book.editionFaces[ap] = book.editionFaces[ap] || {})[face] = url;
-      if (typeof saveLibrary === 'function') saveLibrary();
+      if (!book || typeof url !== 'string') return;
+      if (!wasBinary) {
+        book.editionFaces = book.editionFaces || {};
+        (book.editionFaces[ap] = book.editionFaces[ap] || {})[face] = url;
+        if (typeof saveLibrary === 'function') saveLibrary();
+        return;
+      }
+      var self = this;
+      (async function () {
+        try {
+          var blob = await (await fetch(url)).blob();
+          var id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID() : ('asset-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+          var hasIdb = (typeof idbAssetPut === 'function') &&
+            (typeof currentDb !== 'undefined') && currentDb;
+          if (hasIdb) {
+            await idbAssetPut(currentDb, {
+              id: id, blob: blob,
+              isbn: (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null,
+              face: face, appearance: ap, createdAt: Date.now(), source: 'enhanced'
+            });
+          }
+          var hash = (typeof ecBlobSha256 === 'function') ? await ecBlobSha256(blob) : null;
+          var size = (typeof ecDataUrlSize === 'function') ? await ecDataUrlSize(url) : null;
+          book.editionFaceRefs = book.editionFaceRefs || {};
+          (book.editionFaceRefs[ap] = book.editionFaceRefs[ap] || {})[face] = {
+            assetId: id,
+            bucket: 'edition-images',
+            path: face + '/' + ap + '/' + (hash || id) + '.jpg',
+            width: size ? size.width : null,
+            height: size ? size.height : null
+          };
+          if (face === 'spine') book.spinePhotoAssetId = id;
+          if (typeof saveLibrary === 'function') saveLibrary();
+          // Share the enhanced face as a candidate so the pool can adopt it.
+          var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
+          if (isbn && typeof ecShareFace === 'function') {
+            var st = (self && self.mode === 'restore') ? 'restored' : 'sharpened';
+            ecShareFace(isbn, ap, face, url, st).catch(function () {});
+          }
+        } catch (e) {
+          if (typeof toast === 'function') toast('Could not save the enhanced face');
+        }
+      })();
     },
     after: function () { ecRenderAppearance(); },
   };
@@ -1615,6 +1679,7 @@ function ecEnhancePicker(ap, face, ctx) {
 
 function ecEnhanceProgress(ap, face, mode) {
   if (typeof document === 'undefined' || !EC || !EC.eh) return null;
+  EC.eh.mode = mode;
   var url = EC.eh.getUrl();
   if (!url) { EC.eh.after(); return null; }
   var ov = ecEnhanceShell(
@@ -1679,6 +1744,16 @@ function ecEnhanceCompare(origUrl, newUrl) {
 }
 
 // sha256 hex of a Blob (content-addressed pool path), or null on failure.
+function ecBlobToDataUrl(blob) {
+  return new Promise(function (resolve, reject) {
+    try {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(fr.result); };
+      fr.onerror = function () { reject(fr.error || new Error('read failed')); };
+      fr.readAsDataURL(blob);
+    } catch (e) { reject(e); }
+  });
+}
 async function ecBlobSha256(blob) {
   try {
     if (typeof crypto === 'undefined' || !crypto.subtle || !blob) return null;
@@ -1824,7 +1899,7 @@ async function ecPoolUid(sb) {
 // Contribute one face to the shared pool. First writer wins between users,
 // but the original contributor's newer capture auto-replaces their own image
 // (v283) — a bad first photo can never get permanently stuck.
-async function ecShareFace(isbn, appearance, face, dataUrl) {
+async function ecShareFace(isbn, appearance, face, dataUrl, sourceType) {
   try {
     if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
     var sb = await (typeof cloudClient === 'function' ? cloudClient().catch(function () { return null; }) : null);
@@ -1872,7 +1947,7 @@ async function ecShareFace(isbn, appearance, face, dataUrl) {
         format: 'image/jpeg',
         byte_size: blob.size,
         sha256: hash,
-        source_type: 'capture',
+        source_type: sourceType || 'capture',
         source_user_id: uid,
         quality_score: quality && quality.quality || null,
         sharpness_score: quality && quality.sharpness || null,
