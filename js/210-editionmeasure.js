@@ -40,6 +40,8 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       '<line id="edm-book" stroke="#6fd08a" stroke-width="6" stroke-linecap="round"></line>' +
       '<circle class="edm-point ref" data-i="0"></circle><circle class="edm-point ref" data-i="1"></circle>' +
       '<circle class="edm-point book" data-i="2"></circle><circle class="edm-point book" data-i="3"></circle>' +
+      '<circle class="edm-halo" data-i="0"></circle><circle class="edm-halo" data-i="1"></circle>' +
+      '<circle class="edm-halo" data-i="2"></circle><circle class="edm-halo" data-i="3"></circle>' +
       '</svg></div>' +
       '<p class="ec-hint">Use a standard bank/credit card beside the book, in the same plane and as close to the book as practical. This gives a real mm scale instead of guessing from page count.</p>' +
       '<div class="ec-actions"><button class="btn ghost" id="edm-cancel">Cancel</button><button class="btn primary" id="edm-save">Measure &amp; save</button></div></div>';
@@ -52,8 +54,20 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
     var active = -1, token = (typeof overlayOpened === 'function')
       ? overlayOpened('ed-measure', function () { ov.remove(); resolve(false); }) : null;
 
+    // Image px per CSS px. Dots/widths are authored in image px (the
+    // viewBox is natural resolution), so without this a 13px dot on a 4000px
+    // phone photo renders ~1.5 CSS px: invisible and ungrabbable.
+    var scale = function () {
+      var iw = img.naturalWidth || 1;
+      var w = (typeof img.getBoundingClientRect === 'function')
+        ? img.getBoundingClientRect().width : 0;
+      return (w > 1) ? iw / w : 1;
+    };
     var draw = function () {
       svg.setAttribute('viewBox', '0 0 ' + (img.naturalWidth || 1) + ' ' + (img.naturalHeight || 1));
+      var k = scale(), dotR = 12 * k, haloR = 30 * k, lw = 5 * k;
+      refLine.setAttribute('stroke-width', lw);
+      bookLine.setAttribute('stroke-width', lw);
       refLine.setAttribute('x1', pts[0].x); refLine.setAttribute('y1', pts[0].y);
       refLine.setAttribute('x2', pts[1].x); refLine.setAttribute('y2', pts[1].y);
       bookLine.setAttribute('x1', pts[2].x); bookLine.setAttribute('y1', pts[2].y);
@@ -61,6 +75,12 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       svg.querySelectorAll('.edm-point').forEach(function (n) {
         var i = +n.getAttribute('data-i');
         n.setAttribute('cx', pts[i].x); n.setAttribute('cy', pts[i].y);
+        n.setAttribute('r', dotR);
+      });
+      svg.querySelectorAll('.edm-halo').forEach(function (n) {
+        var i = +n.getAttribute('data-i');
+        n.setAttribute('cx', pts[i].x); n.setAttribute('cy', pts[i].y);
+        n.setAttribute('r', haloR);
       });
     };
 
@@ -74,7 +94,7 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
       };
     };
     svg.addEventListener('pointerdown', function (e) {
-      var n = e.target.closest('.edm-point');
+      var n = e.target.closest('.edm-point, .edm-halo');
       if (!n) return;
       active = +n.getAttribute('data-i');
       try { n.setPointerCapture(e.pointerId); } catch (err) {}
