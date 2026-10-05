@@ -1160,14 +1160,10 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
       return;
     }
     stopScan();
-    captureBurst(5).then(function (frames) {
-      if (!frames.length) { if (typeof toast === 'function') toast('Capture failed — try again'); return; }
-      frames.sort(function (x, y) { return y.score - x.score; });
-      var c = frames[0].canvas, quad = ecDetectQuadForCanvas(c), url = null;
-      try { url = c.toDataURL('image/jpeg', 0.92); } catch (e) {}
-      if (url) gotPhoto(url, quad ? { quad: quad, burstScore: frames[0].score } : undefined);
-      else if (typeof toast === 'function') toast('Capture failed — try again');
-    });
+    // v291: same flow as auto-scan — sharpest frame is warped to the
+    // detected quad and shown already cropped in the confirm sheet
+    // (Use / Adjust corners / Retake), not the corner editor.
+    captureBurst(5).then(function (frames) { finishBurstCapture(frames, null, true); });
   });
   return token;
 }
