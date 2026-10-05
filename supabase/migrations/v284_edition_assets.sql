@@ -112,7 +112,12 @@ drop policy if exists "edition_asset_slots contributor insert" on public.edition
 create policy "edition_asset_slots contributor insert" on public.edition_asset_slots
   for insert to authenticated
   with check (
-    exists (
+    -- Contributors may only ever create automatic slots pointing at their
+    -- own non-rejected asset. Forging 'manual'/'admin' authority would pin
+    -- the asset as permanently canonical (v286 treats those as untouchable).
+    selection_method = 'automatic'
+    and (selected_by = auth.uid() or selected_by is null)
+    and exists (
       select 1 from public.editions e
       where e.id = edition_asset_slots.edition_id
         and e.isbn = edition_asset_slots.isbn
@@ -153,12 +158,12 @@ create policy "edition-images authenticated write" on storage.objects
 drop policy if exists "edition-images contributor update" on storage.objects;
 create policy "edition-images contributor update" on storage.objects
   for update to authenticated
-  using (bucket_id = 'edition-images' and owner_id = auth.uid())
-  with check (bucket_id = 'edition-images' and owner_id = auth.uid());
+  using (bucket_id = 'edition-images' and owner = auth.uid())
+  with check (bucket_id = 'edition-images' and owner = auth.uid());
 
 drop policy if exists "edition-images contributor delete" on storage.objects;
 create policy "edition-images contributor delete" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'edition-images' and owner_id = auth.uid());
+  using (bucket_id = 'edition-images' and owner = auth.uid());
 
 -- Existing legacy edition_images rows remain untouched and continue to work.
