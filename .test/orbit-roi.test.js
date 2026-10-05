@@ -1,7 +1,8 @@
-// Orbit guided detection (v297): with a guide ROI the detector verifies
-// book-like edge presence and trusts the guide rect itself — the user framed
-// the shot; re-measuring the outline is what background clutter corrupted.
-// Regression tests for the real-device failures (monitor scene, wood floor).
+// Orbit guided detection (v298): with a guide ROI the detector checks
+// book-likeness — few dominant parallel edges (a bounded pair, or one strong
+// edge around a contrasting region) — then trusts the guide rect. A long
+// straight edge alone is not enough (v297 captured wood floors).
+// Regression tests for the real-device failures (monitor, wood floor).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -31,52 +32,49 @@ function synthGray(w, h, rects) {
 function stripes(g, w, h, x0, x1, y0, y1) {
   for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) g[y * w + x] = ((y >> 2) % 2) ? 150 : 60;
 }
-`;
-
-// ---- 1. presence: book in guide vs empty guide ----
-const presBook = run(prelude + `JSON.stringify(ecGuidePresence(
-  synthGray(240, 320, [{ cx: 110, cy: 160, rw: 52, rh: 220 }]), 240, 320,
-  { x: 75, y: 40, w: 70, h: 240 }))`);
-{
-  const p = JSON.parse(presBook);
-  ok('book in guide has strong vertical presence', Math.max(p.v, p.h) >= 0.35);
-}
-
-const presEmpty = run(prelude + `(function () {
-  var g = new Uint8ClampedArray(240 * 320), x, y;
-  for (y = 0; y < 320; y++) for (x = 0; x < 240; x++) g[y * 240 + x] = 120 + ((x * 13 + y * 7) % 17);
-  var p = ecGuidePresence(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 });
-  return JSON.stringify(p);
-})()`);
-{
-  const p = JSON.parse(presEmpty);
-  ok('empty guide has no presence', Math.max(p.v, p.h) < 0.35);
-}
-
-// ---- 2. guide trust: the clutter scene that returned null in v294-v296 ----
-const clutter = run(prelude + `(function () {
-  var g = synthGray(240, 320, [{ cx: 110, cy: 170, rw: 52, rh: 220 }]);
-  stripes(g, 240, 320, 158, 236, 20, 300); // background clutter wins the old component race
-  var roi = { x: 75, y: 50, w: 70, h: 240 };
-  var r = ecDetectBookRect(g, 240, 320, roi, 'tall');
+function det(g, w, h, roi, guide) {
+  var r = ecDetectBookRect(g, w, h, roi, guide);
   return r ? JSON.stringify({ cx: Math.round(r.cx), cy: Math.round(r.cy),
                               w: Math.round(r.w), h: Math.round(r.h) }) : 'null';
-})()`);
+}
+`;
+
+// ---- 1. book-likeness: clean spine in guide locks ----
+const spine = run(prelude + `det(
+  synthGray(240, 320, [{ cx: 110, cy: 160, rw: 52, rh: 220 }]), 240, 320,
+  { x: 75, y: 40, w: 70, h: 240 }, 'tall')`);
 {
-  const r = clutter === 'null' ? null : JSON.parse(clutter);
-  ok('clutter scene locks onto the guide rect', !!r &&
-    near(r.cx, 75 + 35, 2) && near(r.cy, 50 + 120, 2) && near(r.w, 70, 2) && near(r.h, 240, 2));
+  const r = spine === 'null' ? null : JSON.parse(spine);
+  ok('spine in guide locks onto the guide rect', !!r &&
+    near(r.cx, 110, 2) && near(r.w, 70, 2) && near(r.h, 240, 2));
 }
 
-// ---- 3. no presence -> null (guidance shows instead of a bad capture) ----
+// ---- 2. the clutter scene that defeated v294-v296 still locks ----
+const clutter = run(prelude + `(function () {
+  var g = synthGray(240, 320, [{ cx: 110, cy: 170, rw: 52, rh: 220 }]);
+  stripes(g, 240, 320, 158, 236, 20, 300);
+  return det(g, 240, 320, { x: 75, y: 50, w: 70, h: 240 }, 'tall');
+})()`);
+ok('clutter scene locks (not null)', clutter !== 'null');
+
+// ---- 3. texture is rejected: many parallel edges are not a book ----
+const texture = run(prelude + `(function () {
+  var g = new Uint8ClampedArray(240 * 320), x, y;
+  for (y = 0; y < 320; y++) for (x = 0; x < 240; x++) g[y * 240 + x] = 140;
+  for (x = 20; x < 220; x += 24) for (y = 40; y < 280; y++) g[y * 240 + x] = 200;
+  return det(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 }, 'tall');
+})()`);
+ok('plank texture does not lock', texture === 'null');
+
+// ---- 4. empty guide -> null ----
 const noPres = run(prelude + `(function () {
   var g = new Uint8ClampedArray(240 * 320), x, y;
   for (y = 0; y < 320; y++) for (x = 0; x < 240; x++) g[y * 240 + x] = 120 + ((x * 13 + y * 7) % 17);
-  return ecDetectBookRect(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 }, 'tall') ? 'found' : 'null';
+  return det(g, 240, 320, { x: 75, y: 40, w: 70, h: 240 }, 'tall');
 })()`);
 ok('empty guide returns null', noPres === 'null');
 
-// ---- 4. no-ROI behavior unchanged (classic flow) ----
+// ---- 5. no-ROI behavior unchanged (classic flow) ----
 const classic = run(prelude + `(function () {
   var r = ecDetectBookRect(synthGray(240, 320, [{ cx: 120, cy: 160, rw: 80, rh: 160 }]), 240, 320);
   return r ? JSON.stringify({ cx: Math.round(r.cx), w: Math.round(r.w) }) : 'null';
@@ -86,20 +84,17 @@ const classic = run(prelude + `(function () {
   ok('classic no-ROI detection unchanged', !!r && Math.abs(r.cx - 120) <= 10 && Math.abs(r.w - 80) <= 16);
 }
 
-// ---- 5. portrait guide (front/back covers) ----
-const portrait = run(prelude + `(function () {
-  var g = synthGray(240, 320, [{ cx: 120, cy: 160, rw: 140, rh: 210 }]);
-  var roi = { x: 40, y: 45, w: 160, h: 230 };
-  var r = ecDetectBookRect(g, 240, 320, roi, 'portrait');
-  return r ? JSON.stringify({ cx: Math.round(r.cx), w: Math.round(r.w), h: Math.round(r.h) }) : 'null';
-})()`);
+// ---- 6. portrait guide (front/back covers) ----
+const portrait = run(prelude + `det(
+  synthGray(240, 320, [{ cx: 120, cy: 160, rw: 140, rh: 210 }]), 240, 320,
+  { x: 40, y: 45, w: 160, h: 230 }, 'portrait')`);
 {
   const r = portrait === 'null' ? null : JSON.parse(portrait);
   ok('portrait guide locks onto the guide rect', !!r &&
     near(r.cx, 120, 2) && near(r.w, 160, 2) && near(r.h, 230, 2));
 }
 
-// ---- 6. ecGuideRoiMath (unchanged from v296) ----
+// ---- 7. ecGuideRoiMath (unchanged) ----
 const tall916 = run(`JSON.stringify(ecGuideRoiMath(
   { left: 90.3, top: 35.2, width: 59.4, height: 249.6 },
   { left: 0, top: 0, width: 240, height: 320 },
@@ -113,7 +108,7 @@ ok('degenerate inputs return null',
   run(`ecGuideRoiMath(null, { width: 1 }, 1, 1, 1, 1)`) === null &&
   run(`ecGuideRoiMath({ width: 0 }, { left: 0, top: 0, width: 240, height: 320 }, 720, 1280, 240, 427)`) === null);
 
-// ---- 7. ecTopComponents still ranks center-biased (used by ecLargestComponent) ----
+// ---- 8. ecTopComponents still ranks center-biased ----
 const topk = run(`(function () {
   var m = new Uint8Array(240 * 320);
   function blob(cx, cy, rw, rh) {

@@ -264,29 +264,86 @@ function ecSobelSep(g, w, h) {
   return { gx: gx, gy: gy };
 }
 
-// v297: guided presence — the longest continuous run of strong directional
-// edges inside the ROI, as a fraction of the ROI's extent. A book face is a
-// rectangle: it always contributes a long straight edge (spine sides,
-// cover top/bottom, page striations). Returns { v, h } fractions.
-function ecGuidePresence(gray, w, h, roi) {
+// v298: region contrast — the strongest object-vs-surroundings signal over
+// centered candidate strips at several widths. A book bounds a region that
+// differs from what's beside it; texture (floor, wall) does not.
+function ecRegionContrast(gray, w, h, roi, tall) {
+  var x0 = Math.max(0, Math.floor(roi.x)), x1 = Math.min(w - 1, Math.ceil(roi.x + roi.w));
+  var y0 = Math.max(0, Math.floor(roi.y)), y1 = Math.min(h - 1, Math.ceil(roi.y + roi.h));
+  function mean(ax0, ax1, ay0, ay1) {
+    ax0 = Math.max(0, Math.floor(ax0)); ax1 = Math.min(w - 1, Math.ceil(ax1));
+    ay0 = Math.max(0, Math.floor(ay0)); ay1 = Math.min(h - 1, Math.ceil(ay1));
+    var s = 0, n = 0;
+    for (var yy = ay0; yy <= ay1; yy++) for (var xx = ax0; xx <= ax1; xx++) { s += gray[yy * w + xx]; n++; }
+    return n ? s / n : 0;
+  }
+  var best = 0;
+  var centers = tall ? [0.35, 0.5, 0.65] : [0.5];
+  var widths = [0.9, 0.65, 0.4];
+  for (var ci = 0; ci < centers.length; ci++) for (var wi = 0; wi < widths.length; wi++) {
+    var c = 0;
+    if (tall) {
+      var ccx = x0 + (x1 - x0) * centers[ci], hw = (x1 - x0) * widths[wi] / 2;
+      var inner = mean(ccx - hw, ccx + hw, y0, y1);
+      c = Math.abs(inner - mean(ccx - hw - 14, ccx - hw, y0, y1)) +
+          Math.abs(inner - mean(ccx + hw, ccx + hw + 14, y0, y1));
+    } else {
+      var ccy = y0 + (y1 - y0) * centers[ci], hh = (y1 - y0) * widths[wi] / 2;
+      var inner2 = mean(x0, x1, ccy - hh, ccy + hh);
+      c = Math.abs(inner2 - mean(x0, x1, ccy - hh - 14, ccy - hh)) +
+          Math.abs(inner2 - mean(x0, x1, ccy + hh, ccy + hh + 14));
+    }
+    if (c > best) best = c;
+  }
+  return best;
+}
+
+// v298: book-likeness in the guide. A long straight edge alone is not enough
+// (wood floors have those). A book face shows FEW dominant parallel edges —
+// a spine usually two, a weak-contrast spine one strong edge bounding a
+// contrasting region — while texture shows many.
+function ecBookPresent(gray, w, h, roi, tall) {
   var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
   var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
   var y0 = Math.max(1, Math.floor(roi.y)), y1 = Math.min(h - 2, Math.ceil(roi.y + roi.h));
-  if (x1 - x0 < 12 || y1 - y0 < 20) return { v: 0, h: 0 };
-  var TH = 100, bestV = 0, bestH = 0, x, y;
-  for (x = x0; x <= x1; x++) {
-    var cv = 0;
-    for (y = y0; y <= y1; y++) {
-      if (se.gx[y * w + x] > TH) { cv++; if (cv > bestV) bestV = cv; } else cv = 0;
+  var rw = x1 - x0, rh = y1 - y0;
+  if (rw < 12 || rh < 20) return false;
+  var TH = 100, runs = [], i, j;
+  if (tall) {
+    for (i = 0; i <= rw; i++) {
+      var best = 0, cur = 0;
+      for (j = y0; j <= y1; j++) {
+        if (se.gx[j * w + x0 + i] > TH) { cur++; if (cur > best) best = cur; } else cur = 0;
+      }
+      runs.push(best);
+    }
+  } else {
+    for (j = 0; j <= rh; j++) {
+      var b2 = 0, c2 = 0;
+      for (i = x0; i <= x1; i++) {
+        if (se.gy[(y0 + j) * w + i] > TH) { c2++; if (c2 > b2) b2 = c2; } else c2 = 0;
+      }
+      runs.push(b2);
     }
   }
-  for (y = y0; y <= y1; y++) {
-    var ch = 0;
-    for (x = x0; x <= x1; x++) {
-      if (se.gy[y * w + x] > TH) { ch++; if (ch > bestH) bestH = ch; } else ch = 0;
+  var len = tall ? rh : rw, strong = [];
+  for (i = 0; i < runs.length; i++) {
+    if (runs[i] < len * 0.35) continue;
+    var peak = true;
+    for (j = Math.max(0, i - 4); j <= Math.min(runs.length - 1, i + 4); j++) {
+      if (runs[j] > runs[i]) { peak = false; break; }
     }
+    if (peak) strong.push(i);
   }
-  return { v: bestV / (y1 - y0), h: bestH / (x1 - x0) };
+  if (strong.length >= 5) return false; // texture (floorboards etc.), not a book
+  var minSep = Math.max(10, (tall ? rw : rh) * 0.25);
+  for (i = 0; i < strong.length; i++) for (j = i + 1; j < strong.length; j++) {
+    if (strong[j] - strong[i] >= minSep) return true; // a bounded pair of edges
+  }
+  if (strong.length >= 1) {
+    return ecRegionContrast(gray, w, h, roi, tall) >= 30; // one edge + contrasting region
+  }
+  return false;
 }
 
 function ecThreshold(mag, w, h, t) {
@@ -498,8 +555,7 @@ function ecDetectBookRect(gray, w, h, roi, guide) {
   // corrupts). The rect is perfectly stable, so the stability tracker just
   // gates on continued presence.
   if (roi && guide) {
-    var pr = ecGuidePresence(gray, w, h, roi);
-    if (Math.max(pr.v, pr.h) >= 0.35) {
+    if (ecBookPresent(gray, w, h, roi, guide === 'tall')) {
       var qx = roi.x, qy = roi.y;
       var quad = ecNormQuad([[qx, qy], [qx + roi.w, qy], [qx + roi.w, qy + roi.h], [qx, qy + roi.h]]);
       return { quad: quad, cx: qx + roi.w / 2, cy: qy + roi.h / 2, w: roi.w, h: roi.h, angle: 0 };
