@@ -1,35 +1,15 @@
--- v288: expose the public edition repository read surface
+-- v288: public edition API — DEFERRED by maintainer decision (2026-10-05).
 --
--- Only canonical/non-rejected repository data is intended for public use.
--- Writes remain authenticated/admin-only under the earlier migrations.
-
-grant select on public.editions to anon, authenticated;
-grant select on public.edition_assets to anon, authenticated;
-grant select on public.edition_asset_slots to anon, authenticated;
-grant select on public.edition_measurements to anon, authenticated;
-grant select on public.edition_images to anon, authenticated;
-
--- The earlier authenticated-only editions read policy is superseded by the
--- gated public read below; drop it so it cannot mask the new predicate.
-drop policy if exists "editions: read for signed-in" on public.editions;
-
-drop policy if exists "editions public read" on public.editions;
-create policy "editions public read"
-  on public.editions
-  for select
-  to anon, authenticated
-  -- Editions are user-insertable with no moderation state, so the public
-  -- surface only exposes editions backed by a canonical slot whose
-  -- canonical asset is not rejected.
-  using (
-    exists (
-      select 1
-      from public.edition_asset_slots s
-      join public.edition_assets a on a.id = s.canonical_asset_id
-      where s.edition_id = editions.id
-        and not a.rejected
-    )
-  );
-
--- The work catalog remains separately permissioned; the public edition API
--- intentionally returns edition metadata without exposing work embeddings.
+-- The public, unauthenticated read surface for the edition repository is NOT
+-- shipping yet. The eventual design is a private API for signed-in users plus
+-- a read-only public API; until that split is designed, there is no public
+-- endpoint and no anonymous access to the repository tables.
+--
+-- This file intentionally applies nothing. It reserves the v288 number so the
+-- migration sequence stays coherent (v288 shipped the admin moderation lab
+-- and the APP_VERSION/SW cache bump; the API itself waits).
+--
+-- When the public API is designed, add its grants + policies in a new
+-- migration (e.g. v289_public_edition_api.sql) — do not resurrect the
+-- unauthenticated CORS-open draft that lived here.
+select 1;

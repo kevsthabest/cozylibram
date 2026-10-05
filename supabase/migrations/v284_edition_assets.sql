@@ -72,9 +72,11 @@ create index if not exists edition_asset_slots_isbn_idx
 alter table public.edition_assets enable row level security;
 alter table public.edition_asset_slots enable row level security;
 
+-- No public API yet (deferred 2026-10-05): repository reads are for
+-- signed-in users only. Revisit when the public read-only API is designed.
 drop policy if exists "edition_assets public read" on public.edition_assets;
-create policy "edition_assets public read" on public.edition_assets
-  for select using (not rejected);
+create policy "edition_assets authenticated read" on public.edition_assets
+  for select to authenticated using (not rejected);
 
 drop policy if exists "edition_assets contributor insert" on public.edition_assets;
 create policy "edition_assets contributor insert" on public.edition_assets
@@ -105,8 +107,8 @@ create policy "edition_assets admin write" on public.edition_assets
   for all to authenticated using (is_admin()) with check (is_admin());
 
 drop policy if exists "edition_asset_slots public read" on public.edition_asset_slots;
-create policy "edition_asset_slots public read" on public.edition_asset_slots
-  for select using (true);
+create policy "edition_asset_slots authenticated read" on public.edition_asset_slots
+  for select to authenticated using (true);
 
 drop policy if exists "edition_asset_slots contributor insert" on public.edition_asset_slots;
 create policy "edition_asset_slots contributor insert" on public.edition_asset_slots

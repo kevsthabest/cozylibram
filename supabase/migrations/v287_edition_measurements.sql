@@ -32,8 +32,8 @@ create index if not exists edition_measurements_edition_idx
 alter table public.edition_measurements enable row level security;
 
 drop policy if exists "edition_measurements public read" on public.edition_measurements;
-create policy "edition_measurements public read" on public.edition_measurements
-  for select using (not rejected);
+create policy "edition_measurements authenticated read" on public.edition_measurements
+  for select to authenticated using (not rejected);
 
 drop policy if exists "edition_measurements contributor insert" on public.edition_measurements;
 create policy "edition_measurements contributor insert" on public.edition_measurements
