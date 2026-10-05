@@ -50,11 +50,15 @@ create policy "edition_assets contributor update" on public.edition_assets
 drop policy if exists "edition_asset_slots contributor update" on public.edition_asset_slots;
 create policy "edition_asset_slots contributor update" on public.edition_asset_slots
   for update to authenticated
-  using (selected_by = auth.uid() or is_admin())
+  -- Automatic selections stamp selected_by = NULL, so contributors can never
+  -- match an automatic slot here. Only an admin-made 'manual' pin naming the
+  -- contributor grants them update rights; admins keep full rights.
+  using (is_admin() or (selected_by = auth.uid() and selection_method = 'manual'))
   with check (
     is_admin()
     or (
       selected_by = auth.uid()
+      and selection_method = 'manual'
       and exists (
         select 1 from public.edition_assets a
         where a.id = edition_asset_slots.canonical_asset_id
@@ -131,13 +135,17 @@ begin
     return null;
   end if;
 
+  /* Automatic selections never stamp a contributor id on the slot. Stamping
+     the asset's owner would hand them UPDATE rights on an automatic slot
+     (the update policy keys off selected_by), which is a path to forging
+     manual/admin authority. Manual/admin pins are created by admins only. */
   insert into public.edition_asset_slots (
     edition_id, isbn, face, appearance, canonical_asset_id,
     selection_method, selected_by, selected_at, updated_at
   ) values (
     p_edition_id, best_isbn, p_face, p_appearance, best_id,
     case when best_verified then 'verified-quality' else 'quality' end,
-    best_user, now(), now()
+    null, now(), now()
   )
   on conflict (edition_id, face, appearance)
   do update set
