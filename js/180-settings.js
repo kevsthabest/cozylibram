@@ -184,7 +184,9 @@ function renderSettings() {
     '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
     '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
-    '<p class="note" id="ap-status"></p>';
+    '<p class="note" id="ap-status"></p>' +
+    '<div class="search-row"><a class="btn ghost" href="./downloads/cozylibram.apk" download>Download APK (Android v1.0.7)</a></div>' +
+    '<p class="note">Install the Android app directly — no GitHub login needed.</p>';
 
   let openIdx = [0];
   try {
