@@ -2131,7 +2131,7 @@ function ecRenderReview() {
    top of the review so the back gesture returns to the review. */
 
 function ecRunEnhance(imageUrl, mode) {
-  return fetch('/api/enhance-face', {
+  return apiFetch('/api/enhance-face', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: imageUrl, mode: mode }),
