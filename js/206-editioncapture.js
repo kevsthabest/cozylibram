@@ -1565,13 +1565,16 @@ function ecOrbitCapture() {
           var tight240 = ecTightenQuad(ecToGray(dd.data, aw2, ah2), aw2, ah2, obRoi, face0.guide === 'tall');
           var edgeQuad = tight240 ? ecNormQuad(tight240).map(function (p) { return [p[0] * s, p[1] * s]; }) : null;
           // Stage 2: YOLO (robust on damaged/warped books).
-          var yoloQuad = null;
+          var yoloQuad = null, yoloUsed = false;
           try {
-            if (typeof ecYoloDetect === 'function') {
+            if (typeof ecYoloDetect === 'function' && (typeof ecYoloEnabled !== 'function' || ecYoloEnabled())) {
+              obSetMsg('AI refining crop…');
               var dets = await ecYoloDetect(c);
               var roiFull = { x: obRoi.x * s, y: obRoi.y * s, w: obRoi.w * s, h: obRoi.h * s };
               var best = ecYoloBestForGuide(dets, roiFull);
               yoloQuad = ecYoloQuad(best);
+              yoloUsed = !!yoloQuad;
+              obSetMsg(yoloUsed ? 'AI crop applied' : 'Processing…');
             }
           } catch (e) {}
           var guideQuad = [[obRoi.x * s, obRoi.y * s], [(obRoi.x + obRoi.w) * s, obRoi.y * s],

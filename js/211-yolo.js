@@ -18,6 +18,15 @@ var EC_YOLO_MASK_THRESH = 0.65;
 
 var ecYoloSession = null;
 var ecYoloLoading = null;
+var EC_YOLO_OPT_KEY = 'cozylibram.yolo-enabled';
+
+/* User toggle (Settings > About). Defaults on. */
+function ecYoloEnabled() {
+  try { return localStorage.getItem(EC_YOLO_OPT_KEY) !== '0'; } catch (e) { return true; }
+}
+function ecSetYoloEnabled(on) {
+  try { localStorage.setItem(EC_YOLO_OPT_KEY, on ? '1' : '0'); } catch (e) {}
+}
 
 /* Dynamically load the vendored ort.min.js (lazy, not on app start). */
 function ecYoloLoadOrt() {
@@ -158,6 +167,7 @@ function ecQuadIoU(q1, q2) {
 
 /* Run YOLO on a canvas. Returns detections in the canvas's coords (or []). */
 async function ecYoloDetect(canvas) {
+  if (!ecYoloEnabled()) return [];
   var session = await ecYoloLoad();
   if (!session || typeof document === 'undefined') return [];
   var w = canvas.width, h = canvas.height;

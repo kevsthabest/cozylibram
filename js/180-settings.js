@@ -185,6 +185,9 @@ function renderSettings() {
     '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
     '<p class="note" id="ap-status"></p>' +
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-yolo" ' +
+    (typeof ecYoloEnabled === 'function' && ecYoloEnabled() ? 'checked' : '') + '> AI crop (YOLO)' +
+    '<span class="chk-hint">On-device book detection for tighter orbit crops. Turn off if you see odd permission prompts.</span></label>' +
     '<div class="search-row"><a class="btn ghost" href="./downloads/cozylibram.apk" download>Download APK (Android v1.0.7)</a></div>' +
     '<p class="note">Install the Android app directly — no GitHub login needed.</p>';
 
@@ -337,6 +340,11 @@ function renderSettings() {
   document.getElementById('st-analytics').addEventListener('change', e => {
     setAnalyticsEnabled(e.target.checked);
     toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');
+  });
+  var yoloTgl = document.getElementById('st-yolo');
+  if (yoloTgl) yoloTgl.addEventListener('change', e => {
+    if (typeof ecSetYoloEnabled === 'function') ecSetYoloEnabled(e.target.checked);
+    toast(e.target.checked ? 'AI crop on' : 'AI crop off — using edge detection only');
   });
   document.getElementById('st-analytics-what').addEventListener('click', e => {
     e.preventDefault();
