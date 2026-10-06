@@ -33,6 +33,11 @@
    goes to a confirm sheet (Use / Adjust corners / Retake). Manual snaps
    and chosen photos get the detected quad as an editor pre-fit. */
 
+// v310: Enhance (AI image editing) hidden — gemini-2.5-flash-image was shut down
+// by Google on 2026-10-02 and replacements have no free tier. Set to true
+// to re-enable if a working model becomes available.
+var EC_ENHANCE_AVAILABLE = false;
+
 var EC_FACES = [
   { id: 'spine', label: 'Spine', skippable: false, guide: 'tall',
     hint: 'Hold the book upright with the spine facing you. Fill the frame.' },
@@ -1856,7 +1861,7 @@ function ecRenderAppearance() {
     var chips = existing[ap].map(function (f) {
       var fd = ecFaceDef(f);
       return '<span class="ec-chip">' + esc(fd ? fd.label : f) +
-        '<button class="ec-chipse" data-ec-eh="' + esc(ap) + ':' + esc(f) + '" aria-label="Enhance">\u2728</button>' +
+        (typeof EC_ENHANCE_AVAILABLE !== 'undefined' && EC_ENHANCE_AVAILABLE ? '<button class="ec-chipse" data-ec-eh="' + esc(ap) + ':' + esc(f) + '" aria-label="Enhance">\u2728</button>' : '') +
         '<button class="ec-chipx" data-ec-rm="' + esc(ap) + ':' + esc(f) + '" aria-label="Remove">\u00d7</button></span>';
     }).join('');
     exHtml += '<div class="ec-exrow"><span class="ec-exap">' + esc(ecAppearanceLabel(ap)) + '</span>' + chips + '</div>';
@@ -2020,7 +2025,7 @@ function ecRenderReview() {
         '<button class="btn ghost sm" data-ec-retake="' + ap + ':' + f.id + '">Retake</button>' +
         '<button class="btn ghost sm" data-ec-adjust="' + ap + ':' + f.id + '">Adjust</button>' +
         '<button class="btn ghost sm" data-ec-aicrop="' + ap + ':' + f.id + '">\uD83E\uDD16 AI crop</button>' +
-        '<button class="btn ghost sm" data-ec-enhance="' + ap + ':' + f.id + '">\u2728 Enhance</button>' +
+        (typeof EC_ENHANCE_AVAILABLE !== 'undefined' && EC_ENHANCE_AVAILABLE ? '<button class="btn ghost sm" data-ec-enhance="' + ap + ':' + f.id + '">\u2728 Enhance</button>' : '') +
         '</div></div>';
     });
   });
