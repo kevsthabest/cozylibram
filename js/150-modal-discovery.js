@@ -1025,10 +1025,12 @@ function renderDetailModal(b, viaBook) {
     // description; mobile stacks cover, title, author, rating, meta, action.
     '<div class="d-hero">' +
     '<div class="d-cover">' + coverHTML(b, 'd-cov') +
-    '<button class="btn ghost sm" id="m-changecover">' + icon('camera') + ' Change Cover</button>' +
-    '<button class="btn ghost sm" id="m-scanfaces">' + icon('camera') + ' Scan Edition</button>' +
-    '<button class="btn ghost sm" id="m-measurethick">Measure thickness</button>' +
-    '<button class="btn ghost sm" id="m-view3d">' + icon('eye') + ' View in 3D</button></div>' +
+    '<div class="edition-toolbar">' +
+    '<button class="edition-tool" id="m-changecover" title="Change Cover" aria-label="Change Cover">' + icon('image') + '<small>Cover</small></button>' +
+    '<button class="edition-tool" id="m-scanfaces" title="Scan Edition" aria-label="Scan Edition">' + icon('camera') + '<small>Scan</small></button>' +
+    '<button class="edition-tool" id="m-measurethick" title="Measure thickness" aria-label="Measure thickness">' + icon('ruler') + '<small>Size</small></button>' +
+    '<button class="edition-tool" id="m-view3d" title="View in 3D" aria-label="View in 3D">' + icon('cube') + '<small>3D</small></button>' +
+    '</div></div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)

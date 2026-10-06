@@ -109,6 +109,10 @@ const ICONS = {
   camera: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8.5 7l1.2-2.5h4.6L15.5 7"/><circle cx="12" cy="13" r="3.5"/>',
   // barcode (ISBN tab)
   barcode: '<path d="M4 5v14M7.5 5v14M10.5 5v14M12.5 5v14M15.5 5v14M19.5 5v14"/>',
+  // ruler (measure thickness)
+  ruler: '<rect x="2.5" y="9" width="19" height="6" rx="1"/><line x1="7" y1="9" x2="7" y2="12"/><line x1="11" y1="9" x2="11" y2="13"/><line x1="15" y1="9" x2="15" y2="12"/><line x1="19" y1="9" x2="19" y2="13"/>',
+  // cube (3D view)
+  cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 3v9"/><path d="M4 7.5l8 4.5 8-4.5"/><path d="M12 12v9"/>',
   // clipboard (bulk tab, copy)
   clipboard: '<rect x="5.5" y="4.5" width="13" height="16.5" rx="2"/><rect x="9" y="2.5" width="6" height="4" rx="1"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="15" y2="15"/>',
   // share (connected nodes)

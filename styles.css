@@ -2169,9 +2169,30 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .d-meta span { display: inline-flex; align-items: center; gap: 5px; }
 .d-meta span svg { width: 14px; height: 14px; color: var(--faint); }
 
-/* --- labeled Change Cover button --- */
-.d-cover #m-changecover { display: inline-flex; align-items: center; gap: 6px; }
-.d-cover #m-changecover svg { width: 15px; height: 15px; }
+/* --- edition tools icon toolbar (v311) --- */
+.edition-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  width: 100%;
+}
+.edition-tool {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--card, #2d1f3d);
+  border: 1px solid var(--line, #4a3560);
+  border-radius: 10px;
+  padding: 8px 2px 6px;
+  color: var(--ink, #e8e0f0);
+  cursor: pointer;
+  font-size: 10px;
+}
+.edition-tool svg { width: 20px; height: 20px; }
+.edition-tool small { font-size: 10px; color: var(--faint, #a090b8); line-height: 1; }
+.edition-tool:active { background: var(--line, #4a3560); }
 
 /* --- tab icons --- */
 .d-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
