@@ -2,6 +2,14 @@ import { rateLimit } from '../_lib/rate-limit.js';
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
 import { geminiFetch } from '../_lib/gemini.js';
 
+// v309: structured AI usage logging. Filter Cloudflare logs by [AI_USAGE].
+function aiLog(endpoint, user, status, detail) {
+  try {
+    var u = user && (user.email || user.id) || 'anon';
+    console.log('[AI_USAGE] endpoint=' + endpoint + ' user=' + u + ' status=' + status + (detail ? ' detail=' + detail : ''));
+  } catch (e) {}
+}
+
 // Cloudflare Pages Function: POST /api/enhance-face
 //
 // v281: AI post-processing for scanned edition faces. The phone camera can't
@@ -90,10 +98,10 @@ export async function onRequest(context) {
   if (!clean) return new Response('bad request', { status: 400 });
   // v225 (security): quota-spending endpoint — signed-in callers only.
   const user = await authedUser(request, env);
-  if (!user) return unauthorized();
-  if (user.banned) return forbiddenBanned();
+  if (!user) { aiLog('enhance-face', null, '401', 'no-auth'); return unauthorized(); }
+  if (user.banned) { aiLog('enhance-face', user, '403', 'banned'); return forbiddenBanned(); }
   const limited = rateLimit(request, 'enhance-face', 10, 60 * 1000);
-  if (limited) return limited;
+  if (limited) { aiLog('enhance-face', user, '429', 'local-limiter'); return limited; }
 
   const key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
   if (!key) {
@@ -121,6 +129,7 @@ export async function onRequest(context) {
     }),
   });
   if (!g.ok) {
+    aiLog('enhance-face', user, String(g.status || 'network-err'), 'upstream');
     if (g.networkError) return jsonErr(502, 'enhance provider unreachable');
     const status = g.status;
     // Same mapping as read-cover: a 503 from OUR endpoint unambiguously
@@ -132,7 +141,8 @@ export async function onRequest(context) {
   try {
     out = extractEnhancedImage(await g.res.json());
   } catch (e) {}
-  if (!out) return jsonErr(502, 'enhance model returned no image');
+  if (!out) { aiLog('enhance-face', user, '502', 'no-image'); return jsonErr(502, 'enhance model returned no image'); }
+  aiLog('enhance-face', user, 'ok', model);
   return new Response(JSON.stringify({ image: out }),
     { headers: { 'Content-Type': 'application/json' } });
 }

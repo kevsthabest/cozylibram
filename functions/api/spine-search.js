@@ -9,6 +9,14 @@ import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.
 import { rateLimit } from '../_lib/rate-limit.js';
 import { geminiFetch } from '../_lib/gemini.js';
 
+// v309: structured AI usage logging. Filter Cloudflare logs by [AI_USAGE].
+function aiLog(endpoint, user, status, detail) {
+  try {
+    var u = user && (user.email || user.id) || 'anon';
+    console.log('[AI_USAGE] endpoint=' + endpoint + ' user=' + u + ' status=' + status + (detail ? ' detail=' + detail : ''));
+  } catch (e) {}
+}
+
 const json = (status, obj) => new Response(JSON.stringify(obj),
   { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -123,10 +131,10 @@ const PROMPT = (title, author) =>
 export async function onRequest({ request, env }) {
   if (request.method !== 'POST') return json(405, { error: 'method not allowed' });
   const rl = rateLimit(request, 'spine-search', 10, 60000);
-  if (rl) return rl;
+  if (rl) { aiLog('spine-search', null, '429', 'local-limiter'); return rl; }
   const caller = await authedUser(request, env);
-  if (!caller) return unauthorized();
-  if (caller.banned) return forbiddenBanned();
+  if (!caller) { aiLog('spine-search', null, '401', 'no-auth'); return unauthorized(); }
+  if (caller.banned) { aiLog('spine-search', caller, '403', 'banned'); return forbiddenBanned(); }
   const supaUrl = String((env && env.SUPABASE_URL) || '').replace(/\/+$/, '');
   const svcKey = (env && env.SUPABASE_SERVICE_KEY) || '';
   if (!supaUrl || !svcKey) return json(500, { error: 'server misconfigured' });
@@ -166,6 +174,7 @@ export async function onRequest({ request, env }) {
     }),
   });
   if (!g.ok) {
+    aiLog('spine-search', caller, String(g.status || 'network-err'), 'upstream');
     if (g.networkError) return json(502, { error: 'vision provider unreachable' });
     if (g.status === 429) return json(502, { error: 'Gemini is rate-limiting this key right now — wait a minute and try again' });
     return json(502, { error: 'vision provider error (upstream ' + g.status + ')' });
@@ -182,5 +191,6 @@ export async function onRequest({ request, env }) {
   } catch (e) {
     candidates = spineSearchUrlsFromText(text).map(image_url => ({ image_url, page_url: null, note: 'scraped from answer text' }));
   }
+  aiLog('spine-search', caller, 'ok', String(candidates.length) + '-candidates');
   return json(200, { candidates, sources: spineSearchSources(data) });
 }

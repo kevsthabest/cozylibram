@@ -2,6 +2,14 @@ import { rateLimit } from '../_lib/rate-limit.js';
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
 import { geminiFetch } from '../_lib/gemini.js';
 
+// v309: structured AI usage logging. Filter Cloudflare logs by [AI_USAGE].
+function aiLog(endpoint, user, status, detail) {
+  try {
+    var u = user && (user.email || user.id) || 'anon';
+    console.log('[AI_USAGE] endpoint=' + endpoint + ' user=' + u + ' status=' + status + (detail ? ' detail=' + detail : ''));
+  } catch (e) {}
+}
+
 // Cloudflare Pages Function: POST /api/read-cover
 //
 // v197: vision cover reading. Accepts a downscaled book-cover photo and asks
@@ -150,11 +158,11 @@ export async function onRequest(context) {
   }
   // v225 (security): quota-spending endpoint — signed-in callers only.
   const user = await authedUser(request, env);
-  if (!user) return unauthorized();
-  if (user.banned) return forbiddenBanned(); // v246: suspended accounts
+  if (!user) { aiLog('read-cover', null, '401', 'no-auth'); return unauthorized(); }
+  if (user.banned) { aiLog('read-cover', user, '403', 'banned'); return forbiddenBanned(); }
   // Vision calls cost more than text — cap harder than trope-infer.
   const limited = rateLimit(request, 'read-cover', 20, 60 * 1000);
-  if (limited) return limited;
+  if (limited) { aiLog('read-cover', user, '429', 'local-limiter'); return limited; }
 
   let body;
   try {
@@ -244,6 +252,7 @@ export async function onRequest(context) {
     // Forward other upstream statuses (including 429 after retries are
     // exhausted) so the client's 429 handling works. Never leak the key:
     // the body is the provider's, which contains no secret.
+    aiLog('read-cover', user, String(status), 'upstream');
     return new Response(await g.res.text(), { status });
   }
   const upstream = g.res;
@@ -254,6 +263,7 @@ export async function onRequest(context) {
   } catch (e) {
     return jsonErr(502, 'vision provider returned an unreadable answer');
   }
+  aiLog('read-cover', user, 'ok', isShelf ? 'shelf' : isSpine ? 'spine' : 'single');
   return new Response(JSON.stringify(parsed),
     { headers: { 'Content-Type': 'application/json' } });
 }
