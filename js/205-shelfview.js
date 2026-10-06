@@ -1122,7 +1122,7 @@ function shelfNativeCapture(bookId) {
   input.click();
 }
 
-// v260: viewfinder — live preview with a spine-shaped guide
+// v260: spine viewfinder — live preview with a spine-shaped guide
 // frame so the spine lands centered. Capture grabs the frame straight into
 // the existing review flow.
 let shelfCamStream = null;
