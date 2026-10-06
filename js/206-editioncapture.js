@@ -1530,6 +1530,7 @@ function ecOrbitCapture() {
     obPhase = 'processing';
     obSetMsg('Processing…');
     // Two-stage crop (v301): edge tighten first, YOLO refines on disagreement.
+    var cropMethod = 'guide';
     var done = function (quad) {
       if (obTornDown) return;
       var url = null;
@@ -1545,6 +1546,7 @@ function ecOrbitCapture() {
       }
       var st = EC.steps[obIdx];
       (EC.results[st.appearance] = EC.results[st.appearance] || {})[st.face] = url;
+      (EC.cropMethods = EC.cropMethods || {})[st.appearance + ':' + st.face] = cropMethod;
       // Keep the full frame + quad so Review → Adjust can re-crop.
       (EC.fullFrames = EC.fullFrames || {})[st.appearance + ':' + st.face] = c.toDataURL('image/jpeg', 0.85);
       (EC.quads = EC.quads || {})[st.appearance + ':' + st.face] = quad;
@@ -1579,7 +1581,10 @@ function ecOrbitCapture() {
           } catch (e) {}
           var guideQuad = [[obRoi.x * s, obRoi.y * s], [(obRoi.x + obRoi.w) * s, obRoi.y * s],
                            [(obRoi.x + obRoi.w) * s, (obRoi.y + obRoi.h) * s], [obRoi.x * s, (obRoi.y + obRoi.h) * s]];
-          quad = (typeof ecEnsembleQuad === 'function' ? ecEnsembleQuad(edgeQuad, yoloQuad) : (edgeQuad || yoloQuad)) || guideQuad;
+          var ensembled = (typeof ecEnsembleQuad === 'function' ? ecEnsembleQuad(edgeQuad, yoloQuad) : (edgeQuad || yoloQuad));
+          quad = ensembled || guideQuad;
+          if (quad === yoloQuad) cropMethod = 'yolo';
+          else if (quad === edgeQuad) cropMethod = 'edge';
         } else {
           quad = ecDetectQuadForCanvas(c);
         }
@@ -2007,8 +2012,10 @@ function ecRenderReview() {
     EC_FACES.forEach(function (f) {
       var url = EC.results[ap] && EC.results[ap][f.id];
       if (!url) return;
+      var cm = EC.cropMethods && EC.cropMethods[ap + ':' + f.id];
+      var badge = cm === 'yolo' ? ' <b style="color:#8f8">AI</b>' : (cm === 'edge' ? ' <span style="opacity:.6">edge</span>' : '');
       thumbs += '<div class="ec-thumb"><img src="' + url + '" alt="">' +
-        '<span>' + esc(f.label) + ' · ' + esc(ecAppearanceLabel(ap)) + '</span>' +
+        '<span>' + esc(f.label) + ' · ' + esc(ecAppearanceLabel(ap)) + badge + '</span>' +
         '<div class="ec-thumbbtns">' +
         '<button class="btn ghost sm" data-ec-retake="' + ap + ':' + f.id + '">Retake</button>' +
         '<button class="btn ghost sm" data-ec-adjust="' + ap + ':' + f.id + '">Adjust</button>' +
