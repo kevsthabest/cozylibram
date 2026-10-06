@@ -2139,7 +2139,13 @@ function ecRunEnhance(imageUrl, mode) {
     if (res.status === 429) return api429Message(res, 'The AI is busy — try again in a minute')
       .then(function (m) { throw new Error(m); });
     if (res.status === 503) throw new Error('Enhancement is not set up on this server');
-    if (!res.ok) throw new Error('Enhancement failed');
+    if (!res.ok) {
+      return res.text().then(function (t) {
+        var detail = '';
+        try { detail = (JSON.parse(t) || {}).error || t; } catch (e) { detail = t; }
+        throw new Error('Enhancement failed (HTTP ' + res.status + ')' + (detail ? ': ' + String(detail).slice(0, 160) : ''));
+      });
+    }
     return res.json();
   }).then(function (j) {
     if (!j || typeof j.image !== 'string' || j.image.indexOf('data:image') !== 0) {
