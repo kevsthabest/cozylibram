@@ -2062,8 +2062,9 @@ function ecRenderReview() {
         await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = fullUrl; });
         var cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
         cv.getContext('2d').drawImage(img, 0, 0);
-        var dets = await ecYoloDetect(cv);
-        if (!dets.length) { toast('AI found no book in this frame'); return; }
+        var dets = await ecYoloDetect(cv, 0.05);
+        if (!dets.length) { toast('AI found no book in this frame (tried down to 5%)'); return; }
+        var topConf = Math.round(dets[0].conf * 100);
         // Pick the largest detection (manual mode: no guide ROI stored)
         var best = dets[0];
         for (var i = 1; i < dets.length; i++) {
@@ -2082,7 +2083,7 @@ function ecRenderReview() {
         var w2 = document.getElementById('ec-wizard');
         if (w2) w2.remove();
         ecRenderReview();
-        toast('AI crop applied');
+        toast('AI crop applied (' + topConf + '%)');
       } catch (e) {
         toast('AI crop failed: ' + (e && e.message ? e.message : e));
       } finally {

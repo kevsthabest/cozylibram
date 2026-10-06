@@ -91,8 +91,9 @@ function ecYoloNms(boxes, scores) {
    det: Float32Array(116*8400), protos: Float32Array(32*160*160).
    Returns [{ box:[x0,y0,x1,y1], conf, cls, maskBox:[x0,y0,x1,y1]|null }]
    in the 640x640 model coords. */
-function ecYoloDecode(det, protos, w, h) {
+function ecYoloDecode(det, protos, w, h, confThresh) {
   var N = 8400, NM = 32, i, c;
+  confThresh = confThresh || EC_YOLO_CONF;
   var boxes = [], scores = [], coeffs = [], classes = [];
   for (i = 0; i < N; i++) {
     var best = 0, cls = -1;
@@ -100,7 +101,7 @@ function ecYoloDecode(det, protos, w, h) {
       var s = det[(4 + c) * N + i];
       if (s > best) { best = s; cls = c; }
     }
-    if (best < EC_YOLO_CONF) continue;
+    if (best < confThresh) continue;
     var cx = det[i], cy = det[N + i], bw = det[2 * N + i], bh = det[3 * N + i];
     boxes.push([(cx - bw / 2) / EC_YOLO_IMG * w, (cy - bh / 2) / EC_YOLO_IMG * h,
                 (cx + bw / 2) / EC_YOLO_IMG * w, (cy + bh / 2) / EC_YOLO_IMG * h]);
@@ -166,7 +167,7 @@ function ecQuadIoU(q1, q2) {
 }
 
 /* Run YOLO on a canvas. Returns detections in the canvas's coords (or []). */
-async function ecYoloDetect(canvas) {
+async function ecYoloDetect(canvas, confOverride) {
   if (!ecYoloEnabled()) return [];
   var session = await ecYoloLoad();
   if (!session || typeof document === 'undefined') return [];
@@ -188,7 +189,7 @@ async function ecYoloDetect(canvas) {
   var det = out[session.outputNames[0]].data;
   var protos = out[session.outputNames[1]].data;
   // Map from square-crop coords back to canvas coords.
-  var dets = ecYoloDecode(det, protos, side, side);
+  var dets = ecYoloDecode(det, protos, side, side, confOverride || EC_YOLO_CONF);
   return dets.map(function (dt) {
     function mp(b) { return [b[0] + sx, b[1] + sy, b[2] + sx, b[3] + sy]; }
     return { box: mp(dt.box), conf: dt.conf, cls: dt.cls, maskBox: dt.maskBox ? mp(dt.maskBox) : null };
