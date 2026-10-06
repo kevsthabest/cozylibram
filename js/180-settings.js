@@ -197,11 +197,38 @@ function renderSettings() {
     if (Array.isArray(saved)) openIdx = saved;
   } catch (e) {}
 
+  // v312: purchase ledger totals
+  var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
+  try {
+    (typeof library !== 'undefined' ? library : []).forEach(function(b) {
+      if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
+        ledgerTotal += b.purchasePrice;
+        ledgerCount++;
+        var src = b.purchaseSource || 'Unknown';
+        ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
+      }
+      if (b.listPrice != null && !isNaN(b.listPrice)) listTotal += b.listPrice;
+    });
+  } catch (e) {}
+  var ledgerSources = Object.keys(ledgerBySource).sort(function(a, b) { return ledgerBySource[b] - ledgerBySource[a]; });
+  var htmlLedger =
+    '<div class="stat-row">' +
+    '<div class="stat"><div class="n">$' + ledgerTotal.toFixed(2) + '</div><div class="l">Total spent</div></div>' +
+    '<div class="stat"><div class="n">' + ledgerCount + '</div><div class="l">With price</div></div>' +
+    '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
+    '</div>' +
+    (ledgerSources.length ? '<div class="field"><label>By source</label>' +
+      ledgerSources.map(function(src) {
+        return '<div class="ledger-row"><span>' + esc(src) + '</span><span>$' + ledgerBySource[src].toFixed(2) + '</span></div>';
+      }).join('') + '</div>' : '<p class="note">Add purchase info in any book&apos;s Details tab to start tracking.</p>');
+
   const groups = [
     ['user', 'Account', 'Sign in, profile & sync',
       setSub('Login') + htmlLogin + setSub('Profile & avatar') + htmlProfile + setSub('Cloud sync') + htmlSync],
     ['covers', 'Library', 'Backups, imports & data',
       setSub('Backup & export') + htmlBackup + setSub('Data management') + htmlData],
+    ['tobuy', 'Purchase Ledger', 'Spending & collection value',
+      setSub('Ledger') + htmlLedger],
     ['sparkles', 'Appearance', 'Theme & display',
       setSub('Theme') + htmlTheme + setSub('Display') + htmlDisplay],
     ['reading', 'Reading', 'Logging & progress',

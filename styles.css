@@ -2194,6 +2194,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .edition-tool small { font-size: 10px; color: var(--faint, #a090b8); line-height: 1; }
 .edition-tool:active { background: var(--line, #4a3560); }
 
+/* --- purchase ledger (v312) --- */
+.purchase-row { display: flex; gap: 8px; }
+.purchase-row input[type="number"] { flex: 1; min-width: 0; }
+.purchase-row select { flex: 1; min-width: 0; }
+.purchase-row input[type="date"] { flex: 1; min-width: 0; }
+#f-purchase-source-custom { width: 100%; }
+
+/* --- purchase ledger rows (v312) --- */
+.ledger-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line, #3a2a4d); font-size: 14px; }
+.ledger-row:last-child { border-bottom: none; }
+
 /* --- tab icons --- */
 .d-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .d-tab svg { width: 17px; height: 17px; }

@@ -1089,6 +1089,23 @@ function renderDetailModal(b, viaBook) {
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
     '</div></div>' +
 
+    // v312: purchase ledger — what you paid, where, when
+    '<div class="field"><label>Purchase</label>' +
+    '<div class="purchase-row">' +
+    '<input type="number" id="f-purchase-price" min="0" step="0.01" placeholder="Price paid" value="' + (draft.purchasePrice != null ? esc(String(draft.purchasePrice)) : '') + '" />' +
+    '<select id="f-purchase-source">' +
+    '<option value="">Source…</option>' +
+    ['Amazon','Indigo','Walmart'].map(function(nm) {
+      return '<option value="' + nm + '"' + (draft.purchaseSource === nm ? ' selected' : '') + '>' + nm + '</option>';
+    }).join('') +
+    '<option value="__other"' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? ' selected' : '') + '>Other…</option>' +
+    '</select>' +
+    '<input type="date" id="f-purchase-date" value="' + (draft.purchaseDate ? esc(draft.purchaseDate) : '') + '" />' +
+    '</div>' +
+    '<input type="text" id="f-purchase-source-custom" placeholder="Store name (e.g. Blue Heron Books)" value="' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? esc(draft.purchaseSource) : '') + '" style="display:' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? '' : 'none') + ';margin-top:6px;" />' +
+    (draft.listPrice != null ? '<div class="note-inline" style="margin-top:6px;">List price: ' + esc(draft.listPriceCurrency || 'CAD') + ' ' + esc(String(draft.listPrice)) + ' (estimate)</div>' : '') +
+    '</div>' +
+
     '<div class="field"><label>Mood</label>' +
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
@@ -1306,6 +1323,31 @@ function renderDetailModal(b, viaBook) {
       paintPrimary(); // v123: primary action follows the shelf
     }));
 
+  // v312: purchase ledger fields
+  var pp = document.getElementById('f-purchase-price');
+  if (pp) pp.addEventListener('input', e => {
+    var v = parseFloat(e.target.value);
+    draft.purchasePrice = isNaN(v) ? null : v;
+  });
+  var ps = document.getElementById('f-purchase-source');
+  var psc = document.getElementById('f-purchase-source-custom');
+  if (ps) ps.addEventListener('change', e => {
+    var v = e.target.value;
+    if (v === '__other') {
+      if (psc) psc.style.display = '';
+      draft.purchaseSource = psc && psc.value ? psc.value : '';
+    } else {
+      if (psc) psc.style.display = 'none';
+      draft.purchaseSource = v || null;
+    }
+  });
+  if (psc) psc.addEventListener('input', e => {
+    if (ps && ps.value === '__other') draft.purchaseSource = e.target.value || null;
+  });
+  var pd = document.getElementById('f-purchase-date');
+  if (pd) pd.addEventListener('change', e => {
+    draft.purchaseDate = e.target.value || null;
+  });
   document.getElementById('f-prevread').addEventListener('change', e => {
     draft.previouslyRead = e.target.checked;
     const pi = document.getElementById('f-progress');
