@@ -2019,6 +2019,7 @@ function ecRenderReview() {
         '<div class="ec-thumbbtns">' +
         '<button class="btn ghost sm" data-ec-retake="' + ap + ':' + f.id + '">Retake</button>' +
         '<button class="btn ghost sm" data-ec-adjust="' + ap + ':' + f.id + '">Adjust</button>' +
+        '<button class="btn ghost sm" data-ec-aicrop="' + ap + ':' + f.id + '">\uD83E\uDD16 AI crop</button>' +
         '<button class="btn ghost sm" data-ec-enhance="' + ap + ':' + f.id + '">\u2728 Enhance</button>' +
         '</div></div>';
     });
@@ -2045,6 +2046,49 @@ function ecRenderReview() {
     btn.addEventListener('click', function () {
       var parts = btn.getAttribute('data-ec-enhance').split(':');
       ecEnhancePicker(parts[0], parts[1]);
+    });
+  });
+  ov.querySelectorAll('[data-ec-aicrop]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      var parts = btn.getAttribute('data-ec-aicrop').split(':');
+      var ap = parts[0], fid = parts[1], key = ap + ':' + fid;
+      var fullUrl = EC.fullFrames && EC.fullFrames[key];
+      if (!fullUrl) { if (typeof toast === 'function') toast('No full frame saved'); return; }
+      if (typeof ecYoloDetect !== 'function') { if (typeof toast === 'function') toast('AI module not loaded'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Working…';
+      try {
+        var img = new Image();
+        await new Promise(function (res, rej) { img.onload = res; img.onerror = rej; img.src = fullUrl; });
+        var cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        cv.getContext('2d').drawImage(img, 0, 0);
+        var dets = await ecYoloDetect(cv);
+        if (!dets.length) { toast('AI found no book in this frame'); return; }
+        // Pick the largest detection (manual mode: no guide ROI stored)
+        var best = dets[0];
+        for (var i = 1; i < dets.length; i++) {
+          var a = dets[i], b = best;
+          var aa = (a.box[2]-a.box[0])*(a.box[3]-a.box[1]), bb = (b.box[2]-b.box[0])*(b.box[3]-b.box[1]);
+          if (a.conf > b.conf && aa > bb * 0.5) best = a;
+        }
+        var qb = best.maskBox || best.box;
+        var quad = [[qb[0],qb[1]],[qb[2],qb[1]],[qb[2],qb[3]],[qb[0],qb[3]]];
+        var size = ecQuadSize(quad, EC_MAX_DIM);
+        var w = ecWarpCanvas(cv, quad, size[0], size[1]);
+        var url = w.toDataURL('image/jpeg', 0.9);
+        (EC.results[ap] = EC.results[ap] || {})[fid] = url;
+        (EC.cropMethods = EC.cropMethods || {})[key] = 'yolo';
+        (EC.quads = EC.quads || {})[key] = quad;
+        var w2 = document.getElementById('ec-wizard');
+        if (w2) w2.remove();
+        ecRenderReview();
+        toast('AI crop applied');
+      } catch (e) {
+        toast('AI crop failed: ' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '\uD83E\uDD16 AI crop';
+      }
     });
   });
   ov.querySelectorAll('[data-ec-adjust]').forEach(function (btn) {
