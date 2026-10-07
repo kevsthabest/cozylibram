@@ -179,6 +179,15 @@ const TROPES = [
   { id: 'epic-battle', name: 'Epic Battle',
     description: 'Large-scale warfare decides the fate of kingdoms.',
     genres: ['fantasy', 'sci-fi'] },
+  { id: 'secret-identity', name: 'Secret Identity',
+    description: 'A character hides who they really are \u2014 name, lineage, powers, or allegiance.',
+    genres: ['fantasy', 'romance', 'dark-romance', 'mystery-thriller', 'sci-fi'] },
+  { id: 'sacrifice', name: 'Sacrifice',
+    description: 'A character gives up something precious \u2014 power, safety, love, or life \u2014 for others.',
+    genres: ['fantasy', 'romance', 'dark-romance', 'sci-fi', 'contemporary'] },
+  { id: 'mentorship', name: 'Mentorship',
+    description: 'An experienced guide trains the protagonist, shaping their growth.',
+    genres: ['fantasy', 'sci-fi', 'contemporary', 'romance'] },
 
   /* ---- sci-fi ---- */
   { id: 'ai-uprising', name: 'AI Uprising',
@@ -246,6 +255,12 @@ const TROPES = [
   { id: 'small-town-secrets', name: 'Small-Town Secrets',
     description: 'A quiet town where everyone is hiding something.',
     genres: ['mystery-thriller', 'horror'] },
+  { id: 'betrayal', name: 'Betrayal',
+    description: 'A trusted ally or loved one turns against the protagonist.',
+    genres: ['romance', 'dark-romance', 'fantasy', 'mystery-thriller', 'contemporary'] },
+  { id: 'heist', name: 'Heist',
+    description: 'A planned theft or infiltration requiring teamwork, timing, and deception.',
+    genres: ['fantasy', 'mystery-thriller', 'sci-fi', 'contemporary'] },
 
   /* ---- horror ---- */
   { id: 'haunted-house', name: 'Haunted House',
@@ -304,7 +319,7 @@ function tropeById(id) {
    "morally-grey". Rather than dropping those near-misses (lost tags) or
    accepting free text (invented tags), validation resolves them here:
    aliases map a variant to its canonical id, exclusions veto a variant
-   that is too generic to auto-map ("betrayal" is not a double-cross).
+   that is too generic to auto-map.
 
    Only canonical ids ever leave the resolver — storage, claims, and the
    UI never see an alias. Live `tropes` table rows may carry their own
@@ -360,8 +375,8 @@ const TROPE_ALIASES = {
 
 const TROPE_EXCLUSIONS = {
   /* Terms deliberately never auto-mapped: considered, rejected as too
-     generic. Documented here so nobody re-adds them as aliases. */
-  'double-cross': ['betrayal'],
+     generic. Documented here so nobody re-adds them as aliases.
+     v314: 'betrayal' removed — now a canonical trope in its own right. */
   'royalty': ['prince', 'princess'],
 };
 

@@ -146,7 +146,7 @@ create policy "trope_proposal_votes: own votes"
   on trope_proposal_votes for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
--- BEGIN GENERATED SEED (from js/156-trope-taxonomy.js v1, 84 tropes)
+-- BEGIN GENERATED SEED (from js/156-trope-taxonomy.js v1, 89 tropes)
 -- Regenerate with: node supabase/gen-trope-seed.js
 insert into tropes (id, name, description, genres, version, aliases, exclusions)
 values
@@ -200,6 +200,9 @@ values
   ('hard-magic', 'Hard Magic System', 'Magic with strict rules, costs, and clever exploitation.', ARRAY['fantasy'], 1, ARRAY['hard magic'], ARRAY[]),
   ('portal-fantasy', 'Portal Fantasy', 'An ordinary person crosses into a magical world.', ARRAY['fantasy'], 1, ARRAY[], ARRAY[]),
   ('epic-battle', 'Epic Battle', 'Large-scale warfare decides the fate of kingdoms.', ARRAY['fantasy', 'sci-fi'], 1, ARRAY[], ARRAY[]),
+  ('secret-identity', 'Secret Identity', 'A character hides who they really are — name, lineage, powers, or allegiance.', ARRAY['fantasy', 'romance', 'dark-romance', 'mystery-thriller', 'sci-fi'], 1, ARRAY[], ARRAY[]),
+  ('sacrifice', 'Sacrifice', 'A character gives up something precious — power, safety, love, or life — for others.', ARRAY['fantasy', 'romance', 'dark-romance', 'sci-fi', 'contemporary'], 1, ARRAY[], ARRAY[]),
+  ('mentorship', 'Mentorship', 'An experienced guide trains the protagonist, shaping their growth.', ARRAY['fantasy', 'sci-fi', 'contemporary', 'romance'], 1, ARRAY[], ARRAY[]),
   ('ai-uprising', 'AI Uprising', 'Artificial intelligence turns on its creators — or demands rights.', ARRAY['sci-fi', 'mystery-thriller'], 1, ARRAY['robot uprising'], ARRAY[]),
   ('space-opera', 'Space Opera', 'Sweeping interstellar adventure across star systems.', ARRAY['sci-fi'], 1, ARRAY[], ARRAY[]),
   ('first-contact', 'First Contact', 'Humanity meets alien intelligence for the first time.', ARRAY['sci-fi'], 1, ARRAY[], ARRAY[]),
@@ -218,9 +221,11 @@ values
   ('cold-case', 'Cold Case', 'An old unsolved crime reopened years later.', ARRAY['mystery-thriller'], 1, ARRAY[], ARRAY[]),
   ('serial-killer', 'Serial Killer', 'A repeating murderer hunted across the story.', ARRAY['mystery-thriller', 'horror'], 1, ARRAY[], ARRAY[]),
   ('conspiracy', 'Conspiracy', 'A hidden network pulling strings behind events.', ARRAY['mystery-thriller', 'sci-fi'], 1, ARRAY[], ARRAY[]),
-  ('double-cross', 'Double-Cross', 'Alliances flip; nobody’s loyalty is what it seemed.', ARRAY['mystery-thriller'], 1, ARRAY['double cross'], ARRAY['betrayal']),
+  ('double-cross', 'Double-Cross', 'Alliances flip; nobody’s loyalty is what it seemed.', ARRAY['mystery-thriller'], 1, ARRAY['double cross'], ARRAY[]),
   ('missing-person', 'Missing Person', 'A disappearance drives the search for truth.', ARRAY['mystery-thriller'], 1, ARRAY['missing persons'], ARRAY[]),
   ('small-town-secrets', 'Small-Town Secrets', 'A quiet town where everyone is hiding something.', ARRAY['mystery-thriller', 'horror'], 1, ARRAY[], ARRAY[]),
+  ('betrayal', 'Betrayal', 'A trusted ally or loved one turns against the protagonist.', ARRAY['romance', 'dark-romance', 'fantasy', 'mystery-thriller', 'contemporary'], 1, ARRAY[], ARRAY[]),
+  ('heist', 'Heist', 'A planned theft or infiltration requiring teamwork, timing, and deception.', ARRAY['fantasy', 'mystery-thriller', 'sci-fi', 'contemporary'], 1, ARRAY[], ARRAY[]),
   ('haunted-house', 'Haunted House', 'A dwelling with a malign presence or history.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
   ('possession', 'Possession', 'An entity takes over a human body or mind.', ARRAY['horror'], 1, ARRAY['possessed', 'demonic possession'], ARRAY[]),
   ('folk-horror', 'Folk Horror', 'Rural rituals, old gods, and communities with dark customs.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
@@ -242,6 +247,8 @@ on conflict (id) do update set
   aliases = excluded.aliases,
   exclusions = excluded.exclusions;
 -- END GENERATED SEED
+
+
 
 
 -- v157: live taxonomy. The shared `tropes` table is now the source of truth
