@@ -1209,6 +1209,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .segbar { display: flex; gap: 5px; flex: 1; cursor: pointer; }
 .segbar i { height: 24px; flex: 1; border-radius: 6px; background: var(--bg2); border: 1px solid var(--line); font-style: normal; }
 .segbar i.f { background: var(--axc, var(--accent)); border-color: var(--axc, var(--accent)); }
+/* v313: detected spice baseline — outline segments until the user rates.
+   Dashed border distinguishes the pipeline/curated value from a real rating. */
+.segbar i.det { background: transparent; border: 1px dashed var(--axc, var(--accent)); }
+.axdet-tag { font-size: 0.78em; opacity: 0.65; font-style: italic; }
 .segnum { font-size: 13px; font-weight: 700; color: var(--muted); min-width: 16px; text-align: right; }
 .axrm { background: none; border: none; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 6px; }
 .axrm:hover { color: var(--danger); }

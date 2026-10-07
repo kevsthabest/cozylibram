@@ -129,6 +129,30 @@ const WorkStore = {
     return (data && data.id) || null;
   },
 
+  /* v313: fetch the work-level spice baseline for a book. Returns
+     { detected, manual } (ints or null), or null when the work can't be
+     resolved or the query fails. Never throws. */
+  async getSpice(book, opts) {
+    opts = opts || {};
+    try {
+      const id = await this.resolve(book, opts);
+      if (!id) return null;
+      let sb = null;
+      try { sb = opts.getClient ? await opts.getClient() : await cloudClient(); }
+      catch (e) { sb = null; }
+      if (!sb) return null;
+      const { data, error } = await sb.from('works')
+        .select('spice_detected, spice_manual').eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      const det = Number(data.spice_detected);
+      const man = Number(data.spice_manual);
+      return {
+        detected: Number.isFinite(det) && det >= 0 && det <= 5 ? det : null,
+        manual: Number.isFinite(man) && man >= 0 && man <= 5 ? man : null,
+      };
+    } catch (e) { return null; }
+  },
+
   /* v272: merge provider IDs into a work's provider_ids JSONB. Only fills
      keys that are absent or different — a capture never clobbers a
      previously stored identity. No-op when there's nothing to merge. */

@@ -896,6 +896,16 @@ function renderDetailModal(b, viaBook) {
     icon(OWNED_META[o].ic) + ' ' + OWNED_META[o].label + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
+  // v313: work-level spice baseline (pipeline-detected or manual override).
+  // Shown as outline segments until the user rates spice themselves.
+  // { value: 0-5, source: 'detected'|'manual' } or null.
+  let spiceBaseline = null;
+  const spiceBaseValue = () => {
+    if (draft.ratings.spice) return 0; // user rating wins, no baseline shown
+    if (!spiceBaseline) return 0;
+    const v = spiceBaseline.source === 'manual' ? spiceBaseline.manual : spiceBaseline.detected;
+    return (v >= 1 && v <= 5) ? v : 0;
+  };
   // v224 (UX-11): rating/axis taps commit live now, so snapshot the rating
   // state at open — the Save-time diff still reports what actually changed.
   const ratingBefore = { myRating: b.myRating || 0, ratings: Object.assign({}, b.ratings || {}) };
@@ -915,11 +925,22 @@ function renderDetailModal(b, viaBook) {
   const axRowHTML = (k) => {
     const a = axisByKey(k);
     const v = draft.ratings[k] || 0;
-    const segs = [1, 2, 3, 4, 5].map(n =>
-      '<i data-v="' + n + '" class="' + (v >= n ? 'f' : '') + '"></i>').join('');
+    // v313: spice shows the work-level detected baseline as outline
+    // segments when the user hasn't rated it themselves.
+    const det = (k === 'spice') ? spiceBaseValue() : 0;
+    const segs = [1, 2, 3, 4, 5].map(n => {
+      let cls = '';
+      if (v >= n) cls = 'f';
+      else if (det >= n) cls = 'det';
+      return '<i data-v="' + n + '" class="' + cls + '"></i>';
+    }).join('');
+    const word = v ? axWord(a, v)
+      : det ? esc(a.levels[det - 1]) + ' <span class="axdet-tag">(' +
+        (spiceBaseline.source === 'manual' ? 'curated' : 'detected') + ')</span>'
+      : 'Tap to rate';
     return '<div class="axrow" data-ax="' + k + '" style="--axc:' + a.color + '">' +
       '<div class="axhead"><span class="axlab">' + icon(a.icon || 'pepper') + ' ' + esc(a.label) + '</span>' +
-      '<span class="axword">' + esc(axWord(a, v)) + '</span></div>' +
+      '<span class="axword">' + word + '</span></div>' +
       '<div class="axbar-row"><div class="segbar" role="slider" aria-label="' + esc(a.label) + ' rating" ' +
       'aria-valuemin="0" aria-valuemax="5" aria-valuenow="' + v + '">' + segs + '</div>' +
       '<span class="segnum">' + (v || '–') + '</span>' +
@@ -1247,11 +1268,21 @@ function renderDetailModal(b, viaBook) {
         const v = Number(seg.dataset.v);
         draft.ratings[k] = (draft.ratings[k] === v) ? 0 : v; // tap again to clear
         const nv = draft.ratings[k];
-        bar.querySelectorAll('i').forEach((x, i) => x.classList.toggle('f', i < nv));
+        // v313: user rating replaces the detected baseline display
+        bar.querySelectorAll('i').forEach((x, i) => {
+          x.classList.toggle('f', i < nv);
+          if (nv) x.classList.remove('det');
+        });
         bar.setAttribute('aria-valuenow', nv);
         row.querySelector('.segnum').textContent = nv || '–';
         const a = axisByKey(k); // v132: level word follows the value
-        row.querySelector('.axword').textContent = nv ? a.levels[nv - 1] : 'Tap to rate';
+        // v313: once rated, the word is the user's level; clearing the
+        // rating restores the detected baseline word if one exists.
+        const detAfter = (k === 'spice' && !nv) ? spiceBaseValue() : 0;
+        row.querySelector('.axword').innerHTML = nv ? esc(a.levels[nv - 1])
+          : detAfter ? esc(a.levels[detAfter - 1]) + ' <span class="axdet-tag">(' +
+            (spiceBaseline.source === 'manual' ? 'curated' : 'detected') + ')</span>'
+          : 'Tap to rate';
         syncRatingLive(); // v224 (UX-11)
       }));
       const rm = row.querySelector('[data-axrm]');
@@ -1268,6 +1299,29 @@ function renderDetailModal(b, viaBook) {
       syncRatingLive(); // v224 (UX-11)
     }));
   };
+
+  // v313: fetch the work-level spice baseline async — the modal renders
+  // immediately and the spice row repaints when the data arrives. Never
+  // blocks modal open; failures leave the row as-is.
+  const loadSpiceBaseline = () => {
+    try {
+      if (typeof WorkStore === 'undefined' || !WorkStore || typeof WorkStore.getSpice !== 'function') return;
+      // Only fetch when the spice axis is visible and unrated
+      if (!draft.axes.includes('spice') || draft.ratings.spice) return;
+      WorkStore.getSpice(b).then(res => {
+        if (!res) return;
+        const manual = res.manual, detected = res.detected;
+        if (manual == null && detected == null) return;
+        spiceBaseline = {
+          detected, manual,
+          source: manual != null ? 'manual' : 'detected',
+        };
+        // Repaint only if the user hasn't rated spice while we were fetching
+        if (!draft.ratings.spice && document.getElementById('f-axrows')) renderAxSection();
+      }).catch(() => {});
+    } catch (e) {}
+  };
+  loadSpiceBaseline();
 
   // v182: mockup tappable rows — the row button expands the options; picking
   // one sets the draft value, repaints the row, and collapses.
