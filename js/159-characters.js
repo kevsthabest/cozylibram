@@ -545,8 +545,9 @@ function initD3Graph(box) {
       pin();
       applyForces();
 
-      const lsel = linkLayer.selectAll('.link').data(links, d => d.source.id + '|' + d.target.id);
-      lsel.exit().transition().duration(DUR / 2).attr('stroke-opacity', 0).remove();
+      // v374: join on .link-group (not .link) so labels exit with their lines
+      const lsel = linkLayer.selectAll('.link-group').data(links, d => d.source.id + '|' + d.target.id);
+      lsel.exit().transition().duration(DUR / 2).attr('opacity', 0).remove();
       // v373: edge labels showing relationship type
       const lenter = lsel.enter().append('g').attr('class', 'link-group');
       lenter.append('line').attr('class', 'link')
@@ -558,9 +559,9 @@ function initD3Graph(box) {
         .style('fill', textColor)
         .style('text-anchor', 'middle')
         .attr('pointer-events', 'none')
-        .attr('stroke-opacity', 0);
+        .attr('opacity', 0);
       lenter.select('.link').transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.55);
-      lenter.select('.link-label').transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.9);
+      lenter.select('.link-label').transition().delay(DUR / 4).duration(DUR).attr('opacity', 0.9);
       linkG = lenter.merge(lsel);
 
       const nsel = nodeLayer.selectAll('.node').data(nodes, d => d.id);
@@ -595,11 +596,8 @@ function initD3Graph(box) {
         .style('font-size', d => radius(d) * 0.6 + 'px')
         .attr('fill', '#fff').attr('font-weight', '700')
         .attr('pointer-events', 'none');
-      // v373: theme-aware text color (var() in SVG needs explicit handling)
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
-        (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches &&
-         !document.documentElement.getAttribute('data-theme'));
-      const textColor = isDark ? '#f1e6da' : '#4a3b32';
+      // v374: read --text from computed styles (works for all themes)
+      const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#4a3b32';
       nodeG.select('.d3-name')
         .text(d => charData[d.id] ? charData[d.id].name : '')
         .attr('y', d => radius(d) + 15)
