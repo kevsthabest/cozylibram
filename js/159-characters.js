@@ -388,25 +388,38 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
   const uid = 'd3graph' + Math.random().toString(36).slice(2, 8);
 
   // Build D3 data structures
+  // v370: include full relationship data for expansion
   const centerId = '__center__';
   const charData = {};
   charData[centerId] = { name: centerName, group: 'hero' };
 
-  // Map relationship types to demo groups
   const typeToGroup = {
     spouse: 'romance', partner: 'romance', fiance: 'romance',
     parent: 'family', child: 'family', sibling: 'family',
     friend: 'friend', mentor: 'mentor', enemy: 'rival', rival: 'rival',
   };
 
+  // Build a map of character name -> their relationships (for expansion)
+  const relMap = {};
+  if (workChars) {
+    workChars.forEach(c => {
+      const key = String(c.name || '').toLowerCase();
+      if (key && c.relationships) {
+        relMap[key] = c.relationships;
+      }
+    });
+  }
+
   nodes.forEach((n, i) => {
     const id = 'n' + i;
     const primaryType = (n.types || [])[0] || 'friend';
+    // v370: store this node's own relationships for expansion
+    const ownRels = relMap[String(n.name || '').toLowerCase()] || [];
     charData[id] = {
       name: n.name,
       group: typeToGroup[primaryType] || 'friend',
-      // Store original for navigation
-      _orig: n,
+      _rels: ownRels, // for expansion
+      _orig: n, // for navigation
     };
   });
 
@@ -427,9 +440,23 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
   return h;
 }
 
-/* v369: Initialize D3 graph after render. Called from renderCharacterPage. */
+/* v369: Initialize D3 graph after render. Called from renderCharacterPage.
+   v370: D3 lazy-loads on first use (not render-blocking). */
 function initD3Graph(box) {
-  if (typeof d3 === 'undefined' || !box) return;
+  if (!box) return;
+  if (typeof d3 === 'undefined') {
+    // Lazy-load D3
+    const script = document.createElement('script');
+    script.src = './vendor/d3.min.js';
+    script.onload = () => initD3Graph(box);
+    script.onerror = () => {
+      box.querySelectorAll('.d3-graph-wrap').forEach(w => {
+        w.innerHTML = '<p class="note">Relationship graph unavailable.</p>';
+      });
+    };
+    document.head.appendChild(script);
+    return;
+  }
   box.querySelectorAll('.d3-graph-wrap').forEach(wrap => {
     const svgEl = wrap.querySelector('svg.d3-graph');
     if (!svgEl || svgEl.dataset.d3wired) return;
@@ -453,6 +480,11 @@ function initD3Graph(box) {
       romance: '#e68fa8',
       mentor: '#9aa7e0',
       rival: '#c9876f',
+    };
+    const typeToGroup = {
+      spouse: 'romance', partner: 'romance', fiance: 'romance',
+      parent: 'family', child: 'family', sibling: 'family',
+      friend: 'friend', mentor: 'mentor', enemy: 'rival', rival: 'rival',
     };
 
     const LINK_DIST = { family: 95, friend: 120, romance: 100, mentor: 130, rival: 150 };
@@ -560,16 +592,54 @@ function initD3Graph(box) {
         .text(d => charData[d.id] ? charData[d.id].name : '')
         .attr('y', d => radius(d) + 15)
         .style('font-size', '11px')
-        .attr('fill', 'var(--text)')
+        .style('fill', 'var(--text)')
         .attr('pointer-events', 'none');
     }
 
     function toggle(d) {
       if (d.id === PROTAG) return;
-      if (expanded.has(d.id)) expanded.delete(d.id);
-      else expanded.add(d.id);
+      // v370: expand with the node's own relationships
+      if (expanded.has(d.id)) {
+        expanded.delete(d.id);
+      } else {
+        expanded.add(d.id);
+        // Add this node's relationships to the graph
+        const nodeData = charData[d.id];
+        if (nodeData && nodeData._rels) {
+          nodeData._rels.forEach(r => {
+            const targetName = String(r.to || '').trim();
+            if (!targetName) return;
+            // Find or create node for target
+            let targetId = Object.keys(charData).find(id =>
+              charData[id].name.toLowerCase() === targetName.toLowerCase());
+            if (!targetId) {
+              targetId = 'x' + Math.random().toString(36).slice(2, 8);
+              const rType = String(r.type || 'friend').toLowerCase();
+              charData[targetId] = {
+                name: targetName,
+                group: typeToGroup[rType] || 'friend',
+                _rels: [],
+              };
+            }
+            // Add relation if not already present
+            const relType = String(r.type || 'friend').toLowerCase();
+            if (!relations.some(rel =>
+              (rel[0] === d.id && rel[1] === targetId) ||
+              (rel[0] === targetId && rel[1] === d.id))) {
+              relations.push([d.id, targetId, relType]);
+            }
+          });
+        }
+      }
       update(d);
       sim.alpha(0.7).restart();
+      // Update legend with new groups
+      const legendEl = document.getElementById(uid + '-legend');
+      if (legendEl) {
+        const usedGroups = [...new Set(Object.values(charData).map(c => c.group))];
+        legendEl.innerHTML = usedGroups.map(g =>
+          '<span style="--c:' + (groupColors[g] || '#888') + '">' + g + '</span>').join('');
+      }
     }
 
     const drag = d3.drag()
@@ -656,7 +726,7 @@ function charRelLink(name, workChars) {
 function wireCharRelLinks(box, excludeSel) {
   if (!box) return;
   box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
-    if (excludeSel && el.closest(excludeSel)) return;
+    if (excludeSel && b.closest(excludeSel)) return;
     openCharacter(b.getAttribute('data-chwiki'));
   }));
   box.querySelectorAll('[data-chbook]').forEach(b => b.addEventListener('click', () => {
@@ -933,8 +1003,7 @@ async function renderCharacterPage() {
   initD3Graph(viewBox);
   // v367: wireCharRelLinks skips graph nodes (graph handler owns all taps)
   wireCharRelLinks(viewBox, '.ch-graph-wrap');
-  // v368: graph nodes are wired by wireCharGraph (single=tap expand, double=tap navigate)
-  // — no direct click handlers here, they would conflict.
+  // v369: graph nodes handled by D3 (see initD3Graph)
   // v341: wire timeline relationship links
   document.querySelectorAll('.ch-tl-rels [data-chwiki]').forEach(b =>
     b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
