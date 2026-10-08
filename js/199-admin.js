@@ -929,6 +929,7 @@ async function tropeLabReviewHTML() {
 
 let tropeLabClaimsShown = 15;
 const TROPE_LAB_CLAIMS_PAGE = 15;
+let tropeLabClaimsModelFilter = ''; // v315: '' = all models
 
 async function tropeLabClaimsHTML() {
   const el = document.getElementById('tropelab-claims');
@@ -944,13 +945,34 @@ async function tropeLabClaimsHTML() {
       'evidence publish automatically — corrections land here.</p></div>';
     return;
   }
-  const shown = groups.slice(0, tropeLabClaimsShown);
-  let html = head + '<p class="note">' + groups.length +
+  // v315: model/source filter — distinct models across the queue.
+  // Lets reviewers isolate one pipeline (e.g. the ebook processor) from
+  // in-app inference.
+  const models = [];
+  groups.forEach(g => g.tropes.forEach(t => {
+    if (t.model && models.indexOf(t.model) < 0) models.push(t.model);
+  }));
+  models.sort();
+  const mf = tropeLabClaimsModelFilter;
+  const fgroups = mf
+    ? groups.map(g => Object.assign({}, g, {
+        tropes: g.tropes.filter(t => t.model === mf),
+      })).filter(g => g.tropes.length)
+    : groups;
+  const shown = fgroups.slice(0, tropeLabClaimsShown);
+  let html = head + '<p class="note">' + fgroups.length +
     ' works with AI tags · ✓ confirms a candidate work-wide, ✕ rejects it ' +
     '(rejections survive re-inference). ' +
     '<span class="chip dbtrope ai">auto</span> = published automatically on ' +
     'high confidence + quoted evidence. ' +
     '<button class="btn sm ghost" id="tl-claims-refresh">↻ Refresh</button></p>';
+  if (models.length > 1) {
+    html += '<p class="note"><label>Source model: <select id="tl-claims-model" class="text-input" style="width:auto;display:inline-block">' +
+      '<option value="">All models (' + groups.length + ' works)</option>' +
+      models.map(m => '<option value="' + esc(m) + '"' +
+        (m === mf ? ' selected' : '') + '>' + esc(m) + '</option>').join('') +
+      '</select></label></p>';
+  }
   shown.forEach(g => {
     html += '<div class="tl-review-book" data-claim-work="' + esc(g.workId) + '">' +
       '<div class="tl-review-head"><div><b>' + esc(g.title) + '</b>' +
@@ -969,14 +991,20 @@ async function tropeLabClaimsHTML() {
     });
     html += '</div></div>';
   });
-  if (groups.length > shown.length) {
+  if (fgroups.length > shown.length) {
     html += '<button class="btn sm" id="tl-claims-more">Show more (' +
-      (groups.length - shown.length) + ' remaining)</button>';
+      (fgroups.length - shown.length) + ' remaining)</button>';
   }
   el.innerHTML = html + '</div>';
 
   const refresh = document.getElementById('tl-claims-refresh');
   if (refresh) refresh.addEventListener('click', () => tropeLabClaimsHTML());
+  const modelSel = document.getElementById('tl-claims-model');
+  if (modelSel) modelSel.addEventListener('change', () => {
+    tropeLabClaimsModelFilter = modelSel.value;
+    tropeLabClaimsShown = TROPE_LAB_CLAIMS_PAGE; // reset pagination on filter change
+    tropeLabClaimsHTML();
+  });
   const more = document.getElementById('tl-claims-more');
   if (more) more.addEventListener('click', () => {
     tropeLabClaimsShown += TROPE_LAB_CLAIMS_PAGE;

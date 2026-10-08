@@ -1401,7 +1401,7 @@ const TropeClaims = {
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_trope_claims')
-        .select('work_id, trope_id, confidence, source_type, status, evidence, works(title, authors)')
+        .select('work_id, trope_id, confidence, source_type, status, evidence, model, works(title, authors)')
         .eq('source_type', 'ai')
         .in('status', ['candidate', 'confirmed'])
         .order('updated_at', { ascending: false })
@@ -1424,7 +1424,8 @@ const TropeClaims = {
         const conf = Number(r.confidence);
         e.tropes.push({ id: t.id, name: t.name,
           confidence: isFinite(conf) ? conf : 0.5,
-          auto: r.status === 'confirmed' });
+          auto: r.status === 'confirmed',
+          model: r.model || null });
       }
       return Object.keys(byWork).map(k => {
         const e = byWork[k];
