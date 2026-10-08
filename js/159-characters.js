@@ -394,7 +394,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
 
   const uid = 'cg' + Math.random().toString(36).slice(2, 8);
   let svg = '<svg id="' + uid + '" viewBox="0 0 ' + W + ' ' + H + '" class="ch-graph" ' +
-    'style="width:100%;max-width:420px;height:auto;display:block;margin:0 auto;touch-action:none;cursor:grab;" ' +
+    'style="width:100%;max-width:420px;height:auto;display:block;margin:0 auto;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;" ' +
     'data-cx="' + cx + '" data-cy="' + cy + '">';
 
   // Edges (behind nodes)
@@ -478,6 +478,7 @@ function wireCharGraph(box) {
       return p.matrixTransform(svg.getScreenCTM().inverse());
     };
     svg.addEventListener('pointerdown', e => {
+      e.preventDefault(); // v368: prevent text selection on drag
       startVB = { ...vb }; startPt = toPt(e); moved = 0;
       lastTap = 0; lastTarget = null; // v367: cancel pending expand on new gesture
       try { svg.setPointerCapture(e.pointerId); } catch (err) {}
@@ -902,11 +903,8 @@ async function renderCharacterPage() {
   wireCharGraph(viewBox);
   // v367: wireCharRelLinks skips graph nodes (graph handler owns all taps)
   wireCharRelLinks(viewBox, '.ch-graph-wrap');
-  // Wire graph nodes (they use the same data attributes)
-  document.querySelectorAll('.ch-graph-node[data-chwiki]').forEach(b =>
-    b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
-  document.querySelectorAll('.ch-graph-node[data-chbook]').forEach(b =>
-    b.addEventListener('click', () => openBookCharacter(b.getAttribute('data-chbook'))));
+  // v368: graph nodes are wired by wireCharGraph (single=tap expand, double=tap navigate)
+  // — no direct click handlers here, they would conflict.
   // v341: wire timeline relationship links
   document.querySelectorAll('.ch-tl-rels [data-chwiki]').forEach(b =>
     b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
