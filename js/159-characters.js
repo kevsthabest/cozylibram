@@ -666,7 +666,15 @@ async function renderCharacterPage() {
     }
   } catch (e) {}
   html += '<h3 class="serif">Appears in</h3><div class="ch-books">';
-  for (const inst of d.instances) {
+  // v362: sort by series position (was link-insertion order)
+  const sortedInstances = [...d.instances].sort((a, b) => {
+    const pa = a.seriesPos == null ? Infinity : parseFloat(a.seriesPos);
+    const pb = b.seriesPos == null ? Infinity : parseFloat(b.seriesPos);
+    const na = Number.isFinite(pa) ? pa : Infinity, nb = Number.isFinite(pb) ? pb : Infinity;
+    if (na !== nb) return na - nb;
+    return String(a.workTitle || '').localeCompare(String(b.workTitle || ''));
+  });
+  for (const inst of sortedInstances) {
     const cover = coverByTitle.get(normTitle(inst.workTitle)) || '';
     html += '<div class="ch-book-card">' +
       (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover"><span>' + esc(inst.workTitle || '?') + '</span></div>') +
