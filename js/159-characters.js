@@ -797,7 +797,6 @@ function initD3Graph(box) {
       const toName = charData[toNode.id] ? charData[toNode.id].name : '?';
 
       const types = ['spouse', 'partner', 'parent', 'child', 'sibling', 'friend', 'enemy', 'rival', 'mentor', 'colleague'];
-      const tagOptions = ['mistress', 'ex', 'secret', 'unrequited', 'forbidden'];
       let html = '<div class="modal-overlay" id="connect-dialog" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;">' +
         '<div class="ob-card" style="max-width:320px;width:90%">' +
         '<h3 class="serif">' + ((typeof isAppAdmin !== 'undefined' && isAppAdmin) ? 'New Relationship' : 'Suggest Relationship') + '</h3>' +
@@ -805,8 +804,8 @@ function initD3Graph(box) {
         '<p><label>Type: <select id="conn-type" class="text-input">' +
         types.map(t => '<option value="' + t + '">' + t + '</option>').join('') +
         '</select></label></p>' +
-        '<p><label>Tags (optional):<br>' +
-        tagOptions.map(t => '<label style="display:inline-block;margin-right:10px"><input type="checkbox" class="conn-tag" value="' + t + '"> ' + t + '</label>').join('') +
+        '<p><label>Tags (optional, comma-separated):<br>' +
+        '<input type="text" id="conn-tags" class="text-input" placeholder="mistress, ex, secret..." style="width:100%">' +
         '</label></p>' +
         '<p><label>Direction: <select id="conn-dir" class="text-input">' +
         '<option value="mutual">Mutual</option>' +
@@ -829,7 +828,8 @@ function initD3Graph(box) {
         const type = document.getElementById('conn-type').value;
         const dir = document.getElementById('conn-dir').value;
         const imp = document.getElementById('conn-imp').value;
-        const tags = [...document.querySelectorAll('.conn-tag:checked')].map(cb => cb.value);
+        const tagsRaw = document.getElementById('conn-tags').value || '';
+        const tags = tagsRaw.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
         document.getElementById('connect-dialog').remove();
 
         // v381: save to edge table — admins create confirmed, users suggest pending
