@@ -470,6 +470,7 @@ function wireCharGraph(box) {
     const W = 400, H = 400;
     let vb = { x: 0, y: 0, w: W, h: H };
     let startVB = null, startPt = null, moved = 0;
+    let lastTap = 0, lastTarget = null;
     const setVB = () => svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
     const toPt = e => {
       const p = svg.createSVGPoint();
@@ -478,6 +479,7 @@ function wireCharGraph(box) {
     };
     svg.addEventListener('pointerdown', e => {
       startVB = { ...vb }; startPt = toPt(e); moved = 0;
+      lastTap = 0; lastTarget = null; // v367: cancel pending expand on new gesture
       try { svg.setPointerCapture(e.pointerId); } catch (err) {}
       svg.style.cursor = 'grabbing';
     });
@@ -504,7 +506,6 @@ function wireCharGraph(box) {
       setVB();
     }, { passive: false });
     // Tap: expand (single) vs navigate (double). Ignore if dragged.
-    let lastTap = 0, lastTarget = null;
     svg.addEventListener('click', e => {
       if (moved > 8) return; // was a drag, not a tap
       const g = e.target.closest('[data-expand]');
@@ -516,9 +517,7 @@ function wireCharGraph(box) {
         const wikiId = g.getAttribute('data-chwiki');
         const bookId = g.getAttribute('data-chbook');
         if (wikiId && typeof openCharacter === 'function') openCharacter(wikiId);
-        else if (bookId && typeof openPreviewModal === 'function') {
-          // find book by id — handled by existing wireCharRelLinks
-        }
+        else if (bookId && typeof openBookCharacter === 'function') openBookCharacter(bookId);
         lastTap = 0; lastTarget = null;
       } else {
         // Single tap: expand
@@ -623,9 +622,10 @@ function charRelLink(name, workChars) {
 }
 
 /* Wire tap handlers for relationship links in a container. */
-function wireCharRelLinks(box) {
+function wireCharRelLinks(box, excludeSel) {
   if (!box) return;
   box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
+    if (excludeSel && el.closest(excludeSel)) return;
     openCharacter(b.getAttribute('data-chwiki'));
   }));
   box.querySelectorAll('[data-chbook]').forEach(b => b.addEventListener('click', () => {
@@ -844,6 +844,7 @@ async function renderCharacterPage() {
       if (uid) {
         const slim = allWorkChars.map(c => ({
           name: c.name, role: c.role,
+          id: c.id, characterId: c.characterId,
           relationships: c.relationships || [],
         }));
         html += graphHTML.replace('</div>',
@@ -898,8 +899,9 @@ async function renderCharacterPage() {
 
   setView(html);
   const viewBox = document.getElementById('view');
-  wireCharRelLinks(viewBox);
   wireCharGraph(viewBox);
+  // v367: wireCharRelLinks skips graph nodes (graph handler owns all taps)
+  wireCharRelLinks(viewBox, '.ch-graph-wrap');
   // Wire graph nodes (they use the same data attributes)
   document.querySelectorAll('.ch-graph-node[data-chwiki]').forEach(b =>
     b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
