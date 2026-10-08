@@ -2202,7 +2202,9 @@ async function charLabRenderInbox(body, works) {
         '<option value="">-</option>' +
         [1,2,3,4,5].map(i => '<option value="' + i + '"' + (r.importance == i ? ' selected' : '') + '>' + i + '</option>').join('') +
         '</select></td>' +
-        '<td>' + (r.source === 'user' ? '<span class="chip">by reader</span>' : '<span class="note">pipeline</span>') +
+        '<td>' + (r.source === 'user' ?
+          '<span title="Reader suggestion">🟡</span> <span class="chip">reader</span>' :
+          '<span title="Pipeline suggestion">🔵</span> <span class="note">pipeline</span>') +
         (r.tags && r.tags.length ? '<br>' + r.tags.map(t => '<span class="chip sm">' + esc(t) + '</span>').join(' ') : '') + '</td>' +
         '<td style="white-space:nowrap">' +
         '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓</button> ' +
