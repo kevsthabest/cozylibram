@@ -448,7 +448,13 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
   // v370: include full relationship data for expansion
   const centerId = '__center__';
   const charData = {};
-  charData[centerId] = { name: centerName, group: 'hero' };
+  // v391: center node gets ID too (Claude bug 3)
+  let centerCharId = null;
+  if (workChars) {
+    const cm = workChars.find(c => String(c.name || '').toLowerCase() === String(centerName || '').toLowerCase());
+    if (cm) centerCharId = cm.id;
+  }
+  charData[centerId] = { name: centerName, group: 'hero', _orig: { name: centerName, id: centerCharId } };
 
   const typeToGroup = {
     spouse: 'romance', partner: 'romance', fiance: 'romance',
@@ -472,11 +478,17 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     const primaryType = (n.types || [])[0] || 'friend';
     // v370: store this node's own relationships for expansion
     const ownRels = relMap[String(n.name || '').toLowerCase()] || [];
+    // v391: carry book_characters id for Shift+drag (Claude bug 3)
+    let charId = null;
+    if (workChars) {
+      const match = workChars.find(c => String(c.name || '').toLowerCase() === String(n.name || '').toLowerCase());
+      if (match) charId = match.id;
+    }
     charData[id] = {
       name: n.name,
       group: typeToGroup[primaryType] || 'friend',
       _rels: ownRels, // for expansion
-      _orig: n, // for navigation
+      _orig: { ...n, id: charId }, // for navigation + connect dialog
     };
   });
 

@@ -2456,6 +2456,9 @@ function charLabRender(body, works, chars) {
         updates[field] = val;
         const { error } = await sb.from('book_characters').update(updates).eq('id', id);
         if (error) throw error;
+        // v391: update local chars array so filters see the change (Claude bug 4)
+        const local = chars.find(c => c.id === id);
+        if (local) local[field] = val;
         inp.style.borderColor = 'var(--gold)';
         setTimeout(() => inp.style.borderColor = '', 800);
       } catch (e) {
