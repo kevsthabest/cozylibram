@@ -1636,7 +1636,7 @@ let charLabWorkId = null;
 let charLabRoleFilter = '';
 let charLabSelectedId = null;
 let charLabShowBlocked = false; // v317: hidden by default
-let charLabView = 'work'; // v318: 'work' | 'unified' | 'relationships' (v377: inbox)
+let charLabView = 'characters'; // v395: 'review' | 'relationships' | 'characters' (was 'work'|'relationships')
 let charLabCanonicalId = null;
 
 const CharacterStore = {
@@ -1739,7 +1739,7 @@ const CharacterStore = {
         direction: opts.direction || 'mutual',
         importance: opts.importance || null,
         source_work_id: opts.workId || null,
-        review_status: 'confirmed',
+        review_status: opts.review_status || 'confirmed',
         created_by: user ? user.id : null,
         notes: opts.notes || null,
       }).select().single();
@@ -2048,21 +2048,40 @@ async function renderCharacterLab() {
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
   }
-  if (charLabView === 'relationships') {
-    await charLabRenderInbox(body, works);
+  // v395: New navigation — Review | Relationships | Characters
+  if (charLabView === 'review') {
+    await charLabRenderReview(body, works);
     return;
   }
+  if (charLabView === 'relationships') {
+    await charLabRenderRelationships(body, works);
+    return;
+  }
+  // Default: Characters view (was 'work')
   const chars = await CharacterStore.listForWork(charLabWorkId);
   charLabRender(body, works, chars);
+}
+
+/* v395: Review view — things needing human attention.
+   Currently: relationship inbox. Future: characters needing review, identity matches. */
+async function charLabRenderReview(body, works) {
+  // For now, Review = Relationship Inbox
+  await charLabRenderInbox(body, works);
+}
+
+/* v395: Relationships workspace — graph + inbox + table.
+   Coming soon: D3 graph integration. Hidden from nav until then. */
+async function charLabRenderRelationships(body, works) {
+  body.innerHTML = '<div class="ob-card"><h3 class="serif">Relationships</h3>' +
+    '<p class="note">Graph workspace coming soon. Use Review for now.</p></div>';
 }
 
 /* v377: Phase 1 — Relationship Inbox.
    Review pipeline-suggested relationships: Accept / Change / Reject.
    Works against current JSON model; Phase 2 moves to edge table. */
 async function charLabRenderInbox(body, works) {
-  const reviewedKey = 'cozylibram.relReviewed';
-  let reviewed = {};
-  try { reviewed = JSON.parse(localStorage.getItem(reviewedKey) || '{}'); } catch (e) {}
+  // v395: Drive inbox from DB review_status, not localStorage (Claude bug 3)
+  // Pipeline JSON items are matched to edge rows; reviewed = edge exists in any status
 
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
@@ -2070,18 +2089,44 @@ async function charLabRenderInbox(body, works) {
   const work = works.find(w => w.workId === charLabWorkId);
   const chars = await CharacterStore.listForWork(charLabWorkId);
 
+  // Get all edge rows for this work's characters (any status)
+  let existingEdges = [];
+  try {
+    const sb = await CharacterStore._sb();
+    const charIds = chars.map(c => c.id);
+    if (charIds.length) {
+      const { data } = await sb.from('character_relationships')
+        .select('id, character_a_id, character_b_id, relationship_type, review_status')
+        .in('character_a_id', charIds);
+      existingEdges = data || [];
+    }
+  } catch (e) { console.warn('Edge fetch failed', e); }
+
+  // Helper: find edge for a from/to pair (v395: type-agnostic to avoid duplicates — Advisor)
+  const findEdge = (fromId, toName) => {
+    const toChar = chars.find(c => String(c.name || '').toLowerCase() === String(toName || '').toLowerCase());
+    if (!toChar) return null;
+    return existingEdges.find(e =>
+      e.character_a_id === fromId &&
+      e.character_b_id === toChar.id
+    );
+  };
+
   // v381: Collect pipeline JSON relationships AND user-suggested edges
   const inbox = [];
   chars.forEach(c => {
     (c.relationships || []).forEach((r, idx) => {
       const relId = c.id + ':' + idx;
-      if (reviewed[relId]) return;
+      const type = String(r.type || 'friend').toLowerCase();
+      const toName = String(r.to || '').trim();
+      // Skip if an edge row exists (already reviewed in any status)
+      if (findEdge(c.id, toName)) return;
       inbox.push({
         id: relId,
         fromId: c.id,
         fromName: c.name,
-        toName: String(r.to || '').trim(),
-        type: String(r.type || 'friend').toLowerCase(),
+        toName: toName,
+        type: type,
         importance: r.importance || null,
         source: 'pipeline',
       });
@@ -2122,11 +2167,12 @@ async function charLabRenderInbox(body, works) {
   const valid = inbox.filter(r => r.toName);
 
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
-    ' Character Lab — Relationship Inbox</h3>' +
+    ' Character Lab — Review</h3>' +
+    '<p class="note">Keyboard: ↑/↓ navigate · A accept · R reject · 1-5 importance · T cycle type</p>' +
     '<p class="note">' +
-    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
-
-    '<button class="btn sm" data-chview="relationships">Relationship Inbox</button></p>' +
+    '<button class="btn sm ghost" data-chview="characters">Characters</button> ' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
+    '<button class="btn sm" data-chview="review">Review</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
@@ -2154,7 +2200,9 @@ async function charLabRenderInbox(body, works) {
         '<option value="">-</option>' +
         [1,2,3,4,5].map(i => '<option value="' + i + '"' + (r.importance == i ? ' selected' : '') + '>' + i + '</option>').join('') +
         '</select></td>' +
-        '<td>' + (r.source === 'user' ? '<span class="chip">by reader</span>' : '<span class="note">pipeline</span>') +
+        '<td>' + (r.source === 'user' ?
+          '<span title="Reader suggestion">🟡</span> <span class="chip">reader</span>' :
+          '<span title="Pipeline suggestion">🔵</span> <span class="note">pipeline</span>') +
         (r.tags && r.tags.length ? '<br>' + r.tags.map(t => '<span class="chip sm">' + esc(t) + '</span>').join(' ') : '') + '</td>' +
         '<td style="white-space:nowrap">' +
         '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓</button> ' +
@@ -2195,15 +2243,7 @@ async function charLabRenderInbox(body, works) {
     deleteWork(charLabWorkId, work ? work.title : charLabWorkId);
   });
 
-  // Wire accept/change/reject
-  const markReviewed = (relId) => {
-    try {
-      const r = JSON.parse(localStorage.getItem(reviewedKey) || '{}');
-      r[relId] = Date.now();
-      localStorage.setItem(reviewedKey, JSON.stringify(r));
-    } catch (e) {}
-  };
-
+  // Wire accept/reject (v395: DB-driven, no localStorage)
   // v387: Inbox dropdowns save on change (Advisor MEDIUM — were decorative)
   body.querySelectorAll('[data-rel-type]').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -2283,27 +2323,90 @@ async function charLabRenderInbox(body, works) {
       toast('Accept failed: ' + (e.message || 'unknown error'));
       return; // v389: don't mark reviewed on failure (Claude)
     }
-    markReviewed(relId);
-    item.style.opacity = '0.4';
+    // v395: re-render to reflect DB state
+    charLabRenderInbox(body, works);
     item.querySelectorAll('button').forEach(x => x.disabled = true);
     toast('Relationship accepted');
   }));
 
   body.querySelectorAll('[data-rel-reject]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-reject');
-    // v381: mark edge as rejected if it's a user suggestion
     try {
       if (relId.startsWith('edge:')) {
         const edgeId = relId.slice(5);
         await CharacterStore.updateRelationship(edgeId, { review_status: 'rejected' });
+      } else {
+        // v395: Pipeline JSON — create rejected edge so it's tracked in DB (Claude bug 3)
+        const [fromId, idx] = relId.split(':');
+        const chars = await CharacterStore.listForWork(charLabWorkId);
+        const fromChar = chars.find(c => c.id === fromId);
+        if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
+          const r = fromChar.relationships[idx];
+          const toName = String(r.to || '').trim();
+          const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+          if (toChar) {
+            await CharacterStore.createRelationship(fromId, toChar.id, String(r.type || 'friend').toLowerCase(), {
+              direction: 'mutual',
+              importance: r.importance || null,
+              workId: charLabWorkId,
+              review_status: 'rejected',
+            });
+          }
+        }
       }
-    } catch (e) { console.warn('Reject failed', e); }
-    markReviewed(relId);
-    b.closest('tr[data-rel]').style.display = 'none';
+    } catch (e) {
+      console.warn('Reject failed', e);
+      toast('Reject failed: ' + (e.message || 'unknown error'));
+      return;
+    }
+    // v395: re-render to reflect DB state
+    charLabRenderInbox(body, works);
     toast('Relationship rejected');
   }));
 
   // v386: Change is now inline via dropdowns (no dialog needed)
+
+  // v395: Keyboard-driven inbox (Claude — biggest time saver)
+  // ↑/↓ navigate, A accept, R reject, 1-5 importance, T cycle type
+  let kbIndex = 0;
+  const rows = () => [...body.querySelectorAll('tr[data-rel]')];
+  const highlightRow = (idx) => {
+    rows().forEach((r, i) => r.classList.toggle('kb-sel', i === idx));
+    const row = rows()[idx];
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  };
+  const kbHandler = (e) => {
+    // Only when inbox is visible and not typing in an input
+    if (!body.contains(document.activeElement) || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const rs = rows();
+    if (!rs.length) return;
+    const row = rs[kbIndex];
+    if (!row) return;
+
+    if (e.key === 'ArrowDown') { kbIndex = Math.min(kbIndex + 1, rs.length - 1); highlightRow(kbIndex); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { kbIndex = Math.max(kbIndex - 1, 0); highlightRow(kbIndex); e.preventDefault(); }
+    else if (e.key === 'a' || e.key === 'A') { row.querySelector('[data-rel-accept]')?.click(); }
+    else if (e.key === 'r' || e.key === 'R') { row.querySelector('[data-rel-reject]')?.click(); }
+    else if (e.key >= '1' && e.key <= '5') {
+      const sel = row.querySelector('[data-rel-imp]');
+      if (sel) { sel.value = e.key; sel.dispatchEvent(new Event('change')); }
+    }
+    else if (e.key === 't' || e.key === 'T') {
+      const sel = row.querySelector('[data-rel-type]');
+      if (sel) {
+        const opts = [...sel.options];
+        const next = (sel.selectedIndex + 1) % opts.length;
+        sel.selectedIndex = next;
+        sel.dispatchEvent(new Event('change'));
+      }
+    }
+  };
+  // v395: Remove old handler before adding (Advisor HIGH — was leaking)
+  if (body._kbHandler) document.removeEventListener('keydown', body._kbHandler);
+  document.addEventListener('keydown', kbHandler);
+  body._kbHandler = kbHandler;
+  highlightRow(0);
+
   if (charLabCanonicalId) await charLabCanonDetail();
 }
 
@@ -2381,9 +2484,10 @@ function charLabRender(body, works, chars) {
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
     ' Character Lab</h3>' +
     '<p class="note">' +
-    '<button class="btn sm" data-chview="work">By work</button> ' +
+    '<button class="btn sm" data-chview="characters">Characters</button> ' +
 
-    '<button class="btn sm ghost" data-chview="relationships">Relationships</button></p>' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
+    '<button class="btn sm ghost" data-chview="review">Review</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
