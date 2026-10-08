@@ -2074,12 +2074,12 @@ async function charLabRenderInbox(body, works) {
   const work = works.find(w => w.workId === charLabWorkId);
   const chars = await CharacterStore.listForWork(charLabWorkId);
 
-  // Collect all relationships with their source character
+  // v381: Collect pipeline JSON relationships AND user-suggested edges
   const inbox = [];
   chars.forEach(c => {
     (c.relationships || []).forEach((r, idx) => {
       const relId = c.id + ':' + idx;
-      if (reviewed[relId]) return; // already reviewed
+      if (reviewed[relId]) return;
       inbox.push({
         id: relId,
         fromId: c.id,
@@ -2087,9 +2087,39 @@ async function charLabRenderInbox(body, works) {
         toName: String(r.to || '').trim(),
         type: String(r.type || 'friend').toLowerCase(),
         importance: r.importance || null,
+        source: 'pipeline',
       });
     });
   });
+
+  // Add user-suggested edges (pending, created_by != null)
+  try {
+    const sb = await CharacterStore._sb();
+    const charIds = chars.map(c => c.id);
+    if (charIds.length) {
+      const { data: suggested } = await sb.from('character_relationships')
+        .select('id, character_a_id, character_b_id, relationship_type, importance, created_by')
+        .in('character_a_id', charIds)
+        .eq('review_status', 'pending')
+        .not('created_by', 'is', null);
+      (suggested || []).forEach(edge => {
+        const fromChar = chars.find(c => c.id === edge.character_a_id);
+        const toChar = chars.find(c => c.id === edge.character_b_id);
+        if (fromChar && toChar) {
+          inbox.push({
+            id: 'edge:' + edge.id,
+            edgeId: edge.id,
+            fromId: edge.character_a_id,
+            fromName: fromChar.name,
+            toName: toChar.name,
+            type: edge.relationship_type,
+            importance: edge.importance,
+            source: 'user',
+          });
+        }
+      });
+    }
+  } catch (e) { console.warn('User suggestions fetch failed', e); }
 
   // Filter out empty targets
   const valid = inbox.filter(r => r.toName);
@@ -2118,7 +2148,8 @@ async function charLabRenderInbox(body, works) {
       html += '<div class="ob-card rel-inbox-item" data-rel="' + esc(r.id) + '">' +
         '<div><b>' + esc(r.fromName) + '</b> ' + typeIcon + ' <b>' + esc(r.toName) + '</b></div>' +
         '<div class="note">Suggested: ' + esc(r.type) +
-        (r.importance ? ' (importance ' + r.importance + '/5)' : '') + '</div>' +
+        (r.importance ? ' (importance ' + r.importance + '/5)' : '') +
+        (r.source === 'user' ? ' <span class="chip">by reader</span>' : '') + '</div>' +
         '<div style="margin-top:8px">' +
         '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓ Accept</button> ' +
         '<button class="btn sm ghost" data-rel-change="' + esc(r.id) + '">Change</button> ' +
@@ -2153,36 +2184,40 @@ async function charLabRenderInbox(body, works) {
   body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-accept');
     const item = b.closest('.rel-inbox-item');
-    // v380: upsert — find pending edge and mark confirmed (Advisor MEDIUM)
+    // v381: handle both edge IDs (user suggestions) and JSON relIds (pipeline)
     try {
-      const [fromId, idx] = relId.split(':');
-      const chars = await CharacterStore.listForWork(charLabWorkId);
-      const fromChar = chars.find(c => c.id === fromId);
-      if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
-        const r = fromChar.relationships[idx];
-        const toName = String(r.to || '').trim();
-        const relType = String(r.type || 'friend').toLowerCase();
-        const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
-        if (toChar) {
-          const sb = await CharacterStore._sb();
-          // Find existing pending edge
-          const { data: existing } = await sb.from('character_relationships')
-            .select('id')
-            .eq('character_a_id', fromId)
-            .eq('character_b_id', toChar.id)
-            .eq('relationship_type', relType)
-            .eq('review_status', 'pending')
-            .maybeSingle();
-          if (existing) {
-            // Flip to confirmed
-            await CharacterStore.updateRelationship(existing.id, { review_status: 'confirmed' });
-          } else {
-            // Create new (shouldn't happen after backfill, but safe)
-            await CharacterStore.createRelationship(fromId, toChar.id, relType, {
-              direction: 'mutual',
-              importance: r.importance || null,
-              workId: charLabWorkId,
-            });
+      if (relId.startsWith('edge:')) {
+        // User suggestion — flip to confirmed
+        const edgeId = relId.slice(5);
+        await CharacterStore.updateRelationship(edgeId, { review_status: 'confirmed' });
+      } else {
+        // Pipeline JSON — upsert as before (v380)
+        const [fromId, idx] = relId.split(':');
+        const chars = await CharacterStore.listForWork(charLabWorkId);
+        const fromChar = chars.find(c => c.id === fromId);
+        if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
+          const r = fromChar.relationships[idx];
+          const toName = String(r.to || '').trim();
+          const relType = String(r.type || 'friend').toLowerCase();
+          const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+          if (toChar) {
+            const sb = await CharacterStore._sb();
+            const { data: existing } = await sb.from('character_relationships')
+              .select('id')
+              .eq('character_a_id', fromId)
+              .eq('character_b_id', toChar.id)
+              .eq('relationship_type', relType)
+              .eq('review_status', 'pending')
+              .maybeSingle();
+            if (existing) {
+              await CharacterStore.updateRelationship(existing.id, { review_status: 'confirmed' });
+            } else {
+              await CharacterStore.createRelationship(fromId, toChar.id, relType, {
+                direction: 'mutual',
+                importance: r.importance || null,
+                workId: charLabWorkId,
+              });
+            }
           }
         }
       }
@@ -2193,8 +2228,15 @@ async function charLabRenderInbox(body, works) {
     toast('Relationship accepted');
   }));
 
-  body.querySelectorAll('[data-rel-reject]').forEach(b => b.addEventListener('click', () => {
+  body.querySelectorAll('[data-rel-reject]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-reject');
+    // v381: mark edge as rejected if it's a user suggestion
+    try {
+      if (relId.startsWith('edge:')) {
+        const edgeId = relId.slice(5);
+        await CharacterStore.updateRelationship(edgeId, { review_status: 'rejected' });
+      }
+    } catch (e) { console.warn('Reject failed', e); }
     markReviewed(relId);
     b.closest('.rel-inbox-item').style.display = 'none';
     toast('Relationship rejected');

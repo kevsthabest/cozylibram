@@ -799,7 +799,7 @@ function initD3Graph(box) {
       const types = ['spouse', 'partner', 'parent', 'child', 'sibling', 'friend', 'enemy', 'rival', 'mentor', 'colleague'];
       let html = '<div class="modal-overlay" id="connect-dialog" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;">' +
         '<div class="ob-card" style="max-width:320px;width:90%">' +
-        '<h3 class="serif">New Relationship</h3>' +
+        '<h3 class="serif">' + ((typeof isAppAdmin !== 'undefined' && isAppAdmin) ? 'New Relationship' : 'Suggest Relationship') + '</h3>' +
         '<p><b>' + esc(fromName) + '</b> → <b>' + esc(toName) + '</b></p>' +
         '<p><label>Type: <select id="conn-type" class="text-input">' +
         types.map(t => '<option value="' + t + '">' + t + '</option>').join('') +
@@ -827,33 +827,32 @@ function initD3Graph(box) {
         const imp = document.getElementById('conn-imp').value;
         document.getElementById('connect-dialog').remove();
 
-        // v378: save to edge table via CharacterStore
+        // v381: save to edge table — admins create confirmed, users suggest pending
         try {
           if (typeof CharacterStore !== 'undefined' && CharacterStore.createRelationship) {
-            // Need book_character IDs — look up from _orig
             const fromOrig = charData[fromNode.id] ? charData[fromNode.id]._orig : null;
             const toOrig = charData[toNode.id] ? charData[toNode.id]._orig : null;
             if (fromOrig && toOrig && fromOrig.id && toOrig.id) {
-              await CharacterStore.createRelationship(fromOrig.id, toOrig.id, type, {
+              const isAdmin = (typeof isAppAdmin !== 'undefined' && isAppAdmin);
+              const sb = await CharacterStore._sb();
+              const { data: { user } } = await sb.auth.getUser();
+              // Direct insert to control review_status
+              const { error } = await sb.from('character_relationships').insert({
+                character_a_id: fromOrig.id,
+                character_b_id: toOrig.id,
+                relationship_type: type,
                 direction: dir,
                 importance: imp ? parseInt(imp, 10) : null,
+                review_status: isAdmin ? 'confirmed' : 'pending',
+                created_by: user ? user.id : null,
               });
-              toast('Relationship created');
-              // v378: refresh graph in place (no reload)
-              if (typeof initD3Graph === 'function') {
-                const wrap = svgEl.closest('.d3-graph-wrap');
-                if (wrap) {
-                  // Clear and re-init
-                  const box = wrap.parentElement;
-                  wrap.remove();
-                  // Re-render will happen via parent refresh
-                  if (typeof renderCharacterPage === 'function') {
-                    // Store scroll pos and re-render
-                    const y = window.scrollY;
-                    await renderCharacterPage();
-                    window.scrollTo(0, y);
-                  }
-                }
+              if (error) throw error;
+              toast(isAdmin ? 'Relationship created' : 'Suggestion submitted for review');
+              // Refresh graph in place
+              if (typeof renderCharacterPage === 'function') {
+                const y = window.scrollY;
+                await renderCharacterPage();
+                window.scrollTo(0, y);
               }
             } else {
               toast('Cannot create: missing character IDs');
