@@ -2169,10 +2169,10 @@ async function charLabRenderInbox(body, works) {
   html += '</div>';
   body.innerHTML = html;
 
-  // Wire view toggle
+  // Wire view toggle (v389: was renderAdminBody which lands on Analytics — Claude caught it)
   body.querySelectorAll('[data-chview]').forEach(b => b.addEventListener('click', () => {
     charLabView = b.getAttribute('data-chview');
-    renderAdminBody();
+    renderCharacterLab();
   }));
   document.getElementById('ch-work').addEventListener('change', e => {
     charLabWorkId = e.target.value;
@@ -2263,7 +2263,11 @@ async function charLabRenderInbox(body, works) {
           }
         }
       }
-    } catch (e) { console.warn('Edge upsert failed', e); }
+    } catch (e) {
+      console.warn('Edge upsert failed', e);
+      toast('Accept failed: ' + (e.message || 'unknown error'));
+      return; // v389: don't mark reviewed on failure (Claude)
+    }
     markReviewed(relId);
     item.style.opacity = '0.4';
     item.querySelectorAll('button').forEach(x => x.disabled = true);
