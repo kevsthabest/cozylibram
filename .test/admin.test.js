@@ -241,12 +241,13 @@ function ev(uid, name, cat, props, created) {
       'id,face,appearance,bucket,path,width,height,quality_score,sharpness_score,exposure_score,perspective_score,coverage_score,glare_score,resolution_score,stability_score,verified,rejected,created_at',
       'face,appearance,canonical_asset_id,selection_method,selected_at',
       'work_id, works(title)',
-      'id, name, role, description, relationships, confidence, status, character_id',
+      'id, name, role, description, relationships, confidence, status, character_id, suggested_character_id',
       'character_id, work_id, works(title)',
       'id, name, description, updated_at',
       'id, name, description',
       'id',
       'id, work_id, name, role, description, relationships, works(title)',
+      'name',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&

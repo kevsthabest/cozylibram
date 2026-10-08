@@ -1663,10 +1663,13 @@ const CharacterStore = {
     } catch (e) { return []; }
   },
 
-  /* Normalize a name for canonical matching. */
+  /* Normalize a name for canonical matching. Mirrors the pipeline's
+     norm_name(): casefold, strip leading articles, collapse whitespace. */
   normName(n) {
     return String(n || '').trim().toLowerCase()
-      .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      .replace(/[^a-z0-9 ]/g, '')
+      .replace(/^(the|a|an)\s+/, '')
+      .replace(/\s+/g, ' ').trim();
   },
 
   /* All canonical characters, with linked work counts. */
@@ -1774,7 +1777,7 @@ const CharacterStore = {
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_characters')
-        .select('id, name, role, description, relationships, confidence, status, character_id')
+        .select('id, name, role, description, relationships, confidence, status, character_id, suggested_character_id')
         .eq('work_id', workId)
         .order('name');
       if (error) throw error;
@@ -1787,6 +1790,7 @@ const CharacterStore = {
         confidence: c.confidence,
         status: c.status || 'candidate',
         characterId: c.character_id || null,
+        suggestedCharacterId: c.suggested_character_id || null,
       }));
     } catch (e) { return []; }
   },
@@ -2134,7 +2138,14 @@ function charLabDetail(chars) {
       ? '<span class="note">Linked to canonical character</span> ' +
         '<button class="btn sm ghost" data-chunlink-row="' + esc(c.id) + '">Unlink</button>'
       : '<button class="btn sm" id="ch-link-btn" data-chid="' + esc(c.id) + '">Link to character…</button>') +
-    '</p><div id="ch-link-ui"></div>';
+    '</p>' +
+    (!c.characterId && c.suggestedCharacterId
+      ? '<div class="ob-card" style="border-color:var(--accent)"><p>' +
+        '<b>Pipeline suggests:</b> <span id="ch-suggest-name">loading…</span><br>' +
+        '<button class="btn sm" data-chsuggest-accept="' + esc(c.id) + '">Accept</button> ' +
+        '<button class="btn sm ghost" data-chsuggest-reject="' + esc(c.id) + '">Reject</button></p></div>'
+      : '') +
+    '<div id="ch-link-ui"></div>';
   if (c.description) html += '<p>' + esc(c.description) + '</p>';
 
   // Outgoing relationships
@@ -2238,6 +2249,46 @@ function charLabDetail(chars) {
       } catch (e) { if (msg) msg.textContent = 'Failed: ' + ((e && e.message) || e); }
     });
   });
+  // Load pipeline suggestion name
+  const sugName = el.querySelector('#ch-suggest-name');
+  if (sugName && c.suggestedCharacterId) {
+    CharacterStore._sb().then(sb => sb && sb.from('characters')
+      .select('name').eq('id', c.suggestedCharacterId).maybeSingle()
+    ).then(r => {
+      if (sugName.isConnected) sugName.textContent =
+        (r && r.data && r.data.name) ? '"' + r.data.name + '"' : '(deleted)';
+    }).catch(() => { if (sugName.isConnected) sugName.textContent = '(error)'; });
+  }
+  // Wire suggestion accept/reject
+  el.querySelectorAll('[data-chsuggest-accept]').forEach(b => b.addEventListener('click', async () => {
+    const rowId = b.getAttribute('data-chsuggest-accept');
+    b.disabled = true;
+    try {
+      const sb = await CharacterStore._sb();
+      if (!sb) throw new Error('cloud unavailable');
+      const { error } = await sb.from('book_characters').update({
+        character_id: c.suggestedCharacterId,
+        suggested_character_id: null,
+      }).eq('id', rowId);
+      if (error) throw error;
+      c.characterId = c.suggestedCharacterId;
+      c.suggestedCharacterId = null;
+      charLabDetail(chars);
+    } catch (e) { b.disabled = false; b.title = 'Failed: ' + ((e && e.message) || e); }
+  }));
+  el.querySelectorAll('[data-chsuggest-reject]').forEach(b => b.addEventListener('click', async () => {
+    const rowId = b.getAttribute('data-chsuggest-reject');
+    b.disabled = true;
+    try {
+      const sb = await CharacterStore._sb();
+      if (!sb) throw new Error('cloud unavailable');
+      const { error } = await sb.from('book_characters')
+        .update({ suggested_character_id: null }).eq('id', rowId);
+      if (error) throw error;
+      c.suggestedCharacterId = null;
+      charLabDetail(chars);
+    } catch (e) { b.disabled = false; b.title = 'Failed: ' + ((e && e.message) || e); }
+  }));
   // Wire unlink from detail
   el.querySelectorAll('[data-chunlink-row]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm('Unlink this character?')) return;
