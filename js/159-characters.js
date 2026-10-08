@@ -366,23 +366,35 @@ function charTimelineHTML(instances, workCharsByWorkId) {
 }
 
 /* v339: Phase C — interactive SVG relationship constellation.
+   v365: rebuilt as zoomable/pannable canvas. Click a node to expand
+   that character's own connections. Filters to important relationships
+   (family/partners or importance >= 4).
    Renders the character at center with relationship nodes arranged in a
    circle. Nodes are tappable (navigate to character pages). Edges are
-   colored by relationship type. Caps at 14 nodes for readability. */
+   colored by relationship type. */
 function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
-  const MAX = 14;
-  const nodes = grouped.slice(0, MAX);
+  // v365: only important relationships — family, partners, or high importance
+  const importantTypes = new Set(['spouse', 'parent', 'child', 'sibling', 'partner', 'fiance']);
+  const important = grouped.filter(n => {
+    if ((n.importance || 0) >= 4) return true;
+    return (n.types || []).some(t => importantTypes.has(t));
+  });
+  const nodes = (important.length ? important : grouped).slice(0, 12);
   const extra = grouped.length - nodes.length;
 
-  const W = 340, H = 340, cx = W / 2, cy = H / 2, R = 120;
+  const W = 400, H = 400, cx = W / 2, cy = H / 2, R = 140;
   const typeColors = {
-    spouse: '#e74c3c', parent: '#c9a227', child: '#f5d76e',
+    spouse: '#e74c3c', partner: '#e74c3c', fiance: '#e74c3c',
+    parent: '#c9a227', child: '#f5d76e',
     sibling: '#9b59b6', friend: '#2ecc71', enemy: '#8b0000',
     mentor: '#3498db', colleague: '#6aa8e5',
   };
 
-  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="ch-graph" style="width:100%;max-width:380px;height:auto;display:block;margin:0 auto;">';
+  const uid = 'cg' + Math.random().toString(36).slice(2, 8);
+  let svg = '<svg id="' + uid + '" viewBox="0 0 ' + W + ' ' + H + '" class="ch-graph" ' +
+    'style="width:100%;max-width:420px;height:auto;display:block;margin:0 auto;touch-action:none;cursor:grab;" ' +
+    'data-cx="' + cx + '" data-cy="' + cy + '">';
 
   // Edges (behind nodes)
   nodes.forEach((n, i) => {
@@ -398,46 +410,116 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
     const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
     const color = typeColors[n.types[0]] || '#888';
-    // v348: node size scales with relationship importance (1-5, default 3)
     const imp = n.importance || 3;
-    const r = 14 + (imp * 2.4); // v349: 16.4 to 26 (Advisor LOW geometry)
+    const r = 16 + (imp * 2.5);
     const initials = String(n.name).trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
-    // Resolve tap target
     let tapAttr = '';
+    let expandAttr = '';
     try {
       if (typeof charResolveTarget !== 'undefined' && workChars) {
         const res = charResolveTarget(n.name, workChars);
         if (res.character) {
           const c = res.character;
-          tapAttr = c.characterId
-            ? ' data-chwiki="' + esc(c.characterId) + '"'
-            : ' data-chbook="' + esc(c.id) + '"';
+          // v365: click expands if the character has their own relationships, else navigates
+          const hasRels = c.relationships && c.relationships.length > 0;
+          if (hasRels) {
+            expandAttr = ' data-expand="' + esc(n.name) + '"';
+          } else {
+            tapAttr = c.characterId
+              ? ' data-chwiki="' + esc(c.characterId) + '"'
+              : ' data-chbook="' + esc(c.id) + '"';
+          }
         }
       }
     } catch (e) {}
-    const label = esc(n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name);
-    svg += '<g' + tapAttr + (tapAttr ? ' class="ch-graph-node" style="cursor:pointer"' : '') + '>' +
-      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + color + '" opacity="0.85"/>' +
-      '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">' + esc(initials) + '</text>' +
-      '<text x="' + x.toFixed(1) + '" y="' + (y + 36).toFixed(1) + '" text-anchor="middle" fill="var(--text)" font-size="9">' + label + '</text>' +
+    const label = esc(n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name);
+    // v365: use style for fill (CSS vars don't work in presentation attributes)
+    svg += '<g' + tapAttr + expandAttr + ' class="ch-graph-node" style="cursor:pointer">' +
+      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + color + '" opacity="0.9"/>' +
+      '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">' + esc(initials) + '</text>' +
+      '<text x="' + x.toFixed(1) + '" y="' + (y + r + 14).toFixed(1) + '" text-anchor="middle" style="fill:var(--text)" font-size="10">' + label + '</text>' +
       '</g>';
   });
 
   // Center node
   const centerInitials = String(centerName || '?').trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
   const centerColor = { protagonist: '#c9a227', antagonist: '#8b0000', supporting: '#2c5f8a', minor: '#5a5a5a' }[centerRole] || '#5a5a5a';
-  svg += '<circle cx="' + cx + '" cy="' + cy + '" r="30" fill="' + centerColor + '"/>' +
-    '<text x="' + cx + '" y="' + (cy + 6) + '" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">' + esc(centerInitials) + '</text>';
+  svg += '<circle cx="' + cx + '" cy="' + cy + '" r="32" fill="' + centerColor + '"/>' +
+    '<text x="' + cx + '" y="' + (cy + 6) + '" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">' + esc(centerInitials) + '</text>' +
+    '<text x="' + cx + '" y="' + (cy + 50) + '" text-anchor="middle" style="fill:var(--text)" font-size="11" font-weight="600">' + esc(centerName || '') + '</text>';
   svg += '</svg>';
 
-  let h = '<div class="ch-graph-wrap">' + svg;
+  let h = '<div class="ch-graph-wrap" data-graph="' + uid + '">' + svg;
+  h += '<p class="note" style="text-align:center;font-size:11px">Drag to pan • Scroll/pinch to zoom • Tap a bubble to explore</p>';
   if (extra > 0) h += '<p class="note" style="text-align:center">+' + extra + ' more connections listed below</p>';
-  // Legend
   const usedTypes = [...new Set(nodes.map(n => n.types[0]))];
   h += '<div class="ch-graph-legend">' + usedTypes.map(t =>
     '<span><i style="background:' + (typeColors[t] || '#888') + '"></i>' + esc(t) + '</span>'
   ).join('') + '</div></div>';
+
+  // v365: pan/zoom/expand interactivity
+  h += '<script>(function(){' +
+    'var svg=document.getElementById("' + uid + '");if(!svg)return;' +
+    'var vb={x:0,y:0,w:' + W + ',h:' + H + '};' +
+    'var startVB=null,startPt=null;' +
+    'function setVB(){svg.setAttribute("viewBox",vb.x+" "+vb.y+" "+vb.w+" "+vb.h);}' +
+    'function pt(e){var p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}' +
+    'svg.addEventListener("pointerdown",function(e){startVB={...vb};startPt=pt(e);svg.setPointerCapture(e.pointerId);svg.style.cursor="grabbing";});' +
+    'svg.addEventListener("pointermove",function(e){if(!startPt)return;var p=pt(e);vb.x=startVB.x-(p.x-startPt.x);vb.y=startVB.y-(p.y-startPt.y);setVB();});' +
+    'svg.addEventListener("pointerup",function(e){startPt=null;svg.style.cursor="grab";});' +
+    'svg.addEventListener("wheel",function(e){e.preventDefault();var s=e.deltaY>0?1.15:0.87;var p=pt(e);vb.x=p.x-(p.x-vb.x)*s;vb.y=p.y-(p.y-vb.y)*s;vb.w*=s;vb.h*=s;' +
+    'vb.w=Math.max(100,Math.min(' + W + '*2,vb.w));vb.h=Math.max(100,Math.min(' + H + '*2,vb.h));setVB();},{passive:false});' +
+    // Expand on node tap
+    'svg.addEventListener("click",function(e){var g=e.target.closest("[data-expand]");if(!g)return;' +
+    'var name=g.getAttribute("data-expand");' +
+    'if(typeof charExpandGraph==="function")charExpandGraph(name,"' + uid + '");});' +
+    '})();</script>';
   return h;
+}
+
+/* v365: expand a graph node to center on that character.
+   Finds the character in the work's character list, groups their
+   relationships, and re-renders the graph centered on them. */
+function charExpandGraph(name, svgId) {
+  try {
+    const wrap = document.querySelector('[data-graph="' + svgId + '"]');
+    if (!wrap) return;
+    // Find character data — stored on the wrap element
+    const dataEl = document.getElementById(svgId + '-data');
+    if (!dataEl) return;
+    const allChars = JSON.parse(dataEl.textContent || '[]');
+    const target = allChars.find(c =>
+      String(c.name || '').toLowerCase() === String(name || '').toLowerCase());
+    if (!target || !target.relationships) return;
+    const grouped = charGroupRelationships(target.relationships);
+    if (!grouped.length) {
+      toast('No recorded relationships for ' + name);
+      return;
+    }
+    // Re-render graph centered on the new character
+    const newHTML = charGraphHTML(grouped, allChars, target.name, target.role);
+    // Extract just the SVG + legend, keep the wrapper
+    const tmp = document.createElement('div');
+    tmp.innerHTML = newHTML;
+    const newWrap = tmp.querySelector('.ch-graph-wrap');
+    if (newWrap) {
+      // Preserve the data store
+      const newData = newWrap.querySelector('script');
+      wrap.innerHTML = newWrap.innerHTML;
+      if (dataEl) wrap.appendChild(dataEl);
+      // Re-run the interactivity script
+      const scripts = wrap.querySelectorAll('script');
+      scripts.forEach(sc => {
+        const ns = document.createElement('script');
+        ns.textContent = sc.textContent;
+        sc.replaceWith(ns);
+      });
+    }
+    // Scroll to top of graph
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    console.warn('charExpandGraph failed', e);
+  }
 }
 
 /* v338: group relationships by person, resolving contradictions.
@@ -705,7 +787,24 @@ async function renderCharacterPage() {
       (inst.relationships || []).forEach(r => allRels.push(r));
     }
     const grouped = charGroupRelationships(allRels);
-    html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
+    const graphHTML = charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
+    // v365: store character data for graph expansion (hidden JSON)
+    if (graphHTML && allWorkChars) {
+      const uid = graphHTML.match(/id="(cg[a-z0-9]+)"/);
+      if (uid) {
+        const slim = allWorkChars.map(c => ({
+          name: c.name, role: c.role,
+          relationships: c.relationships || [],
+        }));
+        html += graphHTML.replace('</div>',
+          '<script type="application/json" id="' + uid[1] + '-data">' +
+          JSON.stringify(slim).replace(/</g, '\\u003c') + '</script></div>');
+      } else {
+        html += graphHTML;
+      }
+    } else {
+      html += graphHTML;
+    }
   } catch (e) {}
   let hasRels = false;
   for (const inst of d.instances) {
