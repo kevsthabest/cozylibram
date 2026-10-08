@@ -547,10 +547,20 @@ function initD3Graph(box) {
 
       const lsel = linkLayer.selectAll('.link').data(links, d => d.source.id + '|' + d.target.id);
       lsel.exit().transition().duration(DUR / 2).attr('stroke-opacity', 0).remove();
-      const lenter = lsel.enter().append('line').attr('class', 'link')
+      // v373: edge labels showing relationship type
+      const lenter = lsel.enter().append('g').attr('class', 'link-group');
+      lenter.append('line').attr('class', 'link')
         .attr('stroke', d => groupColors[charData[d.source.id] ? charData[d.source.id].group : 'friend'] || '#888')
         .attr('stroke-opacity', 0);
-      lenter.transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.55);
+      lenter.append('text').attr('class', 'link-label')
+        .text(d => d.type || '')
+        .style('font-size', '9px')
+        .style('fill', textColor)
+        .style('text-anchor', 'middle')
+        .attr('pointer-events', 'none')
+        .attr('stroke-opacity', 0);
+      lenter.select('.link').transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.55);
+      lenter.select('.link-label').transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.9);
       linkG = lenter.merge(lsel);
 
       const nsel = nodeLayer.selectAll('.node').data(nodes, d => d.id);
@@ -585,11 +595,16 @@ function initD3Graph(box) {
         .style('font-size', d => radius(d) * 0.6 + 'px')
         .attr('fill', '#fff').attr('font-weight', '700')
         .attr('pointer-events', 'none');
+      // v373: theme-aware text color (var() in SVG needs explicit handling)
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+        (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches &&
+         !document.documentElement.getAttribute('data-theme'));
+      const textColor = isDark ? '#f1e6da' : '#4a3b32';
       nodeG.select('.d3-name')
         .text(d => charData[d.id] ? charData[d.id].name : '')
         .attr('y', d => radius(d) + 15)
         .style('font-size', '11px')
-        .style('fill', 'var(--text)')
+        .style('fill', textColor)
         .attr('pointer-events', 'none');
     }
 
@@ -639,11 +654,22 @@ function initD3Graph(box) {
       }
     }
 
+    // v373: drag stops propagation so it doesn't trigger canvas pan
     const drag = d3.drag()
       .filter((e, d) => d.id !== PROTAG && !e.button)
-      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-      .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; });
+      .on('start', (e, d) => {
+        e.sourceEvent.stopPropagation();
+        if (!e.active) sim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (e, d) => {
+        e.sourceEvent.stopPropagation();
+        d.fx = e.x; d.fy = e.y;
+      })
+      .on('end', (e, d) => {
+        if (!e.active) sim.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      });
 
     svg.call(d3.zoom().scaleExtent([0.4, 2.5])
       .on('zoom', e => root.attr('transform', e.transform)))
@@ -652,8 +678,13 @@ function initD3Graph(box) {
     function ticked() {
       if (!nodeG || !linkG) return;
       nodeG.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
-      linkG.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      linkG.select('.link')
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      // v373: position labels at link midpoints
+      linkG.select('.link-label')
+        .attr('x', d => (d.source.x + d.target.x) / 2)
+        .attr('y', d => (d.source.y + d.target.y) / 2 - 4);
     }
 
     // Legend
