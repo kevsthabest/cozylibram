@@ -2176,19 +2176,13 @@ async function charLabRenderInbox(body, works) {
     charLabRenderInbox(body, works);
   });
   document.getElementById('ch-refresh').addEventListener('click', () => charLabRenderInbox(body, works));
-  // v393: Delete work (clean removal — work + characters + claims)
-  document.getElementById('ch-delete-work').addEventListener('click', async () => {
-    const workTitle = work ? work.title : charLabWorkId;
-    if (!await confirmModal('Delete work "' + workTitle + '" and all its characters, relationships, and claims? This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
+  // v394: Shared delete (Advisor — FKs are CASCADE, single delete is atomic)
+  const deleteWork = async (workId, workTitle) => {
+    if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
     try {
       const sb = await CharacterStore._sb();
-      // Delete in dependency order
-      await sb.from('character_relationships').delete().eq('source_work_id', charLabWorkId);
-      await sb.from('book_trope_claims').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_trigger_claims').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_quotes').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_characters').delete().eq('work_id', charLabWorkId);
-      const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
+      // ON DELETE CASCADE handles editions, characters, claims, quotes, links
+      const { error } = await sb.from('works').delete().eq('id', workId);
       if (error) throw error;
       toast('Work deleted');
       charLabWorkId = null;
@@ -2196,6 +2190,9 @@ async function charLabRenderInbox(body, works) {
     } catch (e) {
       toast('Delete failed: ' + (e.message || 'unknown error'));
     }
+  };
+  document.getElementById('ch-delete-work').addEventListener('click', () => {
+    deleteWork(charLabWorkId, work ? work.title : charLabWorkId);
   });
 
   // Wire accept/change/reject
@@ -2456,26 +2453,24 @@ function charLabRender(body, works, chars) {
     const nc = await CharacterStore.listForWork(charLabWorkId);
     charLabRender(body, works, nc);
   });
-  // v393: Delete work from grid view
+  // v394: Delete work from grid view (shared function)
   const delBtn2 = document.getElementById('ch-delete-work2');
-  if (delBtn2) delBtn2.addEventListener('click', async () => {
-    const workTitle = work ? work.title : charLabWorkId;
-    if (!await confirmModal('Delete work "' + workTitle + '" and all its characters, relationships, and claims? This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
-    try {
-      const sb = await CharacterStore._sb();
-      await sb.from('character_relationships').delete().eq('source_work_id', charLabWorkId);
-      await sb.from('book_trope_claims').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_trigger_claims').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_quotes').delete().eq('work_id', charLabWorkId);
-      await sb.from('book_characters').delete().eq('work_id', charLabWorkId);
-      const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
-      if (error) throw error;
-      toast('Work deleted');
-      charLabWorkId = null;
-      renderCharacterLab();
-    } catch (e) {
-      toast('Delete failed: ' + (e.message || 'unknown error'));
-    }
+  if (delBtn2) delBtn2.addEventListener('click', () => {
+    // Reuse the inbox's deleteWork via a temporary approach — define locally
+    (async () => {
+      const workTitle = work ? work.title : charLabWorkId;
+      if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
+      try {
+        const sb = await CharacterStore._sb();
+        const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
+        if (error) throw error;
+        toast('Work deleted');
+        charLabWorkId = null;
+        renderCharacterLab();
+      } catch (e) {
+        toast('Delete failed: ' + (e.message || 'unknown error'));
+      }
+    })();
   });
   const blockedToggle = document.getElementById('ch-blocked-toggle');
   if (blockedToggle) blockedToggle.addEventListener('click', () => {
