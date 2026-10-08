@@ -388,14 +388,18 @@ async function getMergedRelationships(workChars, centerName) {
   });
 
   // Overlay confirmed edges from the table
+  // v379: single query (not N+1)
   try {
     if (typeof CharacterStore !== 'undefined' && CharacterStore.listRelationships) {
-      // Get all character IDs for this work
       const charIds = workChars.map(c => c.id).filter(Boolean);
-      for (const cid of charIds) {
-        const edges = await CharacterStore.listRelationships(cid);
-        edges.forEach(e => {
-          if (e.review_status !== 'confirmed') return;
+      if (charIds.length) {
+        const sb = await CharacterStore._sb();
+        const { data: edges, error } = await sb.from('character_relationships')
+          .select('id, character_a_id, character_b_id, relationship_type, direction, importance, review_status')
+          .in('character_a_id', charIds)
+          .eq('review_status', 'confirmed');
+        if (!error && edges) {
+          edges.forEach(e => {
           // Find names for the IDs
           const aChar = workChars.find(c => c.id === e.character_a_id);
           const bChar = workChars.find(c => c.id === e.character_b_id);
@@ -411,8 +415,9 @@ async function getMergedRelationships(workChars, centerName) {
             type: e.relationship_type, importance: e.importance,
             source: 'edge', edgeId: e.id, direction: e.direction,
           });
-          seen.add(key);
-        });
+            seen.add(key);
+          });
+        }
       }
     }
   } catch (e) { console.warn('Edge merge failed', e); }
@@ -1119,15 +1124,26 @@ async function renderCharacterPage() {
   // Relationships: v339 Phase C graph + text lists below
   html += '<h3 class="serif">Relationships</h3>';
   try {
-    // Collect all relationships across instances for the graph.
-    // v340: reuses allWorkChars fetched above (no duplicate queries).
-    const allRels = [];
-    for (const inst of d.instances) {
-      (inst.relationships || []).forEach(r => allRels.push(r));
-    }
-    const grouped = charGroupRelationships(allRels);
+    // v379: merge edge table over JSON (Advisor HIGH)
+    // getMergedRelationships returns [{from, to, type, importance, source}]
+    const merged = await getMergedRelationships(allWorkChars, d.name);
+    // Convert to grouped format: [{name, types[], importance}]
+    const byName = {};
+    merged.forEach(m => {
+      const key = String(m.to || '').toLowerCase();
+      if (!key) return;
+      if (!byName[key]) byName[key] = { name: m.to, types: new Set(), importance: 0 };
+      byName[key].types.add(String(m.type || 'friend').toLowerCase());
+      const imp = parseInt(m.importance, 10);
+      if (Number.isFinite(imp) && imp > byName[key].importance) byName[key].importance = imp;
+    });
+    const grouped = Object.values(byName).map(g => ({
+      name: g.name,
+      types: [...g.types].sort(),
+      importance: g.importance || null,
+    }));
     html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
-  } catch (e) {}
+  } catch (e) { console.warn('Graph merge failed', e); }
   let hasRels = false;
   for (const inst of d.instances) {
     if (!inst.relationships.length) continue;
