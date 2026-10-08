@@ -9,7 +9,37 @@
 
 /* v331: back navigation for character pages — returns to library
    (no character index exists yet to return to) */
-function goBack() { try { go('library'); } catch (e) { try { history.back(); } catch (err) {} } }
+/* v342: character breadcrumb stack. When navigating character→character,
+   push the current view so Back walks the chain. Empty stack → origin. */
+let charNavStack = [];
+function charPushNav() {
+  if (view === 'character' && characterViewId) {
+    charNavStack.push({ type: 'canonical', id: characterViewId });
+  } else if (view === 'bookcharacter' && bookCharViewId) {
+    charNavStack.push({ type: 'book', id: bookCharViewId });
+  }
+}
+function charPopNav() {
+  const prev = charNavStack.pop();
+  if (!prev) return false;
+  if (prev.type === 'canonical') {
+    characterViewId = prev.id;
+    view = 'character';
+  } else {
+    bookCharViewId = prev.id;
+    view = 'bookcharacter';
+  }
+  animateIn = true;
+  render();
+  return true;
+}
+function charClearNav() { charNavStack = []; }
+
+function goBack() {
+  // v342: walk the character breadcrumb first
+  try { if (charPopNav()) return; } catch (e) {}
+  try { go('library'); } catch (e) { try { history.back(); } catch (err) {} }
+}
 
 let characterViewId = null;
 
@@ -154,6 +184,8 @@ function openCharacter(charId) {
   // overlay token, scroll lock, and history entry are cleaned up properly
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
   try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
+  // v342: push current character to breadcrumb before navigating away
+  try { charPushNav(); } catch (e) {}
   characterViewId = charId;
   view = 'character';
   animateIn = true;
@@ -391,6 +423,8 @@ function openBookCharacter(bookCharId) {
   // overlay token, scroll lock, and history entry are cleaned up properly
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
   try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
+  // v342: push current character to breadcrumb before navigating away
+  try { charPushNav(); } catch (e) {}
   bookCharViewId = bookCharId;
   view = 'bookcharacter';
   animateIn = true;
