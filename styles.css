@@ -2961,3 +2961,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .d3-graph .node { cursor: pointer; }
 .d3-graph .node circle { stroke: var(--bg); stroke-width: 3; filter: drop-shadow(0 3px 6px rgba(0,0,0,.2)); }
 .d3-graph .node, .d3-graph .link { transition: opacity .25s ease; }
+
+/* v377: Relationship Inbox */
+.rel-inbox { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.rel-inbox-item { transition: opacity .2s; }

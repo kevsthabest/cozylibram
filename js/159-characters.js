@@ -427,7 +427,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
 
   let h = '<div class="ch-graph-wrap d3-graph-wrap">';
   h += '<div id="' + uid + '-hud" class="d3-hud">';
-  h += '<div class="d3-hint">Tap a character to expand • Drag bubbles • Scroll/pinch to zoom</div>';
+  h += '<div class="d3-hint">Tap to expand • Drag bubbles • Shift+drag to connect • Scroll to zoom</div>';
   h += '<div class="d3-legend" id="' + uid + '-legend"></div>';
   h += '</div>';
   h += '<svg id="' + uid + '" class="d3-graph" style="width:100%;height:400px;display:block;touch-action:none;"></svg>';
@@ -654,18 +654,54 @@ function initD3Graph(box) {
     }
 
     // v373: drag stops propagation so it doesn't trigger canvas pan
+    // v378 Phase 3: Shift+drag creates a relationship (drag-to-connect)
+    let connectFrom = null;
+    let connectLine = null;
     const drag = d3.drag()
       .filter((e, d) => d.id !== PROTAG && !e.button)
       .on('start', (e, d) => {
         e.sourceEvent.stopPropagation();
+        // v378: Shift+drag starts a connection
+        if (e.sourceEvent.shiftKey) {
+          connectFrom = d;
+          // Draw temporary line
+          connectLine = root.append('line')
+            .attr('class', 'connect-line')
+            .attr('stroke', '#c9a227').attr('stroke-width', 2).attr('stroke-dasharray', '5,5')
+            .attr('x1', d.x).attr('y1', d.y).attr('x2', d.x).attr('y2', d.y);
+          return;
+        }
         if (!e.active) sim.alphaTarget(0.3).restart();
         d.fx = d.x; d.fy = d.y;
       })
       .on('drag', (e, d) => {
         e.sourceEvent.stopPropagation();
+        if (connectFrom) {
+          // Update temp line
+          if (connectLine) {
+            connectLine.attr('x2', e.x).attr('y2', e.y);
+          }
+          return;
+        }
         d.fx = e.x; d.fy = e.y;
       })
       .on('end', (e, d) => {
+        if (connectFrom) {
+          // Find drop target (node under cursor)
+          const target = document.elementFromPoint(e.sourceEvent.clientX, e.sourceEvent.clientY);
+          const nodeEl = target ? target.closest('.node') : null;
+          if (connectLine) connectLine.remove();
+          connectLine = null;
+          if (nodeEl) {
+            const targetData = d3.select(nodeEl).datum();
+            if (targetData && targetData.id !== connectFrom.id) {
+              // v378: show relationship dialog
+              showConnectDialog(connectFrom, targetData, charData, svgEl);
+            }
+          }
+          connectFrom = null;
+          return;
+        }
         if (!e.active) sim.alphaTarget(0);
         d.fx = null; d.fy = null;
       });
@@ -695,6 +731,66 @@ function initD3Graph(box) {
     }
 
     applyForces(); // v372: must run before first update() — sets up the link force
+    // v378: Relationship creation dialog
+    function showConnectDialog(fromNode, toNode, charData, svgEl) {
+      const fromName = charData[fromNode.id] ? charData[fromNode.id].name : '?';
+      const toName = charData[toNode.id] ? charData[toNode.id].name : '?';
+
+      const types = ['spouse', 'partner', 'parent', 'child', 'sibling', 'friend', 'enemy', 'rival', 'mentor', 'colleague'];
+      let html = '<div class="modal-overlay" id="connect-dialog" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;">' +
+        '<div class="ob-card" style="max-width:320px;width:90%">' +
+        '<h3 class="serif">New Relationship</h3>' +
+        '<p><b>' + esc(fromName) + '</b> → <b>' + esc(toName) + '</b></p>' +
+        '<p><label>Type: <select id="conn-type" class="text-input">' +
+        types.map(t => '<option value="' + t + '">' + t + '</option>').join('') +
+        '</select></label></p>' +
+        '<p><label>Direction: <select id="conn-dir" class="text-input">' +
+        '<option value="mutual">Mutual</option>' +
+        '<option value="a_to_b">' + esc(fromName) + ' → ' + esc(toName) + '</option>' +
+        '<option value="b_to_a">' + esc(toName) + ' → ' + esc(fromName) + '</option>' +
+        '</select></label></p>' +
+        '<p><label>Importance: <select id="conn-imp" class="text-input">' +
+        '<option value="">Not set</option>' +
+        [1,2,3,4,5].map(i => '<option value="' + i + '">' + i + '</option>').join('') +
+        '</select></label></p>' +
+        '<p><button class="btn" id="conn-save">Create</button> ' +
+        '<button class="btn ghost" id="conn-cancel">Cancel</button></p>' +
+        '</div></div>';
+      document.body.insertAdjacentHTML('beforeend', html);
+
+      document.getElementById('conn-cancel').addEventListener('click', () => {
+        document.getElementById('connect-dialog').remove();
+      });
+      document.getElementById('conn-save').addEventListener('click', async () => {
+        const type = document.getElementById('conn-type').value;
+        const dir = document.getElementById('conn-dir').value;
+        const imp = document.getElementById('conn-imp').value;
+        document.getElementById('connect-dialog').remove();
+
+        // v378: save to edge table via CharacterStore
+        try {
+          if (typeof CharacterStore !== 'undefined' && CharacterStore.createRelationship) {
+            // Need book_character IDs — look up from _orig
+            const fromOrig = charData[fromNode.id] ? charData[fromNode.id]._orig : null;
+            const toOrig = charData[toNode.id] ? charData[toNode.id]._orig : null;
+            if (fromOrig && toOrig && fromOrig.id && toOrig.id) {
+              await CharacterStore.createRelationship(fromOrig.id, toOrig.id, type, {
+                direction: dir,
+                importance: imp ? parseInt(imp, 10) : null,
+              });
+              toast('Relationship created');
+              // Refresh the graph
+              location.reload(); // Simple refresh for now
+            } else {
+              toast('Cannot create: missing character IDs');
+            }
+          }
+        } catch (e) {
+          toast('Failed: ' + e.message);
+        }
+      });
+    }
+
     update();
     sim.alpha(0.7).restart();
   });

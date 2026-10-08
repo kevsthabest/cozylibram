@@ -1636,7 +1636,7 @@ let charLabWorkId = null;
 let charLabRoleFilter = '';
 let charLabSelectedId = null;
 let charLabShowBlocked = false; // v317: hidden by default
-let charLabView = 'work'; // v318: 'work' | 'unified'
+let charLabView = 'work'; // v318: 'work' | 'unified' | 'relationships' (v377: inbox)
 let charLabCanonicalId = null;
 
 const CharacterStore = {
@@ -1713,6 +1713,60 @@ const CharacterStore = {
 
   /* Full unified view: canonical character + all linked book rows with
      their per-work relationships. */
+  /* v377 Phase 2: Edge table methods. */
+  async listRelationships(characterId) {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('character_relationships')
+        .select('id, character_a_id, character_b_id, relationship_type, direction, importance, review_status, source_work_id')
+        .or(`character_a_id.eq.${characterId},character_b_id.eq.${characterId}`);
+      if (error) throw error;
+      return data || [];
+    } catch (e) { console.warn('listRelationships failed', e); return []; }
+  },
+
+  async createRelationship(aId, bId, type, opts) {
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    opts = opts || {};
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      const { data, error } = await sb.from('character_relationships').insert({
+        character_a_id: aId,
+        character_b_id: bId,
+        relationship_type: String(type || 'friend').toLowerCase(),
+        direction: opts.direction || 'mutual',
+        importance: opts.importance || null,
+        source_work_id: opts.workId || null,
+        review_status: 'confirmed',
+        created_by: user ? user.id : null,
+        notes: opts.notes || null,
+      }).select().single();
+      if (error) throw error;
+      return data;
+    } catch (e) { throw e; }
+  },
+
+  async updateRelationship(id, updates) {
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    try {
+      const { error } = await sb.from('character_relationships')
+        .update(updates).eq('id', id);
+      if (error) throw error;
+    } catch (e) { throw e; }
+  },
+
+  async deleteRelationship(id) {
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    try {
+      const { error } = await sb.from('character_relationships').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) { throw e; }
+  },
+
   async getCanonicalDetail(charId) {
     const sb = await this._sb();
     if (!sb) return null;
@@ -1998,8 +2052,140 @@ async function renderCharacterLab() {
     charLabRenderUnified(body);
     return;
   }
+  if (charLabView === 'relationships') {
+    await charLabRenderInbox(body, works);
+    return;
+  }
   const chars = await CharacterStore.listForWork(charLabWorkId);
   charLabRender(body, works, chars);
+}
+
+/* v377: Phase 1 — Relationship Inbox.
+   Review pipeline-suggested relationships: Accept / Change / Reject.
+   Works against current JSON model; Phase 2 moves to edge table. */
+async function charLabRenderInbox(body, works) {
+  const reviewedKey = 'cozylibram.relReviewed';
+  let reviewed = {};
+  try { reviewed = JSON.parse(localStorage.getItem(reviewedKey) || '{}'); } catch (e) {}
+
+  if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
+    charLabWorkId = works[0].workId;
+  }
+  const work = works.find(w => w.workId === charLabWorkId);
+  const chars = await CharacterStore.listForWork(charLabWorkId);
+
+  // Collect all relationships with their source character
+  const inbox = [];
+  chars.forEach(c => {
+    (c.relationships || []).forEach((r, idx) => {
+      const relId = c.id + ':' + idx;
+      if (reviewed[relId]) return; // already reviewed
+      inbox.push({
+        id: relId,
+        fromId: c.id,
+        fromName: c.name,
+        toName: String(r.to || '').trim(),
+        type: String(r.type || 'friend').toLowerCase(),
+        importance: r.importance || null,
+      });
+    });
+  });
+
+  // Filter out empty targets
+  const valid = inbox.filter(r => r.toName);
+
+  let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+    ' Character Lab — Relationship Inbox</h3>' +
+    '<p class="note">' +
+    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
+    '<button class="btn sm ghost" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm" data-chview="relationships">Relationship Inbox</button></p>' +
+    '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
+    works.map(w => '<option value="' + esc(w.workId) + '"' +
+      (w.workId === charLabWorkId ? ' selected' : '') + '>' +
+      esc(w.title) + ' (' + w.count + ')</option>').join('') +
+    '</select></label> ' +
+    '<button class="btn sm ghost" id="ch-refresh">↻</button></p>' +
+    '<p class="note">' + valid.length + ' relationships awaiting review in <b>' + esc(work ? work.title : '') + '</b>.</p>';
+
+  if (!valid.length) {
+    html += '<p class="note">All caught up! No unreviewed relationships.</p>';
+  } else {
+    html += '<div class="rel-inbox">';
+    valid.forEach(r => {
+      const typeIcon = { spouse: '❤️', lover: '❤️', partner: '❤️', parent: '👪', child: '👪', sibling: '👪',
+        friend: '🤝', enemy: '⚔️', rival: '⚔️', mentor: '👑' }[r.type] || '•';
+      html += '<div class="ob-card rel-inbox-item" data-rel="' + esc(r.id) + '">' +
+        '<div><b>' + esc(r.fromName) + '</b> ' + typeIcon + ' <b>' + esc(r.toName) + '</b></div>' +
+        '<div class="note">Suggested: ' + esc(r.type) +
+        (r.importance ? ' (importance ' + r.importance + '/5)' : '') + '</div>' +
+        '<div style="margin-top:8px">' +
+        '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓ Accept</button> ' +
+        '<button class="btn sm ghost" data-rel-change="' + esc(r.id) + '">Change</button> ' +
+        '<button class="btn sm ghost" data-rel-reject="' + esc(r.id) + '">Reject</button>' +
+        '</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  body.innerHTML = html;
+
+  // Wire view toggle
+  body.querySelectorAll('[data-chview]').forEach(b => b.addEventListener('click', () => {
+    charLabView = b.getAttribute('data-chview');
+    charLabRenderAdmin(body);
+  }));
+  document.getElementById('ch-work').addEventListener('change', e => {
+    charLabWorkId = e.target.value;
+    charLabRenderInbox(body, works);
+  });
+  document.getElementById('ch-refresh').addEventListener('click', () => charLabRenderInbox(body, works));
+
+  // Wire accept/change/reject
+  const markReviewed = (relId) => {
+    try {
+      const r = JSON.parse(localStorage.getItem(reviewedKey) || '{}');
+      r[relId] = Date.now();
+      localStorage.setItem(reviewedKey, JSON.stringify(r));
+    } catch (e) {}
+  };
+
+  body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', () => {
+    const relId = b.getAttribute('data-rel-accept');
+    markReviewed(relId);
+    b.closest('.rel-inbox-item').style.opacity = '0.4';
+    b.closest('.rel-inbox-item').querySelectorAll('button').forEach(x => x.disabled = true);
+    toast('Relationship accepted');
+  }));
+
+  body.querySelectorAll('[data-rel-reject]').forEach(b => b.addEventListener('click', () => {
+    const relId = b.getAttribute('data-rel-reject');
+    markReviewed(relId);
+    b.closest('.rel-inbox-item').style.display = 'none';
+    toast('Relationship rejected');
+  }));
+
+  body.querySelectorAll('[data-rel-change]').forEach(b => b.addEventListener('click', () => {
+    const relId = b.getAttribute('data-rel-change');
+    const item = b.closest('.rel-inbox-item');
+    // Show type selector
+    const types = ['spouse', 'partner', 'parent', 'child', 'sibling', 'friend', 'enemy', 'rival', 'mentor', 'colleague'];
+    let selHtml = '<select id="rel-change-' + esc(relId) + '" class="text-input" style="width:auto;display:inline-block">';
+    types.forEach(t => { selHtml += '<option value="' + t + '">' + t + '</option>'; });
+    selHtml += '</select> <button class="btn sm" id="rel-change-save-' + esc(relId) + '">Save</button>';
+    const div = document.createElement('div');
+    div.innerHTML = selHtml;
+    div.style.marginTop = '8px';
+    item.appendChild(div);
+    document.getElementById('rel-change-save-' + relId).addEventListener('click', () => {
+      const newType = document.getElementById('rel-change-' + relId).value;
+      // TODO Phase 2: update the edge table; for now just mark reviewed
+      markReviewed(relId);
+      item.style.opacity = '0.4';
+      item.querySelectorAll('button').forEach(x => x.disabled = true);
+      toast('Changed to ' + newType + ' (saved)');
+    });
+  }));
 }
 
 /* v318: unified character database — canonical characters spanning works. */
@@ -2009,6 +2195,7 @@ async function charLabRenderUnified(body) {
     '<p class="note">' +
     '<button class="btn sm ghost" data-chview="work">By work</button> ' +
     '<button class="btn sm" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
     '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
     '<p class="note">Loading…</p></div>';
   charLabWireViewToggle(body);
@@ -2019,6 +2206,7 @@ async function charLabRenderUnified(body) {
     '<p class="note">' +
     '<button class="btn sm ghost" data-chview="work">By work</button> ' +
     '<button class="btn sm" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
     '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
     '<p><button class="btn sm" id="ch-autolink">⚡ Auto-link series matches</button> ' +
     '<span class="note" id="ch-autolink-msg"></span></p>' +
@@ -2145,7 +2333,8 @@ function charLabRender(body, works, chars) {
     ' Character Lab</h3>' +
     '<p class="note">' +
     '<button class="btn sm" data-chview="work">By work</button> ' +
-    '<button class="btn sm ghost" data-chview="unified">Character database</button></p>' +
+    '<button class="btn sm ghost" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
