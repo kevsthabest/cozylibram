@@ -947,6 +947,31 @@ function renderStats() {
   const heroCard = (ic, n, l) =>
     '<div class="stat hero"><div class="n">' + icon(ic) + ' ' + n + '</div><div class="l">' + l + '</div></div>';
 
+  // v324: library value — actual spent vs estimated value
+  var libActual = 0, libEst = 0, libPriced = 0;
+  var libDefault = 24.99;
+  try { var dpv = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(dpv) && dpv >= 0) libDefault = dpv; } catch (e) {}
+  try {
+    library.forEach(function(b) {
+      if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
+        libActual += b.purchasePrice;
+        libPriced++;
+        libEst += b.purchasePrice; // actual price counts toward value too
+      } else {
+        libEst += libDefault;
+      }
+      if (b.listPrice != null && !isNaN(b.listPrice)) libEst += b.listPrice;
+    });
+  } catch (e) {}
+  const valueSection =
+    '<div class="stat-sub">' + icon('chart') + ' Library value</div><div class="stat-row">' +
+    heroCard('covers', '$' + libActual.toFixed(0), 'Actual spent') +
+    heroCard('sparkles', '$' + libEst.toFixed(0), 'Est. value') +
+    '</div>' +
+    (libPriced < library.length
+      ? '<p class="note">' + libPriced + ' of ' + library.length + ' books priced — rest use the default estimate.</p>'
+      : '');
+
   // v128: dashboard first — this month at a glance. The full explorer lives
   // one tap behind "Explore detailed stats".
   if (statsMode === 'dash') {
@@ -965,6 +990,7 @@ function renderStats() {
         : '') +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
+      valueSection +
       '<div class="search-row" style="margin:16px 0"><button class="btn ghost block" id="st-explore">' +
       icon('chart') + ' Explore detailed stats →</button></div>'
     );
