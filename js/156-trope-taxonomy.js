@@ -138,6 +138,15 @@ const TROPES = [
   { id: 'dark-academia', name: 'Dark Academia',
     description: 'Elite schools, classical obsession, secrets in the stacks.',
     genres: ['romance', 'fantasy', 'mystery-thriller'] },
+  { id: 'misunderstanding', name: 'Misunderstanding',
+    description: 'A wrong assumption or missed conversation drives the conflict \u2014 solvable by one honest talk.',
+    genres: ['romance', 'dark-romance', 'contemporary'] },
+  { id: 'redemption', name: 'Redemption',
+    description: 'A character with a dark past fights to atone and earn forgiveness.',
+    genres: ['fantasy', 'romance', 'dark-romance'] },
+  { id: 'protective-partner', name: 'Protective Partner',
+    description: 'One partner is fiercely, sometimes possessively, protective of the other.',
+    genres: ['romance', 'dark-romance'] },
 
   /* ---- fantasy ---- */
   { id: 'chosen-one', name: 'Chosen One',
@@ -261,6 +270,9 @@ const TROPES = [
   { id: 'heist', name: 'Heist',
     description: 'A planned theft or infiltration requiring teamwork, timing, and deception.',
     genres: ['fantasy', 'mystery-thriller', 'sci-fi', 'contemporary'] },
+  { id: 'mind-game', name: 'Mind Game',
+    description: 'Characters wage psychological warfare \u2014 manipulation, mind games, and head trips.',
+    genres: ['mystery-thriller', 'dark-romance', 'horror'] },
 
   /* ---- horror ---- */
   { id: 'haunted-house', name: 'Haunted House',
@@ -284,6 +296,12 @@ const TROPES = [
   { id: 'body-horror', name: 'Body Horror',
     description: 'Terror through transformation, mutation, or violation of the flesh.',
     genres: ['horror', 'sci-fi'] },
+  { id: 'ghost-hunter', name: 'Ghost Hunter',
+    description: 'A protagonist who investigates or hunts the paranormal, as calling or profession.',
+    genres: ['horror', 'mystery-thriller'] },
+  { id: 'survivor-guilt', name: 'Survivor Guilt',
+    description: 'A character is haunted by surviving when others did not.',
+    genres: ['horror', 'dark-romance', 'fantasy'] },
 
   /* ---- historical / contemporary / non-fiction ---- */
   { id: 'war-story', name: 'War Story',

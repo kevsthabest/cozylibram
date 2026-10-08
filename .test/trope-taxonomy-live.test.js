@@ -64,7 +64,7 @@ function ok(name, cond) {
   {
     reset();
     ok('list() is the bundled taxonomy when never refreshed',
-      probe('TropeTaxonomy.list().length') === bundledCount && bundledCount === 89);
+      probe('TropeTaxonomy.list().length') === bundledCount && bundledCount === 95);
     ok('byId falls back to the bundled file',
       probe(`TropeTaxonomy.byId('forced-proximity').name`) === 'Forced Proximity');
     ok('byId misses unknown ids', probe(`TropeTaxonomy.byId('nope')`) === null);

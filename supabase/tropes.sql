@@ -146,7 +146,7 @@ create policy "trope_proposal_votes: own votes"
   on trope_proposal_votes for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
--- BEGIN GENERATED SEED (from js/156-trope-taxonomy.js v1, 89 tropes)
+-- BEGIN GENERATED SEED (from js/156-trope-taxonomy.js v1, 95 tropes)
 -- Regenerate with: node supabase/gen-trope-seed.js
 insert into tropes (id, name, description, genres, version, aliases, exclusions)
 values
@@ -187,6 +187,9 @@ values
   ('werewolf', 'Werewolf', 'Shifters, packs, and moon-driven instinct.', ARRAY['dark-romance', 'fantasy', 'romance'], 1, ARRAY['werewolves'], ARRAY[]),
   ('shifter', 'Shifter (Non-Wolf)', 'Characters who change into animals other than wolves.', ARRAY['dark-romance', 'fantasy', 'romance'], 1, ARRAY['shifters', 'shapeshifter', 'shapeshifters'], ARRAY[]),
   ('dark-academia', 'Dark Academia', 'Elite schools, classical obsession, secrets in the stacks.', ARRAY['romance', 'fantasy', 'mystery-thriller'], 1, ARRAY[], ARRAY[]),
+  ('misunderstanding', 'Misunderstanding', 'A wrong assumption or missed conversation drives the conflict — solvable by one honest talk.', ARRAY['romance', 'dark-romance', 'contemporary'], 1, ARRAY[], ARRAY[]),
+  ('redemption', 'Redemption', 'A character with a dark past fights to atone and earn forgiveness.', ARRAY['fantasy', 'romance', 'dark-romance'], 1, ARRAY[], ARRAY[]),
+  ('protective-partner', 'Protective Partner', 'One partner is fiercely, sometimes possessively, protective of the other.', ARRAY['romance', 'dark-romance'], 1, ARRAY[], ARRAY[]),
   ('chosen-one', 'Chosen One', 'Prophecy or destiny singles out an unlikely hero.', ARRAY['fantasy'], 1, ARRAY[], ARRAY[]),
   ('magic-academy', 'Magic Academy', 'A school for magic users — lessons, rivalries, deadly exams.', ARRAY['fantasy', 'romance'], 1, ARRAY['magic school'], ARRAY[]),
   ('dragons', 'Dragons', 'Dragons as mounts, bonded partners, or ancient powers.', ARRAY['fantasy', 'romance'], 1, ARRAY['dragon'], ARRAY[]),
@@ -226,6 +229,7 @@ values
   ('small-town-secrets', 'Small-Town Secrets', 'A quiet town where everyone is hiding something.', ARRAY['mystery-thriller', 'horror'], 1, ARRAY[], ARRAY[]),
   ('betrayal', 'Betrayal', 'A trusted ally or loved one turns against the protagonist.', ARRAY['romance', 'dark-romance', 'fantasy', 'mystery-thriller', 'contemporary'], 1, ARRAY[], ARRAY[]),
   ('heist', 'Heist', 'A planned theft or infiltration requiring teamwork, timing, and deception.', ARRAY['fantasy', 'mystery-thriller', 'sci-fi', 'contemporary'], 1, ARRAY[], ARRAY[]),
+  ('mind-game', 'Mind Game', 'Characters wage psychological warfare — manipulation, mind games, and head trips.', ARRAY['mystery-thriller', 'dark-romance', 'horror'], 1, ARRAY[], ARRAY[]),
   ('haunted-house', 'Haunted House', 'A dwelling with a malign presence or history.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
   ('possession', 'Possession', 'An entity takes over a human body or mind.', ARRAY['horror'], 1, ARRAY['possessed', 'demonic possession'], ARRAY[]),
   ('folk-horror', 'Folk Horror', 'Rural rituals, old gods, and communities with dark customs.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
@@ -233,6 +237,8 @@ values
   ('final-girl', 'Final Girl', 'One survivor — usually a young woman — outlasts the horror.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
   ('found-footage', 'Found Footage', 'The story unfolds through recovered recordings or documents.', ARRAY['horror'], 1, ARRAY[], ARRAY[]),
   ('body-horror', 'Body Horror', 'Terror through transformation, mutation, or violation of the flesh.', ARRAY['horror', 'sci-fi'], 1, ARRAY[], ARRAY[]),
+  ('ghost-hunter', 'Ghost Hunter', 'A protagonist who investigates or hunts the paranormal, as calling or profession.', ARRAY['horror', 'mystery-thriller'], 1, ARRAY[], ARRAY[]),
+  ('survivor-guilt', 'Survivor Guilt', 'A character is haunted by surviving when others did not.', ARRAY['horror', 'dark-romance', 'fantasy'], 1, ARRAY[], ARRAY[]),
   ('war-story', 'War Story', 'Armed conflict and its cost, on the front or the home front.', ARRAY['historical'], 1, ARRAY['military'], ARRAY[]),
   ('coming-of-age', 'Coming of Age', 'A young protagonist grows up over the course of the story.', ARRAY['contemporary', 'historical'], 1, ARRAY['bildungsroman'], ARRAY[]),
   ('road-trip', 'Road Trip', 'The journey — literal miles — changes the travelers.', ARRAY['contemporary'], 1, ARRAY[], ARRAY[]),
@@ -247,6 +253,7 @@ on conflict (id) do update set
   aliases = excluded.aliases,
   exclusions = excluded.exclusions;
 -- END GENERATED SEED
+
 
 
 

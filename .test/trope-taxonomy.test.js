@@ -20,7 +20,7 @@ const GENRES = probe('TROPE_GENRES');
 const VERSION = probe('TROPE_TAXONOMY_VERSION');
 
 ok('TROPE_TAXONOMY_VERSION is a positive int', Number.isInteger(VERSION) && VERSION >= 1);
-ok('taxonomy has 60-90 tropes', TROPES.length >= 60 && TROPES.length <= 90);
+ok('taxonomy has 60-120 tropes', TROPES.length >= 60 && TROPES.length <= 120);
 ok('TROPE_GENRES covers the required genres',
   ['romance', 'fantasy', 'sci-fi', 'mystery-thriller', 'horror', 'historical', 'contemporary', 'non-fiction']
     .every(g => GENRES.includes(g)));
