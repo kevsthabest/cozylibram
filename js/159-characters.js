@@ -370,6 +370,56 @@ function charTimelineHTML(instances, workCharsByWorkId) {
    Protagonist pinned at center, click to expand/collapse, drag to rearrange,
    pan/zoom via D3. Filters to important relationships. */
 
+/* v378: Merge edge table relationships over JSON.
+   Confirmed edges from character_relationships take precedence. */
+async function getMergedRelationships(workChars, centerName) {
+  const merged = [];
+  const seen = new Set();
+
+  // Start with JSON relationships (existing behavior)
+  workChars.forEach(c => {
+    (c.relationships || []).forEach(r => {
+      const key = String(c.name).toLowerCase() + '|' + String(r.to || '').toLowerCase() + '|' + String(r.type || '').toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push({ from: c.name, to: r.to, type: r.type, importance: r.importance, source: 'json' });
+      }
+    });
+  });
+
+  // Overlay confirmed edges from the table
+  try {
+    if (typeof CharacterStore !== 'undefined' && CharacterStore.listRelationships) {
+      // Get all character IDs for this work
+      const charIds = workChars.map(c => c.id).filter(Boolean);
+      for (const cid of charIds) {
+        const edges = await CharacterStore.listRelationships(cid);
+        edges.forEach(e => {
+          if (e.review_status !== 'confirmed') return;
+          // Find names for the IDs
+          const aChar = workChars.find(c => c.id === e.character_a_id);
+          const bChar = workChars.find(c => c.id === e.character_b_id);
+          if (!aChar || !bChar) return;
+          const key = String(aChar.name).toLowerCase() + '|' + String(bChar.name).toLowerCase() + '|' + e.relationship_type;
+          // Remove JSON version if exists, add edge version
+          const idx = merged.findIndex(m =>
+            String(m.from).toLowerCase() === String(aChar.name).toLowerCase() &&
+            String(m.to).toLowerCase() === String(bChar.name).toLowerCase());
+          if (idx >= 0) merged.splice(idx, 1);
+          merged.push({
+            from: aChar.name, to: bChar.name,
+            type: e.relationship_type, importance: e.importance,
+            source: 'edge', edgeId: e.id, direction: e.direction,
+          });
+          seen.add(key);
+        });
+      }
+    }
+  } catch (e) { console.warn('Edge merge failed', e); }
+
+  return merged;
+}
+
 function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
   // v370: always emit markup — initD3Graph handles lazy-loading D3
@@ -779,8 +829,22 @@ function initD3Graph(box) {
                 importance: imp ? parseInt(imp, 10) : null,
               });
               toast('Relationship created');
-              // Refresh the graph
-              location.reload(); // Simple refresh for now
+              // v378: refresh graph in place (no reload)
+              if (typeof initD3Graph === 'function') {
+                const wrap = svgEl.closest('.d3-graph-wrap');
+                if (wrap) {
+                  // Clear and re-init
+                  const box = wrap.parentElement;
+                  wrap.remove();
+                  // Re-render will happen via parent refresh
+                  if (typeof renderCharacterPage === 'function') {
+                    // Store scroll pos and re-render
+                    const y = window.scrollY;
+                    await renderCharacterPage();
+                    window.scrollTo(0, y);
+                  }
+                }
+              }
             } else {
               toast('Cannot create: missing character IDs');
             }

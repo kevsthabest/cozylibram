@@ -2150,11 +2150,33 @@ async function charLabRenderInbox(body, works) {
     } catch (e) {}
   };
 
-  body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', () => {
+  body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-accept');
+    const item = b.closest('.rel-inbox-item');
+    // v378: write to edge table (not just localStorage)
+    try {
+      const [fromId, idx] = relId.split(':');
+      const chars = await CharacterStore.listForWork(charLabWorkId);
+      const fromChar = chars.find(c => c.id === fromId);
+      if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
+        const r = fromChar.relationships[idx];
+        const toName = String(r.to || '').trim();
+        // Find target character ID
+        const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+        if (toChar) {
+          await CharacterStore.createRelationship(fromId, toChar.id, r.type || 'friend', {
+            direction: 'mutual',
+            importance: r.importance || null,
+            workId: charLabWorkId,
+          });
+          // Mark the JSON as reviewed (don't delete, keep as fallback)
+          markReviewed(relId);
+        }
+      }
+    } catch (e) { console.warn('Edge create failed', e); }
     markReviewed(relId);
-    b.closest('.rel-inbox-item').style.opacity = '0.4';
-    b.closest('.rel-inbox-item').querySelectorAll('button').forEach(x => x.disabled = true);
+    item.style.opacity = '0.4';
+    item.querySelectorAll('button').forEach(x => x.disabled = true);
     toast('Relationship accepted');
   }));
 
