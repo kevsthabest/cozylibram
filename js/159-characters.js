@@ -501,6 +501,8 @@ function initD3Graph(box) {
     const DUR = reduceMotion ? 0 : 500;
 
     const radius = d => (d.id === PROTAG ? 36 : expanded.has(d.id) ? 28 : 22);
+    // v376: textColor in outer scope (used by update() for edge labels)
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#4a3b32';
 
     const sim = d3.forceSimulation()
       .velocityDecay(0.35)
@@ -529,7 +531,6 @@ function initD3Graph(box) {
     }
 
     function update(origin) {
-      console.log('[D3] update called, expanded:', [...expanded], 'relations:', relations.length);
       const ids = new Set(expanded);
       const nextLinks = [];
       for (const [a, b, type] of relations) {
@@ -540,7 +541,6 @@ function initD3Graph(box) {
       }
       const old = new Map(nodes.map(n => [n.id, n]));
       nodes = [...ids].map(id => old.get(id) || spawn(id, origin));
-      console.log('[D3] nodes after update:', nodes.length, 'ids:', [...ids]);
       links = nextLinks;
       sim.nodes(nodes);
       sim.force('link').links(links);
@@ -598,8 +598,7 @@ function initD3Graph(box) {
         .style('font-size', d => radius(d) * 0.6 + 'px')
         .attr('fill', '#fff').attr('font-weight', '700')
         .attr('pointer-events', 'none');
-      // v374: read --text from computed styles (works for all themes)
-      const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#4a3b32';
+      // v374: textColor from outer scope
       nodeG.select('.d3-name')
         .text(d => charData[d.id] ? charData[d.id].name : '')
         .attr('y', d => radius(d) + 15)
