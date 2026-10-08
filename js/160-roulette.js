@@ -198,7 +198,8 @@ function updatePickCount() {
   if (prev) {
     prev.innerHTML = candidates.slice(0, 6).map(b =>
       '<button class="pk-prev-book" data-pkprev="' + esc(b.id) + '" title="' + esc(b.title) + '">' +
-      (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<span>' + esc((b.title || '?')[0]) + '</span>') +
+      // v360: gradient tile with title (consistent with v357 character pages)
+      (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<span class="pk-nocover">' + esc(b.title || '?') + '</span>') +
       '</button>').join('') +
       (n > 6 ? '<span class="note">+' + (n - 6) + ' more</span>' : '');
     prev.querySelectorAll('[data-pkprev]').forEach(im => im.addEventListener('click', () => {
