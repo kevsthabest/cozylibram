@@ -43,11 +43,16 @@ const CharacterWiki = {
       const visible = chars.filter(c =>
         c.status !== 'merged' && c.status !== 'rejected' &&
         (typeof charIsBlocked === 'undefined' || !charIsBlocked(c)));
-      const tier1 = visible.filter(c => c.role === 'protagonist' || c.role === 'antagonist');
+      // v329: strict role order — protagonists first, then antagonists
+      const roleOrder = { protagonist: 0, antagonist: 1, supporting: 2, minor: 3 };
+      visible.sort((a, b) => (roleOrder[a.role] ?? 4) - (roleOrder[b.role] ?? 4) ||
+        String(a.name).localeCompare(String(b.name)));
+      const tier1 = visible.filter(c => c.role === 'protagonist');
+      const tier1b = visible.filter(c => c.role === 'antagonist');
       const tier2 = visible.filter(c => c.role === 'supporting');
       const tier3 = visible.filter(c => c.role === 'minor');
-      return { tier1, tier2, tier3, total: visible.length };
-    } catch (e) { return { tier1: [], tier2: [], tier3: [], total: 0 }; }
+      return { tier1, tier1b, tier2, tier3, total: visible.length };
+    } catch (e) { return { tier1: [], tier1b: [], tier2: [], tier3: [], total: 0 }; }
   },
 
   async saveNote(charId, text) {
@@ -76,6 +81,55 @@ function openCharacter(charId) {
   animateIn = true;
   render();
   window.scrollTo(0, 0);
+}
+
+/* v329: detail view for a single book_character row (unlinked characters).
+   Shows book-specific description and relationships. */
+let bookCharViewId = null;
+function openBookCharacter(bookCharId) {
+  bookCharViewId = bookCharId;
+  view = 'bookcharacter';
+  animateIn = true;
+  render();
+  window.scrollTo(0, 0);
+}
+
+async function renderBookCharacterPage() {
+  const sb = await CharacterWiki._sb();
+  if (!sb || !bookCharViewId) {
+    setView('<div class="view-head"><h2 class="serif">Not found</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
+    return;
+  }
+  try {
+    const { data, error } = await sb.from('book_characters')
+      .select('id, name, role, description, relationships, works(title)')
+      .eq('id', bookCharViewId).maybeSingle();
+    if (error || !data) throw error || new Error('not found');
+    const w = data.works || {};
+    let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button>' +
+      '<h2 class="serif">' + esc(data.name) + '</h2></div>' +
+      '<p><span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[data.role] || data.role || '?') + '</span> ' +
+      '<span class="note">in ' + esc(w.title || 'unknown book') + '</span></p>';
+    if (data.description) html += '<p>' + esc(data.description) + '</p>';
+    const rels = Array.isArray(data.relationships) ? data.relationships : [];
+    if (rels.length) {
+      html += '<h3 class="serif">Relationships</h3><p>';
+      const byType = {};
+      rels.forEach(r => {
+        const t = charNormRelType(r.type);
+        (byType[t] || (byType[t] = [])).push(r.to);
+      });
+      html += Object.keys(byType).sort().map(t =>
+        '<b>' + esc(t) + ':</b> ' + byType[t].map(n => esc(n)).join(', ')
+      ).join('<br>');
+      html += '</p>';
+    }
+    html += '<p class="note">Not yet linked to a canonical character. ' +
+      'Link it in the Observatory → Characters to connect across books.</p>';
+    setView(html);
+  } catch (e) {
+    setView('<div class="view-head"><h2 class="serif">Could not load</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
+  }
 }
 
 async function renderCharacterPage() {

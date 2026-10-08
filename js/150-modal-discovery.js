@@ -345,9 +345,11 @@ async function loadCharsTabForBook(t) {
     const cast = await Promise.race([CharacterWiki.getCast(workId), timeout]);
     if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
     const card = (c) => {
-      const link = c.characterId
-        ? '<button class="taplink" data-chwiki="' + esc(c.characterId) + '">' + esc(c.name) + '</button>'
-        : '<b>' + esc(c.name) + '</b>';
+      // v329: all characters tappable — linked open the wiki, unlinked open book detail
+      const tapAttr = c.characterId
+        ? 'data-chwiki="' + esc(c.characterId) + '"'
+        : 'data-chbook="' + esc(c.id) + '"';
+      const link = '<button class="taplink" ' + tapAttr + '>' + esc(c.name) + '</button>';
       const desc = c.description ? '<p class="note">' + esc(c.description.slice(0, 160)) + (c.description.length > 160 ? '…' : '') + '</p>' : '';
       const rels = (c.relationships && c.relationships.length)
         ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
@@ -359,7 +361,8 @@ async function loadCharsTabForBook(t) {
         '<div class="ch-list" id="' + id + '"' + (id !== 'm-ct1' ? ' style="display:none"' : '') + '>' +
         list.map(card).join('') + '</div>';
     };
-    let h = section('Main cast', cast.tier1, 'm-ct1', false);
+    let h = section('Protagonists', cast.tier1, 'm-ct1', false);
+    if (cast.tier1b.length) h += section('Antagonists', cast.tier1b, 'm-ct1b', false);
     if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2', true);
     if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3', true);
     box.innerHTML = h;
@@ -373,6 +376,9 @@ async function loadCharsTabForBook(t) {
     wire('m-ct2-t', 'm-ct2'); wire('m-ct3-t', 'm-ct3');
     box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
       openCharacter(b.getAttribute('data-chwiki'));
+    }));
+    box.querySelectorAll('[data-chbook]').forEach(b => b.addEventListener('click', () => {
+      openBookCharacter(b.getAttribute('data-chbook'));
     }));
   } catch (e) {
     box.innerHTML = '<p class="note">Could not load characters: ' + esc((e && e.message) || 'unknown error') + '</p>';

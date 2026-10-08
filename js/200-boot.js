@@ -13,6 +13,8 @@ function render() {
   else if (view === 'profile') renderProfile();
   else if (view === 'authors') renderAuthors();
   else if (view === 'author') renderAuthorDetail();
+  else if (view === 'character') renderCharacterPage();
+  else if (view === 'bookcharacter') renderBookCharacterPage();
   else if (view === 'upnext') renderUpNext();
   else if (view === 'quotes') renderQuotes();
   else if (view === 'series') renderSeries();
