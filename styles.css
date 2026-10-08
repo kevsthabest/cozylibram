@@ -2965,3 +2965,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v377: Relationship Inbox */
 .rel-inbox { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .rel-inbox-item { transition: opacity .2s; }
+
+/* v385: Character Lab data grid */
+.ch-grid-wrap { margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; }
+.ch-grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ch-grid th { background: var(--bg3); padding: 8px 10px; text-align: left; font-weight: 600;
+  border-bottom: 2px solid var(--line); white-space: nowrap; }
+.ch-grid td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.ch-grid tr.sel td { background: var(--bg2); }
+.ch-grid tr:hover td { background: var(--bg2); }
+.ch-grid-input { width: 100%; min-width: 120px; padding: 4px 6px; font-size: 13px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px; color: var(--text); }
+.ch-grid-input:focus { outline: 2px solid var(--gold); border-color: var(--gold); }

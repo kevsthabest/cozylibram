@@ -2439,23 +2439,33 @@ function charLabRender(body, works, chars) {
       CHAR_ROLE_LABELS[r] + ' (' + roleCounts[r] + ')</button>').join(' ') +
     '</p>';
 
-  // Character list
+  // v385: Desktop data grid (rows/columns, inline editing)
   if (!filtered.length) {
     html += '<p class="note">No characters with this role.</p>';
   } else {
-    html += '<div class="ch-list">';
+    html += '<div class="ch-grid-wrap" style="overflow-x:auto"><table class="ch-grid">' +
+      '<thead><tr>' +
+      '<th><input type="checkbox" id="ch-select-all"></th>' +
+      '<th>Name</th><th>Role</th><th>Status</th><th>Rels</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
     filtered.forEach(c => {
-      const relCount = c.relationships.length;
-      html += '<button class="ch-card' + (c.id === charLabSelectedId ? ' sel' : '') +
-        '" data-chid="' + esc(c.id) + '">' +
-        '<b>' + esc(c.name) + '</b> ' +
-        '<span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[c.role] || c.role) + '</span>' +
-        (dupeIds.has(c.id) ? ' <span class="chip" title="Possible duplicate" style="color:var(--warn,orange)">⚠ dup</span>' : '') +
-        (c.status && c.status !== 'candidate' ? ' <span class="chip">' + esc(c.status) + '</span>' : '') +
-        (relCount ? ' <span class="note">' + relCount + ' relation' + (relCount === 1 ? '' : 's') + '</span>' : '') +
-        '</button>';
+      const relCount = (c.relationships || []).length;
+      html += '<tr data-chid="' + esc(c.id) + '"' + (c.id === charLabSelectedId ? ' class="sel"' : '') + '>' +
+        '<td><input type="checkbox" class="ch-select" value="' + esc(c.id) + '"></td>' +
+        '<td><input type="text" class="ch-grid-input" data-field="name" data-id="' + esc(c.id) + '" value="' + esc(c.name || '') + '"></td>' +
+        '<td><select class="ch-grid-input" data-field="role" data-id="' + esc(c.id) + '">' +
+        CHAR_ROLES.map(r => '<option value="' + r + '"' + (c.role === r ? ' selected' : '') + '>' + CHAR_ROLE_LABELS[r] + '</option>').join('') +
+        '</select></td>' +
+        '<td><select class="ch-grid-input" data-field="status" data-id="' + esc(c.id) + '">' +
+        ['alive', 'dead', 'unknown', 'missing'].map(st => '<option value="' + st + '"' + (c.status === st ? ' selected' : '') + '>' + st + '</option>').join('') +
+        '</select></td>' +
+        '<td>' + relCount + '</td>' +
+        '<td><button class="btn sm ghost" data-chdetail="' + esc(c.id) + '">Detail</button></td>' +
+        '</tr>';
     });
-    html += '</div>';
+    html += '</tbody></table></div>' +
+      '<p class="note"><button class="btn sm ghost" id="ch-bulk-block">Block selected</button> ' +
+      '<button class="btn sm ghost" id="ch-bulk-merge">Merge selected (keep first)</button></p>';
   }
   html += '</div><div id="ch-detail"></div>';
   body.innerHTML = html;
@@ -2477,6 +2487,42 @@ function charLabRender(body, works, chars) {
     charLabShowBlocked = !charLabShowBlocked;
     charLabRender(body, works, chars);
   });
+  // v385: Grid inline editing
+  body.querySelectorAll('.ch-grid-input').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const id = inp.getAttribute('data-id');
+      const field = inp.getAttribute('data-field');
+      const val = inp.value;
+      try {
+        const sb = await CharacterStore._sb();
+        const updates = {};
+        updates[field] = val;
+        const { error } = await sb.from('book_characters').update(updates).eq('id', id);
+        if (error) throw error;
+        inp.style.borderColor = 'var(--gold)';
+        setTimeout(() => inp.style.borderColor = '', 800);
+      } catch (e) {
+        toast('Save failed: ' + e.message);
+        inp.style.borderColor = 'red';
+      }
+    });
+  });
+
+  // v385: Grid detail buttons
+  body.querySelectorAll('[data-chdetail]').forEach(b => b.addEventListener('click', () => {
+    charLabSelectedId = b.getAttribute('data-chdetail');
+    charLabRender(body, works, chars);
+    // Scroll to detail
+    const detail = document.getElementById('ch-detail');
+    if (detail) detail.scrollIntoView({ behavior: 'smooth' });
+  }));
+
+  // v385: Select all
+  const selAll = document.getElementById('ch-select-all');
+  if (selAll) selAll.addEventListener('change', () => {
+    body.querySelectorAll('.ch-select').forEach(cb => cb.checked = selAll.checked);
+  });
+
   body.querySelectorAll('[data-chmerge]').forEach(b => b.addEventListener('click', async () => {
     const idx = Number(b.getAttribute('data-chmerge'));
     const keepId = b.getAttribute('data-keep');
