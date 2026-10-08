@@ -380,7 +380,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     const color = typeColors[n.types[0]] || '#888';
     // v348: node size scales with relationship importance (1-5, default 3)
     const imp = n.importance || 3;
-    const r = 16 + (imp * 2.4); // 18.4 to 28
+    const r = 14 + (imp * 2.4); // v349: 16.4 to 26 (Advisor LOW geometry)
     const initials = String(n.name).trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
     // Resolve tap target
     let tapAttr = '';
@@ -603,10 +603,15 @@ async function renderCharacterPage() {
       return app ? '<p class="ch-appearance">' + esc(app) + '</p>' : '';
     })() +
     (() => {
-      // v348: first appearance chapter (earliest across instances)
-      const chaps = d.instances.map(i => i.firstAppearance).filter(c => c != null);
-      if (!chaps.length) return '';
-      return '<p class="note">First appears: Chapter ' + Math.min(...chaps) + '</p>';
+      // v348: first appearance — earliest book by seriesPos (Advisor MEDIUM).
+      // v349: null seriesPos → Infinity (deprioritize unknowns when seeking earliest),
+      // opposite of v347's -1 for story-latest. Chapters aren't comparable across books.
+      const withChap = d.instances.filter(i => i.firstAppearance != null);
+      if (!withChap.length) return '';
+      const first = [...withChap].sort((a, b) =>
+        ((a.seriesPos == null ? Infinity : a.seriesPos) - (b.seriesPos == null ? Infinity : b.seriesPos)))[0];
+      return '<p class="note">First appears: Chapter ' + first.firstAppearance +
+        (withChap.length > 1 ? ' (' + esc(first.workTitle) + ')' : '') + '</p>';
     })() +
     (() => {
       // v346: character status is spoiler-gated (alive/dead is a spoiler)
