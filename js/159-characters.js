@@ -529,6 +529,7 @@ function initD3Graph(box) {
     }
 
     function update(origin) {
+      console.log('[D3] update called, expanded:', [...expanded], 'relations:', relations.length);
       const ids = new Set(expanded);
       const nextLinks = [];
       for (const [a, b, type] of relations) {
@@ -539,6 +540,7 @@ function initD3Graph(box) {
       }
       const old = new Map(nodes.map(n => [n.id, n]));
       nodes = [...ids].map(id => old.get(id) || spawn(id, origin));
+      console.log('[D3] nodes after update:', nodes.length, 'ids:', [...ids]);
       links = nextLinks;
       sim.nodes(nodes);
       sim.force('link').links(links);
