@@ -242,7 +242,8 @@ function renderSettings() {
     '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
     '</div>' +
     '<div class="field"><label>Default price (for books without one)</label>' +
-    '<input type="number" id="f-default-price" min="0" step="0.01" class="text-input" value="' + defaultPrice.toFixed(2) + '" />' +
+    // v364: text input (not number) — avoids browser float precision quirks in number inputs
+    '<input type="text" inputmode="decimal" id="f-default-price" class="text-input" value="' + defaultPrice.toFixed(2) + '" />' +
     '<p class="note">' + defaultCount + ' books using default estimate.</p></div>' +
     (ledgerSources.length ? '<div class="field"><label>By source</label>' +
       ledgerSources.map(function(src) {
