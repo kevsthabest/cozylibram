@@ -206,6 +206,54 @@ function charQuotesHTML(quotes) {
   return h;
 }
 
+/* v341: Phase D — story timeline. Horizontal journey across books showing
+   the character's role evolution and key relationships per book.
+   Instances are ordered by series position when available, else by title. */
+function charTimelineHTML(instances, workCharsByWorkId) {
+  if (!instances || instances.length < 2) return ''; // timeline needs 2+ books
+  // Sort by series position if available, else alphabetically
+  const sorted = [...instances].sort((a, b) => {
+    const pa = a.seriesPos, pb = b.seriesPos;
+    if (pa != null && pb != null) return pa - pb;
+    if (pa != null) return -1;
+    if (pb != null) return 1;
+    return String(a.workTitle || '').localeCompare(String(b.workTitle || ''));
+  });
+
+  let h = '<h3 class="serif">Story timeline</h3><div class="ch-timeline">';
+  sorted.forEach((inst, i) => {
+    const isLast = i === sorted.length - 1;
+    const rels = (inst.relationships || []).slice(0, 3);
+    // Resolve top relationship names to links
+    const wChars = (workCharsByWorkId && inst.workId && workCharsByWorkId[inst.workId]) || [];
+    const relLinks = rels.map(r => {
+      const name = String(r.to || '');
+      try {
+        if (typeof charResolveTarget !== 'undefined' && wChars.length) {
+          const res = charResolveTarget(name, wChars);
+          if (res.character) {
+            const c = res.character;
+            const attr = c.characterId ? 'data-chwiki="' + esc(c.characterId) + '"' : 'data-chbook="' + esc(c.id) + '"';
+            return '<button class="taplink sm" ' + attr + '>' + esc(name) + '</button>';
+          }
+        }
+      } catch (e) {}
+      return esc(name);
+    }).join(' · ');
+
+    h += '<div class="ch-tl-item' + (isLast ? ' last' : '') + '">' +
+      '<div class="ch-tl-dot ch-role-' + esc(inst.role || 'minor') + '"></div>' +
+      '<div class="ch-tl-content">' +
+      '<b>' + esc(inst.workTitle) + '</b><br>' +
+      '<span class="chip dbtrope sm">' + esc((typeof CHAR_ROLE_LABELS !== 'undefined' && CHAR_ROLE_LABELS[inst.role]) || inst.role || '?') + '</span>' +
+      (inst.name ? '<br><span class="note">as "' + esc(inst.name) + '"</span>' : '') +
+      (relLinks ? '<div class="ch-tl-rels">' + relLinks + '</div>' : '') +
+      '</div></div>';
+  });
+  h += '</div>';
+  return h;
+}
+
 /* v339: Phase C — interactive SVG relationship constellation.
    Renders the character at center with relationship nodes arranged in a
    circle. Nodes are tappable (navigate to character pages). Edges are
@@ -431,13 +479,15 @@ async function renderCharacterPage() {
     if (t) targetCounts[t] = (targetCounts[t] || 0) + 1;
   }));
   const closest = Object.entries(targetCounts).sort((a, b) => b[1] - a[1])[0];
-  // v340: fetch all work characters once (shared by closest-to and graph).
+  // v340: fetch all work characters once (shared by closest-to, graph, timeline).
   // Parallel via Promise.all, deduped by workId.
   let allWorkChars = [];
+  const workCharsByWorkId = {};
   try {
     const workIds = [...new Set(d.instances.map(i => i.workId).filter(Boolean))];
     const results = await Promise.all(workIds.map(wid =>
       CharacterStore.listForWork(wid).catch(() => [])));
+    workIds.forEach((wid, idx) => { workCharsByWorkId[wid] = results[idx] || []; });
     allWorkChars = results.flat();
   } catch (e) {}
 
@@ -478,6 +528,13 @@ async function renderCharacterPage() {
       '</div></div>';
   }
   html += '</div>';
+
+  // v341 Phase D: story timeline (needs 2+ books). Reuses workCharsByWorkId.
+  try {
+    if (d.instances.length >= 2) {
+      html += charTimelineHTML(d.instances, workCharsByWorkId);
+    }
+  } catch (e) {}
 
   // Relationships: v339 Phase C graph + text lists below
   html += '<h3 class="serif">Relationships</h3>';
@@ -537,6 +594,11 @@ async function renderCharacterPage() {
   document.querySelectorAll('.ch-graph-node[data-chwiki]').forEach(b =>
     b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
   document.querySelectorAll('.ch-graph-node[data-chbook]').forEach(b =>
+    b.addEventListener('click', () => openBookCharacter(b.getAttribute('data-chbook'))));
+  // v341: wire timeline relationship links
+  document.querySelectorAll('.ch-tl-rels [data-chwiki]').forEach(b =>
+    b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
+  document.querySelectorAll('.ch-tl-rels [data-chbook]').forEach(b =>
     b.addEventListener('click', () => openBookCharacter(b.getAttribute('data-chbook'))));
   document.getElementById('ch-note-save').addEventListener('click', async (e) => {
     const btn = e.target, msg = document.getElementById('ch-note-msg');

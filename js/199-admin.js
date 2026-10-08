@@ -1721,7 +1721,7 @@ const CharacterStore = {
       if (error || !c) return null;
       // v320: links via character_links (audit trail)
       const { data: links, error: lerr } = await sb.from('character_links')
-        .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))')
+        .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title, series))')
         .eq('character_id', charId);
       if (lerr) throw lerr;
       return {
@@ -1730,10 +1730,13 @@ const CharacterStore = {
         source: c.source || 'manual',
         instances: (links || []).map(l => {
           const r = l.book_characters;
+          const wSeries = (r.works && r.works.series) || null;
           return {
             id: r.id,
             workId: r.work_id,
             workTitle: (r.works && r.works.title) || String(r.work_id).slice(0, 8),
+            series: wSeries,
+            seriesPos: wSeries && wSeries.position != null ? wSeries.position : null,
             name: r.name,
             role: r.role,
             description: r.description || '',
