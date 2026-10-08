@@ -378,6 +378,9 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
     const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
     const color = typeColors[n.types[0]] || '#888';
+    // v348: node size scales with relationship importance (1-5, default 3)
+    const imp = n.importance || 3;
+    const r = 16 + (imp * 2.4); // 18.4 to 28
     const initials = String(n.name).trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
     // Resolve tap target
     let tapAttr = '';
@@ -394,7 +397,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     } catch (e) {}
     const label = esc(n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name);
     svg += '<g' + tapAttr + (tapAttr ? ' class="ch-graph-node" style="cursor:pointer"' : '') + '>' +
-      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="22" fill="' + color + '" opacity="0.85"/>' +
+      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + color + '" opacity="0.85"/>' +
       '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">' + esc(initials) + '</text>' +
       '<text x="' + x.toFixed(1) + '" y="' + (y + 36).toFixed(1) + '" text-anchor="middle" fill="var(--text)" font-size="9">' + label + '</text>' +
       '</g>';
@@ -428,8 +431,11 @@ function charGroupRelationships(relationships) {
     if (!name) return;
     const type = charNormRelType(r.type);
     const key = name.toLowerCase();
-    if (!byPerson[key]) byPerson[key] = { name, types: new Set(), contradicted: false };
+    if (!byPerson[key]) byPerson[key] = { name, types: new Set(), contradicted: false, importance: 0 };
     byPerson[key].types.add(type);
+    // v348: track max importance across duplicate entries
+    const imp = parseInt(r.importance, 10);
+    if (Number.isFinite(imp) && imp > byPerson[key].importance) byPerson[key].importance = imp;
   });
   // Resolve parent/child contradictions
   Object.values(byPerson).forEach(p => {
@@ -442,6 +448,7 @@ function charGroupRelationships(relationships) {
     name: p.name,
     types: [...p.types].sort(),
     contradicted: p.contradicted,
+    importance: p.importance || null,
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -590,6 +597,17 @@ async function renderCharacterPage() {
     '<div class="ch-hero-info"><h2 class="serif">' + esc(d.name) + '</h2>' +
     '<span class="chip dbtrope ch-role-' + esc(primaryRole) + '">' + esc(CHAR_ROLE_LABELS[primaryRole] || primaryRole) + '</span>' +
     (d.aliases && d.aliases.length ? '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
+    (() => {
+      // v348: appearance description from pipeline (first non-empty across instances)
+      const app = d.instances.map(i => i.appearance).find(a => a && a.trim());
+      return app ? '<p class="ch-appearance">' + esc(app) + '</p>' : '';
+    })() +
+    (() => {
+      // v348: first appearance chapter (earliest across instances)
+      const chaps = d.instances.map(i => i.firstAppearance).filter(c => c != null);
+      if (!chaps.length) return '';
+      return '<p class="note">First appears: Chapter ' + Math.min(...chaps) + '</p>';
+    })() +
     (() => {
       // v346: character status is spoiler-gated (alive/dead is a spoiler)
       // v347: pick story-latest via seriesPos (Advisor MEDIUM); skip if all unknown
