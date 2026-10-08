@@ -197,8 +197,14 @@ function renderSettings() {
     if (Array.isArray(saved)) openIdx = saved;
   } catch (e) {}
 
-  // v312: purchase ledger totals
+  // v312: purchase ledger totals; v323: default price fallback
+  var defaultPrice = 24.99;
+  try {
+    var dp = parseFloat(localStorage.getItem('cozylibram.defaultPrice'));
+    if (!isNaN(dp) && dp >= 0) defaultPrice = dp;
+  } catch (e) {}
   var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
+  var defaultCount = 0;
   try {
     (typeof library !== 'undefined' ? library : []).forEach(function(b) {
       if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
@@ -206,6 +212,10 @@ function renderSettings() {
         ledgerCount++;
         var src = b.purchaseSource || 'Unknown';
         ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
+      } else {
+        // v323: books without a price use the default as an estimate
+        listTotal += defaultPrice;
+        defaultCount++;
       }
       if (b.listPrice != null && !isNaN(b.listPrice)) listTotal += b.listPrice;
     });
@@ -217,6 +227,9 @@ function renderSettings() {
     '<div class="stat"><div class="n">' + ledgerCount + '</div><div class="l">With price</div></div>' +
     '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
     '</div>' +
+    '<div class="field"><label>Default price (for books without one)</label>' +
+    '<input type="number" id="f-default-price" min="0" step="0.01" class="text-input" value="' + defaultPrice.toFixed(2) + '" />' +
+    '<p class="note">' + defaultCount + ' books using default estimate.</p></div>' +
     (ledgerSources.length ? '<div class="field"><label>By source</label>' +
       ledgerSources.map(function(src) {
         return '<div class="ledger-row"><span>' + esc(src) + '</span><span>$' + ledgerBySource[src].toFixed(2) + '</span></div>';
@@ -277,6 +290,15 @@ function renderSettings() {
   document.getElementById('th-theme').addEventListener('change', e => {
     localStorage.setItem('theme', e.target.value);
     applyTheme();
+  });
+  // v323: default price for books without a recorded cost
+  var dpInput = document.getElementById('f-default-price');
+  if (dpInput) dpInput.addEventListener('change', e => {
+    var v = parseFloat(e.target.value);
+    if (!isNaN(v) && v >= 0) {
+      try { localStorage.setItem('cozylibram.defaultPrice', String(v)); } catch (err) {}
+      renderSettings(); // refresh totals
+    }
   });
   document.querySelectorAll('#th-accent .sw').forEach(btn =>
     btn.addEventListener('click', () => {

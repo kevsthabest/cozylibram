@@ -1170,6 +1170,11 @@ function renderDetailModal(b, viaBook) {
     '</div>' +
     '<input type="text" id="f-purchase-source-custom" placeholder="Store name (e.g. Blue Heron Books)" value="' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? esc(draft.purchaseSource) : '') + '" style="display:' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? '' : 'none') + ';margin-top:6px;" />' +
     (draft.listPrice != null ? '<div class="note-inline" style="margin-top:6px;">List price: ' + esc(draft.listPriceCurrency || 'CAD') + ' ' + esc(String(draft.listPrice)) + ' (estimate)</div>' : '') +
+    (draft.purchasePrice == null ? (function() {
+      var dp = 24.99;
+      try { var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(v) && v >= 0) dp = v; } catch (e) {}
+      return '<div class="note-inline" style="margin-top:6px;">Est. value: CAD ' + dp.toFixed(2) + ' (default — add actual price above)</div>';
+    })() : '') +
     '</div>' +
 
     '<div class="field"><label>Mood</label>' +
