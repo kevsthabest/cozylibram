@@ -2885,3 +2885,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ch-tl-content b { font-size: 1.05em; }
 .ch-tl-rels { margin-top: 6px; font-size: 0.9em; }
 .taplink.sm { font-size: 0.9em; }
+
+/* v346: spoiler protection */
+.spoiler { display: inline-block; position: relative; cursor: pointer; }
+.spoiler-blur { filter: blur(8px); user-select: none; transition: filter 0.2s; }
+.spoiler.revealed .spoiler-blur { filter: none; user-select: auto; }
+.spoiler-hint { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 0.8em; color: var(--text2);
+  background: rgba(0,0,0,0.15); border-radius: 4px; padding: 2px 8px; }
+.spoiler.revealed .spoiler-hint { display: none; }
+.ch-status-dead { background: #5a0000; color: #ffb3b3; }
+.ch-status-alive { background: #1a4d1a; color: #b3ffb3; }

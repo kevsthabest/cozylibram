@@ -167,8 +167,14 @@ function renderSettings() {
     '<p class="note">Clears only this device\'s offline copies — the shared canonical covers are untouched.</p>';
 
   /* ---- Privacy ---- */
+  // v346: spoiler protection toggle (default ON)
+  const htmlSpoiler =
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-spoilers" ' +
+    (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
+    'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
   const htmlPrivacy =
     '<div id="st-privacy"><p class="note">Loading…</p></div>' +
+    htmlSpoiler +
     '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
     // v118: usage-analytics opt-out. Default ON for signed-in users; never
     // tracks guests, never collects book content — see docs/ANALYTICS.md.
@@ -386,6 +392,11 @@ function renderSettings() {
   document.getElementById('st-edit-profile').addEventListener('click', () => go('profile'));
   document.getElementById('st-privacy-go').addEventListener('click', () => go('coven'));
   // v118: analytics opt-out
+  // v346: spoiler toggle
+  document.getElementById('st-spoilers').addEventListener('change', e => {
+    try { setSpoilersHidden(e.target.checked); } catch (err) {}
+    toast(e.target.checked ? 'Spoilers hidden' : 'Spoilers visible');
+  });
   document.getElementById('st-analytics').addEventListener('change', e => {
     setAnalyticsEnabled(e.target.checked);
     toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');

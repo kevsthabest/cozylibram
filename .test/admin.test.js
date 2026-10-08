@@ -246,7 +246,7 @@ function ev(uid, name, cat, props, created) {
       'id, name, description, aliases, source',
       'character_id, book_characters!inner(work_id, works(title))',
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))',
-      'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title, series))', // v341: timeline needs series position
+      'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, works(title, series))', // v346: spoiler-gated fields
       'id, name, work_id, works!inner(authors, series)',
       'book_character_id',
       'book_characters!inner(work_id, works!inner(authors, series))',

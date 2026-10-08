@@ -245,6 +245,36 @@ function charQuotesHTML(quotes) {
   return h;
 }
 
+/* v346: spoiler protection. Spoiler-gated content is blurred by default
+   (per-device setting, default ON). Tap to reveal. */
+function spoilersHidden() {
+  try {
+    const v = localStorage.getItem('cl_hide_spoilers');
+    return v === null ? true : v === '1'; // default ON
+  } catch (e) { return true; }
+}
+function setSpoilersHidden(hide) {
+  try { localStorage.setItem('cl_hide_spoilers', hide ? '1' : '0'); } catch (e) {}
+}
+/* Wrap spoilerish HTML. When hidden, shows a blur + tap-to-reveal. */
+function spoilerWrap(html, label) {
+  if (!spoilersHidden()) return html;
+  return '<span class="spoiler" tabindex="0" role="button">' +
+    '<span class="spoiler-blur">' + html + '</span>' +
+    '<span class="spoiler-hint">' + esc(label || 'Spoiler') + ' &mdash; tap to reveal</span>' +
+    '</span>';
+}
+/* Wire spoiler tap-to-reveal (event delegation, works for dynamic content) */
+document.addEventListener('click', function(e) {
+  const sp = e.target.closest && e.target.closest('.spoiler');
+  if (sp && !sp.classList.contains('revealed')) {
+    // Only toggle if the click wasn't on a link/button inside
+    if (!e.target.closest('a, button:not(.spoiler)')) sp.classList.add('revealed');
+  } else if (sp) {
+    sp.classList.remove('revealed');
+  }
+});
+
 /* v341: Phase D — story timeline. Horizontal journey across books showing
    the character's role evolution and key relationships per book.
    Instances are ordered by series position when available, else by title. */
@@ -540,6 +570,15 @@ async function renderCharacterPage() {
     '<div class="ch-hero-info"><h2 class="serif">' + esc(d.name) + '</h2>' +
     '<span class="chip dbtrope ch-role-' + esc(primaryRole) + '">' + esc(CHAR_ROLE_LABELS[primaryRole] || primaryRole) + '</span>' +
     (d.aliases && d.aliases.length ? '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
+    (() => {
+      // v346: character status is spoiler-gated (alive/dead is a spoiler)
+      const statuses = [...new Set(d.instances.map(i => i.status).filter(Boolean))];
+      if (!statuses.length) return '';
+      const latest = statuses[statuses.length - 1];
+      const label = { alive: 'Alive', dead: 'Deceased', unknown: 'Unknown', missing: 'Missing' }[latest] || latest;
+      const cls = latest === 'dead' ? 'ch-status-dead' : latest === 'alive' ? 'ch-status-alive' : '';
+      return '<p>' + spoilerWrap('<span class="chip dbtrope sm ' + cls + '">' + esc(label) + '</span>', 'Character status') + '</p>';
+    })() +
     '</div></div>' +
     '<div class="stat-row ch-stats">' +
     '<div class="stat"><div class="n">' + d.instances.length + '</div><div class="l">' + (d.instances.length === 1 ? 'Book' : 'Books') + '</div></div>' +
