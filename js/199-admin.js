@@ -2132,7 +2132,8 @@ async function charLabRenderInbox(body, works) {
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
       esc(w.title) + ' (' + w.count + ')</option>').join('') +
     '</select></label> ' +
-    '<button class="btn sm ghost" id="ch-refresh">↻</button></p>' +
+    '<button class="btn sm ghost" id="ch-refresh">↻</button> ' +
+    '<button class="btn sm ghost" id="ch-delete-work" style="color:var(--danger,red)">Delete work</button></p>' +
     '<p class="note">' + valid.length + ' relationships awaiting review in <b>' + esc(work ? work.title : '') + '</b>.</p>';
 
   // v386: Inbox as data grid
@@ -2175,6 +2176,27 @@ async function charLabRenderInbox(body, works) {
     charLabRenderInbox(body, works);
   });
   document.getElementById('ch-refresh').addEventListener('click', () => charLabRenderInbox(body, works));
+  // v393: Delete work (clean removal — work + characters + claims)
+  document.getElementById('ch-delete-work').addEventListener('click', async () => {
+    const workTitle = work ? work.title : charLabWorkId;
+    if (!await confirmModal('Delete work "' + workTitle + '" and all its characters, relationships, and claims? This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
+    try {
+      const sb = await CharacterStore._sb();
+      // Delete in dependency order
+      await sb.from('character_relationships').delete().eq('source_work_id', charLabWorkId);
+      await sb.from('book_trope_claims').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_trigger_claims').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_quotes').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_characters').delete().eq('work_id', charLabWorkId);
+      const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
+      if (error) throw error;
+      toast('Work deleted');
+      charLabWorkId = null;
+      renderCharacterLab();
+    } catch (e) {
+      toast('Delete failed: ' + (e.message || 'unknown error'));
+    }
+  });
 
   // Wire accept/change/reject
   const markReviewed = (relId) => {
@@ -2370,7 +2392,8 @@ function charLabRender(body, works, chars) {
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
       esc(w.title) + ' (' + w.count + ')</option>').join('') +
     '</select></label> ' +
-    '<button class="btn sm ghost" id="ch-refresh">↻</button>' +
+    '<button class="btn sm ghost" id="ch-refresh">↻</button> ' +
+    '<button class="btn sm ghost" id="ch-delete-work2" style="color:var(--danger,red)">Delete work</button>' +
     (blockedCount ? ' <button class="btn sm ghost" id="ch-blocked-toggle">' +
       (charLabShowBlocked ? 'Hide' : 'Show') + ' ' + blockedCount + ' hidden</button>' : '') +
     (mergedCount ? ' <span class="note">' + mergedCount + ' merged</span>' : '') +
@@ -2432,6 +2455,27 @@ function charLabRender(body, works, chars) {
   document.getElementById('ch-refresh').addEventListener('click', async () => {
     const nc = await CharacterStore.listForWork(charLabWorkId);
     charLabRender(body, works, nc);
+  });
+  // v393: Delete work from grid view
+  const delBtn2 = document.getElementById('ch-delete-work2');
+  if (delBtn2) delBtn2.addEventListener('click', async () => {
+    const workTitle = work ? work.title : charLabWorkId;
+    if (!await confirmModal('Delete work "' + workTitle + '" and all its characters, relationships, and claims? This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
+    try {
+      const sb = await CharacterStore._sb();
+      await sb.from('character_relationships').delete().eq('source_work_id', charLabWorkId);
+      await sb.from('book_trope_claims').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_trigger_claims').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_quotes').delete().eq('work_id', charLabWorkId);
+      await sb.from('book_characters').delete().eq('work_id', charLabWorkId);
+      const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
+      if (error) throw error;
+      toast('Work deleted');
+      charLabWorkId = null;
+      renderCharacterLab();
+    } catch (e) {
+      toast('Delete failed: ' + (e.message || 'unknown error'));
+    }
   });
   const blockedToggle = document.getElementById('ch-blocked-toggle');
   if (blockedToggle) blockedToggle.addEventListener('click', () => {
