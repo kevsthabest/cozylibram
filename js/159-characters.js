@@ -664,6 +664,7 @@ function initD3Graph(box) {
         '<span style="--c:' + (groupColors[g] || '#888') + '">' + g + '</span>').join('');
     }
 
+    applyForces(); // v372: must run before first update() — sets up the link force
     update();
     sim.alpha(0.7).restart();
   });
