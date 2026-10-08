@@ -431,15 +431,14 @@ async function renderCharacterPage() {
     if (t) targetCounts[t] = (targetCounts[t] || 0) + 1;
   }));
   const closest = Object.entries(targetCounts).sort((a, b) => b[1] - a[1])[0];
-  // v335: collect all work characters for closest-to link resolution
+  // v340: fetch all work characters once (shared by closest-to and graph).
+  // Parallel via Promise.all, deduped by workId.
   let allWorkChars = [];
   try {
-    for (const inst of d.instances) {
-      if (inst.workId) {
-        const wc = await CharacterStore.listForWork(inst.workId);
-        allWorkChars = allWorkChars.concat(wc);
-      }
-    }
+    const workIds = [...new Set(d.instances.map(i => i.workId).filter(Boolean))];
+    const results = await Promise.all(workIds.map(wid =>
+      CharacterStore.listForWork(wid).catch(() => [])));
+    allWorkChars = results.flat();
   } catch (e) {}
 
   let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
@@ -483,21 +482,14 @@ async function renderCharacterPage() {
   // Relationships: v339 Phase C graph + text lists below
   html += '<h3 class="serif">Relationships</h3>';
   try {
-    // Collect all relationships across instances for the graph
+    // Collect all relationships across instances for the graph.
+    // v340: reuses allWorkChars fetched above (no duplicate queries).
     const allRels = [];
-    const graphWorkChars = [];
     for (const inst of d.instances) {
       (inst.relationships || []).forEach(r => allRels.push(r));
-      try {
-        if (inst.workId) {
-          const wc = await CharacterStore.listForWork(inst.workId);
-          graphWorkChars.push(...wc);
-        }
-      } catch (e) {}
     }
     const grouped = charGroupRelationships(allRels);
-    const primaryRole = charPrimaryRole(d.instances);
-    html += charGraphHTML(grouped, graphWorkChars, d.name, primaryRole);
+    html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
   } catch (e) {}
   let hasRels = false;
   for (const inst of d.instances) {
