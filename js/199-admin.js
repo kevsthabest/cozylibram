@@ -2226,29 +2226,37 @@ async function charLabRenderInbox(body, works) {
         await CharacterStore.updateRelationship(edgeId, updates);
       } else {
         // Pipeline JSON — upsert as before (v380)
+        // v388: apply pending dropdown changes (Advisor — were silently discarded)
         const [fromId, idx] = relId.split(':');
         const chars = await CharacterStore.listForWork(charLabWorkId);
         const fromChar = chars.find(c => c.id === fromId);
         if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
           const r = fromChar.relationships[idx];
           const toName = String(r.to || '').trim();
-          const relType = String(r.type || 'friend').toLowerCase();
+          const origType = String(r.type || 'friend').toLowerCase();
+          const newType = pendingType || origType;
+          const newImp = pendingImp ? parseInt(pendingImp, 10) || null : (r.importance || null);
           const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
           if (toChar) {
             const sb = await CharacterStore._sb();
+            // Look up by ORIGINAL type (backfilled row) — not newType
             const { data: existing } = await sb.from('character_relationships')
               .select('id')
               .eq('character_a_id', fromId)
               .eq('character_b_id', toChar.id)
-              .eq('relationship_type', relType)
+              .eq('relationship_type', origType)
               .eq('review_status', 'pending')
               .maybeSingle();
             if (existing) {
-              await CharacterStore.updateRelationship(existing.id, { review_status: 'confirmed' });
+              await CharacterStore.updateRelationship(existing.id, {
+                review_status: 'confirmed',
+                relationship_type: newType,
+                importance: newImp,
+              });
             } else {
-              await CharacterStore.createRelationship(fromId, toChar.id, relType, {
+              await CharacterStore.createRelationship(fromId, toChar.id, newType, {
                 direction: 'mutual',
-                importance: r.importance || null,
+                importance: newImp,
                 workId: charLabWorkId,
               });
             }
