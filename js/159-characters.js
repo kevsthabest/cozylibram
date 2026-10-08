@@ -101,10 +101,12 @@ const CharacterWiki = {
     const sb = await this._sb();
     if (!sb || !speakerName) return [];
     try {
+      // v337: escape LIKE wildcards in the speaker name
+      const safeName = String(speakerName).trim().replace(/[\\%_]/g, m => '\\' + m);
       const { data, error } = await sb.from('book_quotes')
         .select('quote, context')
         .eq('work_id', workId)
-        .ilike('speaker_name', '%' + String(speakerName).trim() + '%')
+        .ilike('speaker_name', '%' + safeName + '%')
         .order('created_at').limit(10);
       if (error) throw error;
       return (data || []).map(q => ({ quote: q.quote, context: q.context }));

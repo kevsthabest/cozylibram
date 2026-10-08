@@ -39,5 +39,32 @@ ok('null stays empty', normTitle(null) === '');
 ok('exact match works', normTitle('Fourth Wing') === normTitle('fourth wing'));
 ok('parenthetical variants match', normTitle('Dune (Movie Tie-in)') === normTitle('Dune'));
 
+/* ---- charQuotesHTML escaping (mirror — keep in sync) ---- */
+// Minimal esc() mirror for testing
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function charQuotesHTML(quotes) {
+  if (!quotes || !quotes.length) return '';
+  let h = '<h3 class="serif">Memorable quotes</h3><div class="ch-quotes">';
+  quotes.slice(0, 5).forEach(q => {
+    h += '<blockquote class="ch-quote"><p>"' + esc(q.quote) + '"</p>' +
+      (q.context ? '<cite>' + esc(q.context) + '</cite>' : '') +
+      (q.workTitle ? '<span class="note"> — ' + esc(q.workTitle) + '</span>' : '') +
+      '</blockquote>';
+  });
+  h += '</div>';
+  return h;
+}
+
+ok('quotes HTML escapes script tags',
+  !charQuotesHTML([{quote: '<script>alert(1)</script>'}]).includes('<script>'));
+ok('quotes HTML escapes quotes in text',
+  charQuotesHTML([{quote: 'He said "hi"'}]).includes('&quot;hi&quot;'));
+ok('empty quotes returns empty string', charQuotesHTML([]) === '');
+ok('null quotes returns empty string', charQuotesHTML(null) === '');
+ok('caps at 5 quotes',
+  (charQuotesHTML([1,2,3,4,5,6].map(i => ({quote: 'q'+i}))).match(/<blockquote/g) || []).length === 5);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
