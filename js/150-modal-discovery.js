@@ -420,50 +420,51 @@ function openPreviewModal(t, opts) {
       h += '<div class="field"><label>' + icon('doc') + ' Genres</label><div class="chips wrap">' +
         pGenres.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
-    // v322: Cast section — populated async via loadCast()
-    h += '<div class="field" id="m-cast-wrap" style="display:none"><label>' + icon('friends') + ' Cast</label><div id="m-cast"></div></div>';
     return h;
   };
-  // v322: load cast for the book's work, tiered display
-  const loadCast = async () => {
+  // v325: character tab — tiered cast with descriptions, loaded on tab open
+  let charsLoaded = false;
+  const loadCharsTab = async () => {
+    if (charsLoaded) return;
+    charsLoaded = true;
+    const box = document.getElementById('m-charstab');
+    if (!box || typeof CharacterWiki === 'undefined') return;
     try {
-      const wrap = document.getElementById('m-cast-wrap');
-      const box = document.getElementById('m-cast');
-      if (!wrap || !box || typeof CharacterWiki === 'undefined') return;
       const workId = await resolveWork(t);
-      if (!workId) return;
+      if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
       const cast = await CharacterWiki.getCast(workId);
-      if (!cast.total) return;
-      const chip = (c) => {
-        const label = c.characterId ? 'data-chwiki="' + esc(c.characterId) + '"' : '';
-        const cls = c.characterId ? 'taplink' : 'chip';
-        return '<button class="' + cls + '" ' + label + '>' + esc(c.name) + '</button>';
+      if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
+      const card = (c) => {
+        const link = c.characterId
+          ? '<button class="taplink" data-chwiki="' + esc(c.characterId) + '">' + esc(c.name) + '</button>'
+          : '<b>' + esc(c.name) + '</b>';
+        const desc = c.description ? '<p class="note">' + esc(c.description.slice(0, 160)) + (c.description.length > 160 ? '…' : '') + '</p>' : '';
+        const rels = (c.relationships && c.relationships.length)
+          ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
+        return '<div class="ch-card">' + link + desc + rels + '</div>';
       };
-      let h = '<div class="chips wrap">' + cast.tier1.map(chip).join('') + '</div>';
-      if (cast.tier2.length) {
-        h += '<p><button class="taplink" id="m-cast-t2">Supporting cast (' + cast.tier2.length + ')</button></p>' +
-          '<div class="chips wrap" id="m-cast-t2-list" style="display:none">' + cast.tier2.map(chip).join('') + '</div>';
-      }
-      if (cast.tier3.length) {
-        h += '<p><button class="taplink" id="m-cast-t3">Minor characters (' + cast.tier3.length + ')</button></p>' +
-          '<div class="chips wrap" id="m-cast-t3-list" style="display:none">' + cast.tier3.map(chip).join('') + '</div>';
-      }
+      const section = (title, list, id) => {
+        if (!list.length) return '';
+        return '<h4 class="serif">' + title + ' (' + list.length + ')</h4>' +
+          '<div class="ch-list" id="' + id + '"' + (id !== 'm-ct1' ? ' style="display:none"' : '') + '>' +
+          list.map(card).join('') + '</div>';
+      };
+      let h = section('Main cast', cast.tier1, 'm-ct1');
+      if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2').replace('<h4 class="serif"> (', '<h4 class="serif" style="display:none">(');
+      if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3').replace('<h4 class="serif"> (', '<h4 class="serif" style="display:none">(');
       box.innerHTML = h;
-      wrap.style.display = '';
-      const t2 = document.getElementById('m-cast-t2');
-      if (t2) t2.addEventListener('click', () => {
-        const l = document.getElementById('m-cast-t2-list');
-        l.style.display = l.style.display === 'none' ? '' : 'none';
-      });
-      const t3 = document.getElementById('m-cast-t3');
-      if (t3) t3.addEventListener('click', () => {
-        const l = document.getElementById('m-cast-t3-list');
-        l.style.display = l.style.display === 'none' ? '' : 'none';
-      });
+      const wire = (btnId, listId) => {
+        const b = document.getElementById(btnId);
+        if (b) b.addEventListener('click', () => {
+          const l = document.getElementById(listId);
+          l.style.display = l.style.display === 'none' ? '' : 'none';
+        });
+      };
+      wire('m-ct2-t', 'm-ct2'); wire('m-ct3-t', 'm-ct3');
       box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
         openCharacter(b.getAttribute('data-chwiki'));
       }));
-    } catch (e) {}
+    } catch (e) { box.innerHTML = '<p class="note">Could not load characters.</p>'; }
   };
   const wireDescToggle = () => {
     const w = document.getElementById(descId);
@@ -562,12 +563,13 @@ function openPreviewModal(t, opts) {
       document.getElementById('p-descread').innerHTML = descHTML();
       document.getElementById('p-tags').innerHTML = tagSecHTML();
       wireDescToggle();
-      loadCast();
     })();
   } else {
     wireDescToggle();
-    loadCast();
   }
+  // v325: lazy-load characters when the tab opens
+  root.querySelectorAll('[data-dtab="characters"]').forEach(btn =>
+    btn.addEventListener('click', () => loadCharsTab()));
   track('book_preview_opened', { source: opts.source || 'preview', kind: t.kind });
 }
 
@@ -1122,7 +1124,8 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-tabs" role="tablist">' +
     '<button class="d-tab active" data-dtab="details" role="tab" aria-selected="true">' + icon('doc') + 'Details</button>' +
     '<button class="d-tab" data-dtab="tropes" role="tab" aria-selected="false">' + icon('sparkles') + 'Tropes</button>' +
-    '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">' + icon('clipboard') + 'Notes</button></div>' +
+    '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">' + icon('clipboard') + 'Notes</button>' +
+    '<button class="d-tab" data-dtab="characters" role="tab" aria-selected="false">' + icon('friends') + 'Characters</button></div>' +
 
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
     // v182: mockup "About this book" section (the hero carries its own copy on desktop).
@@ -1232,6 +1235,8 @@ function renderDetailModal(b, viaBook) {
     '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div></div>' +
     '</div>' +
 
+    '<div class="d-panel" id="dtab-characters" role="tabpanel" hidden>' +
+    '<div id="m-charstab"><p class="note">Loading characters…</p></div></div>' +
     '<div class="d-panel" id="dtab-notes" role="tabpanel" hidden>' +
     '<div class="field"><label>My notes</label>' +
     '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea>' +
