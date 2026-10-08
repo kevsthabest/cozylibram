@@ -324,6 +324,61 @@ function externalRowHTML(x, i) {
 
 // Normalize any external/discovered book shape into a transient preview book.
 // kind: 'reco' | 'release' | 'coven-reco' | 'friend' | 'external'
+/* v329: shared character-tab loader — used by renderDetailModal (the full
+   book modal). Takes the book object directly; caches per book id so
+   re-opening the tab doesn't refetch. */
+const _charsTabLoaded = {};
+async function loadCharsTabForBook(t) {
+  const cacheKey = (t && t.id) || 'unknown';
+  if (_charsTabLoaded[cacheKey]) return;
+  _charsTabLoaded[cacheKey] = true;
+  const box = document.getElementById('m-charstab');
+  if (!box) return;
+  if (typeof CharacterWiki === 'undefined') {
+    box.innerHTML = '<p class="note">Character module not loaded — try fully closing and reopening the app.</p>';
+    return;
+  }
+  try {
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
+    const workId = await Promise.race([resolveWork(t), timeout]);
+    if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
+    const cast = await Promise.race([CharacterWiki.getCast(workId), timeout]);
+    if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
+    const card = (c) => {
+      const link = c.characterId
+        ? '<button class="taplink" data-chwiki="' + esc(c.characterId) + '">' + esc(c.name) + '</button>'
+        : '<b>' + esc(c.name) + '</b>';
+      const desc = c.description ? '<p class="note">' + esc(c.description.slice(0, 160)) + (c.description.length > 160 ? '…' : '') + '</p>' : '';
+      const rels = (c.relationships && c.relationships.length)
+        ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
+      return '<div class="ch-card">' + link + desc + rels + '</div>';
+    };
+    const section = (title, list, id, hideTitle) => {
+      if (!list.length) return '';
+      return (hideTitle ? '' : '<h4 class="serif">' + title + ' (' + list.length + ')</h4>') +
+        '<div class="ch-list" id="' + id + '"' + (id !== 'm-ct1' ? ' style="display:none"' : '') + '>' +
+        list.map(card).join('') + '</div>';
+    };
+    let h = section('Main cast', cast.tier1, 'm-ct1', false);
+    if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2', true);
+    if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3', true);
+    box.innerHTML = h;
+    const wire = (btnId, listId) => {
+      const b = document.getElementById(btnId);
+      if (b) b.addEventListener('click', () => {
+        const l = document.getElementById(listId);
+        if (l) l.style.display = l.style.display === 'none' ? '' : 'none';
+      });
+    };
+    wire('m-ct2-t', 'm-ct2'); wire('m-ct3-t', 'm-ct3');
+    box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
+      openCharacter(b.getAttribute('data-chwiki'));
+    }));
+  } catch (e) {
+    box.innerHTML = '<p class="note">Could not load characters: ' + esc((e && e.message) || 'unknown error') + '</p>';
+  }
+}
+
 function previewTransient(src, kind) {
   const s = src || {};
   const authors = Array.isArray(s.authors) ? s.authors.slice()
@@ -421,62 +476,6 @@ function openPreviewModal(t, opts) {
         pGenres.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
     return h;
-  };
-  // v325: character tab — tiered cast with descriptions, loaded on tab open
-  let charsLoaded = false;
-  const loadCharsTab = async () => {
-    if (charsLoaded) return;
-    charsLoaded = true;
-    const box = document.getElementById('m-charstab');
-    if (!box) return;
-    try { console.log('[chars] tab opened, CharacterWiki:', typeof CharacterWiki); } catch (e) {}
-    if (typeof CharacterWiki === 'undefined') {
-      box.innerHTML = '<p class="note">Character module not loaded — try fully closing and reopening the app.</p>';
-      return;
-    }
-    try {
-      // v327: timeout guard — never hang on "Loading…" forever
-      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
-      const workId = await Promise.race([resolveWork(t), timeout]);
-      try { console.log('[chars] workId:', workId); } catch (e) {}
-      if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
-      const cast = await Promise.race([CharacterWiki.getCast(workId), timeout]);
-      try { console.log('[chars] cast total:', cast && cast.total); } catch (e) {}
-      if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
-      const card = (c) => {
-        const link = c.characterId
-          ? '<button class="taplink" data-chwiki="' + esc(c.characterId) + '">' + esc(c.name) + '</button>'
-          : '<b>' + esc(c.name) + '</b>';
-        const desc = c.description ? '<p class="note">' + esc(c.description.slice(0, 160)) + (c.description.length > 160 ? '…' : '') + '</p>' : '';
-        const rels = (c.relationships && c.relationships.length)
-          ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
-        return '<div class="ch-card">' + link + desc + rels + '</div>';
-      };
-      const section = (title, list, id, hideTitle) => {
-        if (!list.length) return '';
-        return (hideTitle ? '' : '<h4 class="serif">' + title + ' (' + list.length + ')</h4>') +
-          '<div class="ch-list" id="' + id + '"' + (id !== 'm-ct1' ? ' style="display:none"' : '') + '>' +
-          list.map(card).join('') + '</div>';
-      };
-      let h = section('Main cast', cast.tier1, 'm-ct1', false);
-      if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2', true);
-      if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3', true);
-      box.innerHTML = h;
-      const wire = (btnId, listId) => {
-        const b = document.getElementById(btnId);
-        if (b) b.addEventListener('click', () => {
-          const l = document.getElementById(listId);
-          if (l) l.style.display = l.style.display === 'none' ? '' : 'none';
-        });
-      };
-      wire('m-ct2-t', 'm-ct2'); wire('m-ct3-t', 'm-ct3');
-      box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
-        openCharacter(b.getAttribute('data-chwiki'));
-      }));
-    } catch (e) {
-      try { console.error('[chars] load failed:', e); } catch (err) {}
-      box.innerHTML = '<p class="note">Could not load characters: ' + esc((e && e.message) || 'unknown error') + '</p>';
-    }
   };
   const wireDescToggle = () => {
     const w = document.getElementById(descId);
@@ -579,9 +578,6 @@ function openPreviewModal(t, opts) {
   } else {
     wireDescToggle();
   }
-  // v325: lazy-load characters when the tab opens
-  root.querySelectorAll('[data-dtab="characters"]').forEach(btn =>
-    btn.addEventListener('click', () => loadCharsTab()));
   track('book_preview_opened', { source: opts.source || 'preview', kind: t.kind });
 }
 
@@ -1552,6 +1548,9 @@ function renderDetailModal(b, viaBook) {
   };
   root.querySelectorAll('.d-tab').forEach(t =>
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
+  // v329: character tab loader — calls shared module-level function
+  root.querySelectorAll('[data-dtab="characters"]').forEach(btn =>
+    btn.addEventListener('click', () => loadCharsTabForBook(b)));
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));
