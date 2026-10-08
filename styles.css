@@ -679,6 +679,9 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   padding: 18px 18px calc(20px + env(safe-area-inset-bottom));
   animation: slideup 0.22s ease;
 }
+/* v356: ensure last content isn't hidden under sticky action bar (UX Tester) */
+.modal.detail-v174 .modal-body,
+.modal .d-panel { padding-bottom: 8px; }
 @media (min-width: 600px) { .modal { border-bottom: 1px solid var(--line); border-radius: 20px; } }
 
 /* v170: floral vine — decorative side ornament on modals (desktop), tinted per theme */
@@ -2227,6 +2230,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .mrow-opts { border-top: 1px solid var(--line); padding: 6px; }
 /* v355: dropdown above sticky action bar (UX Tester: DNF was unclickable) */
 .mrow-opts { position: relative; z-index: 5; background: var(--bg); }
+/* v356: the SHELF/STATUS button itself must also paint above the sticky bar */
+.mrow { position: relative; z-index: 5; }
 .mrow-opts button {
   display: flex; align-items: center; gap: 10px; width: 100%;
   background: none; border: none; color: inherit; font: inherit; font-size: 14px;
