@@ -259,19 +259,39 @@ function setSpoilersHidden(hide) {
 /* Wrap spoilerish HTML. When hidden, shows a blur + tap-to-reveal. */
 function spoilerWrap(html, label) {
   if (!spoilersHidden()) return html;
-  return '<span class="spoiler" tabindex="0" role="button">' +
-    '<span class="spoiler-blur">' + html + '</span>' +
+  // v347: aria-hidden on blur so screen readers don't announce spoilers (Advisor MEDIUM)
+  return '<span class="spoiler" tabindex="0" role="button" aria-label="' + esc(label || 'Spoiler') + ' (hidden)">' +
+    '<span class="spoiler-blur" aria-hidden="true">' + html + '</span>' +
     '<span class="spoiler-hint">' + esc(label || 'Spoiler') + ' &mdash; tap to reveal</span>' +
     '</span>';
 }
 /* Wire spoiler tap-to-reveal (event delegation, works for dynamic content) */
+function spoilerToggle(sp, reveal) {
+  const blur = sp.querySelector('.spoiler-blur');
+  if (reveal) {
+    sp.classList.add('revealed');
+    if (blur) blur.setAttribute('aria-hidden', 'false');
+    sp.setAttribute('aria-label', sp.getAttribute('aria-label').replace(' (hidden)', ' (revealed)'));
+  } else {
+    sp.classList.remove('revealed');
+    if (blur) blur.setAttribute('aria-hidden', 'true');
+    sp.setAttribute('aria-label', sp.getAttribute('aria-label').replace(' (revealed)', ' (hidden)'));
+  }
+}
 document.addEventListener('click', function(e) {
   const sp = e.target.closest && e.target.closest('.spoiler');
-  if (sp && !sp.classList.contains('revealed')) {
-    // Only toggle if the click wasn't on a link/button inside
-    if (!e.target.closest('a, button:not(.spoiler)')) sp.classList.add('revealed');
-  } else if (sp) {
-    sp.classList.remove('revealed');
+  if (!sp) return;
+  if (!e.target.closest('a, button:not(.spoiler)')) {
+    spoilerToggle(sp, !sp.classList.contains('revealed'));
+  }
+});
+// v347: keyboard support for spoiler buttons (WCAG 2.1.1)
+document.addEventListener('keydown', function(e) {
+  const sp = e.target.closest && e.target.closest('.spoiler');
+  if (!sp) return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    spoilerToggle(sp, !sp.classList.contains('revealed'));
   }
 });
 
@@ -572,9 +592,12 @@ async function renderCharacterPage() {
     (d.aliases && d.aliases.length ? '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
     (() => {
       // v346: character status is spoiler-gated (alive/dead is a spoiler)
-      const statuses = [...new Set(d.instances.map(i => i.status).filter(Boolean))];
-      if (!statuses.length) return '';
-      const latest = statuses[statuses.length - 1];
+      // v347: pick story-latest via seriesPos (Advisor MEDIUM); skip if all unknown
+      const withStatus = d.instances.filter(i => i.status);
+      if (!withStatus.length) return '';
+      if (withStatus.every(i => i.status === 'unknown')) return '';
+      const sorted = [...withStatus].sort((a, b) => ((b.seriesPos == null ? -1 : b.seriesPos) - (a.seriesPos == null ? -1 : a.seriesPos)));
+      const latest = sorted[0].status;
       const label = { alive: 'Alive', dead: 'Deceased', unknown: 'Unknown', missing: 'Missing' }[latest] || latest;
       const cls = latest === 'dead' ? 'ch-status-dead' : latest === 'alive' ? 'ch-status-alive' : '';
       return '<p>' + spoilerWrap('<span class="chip dbtrope sm ' + cls + '">' + esc(label) + '</span>', 'Character status') + '</p>';
