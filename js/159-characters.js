@@ -838,6 +838,23 @@ function initD3Graph(box) {
         '</div></div>';
       document.body.insertAdjacentHTML('beforeend', html);
 
+      // v395: Direction conditional on type (GPT)
+      // Directional types default to from→to; symmetric default to mutual
+      const directionalTypes = new Set(['parent', 'child', 'mentor', 'employer', 'employee']);
+      const typeSel = document.getElementById('conn-type');
+      const dirSel = document.getElementById('conn-dir');
+      const updateDirection = () => {
+        const t = typeSel.value;
+        if (directionalTypes.has(t)) {
+          // For directional, pre-select from→to (user can change)
+          dirSel.value = 'a_to_b';
+        } else {
+          dirSel.value = 'mutual';
+        }
+      };
+      typeSel.addEventListener('change', updateDirection);
+      updateDirection(); // Set initial
+
       document.getElementById('conn-cancel').addEventListener('click', () => {
         document.getElementById('connect-dialog').remove();
       });
