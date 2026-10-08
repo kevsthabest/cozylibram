@@ -385,6 +385,26 @@ async function loadCharsTabForBook(t) {
   }
 }
 
+/* v337: load memorable quotes for a book's work into the modal Details tab. */
+async function loadQuotesForBook(t) {
+  try {
+    const wrap = document.getElementById('m-quotes-wrap');
+    const box = document.getElementById('m-quotes');
+    if (!wrap || !box || typeof CharacterWiki === 'undefined') return;
+    const workId = await resolveWork(t);
+    if (!workId) return;
+    const quotes = await CharacterWiki.getQuotesForWork(workId);
+    if (!quotes.length) return;
+    box.innerHTML = '<div class="ch-quotes">' + quotes.slice(0, 4).map(q =>
+      '<blockquote class="ch-quote"><p>"' + esc(q.quote) + '"</p>' +
+      (q.speaker ? '<cite>— ' + esc(q.speaker) + '</cite>' : '') +
+      (q.context ? '<span class="note"> ' + esc(q.context) + '</span>' : '') +
+      '</blockquote>'
+    ).join('') + '</div>';
+    wrap.style.display = '';
+  } catch (e) {}
+}
+
 function previewTransient(src, kind) {
   const s = src || {};
   const authors = Array.isArray(s.authors) ? s.authors.slice()
@@ -1144,6 +1164,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
     // v182: mockup "About this book" section (the hero carries its own copy on desktop).
     (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
+    '<div class="field" id="m-quotes-wrap" style="display:none"><label>' + icon('quotes') + ' Memorable quotes</label><div id="m-quotes"></div></div>' +
     // v131: your rating — hearts + word label, now on the Details tab.
     '<div class="field"><label>Your rating</label>' +
     '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
@@ -1557,6 +1578,8 @@ function renderDetailModal(b, viaBook) {
   // v329: character tab loader — calls shared module-level function
   root.querySelectorAll('[data-dtab="characters"]').forEach(btn =>
     btn.addEventListener('click', () => loadCharsTabForBook(b)));
+  // v337: load memorable quotes for the Details tab
+  loadQuotesForBook(b);
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));

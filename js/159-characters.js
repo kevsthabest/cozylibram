@@ -111,6 +111,22 @@ const CharacterWiki = {
     } catch (e) { return []; }
   },
 
+  /* v337: quotes for a work (book-level, regardless of speaker attribution). */
+  async getQuotesForWork(workId) {
+    const sb = await this._sb();
+    if (!sb || !workId) return [];
+    try {
+      const { data, error } = await sb.from('book_quotes')
+        .select('quote, context, speaker_name')
+        .eq('work_id', workId)
+        .order('created_at').limit(8);
+      if (error) throw error;
+      return (data || []).map(q => ({
+        quote: q.quote, context: q.context, speaker: q.speaker_name,
+      }));
+    } catch (e) { return []; }
+  },
+
   async saveNote(charId, text) {
     const sb = await this._sb();
     if (!sb) throw new Error('cloud unavailable');
