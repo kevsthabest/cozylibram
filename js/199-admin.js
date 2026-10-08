@@ -2138,25 +2138,31 @@ async function charLabRenderInbox(body, works) {
     '<button class="btn sm ghost" id="ch-refresh">↻</button></p>' +
     '<p class="note">' + valid.length + ' relationships awaiting review in <b>' + esc(work ? work.title : '') + '</b>.</p>';
 
+  // v386: Inbox as data grid
   if (!valid.length) {
     html += '<p class="note">All caught up! No unreviewed relationships.</p>';
   } else {
-    html += '<div class="rel-inbox">';
+    html += '<div class="ch-grid-wrap" style="overflow-x:auto"><table class="ch-grid">' +
+      '<thead><tr><th>From</th><th>Type</th><th>To</th><th>Importance</th><th>Source</th><th>Actions</th></tr></thead><tbody>';
     valid.forEach(r => {
-      const typeIcon = { spouse: '❤️', lover: '❤️', partner: '❤️', parent: '👪', child: '👪', sibling: '👪',
-        friend: '🤝', enemy: '⚔️', rival: '⚔️', mentor: '👑' }[r.type] || '•';
-      html += '<div class="ob-card rel-inbox-item" data-rel="' + esc(r.id) + '">' +
-        '<div><b>' + esc(r.fromName) + '</b> ' + typeIcon + ' <b>' + esc(r.toName) + '</b></div>' +
-        '<div class="note">Suggested: ' + esc(r.type) +
-        (r.importance ? ' (importance ' + r.importance + '/5)' : '') +
-        (r.source === 'user' ? ' <span class="chip">by reader</span>' : '') + '</div>' +
-        '<div style="margin-top:8px">' +
-        '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓ Accept</button> ' +
-        '<button class="btn sm ghost" data-rel-change="' + esc(r.id) + '">Change</button> ' +
-        '<button class="btn sm ghost" data-rel-reject="' + esc(r.id) + '">Reject</button>' +
-        '</div></div>';
+      html += '<tr data-rel="' + esc(r.id) + '">' +
+        '<td><b>' + esc(r.fromName) + '</b></td>' +
+        '<td><select class="ch-grid-input" data-rel-type="' + esc(r.id) + '" style="min-width:100px">' +
+        ['spouse','partner','parent','child','sibling','friend','enemy','rival','mentor','colleague'].map(t =>
+          '<option value="' + t + '"' + (r.type === t ? ' selected' : '') + '>' + t + '</option>').join('') +
+        '</select></td>' +
+        '<td><b>' + esc(r.toName) + '</b></td>' +
+        '<td><select class="ch-grid-input" data-rel-imp="' + esc(r.id) + '" style="min-width:60px">' +
+        '<option value="">-</option>' +
+        [1,2,3,4,5].map(i => '<option value="' + i + '"' + (r.importance == i ? ' selected' : '') + '>' + i + '</option>').join('') +
+        '</select></td>' +
+        '<td>' + (r.source === 'user' ? '<span class="chip">by reader</span>' : '<span class="note">pipeline</span>') + '</td>' +
+        '<td style="white-space:nowrap">' +
+        '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓</button> ' +
+        '<button class="btn sm ghost" data-rel-reject="' + esc(r.id) + '">✕</button>' +
+        '</td></tr>';
     });
-    html += '</div>';
+    html += '</tbody></table></div>';
   }
   html += '</div>';
   body.innerHTML = html;
@@ -2183,7 +2189,7 @@ async function charLabRenderInbox(body, works) {
 
   body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-accept');
-    const item = b.closest('.rel-inbox-item');
+    const item = b.closest('tr[data-rel]');
     // v381: handle both edge IDs (user suggestions) and JSON relIds (pipeline)
     try {
       if (relId.startsWith('edge:')) {
@@ -2238,100 +2244,11 @@ async function charLabRenderInbox(body, works) {
       }
     } catch (e) { console.warn('Reject failed', e); }
     markReviewed(relId);
-    b.closest('.rel-inbox-item').style.display = 'none';
+    b.closest('tr[data-rel]').style.display = 'none';
     toast('Relationship rejected');
   }));
 
-  body.querySelectorAll('[data-rel-change]').forEach(b => b.addEventListener('click', () => {
-    const relId = b.getAttribute('data-rel-change');
-    const item = b.closest('.rel-inbox-item');
-    // Show type selector
-    const types = ['spouse', 'partner', 'parent', 'child', 'sibling', 'friend', 'enemy', 'rival', 'mentor', 'colleague'];
-    let selHtml = '<select id="rel-change-' + esc(relId) + '" class="text-input" style="width:auto;display:inline-block">';
-    types.forEach(t => { selHtml += '<option value="' + t + '">' + t + '</option>'; });
-    selHtml += '</select> <button class="btn sm" id="rel-change-save-' + esc(relId) + '">Save</button>';
-    const div = document.createElement('div');
-    div.innerHTML = selHtml;
-    div.style.marginTop = '8px';
-    item.appendChild(div);
-    document.getElementById('rel-change-save-' + relId).addEventListener('click', () => {
-      const newType = document.getElementById('rel-change-' + relId).value;
-      // TODO Phase 2: update the edge table; for now just mark reviewed
-      markReviewed(relId);
-      item.style.opacity = '0.4';
-      item.querySelectorAll('button').forEach(x => x.disabled = true);
-      toast('Changed to ' + newType + ' (saved)');
-    });
-  }));
-}
-
-/* v318: unified character database — canonical characters spanning works. */
-async function charLabRenderUnified(body) {
-  body.innerHTML = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
-    ' Character Lab</h3>' +
-    '<p class="note">' +
-    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
-    '<button class="btn sm" data-chview="unified">Character database</button> ' +
-    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
-    '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
-    '<p class="note">Loading…</p></div>';
-  charLabWireViewToggle(body);
-
-  const canonicals = await CharacterStore.listCanonical();
-  let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
-    ' Character Lab</h3>' +
-    '<p class="note">' +
-    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
-    '<button class="btn sm" data-chview="unified">Character database</button> ' +
-    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
-    '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
-    '<p><button class="btn sm" id="ch-autolink">⚡ Auto-link series matches</button> ' +
-    '<span class="note" id="ch-autolink-msg"></span></p>' +
-    '<p class="note">' + canonicals.length + ' canonical characters. ' +
-    'Link book characters to build the cross-book web.</p>';
-  if (!canonicals.length) {
-    html += '<p class="note">No linked characters yet. Open a work, select ' +
-      'a character, and use "Link to character" to start building.</p>';
-  } else {
-    html += '<div class="ch-list">';
-    canonicals.forEach(c => {
-      html += '<button class="ch-card' + (c.id === charLabCanonicalId ? ' sel' : '') +
-        '" data-chcanon="' + esc(c.id) + '">' +
-        '<b>' + esc(c.name) + '</b> ' +
-        '<span class="note">' + c.workCount + ' book' + (c.workCount === 1 ? '' : 's') + '</span>' +
-        (c.works.length ? '<br><span class="note">' + esc(c.works.slice(0, 3).join(', ')) +
-          (c.works.length > 3 ? '…' : '') + '</span>' : '') +
-        '</button>';
-    });
-    html += '</div>';
-  }
-  html += '</div><div id="ch-canon-detail"></div>';
-  body.innerHTML = html;
-  charLabWireViewToggle(body);
-  document.getElementById('ch-urefresh').addEventListener('click', () => charLabRenderUnified(body));
-  document.getElementById('ch-autolink').addEventListener('click', async (e) => {
-    const btn = e.target;
-    const msg = document.getElementById('ch-autolink-msg');
-    btn.disabled = true;
-    if (msg) msg.textContent = 'Scanning…';
-    const res = await CharacterStore.autoLinkSeries();
-    if (res.error) {
-      if (msg) msg.textContent = 'Failed: ' + res.error;
-      btn.disabled = false;
-      return;
-    }
-    if (msg) msg.textContent = res.linked
-      ? 'Linked ' + res.linked + ' characters across ' + res.groups + ' groups.'
-      : 'No new series matches found.';
-    btn.disabled = false;
-    if (res.linked) charLabRenderUnified(body);
-  });
-  body.querySelectorAll('[data-chcanon]').forEach(b => b.addEventListener('click', async () => {
-    charLabCanonicalId = b.getAttribute('data-chcanon');
-    body.querySelectorAll('.ch-card').forEach(x =>
-      x.classList.toggle('sel', x.getAttribute('data-chcanon') === charLabCanonicalId));
-    await charLabCanonDetail();
-  }));
+  // v386: Change is now inline via dropdowns (no dialog needed)
   if (charLabCanonicalId) await charLabCanonDetail();
 }
 
