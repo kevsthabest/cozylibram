@@ -12,6 +12,9 @@
 /* v342: character breadcrumb stack. When navigating character→character,
    push the current view so Back walks the chain. Empty stack → origin. */
 let charNavStack = [];
+/* v353: modal return target — when opening a character from a book modal,
+   stash the book ID so Back can restore the modal (triage #9) */
+let charModalReturn = null;
 function charPushNav(targetId) {
   // v343: clear stale crumbs on fresh entry (Advisor HIGH)
   if (view === 'character' && characterViewId) {
@@ -45,6 +48,16 @@ function charClearNav() { charNavStack = []; }
 function goBack() {
   // v342: walk the character breadcrumb first
   try { if (charPopNav()) return; } catch (e) {}
+  // v353: restore book modal if we came from one (triage #9)
+  try {
+    if (charModalReturn && typeof openPreviewModal === 'function') {
+      const bookId = charModalReturn;
+      charModalReturn = null;
+      const book = (typeof library !== 'undefined' ? library : []).find(b => b.id === bookId);
+      if (book) { openPreviewModal(book); return; }
+    }
+  } catch (e) {}
+  charModalReturn = null;
   try { go('library'); } catch (e) { try { history.back(); } catch (err) {} }
 }
 
@@ -187,6 +200,12 @@ const CharacterWiki = {
 };
 
 function openCharacter(charId) {
+  // v353: stash modal return target before closing (triage #9)
+  try {
+    if (typeof previewOpenId !== 'undefined' && previewOpenId) {
+      charModalReturn = previewOpenId;
+    }
+  } catch (e) {}
   // v332: close the book modal first — click its close button so the
   // overlay token, scroll lock, and history entry are cleaned up properly
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}

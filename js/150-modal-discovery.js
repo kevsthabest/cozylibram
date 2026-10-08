@@ -1043,6 +1043,9 @@ function renderDetailModal(b, viaBook) {
     const inp = document.getElementById('f-progress');
     if (inp) inp.value = draft.progress;
     renderProgressSection();
+    // v353: refresh log summary after stepper changes
+    const summEl = document.getElementById('m-logsummary');
+    if (summEl) summEl.outerHTML = logSummaryHTML();
   };
   const progressQuickHTML = () => {
     if (draft.status !== 'reading') return '';
@@ -1099,12 +1102,13 @@ function renderDetailModal(b, viaBook) {
   })();
 
   // v182: mockup reading-log card header — Started / Last read.
-  const logSummaryHTML = (() => {
+  // v353: log summary as function so stepper can re-render it (Advisor triage #10)
+  const logSummaryHTML = () => {
     const ds = (b.log || []).map(x => x.d).filter(Boolean).sort();
-    if (!ds.length) return '';
-    return '<div class="log-summary"><span>Started <b>' + esc(fmtDate(ds[0])) + '</b></span>' +
+    if (!ds.length) return '<div id="m-logsummary"></div>';
+    return '<div id="m-logsummary" class="log-summary"><span>Started <b>' + esc(fmtDate(ds[0])) + '</b></span>' +
       '<span>Last read <b>' + esc(fmtDate(ds[ds.length - 1])) + '</b></span></div>';
-  })();
+  };
 
   root.innerHTML =
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
@@ -1220,7 +1224,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
 
     '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
-    logSummaryHTML +
+    logSummaryHTML() +
     '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
 
     '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
@@ -1447,7 +1451,10 @@ function renderDetailModal(b, viaBook) {
 
   root.querySelectorAll('#f-status [data-s]').forEach(btn =>
     btn.addEventListener('click', () => {
+      // v353: save immediately for consistency with primary button (triage #5+6)
       draft.status = btn.dataset.s;
+      b.status = btn.dataset.s;
+      saveLibrary();
       root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');
       if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';

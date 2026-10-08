@@ -56,12 +56,25 @@ function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES
 // None of these are genres.
 const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?(print|type( books?)?)|accessible book|protected daisy|in library|overdrive|internet archive)$/i;
 const GENRE_SUBJECT_JUNK = /\((fictional|fictitious|imaginary|legendary|mythical)\b/i;
+/* v353: multilingual genre normalization — map non-English variants to
+   canonical English (triage #7: "Fantasia"/"fantástico" → "Fantasy") */
+const GENRE_NORM = {
+  'fantasia': 'Fantasy', 'fantastique': 'Fantasy', 'fantástico': 'Fantasy', 'fantastica': 'Fantasy',
+  'romance': 'Romance', 'romantique': 'Romance', 'romântico': 'Romance',
+  'horreur': 'Horror', 'terror': 'Horror',
+  'science fiction': 'Science Fiction', 'ficção científica': 'Science Fiction',
+  'dragons & mythical creatures': 'Dragons & Mythical Creatures',
+  'dragons et créatures mythiques': 'Dragons & Mythical Creatures',
+  'dragões e criaturas míticas': 'Dragons & Mythical Creatures',
+};
 function bookGenres(b) {
   const out = [];
   (b.categories || []).forEach(c => {
     String(c).split('/').map(s => s.trim()).forEach(s => {
       if (!s || s.length > 48 || GENRE_JUNK.test(s) || GENRE_SUBJECT_JUNK.test(s)) return;
-      if (!out.includes(s)) out.push(s);
+      // v353: normalize multilingual dupes
+      const norm = GENRE_NORM[s.toLowerCase()] || s;
+      if (!out.includes(norm)) out.push(norm);
     });
   });
   return out;
