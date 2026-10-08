@@ -7,6 +7,10 @@
    Linked from the book modal's Cast section. Read-only shared data in v1;
    edit suggestions come later. */
 
+/* v331: back navigation for character pages — returns to library
+   (no character index exists yet to return to) */
+function goBack() { try { go('library'); } catch (e) { try { history.back(); } catch (err) {} } }
+
 let characterViewId = null;
 
 const CharacterWiki = {
@@ -76,6 +80,9 @@ const CharacterWiki = {
 };
 
 function openCharacter(charId) {
+  // v331: close the book modal first — otherwise it overlays the wiki page
+  try { if (typeof closeDetailModal === 'function') closeDetailModal(); } catch (e) {}
+  try { document.querySelectorAll('.modal-ov').forEach(m => m.remove()); } catch (e) {}
   characterViewId = charId;
   view = 'character';
   animateIn = true;
@@ -87,6 +94,9 @@ function openCharacter(charId) {
    Shows book-specific description and relationships. */
 let bookCharViewId = null;
 function openBookCharacter(bookCharId) {
+  // v331: close the book modal first
+  try { if (typeof closeDetailModal === 'function') closeDetailModal(); } catch (e) {}
+  try { document.querySelectorAll('.modal-ov').forEach(m => m.remove()); } catch (e) {}
   bookCharViewId = bookCharId;
   view = 'bookcharacter';
   animateIn = true;
