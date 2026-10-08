@@ -420,7 +420,50 @@ function openPreviewModal(t, opts) {
       h += '<div class="field"><label>' + icon('doc') + ' Genres</label><div class="chips wrap">' +
         pGenres.map(x => '<span class="chip">' + esc(x) + '</span>').join('') + '</div></div>';
     }
+    // v322: Cast section — populated async via loadCast()
+    h += '<div class="field" id="m-cast-wrap" style="display:none"><label>' + icon('friends') + ' Cast</label><div id="m-cast"></div></div>';
     return h;
+  };
+  // v322: load cast for the book's work, tiered display
+  const loadCast = async () => {
+    try {
+      const wrap = document.getElementById('m-cast-wrap');
+      const box = document.getElementById('m-cast');
+      if (!wrap || !box || typeof CharacterWiki === 'undefined') return;
+      const workId = await resolveWork(t);
+      if (!workId) return;
+      const cast = await CharacterWiki.getCast(workId);
+      if (!cast.total) return;
+      const chip = (c) => {
+        const label = c.characterId ? 'data-chwiki="' + esc(c.characterId) + '"' : '';
+        const cls = c.characterId ? 'taplink' : 'chip';
+        return '<button class="' + cls + '" ' + label + '>' + esc(c.name) + '</button>';
+      };
+      let h = '<div class="chips wrap">' + cast.tier1.map(chip).join('') + '</div>';
+      if (cast.tier2.length) {
+        h += '<p><button class="taplink" id="m-cast-t2">Supporting cast (' + cast.tier2.length + ')</button></p>' +
+          '<div class="chips wrap" id="m-cast-t2-list" style="display:none">' + cast.tier2.map(chip).join('') + '</div>';
+      }
+      if (cast.tier3.length) {
+        h += '<p><button class="taplink" id="m-cast-t3">Minor characters (' + cast.tier3.length + ')</button></p>' +
+          '<div class="chips wrap" id="m-cast-t3-list" style="display:none">' + cast.tier3.map(chip).join('') + '</div>';
+      }
+      box.innerHTML = h;
+      wrap.style.display = '';
+      const t2 = document.getElementById('m-cast-t2');
+      if (t2) t2.addEventListener('click', () => {
+        const l = document.getElementById('m-cast-t2-list');
+        l.style.display = l.style.display === 'none' ? '' : 'none';
+      });
+      const t3 = document.getElementById('m-cast-t3');
+      if (t3) t3.addEventListener('click', () => {
+        const l = document.getElementById('m-cast-t3-list');
+        l.style.display = l.style.display === 'none' ? '' : 'none';
+      });
+      box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
+        openCharacter(b.getAttribute('data-chwiki'));
+      }));
+    } catch (e) {}
   };
   const wireDescToggle = () => {
     const w = document.getElementById(descId);
@@ -519,9 +562,11 @@ function openPreviewModal(t, opts) {
       document.getElementById('p-descread').innerHTML = descHTML();
       document.getElementById('p-tags').innerHTML = tagSecHTML();
       wireDescToggle();
+      loadCast();
     })();
   } else {
     wireDescToggle();
+    loadCast();
   }
   track('book_preview_opened', { source: opts.source || 'preview', kind: t.kind });
 }
