@@ -251,8 +251,10 @@ function charQuotesHTML(quotes) {
 function charTimelineHTML(instances, workCharsByWorkId) {
   if (!instances || instances.length < 2) return ''; // timeline needs 2+ books
   // Sort by series position if available, else alphabetically
+  // v344: normalize positions (handles range strings like "0.1-0.5" via parseFloat)
+  const posNum = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
   const sorted = [...instances].sort((a, b) => {
-    const pa = a.seriesPos, pb = b.seriesPos;
+    const pa = posNum(a.seriesPos), pb = posNum(b.seriesPos);
     if (pa != null && pb != null) return pa - pb;
     if (pa != null) return -1;
     if (pb != null) return 1;
