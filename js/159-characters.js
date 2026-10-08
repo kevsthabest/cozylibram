@@ -37,14 +37,17 @@ const CharacterWiki = {
 
   /* Characters for a work, grouped by role tier for the Cast section. */
   async getCast(workId) {
-    const chars = await CharacterStore.listForWork(workId);
-    // Filter to confirmed/candidate, hide merged/blocked
-    const visible = chars.filter(c =>
-      c.status !== 'merged' && c.status !== 'rejected' && !charIsBlocked(c));
-    const tier1 = visible.filter(c => c.role === 'protagonist' || c.role === 'antagonist');
-    const tier2 = visible.filter(c => c.role === 'supporting');
-    const tier3 = visible.filter(c => c.role === 'minor');
-    return { tier1, tier2, tier3, total: visible.length };
+    try {
+      const chars = await CharacterStore.listForWork(workId);
+      // Filter to confirmed/candidate, hide merged/blocked
+      const visible = chars.filter(c =>
+        c.status !== 'merged' && c.status !== 'rejected' &&
+        (typeof charIsBlocked === 'undefined' || !charIsBlocked(c)));
+      const tier1 = visible.filter(c => c.role === 'protagonist' || c.role === 'antagonist');
+      const tier2 = visible.filter(c => c.role === 'supporting');
+      const tier3 = visible.filter(c => c.role === 'minor');
+      return { tier1, tier2, tier3, total: visible.length };
+    } catch (e) { return { tier1: [], tier2: [], tier3: [], total: 0 }; }
   },
 
   async saveNote(charId, text) {

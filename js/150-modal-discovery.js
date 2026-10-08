@@ -428,7 +428,11 @@ function openPreviewModal(t, opts) {
     if (charsLoaded) return;
     charsLoaded = true;
     const box = document.getElementById('m-charstab');
-    if (!box || typeof CharacterWiki === 'undefined') return;
+    if (!box) return;
+    if (typeof CharacterWiki === 'undefined') {
+      box.innerHTML = '<p class="note">Character module not loaded — try fully closing and reopening the app.</p>';
+      return;
+    }
     try {
       const workId = await resolveWork(t);
       if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
