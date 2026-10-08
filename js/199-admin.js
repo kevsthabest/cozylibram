@@ -2153,7 +2153,7 @@ async function charLabRenderInbox(body, works) {
   body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-accept');
     const item = b.closest('.rel-inbox-item');
-    // v378: write to edge table (not just localStorage)
+    // v380: upsert — find pending edge and mark confirmed (Advisor MEDIUM)
     try {
       const [fromId, idx] = relId.split(':');
       const chars = await CharacterStore.listForWork(charLabWorkId);
@@ -2161,19 +2161,32 @@ async function charLabRenderInbox(body, works) {
       if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
         const r = fromChar.relationships[idx];
         const toName = String(r.to || '').trim();
-        // Find target character ID
+        const relType = String(r.type || 'friend').toLowerCase();
         const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
         if (toChar) {
-          await CharacterStore.createRelationship(fromId, toChar.id, r.type || 'friend', {
-            direction: 'mutual',
-            importance: r.importance || null,
-            workId: charLabWorkId,
-          });
-          // Mark the JSON as reviewed (don't delete, keep as fallback)
-          markReviewed(relId);
+          const sb = await CharacterStore._sb();
+          // Find existing pending edge
+          const { data: existing } = await sb.from('character_relationships')
+            .select('id')
+            .eq('character_a_id', fromId)
+            .eq('character_b_id', toChar.id)
+            .eq('relationship_type', relType)
+            .eq('review_status', 'pending')
+            .maybeSingle();
+          if (existing) {
+            // Flip to confirmed
+            await CharacterStore.updateRelationship(existing.id, { review_status: 'confirmed' });
+          } else {
+            // Create new (shouldn't happen after backfill, but safe)
+            await CharacterStore.createRelationship(fromId, toChar.id, relType, {
+              direction: 'mutual',
+              importance: r.importance || null,
+              workId: charLabWorkId,
+            });
+          }
         }
       }
-    } catch (e) { console.warn('Edge create failed', e); }
+    } catch (e) { console.warn('Edge upsert failed', e); }
     markReviewed(relId);
     item.style.opacity = '0.4';
     item.querySelectorAll('button').forEach(x => x.disabled = true);

@@ -371,32 +371,37 @@ function charTimelineHTML(instances, workCharsByWorkId) {
    pan/zoom via D3. Filters to important relationships. */
 
 /* v378: Merge edge table relationships over JSON.
+   v380: Filter to center character only (Advisor HIGH).
    Confirmed edges from character_relationships take precedence. */
-async function getMergedRelationships(workChars, centerName) {
+async function getMergedRelationships(workChars, centerInstances) {
   const merged = [];
   const seen = new Set();
 
-  // Start with JSON relationships (existing behavior)
-  workChars.forEach(c => {
-    (c.relationships || []).forEach(r => {
-      const key = String(c.name).toLowerCase() + '|' + String(r.to || '').toLowerCase() + '|' + String(r.type || '').toLowerCase();
+  // v380: only the center character's relationships (not the whole work)
+  // centerInstances are the book_character rows for the viewed character
+  const centerIds = new Set((centerInstances || []).map(i => i.id).filter(Boolean));
+
+  // Start with JSON relationships from center's instances
+  (centerInstances || []).forEach(inst => {
+    (inst.relationships || []).forEach(r => {
+      const key = String(inst.name).toLowerCase() + '|' + String(r.to || '').toLowerCase() + '|' + String(r.type || '').toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
-        merged.push({ from: c.name, to: r.to, type: r.type, importance: r.importance, source: 'json' });
+        merged.push({ from: inst.name, to: r.to, type: r.type, importance: r.importance, source: 'json' });
       }
     });
   });
 
   // Overlay confirmed edges from the table
-  // v379: single query (not N+1)
+  // v379: single query (not N+1); v380: filter to center's IDs only
   try {
-    if (typeof CharacterStore !== 'undefined' && CharacterStore.listRelationships) {
-      const charIds = workChars.map(c => c.id).filter(Boolean);
-      if (charIds.length) {
+    if (typeof CharacterStore !== 'undefined') {
+      const centerIdList = [...centerIds];
+      if (centerIdList.length) {
         const sb = await CharacterStore._sb();
         const { data: edges, error } = await sb.from('character_relationships')
           .select('id, character_a_id, character_b_id, relationship_type, direction, importance, review_status')
-          .in('character_a_id', charIds)
+          .in('character_a_id', centerIdList)
           .eq('review_status', 'confirmed');
         if (!error && edges) {
           edges.forEach(e => {
@@ -1125,8 +1130,9 @@ async function renderCharacterPage() {
   html += '<h3 class="serif">Relationships</h3>';
   try {
     // v379: merge edge table over JSON (Advisor HIGH)
+    // v380: pass d.instances (center's rows) not allWorkChars
     // getMergedRelationships returns [{from, to, type, importance, source}]
-    const merged = await getMergedRelationships(allWorkChars, d.name);
+    const merged = await getMergedRelationships(allWorkChars, d.instances);
     // Convert to grouped format: [{name, types[], importance}]
     const byName = {};
     merged.forEach(m => {
