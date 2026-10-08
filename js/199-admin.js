@@ -2164,7 +2164,7 @@ async function charLabRenderInbox(body, works) {
   // Wire view toggle
   body.querySelectorAll('[data-chview]').forEach(b => b.addEventListener('click', () => {
     charLabView = b.getAttribute('data-chview');
-    charLabRenderAdmin(body);
+    renderAdminBody();
   }));
   document.getElementById('ch-work').addEventListener('change', e => {
     charLabWorkId = e.target.value;
