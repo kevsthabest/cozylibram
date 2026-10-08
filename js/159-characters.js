@@ -206,6 +206,34 @@ function charQuotesHTML(quotes) {
   return h;
 }
 
+/* v338: group relationships by person, resolving contradictions.
+   If the same person appears as both parent and child (pipeline error),
+   keep only 'parent' (the more commonly correct direction) and flag it.
+   Returns [{name, types: [], contradicted: bool}]. */
+function charGroupRelationships(relationships) {
+  const byPerson = {};
+  (relationships || []).forEach(r => {
+    const name = String(r.to || '').trim();
+    if (!name) return;
+    const type = charNormRelType(r.type);
+    const key = name.toLowerCase();
+    if (!byPerson[key]) byPerson[key] = { name, types: new Set(), contradicted: false };
+    byPerson[key].types.add(type);
+  });
+  // Resolve parent/child contradictions
+  Object.values(byPerson).forEach(p => {
+    if (p.types.has('parent') && p.types.has('child')) {
+      p.types.delete('child');
+      p.contradicted = true;
+    }
+  });
+  return Object.values(byPerson).map(p => ({
+    name: p.name,
+    types: [...p.types].sort(),
+    contradicted: p.contradicted,
+  })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /* v333: render a relationship target name as a tappable link when it
    resolves to a known character, plain text otherwise. */
 function charRelLink(name, workChars) {
@@ -280,8 +308,16 @@ async function renderBookCharacterPage() {
     if (rels.length) {
       html += '<h3 class="serif">Relationships</h3><p>';
       const byType = {};
+      // v338: dedupe parent/child contradictions (pipeline sometimes writes both)
+      const seenParents = new Set();
       rels.forEach(r => {
         const t = charNormRelType(r.type);
+        if (t === 'parent') seenParents.add(String(r.to || '').trim().toLowerCase());
+      });
+      rels.forEach(r => {
+        const t = charNormRelType(r.type);
+        const nameKey = String(r.to || '').trim().toLowerCase();
+        if (t === 'child' && seenParents.has(nameKey)) return; // contradictory, skip
         (byType[t] || (byType[t] = [])).push(r.to);
       });
       html += Object.keys(byType).sort().map(t =>
@@ -383,8 +419,15 @@ async function renderCharacterPage() {
     try { wChars = await CharacterStore.listForWork(inst.workId); } catch (e) {}
     html += '<h4 class="serif">' + esc(inst.workTitle) + '</h4><p>';
     const byType = {};
+    // v338: dedupe parent/child contradictions
+    const seenParents = new Set();
+    inst.relationships.forEach(r => {
+      if (charNormRelType(r.type) === 'parent')
+        seenParents.add(String(r.to || '').trim().toLowerCase());
+    });
     inst.relationships.forEach(r => {
       const t = charNormRelType(r.type);
+      if (t === 'child' && seenParents.has(String(r.to || '').trim().toLowerCase())) return;
       (byType[t] || (byType[t] = [])).push(r.to);
     });
     html += Object.keys(byType).sort().map(t =>
