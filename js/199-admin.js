@@ -1793,6 +1793,80 @@ const CharacterStore = {
     if (error) throw error;
   },
 
+  /* v321: series-aware auto-link. Finds unlinked book_characters with
+     identical normalized names in works by the SAME author in the SAME
+     series, and links them to a shared canonical character.
+     This is the safe automation: same author + same series + exact name
+     is strong evidence (the Pete Sebeck case). Cross-author and
+     cross-series matches are NEVER auto-linked.
+     Returns {linked: n, groups: m} — counts of rows linked and canonicals
+     created/touched. Never throws — returns {error} on failure. */
+  async autoLinkSeries() {
+    const sb = await this._sb();
+    if (!sb) return { error: 'cloud unavailable' };
+    try {
+      // Get all unlinked characters with their work's author/series
+      const { data, error } = await sb.from('book_characters')
+        .select('id, name, work_id, works!inner(authors, series)')
+        .is('duplicate_of', null)
+        .neq('status', 'merged')
+        .limit(5000);
+      if (error) throw error;
+      // Get already-linked row ids to exclude
+      const { data: linked } = await sb.from('character_links')
+        .select('book_character_id').limit(5000);
+      const linkedIds = new Set((linked || []).map(l => l.book_character_id));
+
+      // Group by (norm_name, author_key, series_key)
+      const groups = {};
+      for (const r of data || []) {
+        if (linkedIds.has(r.id)) continue;
+        const norm = this.normName(r.name);
+        if (!norm) continue;
+        const w = r.works || {};
+        const authors = Array.isArray(w.authors) ? w.authors.join('|').toLowerCase() : '';
+        const series = String(w.series || '').trim().toLowerCase();
+        if (!authors || !series) continue; // need both for safe auto-link
+        const key = norm + '||' + authors + '||' + series;
+        (groups[key] || (groups[key] = [])).push({
+          id: r.id, name: r.name, norm,
+          workId: r.work_id,
+        });
+      }
+      // Only groups with 2+ rows from DIFFERENT works qualify
+      let linkedCount = 0, groupCount = 0;
+      for (const key of Object.keys(groups)) {
+        const g = groups[key];
+        const workIds = new Set(g.map(x => x.workId));
+        if (g.length < 2 || workIds.size < 2) continue;
+        // Find or create canonical
+        const { data: existing } = await sb.from('characters')
+          .select('id').eq('name_norm', g[0].norm).limit(1);
+        let charId = existing && existing[0] && existing[0].id;
+        if (!charId) {
+          const { data: nc, error: cerr } = await sb.from('characters')
+            .insert({ name: g[0].name, name_norm: g[0].norm, source: 'auto-series' })
+            .select('id').maybeSingle();
+          if (cerr) throw cerr;
+          charId = nc.id;
+        }
+        // Link all rows in the group
+        const rows = g.map(x => ({
+          book_character_id: x.id,
+          character_id: charId,
+          linked_by: null, // system, not a human
+          note: 'auto-series: same author + series + exact name',
+        }));
+        const { error: lerr } = await sb.from('character_links')
+          .upsert(rows, { onConflict: 'book_character_id', ignoreDuplicates: true });
+        if (lerr) throw lerr;
+        linkedCount += g.length;
+        groupCount++;
+      }
+      return { linked: linkedCount, groups: groupCount };
+    } catch (e) { return { error: (e && e.message) || 'unknown error' }; }
+  },
+
   /* All characters for a work. v320: character_id via character_links join. */
   async listForWork(workId) {
     const sb = await this._sb();
@@ -1919,6 +1993,8 @@ async function charLabRenderUnified(body) {
     '<button class="btn sm ghost" data-chview="work">By work</button> ' +
     '<button class="btn sm" data-chview="unified">Character database</button> ' +
     '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
+    '<p><button class="btn sm" id="ch-autolink">⚡ Auto-link series matches</button> ' +
+    '<span class="note" id="ch-autolink-msg"></span></p>' +
     '<p class="note">' + canonicals.length + ' canonical characters. ' +
     'Link book characters to build the cross-book web.</p>';
   if (!canonicals.length) {
@@ -1941,6 +2017,23 @@ async function charLabRenderUnified(body) {
   body.innerHTML = html;
   charLabWireViewToggle(body);
   document.getElementById('ch-urefresh').addEventListener('click', () => charLabRenderUnified(body));
+  document.getElementById('ch-autolink').addEventListener('click', async (e) => {
+    const btn = e.target;
+    const msg = document.getElementById('ch-autolink-msg');
+    btn.disabled = true;
+    if (msg) msg.textContent = 'Scanning…';
+    const res = await CharacterStore.autoLinkSeries();
+    if (res.error) {
+      if (msg) msg.textContent = 'Failed: ' + res.error;
+      btn.disabled = false;
+      return;
+    }
+    if (msg) msg.textContent = res.linked
+      ? 'Linked ' + res.linked + ' characters across ' + res.groups + ' groups.'
+      : 'No new series matches found.';
+    btn.disabled = false;
+    if (res.linked) charLabRenderUnified(body);
+  });
   body.querySelectorAll('[data-chcanon]').forEach(b => b.addEventListener('click', async () => {
     charLabCanonicalId = b.getAttribute('data-chcanon');
     body.querySelectorAll('.ch-card').forEach(x =>
