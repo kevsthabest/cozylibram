@@ -372,10 +372,7 @@ function charTimelineHTML(instances, workCharsByWorkId) {
 
 function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
-  if (typeof d3 === 'undefined') {
-    // Fallback if D3 failed to load
-    return '<p class="note">Relationship graph unavailable (D3 not loaded).</p>';
-  }
+  // v370: always emit markup — initD3Graph handles lazy-loading D3
 
   // v365: only important relationships — family, partners, or high importance
   const importantTypes = new Set(['spouse', 'parent', 'child', 'sibling', 'partner', 'fiance']);
@@ -938,25 +935,7 @@ async function renderCharacterPage() {
       (inst.relationships || []).forEach(r => allRels.push(r));
     }
     const grouped = charGroupRelationships(allRels);
-    const graphHTML = charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
-    // v365: store character data for graph expansion (hidden JSON)
-    if (graphHTML && allWorkChars) {
-      const uid = graphHTML.match(/id="(cg[a-z0-9]+)"/);
-      if (uid) {
-        const slim = allWorkChars.map(c => ({
-          name: c.name, role: c.role,
-          id: c.id, characterId: c.characterId,
-          relationships: c.relationships || [],
-        }));
-        html += graphHTML.replace('</div>',
-          '<script type="application/json" id="' + uid[1] + '-data">' +
-          JSON.stringify(slim).replace(/</g, '\\u003c') + '</script></div>');
-      } else {
-        html += graphHTML;
-      }
-    } else {
-      html += graphHTML;
-    }
+    html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
   } catch (e) {}
   let hasRels = false;
   for (const inst of d.instances) {
