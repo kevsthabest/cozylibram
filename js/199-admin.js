@@ -299,8 +299,8 @@ function renderLogsTab() {
     const refresh = document.getElementById('log-refresh');
     if (refresh) refresh.addEventListener('click', paint);
     const clear = document.getElementById('log-clear');
-    if (clear) clear.addEventListener('click', () => {
-      if (confirm('Clear the on-device log?')) { AppLog.clear(); paint(); }
+    if (clear) clear.addEventListener('click', async () => {
+      if (await confirmModal('Clear the on-device log?', { okLabel: 'Clear' })) { AppLog.clear(); paint(); }
     });
   };
   paint();
@@ -434,8 +434,9 @@ function wireModeration(body) {
     try { await fn(); toast(label); await refresh(); }
     catch (e) { toast('Couldn\u2019t: ' + ((e && e.message) || e)); }
   };
-  body.querySelectorAll('[data-mod-ban]').forEach(b => b.addEventListener('click', () => {
-    if (!confirm('Ban user ' + modUserLabel(b.dataset.modBan) + '? They will be signed out immediately.')) return;
+  body.querySelectorAll('[data-mod-ban]').forEach(b => b.addEventListener('click', async () => {
+    // v352: in-app confirm
+    if (!await confirmModal('Ban user ' + modUserLabel(b.dataset.modBan) + '? They will be signed out immediately.', { okLabel: 'Ban' })) return;
     run('User banned', () => modBan(b.dataset.modBan));
   }));
   body.querySelectorAll('[data-mod-unban]').forEach(b => b.addEventListener('click', () => {
@@ -444,17 +445,17 @@ function wireModeration(body) {
   body.querySelectorAll('[data-mod-dismiss]').forEach(b => b.addEventListener('click', () => {
     run('Report dismissed', () => modSetReportStatus(b.dataset.modDismiss, 'dismissed'));
   }));
-  body.querySelectorAll('[data-mod-report-ban]').forEach(b => b.addEventListener('click', () => {
-    if (!confirm('Ban user ' + modUserLabel(b.dataset.uid) + '? They will be signed out immediately.')) return;
+  body.querySelectorAll('[data-mod-report-ban]').forEach(b => b.addEventListener('click', async () => {
+    if (!await confirmModal('Ban user ' + modUserLabel(b.dataset.uid) + '? They will be signed out immediately.', { okLabel: 'Ban' })) return;
     run('User banned', async () => {
       await modBan(b.dataset.uid);
       await modSetReportStatus(b.dataset.modReportBan, 'actioned');
     });
   }));
-  body.querySelectorAll('[data-mod-delete]').forEach(b => b.addEventListener('click', () => {
+  body.querySelectorAll('[data-mod-delete]').forEach(b => b.addEventListener('click', async () => {
     const uid = b.dataset.modDelete, label = modUserLabel(uid);
-    if (!confirm('DELETE user ' + label + ' permanently?\n\nThis wipes their library and deletes their account. It cannot be undone.')) return;
-    if (!confirm('Last chance — really delete ' + label + '?')) return;
+    if (!await confirmModal('DELETE user ' + label + ' permanently?\n\nThis wipes their library and deletes their account. It cannot be undone.', { okLabel: 'Delete' })) return;
+    if (!await confirmModal('Last chance \u2014 really delete ' + label + '?', { okLabel: 'Yes, delete' })) return;
     run('User deleted', () => modDeleteUser(uid));
   }));
 }
@@ -1162,7 +1163,7 @@ async function renderEditionAssetLab() {
         await load();
       }));
       result.querySelectorAll('[data-eal-reject]').forEach(btn => btn.addEventListener('click', async () => {
-        if (!confirm('Reject this candidate?')) return;
+        if (!await confirmModal('Reject this candidate?', { okLabel: 'Reject' })) return;
         btn.disabled = true;
         await sb.from('edition_assets').update({ rejected: true, verified: false }).eq('id', btn.dataset.ealReject);
         await load();
@@ -2107,7 +2108,7 @@ async function charLabCanonDetail() {
   el.innerHTML = html;
   el.querySelectorAll('[data-chunlink]').forEach(b => b.addEventListener('click', async () => {
     const rowId = b.getAttribute('data-chunlink');
-    if (!confirm('Unlink this appearance from ' + d.name + '?')) return;
+    if (!await confirmModal('Unlink this appearance from ' + d.name + '?', { okLabel: 'Unlink' })) return;
     b.disabled = true;
     try {
       await CharacterStore.unlink(rowId);
@@ -2216,8 +2217,9 @@ function charLabRender(body, works, chars) {
     const [a, bb] = dupes[idx];
     const loserId = a.id === keepId ? bb.id : a.id;
     const msg = document.getElementById('ch-merge-msg');
-    if (!confirm('Merge "' + (a.id === keepId ? bb.name : a.name) + '" into "' +
-        (a.id === keepId ? a.name : bb.name) + '"? Relationships will be repointed.')) return;
+    // v352: in-app confirm
+    if (!await confirmModal('Merge "' + (a.id === keepId ? bb.name : a.name) + '" into "' +
+        (a.id === keepId ? a.name : bb.name) + '"? Relationships will be repointed.', { okLabel: 'Merge' })) return;
     b.disabled = true;
     if (msg) msg.textContent = 'Merging…';
     const err = await charMerge(keepId, loserId, chars);
@@ -2448,7 +2450,7 @@ function charLabDetail(chars) {
   }));
   // Wire unlink from detail
   el.querySelectorAll('[data-chunlink-row]').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm('Unlink this character?')) return;
+    if (!await confirmModal('Unlink this character?', { okLabel: 'Unlink' })) return;
     b.disabled = true;
     try {
       await CharacterStore.unlink(b.getAttribute('data-chunlink-row'));

@@ -2899,3 +2899,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* v348: appearance description */
 .ch-appearance { font-style: italic; color: var(--text2); margin: 8px 0; }
+
+/* v352: in-app confirm modal */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.confirm-box { background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; max-width: 400px; width: 100%; }
+.confirm-box p { margin: 0 0 16px; }
+.confirm-btns { display: flex; gap: 10px; justify-content: flex-end; }

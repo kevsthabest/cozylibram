@@ -155,10 +155,45 @@ function icon(name) {
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     body + '</svg>';
 }
+
+/* v352: in-app confirm modal — replaces native confirm() which blocks the
+   renderer (breaks automation, ugly on mobile). Returns a Promise<boolean>. */
+function confirmModal(message, opts) {
+  opts = opts || {};
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.innerHTML =
+      '<div class="confirm-box" role="alertdialog" aria-modal="true">' +
+      '<p>' + esc(message).replace(/\n/g, '<br>') + '</p>' +
+      '<div class="confirm-btns">' +
+      '<button class="btn ghost" data-ca="cancel">' + esc(opts.cancelLabel || 'Cancel') + '</button>' +
+      '<button class="btn danger" data-ca="ok">' + esc(opts.okLabel || 'Confirm') + '</button>' +
+      '</div></div>';
+    const done = val => { try { overlay.remove(); } catch (e) {} resolve(val); };
+    overlay.addEventListener('click', e => {
+      const btn = e.target.closest('[data-ca]');
+      if (btn) done(btn.getAttribute('data-ca') === 'ok');
+      else if (e.target === overlay) done(false);
+    });
+    overlay.addEventListener('keydown', e => {
+      if (e.key === 'Escape') done(false);
+    });
+    document.body.appendChild(overlay);
+    const okBtn = overlay.querySelector('[data-ca="ok"]');
+    if (okBtn) okBtn.focus();
+  });
+}
+
 function fmtDate(iso) {
   if (!iso) return '';
-  try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch (e) { return ''; }
+  try {
+    // v352: date-only strings ("2026-10-08") parse as UTC midnight in new Date(),
+    // which renders the previous day in UTC- timezones. Parse as local instead.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).trim());
+    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) { return ''; }
 }
 
 /* v126: one consistent empty-state block — empathetic title, gentle guidance,

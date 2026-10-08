@@ -432,8 +432,11 @@ function renderSettings() {
   })();
 
   document.getElementById('bk-wipe').addEventListener('click', async () => {
-    if (!confirm('Delete ALL ' + library.length + ' books? Export a backup first!')) return;
-    if (!confirm('Really? This cannot be undone.')) return;
+    // v352: in-app confirms (native confirm blocks renderer)
+    const ok1 = await confirmModal('Delete ALL ' + library.length + ' books? Export a backup first!', { okLabel: 'Delete all' });
+    if (!ok1) return;
+    const ok2 = await confirmModal('Really? This cannot be undone.', { okLabel: 'Yes, delete' });
+    if (!ok2) return;
     library.forEach(b => {
       if (!tombstones.some(t => t.id === b.id)) tombstones.push({ id: b.id, at: Date.now() });
     });
@@ -467,10 +470,12 @@ function renderSettings() {
         ? '<button class="btn ghost block" id="bk-cloud-check" style="margin-top:8px">' + icon('cloud') +
           ' Check my cloud library</button><div id="bk-cloud"></div>'
         : '<p class="note">Sign in to also check your cloud library.</p>');
-    box.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', () => {
+    box.querySelectorAll('[data-restore]').forEach(btn => btn.addEventListener('click', async () => {
       const p = parts[Number(btn.dataset.restore)];
-      if (!p || !confirm('Restore ' + p.n + ' books from "' + partitionLabel(p) +
-        '"? This replaces the ' + library.length + ' books currently open.')) return;
+      // v352: in-app confirm
+      const ok = p && await confirmModal('Restore ' + p.n + ' books from "' + partitionLabel(p) +
+        '"? This replaces the ' + library.length + ' books currently open.', { okLabel: 'Restore' });
+      if (!ok) return;
       const n = restorePartition(p.key);
       render();
       toast(n ? 'Restored ' + n + ' books ✓' : 'Nothing to restore');

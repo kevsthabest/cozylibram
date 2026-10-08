@@ -115,7 +115,7 @@ function heatmapHTML() {
 
   const detail = heatSel
     ? '<div id="heat-books">' + dayDetailHTML(byDay, heatSel) + '</div>'
-    : '<div id="heat-books"><p class="note">Tap a day to see what she read.</p></div>';
+    : '<div id="heat-books"><p class="note">Tap a day to see what you read.</p></div>';
 
   return '<div class="stat-sub">Reading activity</div>' +
     '<div class="heat-scroll"><div class="heat" id="heatmap">' + cols + '</div></div>' +
@@ -203,7 +203,7 @@ function paceHTML() {
     '<div class="kv-row"><span>' + label + '</span><b>' + val + '</b></div>';
   html += '<div class="kv">' +
     (avgLen != null ? kv(icon('reading') + ' Average book', Math.round(avgLen) + ' pages') : '') +
-    (avgDays != null ? kv(icon('hourglass') + ' Average time to finish', Math.max(1, Math.round(avgDays)) + ' days') : '') +
+    (avgDays != null ? (() => { const d = Math.max(1, Math.round(avgDays)); return kv(icon('hourglass') + ' Average time to finish', d + (d === 1 ? ' day' : ' days')); })() : '') +
     kv(icon('flame') + ' Current streak', streak > 0 ? streak + '-day' : '–') +
     kv(icon('medal') + ' Longest streak', best > 0 ? best + '-day' : '–') +
     '</div>';
@@ -965,8 +965,8 @@ function renderStats() {
   } catch (e) {}
   const valueSection =
     '<div class="stat-sub">' + icon('chart') + ' Library value</div><div class="stat-row">' +
-    heroCard('covers', '$' + libActual.toFixed(0), 'Actual spent') +
-    heroCard('sparkles', '$' + libEst.toFixed(0), 'Est. value') +
+    heroCard('covers', '$' + libActual.toFixed(2), 'Actual spent') +
+    heroCard('sparkles', '$' + libEst.toFixed(2), 'Est. value') +
     '</div>' +
     (libPriced < library.length
       ? '<p class="note">' + libPriced + ' of ' + library.length + ' books priced — rest use the default estimate.</p>'

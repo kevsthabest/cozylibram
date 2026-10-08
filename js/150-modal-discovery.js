@@ -1834,12 +1834,14 @@ function renderDetailModal(b, viaBook) {
   });
 
   const rmlog = document.getElementById('m-rmlog');
-  if (rmlog) rmlog.addEventListener('click', () => {
+  if (rmlog) rmlog.addEventListener('click', async () => {
     const tk = dayKey(new Date());
     const e = (b.log || []).find(x => x.d === tk);
     const n = e ? Math.max(0, e.to - e.from) : 0;
     if (!n) return;
-    if (!confirm('Remove today’s log entry (' + n + ' pages) for “' + b.title + '”?')) return;
+    // v352: in-app confirm
+    const ok = await confirmModal('Remove today\u2019s log entry (' + n + ' pages) for \u201c' + b.title + '\u201d?', { okLabel: 'Remove' });
+    if (!ok) return;
     b.log = (b.log || []).filter(x => x.d !== tk);
     draft.log = b.log;
     b.progress = draft.progress = e.from; // roll progress back to where the day started
@@ -1916,8 +1918,10 @@ function renderDetailModal(b, viaBook) {
     toast('Saved ✨');
   });
 
-  document.getElementById('m-del').addEventListener('click', () => {
-    if (!confirm('Remove "' + b.title + '" from your shelves?')) return;
+  document.getElementById('m-del').addEventListener('click', async () => {
+    // v352: in-app confirm (native confirm blocks renderer)
+    const ok = await confirmModal('Remove "' + b.title + '" from your shelves?', { okLabel: 'Remove' });
+    if (!ok) return;
     removeBook(id);
     close(); render();
     toast('Removed');
