@@ -375,9 +375,10 @@ function charTimelineHTML(instances, workCharsByWorkId) {
 function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
   // v365: only important relationships — family, partners, or high importance
+  // v366: NULL importance treated as 3 (old default) so pre-v2.6.2 data isn't hidden
   const importantTypes = new Set(['spouse', 'parent', 'child', 'sibling', 'partner', 'fiance']);
   const important = grouped.filter(n => {
-    if ((n.importance || 0) >= 4) return true;
+    if ((n.importance || 3) >= 4) return true;
     return (n.types || []).some(t => importantTypes.has(t));
   });
   const nodes = (important.length ? important : grouped).slice(0, 12);
@@ -420,15 +421,13 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
         const res = charResolveTarget(n.name, workChars);
         if (res.character) {
           const c = res.character;
-          // v365: click expands if the character has their own relationships, else navigates
+          // v366: nodes get BOTH — tap expands, double-tap navigates to page
+          // (Advisor HIGH: was either/or)
           const hasRels = c.relationships && c.relationships.length > 0;
-          if (hasRels) {
-            expandAttr = ' data-expand="' + esc(n.name) + '"';
-          } else {
-            tapAttr = c.characterId
-              ? ' data-chwiki="' + esc(c.characterId) + '"'
-              : ' data-chbook="' + esc(c.id) + '"';
-          }
+          if (hasRels) expandAttr = ' data-expand="' + esc(n.name) + '"';
+          tapAttr = c.characterId
+            ? ' data-chwiki="' + esc(c.characterId) + '"'
+            : ' data-chbook="' + esc(c.id) + '"';
         }
       }
     } catch (e) {}
@@ -457,34 +456,91 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     '<span><i style="background:' + (typeColors[t] || '#888') + '"></i>' + esc(t) + '</span>'
   ).join('') + '</div></div>';
 
-  // v365: pan/zoom/expand interactivity
-  h += '<script>(function(){' +
-    'var svg=document.getElementById("' + uid + '");if(!svg)return;' +
-    'var vb={x:0,y:0,w:' + W + ',h:' + H + '};' +
-    'var startVB=null,startPt=null;' +
-    'function setVB(){svg.setAttribute("viewBox",vb.x+" "+vb.y+" "+vb.w+" "+vb.h);}' +
-    'function pt(e){var p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}' +
-    'svg.addEventListener("pointerdown",function(e){startVB={...vb};startPt=pt(e);svg.setPointerCapture(e.pointerId);svg.style.cursor="grabbing";});' +
-    'svg.addEventListener("pointermove",function(e){if(!startPt)return;var p=pt(e);vb.x=startVB.x-(p.x-startPt.x);vb.y=startVB.y-(p.y-startPt.y);setVB();});' +
-    'svg.addEventListener("pointerup",function(e){startPt=null;svg.style.cursor="grab";});' +
-    'svg.addEventListener("wheel",function(e){e.preventDefault();var s=e.deltaY>0?1.15:0.87;var p=pt(e);vb.x=p.x-(p.x-vb.x)*s;vb.y=p.y-(p.y-vb.y)*s;vb.w*=s;vb.h*=s;' +
-    'vb.w=Math.max(100,Math.min(' + W + '*2,vb.w));vb.h=Math.max(100,Math.min(' + H + '*2,vb.h));setVB();},{passive:false});' +
-    // Expand on node tap
-    'svg.addEventListener("click",function(e){var g=e.target.closest("[data-expand]");if(!g)return;' +
-    'var name=g.getAttribute("data-expand");' +
-    'if(typeof charExpandGraph==="function")charExpandGraph(name,"' + uid + '");});' +
-    '})();</script>';
   return h;
 }
 
+/* v366: wire graph interactivity (pan/zoom/expand).
+   Called after setView — inline scripts don't execute via innerHTML. */
+function wireCharGraph(box) {
+  if (!box) return;
+  box.querySelectorAll('.ch-graph-wrap').forEach(wrap => {
+    const svg = wrap.querySelector('svg.ch-graph');
+    if (!svg || svg.dataset.wired) return;
+    svg.dataset.wired = '1';
+    const W = 400, H = 400;
+    let vb = { x: 0, y: 0, w: W, h: H };
+    let startVB = null, startPt = null, moved = 0;
+    const setVB = () => svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+    const toPt = e => {
+      const p = svg.createSVGPoint();
+      p.x = e.clientX; p.y = e.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse());
+    };
+    svg.addEventListener('pointerdown', e => {
+      startVB = { ...vb }; startPt = toPt(e); moved = 0;
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      svg.style.cursor = 'grabbing';
+    });
+    svg.addEventListener('pointermove', e => {
+      if (!startPt) return;
+      const p = toPt(e);
+      const dx = p.x - startPt.x, dy = p.y - startPt.y;
+      moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+      vb.x = startVB.x - dx; vb.y = startVB.y - dy;
+      setVB();
+    });
+    const endPan = () => { startPt = null; svg.style.cursor = 'grab'; };
+    svg.addEventListener('pointerup', endPan);
+    svg.addEventListener('pointercancel', endPan);
+    svg.addEventListener('wheel', e => {
+      e.preventDefault();
+      const s = e.deltaY > 0 ? 1.15 : 0.87;
+      const p = toPt(e);
+      vb.x = p.x - (p.x - vb.x) * s;
+      vb.y = p.y - (p.y - vb.y) * s;
+      vb.w *= s; vb.h *= s;
+      vb.w = Math.max(100, Math.min(W * 2, vb.w));
+      vb.h = Math.max(100, Math.min(H * 2, vb.h));
+      setVB();
+    }, { passive: false });
+    // Tap: expand (single) vs navigate (double). Ignore if dragged.
+    let lastTap = 0, lastTarget = null;
+    svg.addEventListener('click', e => {
+      if (moved > 8) return; // was a drag, not a tap
+      const g = e.target.closest('[data-expand]');
+      if (!g) return;
+      const now = Date.now();
+      const name = g.getAttribute('data-expand');
+      if (now - lastTap < 400 && lastTarget === g) {
+        // Double-tap: navigate to character page
+        const wikiId = g.getAttribute('data-chwiki');
+        const bookId = g.getAttribute('data-chbook');
+        if (wikiId && typeof openCharacter === 'function') openCharacter(wikiId);
+        else if (bookId && typeof openPreviewModal === 'function') {
+          // find book by id — handled by existing wireCharRelLinks
+        }
+        lastTap = 0; lastTarget = null;
+      } else {
+        // Single tap: expand
+        lastTap = now; lastTarget = g;
+        setTimeout(() => {
+          if (Date.now() - lastTap >= 400 && lastTarget === g) {
+            const uid = svg.id;
+            if (typeof charExpandGraph === 'function') charExpandGraph(name, uid);
+            lastTap = 0; lastTarget = null;
+          }
+        }, 410);
+      }
+    });
+  });
+}
+
 /* v365: expand a graph node to center on that character.
-   Finds the character in the work's character list, groups their
-   relationships, and re-renders the graph centered on them. */
+   v366: re-renders via charGraphHTML and re-wires with wireCharGraph. */
 function charExpandGraph(name, svgId) {
   try {
     const wrap = document.querySelector('[data-graph="' + svgId + '"]');
     if (!wrap) return;
-    // Find character data — stored on the wrap element
     const dataEl = document.getElementById(svgId + '-data');
     if (!dataEl) return;
     const allChars = JSON.parse(dataEl.textContent || '[]');
@@ -493,29 +549,23 @@ function charExpandGraph(name, svgId) {
     if (!target || !target.relationships) return;
     const grouped = charGroupRelationships(target.relationships);
     if (!grouped.length) {
-      toast('No recorded relationships for ' + name);
+      if (typeof toast === 'function') toast('No recorded relationships for ' + name);
       return;
     }
     // Re-render graph centered on the new character
     const newHTML = charGraphHTML(grouped, allChars, target.name, target.role);
-    // Extract just the SVG + legend, keep the wrapper
     const tmp = document.createElement('div');
     tmp.innerHTML = newHTML;
     const newWrap = tmp.querySelector('.ch-graph-wrap');
     if (newWrap) {
-      // Preserve the data store
-      const newData = newWrap.querySelector('script');
       wrap.innerHTML = newWrap.innerHTML;
-      if (dataEl) wrap.appendChild(dataEl);
-      // Re-run the interactivity script
-      const scripts = wrap.querySelectorAll('script');
-      scripts.forEach(sc => {
-        const ns = document.createElement('script');
-        ns.textContent = sc.textContent;
-        sc.replaceWith(ns);
-      });
+      wrap.appendChild(dataEl); // preserve data store
+      // Re-wire interactivity
+      wireCharGraph(wrap.parentElement || document);
+      // Update the data-graph UID to the new SVG's ID
+      const newSvg = wrap.querySelector('svg.ch-graph');
+      if (newSvg) wrap.setAttribute('data-graph', newSvg.id);
     }
-    // Scroll to top of graph
     wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (e) {
     console.warn('charExpandGraph failed', e);
@@ -847,7 +897,9 @@ async function renderCharacterPage() {
     '<span class="note" id="ch-note-msg"></span></p>';
 
   setView(html);
-  wireCharRelLinks(document.getElementById('view'));
+  const viewBox = document.getElementById('view');
+  wireCharRelLinks(viewBox);
+  wireCharGraph(viewBox);
   // Wire graph nodes (they use the same data attributes)
   document.querySelectorAll('.ch-graph-node[data-chwiki]').forEach(b =>
     b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
