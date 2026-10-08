@@ -80,9 +80,10 @@ const CharacterWiki = {
 };
 
 function openCharacter(charId) {
-  // v331: close the book modal first — otherwise it overlays the wiki page
-  try { if (typeof closeDetailModal === 'function') closeDetailModal(); } catch (e) {}
-  try { document.querySelectorAll('.modal-ov').forEach(m => m.remove()); } catch (e) {}
+  // v332: close the book modal first — click its close button so the
+  // overlay token, scroll lock, and history entry are cleaned up properly
+  try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
+  try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
   characterViewId = charId;
   view = 'character';
   animateIn = true;
@@ -94,9 +95,10 @@ function openCharacter(charId) {
    Shows book-specific description and relationships. */
 let bookCharViewId = null;
 function openBookCharacter(bookCharId) {
-  // v331: close the book modal first
-  try { if (typeof closeDetailModal === 'function') closeDetailModal(); } catch (e) {}
-  try { document.querySelectorAll('.modal-ov').forEach(m => m.remove()); } catch (e) {}
+  // v332: close the book modal first — click its close button so the
+  // overlay token, scroll lock, and history entry are cleaned up properly
+  try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
+  try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
   bookCharViewId = bookCharId;
   view = 'bookcharacter';
   animateIn = true;
