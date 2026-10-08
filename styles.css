@@ -2225,6 +2225,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .mrow-val { flex: 1; text-align: left; font-weight: 600; font-size: 14.5px; }
 .mrow-chev { color: var(--faint); font-size: 20px; line-height: 1; }
 .mrow-opts { border-top: 1px solid var(--line); padding: 6px; }
+/* v355: dropdown above sticky action bar (UX Tester: DNF was unclickable) */
+.mrow-opts { position: relative; z-index: 5; background: var(--bg); }
 .mrow-opts button {
   display: flex; align-items: center; gap: 10px; width: 100%;
   background: none; border: none; color: inherit; font: inherit; font-size: 14px;

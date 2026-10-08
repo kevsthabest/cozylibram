@@ -207,7 +207,8 @@ function renderSettings() {
   var defaultPrice = 24.99;
   try {
     var dp = parseFloat(localStorage.getItem('cozylibram.defaultPrice'));
-    if (!isNaN(dp) && dp >= 0) defaultPrice = dp;
+    // v355: self-heal float32 artifacts in stored value
+    if (!isNaN(dp) && dp >= 0) defaultPrice = Math.round(dp * 100) / 100;
   } catch (e) {}
   var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
   var defaultCount = 0;
@@ -302,6 +303,8 @@ function renderSettings() {
   if (dpInput) dpInput.addEventListener('change', e => {
     var v = parseFloat(e.target.value);
     if (!isNaN(v) && v >= 0) {
+      // v355: round to cents — raw float32 artifacts ("24.9899997…") in storage (UX Tester)
+      v = Math.round(v * 100) / 100;
       try { localStorage.setItem('cozylibram.defaultPrice', String(v)); } catch (err) {}
       renderSettings(); // refresh totals
     }
