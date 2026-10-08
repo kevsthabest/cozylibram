@@ -1739,7 +1739,7 @@ const CharacterStore = {
         direction: opts.direction || 'mutual',
         importance: opts.importance || null,
         source_work_id: opts.workId || null,
-        review_status: 'confirmed',
+        review_status: opts.review_status || 'confirmed',
         created_by: user ? user.id : null,
         notes: opts.notes || null,
       }).select().single();
@@ -2060,9 +2060,8 @@ async function renderCharacterLab() {
    Review pipeline-suggested relationships: Accept / Change / Reject.
    Works against current JSON model; Phase 2 moves to edge table. */
 async function charLabRenderInbox(body, works) {
-  const reviewedKey = 'cozylibram.relReviewed';
-  let reviewed = {};
-  try { reviewed = JSON.parse(localStorage.getItem(reviewedKey) || '{}'); } catch (e) {}
+  // v395: Drive inbox from DB review_status, not localStorage (Claude bug 3)
+  // Pipeline JSON items are matched to edge rows; reviewed = edge exists in any status
 
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
@@ -2070,18 +2069,45 @@ async function charLabRenderInbox(body, works) {
   const work = works.find(w => w.workId === charLabWorkId);
   const chars = await CharacterStore.listForWork(charLabWorkId);
 
+  // Get all edge rows for this work's characters (any status)
+  let existingEdges = [];
+  try {
+    const sb = await CharacterStore._sb();
+    const charIds = chars.map(c => c.id);
+    if (charIds.length) {
+      const { data } = await sb.from('character_relationships')
+        .select('id, character_a_id, character_b_id, relationship_type, review_status')
+        .in('character_a_id', charIds);
+      existingEdges = data || [];
+    }
+  } catch (e) { console.warn('Edge fetch failed', e); }
+
+  // Helper: find edge for a from/to/type combo
+  const findEdge = (fromId, toName, type) => {
+    const toChar = chars.find(c => String(c.name || '').toLowerCase() === String(toName || '').toLowerCase());
+    if (!toChar) return null;
+    return existingEdges.find(e =>
+      e.character_a_id === fromId &&
+      e.character_b_id === toChar.id &&
+      String(e.relationship_type || '').toLowerCase() === String(type || '').toLowerCase()
+    );
+  };
+
   // v381: Collect pipeline JSON relationships AND user-suggested edges
   const inbox = [];
   chars.forEach(c => {
     (c.relationships || []).forEach((r, idx) => {
       const relId = c.id + ':' + idx;
-      if (reviewed[relId]) return;
+      const type = String(r.type || 'friend').toLowerCase();
+      const toName = String(r.to || '').trim();
+      // Skip if an edge row exists (already reviewed in any status)
+      if (findEdge(c.id, toName, type)) return;
       inbox.push({
         id: relId,
         fromId: c.id,
         fromName: c.name,
-        toName: String(r.to || '').trim(),
-        type: String(r.type || 'friend').toLowerCase(),
+        toName: toName,
+        type: type,
         importance: r.importance || null,
         source: 'pipeline',
       });
@@ -2195,15 +2221,7 @@ async function charLabRenderInbox(body, works) {
     deleteWork(charLabWorkId, work ? work.title : charLabWorkId);
   });
 
-  // Wire accept/change/reject
-  const markReviewed = (relId) => {
-    try {
-      const r = JSON.parse(localStorage.getItem(reviewedKey) || '{}');
-      r[relId] = Date.now();
-      localStorage.setItem(reviewedKey, JSON.stringify(r));
-    } catch (e) {}
-  };
-
+  // Wire accept/reject (v395: DB-driven, no localStorage)
   // v387: Inbox dropdowns save on change (Advisor MEDIUM — were decorative)
   body.querySelectorAll('[data-rel-type]').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -2283,23 +2301,44 @@ async function charLabRenderInbox(body, works) {
       toast('Accept failed: ' + (e.message || 'unknown error'));
       return; // v389: don't mark reviewed on failure (Claude)
     }
-    markReviewed(relId);
-    item.style.opacity = '0.4';
+    // v395: re-render to reflect DB state
+    charLabRenderInbox(body, works);
     item.querySelectorAll('button').forEach(x => x.disabled = true);
     toast('Relationship accepted');
   }));
 
   body.querySelectorAll('[data-rel-reject]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-reject');
-    // v381: mark edge as rejected if it's a user suggestion
     try {
       if (relId.startsWith('edge:')) {
         const edgeId = relId.slice(5);
         await CharacterStore.updateRelationship(edgeId, { review_status: 'rejected' });
+      } else {
+        // v395: Pipeline JSON — create rejected edge so it's tracked in DB (Claude bug 3)
+        const [fromId, idx] = relId.split(':');
+        const chars = await CharacterStore.listForWork(charLabWorkId);
+        const fromChar = chars.find(c => c.id === fromId);
+        if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
+          const r = fromChar.relationships[idx];
+          const toName = String(r.to || '').trim();
+          const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+          if (toChar) {
+            await CharacterStore.createRelationship(fromId, toChar.id, String(r.type || 'friend').toLowerCase(), {
+              direction: 'mutual',
+              importance: r.importance || null,
+              workId: charLabWorkId,
+              review_status: 'rejected',
+            });
+          }
+        }
       }
-    } catch (e) { console.warn('Reject failed', e); }
-    markReviewed(relId);
-    b.closest('tr[data-rel]').style.display = 'none';
+    } catch (e) {
+      console.warn('Reject failed', e);
+      toast('Reject failed: ' + (e.message || 'unknown error'));
+      return;
+    }
+    // v395: re-render to reflect DB state
+    charLabRenderInbox(body, works);
     toast('Relationship rejected');
   }));
 
