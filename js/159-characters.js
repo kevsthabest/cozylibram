@@ -206,6 +206,78 @@ function charQuotesHTML(quotes) {
   return h;
 }
 
+/* v339: Phase C — interactive SVG relationship constellation.
+   Renders the character at center with relationship nodes arranged in a
+   circle. Nodes are tappable (navigate to character pages). Edges are
+   colored by relationship type. Caps at 14 nodes for readability. */
+function charGraphHTML(grouped, workChars, centerName, centerRole) {
+  if (!grouped || !grouped.length) return '';
+  const MAX = 14;
+  const nodes = grouped.slice(0, MAX);
+  const extra = grouped.length - nodes.length;
+
+  const W = 340, H = 340, cx = W / 2, cy = H / 2, R = 120;
+  const typeColors = {
+    spouse: '#e74c3c', parent: '#c9a227', child: '#f5d76e',
+    sibling: '#9b59b6', friend: '#2ecc71', enemy: '#8b0000',
+    mentor: '#3498db', colleague: '#6aa8e5',
+  };
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="ch-graph" style="width:100%;max-width:380px;height:auto;display:block;margin:0 auto;">';
+
+  // Edges (behind nodes)
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
+    const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
+    const color = typeColors[n.types[0]] || '#888';
+    svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"' +
+      ' stroke="' + color + '" stroke-width="1.5" opacity="0.5"/>';
+  });
+
+  // Nodes
+  nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
+    const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
+    const color = typeColors[n.types[0]] || '#888';
+    const initials = String(n.name).trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
+    // Resolve tap target
+    let tapAttr = '';
+    try {
+      if (typeof charResolveTarget !== 'undefined' && workChars) {
+        const res = charResolveTarget(n.name, workChars);
+        if (res.character) {
+          const c = res.character;
+          tapAttr = c.characterId
+            ? ' data-chwiki="' + esc(c.characterId) + '"'
+            : ' data-chbook="' + esc(c.id) + '"';
+        }
+      }
+    } catch (e) {}
+    const label = esc(n.name.length > 14 ? n.name.slice(0, 13) + '…' : n.name);
+    svg += '<g' + tapAttr + (tapAttr ? ' class="ch-graph-node" style="cursor:pointer"' : '') + '>' +
+      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="22" fill="' + color + '" opacity="0.85"/>' +
+      '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">' + esc(initials) + '</text>' +
+      '<text x="' + x.toFixed(1) + '" y="' + (y + 36).toFixed(1) + '" text-anchor="middle" fill="var(--text)" font-size="9">' + label + '</text>' +
+      '</g>';
+  });
+
+  // Center node
+  const centerInitials = String(centerName || '?').trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
+  const centerColor = { protagonist: '#c9a227', antagonist: '#8b0000', supporting: '#2c5f8a', minor: '#5a5a5a' }[centerRole] || '#5a5a5a';
+  svg += '<circle cx="' + cx + '" cy="' + cy + '" r="30" fill="' + centerColor + '"/>' +
+    '<text x="' + cx + '" y="' + (cy + 6) + '" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">' + esc(centerInitials) + '</text>';
+  svg += '</svg>';
+
+  let h = '<div class="ch-graph-wrap">' + svg;
+  if (extra > 0) h += '<p class="note" style="text-align:center">+' + extra + ' more connections listed below</p>';
+  // Legend
+  const usedTypes = [...new Set(nodes.map(n => n.types[0]))];
+  h += '<div class="ch-graph-legend">' + usedTypes.map(t =>
+    '<span><i style="background:' + (typeColors[t] || '#888') + '"></i>' + esc(t) + '</span>'
+  ).join('') + '</div></div>';
+  return h;
+}
+
 /* v338: group relationships by person, resolving contradictions.
    If the same person appears as both parent and child (pipeline error),
    keep only 'parent' (the more commonly correct direction) and flag it.
@@ -408,8 +480,25 @@ async function renderCharacterPage() {
   }
   html += '</div>';
 
-  // Relationships merged across books, labeled by source. v333: names are tappable.
+  // Relationships: v339 Phase C graph + text lists below
   html += '<h3 class="serif">Relationships</h3>';
+  try {
+    // Collect all relationships across instances for the graph
+    const allRels = [];
+    const graphWorkChars = [];
+    for (const inst of d.instances) {
+      (inst.relationships || []).forEach(r => allRels.push(r));
+      try {
+        if (inst.workId) {
+          const wc = await CharacterStore.listForWork(inst.workId);
+          graphWorkChars.push(...wc);
+        }
+      } catch (e) {}
+    }
+    const grouped = charGroupRelationships(allRels);
+    const primaryRole = charPrimaryRole(d.instances);
+    html += charGraphHTML(grouped, graphWorkChars, d.name, primaryRole);
+  } catch (e) {}
   let hasRels = false;
   for (const inst of d.instances) {
     if (!inst.relationships.length) continue;
@@ -452,6 +541,11 @@ async function renderCharacterPage() {
 
   setView(html);
   wireCharRelLinks(document.getElementById('view'));
+  // Wire graph nodes (they use the same data attributes)
+  document.querySelectorAll('.ch-graph-node[data-chwiki]').forEach(b =>
+    b.addEventListener('click', () => openCharacter(b.getAttribute('data-chwiki'))));
+  document.querySelectorAll('.ch-graph-node[data-chbook]').forEach(b =>
+    b.addEventListener('click', () => openBookCharacter(b.getAttribute('data-chbook'))));
   document.getElementById('ch-note-save').addEventListener('click', async (e) => {
     const btn = e.target, msg = document.getElementById('ch-note-msg');
     const text = document.getElementById('ch-note').value;

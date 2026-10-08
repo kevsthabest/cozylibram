@@ -2860,3 +2860,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ch-quote p { margin: 0 0 6px; font-style: italic; font-size: 1.05em; line-height: 1.5; }
 .ch-quote cite { display: block; font-size: 0.85em; color: var(--text2); font-style: normal; }
 .ch-quote .note { font-size: 0.8em; }
+
+/* v339: relationship graph */
+.ch-graph-wrap { margin: 16px 0; }
+.ch-graph-node { transition: opacity 0.15s; }
+.ch-graph-node:hover { opacity: 0.75; }
+.ch-graph-legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+  margin-top: 8px; font-size: 0.8em; color: var(--text2); }
+.ch-graph-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.ch-graph-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
