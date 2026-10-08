@@ -1672,35 +1672,38 @@ const CharacterStore = {
       .replace(/\s+/g, ' ').trim();
   },
 
-  /* All canonical characters, with linked work counts. */
+  /* All canonical characters, with linked work counts.
+     v320: links live in character_links (audit trail), not the bare FK. */
   async listCanonical() {
     const sb = await this._sb();
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('characters')
-        .select('id, name, description, updated_at')
+        .select('id, name, description, aliases, source, updated_at')
         .order('name');
       if (error) throw error;
-      // Get link counts per canonical character
-      const { data: links, error: lerr } = await sb.from('book_characters')
-        .select('character_id, work_id, works(title)')
-        .not('character_id', 'is', null)
+      const { data: links, error: lerr } = await sb.from('character_links')
+        .select('character_id, book_characters!inner(work_id, works(title))')
         .limit(5000);
       if (lerr) throw lerr;
       const byChar = {};
       for (const l of links || []) {
+        const bc = l.book_characters;
+        if (!bc) continue;
         const b = byChar[l.character_id] || (byChar[l.character_id] = {
           works: [], workIds: new Set(),
         });
-        if (!b.workIds.has(l.work_id)) {
-          b.workIds.add(l.work_id);
-          b.works.push((l.works && l.works.title) || l.work_id.slice(0, 8));
+        if (!b.workIds.has(bc.work_id)) {
+          b.workIds.add(bc.work_id);
+          b.works.push((bc.works && bc.works.title) || String(bc.work_id).slice(0, 8));
         }
       }
       return (data || []).map(c => ({
         id: c.id,
         name: c.name,
         description: c.description || '',
+        aliases: Array.isArray(c.aliases) ? c.aliases : [],
+        source: c.source || 'manual',
         works: (byChar[c.id] && byChar[c.id].works) || [],
         workCount: (byChar[c.id] && byChar[c.id].workIds.size) || 0,
       }));
@@ -1714,49 +1717,68 @@ const CharacterStore = {
     if (!sb) return null;
     try {
       const { data: c, error } = await sb.from('characters')
-        .select('id, name, description').eq('id', charId).maybeSingle();
+        .select('id, name, description, aliases, source').eq('id', charId).maybeSingle();
       if (error || !c) return null;
-      const { data: rows, error: rerr } = await sb.from('book_characters')
-        .select('id, work_id, name, role, description, relationships, works(title)')
+      // v320: links via character_links (audit trail)
+      const { data: links, error: lerr } = await sb.from('character_links')
+        .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))')
         .eq('character_id', charId);
-      if (rerr) throw rerr;
+      if (lerr) throw lerr;
       return {
         id: c.id, name: c.name, description: c.description || '',
-        instances: (rows || []).map(r => ({
-          id: r.id,
-          workId: r.work_id,
-          workTitle: (r.works && r.works.title) || r.work_id.slice(0, 8),
-          name: r.name,
-          role: r.role,
-          description: r.description || '',
-          relationships: Array.isArray(r.relationships) ? r.relationships : [],
-        })),
+        aliases: Array.isArray(c.aliases) ? c.aliases : [],
+        source: c.source || 'manual',
+        instances: (links || []).map(l => {
+          const r = l.book_characters;
+          return {
+            id: r.id,
+            workId: r.work_id,
+            workTitle: (r.works && r.works.title) || String(r.work_id).slice(0, 8),
+            name: r.name,
+            role: r.role,
+            description: r.description || '',
+            relationships: Array.isArray(r.relationships) ? r.relationships : [],
+            linkedAt: l.linked_at,
+            linkNote: l.note,
+          };
+        }),
       };
     } catch (e) { return null; }
   },
 
-  /* Create a canonical character and link book rows to it. */
-  async createCanonical(name, description, bookRowIds) {
+  /* Create a canonical character and link book rows to it.
+     v320: links go in character_links with audit (who/when). */
+  async createCanonical(name, description, bookRowIds, opts) {
+    opts = opts || {};
     const sb = await this._sb();
     if (!sb) throw new Error('cloud unavailable');
     const norm = this.normName(name);
     if (!norm) throw new Error('name required');
-    // Upsert canonical by normalized name
+    // Find existing canonical by normalized name (no UNIQUE — reviewer decides)
     const { data: existing } = await sb.from('characters')
-      .select('id').eq('name_norm', norm).maybeSingle();
-    let charId = existing && existing.id;
+      .select('id').eq('name_norm', norm).limit(1);
+    let charId = existing && existing[0] && existing[0].id;
     if (!charId) {
       const { data, error } = await sb.from('characters')
         .insert({ name: String(name).trim(), name_norm: norm,
-          description: String(description || '').trim() || null })
+          description: String(description || '').trim() || null,
+          source: opts.source || 'manual' })
         .select('id').maybeSingle();
       if (error) throw error;
       charId = data.id;
     }
-    // Link the book rows
+    // Create links with audit trail
     if (bookRowIds && bookRowIds.length) {
-      const { error: lerr } = await sb.from('book_characters')
-        .update({ character_id: charId }).in('id', bookRowIds);
+      let userId = null;
+      try { const { data: { user } } = await sb.auth.getUser(); userId = user && user.id; } catch (e) {}
+      const rows = bookRowIds.map(bid => ({
+        book_character_id: bid,
+        character_id: charId,
+        linked_by: userId,
+        note: opts.note || null,
+      }));
+      const { error: lerr } = await sb.from('character_links').upsert(rows,
+        { onConflict: 'book_character_id', ignoreDuplicates: false });
       if (lerr) throw lerr;
     }
     return charId;
@@ -1766,32 +1788,36 @@ const CharacterStore = {
   async unlink(rowId) {
     const sb = await this._sb();
     if (!sb) throw new Error('cloud unavailable');
-    const { error } = await sb.from('book_characters')
-      .update({ character_id: null }).eq('id', rowId);
+    const { error } = await sb.from('character_links')
+      .delete().eq('book_character_id', rowId);
     if (error) throw error;
   },
 
-  /* All characters for a work. */
+  /* All characters for a work. v320: character_id via character_links join. */
   async listForWork(workId) {
     const sb = await this._sb();
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_characters')
-        .select('id, name, role, description, relationships, confidence, status, character_id, suggested_character_id')
+        .select('id, name, role, description, relationships, confidence, status, suggested_character_id, duplicate_of, character_links(character_id)')
         .eq('work_id', workId)
         .order('name');
       if (error) throw error;
-      return (data || []).map(c => ({
-        id: c.id,
-        name: c.name || 'Unnamed',
-        role: CHAR_ROLES.includes(c.role) ? c.role : 'minor',
-        description: c.description || '',
-        relationships: Array.isArray(c.relationships) ? c.relationships : [],
-        confidence: c.confidence,
-        status: c.status || 'candidate',
-        characterId: c.character_id || null,
-        suggestedCharacterId: c.suggested_character_id || null,
-      }));
+      return (data || []).map(c => {
+        const link = Array.isArray(c.character_links) ? c.character_links[0] : c.character_links;
+        return {
+          id: c.id,
+          name: c.name || 'Unnamed',
+          role: CHAR_ROLES.includes(c.role) ? c.role : 'minor',
+          description: c.description || '',
+          relationships: Array.isArray(c.relationships) ? c.relationships : [],
+          confidence: c.confidence,
+          status: c.status || 'candidate',
+          characterId: (link && link.character_id) || null,
+          suggestedCharacterId: c.suggested_character_id || null,
+          duplicateOf: c.duplicate_of || null,
+        };
+      });
     } catch (e) { return []; }
   },
 };
@@ -1979,9 +2005,11 @@ async function charLabCanonDetail() {
 function charLabRender(body, works, chars) {
   const work = works.find(w => w.workId === charLabWorkId);
   const rf = charLabRoleFilter;
-  // v317: blocked names hidden unless toggled
-  const visible = charLabShowBlocked ? chars : chars.filter(c => !charIsBlocked(c));
-  const blockedCount = chars.length - visible.length;
+  // v317: blocked names hidden unless toggled; v321: merged hidden too
+  const unmerged = chars.filter(c => c.status !== 'merged');
+  const mergedCount = chars.length - unmerged.length;
+  const visible = charLabShowBlocked ? unmerged : unmerged.filter(c => !charIsBlocked(c));
+  const blockedCount = unmerged.length - visible.length;
   const filtered = rf ? visible.filter(c => c.role === rf) : visible;
 
   // Role counts for filter chips (over visible set)
@@ -2006,6 +2034,7 @@ function charLabRender(body, works, chars) {
     '<button class="btn sm ghost" id="ch-refresh">↻</button>' +
     (blockedCount ? ' <button class="btn sm ghost" id="ch-blocked-toggle">' +
       (charLabShowBlocked ? 'Hide' : 'Show') + ' ' + blockedCount + ' hidden</button>' : '') +
+    (mergedCount ? ' <span class="note">' + mergedCount + ' merged</span>' : '') +
     '</p>' +
     (dupes.length ? '<div class="ob-card" style="border-color:var(--warn,orange)">' +
       '<h4 class="serif">⚠ Possible duplicates (' + dupes.length + ')</h4>' +
@@ -2078,9 +2107,6 @@ function charLabRender(body, works, chars) {
       b.disabled = false;
       return;
     }
-    // Remove loser from local list and re-render
-    const li = chars.findIndex(c => c.id === loserId);
-    if (li >= 0) chars.splice(li, 1);
     if (charLabSelectedId === loserId) charLabSelectedId = keepId;
     charLabRender(body, works, chars);
   }));
@@ -2225,8 +2251,13 @@ function charLabDetail(chars) {
       try {
         const sb = await CharacterStore._sb();
         if (!sb) throw new Error('cloud unavailable');
-        const { error } = await sb.from('book_characters')
-          .update({ character_id: charId }).eq('id', rowId);
+        let userId = null;
+        try { const { data: { user } } = await sb.auth.getUser(); userId = user && user.id; } catch (e) {}
+        const { error } = await sb.from('character_links').upsert({
+          book_character_id: rowId,
+          character_id: charId,
+          linked_by: userId,
+        }, { onConflict: 'book_character_id' });
         if (error) throw error;
         c.characterId = charId;
         charLabDetail(chars);
@@ -2266,10 +2297,17 @@ function charLabDetail(chars) {
     try {
       const sb = await CharacterStore._sb();
       if (!sb) throw new Error('cloud unavailable');
-      const { error } = await sb.from('book_characters').update({
+      let userId = null;
+      try { const { data: { user } } = await sb.auth.getUser(); userId = user && user.id; } catch (e) {}
+      const { error: lerr } = await sb.from('character_links').upsert({
+        book_character_id: rowId,
         character_id: c.suggestedCharacterId,
-        suggested_character_id: null,
-      }).eq('id', rowId);
+        linked_by: userId,
+        note: 'accepted pipeline suggestion',
+      }, { onConflict: 'book_character_id' });
+      if (lerr) throw lerr;
+      const { error } = await sb.from('book_characters')
+        .update({ suggested_character_id: null }).eq('id', rowId);
       if (error) throw error;
       c.characterId = c.suggestedCharacterId;
       c.suggestedCharacterId = null;
@@ -2319,8 +2357,10 @@ function charLabDetail(chars) {
   }));
 }
 
-/* Merge two duplicate characters: repoint relationships, delete the loser.
-   Keeps the winner's id. Never throws — returns error string on failure. */
+/* Merge two duplicate characters: repoint relationships, soft-merge the loser.
+   v321: loser is marked status='merged' with duplicate_of pointing at the
+   winner — NOT deleted. Unmerge restores it. Reversible human errors only.
+   Never throws — returns error string on failure. */
 async function charMerge(winnerId, loserId, chars) {
   try {
     const sb = await CharacterStore._sb();
@@ -2331,6 +2371,7 @@ async function charMerge(winnerId, loserId, chars) {
     const loserName = String(loser.name).trim().toLowerCase();
     // Repoint: in every character's relationships, replace loser name with winner name
     for (const c of chars) {
+      if (c.id === loserId) continue; // don't touch the loser's own rels
       let changed = false;
       const rels = c.relationships.map(r => {
         if (String(r.to || '').trim().toLowerCase() === loserName) {
@@ -2339,7 +2380,7 @@ async function charMerge(winnerId, loserId, chars) {
         }
         return r;
       });
-      // Merge loser's own relationships into winner (dedupe by to+type)
+      // Merge loser's relationships into winner (dedupe by to+type)
       if (c.id === winnerId) {
         const seen = new Set(rels.map(r =>
           String(r.to).toLowerCase() + '|' + charNormRelType(r.type)));
@@ -2355,9 +2396,26 @@ async function charMerge(winnerId, loserId, chars) {
         if (error) return 'repoint failed: ' + error.message;
       }
     }
-    // Delete the loser
-    const { error: delErr } = await sb.from('book_characters').delete().eq('id', loserId);
-    if (delErr) return 'delete failed: ' + delErr.message;
+    // Soft-merge: mark loser, point at winner (reversible)
+    const { error: mErr } = await sb.from('book_characters')
+      .update({ status: 'merged', duplicate_of: winnerId }).eq('id', loserId);
+    if (mErr) return 'merge failed: ' + mErr.message;
+    loser.status = 'merged';
+    loser.duplicateOf = winnerId;
+    return null;
+  } catch (e) { return (e && e.message) || 'unknown error'; }
+}
+
+/* Unmerge: restore a soft-merged character. */
+async function charUnmerge(loserId, chars) {
+  try {
+    const sb = await CharacterStore._sb();
+    if (!sb) return 'cloud unavailable';
+    const { error } = await sb.from('book_characters')
+      .update({ status: 'candidate', duplicate_of: null }).eq('id', loserId);
+    if (error) return 'unmerge failed: ' + error.message;
+    const loser = chars.find(c => c.id === loserId);
+    if (loser) { loser.status = 'candidate'; loser.duplicateOf = null; }
     return null;
   } catch (e) { return (e && e.message) || 'unknown error'; }
 }
