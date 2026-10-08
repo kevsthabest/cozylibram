@@ -419,7 +419,8 @@ async function handlePasswordRecovery(sb, code) {
   } catch (e) { renderGate(); }
 }
 async function initCloud() {
-  if (!cloudConfigured()) return;
+  // v350: own the gate decision — boot() shows a neutral splash (Advisor triage)
+  if (!cloudConfigured()) { try { renderGate(); } catch (e) {} return; }
   try {
     const sb = await cloudClient();
     const code = new URLSearchParams(location.search).get('code');
@@ -438,6 +439,7 @@ async function initCloud() {
     const { data } = await sb.auth.getSession();
     const user = (data && data.session && data.session.user) || null;
     if (user && (!cloudUser || cloudUser.id !== user.id)) { cloudUser = user; enterApp(user); }
+    else if (!cloudUser) { try { renderGate(); } catch (e) {} }
     refreshAccountUI();
   } catch (e) { /* offline or bad config — app keeps working locally */ }
 }

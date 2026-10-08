@@ -262,7 +262,9 @@ function menuAction(id) {
   else if (id === 'settings') go('settings');
   else if (id === 'observatory') go('admin'); // v119: admin-gated in renderAdmin()
   else if (id === 'logout') {
-    if (confirm('Sign out of ' + cloudUser.email + '?\nYour books stay on this device.')) cloudSignOut();
+    // v350: no native confirm() — it blocks the renderer (Advisor triage).
+    // Matches Settings → Account logout (no confirm); low-risk action.
+    cloudSignOut();
   }
 }
 const _menuBtn = document.getElementById('menu-btn');

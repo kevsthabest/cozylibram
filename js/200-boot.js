@@ -55,7 +55,12 @@ function boot() {
   // v204: the retired offline-mode flags are never honored again — drop any
   // copies left over from before signed-out mode was deprecated.
   try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}
-  renderGate();
+  // v350: render neutral loading splash — initCloud owns the gate decision
+  // (Advisor triage: gate flash on every returning-user load)
+  try {
+    document.getElementById('view').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;min-height:60vh;color:var(--text2)">Loading…</div>';
+  } catch (e) { renderGate(); }
 }
 
 if (idbDisabled) {
