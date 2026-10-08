@@ -2231,7 +2231,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v355: dropdown above sticky action bar (UX Tester: DNF was unclickable) */
 .mrow-opts { position: relative; z-index: 5; background: var(--bg); }
 /* v356: the SHELF/STATUS button itself must also paint above the sticky bar */
-.mrow { position: relative; z-index: 5; }
+/* v358: bump to 10 and ensure stacking context is solid */
+.mrow { position: relative; z-index: 10; }
+.mrow-opts { z-index: 10; }
+.modal-actions { z-index: 1; }
 .mrow-opts button {
   display: flex; align-items: center; gap: 10px; width: 100%;
   background: none; border: none; color: inherit; font: inherit; font-size: 14px;

@@ -211,7 +211,7 @@ function renderSettings() {
     // v356: self-heal float32 artifacts — write clean value back to storage
     if (!isNaN(dp) && dp >= 0) {
       defaultPrice = Math.round(dp * 100) / 100;
-      var clean = String(defaultPrice);
+      var clean = defaultPrice.toFixed(2);
       if (dpRaw !== clean) {
         try { localStorage.setItem('cozylibram.defaultPrice', clean); } catch (e2) {}
       }
@@ -308,11 +308,12 @@ function renderSettings() {
   // v323: default price for books without a recorded cost
   var dpInput = document.getElementById('f-default-price');
   if (dpInput) dpInput.addEventListener('change', e => {
-    var v = parseFloat(e.target.value);
+    // v358: store the exact decimal string — never via float (kills float32 artifacts)
+    var raw = String(e.target.value || '').trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return;
+    var v = Math.round(parseFloat(raw) * 100) / 100;
     if (!isNaN(v) && v >= 0) {
-      // v355: round to cents — raw float32 artifacts ("24.9899997…") in storage (UX Tester)
-      v = Math.round(v * 100) / 100;
-      try { localStorage.setItem('cozylibram.defaultPrice', String(v)); } catch (err) {}
+      try { localStorage.setItem('cozylibram.defaultPrice', v.toFixed(2)); } catch (err) {}
       renderSettings(); // refresh totals
     }
   });
