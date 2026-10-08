@@ -816,8 +816,13 @@ function initD3Graph(box) {
         '<p><label>Type: <select id="conn-type" class="text-input">' +
         types.map(t => '<option value="' + t + '">' + t + '</option>').join('') +
         '</select></label></p>' +
-        '<p><label>Tags (optional, comma-separated):<br>' +
-        '<input type="text" id="conn-tags" class="text-input" placeholder="mistress, ex, secret..." style="width:100%">' +
+        '<p><label>Tags:<br>' +
+        '<div id="conn-tag-chips" style="margin-bottom:6px">' +
+        ['ex', 'secret', 'unrequited', 'forbidden', 'estranged', 'complicated', 'one-sided'].map(t =>
+          '<button type="button" class="btn sm ghost conn-tag-chip" data-tag="' + t + '">' + t + '</button>'
+        ).join(' ') +
+        '</div>' +
+        '<input type="text" id="conn-tags" class="text-input" placeholder="Custom tags, comma-separated..." style="width:100%">' +
         '</label></p>' +
         '<p><label>Direction: <select id="conn-dir" class="text-input">' +
         '<option value="mutual">Mutual</option>' +
@@ -835,6 +840,22 @@ function initD3Graph(box) {
 
       document.getElementById('conn-cancel').addEventListener('click', () => {
         document.getElementById('connect-dialog').remove();
+      });
+      // v395: Tag chips toggle (hybrid controlled + custom)
+      document.querySelectorAll('.conn-tag-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const tag = chip.getAttribute('data-tag');
+          const input = document.getElementById('conn-tags');
+          const current = input.value.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
+          if (current.includes(tag)) {
+            input.value = current.filter(t => t !== tag).join(', ');
+            chip.classList.remove('sel');
+          } else {
+            current.push(tag);
+            input.value = current.join(', ');
+            chip.classList.add('sel');
+          }
+        });
       });
       document.getElementById('conn-save').addEventListener('click', async () => {
         const type = document.getElementById('conn-type').value;

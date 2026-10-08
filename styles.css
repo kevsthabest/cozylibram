@@ -2980,3 +2980,6 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* v395: Keyboard selection in inbox */
 .ch-grid tr.kb-sel td { background: var(--gold-bg, #fff8e1); outline: 2px solid var(--gold); }
+
+/* v395: Tag chips */
+.conn-tag-chip.sel { background: var(--gold); color: var(--bg); border-color: var(--gold); }
