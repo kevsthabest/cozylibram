@@ -2098,7 +2098,7 @@ async function charLabRenderInbox(body, works) {
     const charIds = chars.map(c => c.id);
     if (charIds.length) {
       const { data: suggested } = await sb.from('character_relationships')
-        .select('id, character_a_id, character_b_id, relationship_type, importance, created_by')
+        .select('id, character_a_id, character_b_id, relationship_type, importance, tags, created_by')
         .in('character_a_id', charIds)
         .eq('review_status', 'pending')
         .not('created_by', 'is', null);
@@ -2114,6 +2114,7 @@ async function charLabRenderInbox(body, works) {
             toName: toChar.name,
             type: edge.relationship_type,
             importance: edge.importance,
+            tags: edge.tags || [],
             source: 'user',
           });
         }
@@ -2156,7 +2157,8 @@ async function charLabRenderInbox(body, works) {
         '<option value="">-</option>' +
         [1,2,3,4,5].map(i => '<option value="' + i + '"' + (r.importance == i ? ' selected' : '') + '>' + i + '</option>').join('') +
         '</select></td>' +
-        '<td>' + (r.source === 'user' ? '<span class="chip">by reader</span>' : '<span class="note">pipeline</span>') + '</td>' +
+        '<td>' + (r.source === 'user' ? '<span class="chip">by reader</span>' : '<span class="note">pipeline</span>') +
+        (r.tags && r.tags.length ? '<br>' + r.tags.map(t => '<span class="chip sm">' + esc(t) + '</span>').join(' ') : '') + '</td>' +
         '<td style="white-space:nowrap">' +
         '<button class="btn sm" data-rel-accept="' + esc(r.id) + '">✓</button> ' +
         '<button class="btn sm ghost" data-rel-reject="' + esc(r.id) + '">✕</button>' +
@@ -2187,15 +2189,41 @@ async function charLabRenderInbox(body, works) {
     } catch (e) {}
   };
 
+  // v387: Inbox dropdowns save on change (Advisor MEDIUM — were decorative)
+  body.querySelectorAll('[data-rel-type]').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const relId = sel.getAttribute('data-rel-type');
+      const newType = sel.value;
+      // Store pending change — applied on Accept
+      sel.closest('tr').dataset.pendingType = newType;
+      sel.style.borderColor = 'var(--gold)';
+    });
+  });
+  body.querySelectorAll('[data-rel-imp]').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const relId = sel.getAttribute('data-rel-imp');
+      const newImp = sel.value;
+      sel.closest('tr').dataset.pendingImp = newImp;
+      sel.style.borderColor = 'var(--gold)';
+    });
+  });
+
   body.querySelectorAll('[data-rel-accept]').forEach(b => b.addEventListener('click', async () => {
     const relId = b.getAttribute('data-rel-accept');
     const item = b.closest('tr[data-rel]');
     // v381: handle both edge IDs (user suggestions) and JSON relIds (pipeline)
+    // v387: apply pending type/imp changes from dropdowns
+    const row = item;
+    const pendingType = row.dataset.pendingType;
+    const pendingImp = row.dataset.pendingImp;
     try {
       if (relId.startsWith('edge:')) {
-        // User suggestion — flip to confirmed
+        // User suggestion — flip to confirmed (with pending changes)
         const edgeId = relId.slice(5);
-        await CharacterStore.updateRelationship(edgeId, { review_status: 'confirmed' });
+        const updates = { review_status: 'confirmed' };
+        if (pendingType) updates.relationship_type = pendingType;
+        if (pendingImp) updates.importance = parseInt(pendingImp, 10) || null;
+        await CharacterStore.updateRelationship(edgeId, updates);
       } else {
         // Pipeline JSON — upsert as before (v380)
         const [fromId, idx] = relId.split(':');
@@ -2380,9 +2408,7 @@ function charLabRender(body, works, chars) {
         '<td><button class="btn sm ghost" data-chdetail="' + esc(c.id) + '">Detail</button></td>' +
         '</tr>';
     });
-    html += '</tbody></table></div>' +
-      '<p class="note"><button class="btn sm ghost" id="ch-bulk-block">Block selected</button> ' +
-      '<button class="btn sm ghost" id="ch-bulk-merge">Merge selected (keep first)</button></p>';
+    html += '</tbody></table></div>';
   }
   html += '</div><div id="ch-detail"></div>';
   body.innerHTML = html;
@@ -2409,6 +2435,8 @@ function charLabRender(body, works, chars) {
     inp.addEventListener('change', async () => {
       const id = inp.getAttribute('data-id');
       const field = inp.getAttribute('data-field');
+      // v387: whitelist fields (Advisor MEDIUM — prevent mass assignment)
+      if (!['name', 'role', 'status'].includes(field)) return;
       const val = inp.value;
       try {
         const sb = await CharacterStore._sb();
