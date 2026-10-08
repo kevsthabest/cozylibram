@@ -2048,10 +2048,6 @@ async function renderCharacterLab() {
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
   }
-  if (charLabView === 'unified') {
-    charLabRenderUnified(body);
-    return;
-  }
   if (charLabView === 'relationships') {
     await charLabRenderInbox(body, works);
     return;
@@ -2129,7 +2125,7 @@ async function charLabRenderInbox(body, works) {
     ' Character Lab — Relationship Inbox</h3>' +
     '<p class="note">' +
     '<button class="btn sm ghost" data-chview="work">By work</button> ' +
-    '<button class="btn sm ghost" data-chview="unified">Character database</button> ' +
+
     '<button class="btn sm" data-chview="relationships">Relationship Inbox</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
@@ -2367,7 +2363,7 @@ function charLabRender(body, works, chars) {
     ' Character Lab</h3>' +
     '<p class="note">' +
     '<button class="btn sm" data-chview="work">By work</button> ' +
-    '<button class="btn sm ghost" data-chview="unified">Character database</button> ' +
+
     '<button class="btn sm ghost" data-chview="relationships">Relationships</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
