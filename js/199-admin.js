@@ -2070,11 +2070,10 @@ async function charLabRenderReview(body, works) {
 }
 
 /* v395: Relationships workspace — graph + inbox + table.
-   TODO: Integrate D3 graph here. For now, shows the inbox. */
+   Coming soon: D3 graph integration. Hidden from nav until then. */
 async function charLabRenderRelationships(body, works) {
-  // Placeholder — will hold graph + sub-tabs
-  // For now, redirect to review (inbox)
-  await charLabRenderInbox(body, works);
+  body.innerHTML = '<div class="ob-card"><h3 class="serif">Relationships</h3>' +
+    '<p class="note">Graph workspace coming soon. Use Review for now.</p></div>';
 }
 
 /* v377: Phase 1 — Relationship Inbox.
@@ -2103,14 +2102,13 @@ async function charLabRenderInbox(body, works) {
     }
   } catch (e) { console.warn('Edge fetch failed', e); }
 
-  // Helper: find edge for a from/to/type combo
-  const findEdge = (fromId, toName, type) => {
+  // Helper: find edge for a from/to pair (v395: type-agnostic to avoid duplicates — Advisor)
+  const findEdge = (fromId, toName) => {
     const toChar = chars.find(c => String(c.name || '').toLowerCase() === String(toName || '').toLowerCase());
     if (!toChar) return null;
     return existingEdges.find(e =>
       e.character_a_id === fromId &&
-      e.character_b_id === toChar.id &&
-      String(e.relationship_type || '').toLowerCase() === String(type || '').toLowerCase()
+      e.character_b_id === toChar.id
     );
   };
 
@@ -2122,7 +2120,7 @@ async function charLabRenderInbox(body, works) {
       const type = String(r.type || 'friend').toLowerCase();
       const toName = String(r.to || '').trim();
       // Skip if an edge row exists (already reviewed in any status)
-      if (findEdge(c.id, toName, type)) return;
+      if (findEdge(c.id, toName)) return;
       inbox.push({
         id: relId,
         fromId: c.id,
@@ -2403,8 +2401,9 @@ async function charLabRenderInbox(body, works) {
       }
     }
   };
+  // v395: Remove old handler before adding (Advisor HIGH — was leaking)
+  if (body._kbHandler) document.removeEventListener('keydown', body._kbHandler);
   document.addEventListener('keydown', kbHandler);
-  // Clean up on re-render (store handler for removal)
   body._kbHandler = kbHandler;
   highlightRow(0);
 
