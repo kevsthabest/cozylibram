@@ -429,14 +429,19 @@ function openPreviewModal(t, opts) {
     charsLoaded = true;
     const box = document.getElementById('m-charstab');
     if (!box) return;
+    try { console.log('[chars] tab opened, CharacterWiki:', typeof CharacterWiki); } catch (e) {}
     if (typeof CharacterWiki === 'undefined') {
       box.innerHTML = '<p class="note">Character module not loaded — try fully closing and reopening the app.</p>';
       return;
     }
     try {
-      const workId = await resolveWork(t);
+      // v327: timeout guard — never hang on "Loading…" forever
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
+      const workId = await Promise.race([resolveWork(t), timeout]);
+      try { console.log('[chars] workId:', workId); } catch (e) {}
       if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
-      const cast = await CharacterWiki.getCast(workId);
+      const cast = await Promise.race([CharacterWiki.getCast(workId), timeout]);
+      try { console.log('[chars] cast total:', cast && cast.total); } catch (e) {}
       if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
       const card = (c) => {
         const link = c.characterId
@@ -468,7 +473,10 @@ function openPreviewModal(t, opts) {
       box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
         openCharacter(b.getAttribute('data-chwiki'));
       }));
-    } catch (e) { box.innerHTML = '<p class="note">Could not load characters.</p>'; }
+    } catch (e) {
+      try { console.error('[chars] load failed:', e); } catch (err) {}
+      box.innerHTML = '<p class="note">Could not load characters: ' + esc((e && e.message) || 'unknown error') + '</p>';
+    }
   };
   const wireDescToggle = () => {
     const w = document.getElementById(descId);
