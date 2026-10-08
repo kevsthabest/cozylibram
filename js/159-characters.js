@@ -59,6 +59,58 @@ const CharacterWiki = {
     } catch (e) { return { tier1: [], tier1b: [], tier2: [], tier3: [], total: 0 }; }
   },
 
+  /* v336: fetch quotes for a canonical character (via linked book_characters)
+     or for a single book_character. Returns array of {quote, context, workTitle}. */
+  async getQuotesForCanonical(charId) {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      // Get linked book_character ids
+      const { data: links } = await sb.from('character_links')
+        .select('book_character_id').eq('character_id', charId);
+      const bcIds = (links || []).map(l => l.book_character_id).filter(Boolean);
+      if (!bcIds.length) return [];
+      const { data, error } = await sb.from('book_quotes')
+        .select('quote, context, speaker_name, works(title)')
+        .in('book_character_id', bcIds)
+        .order('created_at').limit(10);
+      if (error) throw error;
+      return (data || []).map(q => ({
+        quote: q.quote, context: q.context,
+        workTitle: (q.works || {}).title || '',
+      }));
+    } catch (e) { return []; }
+  },
+
+  async getQuotesForBookCharacter(bookCharId) {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('book_quotes')
+        .select('quote, context, speaker_name')
+        .eq('book_character_id', bookCharId)
+        .order('created_at').limit(10);
+      if (error) throw error;
+      return (data || []).map(q => ({ quote: q.quote, context: q.context }));
+    } catch (e) { return []; }
+  },
+
+  /* Fallback: quotes matched by speaker name within a work (when
+     book_character_id wasn't set by the pipeline). */
+  async getQuotesBySpeaker(workId, speakerName) {
+    const sb = await this._sb();
+    if (!sb || !speakerName) return [];
+    try {
+      const { data, error } = await sb.from('book_quotes')
+        .select('quote, context')
+        .eq('work_id', workId)
+        .ilike('speaker_name', '%' + String(speakerName).trim() + '%')
+        .order('created_at').limit(10);
+      if (error) throw error;
+      return (data || []).map(q => ({ quote: q.quote, context: q.context }));
+    } catch (e) { return []; }
+  },
+
   async saveNote(charId, text) {
     const sb = await this._sb();
     if (!sb) throw new Error('cloud unavailable');
@@ -120,6 +172,20 @@ function charPrimaryRole(instances) {
     if (r != null && r < bestRank) { bestRank = r; best = inst.role; }
   });
   return best;
+}
+
+/* v336: render pull quotes section. Returns HTML (empty string if none). */
+function charQuotesHTML(quotes) {
+  if (!quotes || !quotes.length) return '';
+  let h = '<h3 class="serif">Memorable quotes</h3><div class="ch-quotes">';
+  quotes.slice(0, 5).forEach(q => {
+    h += '<blockquote class="ch-quote"><p>"' + esc(q.quote) + '"</p>' +
+      (q.context ? '<cite>' + esc(q.context) + '</cite>' : '') +
+      (q.workTitle ? '<span class="note"> — ' + esc(q.workTitle) + '</span>' : '') +
+      '</blockquote>';
+  });
+  h += '</div>';
+  return h;
 }
 
 /* v333: render a relationship target name as a tappable link when it
@@ -205,6 +271,14 @@ async function renderBookCharacterPage() {
       ).join('<br>');
       html += '</p>';
     }
+    // v336: memorable quotes (by character id, fallback to speaker name)
+    try {
+      let quotes = await CharacterWiki.getQuotesForBookCharacter(bookCharViewId);
+      if (!quotes.length && data.work_id) {
+        quotes = await CharacterWiki.getQuotesBySpeaker(data.work_id, data.name);
+      }
+      html += charQuotesHTML(quotes);
+    } catch (e) {}
     html += '<p class="note">Not yet linked to a canonical character. ' +
       'Link it in the Observatory → Characters to connect across books.</p>';
     setView(html);
@@ -301,6 +375,12 @@ async function renderCharacterPage() {
     html += '</p>';
   }
   if (!hasRels) html += '<p class="note">No recorded relationships.</p>';
+
+  // v336: memorable quotes
+  try {
+    const quotes = await CharacterWiki.getQuotesForCanonical(characterViewId);
+    html += charQuotesHTML(quotes);
+  } catch (e) {}
 
   // Per-user notes
   html += '<h3 class="serif">My notes</h3>' +
