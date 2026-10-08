@@ -279,9 +279,10 @@ function setSpoilersHidden(hide) {
 function spoilerWrap(html, label) {
   if (!spoilersHidden()) return html;
   // v347: aria-hidden on blur so screen readers don't announce spoilers (Advisor MEDIUM)
+  // v357: hint is eye icon + "Tap to reveal" (aria-label carries the context)
   return '<span class="spoiler" tabindex="0" role="button" aria-label="' + esc(label || 'Spoiler') + ' (hidden)">' +
     '<span class="spoiler-blur" aria-hidden="true">' + html + '</span>' +
-    '<span class="spoiler-hint">' + esc(label || 'Spoiler') + ' &mdash; tap to reveal</span>' +
+    '<span class="spoiler-hint">' + icon('eye') + '<span>Tap to reveal</span></span>' +
     '</span>';
 }
 /* Wire spoiler tap-to-reveal (event delegation, works for dynamic content) */
@@ -668,7 +669,7 @@ async function renderCharacterPage() {
   for (const inst of d.instances) {
     const cover = coverByTitle.get(normTitle(inst.workTitle)) || '';
     html += '<div class="ch-book-card">' +
-      (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover">' + esc(String(inst.workTitle || '?')[0]) + '</div>') +
+      (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover"><span>' + esc(inst.workTitle || '?') + '</span></div>') +
       '<div class="ch-book-meta"><b>' + esc(inst.workTitle) + '</b><br>' +
       '<span class="chip dbtrope sm">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span>' +
       (inst.name !== d.name ? '<br><span class="note">as "' + esc(inst.name) + '"</span>' : '') +
