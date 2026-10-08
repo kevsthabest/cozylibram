@@ -91,6 +91,37 @@ function openCharacter(charId) {
   window.scrollTo(0, 0);
 }
 
+/* v334: premium character wiki — visual identity helpers */
+
+/* Role-themed avatar medallion. Returns HTML for a circular badge with
+   the character's initials, colored by their primary role. */
+function charAvatar(name, role, size) {
+  size = size || 64;
+  const initials = String(name || '?').trim().split(/\s+/)
+    .map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  const themes = {
+    protagonist: 'background:linear-gradient(135deg,#c9a227,#f5d76e);color:#2a1f00;',
+    antagonist: 'background:linear-gradient(135deg,#8b0000,#e74c3c);color:#fff;',
+    supporting: 'background:linear-gradient(135deg,#2c5f8a,#6aa8e5);color:#fff;',
+    minor: 'background:linear-gradient(135deg,#5a5a5a,#9a9a9a);color:#fff;',
+  };
+  const style = themes[role] || themes.minor;
+  return '<div class="ch-avatar" style="width:' + size + 'px;height:' + size + 'px;' + style + '">' +
+    esc(initials) + '</div>';
+}
+
+/* Determine a character's primary role across all instances
+   (protagonist > antagonist > supporting > minor). */
+function charPrimaryRole(instances) {
+  const order = { protagonist: 0, antagonist: 1, supporting: 2, minor: 3 };
+  let best = 'minor', bestRank = 4;
+  (instances || []).forEach(inst => {
+    const r = order[inst.role];
+    if (r != null && r < bestRank) { bestRank = r; best = inst.role; }
+  });
+  return best;
+}
+
 /* v333: render a relationship target name as a tappable link when it
    resolves to a known character, plain text otherwise. */
 function charRelLink(name, workChars) {
@@ -150,11 +181,17 @@ async function renderBookCharacterPage() {
     // v333: fetch work characters for relationship link resolution
     let workChars = [];
     try { workChars = await CharacterStore.listForWork(data.work_id); } catch (e) {}
-    let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button>' +
-      '<h2 class="serif">' + esc(data.name) + '</h2></div>' +
-      '<p><span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[data.role] || data.role || '?') + '</span> ' +
-      '<span class="note">in ' + esc(w.title || 'unknown book') + '</span></p>';
-    if (data.description) html += '<p>' + esc(data.description) + '</p>';
+    // v334: premium hero for book character page too
+    const relCount = (Array.isArray(data.relationships) ? data.relationships : []).length;
+    let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+      '<div class="ch-hero">' +
+      charAvatar(data.name, data.role, 72) +
+      '<div class="ch-hero-info"><h2 class="serif">' + esc(data.name) + '</h2>' +
+      '<span class="chip dbtrope ch-role-' + esc(data.role || 'minor') + '">' + esc(CHAR_ROLE_LABELS[data.role] || data.role || '?') + '</span><br>' +
+      '<span class="note">in ' + esc(w.title || 'unknown book') + '</span></div></div>' +
+      '<div class="stat-row ch-stats">' +
+      '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div></div>';
+    if (data.description) html += '<p class="ch-desc">' + esc(data.description) + '</p>';
     const rels = Array.isArray(data.relationships) ? data.relationships : [];
     if (rels.length) {
       html += '<h3 class="serif">Relationships</h3><p>';
@@ -184,19 +221,51 @@ async function renderCharacterPage() {
       '<button class="btn sm" onclick="goBack()">← Back</button></div>');
     return;
   }
-  let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button>' +
-    '<h2 class="serif">' + esc(d.name) + '</h2></div>';
-  if (d.description) html += '<p>' + esc(d.description) + '</p>';
-  if (d.aliases && d.aliases.length)
-    html += '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>';
+  // v334: premium hero — avatar, name, role badge, at-a-glance stats
+  const primaryRole = charPrimaryRole(d.instances);
+  const relCount = d.instances.reduce((n, inst) => n + (inst.relationships || []).length, 0);
+  // "Closest to" — most frequent relationship target
+  const targetCounts = {};
+  d.instances.forEach(inst => (inst.relationships || []).forEach(r => {
+    const t = String(r.to || '').trim();
+    if (t) targetCounts[t] = (targetCounts[t] || 0) + 1;
+  }));
+  const closest = Object.entries(targetCounts).sort((a, b) => b[1] - a[1])[0];
 
-  // Appears in
-  html += '<h3 class="serif">Appears in (' + d.instances.length + ')</h3><div class="ch-list">';
-  d.instances.forEach(inst => {
-    html += '<div class="ch-card"><b>' + esc(inst.workTitle) + '</b> ' +
-      '<span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span><br>' +
-      '<span class="note">as "' + esc(inst.name) + '"</span></div>';
-  });
+  let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+    '<div class="ch-hero">' +
+    charAvatar(d.name, primaryRole, 84) +
+    '<div class="ch-hero-info"><h2 class="serif">' + esc(d.name) + '</h2>' +
+    '<span class="chip dbtrope ch-role-' + esc(primaryRole) + '">' + esc(CHAR_ROLE_LABELS[primaryRole] || primaryRole) + '</span>' +
+    (d.aliases && d.aliases.length ? '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
+    '</div></div>' +
+    '<div class="stat-row ch-stats">' +
+    '<div class="stat"><div class="n">' + d.instances.length + '</div><div class="l">' + (d.instances.length === 1 ? 'Book' : 'Books') + '</div></div>' +
+    '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div>' +
+    (closest ? '<div class="stat"><div class="n" style="font-size:1em">' + esc(closest[0].split(' ')[0]) + '</div><div class="l">Closest to</div></div>' : '') +
+    '</div>';
+  if (d.description) html += '<p class="ch-desc">' + esc(d.description) + '</p>';
+
+  // Appears in — cover cards
+  html += '<h3 class="serif">Appears in</h3><div class="ch-books">';
+  for (const inst of d.instances) {
+    // Try to find the book cover from the library
+    let cover = '';
+    try {
+      const book = (typeof library !== 'undefined' ? library : []).find(b => {
+        if (!b) return false;
+        const bt = String(b.title || '').toLowerCase();
+        return bt.includes(String(inst.workTitle || '').toLowerCase().split('(')[0].trim().slice(0, 20));
+      });
+      if (book && book.cover) cover = book.cover;
+    } catch (e) {}
+    html += '<div class="ch-book-card">' +
+      (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover">' + esc(String(inst.workTitle || '?')[0]) + '</div>') +
+      '<div class="ch-book-meta"><b>' + esc(inst.workTitle) + '</b><br>' +
+      '<span class="chip dbtrope sm">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span>' +
+      (inst.name !== d.name ? '<br><span class="note">as "' + esc(inst.name) + '"</span>' : '') +
+      '</div></div>';
+  }
   html += '</div>';
 
   // Relationships merged across books, labeled by source. v333: names are tappable.
