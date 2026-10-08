@@ -957,7 +957,7 @@ function renderStats() {
         libActual += b.purchasePrice;
         libPriced++;
         libEst += b.purchasePrice; // actual price counts toward value too
-      } else {
+      } else if (b.listPrice == null || isNaN(b.listPrice)) {
         libEst += libDefault;
       }
       if (b.listPrice != null && !isNaN(b.listPrice)) libEst += b.listPrice;

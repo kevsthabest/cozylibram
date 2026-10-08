@@ -63,7 +63,7 @@ ok('desktop panel CSS uses the approved mockup hero grid', (() => {
 
 // --- 2. Tabs exist; Details active, others hidden ---
 const tabs = qa('.d-tab').map(t => t.textContent);
-ok('tabs: Details | Tropes | Notes', JSON.stringify(tabs) === JSON.stringify(['Details', 'Tropes', 'Notes']));
+ok('tabs: Details | Tropes | Notes | Characters', JSON.stringify(tabs) === JSON.stringify(['Details', 'Tropes', 'Notes', 'Characters']));
 ok('tabs: Details active by default',
   q('.d-tab[data-dtab="details"]').classList.contains('active') && !q('#dtab-details').hidden);
 ok('tabs: Tropes + Notes start hidden', q('#dtab-tropes').hidden && q('#dtab-notes').hidden);

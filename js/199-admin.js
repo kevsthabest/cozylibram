@@ -1837,12 +1837,31 @@ const CharacterStore = {
       let linkedCount = 0, groupCount = 0;
       for (const key of Object.keys(groups)) {
         const g = groups[key];
+        const groupKey = key;
         const workIds = new Set(g.map(x => x.workId));
         if (g.length < 2 || workIds.size < 2) continue;
-        // Find or create canonical
+        // Find or create canonical. v326: verify an existing canonical actually
+        // belongs to this author+series before reusing it (John Smith problem).
+        // The group's key already encodes author+series, so we check the
+        // canonical's linked characters for a matching group.
+        let charId = null;
         const { data: existing } = await sb.from('characters')
-          .select('id').eq('name_norm', g[0].norm).limit(1);
-        let charId = existing && existing[0] && existing[0].id;
+          .select('id').eq('name_norm', g[0].norm).limit(5);
+        if (existing && existing.length) {
+          for (const cand of existing) {
+            const { data: candLinks } = await sb.from('character_links')
+              .select('book_characters!inner(work_id, works!inner(authors, series))')
+              .eq('character_id', cand.id).limit(10);
+            const match = (candLinks || []).some(l => {
+              const bc = l.book_characters || {};
+              const w = bc.works || {};
+              const authors = Array.isArray(w.authors) ? w.authors.join('|').toLowerCase() : '';
+              const series = String(w.series || '').trim().toLowerCase();
+              return (g[0].norm + '||' + authors + '||' + series) === groupKey;
+            });
+            if (match) { charId = cand.id; break; }
+          }
+        }
         if (!charId) {
           const { data: nc, error: cerr } = await sb.from('characters')
             .insert({ name: g[0].name, name_norm: g[0].norm, source: 'auto-series' })

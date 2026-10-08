@@ -447,21 +447,21 @@ function openPreviewModal(t, opts) {
           ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
         return '<div class="ch-card">' + link + desc + rels + '</div>';
       };
-      const section = (title, list, id) => {
+      const section = (title, list, id, hideTitle) => {
         if (!list.length) return '';
-        return '<h4 class="serif">' + title + ' (' + list.length + ')</h4>' +
+        return (hideTitle ? '' : '<h4 class="serif">' + title + ' (' + list.length + ')</h4>') +
           '<div class="ch-list" id="' + id + '"' + (id !== 'm-ct1' ? ' style="display:none"' : '') + '>' +
           list.map(card).join('') + '</div>';
       };
-      let h = section('Main cast', cast.tier1, 'm-ct1');
-      if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2').replace('<h4 class="serif"> (', '<h4 class="serif" style="display:none">(');
-      if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3').replace('<h4 class="serif"> (', '<h4 class="serif" style="display:none">(');
+      let h = section('Main cast', cast.tier1, 'm-ct1', false);
+      if (cast.tier2.length) h += '<p><button class="taplink" id="m-ct2-t">Supporting cast (' + cast.tier2.length + ')</button></p>' + section('', cast.tier2, 'm-ct2', true);
+      if (cast.tier3.length) h += '<p><button class="taplink" id="m-ct3-t">Minor characters (' + cast.tier3.length + ')</button></p>' + section('', cast.tier3, 'm-ct3', true);
       box.innerHTML = h;
       const wire = (btnId, listId) => {
         const b = document.getElementById(btnId);
         if (b) b.addEventListener('click', () => {
           const l = document.getElementById(listId);
-          l.style.display = l.style.display === 'none' ? '' : 'none';
+          if (l) l.style.display = l.style.display === 'none' ? '' : 'none';
         });
       };
       wire('m-ct2-t', 'm-ct2'); wire('m-ct3-t', 'm-ct3');

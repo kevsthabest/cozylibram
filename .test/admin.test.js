@@ -248,6 +248,7 @@ function ev(uid, name, cat, props, created) {
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))',
       'id, name, work_id, works!inner(authors, series)',
       'book_character_id',
+      'book_characters!inner(work_id, works!inner(authors, series))',
       'id',
       'name',
     ]);

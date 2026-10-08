@@ -53,7 +53,7 @@ function ok(name, cond) {
     ok('multi-word alias with punctuation',
       r("dead man's switch") === 'dead-mans-switch');
     ok('normalization variant resolves', r('Morally_Gray') === 'morally-grey');
-    ok('excluded term vetoed (betrayal != double-cross)', r('betrayal') === null);
+    ok('betrayal is now a legitimate trope (v314)', r('betrayal') === 'betrayal');
     ok('excluded term vetoed (prince != royalty)', r('prince') === null);
     ok('unknown -> null', r('not-a-trope') === null);
     ok('empty -> null', r('') === null && r(null) === null);
@@ -84,7 +84,7 @@ function ok(name, cond) {
       { id: 'why-choose', confidence: 0.6 },
       { id: 'dragons', confidence: 0.9 },
       { id: 'not-a-trope', confidence: 0.95 },
-      { id: 'betrayal', confidence: 0.7 },
+      { id: 'not-a-trope', confidence: 0.7 },
       { id: 'slow burn', confidence: 1.5 },
       { id: null, confidence: 0.5 },
     ])`);
@@ -93,7 +93,7 @@ function ok(name, cond) {
     ok('canonical+alias deduped to one row',
       out.filter(o => o.id === 'why-choose').length === 1);
     ok('unknown and excluded terms dropped',
-      !ids.includes('not-a-trope') && !ids.includes('betrayal'));
+      !ids.includes('not-a-trope'));
     ok('no alias ids leak into output',
       out.every(o => probe(`TropeTaxonomy.byId(${JSON.stringify(o.id)})`) !== null));
     const slow = out.find(o => o.id === 'slow-burn');

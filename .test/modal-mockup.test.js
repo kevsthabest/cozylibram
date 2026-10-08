@@ -61,7 +61,7 @@ ok('primary row holds primary + hero favorite',
   !!q('.d-primary-row #m-primary') && !!q('.d-primary-row #f-fav2'));
 ok('primary still singular', qa('#m-primary').length === 1);
 ok('metadata row uses icons', qa('.d-meta svg').length === 3);
-ok('change cover is a labeled button', q('#m-changecover').textContent.includes('Change Cover'));
+ok('change cover is a labeled button', q('#m-changecover').textContent.includes('Cover'));
 
 // --- 3. Favorite sync across all three controls ---
 ok('hero favorite starts off', !q('#f-fav2').classList.contains('on'));
@@ -76,7 +76,7 @@ ok('menu favorite toggles back off',
 ok('menu favorite label flips back', q('#m-favmenu').textContent.includes('Add to Favorites'));
 
 // --- 4. Tabs carry icons ---
-ok('tabs have icons', qa('.d-tab svg').length === 3);
+ok('tabs have icons', qa('.d-tab svg').length === 4);
 
 // --- 5. Details: about heading, tappable rows, more-details, log summary ---
 ok('about-this-book heading', q('#dtab-details .field label').textContent === 'About this book');

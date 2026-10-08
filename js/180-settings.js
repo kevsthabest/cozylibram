@@ -212,8 +212,8 @@ function renderSettings() {
         ledgerCount++;
         var src = b.purchaseSource || 'Unknown';
         ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
-      } else {
-        // v323: books without a price use the default as an estimate
+      } else if (b.listPrice == null || isNaN(b.listPrice)) {
+        // v323: books without a price AND without a list price use the default
         listTotal += defaultPrice;
         defaultCount++;
       }
