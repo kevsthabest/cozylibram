@@ -1635,6 +1635,8 @@ let charLabWorkId = null;
 let charLabRoleFilter = '';
 let charLabSelectedId = null;
 let charLabShowBlocked = false; // v317: hidden by default
+let charLabView = 'work'; // v318: 'work' | 'unified'
+let charLabCanonicalId = null;
 
 const CharacterStore = {
   _sb() { return cloudClient().catch(() => null); },
@@ -1661,13 +1663,118 @@ const CharacterStore = {
     } catch (e) { return []; }
   },
 
+  /* Normalize a name for canonical matching. */
+  normName(n) {
+    return String(n || '').trim().toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  },
+
+  /* All canonical characters, with linked work counts. */
+  async listCanonical() {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('characters')
+        .select('id, name, description, updated_at')
+        .order('name');
+      if (error) throw error;
+      // Get link counts per canonical character
+      const { data: links, error: lerr } = await sb.from('book_characters')
+        .select('character_id, work_id, works(title)')
+        .not('character_id', 'is', null)
+        .limit(5000);
+      if (lerr) throw lerr;
+      const byChar = {};
+      for (const l of links || []) {
+        const b = byChar[l.character_id] || (byChar[l.character_id] = {
+          works: [], workIds: new Set(),
+        });
+        if (!b.workIds.has(l.work_id)) {
+          b.workIds.add(l.work_id);
+          b.works.push((l.works && l.works.title) || l.work_id.slice(0, 8));
+        }
+      }
+      return (data || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description || '',
+        works: (byChar[c.id] && byChar[c.id].works) || [],
+        workCount: (byChar[c.id] && byChar[c.id].workIds.size) || 0,
+      }));
+    } catch (e) { return []; }
+  },
+
+  /* Full unified view: canonical character + all linked book rows with
+     their per-work relationships. */
+  async getCanonicalDetail(charId) {
+    const sb = await this._sb();
+    if (!sb) return null;
+    try {
+      const { data: c, error } = await sb.from('characters')
+        .select('id, name, description').eq('id', charId).maybeSingle();
+      if (error || !c) return null;
+      const { data: rows, error: rerr } = await sb.from('book_characters')
+        .select('id, work_id, name, role, description, relationships, works(title)')
+        .eq('character_id', charId);
+      if (rerr) throw rerr;
+      return {
+        id: c.id, name: c.name, description: c.description || '',
+        instances: (rows || []).map(r => ({
+          id: r.id,
+          workId: r.work_id,
+          workTitle: (r.works && r.works.title) || r.work_id.slice(0, 8),
+          name: r.name,
+          role: r.role,
+          description: r.description || '',
+          relationships: Array.isArray(r.relationships) ? r.relationships : [],
+        })),
+      };
+    } catch (e) { return null; }
+  },
+
+  /* Create a canonical character and link book rows to it. */
+  async createCanonical(name, description, bookRowIds) {
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    const norm = this.normName(name);
+    if (!norm) throw new Error('name required');
+    // Upsert canonical by normalized name
+    const { data: existing } = await sb.from('characters')
+      .select('id').eq('name_norm', norm).maybeSingle();
+    let charId = existing && existing.id;
+    if (!charId) {
+      const { data, error } = await sb.from('characters')
+        .insert({ name: String(name).trim(), name_norm: norm,
+          description: String(description || '').trim() || null })
+        .select('id').maybeSingle();
+      if (error) throw error;
+      charId = data.id;
+    }
+    // Link the book rows
+    if (bookRowIds && bookRowIds.length) {
+      const { error: lerr } = await sb.from('book_characters')
+        .update({ character_id: charId }).in('id', bookRowIds);
+      if (lerr) throw lerr;
+    }
+    return charId;
+  },
+
+  /* Unlink a book row from its canonical character. */
+  async unlink(rowId) {
+    const sb = await this._sb();
+    if (!sb) throw new Error('cloud unavailable');
+    const { error } = await sb.from('book_characters')
+      .update({ character_id: null }).eq('id', rowId);
+    if (error) throw error;
+  },
+
   /* All characters for a work. */
   async listForWork(workId) {
     const sb = await this._sb();
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_characters')
-        .select('id, name, role, description, relationships, confidence, status')
+        .select('id, name, role, description, relationships, confidence, status, character_id')
         .eq('work_id', workId)
         .order('name');
       if (error) throw error;
@@ -1679,6 +1786,7 @@ const CharacterStore = {
         relationships: Array.isArray(c.relationships) ? c.relationships : [],
         confidence: c.confidence,
         status: c.status || 'candidate',
+        characterId: c.character_id || null,
       }));
     } catch (e) { return []; }
   },
@@ -1755,8 +1863,113 @@ async function renderCharacterLab() {
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
   }
+  if (charLabView === 'unified') {
+    charLabRenderUnified(body);
+    return;
+  }
   const chars = await CharacterStore.listForWork(charLabWorkId);
   charLabRender(body, works, chars);
+}
+
+/* v318: unified character database — canonical characters spanning works. */
+async function charLabRenderUnified(body) {
+  body.innerHTML = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+    ' Character Lab</h3>' +
+    '<p class="note">' +
+    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
+    '<button class="btn sm" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
+    '<p class="note">Loading…</p></div>';
+  charLabWireViewToggle(body);
+
+  const canonicals = await CharacterStore.listCanonical();
+  let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+    ' Character Lab</h3>' +
+    '<p class="note">' +
+    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
+    '<button class="btn sm" data-chview="unified">Character database</button> ' +
+    '<button class="btn sm ghost" id="ch-urefresh">↻</button></p>' +
+    '<p class="note">' + canonicals.length + ' canonical characters. ' +
+    'Link book characters to build the cross-book web.</p>';
+  if (!canonicals.length) {
+    html += '<p class="note">No linked characters yet. Open a work, select ' +
+      'a character, and use "Link to character" to start building.</p>';
+  } else {
+    html += '<div class="ch-list">';
+    canonicals.forEach(c => {
+      html += '<button class="ch-card' + (c.id === charLabCanonicalId ? ' sel' : '') +
+        '" data-chcanon="' + esc(c.id) + '">' +
+        '<b>' + esc(c.name) + '</b> ' +
+        '<span class="note">' + c.workCount + ' book' + (c.workCount === 1 ? '' : 's') + '</span>' +
+        (c.works.length ? '<br><span class="note">' + esc(c.works.slice(0, 3).join(', ')) +
+          (c.works.length > 3 ? '…' : '') + '</span>' : '') +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  html += '</div><div id="ch-canon-detail"></div>';
+  body.innerHTML = html;
+  charLabWireViewToggle(body);
+  document.getElementById('ch-urefresh').addEventListener('click', () => charLabRenderUnified(body));
+  body.querySelectorAll('[data-chcanon]').forEach(b => b.addEventListener('click', async () => {
+    charLabCanonicalId = b.getAttribute('data-chcanon');
+    body.querySelectorAll('.ch-card').forEach(x =>
+      x.classList.toggle('sel', x.getAttribute('data-chcanon') === charLabCanonicalId));
+    await charLabCanonDetail();
+  }));
+  if (charLabCanonicalId) await charLabCanonDetail();
+}
+
+function charLabWireViewToggle(body) {
+  body.querySelectorAll('[data-chview]').forEach(b => b.addEventListener('click', () => {
+    charLabView = b.getAttribute('data-chview');
+    renderCharacterLab();
+  }));
+}
+
+/* Unified character detail: all linked instances, merged relationships
+   labeled by book, and unlink controls. */
+async function charLabCanonDetail() {
+  const el = document.getElementById('ch-canon-detail');
+  if (!el || !charLabCanonicalId) { if (el) el.innerHTML = ''; return; }
+  el.innerHTML = '<p class="note">Loading…</p>';
+  const d = await CharacterStore.getCanonicalDetail(charLabCanonicalId);
+  if (!d) { el.innerHTML = '<p class="note">Character not found.</p>'; return; }
+
+  let html = '<div class="ob-card"><h3 class="serif">' + esc(d.name) + '</h3>';
+  if (d.description) html += '<p>' + esc(d.description) + '</p>';
+  html += '<h4 class="serif">Appears in (' + d.instances.length + ')</h4>';
+  d.instances.forEach(inst => {
+    html += '<div class="ch-instance"><p><b>' + esc(inst.workTitle) + '</b> ' +
+      '<span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span> ' +
+      '<span class="note">as "' + esc(inst.name) + '"</span> ' +
+      '<button class="btn sm ghost" data-chunlink="' + esc(inst.id) + '">Unlink</button></p>';
+    if (inst.description) html += '<p class="note">' + esc(inst.description) + '</p>';
+    if (inst.relationships.length) {
+      html += '<p class="note">Relationships in this book:</p><p>';
+      html += inst.relationships.map(r =>
+        '<span class="chip">' + esc(charNormRelType(r.type)) + '</span> ' + esc(r.to)
+      ).join(' · ');
+      html += '</p>';
+    }
+    html += '</div>';
+  });
+  html += '<p class="note" id="ch-unlink-msg"></p></div>';
+  el.innerHTML = html;
+  el.querySelectorAll('[data-chunlink]').forEach(b => b.addEventListener('click', async () => {
+    const rowId = b.getAttribute('data-chunlink');
+    if (!confirm('Unlink this appearance from ' + d.name + '?')) return;
+    b.disabled = true;
+    try {
+      await CharacterStore.unlink(rowId);
+      await charLabCanonDetail();
+      // Refresh the list counts
+      charLabRenderUnified(document.getElementById('ob-body'));
+    } catch (e) {
+      b.disabled = false;
+      document.getElementById('ch-unlink-msg').textContent = 'Failed: ' + ((e && e.message) || e);
+    }
+  }));
 }
 
 function charLabRender(body, works, chars) {
@@ -1778,6 +1991,9 @@ function charLabRender(body, works, chars) {
 
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
     ' Character Lab</h3>' +
+    '<p class="note">' +
+    '<button class="btn sm" data-chview="work">By work</button> ' +
+    '<button class="btn sm ghost" data-chview="unified">Character database</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
@@ -1832,6 +2048,7 @@ function charLabRender(body, works, chars) {
     const nc = await CharacterStore.listForWork(charLabWorkId);
     charLabRender(body, works, nc);
   });
+  charLabWireViewToggle(body);
   document.getElementById('ch-refresh').addEventListener('click', async () => {
     const nc = await CharacterStore.listForWork(charLabWorkId);
     charLabRender(body, works, nc);
@@ -1912,7 +2129,12 @@ function charLabDetail(chars) {
     (c.status === 'candidate'
       ? '<p><button class="btn sm" data-chstatus="confirmed" data-chid="' + esc(c.id) + '">✓ Confirm</button> ' +
         '<button class="btn sm ghost" data-chstatus="rejected" data-chid="' + esc(c.id) + '">✕ Reject</button></p>'
-      : '');
+      : '') +
+    '<p>' + (c.characterId
+      ? '<span class="note">Linked to canonical character</span> ' +
+        '<button class="btn sm ghost" data-chunlink-row="' + esc(c.id) + '">Unlink</button>'
+      : '<button class="btn sm" id="ch-link-btn" data-chid="' + esc(c.id) + '">Link to character…</button>') +
+    '</p><div id="ch-link-ui"></div>';
   if (c.description) html += '<p>' + esc(c.description) + '</p>';
 
   // Outgoing relationships
@@ -1956,6 +2178,75 @@ function charLabDetail(chars) {
       x.classList.toggle('sel', x.getAttribute('data-chid') === charLabSelectedId));
     charLabDetail(chars);
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  // Wire link button — show canonical picker
+  const linkBtn = el.querySelector('#ch-link-btn');
+  if (linkBtn) linkBtn.addEventListener('click', async () => {
+    const ui = el.querySelector('#ch-link-ui');
+    const rowId = linkBtn.getAttribute('data-chid');
+    ui.innerHTML = '<p class="note">Loading characters…</p>';
+    const canonicals = await CharacterStore.listCanonical();
+    // Suggest matches by normalized name
+    const norm = CharacterStore.normName(c.name);
+    const suggestions = canonicals.filter(cc =>
+      CharacterStore.normName(cc.name) === norm ||
+      CharacterStore.normName(cc.name).includes(norm) ||
+      norm.includes(CharacterStore.normName(cc.name)));
+    let h = '<div class="ob-card"><h4 class="serif">Link "' + esc(c.name) + '" to…</h4>';
+    if (suggestions.length) {
+      h += '<p><b>Suggestions:</b></p>';
+      suggestions.forEach(sg => {
+        h += '<p><button class="btn sm" data-chdolink="' + esc(sg.id) + '" data-row="' + esc(rowId) + '">' +
+          esc(sg.name) + '</button> <span class="note">' + sg.workCount + ' books</span></p>';
+      });
+    }
+    h += '<p><b>All characters:</b> <select id="ch-link-pick" class="text-input" style="width:auto;display:inline-block;max-width:220px">' +
+      '<option value="">— pick —</option>' +
+      canonicals.filter(cc => !suggestions.some(sg => sg.id === cc.id)).map(cc =>
+        '<option value="' + esc(cc.id) + '">' + esc(cc.name) + ' (' + cc.workCount + ')</option>').join('') +
+      '</select> <button class="btn sm" id="ch-link-pick-go">Link</button></p>';
+    h += '<p><b>Or create new:</b> <input id="ch-link-new" class="text-input" style="width:auto;display:inline-block" placeholder="Character name" value="' + esc(c.name) + '"> ' +
+      '<button class="btn sm" id="ch-link-new-go">Create & link</button></p>';
+    h += '<p class="note" id="ch-link-msg"></p></div>';
+    ui.innerHTML = h;
+    const doLink = async (charId) => {
+      const msg = ui.querySelector('#ch-link-msg');
+      try {
+        const sb = await CharacterStore._sb();
+        if (!sb) throw new Error('cloud unavailable');
+        const { error } = await sb.from('book_characters')
+          .update({ character_id: charId }).eq('id', rowId);
+        if (error) throw error;
+        c.characterId = charId;
+        charLabDetail(chars);
+      } catch (e) { if (msg) msg.textContent = 'Failed: ' + ((e && e.message) || e); }
+    };
+    ui.querySelectorAll('[data-chdolink]').forEach(b => b.addEventListener('click', () =>
+      doLink(b.getAttribute('data-chdolink'))));
+    ui.querySelector('#ch-link-pick-go').addEventListener('click', () => {
+      const v = ui.querySelector('#ch-link-pick').value;
+      if (v) doLink(v);
+    });
+    ui.querySelector('#ch-link-new-go').addEventListener('click', async () => {
+      const v = ui.querySelector('#ch-link-new').value.trim();
+      const msg = ui.querySelector('#ch-link-msg');
+      if (!v) { if (msg) msg.textContent = 'Enter a name.'; return; }
+      try {
+        const cid = await CharacterStore.createCanonical(v, c.description, [rowId]);
+        c.characterId = cid;
+        charLabDetail(chars);
+      } catch (e) { if (msg) msg.textContent = 'Failed: ' + ((e && e.message) || e); }
+    });
+  });
+  // Wire unlink from detail
+  el.querySelectorAll('[data-chunlink-row]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('Unlink this character?')) return;
+    b.disabled = true;
+    try {
+      await CharacterStore.unlink(b.getAttribute('data-chunlink-row'));
+      c.characterId = null;
+      charLabDetail(chars);
+    } catch (e) { b.disabled = false; b.title = 'Failed: ' + ((e && e.message) || e); }
   }));
   // Wire confirm/reject
   el.querySelectorAll('[data-chstatus]').forEach(b => b.addEventListener('click', async () => {
