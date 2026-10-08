@@ -365,211 +365,241 @@ function charTimelineHTML(instances, workCharsByWorkId) {
   return h;
 }
 
-/* v339: Phase C — interactive SVG relationship constellation.
-   v365: rebuilt as zoomable/pannable canvas. Click a node to expand
-   that character's own connections. Filters to important relationships
-   (family/partners or importance >= 4).
-   Renders the character at center with relationship nodes arranged in a
-   circle. Nodes are tappable (navigate to character pages). Edges are
-   colored by relationship type. */
+/* v339: Phase C — relationship graph.
+   v369: rebuilt with D3 force-directed layout (was hand-rolled SVG).
+   Protagonist pinned at center, click to expand/collapse, drag to rearrange,
+   pan/zoom via D3. Filters to important relationships. */
+
 function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
+  if (typeof d3 === 'undefined') {
+    // Fallback if D3 failed to load
+    return '<p class="note">Relationship graph unavailable (D3 not loaded).</p>';
+  }
+
   // v365: only important relationships — family, partners, or high importance
-  // v366: NULL importance treated as 3 (old default) so pre-v2.6.2 data isn't hidden
   const importantTypes = new Set(['spouse', 'parent', 'child', 'sibling', 'partner', 'fiance']);
   const important = grouped.filter(n => {
     if ((n.importance || 3) >= 4) return true;
     return (n.types || []).some(t => importantTypes.has(t));
   });
   const nodes = (important.length ? important : grouped).slice(0, 12);
-  const extra = grouped.length - nodes.length;
 
-  const W = 400, H = 400, cx = W / 2, cy = H / 2, R = 140;
-  const typeColors = {
-    spouse: '#e74c3c', partner: '#e74c3c', fiance: '#e74c3c',
-    parent: '#c9a227', child: '#f5d76e',
-    sibling: '#9b59b6', friend: '#2ecc71', enemy: '#8b0000',
-    mentor: '#3498db', colleague: '#6aa8e5',
+  const uid = 'd3graph' + Math.random().toString(36).slice(2, 8);
+
+  // Build D3 data structures
+  const centerId = '__center__';
+  const charData = {};
+  charData[centerId] = { name: centerName, group: 'hero' };
+
+  // Map relationship types to demo groups
+  const typeToGroup = {
+    spouse: 'romance', partner: 'romance', fiance: 'romance',
+    parent: 'family', child: 'family', sibling: 'family',
+    friend: 'friend', mentor: 'mentor', enemy: 'rival', rival: 'rival',
   };
 
-  const uid = 'cg' + Math.random().toString(36).slice(2, 8);
-  let svg = '<svg id="' + uid + '" viewBox="0 0 ' + W + ' ' + H + '" class="ch-graph" ' +
-    'style="width:100%;max-width:420px;height:auto;display:block;margin:0 auto;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;" ' +
-    'data-cx="' + cx + '" data-cy="' + cy + '">';
-
-  // Edges (behind nodes)
   nodes.forEach((n, i) => {
-    const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
-    const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
-    const color = typeColors[n.types[0]] || '#888';
-    svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '"' +
-      ' stroke="' + color + '" stroke-width="1.5" opacity="0.5"/>';
+    const id = 'n' + i;
+    const primaryType = (n.types || [])[0] || 'friend';
+    charData[id] = {
+      name: n.name,
+      group: typeToGroup[primaryType] || 'friend',
+      // Store original for navigation
+      _orig: n,
+    };
   });
 
-  // Nodes
-  nodes.forEach((n, i) => {
-    const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
-    const x = cx + R * Math.cos(angle), y = cy + R * Math.sin(angle);
-    const color = typeColors[n.types[0]] || '#888';
-    const imp = n.importance || 3;
-    const r = 16 + (imp * 2.5);
-    const initials = String(n.name).trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
-    let tapAttr = '';
-    let expandAttr = '';
-    try {
-      if (typeof charResolveTarget !== 'undefined' && workChars) {
-        const res = charResolveTarget(n.name, workChars);
-        if (res.character) {
-          const c = res.character;
-          // v366: nodes get BOTH — tap expands, double-tap navigates to page
-          // (Advisor HIGH: was either/or)
-          const hasRels = c.relationships && c.relationships.length > 0;
-          if (hasRels) expandAttr = ' data-expand="' + esc(n.name) + '"';
-          tapAttr = c.characterId
-            ? ' data-chwiki="' + esc(c.characterId) + '"'
-            : ' data-chbook="' + esc(c.id) + '"';
-        }
-      }
-    } catch (e) {}
-    const label = esc(n.name.length > 16 ? n.name.slice(0, 15) + '…' : n.name);
-    // v365: use style for fill (CSS vars don't work in presentation attributes)
-    svg += '<g' + tapAttr + expandAttr + ' class="ch-graph-node" style="cursor:pointer">' +
-      '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + color + '" opacity="0.9"/>' +
-      '<text x="' + x.toFixed(1) + '" y="' + (y + 5).toFixed(1) + '" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">' + esc(initials) + '</text>' +
-      '<text x="' + x.toFixed(1) + '" y="' + (y + r + 14).toFixed(1) + '" text-anchor="middle" style="fill:var(--text)" font-size="10">' + label + '</text>' +
-      '</g>';
-  });
+  const relations = nodes.map((n, i) => [centerId, 'n' + i, (n.types || [])[0] || 'friend']);
 
-  // Center node
-  const centerInitials = String(centerName || '?').trim().split(/\s+/).map(w => [...w][0]).join('').slice(0, 2).toUpperCase();
-  const centerColor = { protagonist: '#c9a227', antagonist: '#8b0000', supporting: '#2c5f8a', minor: '#5a5a5a' }[centerRole] || '#5a5a5a';
-  svg += '<circle cx="' + cx + '" cy="' + cy + '" r="32" fill="' + centerColor + '"/>' +
-    '<text x="' + cx + '" y="' + (cy + 6) + '" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">' + esc(centerInitials) + '</text>' +
-    '<text x="' + cx + '" y="' + (cy + 50) + '" text-anchor="middle" style="fill:var(--text)" font-size="11" font-weight="600">' + esc(centerName || '') + '</text>';
-  svg += '</svg>';
+  // Store data for the D3 init
+  const dataJson = JSON.stringify({ charData, relations, centerId, centerName }).replace(/</g, '\\u003c');
 
-  let h = '<div class="ch-graph-wrap" data-graph="' + uid + '">' + svg;
-  h += '<p class="note" style="text-align:center;font-size:11px">Drag to pan • Scroll/pinch to zoom • Tap a bubble to explore</p>';
-  if (extra > 0) h += '<p class="note" style="text-align:center">+' + extra + ' more connections listed below</p>';
-  const usedTypes = [...new Set(nodes.map(n => n.types[0]))];
-  h += '<div class="ch-graph-legend">' + usedTypes.map(t =>
-    '<span><i style="background:' + (typeColors[t] || '#888') + '"></i>' + esc(t) + '</span>'
-  ).join('') + '</div></div>';
+  let h = '<div class="ch-graph-wrap d3-graph-wrap">';
+  h += '<div id="' + uid + '-hud" class="d3-hud">';
+  h += '<div class="d3-hint">Tap a character to expand • Drag bubbles • Scroll/pinch to zoom</div>';
+  h += '<div class="d3-legend" id="' + uid + '-legend"></div>';
+  h += '</div>';
+  h += '<svg id="' + uid + '" class="d3-graph" style="width:100%;height:400px;display:block;touch-action:none;"></svg>';
+  h += '<script type="application/json" id="' + uid + '-data">' + dataJson + '</script>';
+  h += '</div>';
 
   return h;
 }
 
-/* v366: wire graph interactivity (pan/zoom/expand).
-   Called after setView — inline scripts don't execute via innerHTML. */
-function wireCharGraph(box) {
-  if (!box) return;
-  box.querySelectorAll('.ch-graph-wrap').forEach(wrap => {
-    const svg = wrap.querySelector('svg.ch-graph');
-    if (!svg || svg.dataset.wired) return;
-    svg.dataset.wired = '1';
-    const W = 400, H = 400;
-    let vb = { x: 0, y: 0, w: W, h: H };
-    let startVB = null, startPt = null, moved = 0;
-    let lastTap = 0, lastTarget = null;
-    const setVB = () => svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
-    const toPt = e => {
-      const p = svg.createSVGPoint();
-      p.x = e.clientX; p.y = e.clientY;
-      return p.matrixTransform(svg.getScreenCTM().inverse());
-    };
-    svg.addEventListener('pointerdown', e => {
-      e.preventDefault(); // v368: prevent text selection on drag
-      startVB = { ...vb }; startPt = toPt(e); moved = 0;
-      lastTap = 0; lastTarget = null; // v367: cancel pending expand on new gesture
-      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
-      svg.style.cursor = 'grabbing';
-    });
-    svg.addEventListener('pointermove', e => {
-      if (!startPt) return;
-      const p = toPt(e);
-      const dx = p.x - startPt.x, dy = p.y - startPt.y;
-      moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
-      vb.x = startVB.x - dx; vb.y = startVB.y - dy;
-      setVB();
-    });
-    const endPan = () => { startPt = null; svg.style.cursor = 'grab'; };
-    svg.addEventListener('pointerup', endPan);
-    svg.addEventListener('pointercancel', endPan);
-    svg.addEventListener('wheel', e => {
-      e.preventDefault();
-      const s = e.deltaY > 0 ? 1.15 : 0.87;
-      const p = toPt(e);
-      vb.x = p.x - (p.x - vb.x) * s;
-      vb.y = p.y - (p.y - vb.y) * s;
-      vb.w *= s; vb.h *= s;
-      vb.w = Math.max(100, Math.min(W * 2, vb.w));
-      vb.h = Math.max(100, Math.min(H * 2, vb.h));
-      setVB();
-    }, { passive: false });
-    // Tap: expand (single) vs navigate (double). Ignore if dragged.
-    svg.addEventListener('click', e => {
-      if (moved > 8) return; // was a drag, not a tap
-      const g = e.target.closest('[data-expand]');
-      if (!g) return;
-      const now = Date.now();
-      const name = g.getAttribute('data-expand');
-      if (now - lastTap < 400 && lastTarget === g) {
-        // Double-tap: navigate to character page
-        const wikiId = g.getAttribute('data-chwiki');
-        const bookId = g.getAttribute('data-chbook');
-        if (wikiId && typeof openCharacter === 'function') openCharacter(wikiId);
-        else if (bookId && typeof openBookCharacter === 'function') openBookCharacter(bookId);
-        lastTap = 0; lastTarget = null;
-      } else {
-        // Single tap: expand
-        lastTap = now; lastTarget = g;
-        setTimeout(() => {
-          if (Date.now() - lastTap >= 400 && lastTarget === g) {
-            const uid = svg.id;
-            if (typeof charExpandGraph === 'function') charExpandGraph(name, uid);
-            lastTap = 0; lastTarget = null;
-          }
-        }, 410);
-      }
-    });
-  });
-}
+/* v369: Initialize D3 graph after render. Called from renderCharacterPage. */
+function initD3Graph(box) {
+  if (typeof d3 === 'undefined' || !box) return;
+  box.querySelectorAll('.d3-graph-wrap').forEach(wrap => {
+    const svgEl = wrap.querySelector('svg.d3-graph');
+    if (!svgEl || svgEl.dataset.d3wired) return;
+    svgEl.dataset.d3wired = '1';
 
-/* v365: expand a graph node to center on that character.
-   v366: re-renders via charGraphHTML and re-wires with wireCharGraph. */
-function charExpandGraph(name, svgId) {
-  try {
-    const wrap = document.querySelector('[data-graph="' + svgId + '"]');
-    if (!wrap) return;
-    const dataEl = document.getElementById(svgId + '-data');
+    const uid = svgEl.id;
+    const dataEl = document.getElementById(uid + '-data');
     if (!dataEl) return;
-    const allChars = JSON.parse(dataEl.textContent || '[]');
-    const target = allChars.find(c =>
-      String(c.name || '').toLowerCase() === String(name || '').toLowerCase());
-    if (!target || !target.relationships) return;
-    const grouped = charGroupRelationships(target.relationships);
-    if (!grouped.length) {
-      if (typeof toast === 'function') toast('No recorded relationships for ' + name);
-      return;
+
+    let data;
+    try { data = JSON.parse(dataEl.textContent); } catch (e) { return; }
+
+    const { charData, relations, centerId } = data;
+    const PROTAG = centerId;
+
+    // Demo color scheme adapted to CozyLibram theme
+    const groupColors = {
+      hero: '#c9a227',
+      family: '#e9a37b',
+      friend: '#8fc1a3',
+      romance: '#e68fa8',
+      mentor: '#9aa7e0',
+      rival: '#c9876f',
+    };
+
+    const LINK_DIST = { family: 95, friend: 120, romance: 100, mentor: 130, rival: 150 };
+
+    const svg = d3.select(svgEl);
+    const width = svgEl.clientWidth || 400;
+    const height = 400;
+    svg.attr('viewBox', '0 0 ' + width + ' ' + height);
+
+    const root = svg.append('g');
+    const linkLayer = root.append('g');
+    const nodeLayer = root.append('g');
+
+    let nodes = [], links = [];
+    const expanded = new Set([PROTAG]);
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const DUR = reduceMotion ? 0 : 500;
+
+    const radius = d => (d.id === PROTAG ? 36 : expanded.has(d.id) ? 28 : 22);
+
+    const sim = d3.forceSimulation()
+      .velocityDecay(0.35)
+      .alphaDecay(0.02)
+      .on('tick', ticked);
+
+    function applyForces() {
+      sim
+        .force('link', d3.forceLink(links).id(d => d.id)
+          .distance(l => (LINK_DIST[l.type] || 110)).strength(0.55))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('collide', d3.forceCollide(d => radius(d) + 16).strength(0.9))
+        .force('x', d3.forceX(width / 2).strength(0.04))
+        .force('y', d3.forceY(height / 2).strength(0.04));
     }
-    // Re-render graph centered on the new character
-    const newHTML = charGraphHTML(grouped, allChars, target.name, target.role);
-    const tmp = document.createElement('div');
-    tmp.innerHTML = newHTML;
-    const newWrap = tmp.querySelector('.ch-graph-wrap');
-    if (newWrap) {
-      wrap.innerHTML = newWrap.innerHTML;
-      wrap.appendChild(dataEl); // preserve data store
-      // Re-wire interactivity
-      wireCharGraph(wrap.parentElement || document);
-      // Update the data-graph UID to the new SVG's ID
-      const newSvg = wrap.querySelector('svg.ch-graph');
-      if (newSvg) wrap.setAttribute('data-graph', newSvg.id);
+
+    function pin() {
+      const p = nodes.find(n => n.id === PROTAG);
+      if (p) { p.fx = width / 2; p.fy = height / 2; }
     }
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } catch (e) {
-    console.warn('charExpandGraph failed', e);
-  }
+
+    function spawn(id, origin) {
+      const o = origin || { x: width / 2, y: height / 2 };
+      const a = Math.random() * Math.PI * 2;
+      return { id, x: o.x + Math.cos(a) * 4, y: o.y + Math.sin(a) * 4 };
+    }
+
+    function update(origin) {
+      const ids = new Set(expanded);
+      const nextLinks = [];
+      for (const [a, b, type] of relations) {
+        if (expanded.has(a) || expanded.has(b)) {
+          ids.add(a); ids.add(b);
+          nextLinks.push({ source: a, target: b, type });
+        }
+      }
+      const old = new Map(nodes.map(n => [n.id, n]));
+      nodes = [...ids].map(id => old.get(id) || spawn(id, origin));
+      links = nextLinks;
+      sim.nodes(nodes);
+      sim.force('link').links(links);
+      pin();
+      applyForces();
+
+      const lsel = linkLayer.selectAll('.link').data(links, d => d.source.id + '|' + d.target.id);
+      lsel.exit().transition().duration(DUR / 2).attr('stroke-opacity', 0).remove();
+      const lenter = lsel.enter().append('line').attr('class', 'link')
+        .attr('stroke', d => groupColors[charData[d.source.id] ? charData[d.source.id].group : 'friend'] || '#888')
+        .attr('stroke-opacity', 0);
+      lenter.transition().delay(DUR / 4).duration(DUR).attr('stroke-opacity', 0.55);
+      linkG = lenter.merge(lsel);
+
+      const nsel = nodeLayer.selectAll('.node').data(nodes, d => d.id);
+      nsel.exit().select('.bubble').transition().duration(DUR / 2)
+        .attr('transform', 'scale(0)').on('end', function() { this.parentNode.remove(); });
+
+      const nenter = nsel.enter().append('g').attr('class', 'node')
+        .attr('transform', d => 'translate(' + d.x + ',' + d.y + ')')
+        .call(drag)
+        .on('click', (e, d) => toggle(d));
+      const bubble = nenter.append('g').attr('class', 'bubble').attr('transform', 'scale(0)');
+      bubble.append('circle').attr('r', radius);
+      bubble.append('text').attr('class', 'initials').attr('text-anchor', 'middle').attr('dy', '0.35em');
+      bubble.append('text').attr('class', 'd3-name').attr('text-anchor', 'middle');
+      bubble.transition().duration(DUR).attr('transform', 'scale(1)');
+
+      nodeG = nenter.merge(nsel);
+      styleNodes(300);
+    }
+
+    let nodeG = null, linkG = null;
+
+    function styleNodes(dur) {
+      if (!nodeG) return;
+      nodeG.select('circle').transition().duration(dur).attr('r', radius)
+        .attr('fill', d => groupColors[charData[d.id] ? charData[d.id].group : 'friend'] || '#888');
+      nodeG.select('.initials')
+        .text(d => {
+          const name = charData[d.id] ? charData[d.id].name : '?';
+          return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        })
+        .style('font-size', d => radius(d) * 0.6 + 'px')
+        .attr('fill', '#fff').attr('font-weight', '700')
+        .attr('pointer-events', 'none');
+      nodeG.select('.d3-name')
+        .text(d => charData[d.id] ? charData[d.id].name : '')
+        .attr('y', d => radius(d) + 15)
+        .style('font-size', '11px')
+        .attr('fill', 'var(--text)')
+        .attr('pointer-events', 'none');
+    }
+
+    function toggle(d) {
+      if (d.id === PROTAG) return;
+      if (expanded.has(d.id)) expanded.delete(d.id);
+      else expanded.add(d.id);
+      update(d);
+      sim.alpha(0.7).restart();
+    }
+
+    const drag = d3.drag()
+      .filter((e, d) => d.id !== PROTAG && !e.button)
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; });
+
+    svg.call(d3.zoom().scaleExtent([0.4, 2.5])
+      .on('zoom', e => root.attr('transform', e.transform)))
+      .on('dblclick.zoom', null);
+
+    function ticked() {
+      if (!nodeG || !linkG) return;
+      nodeG.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+      linkG.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    }
+
+    // Legend
+    const legendEl = document.getElementById(uid + '-legend');
+    if (legendEl) {
+      const usedGroups = [...new Set(Object.values(charData).map(c => c.group))];
+      legendEl.innerHTML = usedGroups.map(g =>
+        '<span style="--c:' + (groupColors[g] || '#888') + '">' + g + '</span>').join('');
+    }
+
+    update();
+    sim.alpha(0.7).restart();
+  });
 }
 
 /* v338: group relationships by person, resolving contradictions.
@@ -900,7 +930,7 @@ async function renderCharacterPage() {
 
   setView(html);
   const viewBox = document.getElementById('view');
-  wireCharGraph(viewBox);
+  initD3Graph(viewBox);
   // v367: wireCharRelLinks skips graph nodes (graph handler owns all taps)
   wireCharRelLinks(viewBox, '.ch-graph-wrap');
   // v368: graph nodes are wired by wireCharGraph (single=tap expand, double=tap navigate)
