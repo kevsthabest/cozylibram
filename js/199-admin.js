@@ -2169,7 +2169,8 @@ async function charLabRenderInbox(body, works) {
   const valid = inbox.filter(r => r.toName);
 
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
-    ' Character Lab — Relationship Inbox</h3>' +
+    ' Character Lab — Review</h3>' +
+    '<p class="note">Keyboard: ↑/↓ navigate · A accept · R reject · 1-5 importance · T cycle type</p>' +
     '<p class="note">' +
     '<button class="btn sm ghost" data-chview="characters">Characters</button> ' +
     '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
@@ -2364,6 +2365,47 @@ async function charLabRenderInbox(body, works) {
   }));
 
   // v386: Change is now inline via dropdowns (no dialog needed)
+
+  // v395: Keyboard-driven inbox (Claude — biggest time saver)
+  // ↑/↓ navigate, A accept, R reject, 1-5 importance, T cycle type
+  let kbIndex = 0;
+  const rows = () => [...body.querySelectorAll('tr[data-rel]')];
+  const highlightRow = (idx) => {
+    rows().forEach((r, i) => r.classList.toggle('kb-sel', i === idx));
+    const row = rows()[idx];
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  };
+  const kbHandler = (e) => {
+    // Only when inbox is visible and not typing in an input
+    if (!body.contains(document.activeElement) || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    const rs = rows();
+    if (!rs.length) return;
+    const row = rs[kbIndex];
+    if (!row) return;
+
+    if (e.key === 'ArrowDown') { kbIndex = Math.min(kbIndex + 1, rs.length - 1); highlightRow(kbIndex); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { kbIndex = Math.max(kbIndex - 1, 0); highlightRow(kbIndex); e.preventDefault(); }
+    else if (e.key === 'a' || e.key === 'A') { row.querySelector('[data-rel-accept]')?.click(); }
+    else if (e.key === 'r' || e.key === 'R') { row.querySelector('[data-rel-reject]')?.click(); }
+    else if (e.key >= '1' && e.key <= '5') {
+      const sel = row.querySelector('[data-rel-imp]');
+      if (sel) { sel.value = e.key; sel.dispatchEvent(new Event('change')); }
+    }
+    else if (e.key === 't' || e.key === 'T') {
+      const sel = row.querySelector('[data-rel-type]');
+      if (sel) {
+        const opts = [...sel.options];
+        const next = (sel.selectedIndex + 1) % opts.length;
+        sel.selectedIndex = next;
+        sel.dispatchEvent(new Event('change'));
+      }
+    }
+  };
+  document.addEventListener('keydown', kbHandler);
+  // Clean up on re-render (store handler for removal)
+  body._kbHandler = kbHandler;
+  highlightRow(0);
+
   if (charLabCanonicalId) await charLabCanonDetail();
 }
 
