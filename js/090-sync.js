@@ -441,7 +441,10 @@ async function initCloud() {
     if (user && (!cloudUser || cloudUser.id !== user.id)) { cloudUser = user; enterApp(user); }
     else if (!cloudUser) { try { renderGate(); } catch (e) {} }
     refreshAccountUI();
-  } catch (e) { /* offline or bad config — app keeps working locally */ }
+  } catch (e) {
+    /* v351: never strand the user on the loading splash (Advisor) */
+    try { if (!cloudUser) renderGate(); } catch (_) {}
+  }
 }
 
 function refreshAccountUI() {
