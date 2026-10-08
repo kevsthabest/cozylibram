@@ -1166,6 +1166,11 @@ function renderDetailModal(b, viaBook) {
     '<button class="d-tab" data-dtab="characters" role="tab" aria-selected="false">' + icon('friends') + 'Characters</button></div>' +
 
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
+    // v354: editable title/author — fixes stranded manual-add data (Advisor: in scope)
+    '<div class="field"><label>' + icon('edit') + ' Title</label>' +
+    '<input class="text-input" id="f-title" value="' + esc(b.title || '') + '" maxlength="300"></div>' +
+    '<div class="field"><label>' + icon('user') + ' Author(s)</label>' +
+    '<input class="text-input" id="f-author" value="' + esc((b.authors || []).join(', ')) + '" maxlength="300" placeholder="Separate multiple with commas"></div>' +
     // v182: mockup "About this book" section (the hero carries its own copy on desktop).
     (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
     '<div class="field" id="m-quotes-wrap" style="display:none"><label>' + icon('quotes') + ' Memorable quotes</label><div id="m-quotes"></div></div>' +
@@ -1880,6 +1885,11 @@ function renderDetailModal(b, viaBook) {
   // v224 (UX-10): Share also sits in the primary row, next to the heart.
   document.getElementById('m-share2').addEventListener('click', () => shareBookCard(b.id));
   document.getElementById('m-save').addEventListener('click', () => {
+    // v354: save edited title/author
+    const newTitle = document.getElementById('f-title').value.trim();
+    const newAuthors = document.getElementById('f-author').value.split(',').map(a => a.trim()).filter(Boolean);
+    if (newTitle) draft.title = newTitle;
+    draft.authors = newAuthors;
     draft.tropes = document.getElementById('f-tropes').value.split(',')
       .map(t => t.trim().toLowerCase()).filter(Boolean);
     draft.notes = document.getElementById('f-notes').value;

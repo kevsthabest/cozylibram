@@ -55,6 +55,8 @@ function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES
 // non-genres ("Large type books", "Accessible book"), and overlong headings.
 // None of these are genres.
 const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?(print|type( books?)?)|accessible book|protected daisy|in library|overdrive|internet archive)$/i;
+// v354: miscategorized subjects/shelf names (Advisor: triage #7 follow-up)
+const GENRE_SUBJECT_EXTRA = /^(native americans?|did-not-finish|to-read|currently-reading|favorites?)$/i;
 const GENRE_SUBJECT_JUNK = /\((fictional|fictitious|imaginary|legendary|mythical)\b/i;
 /* v353: multilingual genre normalization — map non-English variants to
    canonical English (triage #7: "Fantasia"/"fantástico" → "Fantasy") */
@@ -71,7 +73,7 @@ function bookGenres(b) {
   const out = [];
   (b.categories || []).forEach(c => {
     String(c).split('/').map(s => s.trim()).forEach(s => {
-      if (!s || s.length > 48 || GENRE_JUNK.test(s) || GENRE_SUBJECT_JUNK.test(s)) return;
+      if (!s || s.length > 48 || GENRE_JUNK.test(s) || GENRE_SUBJECT_JUNK.test(s) || GENRE_SUBJECT_EXTRA.test(s)) return;
       // v353: normalize multilingual dupes
       const norm = GENRE_NORM[s.toLowerCase()] || s;
       if (!out.includes(norm)) out.push(norm);
