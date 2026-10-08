@@ -666,10 +666,13 @@ async function renderCharacterPage() {
     }
   } catch (e) {}
   html += '<h3 class="serif">Appears in</h3><div class="ch-books">';
-  // v362: sort by series position (was link-insertion order)
+  // v362: sort by (series name, position) — groups multi-series characters correctly.
+  // v363: instances carry series name from works.series (added in v341 query)
   const sortedInstances = [...d.instances].sort((a, b) => {
-    const pa = a.seriesPos == null ? Infinity : parseFloat(a.seriesPos);
-    const pb = b.seriesPos == null ? Infinity : parseFloat(b.seriesPos);
+    const sa = String((a.series && a.series.name) || '').toLowerCase();
+    const sb = String((b.series && b.series.name) || '').toLowerCase();
+    if (sa !== sb) return sa.localeCompare(sb);
+    const pa = parseFloat(a.seriesPos), pb = parseFloat(b.seriesPos);
     const na = Number.isFinite(pa) ? pa : Infinity, nb = Number.isFinite(pb) ? pb : Infinity;
     if (na !== nb) return na - nb;
     return String(a.workTitle || '').localeCompare(String(b.workTitle || ''));
