@@ -96,9 +96,9 @@ function openCharacter(charId) {
 /* Role-themed avatar medallion. Returns HTML for a circular badge with
    the character's initials, colored by their primary role. */
 function charAvatar(name, role, size) {
-  size = size || 64;
+  size = parseInt(size, 10) || 64;
   const initials = String(name || '?').trim().split(/\s+/)
-    .map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    .map(w => [...w][0]).join('').slice(0, 2).toUpperCase() || '?';
   const themes = {
     protagonist: 'background:linear-gradient(135deg,#c9a227,#f5d76e);color:#2a1f00;',
     antagonist: 'background:linear-gradient(135deg,#8b0000,#e74c3c);color:#fff;',
@@ -231,6 +231,16 @@ async function renderCharacterPage() {
     if (t) targetCounts[t] = (targetCounts[t] || 0) + 1;
   }));
   const closest = Object.entries(targetCounts).sort((a, b) => b[1] - a[1])[0];
+  // v335: collect all work characters for closest-to link resolution
+  let allWorkChars = [];
+  try {
+    for (const inst of d.instances) {
+      if (inst.workId) {
+        const wc = await CharacterStore.listForWork(inst.workId);
+        allWorkChars = allWorkChars.concat(wc);
+      }
+    }
+  } catch (e) {}
 
   let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
     '<div class="ch-hero">' +
@@ -242,23 +252,25 @@ async function renderCharacterPage() {
     '<div class="stat-row ch-stats">' +
     '<div class="stat"><div class="n">' + d.instances.length + '</div><div class="l">' + (d.instances.length === 1 ? 'Book' : 'Books') + '</div></div>' +
     '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div>' +
-    (closest ? '<div class="stat"><div class="n" style="font-size:1em">' + esc(closest[0].split(' ')[0]) + '</div><div class="l">Closest to</div></div>' : '') +
+    (closest ? '<div class="stat"><div class="n" style="font-size:0.9em;line-height:1.2">' + charRelLink(closest[0], allWorkChars) + '</div><div class="l">Closest to</div></div>' : '') +
     '</div>';
   if (d.description) html += '<p class="ch-desc">' + esc(d.description) + '</p>';
 
-  // Appears in — cover cards
+  // Appears in — cover cards. v335: exact normalized title lookup
+  // (Security Advisor: fuzzy includes() caused wrong covers)
+  const normTitle = t => String(t || '').toLowerCase().replace(/\s*\(.*\)\s*$/, '').trim();
+  const coverByTitle = new Map();
+  try {
+    for (const b of (typeof library !== 'undefined' ? library : []) || []) {
+      if (b && b.title && b.cover) {
+        const k = normTitle(b.title);
+        if (k && !coverByTitle.has(k)) coverByTitle.set(k, b.cover);
+      }
+    }
+  } catch (e) {}
   html += '<h3 class="serif">Appears in</h3><div class="ch-books">';
   for (const inst of d.instances) {
-    // Try to find the book cover from the library
-    let cover = '';
-    try {
-      const book = (typeof library !== 'undefined' ? library : []).find(b => {
-        if (!b) return false;
-        const bt = String(b.title || '').toLowerCase();
-        return bt.includes(String(inst.workTitle || '').toLowerCase().split('(')[0].trim().slice(0, 20));
-      });
-      if (book && book.cover) cover = book.cover;
-    } catch (e) {}
+    const cover = coverByTitle.get(normTitle(inst.workTitle)) || '';
     html += '<div class="ch-book-card">' +
       (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover">' + esc(String(inst.workTitle || '?')[0]) + '</div>') +
       '<div class="ch-book-meta"><b>' + esc(inst.workTitle) + '</b><br>' +
