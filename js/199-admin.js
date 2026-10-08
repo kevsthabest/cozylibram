@@ -2413,8 +2413,8 @@ function charLabRender(body, works, chars) {
         '<td><select class="ch-grid-input" data-field="role" data-id="' + esc(c.id) + '">' +
         CHAR_ROLES.map(r => '<option value="' + r + '"' + (c.role === r ? ' selected' : '') + '>' + CHAR_ROLE_LABELS[r] + '</option>').join('') +
         '</select></td>' +
-        '<td><select class="ch-grid-input" data-field="status" data-id="' + esc(c.id) + '">' +
-        ['alive', 'dead', 'unknown', 'missing'].map(st => '<option value="' + st + '"' + (c.status === st ? ' selected' : '') + '>' + st + '</option>').join('') +
+        '<td><select class="ch-grid-input" data-field="vitality" data-id="' + esc(c.id) + '">' +
+        ['alive', 'dead', 'unknown', 'missing'].map(st => '<option value="' + st + '"' + (c.vitality === st ? ' selected' : '') + '>' + st + '</option>').join('') +
         '</select></td>' +
         '<td>' + relCount + '</td>' +
         '<td><button class="btn sm ghost" data-chdetail="' + esc(c.id) + '">Detail</button></td>' +
@@ -2448,7 +2448,7 @@ function charLabRender(body, works, chars) {
       const id = inp.getAttribute('data-id');
       const field = inp.getAttribute('data-field');
       // v387: whitelist fields (Advisor MEDIUM — prevent mass assignment)
-      if (!['name', 'role', 'status'].includes(field)) return;
+      if (!['name', 'role', 'vitality'].includes(field)) return;
       const val = inp.value;
       try {
         const sb = await CharacterStore._sb();
