@@ -1636,7 +1636,7 @@ let charLabWorkId = null;
 let charLabRoleFilter = '';
 let charLabSelectedId = null;
 let charLabShowBlocked = false; // v317: hidden by default
-let charLabView = 'work'; // v318: 'work' | 'unified' | 'relationships' (v377: inbox)
+let charLabView = 'characters'; // v395: 'review' | 'relationships' | 'characters' (was 'work'|'relationships')
 let charLabCanonicalId = null;
 
 const CharacterStore = {
@@ -2048,12 +2048,33 @@ async function renderCharacterLab() {
   if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
     charLabWorkId = works[0].workId;
   }
-  if (charLabView === 'relationships') {
-    await charLabRenderInbox(body, works);
+  // v395: New navigation — Review | Relationships | Characters
+  if (charLabView === 'review') {
+    await charLabRenderReview(body, works);
     return;
   }
+  if (charLabView === 'relationships') {
+    await charLabRenderRelationships(body, works);
+    return;
+  }
+  // Default: Characters view (was 'work')
   const chars = await CharacterStore.listForWork(charLabWorkId);
   charLabRender(body, works, chars);
+}
+
+/* v395: Review view — things needing human attention.
+   Currently: relationship inbox. Future: characters needing review, identity matches. */
+async function charLabRenderReview(body, works) {
+  // For now, Review = Relationship Inbox
+  await charLabRenderInbox(body, works);
+}
+
+/* v395: Relationships workspace — graph + inbox + table.
+   TODO: Integrate D3 graph here. For now, shows the inbox. */
+async function charLabRenderRelationships(body, works) {
+  // Placeholder — will hold graph + sub-tabs
+  // For now, redirect to review (inbox)
+  await charLabRenderInbox(body, works);
 }
 
 /* v377: Phase 1 — Relationship Inbox.
@@ -2150,9 +2171,9 @@ async function charLabRenderInbox(body, works) {
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
     ' Character Lab — Relationship Inbox</h3>' +
     '<p class="note">' +
-    '<button class="btn sm ghost" data-chview="work">By work</button> ' +
-
-    '<button class="btn sm" data-chview="relationships">Relationship Inbox</button></p>' +
+    '<button class="btn sm ghost" data-chview="characters">Characters</button> ' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
+    '<button class="btn sm" data-chview="review">Review</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
@@ -2420,9 +2441,10 @@ function charLabRender(body, works, chars) {
   let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
     ' Character Lab</h3>' +
     '<p class="note">' +
-    '<button class="btn sm" data-chview="work">By work</button> ' +
+    '<button class="btn sm" data-chview="characters">Characters</button> ' +
 
-    '<button class="btn sm ghost" data-chview="relationships">Relationships</button></p>' +
+    '<button class="btn sm ghost" data-chview="relationships">Relationships</button> ' +
+    '<button class="btn sm ghost" data-chview="review">Review</button></p>' +
     '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
     works.map(w => '<option value="' + esc(w.workId) + '"' +
       (w.workId === charLabWorkId ? ' selected' : '') + '>' +
