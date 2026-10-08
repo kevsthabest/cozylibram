@@ -2927,3 +2927,20 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   padding: 20px; max-width: 400px; width: 100%; }
 .confirm-box p { margin: 0 0 16px; }
 .confirm-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* v359: roulette improvements (UX backlog #1) */
+.chip-scroll { overflow-x: auto; margin: 0 -18px; padding: 0 18px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  scrollbar-width: none; }
+.chip-scroll::-webkit-scrollbar { display: none; }
+.chip-scroll .chips { flex-wrap: nowrap; width: max-content; }
+.pk-int svg { width: 18px; height: 18px; vertical-align: -3px; }
+.pk-int { display: inline-flex; gap: 2px; }
+.pk-cta-row { display: flex; gap: 10px; margin-top: 12px; }
+.pk-cta-row .pick-btn { flex: 1; }
+.pk-preview { display: flex; gap: 8px; align-items: center; margin: 10px 0; overflow-x: auto; }
+.pk-prev-book { width: 44px; height: 66px; flex-shrink: 0; border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg3); padding: 0; cursor: pointer; }
+.pk-prev-book img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pk-prev-book span { font-size: 20px; color: var(--text2); }

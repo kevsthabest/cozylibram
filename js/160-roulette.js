@@ -73,8 +73,12 @@ function renderPick() {
   // most common primary axis across the TBR; its icon replaces the peppers.
   const domAxis = dominantPickAxis();
   const axIcon = icon(domAxis.icon);
+  // v359: legible intensity icons (UX backlog #1 — tiny glyphs looked like artifacts)
   const intensityOpts = [
-    [0, 'Any'], [1, axIcon + '+'], [2, axIcon + axIcon + '+'], [3, axIcon + axIcon + axIcon + '+']
+    [0, 'Any'],
+    [1, '<span class="pk-int">' + axIcon + '</span> Mild'],
+    [2, '<span class="pk-int">' + axIcon + axIcon + '</span> Medium'],
+    [3, '<span class="pk-int">' + axIcon + axIcon + axIcon + '</span> Spicy'],
   ];
 
   let html = '<h2 class="section serif" style="font-size:26px">' + icon('dice') + ' TBR Roulette</h2>' +
@@ -92,9 +96,10 @@ function renderPick() {
 
   html += '<div class="pick-filters">';
   if (genres.length) {
-    html += '<div class="stat-sub">Genre</div><div class="chips">' +
+    // v359: fade-mask scroll container (UX backlog #1 — was raw scrollbar)
+    html += '<div class="stat-sub">Genre</div><div class="chip-scroll"><div class="chips">' +
       genres.map(g => '<button class="chip' + (pickState.genres.includes(g) ? ' active' : '') +
-        '" data-g="' + esc(g) + '">' + esc(g) + '</button>').join('') + '</div>';
+        '" data-g="' + esc(g) + '">' + esc(g) + '</button>').join('') + '</div></div>';
   }
   html += '<div class="stat-sub">Trope or tag</div>' +
     // v236: autocomplete — the wrap anchors the suggestion dropdown.
@@ -105,14 +110,16 @@ function renderPick() {
       '" data-s="' + v + '">' + l + '</button>').join('') + '</div>';
   html += '<div class="stat-sub">Queue</div><div class="chips">' +
     '<button class="chip' + (pickState.upNextOnly ? ' active' : '') + '" id="pk-upnext">' + icon('upnext') + ' Up Next only (' + upNext.length + ')</button></div>';
-  // v224 (UX-20): one tap back to the unfiltered spin.
-  const filtersActive = pickState.genres.length || pickState.trope || pickState.minIntensity || pickState.upNextOnly;
-  html += '<p class="note" style="text-align:right;margin:2px 0 0"><button class="taplink" id="pk-reset"' +
-    (filtersActive ? '' : ' disabled style="opacity:.4;cursor:default"') + '>Reset filters</button></p>';
   html += '</div>';
 
   html += '<p class="note" id="pick-count"></p>' +
+    // v359: matching-books preview strip (UX backlog #1 — visual payoff for filters)
+    '<div id="pk-preview" class="pk-preview"></div>' +
+    '<div class="pk-cta-row">' +
     '<button class="btn pick-btn" id="pk-spin">' + icon('dice') + ' Pick my next read</button>' +
+    // v359: reset as secondary button next to CTA (was detached floating link)
+    '<button class="btn ghost" id="pk-reset">Reset</button>' +
+    '</div>' +
     '<div id="roulette-result" style="margin-top:18px"></div>';
 
   setView(html);
@@ -179,12 +186,33 @@ function renderPick() {
 function updatePickCount() {
   const el = document.getElementById('pick-count');
   if (!el) return;
-  const n = pickCandidates().length;
+  const candidates = pickCandidates();
+  const n = candidates.length;
   el.innerHTML = n
     ? '<b style="color:var(--gold)">' + n + '</b> book' + (n === 1 ? '' : 's') + ' match your mood'
     : 'No TBR books match — loosen the filters a little.';
   const btn = document.getElementById('pk-spin');
   if (btn) btn.disabled = !n;
+  // v359: preview strip of matching books
+  const prev = document.getElementById('pk-preview');
+  if (prev) {
+    prev.innerHTML = candidates.slice(0, 6).map(b =>
+      '<button class="pk-prev-book" data-pkprev="' + esc(b.id) + '" title="' + esc(b.title) + '">' +
+      (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<span>' + esc((b.title || '?')[0]) + '</span>') +
+      '</button>').join('') +
+      (n > 6 ? '<span class="note">+' + (n - 6) + ' more</span>' : '');
+    prev.querySelectorAll('[data-pkprev]').forEach(im => im.addEventListener('click', () => {
+      const book = (typeof library !== 'undefined' ? library : []).find(x => x.id === im.dataset.pkprev);
+      if (book && typeof openPreviewModal === 'function') openPreviewModal(book);
+    }));
+  }
+  // v359: reset button disabled state
+  const reset = document.getElementById('pk-reset');
+  if (reset) {
+    const active = pickState.genres.length || pickState.trope || pickState.minIntensity || pickState.upNextOnly;
+    reset.disabled = !active;
+    reset.style.opacity = active ? '' : '.4';
+  }
 }
 
 function runRoulette() {
