@@ -229,6 +229,7 @@ function renderAdmin() {
     '<button class="btn sm' + (adminTab === 'analytics' ? '' : ' ghost') + '" data-atab="analytics">Analytics</button>' +
     '<button class="btn sm' + (adminTab === 'tropes' ? '' : ' ghost') + '" data-atab="tropes">' + icon('bulb') + ' Trope Lab</button>' +
     '<button class="btn sm' + (adminTab === 'spine' ? '' : ' ghost') + '" data-atab="spine">' + icon('camera') + ' Spine Lab</button>' +
+    '<button class="btn sm' + (adminTab === 'characters' ? '' : ' ghost') + '" data-atab="characters">' + icon('friends') + ' Characters</button>' +
     '<button class="btn sm' + (adminTab === 'assets' ? '' : ' ghost') + '" data-atab="assets">Edition Assets</button>' +
     '<button class="btn sm' + (adminTab === 'logs' ? '' : ' ghost') + '" data-atab="logs">' + icon('warn') + ' Logs</button>' +
     '</div>' +
@@ -251,6 +252,7 @@ function renderAdmin() {
     renderAdminBody();
   });
   if (adminTab === 'tropes') renderTropeLab();
+  else if (adminTab === 'characters') renderCharacterLab();
   else if (adminTab === 'spine') renderSpineLab();
   else if (adminTab === 'assets') renderEditionAssetLab();
   else if (adminTab === 'logs') renderLogsTab();
@@ -1610,4 +1612,410 @@ async function tropeLabProposalsHTML() {
       toast('Failed: ' + ((e && e.message) || e));
     }
   }));
+}
+
+/* ---------------- Character Lab (v317) ----------------
+   Review pipeline-extracted characters and trace their relationships.
+   Data contract (from Ebook Processor):
+   - book_characters: work_id, name, role (protagonist/antagonist/supporting/minor),
+     description, relationships JSONB [{to: "<name>", type: "<type>"}]
+   - Relationship `to` is a NAME string, not an ID — resolve defensively.
+   - Relationship types: closed set of 10 (spouse/parent/child/sibling/friend/
+     enemy/mentor/colleague/neighbor/other); unknown -> "other".
+   - Each work's cast is isolated (no cross-book linking yet).
+   - Unresolved targets shown, never dropped. */
+
+const CHAR_ROLES = ['protagonist', 'antagonist', 'supporting', 'minor'];
+const CHAR_REL_TYPES = ['spouse', 'parent', 'child', 'sibling', 'friend',
+  'enemy', 'mentor', 'colleague', 'neighbor', 'other'];
+const CHAR_ROLE_LABELS = { protagonist: 'Protagonist', antagonist: 'Antagonist',
+  supporting: 'Supporting', minor: 'Minor' };
+
+let charLabWorkId = null;
+let charLabRoleFilter = '';
+let charLabSelectedId = null;
+let charLabShowBlocked = false; // v317: hidden by default
+
+const CharacterStore = {
+  _sb() { return cloudClient().catch(() => null); },
+
+  /* Works that have character data, with counts. */
+  async listWorks() {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('book_characters')
+        .select('work_id, works(title)')
+        .limit(5000);
+      if (error) throw error;
+      const byWork = {};
+      for (const r of data || []) {
+        const w = byWork[r.work_id] || (byWork[r.work_id] = {
+          workId: r.work_id,
+          title: (r.works && r.works.title) || r.work_id.slice(0, 8),
+          count: 0,
+        });
+        w.count++;
+      }
+      return Object.values(byWork).sort((a, b) => b.count - a.count);
+    } catch (e) { return []; }
+  },
+
+  /* All characters for a work. */
+  async listForWork(workId) {
+    const sb = await this._sb();
+    if (!sb) return [];
+    try {
+      const { data, error } = await sb.from('book_characters')
+        .select('id, name, role, description, relationships, confidence, status')
+        .eq('work_id', workId)
+        .order('name');
+      if (error) throw error;
+      return (data || []).map(c => ({
+        id: c.id,
+        name: c.name || 'Unnamed',
+        role: CHAR_ROLES.includes(c.role) ? c.role : 'minor',
+        description: c.description || '',
+        relationships: Array.isArray(c.relationships) ? c.relationships : [],
+        confidence: c.confidence,
+        status: c.status || 'candidate',
+      }));
+    } catch (e) { return []; }
+  },
+};
+
+/* Resolve a relationship target name to a character in the same work.
+   Returns {character} or {unresolved: name}. Case-insensitive exact match
+   first, then substring match (handles "Bodhi" -> "Bodhi Durran"). */
+function charResolveTarget(name, chars) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return { unresolved: String(name || '') };
+  let c = chars.find(x => String(x.name).trim().toLowerCase() === n);
+  if (c) return { character: c };
+  c = chars.find(x => {
+    const cn = String(x.name).trim().toLowerCase();
+    return cn.includes(n) || n.includes(cn);
+  });
+  if (c) return { character: c, fuzzy: true };
+  return { unresolved: String(name || '').trim() };
+}
+
+function charNormRelType(t) {
+  t = String(t || '').trim().toLowerCase();
+  return CHAR_REL_TYPES.includes(t) ? t : 'other';
+}
+
+/* v317: quality gates (per Trope Review Agent).
+   BLOCKED: generic kinship terms and obvious non-names — hidden by default.
+   Duplicates: substring/similar names flagged for merge review. */
+const CHAR_BLOCKED_NAMES = ['dad', 'mom', 'mother', 'father', 'parent',
+  'parents', 'brother', 'sister', 'son', 'daughter', 'child', 'children',
+  'friend', 'friends', 'enemy', 'enemies', 'someone', 'somebody', 'nobody',
+  'everyone', 'man', 'woman', 'boy', 'girl', 'child', 'baby'];
+
+function charIsBlocked(c) {
+  const n = String(c.name || '').trim().toLowerCase();
+  return CHAR_BLOCKED_NAMES.includes(n) || n.length < 2;
+}
+
+/* Find likely duplicates: names where one contains the other and they
+   share the same role, or normalized names match. Returns pairs. */
+function charFindDuplicates(chars) {
+  const pairs = [];
+  const norm = s => String(s || '').trim().toLowerCase().replace(/[^a-z ]/g, '');
+  for (let i = 0; i < chars.length; i++) {
+    for (let j = i + 1; j < chars.length; j++) {
+      const a = chars[i], b = chars[j];
+      const na = norm(a.name), nb = norm(b.name);
+      if (!na || !nb || na === nb) {
+        if (na === nb && na) pairs.push([a, b, 'exact']);
+        continue;
+      }
+      if ((na.includes(nb) || nb.includes(na)) && a.role === b.role) {
+        pairs.push([a, b, 'substring']);
+      }
+    }
+  }
+  return pairs;
+}
+
+async function renderCharacterLab() {
+  const body = document.getElementById('ob-body');
+  if (!body) return;
+  body.innerHTML = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+    ' Character Lab</h3><p class="note">Loading…</p></div>';
+
+  const works = await CharacterStore.listWorks();
+  if (!works.length) {
+    body.innerHTML = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+      ' Character Lab</h3><p class="note">No character data yet. The ebook ' +
+      'processor writes to <code>book_characters</code> per work.</p></div>';
+    return;
+  }
+  if (!charLabWorkId || !works.some(w => w.workId === charLabWorkId)) {
+    charLabWorkId = works[0].workId;
+  }
+  const chars = await CharacterStore.listForWork(charLabWorkId);
+  charLabRender(body, works, chars);
+}
+
+function charLabRender(body, works, chars) {
+  const work = works.find(w => w.workId === charLabWorkId);
+  const rf = charLabRoleFilter;
+  // v317: blocked names hidden unless toggled
+  const visible = charLabShowBlocked ? chars : chars.filter(c => !charIsBlocked(c));
+  const blockedCount = chars.length - visible.length;
+  const filtered = rf ? visible.filter(c => c.role === rf) : visible;
+
+  // Role counts for filter chips (over visible set)
+  const roleCounts = {};
+  CHAR_ROLES.forEach(r => { roleCounts[r] = visible.filter(c => c.role === r).length; });
+
+  // Duplicate detection
+  const dupes = charFindDuplicates(visible);
+  const dupeIds = new Set();
+  dupes.forEach(([a, b]) => { dupeIds.add(a.id); dupeIds.add(b.id); });
+
+  let html = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
+    ' Character Lab</h3>' +
+    '<p class="note"><label>Work: <select id="ch-work" class="text-input" style="width:auto;display:inline-block;max-width:280px">' +
+    works.map(w => '<option value="' + esc(w.workId) + '"' +
+      (w.workId === charLabWorkId ? ' selected' : '') + '>' +
+      esc(w.title) + ' (' + w.count + ')</option>').join('') +
+    '</select></label> ' +
+    '<button class="btn sm ghost" id="ch-refresh">↻</button>' +
+    (blockedCount ? ' <button class="btn sm ghost" id="ch-blocked-toggle">' +
+      (charLabShowBlocked ? 'Hide' : 'Show') + ' ' + blockedCount + ' hidden</button>' : '') +
+    '</p>' +
+    (dupes.length ? '<div class="ob-card" style="border-color:var(--warn,orange)">' +
+      '<h4 class="serif">⚠ Possible duplicates (' + dupes.length + ')</h4>' +
+      dupes.map(([a, b, kind], i) =>
+        '<p><b>' + esc(a.name) + '</b> ↔ <b>' + esc(b.name) + '</b> ' +
+        '<span class="note">(' + esc(kind) + ' match)</span><br>' +
+        '<button class="btn sm" data-chmerge="' + i + '" data-keep="' + esc(a.id) + '">Keep ' +
+        esc(a.name) + '</button> ' +
+        '<button class="btn sm ghost" data-chmerge="' + i + '" data-keep="' + esc(b.id) + '">Keep ' +
+        esc(b.name) + '</button></p>').join('') +
+      '<p class="note" id="ch-merge-msg"></p></div>' : '') +
+    '<p class="note">' +
+    '<button class="btn sm' + (!rf ? '' : ' ghost') + '" data-chrole="">All (' + chars.length + ')</button> ' +
+    CHAR_ROLES.map(r =>
+      '<button class="btn sm' + (rf === r ? '' : ' ghost') + '" data-chrole="' + r + '">' +
+      CHAR_ROLE_LABELS[r] + ' (' + roleCounts[r] + ')</button>').join(' ') +
+    '</p>';
+
+  // Character list
+  if (!filtered.length) {
+    html += '<p class="note">No characters with this role.</p>';
+  } else {
+    html += '<div class="ch-list">';
+    filtered.forEach(c => {
+      const relCount = c.relationships.length;
+      html += '<button class="ch-card' + (c.id === charLabSelectedId ? ' sel' : '') +
+        '" data-chid="' + esc(c.id) + '">' +
+        '<b>' + esc(c.name) + '</b> ' +
+        '<span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[c.role] || c.role) + '</span>' +
+        (dupeIds.has(c.id) ? ' <span class="chip" title="Possible duplicate" style="color:var(--warn,orange)">⚠ dup</span>' : '') +
+        (c.status && c.status !== 'candidate' ? ' <span class="chip">' + esc(c.status) + '</span>' : '') +
+        (relCount ? ' <span class="note">' + relCount + ' relation' + (relCount === 1 ? '' : 's') + '</span>' : '') +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  html += '</div><div id="ch-detail"></div>';
+  body.innerHTML = html;
+
+  // Wire work selector
+  document.getElementById('ch-work').addEventListener('change', async (e) => {
+    charLabWorkId = e.target.value;
+    charLabSelectedId = null;
+    const nc = await CharacterStore.listForWork(charLabWorkId);
+    charLabRender(body, works, nc);
+  });
+  document.getElementById('ch-refresh').addEventListener('click', async () => {
+    const nc = await CharacterStore.listForWork(charLabWorkId);
+    charLabRender(body, works, nc);
+  });
+  const blockedToggle = document.getElementById('ch-blocked-toggle');
+  if (blockedToggle) blockedToggle.addEventListener('click', () => {
+    charLabShowBlocked = !charLabShowBlocked;
+    charLabRender(body, works, chars);
+  });
+  body.querySelectorAll('[data-chmerge]').forEach(b => b.addEventListener('click', async () => {
+    const idx = Number(b.getAttribute('data-chmerge'));
+    const keepId = b.getAttribute('data-keep');
+    const [a, bb] = dupes[idx];
+    const loserId = a.id === keepId ? bb.id : a.id;
+    const msg = document.getElementById('ch-merge-msg');
+    if (!confirm('Merge "' + (a.id === keepId ? bb.name : a.name) + '" into "' +
+        (a.id === keepId ? a.name : bb.name) + '"? Relationships will be repointed.')) return;
+    b.disabled = true;
+    if (msg) msg.textContent = 'Merging…';
+    const err = await charMerge(keepId, loserId, chars);
+    if (err) {
+      if (msg) msg.textContent = 'Merge failed: ' + err;
+      b.disabled = false;
+      return;
+    }
+    // Remove loser from local list and re-render
+    const li = chars.findIndex(c => c.id === loserId);
+    if (li >= 0) chars.splice(li, 1);
+    if (charLabSelectedId === loserId) charLabSelectedId = keepId;
+    charLabRender(body, works, chars);
+  }));
+  document.querySelectorAll('[data-chrole]').forEach(b => b.addEventListener('click', () => {
+    charLabRoleFilter = b.getAttribute('data-chrole');
+    charLabRender(body, works, chars);
+  }));
+  // Wire character selection
+  body.querySelectorAll('[data-chid]').forEach(b => b.addEventListener('click', () => {
+    charLabSelectedId = b.getAttribute('data-chid');
+    body.querySelectorAll('.ch-card').forEach(x =>
+      x.classList.toggle('sel', x.getAttribute('data-chid') === charLabSelectedId));
+    charLabDetail(chars);
+  }));
+  // Restore detail if a character was selected
+  if (charLabSelectedId) charLabDetail(chars);
+}
+
+/* Character detail panel with relationship tracing. Clicking a resolved
+   relationship target navigates to that character (trace the graph). */
+function charLabDetail(chars) {
+  const el = document.getElementById('ch-detail');
+  if (!el) return;
+  const c = chars.find(x => x.id === charLabSelectedId);
+  if (!c) { el.innerHTML = ''; return; }
+
+  // Group relationships by normalized type
+  const byType = {};
+  c.relationships.forEach(r => {
+    const t = charNormRelType(r.type);
+    (byType[t] || (byType[t] = [])).push(r);
+  });
+
+  // Reverse relationships: who points TO this character
+  const mentionedBy = [];
+  chars.forEach(o => {
+    if (o.id === c.id) return;
+    o.relationships.forEach(r => {
+      const res = charResolveTarget(r.to, chars);
+      if (res.character && res.character.id === c.id) {
+        mentionedBy.push({ from: o, type: charNormRelType(r.type) });
+      }
+    });
+  });
+
+  let html = '<div class="ob-card"><h3 class="serif">' + esc(c.name) + '</h3>' +
+    '<p><span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[c.role] || c.role) + '</span>' +
+    (c.confidence != null ? ' <span class="note">' + Math.round(Number(c.confidence) * 100) + '% confidence</span>' : '') +
+    ' <span class="chip">' + esc(c.status || 'candidate') + '</span></p>' +
+    (c.status === 'candidate'
+      ? '<p><button class="btn sm" data-chstatus="confirmed" data-chid="' + esc(c.id) + '">✓ Confirm</button> ' +
+        '<button class="btn sm ghost" data-chstatus="rejected" data-chid="' + esc(c.id) + '">✕ Reject</button></p>'
+      : '');
+  if (c.description) html += '<p>' + esc(c.description) + '</p>';
+
+  // Outgoing relationships
+  const types = Object.keys(byType).sort();
+  if (types.length) {
+    html += '<h4 class="serif">Relationships (' + c.relationships.length + ')</h4>';
+    types.forEach(t => {
+      html += '<p><b>' + esc(t) + ':</b> ';
+      html += byType[t].map(r => {
+        const res = charResolveTarget(r.to, chars);
+        if (res.character) {
+          return '<button class="taplink" data-chtrace="' + esc(res.character.id) + '"' +
+            (res.fuzzy ? ' title="Fuzzy match"' : '') + '>' +
+            esc(res.character.name) + (res.fuzzy ? ' ~' : '') + '</button>';
+        }
+        return '<span class="chip" title="Unresolved reference">? ' + esc(res.unresolved) + '</span>';
+      }).join(' · ');
+      html += '</p>';
+    });
+  } else {
+    html += '<p class="note">No recorded relationships.</p>';
+  }
+
+  // Incoming relationships
+  if (mentionedBy.length) {
+    html += '<h4 class="serif">Mentioned by (' + mentionedBy.length + ')</h4><p>';
+    html += mentionedBy.map(m =>
+      '<button class="taplink" data-chtrace="' + esc(m.from.id) + '">' +
+      esc(m.from.name) + '</button> <span class="note">(' + esc(m.type) + ')</span>'
+    ).join(' · ');
+    html += '</p>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+
+  // Wire trace navigation
+  el.querySelectorAll('[data-chtrace]').forEach(b => b.addEventListener('click', () => {
+    charLabSelectedId = b.getAttribute('data-chtrace');
+    document.querySelectorAll('.ch-card').forEach(x =>
+      x.classList.toggle('sel', x.getAttribute('data-chid') === charLabSelectedId));
+    charLabDetail(chars);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  // Wire confirm/reject
+  el.querySelectorAll('[data-chstatus]').forEach(b => b.addEventListener('click', async () => {
+    const status = b.getAttribute('data-chstatus');
+    const cid = b.getAttribute('data-chid');
+    b.disabled = true;
+    try {
+      const sb = await CharacterStore._sb();
+      if (!sb) throw new Error('cloud unavailable');
+      const { error } = await sb.from('book_characters').update({ status }).eq('id', cid);
+      if (error) throw error;
+      const ch = chars.find(x => x.id === cid);
+      if (ch) ch.status = status;
+      charLabDetail(chars);
+    } catch (e) {
+      b.disabled = false;
+      b.title = 'Failed: ' + ((e && e.message) || 'unknown error');
+    }
+  }));
+}
+
+/* Merge two duplicate characters: repoint relationships, delete the loser.
+   Keeps the winner's id. Never throws — returns error string on failure. */
+async function charMerge(winnerId, loserId, chars) {
+  try {
+    const sb = await CharacterStore._sb();
+    if (!sb) return 'cloud unavailable';
+    const winner = chars.find(c => c.id === winnerId);
+    const loser = chars.find(c => c.id === loserId);
+    if (!winner || !loser) return 'character not found';
+    const loserName = String(loser.name).trim().toLowerCase();
+    // Repoint: in every character's relationships, replace loser name with winner name
+    for (const c of chars) {
+      let changed = false;
+      const rels = c.relationships.map(r => {
+        if (String(r.to || '').trim().toLowerCase() === loserName) {
+          changed = true;
+          return Object.assign({}, r, { to: winner.name });
+        }
+        return r;
+      });
+      // Merge loser's own relationships into winner (dedupe by to+type)
+      if (c.id === winnerId) {
+        const seen = new Set(rels.map(r =>
+          String(r.to).toLowerCase() + '|' + charNormRelType(r.type)));
+        loser.relationships.forEach(r => {
+          const key = String(r.to).toLowerCase() + '|' + charNormRelType(r.type);
+          if (!seen.has(key)) { rels.push(r); seen.add(key); }
+        });
+        changed = true;
+      }
+      if (changed) {
+        const { error } = await sb.from('book_characters')
+          .update({ relationships: rels }).eq('id', c.id);
+        if (error) return 'repoint failed: ' + error.message;
+      }
+    }
+    // Delete the loser
+    const { error: delErr } = await sb.from('book_characters').delete().eq('id', loserId);
+    if (delErr) return 'delete failed: ' + delErr.message;
+    return null;
+  } catch (e) { return (e && e.message) || 'unknown error'; }
 }

@@ -219,6 +219,11 @@ function ev(uid, name, cat, props, created) {
     // scores (deliberately NOT source_user_id — no contributor PII in the
     // projection), and edition_asset_slots canonical-slot state. Asset
     // evidence only, never library contents.
+    // The sixteenth/seventeenth (v317) are the Character Lab: book_characters
+    // work_ids with work titles (shared pipeline metadata, same class as the
+    // v271 works fields), and per-work character rows (names, roles,
+    // descriptions, relationships — pipeline-extracted fiction metadata,
+    // never user library contents).
     const allowed = new Set([
       'user_id',
       'user_id,event_name,event_category,properties,app_version,created_at',
@@ -235,6 +240,8 @@ function ev(uid, name, cat, props, created) {
       'id,isbn,publisher,format,page_count',
       'id,face,appearance,bucket,path,width,height,quality_score,sharpness_score,exposure_score,perspective_score,coverage_score,glare_score,resolution_score,stability_score,verified,rejected,created_at',
       'face,appearance,canonical_asset_id,selection_method,selected_at',
+      'work_id, works(title)',
+      'id, name, role, description, relationships, confidence, status',
     ]);
     ok('structural: select projections are exactly the safe columns',
       sels.length > 0 && sels.every(s => allowed.has(s)) &&
