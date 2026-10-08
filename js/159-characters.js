@@ -91,6 +91,35 @@ function openCharacter(charId) {
   window.scrollTo(0, 0);
 }
 
+/* v333: render a relationship target name as a tappable link when it
+   resolves to a known character, plain text otherwise. */
+function charRelLink(name, workChars) {
+  const escName = esc(String(name || ''));
+  if (typeof charResolveTarget === 'undefined' || !workChars) return escName;
+  try {
+    const res = charResolveTarget(name, workChars);
+    if (res.character) {
+      const c = res.character;
+      const attr = c.characterId
+        ? 'data-chwiki="' + esc(c.characterId) + '"'
+        : 'data-chbook="' + esc(c.id) + '"';
+      return '<button class="taplink" ' + attr + '>' + escName + '</button>';
+    }
+  } catch (e) {}
+  return escName;
+}
+
+/* Wire tap handlers for relationship links in a container. */
+function wireCharRelLinks(box) {
+  if (!box) return;
+  box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
+    openCharacter(b.getAttribute('data-chwiki'));
+  }));
+  box.querySelectorAll('[data-chbook]').forEach(b => b.addEventListener('click', () => {
+    openBookCharacter(b.getAttribute('data-chbook'));
+  }));
+}
+
 /* v329: detail view for a single book_character row (unlinked characters).
    Shows book-specific description and relationships. */
 let bookCharViewId = null;
@@ -114,10 +143,13 @@ async function renderBookCharacterPage() {
   }
   try {
     const { data, error } = await sb.from('book_characters')
-      .select('id, name, role, description, relationships, works(title)')
+      .select('id, name, role, description, relationships, work_id, works(title)')
       .eq('id', bookCharViewId).maybeSingle();
     if (error || !data) throw error || new Error('not found');
     const w = data.works || {};
+    // v333: fetch work characters for relationship link resolution
+    let workChars = [];
+    try { workChars = await CharacterStore.listForWork(data.work_id); } catch (e) {}
     let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button>' +
       '<h2 class="serif">' + esc(data.name) + '</h2></div>' +
       '<p><span class="chip dbtrope">' + esc(CHAR_ROLE_LABELS[data.role] || data.role || '?') + '</span> ' +
@@ -132,13 +164,14 @@ async function renderBookCharacterPage() {
         (byType[t] || (byType[t] = [])).push(r.to);
       });
       html += Object.keys(byType).sort().map(t =>
-        '<b>' + esc(t) + ':</b> ' + byType[t].map(n => esc(n)).join(', ')
+        '<b>' + esc(t) + ':</b> ' + byType[t].map(n => charRelLink(n, workChars)).join(', ')
       ).join('<br>');
       html += '</p>';
     }
     html += '<p class="note">Not yet linked to a canonical character. ' +
       'Link it in the Observatory → Characters to connect across books.</p>';
     setView(html);
+    wireCharRelLinks(document.getElementById('view'));
   } catch (e) {
     setView('<div class="view-head"><h2 class="serif">Could not load</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
   }
@@ -166,12 +199,15 @@ async function renderCharacterPage() {
   });
   html += '</div>';
 
-  // Relationships merged across books, labeled by source
+  // Relationships merged across books, labeled by source. v333: names are tappable.
   html += '<h3 class="serif">Relationships</h3>';
   let hasRels = false;
-  d.instances.forEach(inst => {
-    if (!inst.relationships.length) return;
+  for (const inst of d.instances) {
+    if (!inst.relationships.length) continue;
     hasRels = true;
+    // Fetch work characters for link resolution
+    let wChars = [];
+    try { wChars = await CharacterStore.listForWork(inst.workId); } catch (e) {}
     html += '<h4 class="serif">' + esc(inst.workTitle) + '</h4><p>';
     const byType = {};
     inst.relationships.forEach(r => {
@@ -179,10 +215,10 @@ async function renderCharacterPage() {
       (byType[t] || (byType[t] = [])).push(r.to);
     });
     html += Object.keys(byType).sort().map(t =>
-      '<b>' + esc(t) + ':</b> ' + byType[t].map(n => esc(n)).join(', ')
+      '<b>' + esc(t) + ':</b> ' + byType[t].map(n => charRelLink(n, wChars)).join(', ')
     ).join('<br>');
     html += '</p>';
-  });
+  }
   if (!hasRels) html += '<p class="note">No recorded relationships.</p>';
 
   // Per-user notes
@@ -193,6 +229,7 @@ async function renderCharacterPage() {
     '<span class="note" id="ch-note-msg"></span></p>';
 
   setView(html);
+  wireCharRelLinks(document.getElementById('view'));
   document.getElementById('ch-note-save').addEventListener('click', async (e) => {
     const btn = e.target, msg = document.getElementById('ch-note-msg');
     const text = document.getElementById('ch-note').value;
