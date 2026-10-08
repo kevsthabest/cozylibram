@@ -12,12 +12,19 @@
 /* v342: character breadcrumb stack. When navigating character→character,
    push the current view so Back walks the chain. Empty stack → origin. */
 let charNavStack = [];
-function charPushNav() {
+function charPushNav(targetId) {
+  // v343: clear stale crumbs on fresh entry (Advisor HIGH)
   if (view === 'character' && characterViewId) {
+    // v343 LOW: skip self-push (tapping link to current character)
+    if (targetId && targetId === characterViewId) return;
     charNavStack.push({ type: 'canonical', id: characterViewId });
   } else if (view === 'bookcharacter' && bookCharViewId) {
+    if (targetId && targetId === bookCharViewId) return;
     charNavStack.push({ type: 'book', id: bookCharViewId });
+  } else {
+    charClearNav();
   }
+  if (charNavStack.length > 30) charNavStack = charNavStack.slice(-30);
 }
 function charPopNav() {
   const prev = charNavStack.pop();
@@ -185,7 +192,7 @@ function openCharacter(charId) {
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
   try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
   // v342: push current character to breadcrumb before navigating away
-  try { charPushNav(); } catch (e) {}
+  try { charPushNav(charId); } catch (e) {}
   characterViewId = charId;
   view = 'character';
   animateIn = true;
@@ -424,7 +431,7 @@ function openBookCharacter(bookCharId) {
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
   try { const mr = document.getElementById('modal-root'); if (mr) mr.innerHTML = ''; } catch (e) {}
   // v342: push current character to breadcrumb before navigating away
-  try { charPushNav(); } catch (e) {}
+  try { charPushNav(bookCharId); } catch (e) {}
   bookCharViewId = bookCharId;
   view = 'bookcharacter';
   animateIn = true;
