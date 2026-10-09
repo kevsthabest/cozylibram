@@ -1204,7 +1204,7 @@ function renderDetailModal(b, viaBook) {
 
     // v312: purchase ledger — what you paid, where, when
     // v396: collapsible (IA rework)
-    '<details class="m-collapsible"><summary><span>' + icon('cart') + ' Purchase' +
+    '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('cart') + ' Purchase' +
     (draft.purchasePrice != null ? ' <span class="note-inline">· $' + esc(String(draft.purchasePrice)) + '</span>' : '') +
     '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
@@ -1233,7 +1233,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div></details>' +
 
-    '<details class="m-collapsible"><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
+    '<details class="m-collapsible"' + ((b.log || []).length ? ' open' : '') + '><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
     '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
     logSummaryHTML() +
     '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div></details>' +
