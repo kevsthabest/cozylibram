@@ -2076,6 +2076,22 @@ async function charLabRenderRelationships(body, works) {
     '<p class="note">Graph workspace coming soon. Use Review for now.</p></div>';
 }
 
+/* v397: Shared work deletion (consolidated from inbox + grid duplicates). */
+async function deleteWork(workId, workTitle) {
+  if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
+  try {
+    const sb = await CharacterStore._sb();
+    // ON DELETE CASCADE handles editions, characters, claims, quotes, links
+    const { error } = await sb.from('works').delete().eq('id', workId);
+    if (error) throw error;
+    toast('Work deleted');
+    charLabWorkId = null;
+    renderCharacterLab();
+  } catch (e) {
+    toast('Delete failed: ' + (e.message || 'unknown error'));
+  }
+}
+
 /* v377: Phase 1 — Relationship Inbox.
    Review pipeline-suggested relationships: Accept / Change / Reject.
    Works against current JSON model; Phase 2 moves to edge table. */
@@ -2104,7 +2120,7 @@ async function charLabRenderInbox(body, works) {
 
   // Helper: find edge for a from/to pair (v395: type-agnostic to avoid duplicates — Advisor)
   const findEdge = (fromId, toName) => {
-    const toChar = chars.find(c => String(c.name || '').toLowerCase() === String(toName || '').toLowerCase());
+    const toChar = findCharByName(chars, toName);
     if (!toChar) return null;
     return existingEdges.find(e =>
       e.character_a_id === fromId &&
@@ -2224,21 +2240,6 @@ async function charLabRenderInbox(body, works) {
     charLabRenderInbox(body, works);
   });
   document.getElementById('ch-refresh').addEventListener('click', () => charLabRenderInbox(body, works));
-  // v394: Shared delete (Advisor — FKs are CASCADE, single delete is atomic)
-  const deleteWork = async (workId, workTitle) => {
-    if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
-    try {
-      const sb = await CharacterStore._sb();
-      // ON DELETE CASCADE handles editions, characters, claims, quotes, links
-      const { error } = await sb.from('works').delete().eq('id', workId);
-      if (error) throw error;
-      toast('Work deleted');
-      charLabWorkId = null;
-      renderCharacterLab();
-    } catch (e) {
-      toast('Delete failed: ' + (e.message || 'unknown error'));
-    }
-  };
   document.getElementById('ch-delete-work').addEventListener('click', () => {
     deleteWork(charLabWorkId, work ? work.title : charLabWorkId);
   });
@@ -2291,7 +2292,7 @@ async function charLabRenderInbox(body, works) {
           const origType = String(r.type || 'friend').toLowerCase();
           const newType = pendingType || origType;
           const newImp = pendingImp ? parseInt(pendingImp, 10) || null : (r.importance || null);
-          const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+          const toChar = findCharByName(chars, toName);
           if (toChar) {
             const sb = await CharacterStore._sb();
             // Look up by ORIGINAL type (backfilled row) — not newType
@@ -2343,7 +2344,7 @@ async function charLabRenderInbox(body, works) {
         if (fromChar && fromChar.relationships && fromChar.relationships[idx]) {
           const r = fromChar.relationships[idx];
           const toName = String(r.to || '').trim();
-          const toChar = chars.find(c => String(c.name || '').toLowerCase() === toName.toLowerCase());
+          const toChar = findCharByName(chars, toName);
           if (toChar) {
             await CharacterStore.createRelationship(fromId, toChar.id, String(r.type || 'friend').toLowerCase(), {
               direction: 'mutual',
@@ -2557,24 +2558,10 @@ function charLabRender(body, works, chars) {
     const nc = await CharacterStore.listForWork(charLabWorkId);
     charLabRender(body, works, nc);
   });
-  // v394: Delete work from grid view (shared function)
+  // v397: Delete work from grid view (uses shared deleteWork)
   const delBtn2 = document.getElementById('ch-delete-work2');
   if (delBtn2) delBtn2.addEventListener('click', () => {
-    // Reuse the inbox's deleteWork via a temporary approach — define locally
-    (async () => {
-      const workTitle = work ? work.title : charLabWorkId;
-      if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
-      try {
-        const sb = await CharacterStore._sb();
-        const { error } = await sb.from('works').delete().eq('id', charLabWorkId);
-        if (error) throw error;
-        toast('Work deleted');
-        charLabWorkId = null;
-        renderCharacterLab();
-      } catch (e) {
-        toast('Delete failed: ' + (e.message || 'unknown error'));
-      }
-    })();
+    deleteWork(charLabWorkId, work ? work.title : charLabWorkId);
   });
   const blockedToggle = document.getElementById('ch-blocked-toggle');
   if (blockedToggle) blockedToggle.addEventListener('click', () => {
@@ -2939,15 +2926,3 @@ async function charMerge(winnerId, loserId, chars) {
 }
 
 /* Unmerge: restore a soft-merged character. */
-async function charUnmerge(loserId, chars) {
-  try {
-    const sb = await CharacterStore._sb();
-    if (!sb) return 'cloud unavailable';
-    const { error } = await sb.from('book_characters')
-      .update({ status: 'candidate', duplicate_of: null }).eq('id', loserId);
-    if (error) return 'unmerge failed: ' + error.message;
-    const loser = chars.find(c => c.id === loserId);
-    if (loser) { loser.status = 'candidate'; loser.duplicateOf = null; }
-    return null;
-  } catch (e) { return (e && e.message) || 'unknown error'; }
-}

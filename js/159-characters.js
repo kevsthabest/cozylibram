@@ -451,7 +451,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
   // v391: center node gets ID too (Claude bug 3)
   let centerCharId = null;
   if (workChars) {
-    const cm = workChars.find(c => String(c.name || '').toLowerCase() === String(centerName || '').toLowerCase());
+    const cm = findCharByName(workChars, centerName);
     if (cm) centerCharId = cm.id;
   }
   charData[centerId] = { name: centerName, group: 'hero', _orig: { name: centerName, id: centerCharId } };
@@ -481,7 +481,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
     // v391: carry book_characters id for Shift+drag (Claude bug 3)
     let charId = null;
     if (workChars) {
-      const match = workChars.find(c => String(c.name || '').toLowerCase() === String(n.name || '').toLowerCase());
+      const match = findCharByName(workChars, n.name);
       if (match) charId = match.id;
     }
     charData[id] = {

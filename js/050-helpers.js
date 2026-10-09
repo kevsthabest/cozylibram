@@ -7,6 +7,16 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function uid() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* v397: Simple case-insensitive normalization for comparisons.
+   For full normalization (strip punctuation, articles), use CharacterStore.normName(). */
+function norm(s) {
+  return String(s || '').trim().toLowerCase();
+}
+/* v397: Find a character by name (case-insensitive). */
+function findCharByName(chars, name) {
+  const n = norm(name);
+  return (chars || []).find(c => norm(c.name) === n) || null;
+}
 /* v224 (UX-05): one display normalization for author names — unicode-normalize,
    collapse stray whitespace, strip publisher suffixes (Inc/LLC/Ltd/Co), and
    title-case uniformly-cased names ("H D CARLTON" -> "H D Carlton"). Mixed-case
