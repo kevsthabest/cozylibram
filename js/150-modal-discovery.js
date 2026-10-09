@@ -1203,6 +1203,10 @@ function renderDetailModal(b, viaBook) {
     '</div></div>' +
 
     // v312: purchase ledger — what you paid, where, when
+    // v396: collapsible (IA rework)
+    '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('cart') + ' Purchase' +
+    (draft.purchasePrice != null ? ' <span class="note-inline">· $' + esc(String(draft.purchasePrice)) + '</span>' : '') +
+    '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
     '<div class="purchase-row">' +
     '<input type="number" id="f-purchase-price" min="0" step="0.01" placeholder="Price paid" value="' + (draft.purchasePrice != null ? esc(String(draft.purchasePrice)) : '') + '" />' +
@@ -1222,15 +1226,17 @@ function renderDetailModal(b, viaBook) {
       try { var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(v) && v >= 0) dp = v; } catch (e) {}
       return '<div class="note-inline" style="margin-top:6px;">Est. value: CAD ' + dp.toFixed(2) + ' (default — add actual price above)</div>';
     })() : '') +
-    '</div>' +
+    '</div></details>' +
 
+    '<details class="m-collapsible"><summary><span>' + icon('sparkles') + ' Mood</span></summary>' +
     '<div class="field"><label>Mood</label>' +
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
-    '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div>' +
+    '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div></details>' +
 
+    '<details class="m-collapsible"' + ((b.log || []).length ? ' open' : '') + '><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
     '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
     logSummaryHTML() +
-    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div>' +
+    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div></details>' +
 
     '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
     '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
