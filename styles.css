@@ -2983,3 +2983,20 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* v395: Tag chips */
 .conn-tag-chip.sel { background: var(--gold); color: var(--bg); border-color: var(--gold); }
+
+/* v396: Collapsible book modal sections (IA rework) */
+.m-collapsible {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); margin: 14px 0; padding: 0 14px;
+}
+.m-collapsible summary {
+  padding: 14px 0; cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 14.5px;
+}
+.m-collapsible summary::-webkit-details-marker { display: none; }
+.m-collapsible summary::after {
+  content: '›'; color: var(--faint); font-size: 20px;
+  transition: transform 0.15s ease;
+}
+.m-collapsible[open] summary::after { transform: rotate(90deg); }
