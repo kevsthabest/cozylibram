@@ -60,8 +60,10 @@ function seriesData() {
   });
 }
 // v78: hide single-book "series" unless the book is still upcoming (unread).
+// v404: strictly require 2+ books — phantom single-book series for standalones
+// confused users (UX Tester L9). Unread standalones don't get a series row.
 function visibleSeries() {
-  return seriesData().filter(s => s.books.length > 1 || s.next);
+  return seriesData().filter(s => s.books.length > 1);
 }
 // v108: owned-vs-full-series total. Hardcover's series listing is the honest
 // total; owned books are unioned in (deduped by title+author/ISBN) so a thin

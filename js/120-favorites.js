@@ -354,7 +354,9 @@ function readingHeroHTML() {
       (b.publicRating ? '<div class="cr-stars">' + stars(b.publicRating) + '</div>' : '') +
       '<div class="cr-prog"><span class="progress-line"><span class="fill" style="width:' + pct + '%"></span></span>' +
       '<small>page ' + cur + ' of ' + (total || '\u2013') + ' \u00b7 ' + pct + '%</small></div>' +
-      '<button class="btn sm" data-cr="' + b.id + '">Update Progress</button></div></div>';
+      '<div class="cr-stepper"><button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="1" aria-label="Log 1 page">+1</button>' +
+      '<button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="10" aria-label="Log 10 pages">+10</button>' +
+      '<button class="btn sm" data-cr="' + b.id + '">Update Progress</button></div></div></div>';
     if (reading.length > 1) {
       html += '<div class="cr-also">' + reading.slice(1, 5).map(o =>
         '<button class="cr-mini" data-cr="' + o.id + '" title="' + esc(o.title) + '" aria-label="Open ' + esc(o.title) + '">' +
@@ -409,7 +411,11 @@ function renderLibrary() {
     '<button data-l="grid" class="' + (layout === 'grid' ? 'active' : '') + '" aria-label="Cover grid">' + icon('covers') + '</button></div>' +
     '<button class="btn ghost sm" id="lib-wishlist" title="Wishlist">' + icon('gift') + ' Wishlist</button>' +
     '<button class="btn ghost sm" id="lib-quotes" title="Browse saved quotes">' + icon('quotes') + ' Quotes</button>' +
-    '<button class="btn ghost sm" id="lib-series" title="Series overview">' + icon('series') + ' Series</button></div>';
+    '<button class="btn ghost sm" id="lib-series" title="Series overview">' + icon('series') + ' Series</button>' +
+    '<select id="lib-sort" class="sort-sel" aria-label="Sort library">' +
+    [['added', 'Date added'], ['title', 'Title'], ['author', 'Author'], ['rating', 'Rating'], ['progress', 'Progress']]
+      .map(o => '<option value="' + o[0] + '"' + (sortBy === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+    '</select></div>';
   html += '<div class="chips">' +
     chip('all', 'All · ' + library.length, filter === 'all') +
     chip('tbr', icon('tbr') + ' TBR · ' + counts.tbr, filter === 'tbr') +
@@ -467,6 +473,23 @@ function renderLibrary() {
   // v122 home-section wiring
   document.querySelectorAll('[data-cr]').forEach(el =>
     el.addEventListener('click', () => openDetail(el.dataset.cr)));
+  // v404: quick page stepper on the Currently Reading hero card — logs pages
+  // without opening the dialog. Same save path as the modal stepper.
+  document.querySelectorAll('[data-stepcr]').forEach(el =>
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = (typeof library !== 'undefined' ? library : []).find(x => x && String(x.id) === String(el.dataset.stepcr));
+      if (!b) return;
+      const total = b.pageCount || 0;
+      const oldP = b.progress || 0;
+      b.progress = total ? Math.max(0, Math.min(total, oldP + Number(el.dataset.step))) : Math.max(0, oldP + Number(el.dataset.step));
+      b._mtime = Date.now();
+      if (typeof logPages === 'function') logPages(b, oldP, b.progress);
+      if (typeof saveLibrary === 'function') saveLibrary();
+      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+      renderLibrary();
+      toast('Page ' + b.progress + (total ? ' of ' + total : ''));
+    }));
   const het = document.getElementById('he-tbr');
   if (het) het.addEventListener('click', () => { filter = 'tbr'; animateIn = true; render(); });
   const hed = document.getElementById('he-disc');
@@ -498,6 +521,12 @@ function renderLibrary() {
   if (lw) lw.addEventListener('click', () => go('wishlist'));
   const ls = document.getElementById('lib-series');
   if (ls) ls.addEventListener('click', () => { seriesReturn = 'library'; go('series'); });
+  const srt = document.getElementById('lib-sort');
+  if (srt) srt.addEventListener('change', () => {
+    sortBy = srt.value;
+    try { localStorage.setItem('spicyshelves.sortby', sortBy); } catch (e) {}
+    renderLibrary();
+  });
   const ft = document.getElementById('fav-toggle');
   if (ft) ft.addEventListener('click', () => { favExpanded = !favExpanded; render(); });
   document.querySelectorAll('.fav-shelf [data-fs]').forEach(b =>
