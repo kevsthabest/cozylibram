@@ -2019,6 +2019,9 @@ function renderDetailModal(b, viaBook) {
     draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
     draft.cover = b.cover; // v168: the cover picker saves immediately too — don't clobber it
     draft.isbn = b.isbn; // v210: the edition picker saves immediately too — don't clobber it
+    draft._mtime = b._mtime; // P0 fix: the draft copied a stale _mtime at open; live edits
+    // may have stamped b._mtime fresh since. Never overwrite it with the stale copy —
+    // stampMtimes() in saveLibrary() will stamp fresh if content actually changed.
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
