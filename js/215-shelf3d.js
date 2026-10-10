@@ -140,7 +140,7 @@
     '.s3d-root #s3dInvPanel .sub{font-size:11px;color:#b9a8c6;font-family:system-ui,sans-serif;margin-bottom:10px;}',
     '.s3d-root #s3dInvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}',
     '.s3d-root .inv-item{background:rgba(40,30,52,.9);border:1px solid rgba(229,184,106,.25);border-radius:12px;',
-    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:none;',
+    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:pan-y;',  // v420: allow vertical scroll; press-hold for drag
     '  font-family:system-ui,sans-serif;font-size:10px;color:#f6eff8;',
     '  user-select:none;-webkit-user-select:none;position:relative;}',
     '.s3d-root .inv-item:active{transform:scale(.94);border-color:#e5b86a;}',
@@ -1335,6 +1335,40 @@
     }
 
     /* ============================== inventory ============================== */
+    /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
+       Quick swipe scrolls the list; holding ~280ms grabs the item for dragging.
+       If the finger moves beyond slop before the timer, it's a scroll. */
+    var HOLD_MS = 280, HOLD_SLOP = 10;
+    function pressHoldToDrag(el, startFn) {
+      var timer = null, sx = 0, sy = 0, fired = false;
+      el.addEventListener('pointerdown', function (e) {
+        // Only for touch — mouse can drag immediately.
+        if (e.pointerType !== 'touch') { startFn(e); return; }
+        sx = e.clientX; sy = e.clientY; fired = false;
+        timer = setTimeout(function () {
+          timer = null; fired = true;
+          startFn(e);
+        }, HOLD_MS);
+        var onMove = function (me) {
+          if (Math.hypot(me.clientX - sx, me.clientY - sy) > HOLD_SLOP) {
+            // Moved — it's a scroll, cancel the hold.
+            if (timer) { clearTimeout(timer); timer = null; }
+            el.removeEventListener('pointermove', onMove);
+            el.removeEventListener('pointerup', onUp);
+            el.removeEventListener('pointercancel', onUp);
+          }
+        };
+        var onUp = function () {
+          if (timer) { clearTimeout(timer); timer = null; }
+          el.removeEventListener('pointermove', onMove);
+          el.removeEventListener('pointerup', onUp);
+          el.removeEventListener('pointercancel', onUp);
+        };
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerup', onUp);
+        el.addEventListener('pointercancel', onUp);
+      });
+    }
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
        premium flag) comes from the catalog. Lantern + globe are unlocked
@@ -1364,8 +1398,8 @@
             '<span class="cnt">\u00d7' + item.owned + '</span>';
           if (item.owned > 0) {
             if (item.room) {
-              // room decos drag from inventory (like shelf decos); tap = auto-place
-              d.addEventListener('pointerdown', function (e) { startRoomDrag(e, item, d); });
+              // room decos: press-and-hold to drag (v420), tap = auto-place
+              pressHoldToDrag(d, function (e) { startRoomDrag(e, item, d); });
               d.addEventListener('click', function () {
                 // tap (not drag): auto-place at first free default spot
                 if (d.dataset.dragged) { delete d.dataset.dragged; return; }
@@ -1376,7 +1410,8 @@
                 if (a) placeRoomDeco(item.type, a.pos, a);
               });
             } else {
-              d.addEventListener('pointerdown', function (e) { startInvDrag(e, item, d); });
+              // v420: press-and-hold to drag; tap = pick up for tap-to-place
+              pressHoldToDrag(d, function (e) { startInvDrag(e, item, d); });
               d.addEventListener('click', function () {
                 // tap (not drag): pick up for tap-to-place
                 if (d.dataset.dragged) { delete d.dataset.dragged; return; }
