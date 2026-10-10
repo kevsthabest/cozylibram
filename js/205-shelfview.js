@@ -717,6 +717,7 @@ function renderShelf() {
     '<button class="sv-cam" id="svMenu" aria-label="Shelf menu" title="Shelf menu">' + icon('dots') + '</button>' +
     '<div class="sv-menu" id="svMenuDropdown" hidden>' +
     '<button class="sv-menu-item" id="svMenuView">' + icon('cube') + '<span>Switch to 3D view</span></button>' +
+    '<button class="sv-menu-item" id="svMenuDecor">' + icon('sparkles') + '<span>Decorations</span></button>' +
     '</div></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(g =>
       '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
@@ -780,6 +781,12 @@ function wireShelf() {
       try { _shelf3dWebGLFailed = false; } catch (e) {}
       menuDropdown.hidden = true;
       renderShelf();
+    });
+    // v417: Decorations inventory in menu (Kevin: wasn't findable).
+    const menuDecorBtn = document.getElementById('svMenuDecor');
+    if (menuDecorBtn) menuDecorBtn.addEventListener('click', () => {
+      menuDropdown.hidden = true;
+      if (typeof shelfOpenDecorSheet === 'function') shelfOpenDecorSheet();
     });
   }
   const emptyAdd = document.getElementById('svEmptyAdd');
