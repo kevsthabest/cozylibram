@@ -38,9 +38,10 @@ function recentlyAddedHTML() {
       .localeCompare(String(a.dateAdded || a._mtime || '')))
     .slice(0, 10);
   if (!rec.length) return '';
+  // v405 (L2): live count on View All — a decorative-looking control erodes trust.
   return '<section class="home-sec"><div class="recent-strip"><div class="recent-head"><h3 class="serif">' + icon('history') + ' Recently Added</h3>' +
-    '<button class="btn ghost sm" id="ra-all">View All \u2192</button></div>' +
-    '<div class="recent-row">' + rec.map(b => {
+    '<button class="btn ghost sm" id="ra-all">View all " + library.length + " \u2192</button></div>' +
+    '<div class="recent-row edge-fade">' + rec.map(b => {
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
         : '<div class="recent-nocover">' + icon('covers') + '</div>';
       return '<button class="recent-card" data-id="' + b.id + '" title="' + esc(b.title) + '">' + cov +
@@ -308,10 +309,12 @@ function pullSpine(el, id) {
 function homeGreetingHTML() {
   const h = new Date().getHours();
   const tod = h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : 'evening';
-  // v177: the term of endearment follows the profile gender — unset keeps
-  // the long-standing "beautiful" default.
-  const g = (typeof loadProfile === 'function' && loadProfile().gender) || '';
-  const term = g === 'm' ? 'handsome' : g === 'other' ? 'friend' : 'beautiful';
+  // v405 (L1): real greeting — profile first name with neutral fallback.
+  // No more placeholder terms of endearment.
+  let name = '';
+  try {
+    if (typeof loadProfile === 'function') name = (loadProfile().firstName || '').trim();
+  } catch (e) {}
   // v224 (UX-04): when a book is in progress the greeting names it — the
   // shelf knows what she's reading, so the hello should too.
   const reading = typeof library !== 'undefined'
@@ -321,11 +324,12 @@ function homeGreetingHTML() {
   let greet;
   if (reading) {
     const t = reading.title || 'your book';
-    greet = (h >= 22 || h < 2) ? 'One more chapter, ' + term + '?'
-      : h >= 5 && h < 12 ? 'A new chapter awaits, ' + term
-      : 'Back to ' + t + ', ' + term + '?';
+    const who = name ? ', ' + name : '';
+    greet = (h >= 22 || h < 2) ? 'One more chapter' + who + '?'
+      : h >= 5 && h < 12 ? 'A new chapter awaits' + who
+      : 'Back to ' + t + who + '?';
   } else {
-    greet = 'Good ' + tod + ', ' + term;
+    greet = 'Good ' + tod + (name ? ', ' + name : '');
   }
   return '<section class="home-sec home-greet"><h2 class="serif">' + esc(greet) + ' ' + icon('covers') + '</h2>' +
     '<p>What are you in the mood for?</p></section>';
