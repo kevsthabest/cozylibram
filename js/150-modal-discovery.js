@@ -1463,9 +1463,14 @@ function renderDetailModal(b, viaBook) {
   root.querySelectorAll('#f-status [data-s]').forEach(btn =>
     btn.addEventListener('click', () => {
       // v353: save immediately for consistency with primary button (triage #5+6)
+      const prevStatus = b.status;
       draft.status = btn.dataset.s;
       b.status = btn.dataset.s;
       saveLibrary();
+      // v398: DNF Autopsy — prompt for a reason when a book is newly marked DNF
+      if (btn.dataset.s === 'dnf' && prevStatus !== 'dnf' && typeof openDnfReasonSheet === 'function') {
+        setTimeout(() => openDnfReasonSheet(b), 350);
+      }
       root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');
       if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';

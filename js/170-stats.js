@@ -1021,6 +1021,8 @@ function renderStats() {
     readingCalHTML() +
     paceHTML() +
     spiceProfileHTML() +
+    (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
+    (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() +
     patternsHTML() +
     genreEvoHTML() +
@@ -1057,6 +1059,10 @@ function renderStats() {
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   const sra = document.getElementById('sr-all');
   if (sra) sra.addEventListener('click', () => { seriesReturn = 'stats'; go('series'); });
+  // v398: wire Reading DNA share button
+  if (typeof wireDnaShare === 'function') wireDnaShare();
+  // v398: maybe show Reading Wrapped banner (Dec/Jan)
+  if (typeof maybeShowWrappedBanner === 'function') maybeShowWrappedBanner();
   const big = document.getElementById('bigday');
   if (big) big.addEventListener('click', () => {
     const parts = big.dataset.day.split('-');
