@@ -298,6 +298,11 @@
     scene.add(hemi);
     var sun = new THREE.DirectionalLight(0xffe2b8, 2.3);
     sun.position.set(6, 11, 8);
+    // v409: warm downlight above the bookcase by default (Kevin: spines hard to read on mobile).
+    // Makes book titles legible without washing out the mood.
+    var downLight = new THREE.PointLight(0xffd9a0, 12, 18, 1.8);
+    downLight.position.set(0, 9.5, 2.5);
+    scene.add(downLight);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
@@ -1961,7 +1966,9 @@
       var w = Math.max(1, r.width), h = Math.max(1, r.height), a = w / h;
       camera.aspect = a; camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
-      camBase.set(0, 4.8, a >= 1 ? 13.4 : 13.4 * Math.min(2.1, 1.3 / a));
+      // v409: tighter mobile framing (Kevin: shelf too small on Pixel).
+      // Portrait phones get closer instead of the old 2.1x pullback.
+      camBase.set(0, 4.8, a >= 1 ? 13.4 : 13.4 * Math.min(1.45, 1.05 / a));
     }
     var resizeObs = null;
     if (typeof ResizeObserver !== 'undefined') {
