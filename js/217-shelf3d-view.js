@@ -93,7 +93,10 @@ function renderShelf3D() {
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
     '<button class="sv-cam" id="svViewToggle" aria-label="Switch to classic 2D shelf view" title="Classic view">' + icon2d + '</button>' +
-    '</div></div>' +
+    '<button class="sv-cam" id="svMenu3D" aria-label="Shelf menu" title="Shelf menu">' + ((typeof icon === 'function') ? icon('dots') : '⋮') + '</button>' +
+    '<div class="sv-menu" id="svMenuDropdown3D" hidden>' +
+    '<button class="sv-menu-item" id="svMenuView3D">' + ((typeof icon === 'function') ? icon('shelf') : '') + '<span>Switch to classic 2D view</span></button>' +
+    '</div></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(function (g) {
       return '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
         SHELF_GROUP_LABEL[g] + ' <span class="n">' + counts[g] + '</span></button>';
@@ -111,6 +114,26 @@ function renderShelf3D() {
     shelfSetViewMode('2d');
     renderShelf();
   });
+  // v411: overflow menu with 2D toggle (Kevin: discoverable home for view switch).
+  const menuBtn3D = document.getElementById('svMenu3D');
+  const menuDropdown3D = document.getElementById('svMenuDropdown3D');
+  if (menuBtn3D && menuDropdown3D) {
+    menuBtn3D.addEventListener('click', function (e) {
+      e.stopPropagation();
+      menuDropdown3D.hidden = !menuDropdown3D.hidden;
+    });
+    document.addEventListener('click', function closeMenu3D(e) {
+      if (!menuDropdown3D.hidden && !menuDropdown3D.contains(e.target) && e.target !== menuBtn3D) {
+        menuDropdown3D.hidden = true;
+      }
+    });
+    const menuView3DBtn = document.getElementById('svMenuView3D');
+    if (menuView3DBtn) menuView3DBtn.addEventListener('click', function () {
+      shelfSetViewMode('2d');
+      menuDropdown3D.hidden = true;
+      renderShelf();
+    });
+  }
 
   // Chips: update the 3D scene in place (no remount).
   document.querySelectorAll('.sv-chip').forEach(function (ch) {
