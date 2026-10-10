@@ -623,7 +623,9 @@ function renderShelf() {
   // when not mounted), then branch to the 3D renderer when that's the
   // active view mode.
   if (typeof shelfUnmount3D === 'function') shelfUnmount3D();
-  if (typeof shelfViewMode === 'function' && shelfViewMode() === '3d' &&
+  // v408: skip 3D if WebGL failed this session (don't keep retrying a broken context).
+  const webglFailed = (typeof _shelf3dWebGLFailed !== 'undefined' && _shelf3dWebGLFailed);
+  if (!webglFailed && typeof shelfViewMode === 'function' && shelfViewMode() === '3d' &&
       typeof renderShelf3D === 'function') {
     renderShelf3D();
     return;
@@ -708,6 +710,7 @@ function renderShelf() {
   setView(
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
+    '<button class="sv-cam" id="svView3D" aria-label="Switch to 3D view" title="Switch to 3D view">' + icon('cube') + '</button>' +
     '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
     '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div></div>' +
@@ -745,6 +748,14 @@ function wireShelf() {
   if (decorBtn) decorBtn.addEventListener('click', () => shelfOpenDecorSheet());
   const layoutBtn = document.getElementById('svLayout');
   if (layoutBtn) layoutBtn.addEventListener('click', () => shelfOpenLayoutSheet());
+  // v408: 3D view toggle — the 3D view has a 2D toggle, but 2D had no way back (launch-blocker).
+  const view3DBtn = document.getElementById('svView3D');
+  if (view3DBtn) view3DBtn.addEventListener('click', () => {
+    if (typeof shelfSetViewMode === 'function') shelfSetViewMode('3d');
+    // Clear the WebGL-failed session flag so 3D is retried.
+    try { _shelf3dWebGLFailed = false; } catch (e) {}
+    renderShelf();
+  });
   const emptyAdd = document.getElementById('svEmptyAdd');
   if (emptyAdd) emptyAdd.addEventListener('click', () => go('add'));
   const cancel = document.getElementById('svAssignCancel');
