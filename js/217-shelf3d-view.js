@@ -112,9 +112,6 @@ function renderShelf3D() {
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
     '<button class="sv-cam" id="svViewToggle" aria-label="Switch to classic 2D shelf view" title="Classic view">' + icon2d + '</button>' +
-    // v432: visible Decorate button — the inventory was buried at ⋮ → Decorations
-    // with ~zero first-run discovery.
-    '<button class="sv-cam" id="svDecorate3D" aria-label="Decorate shelf" title="Decorate">' + ((typeof icon === 'function') ? icon('sparkles') : '✨') + '</button>' +
     '<button class="sv-cam" id="svMenu3D" aria-label="Shelf menu" title="Shelf menu">' + ((typeof icon === 'function') ? icon('dots') : '⋮') + '</button>' +
     '<div class="sv-menu" id="svMenuDropdown3D" hidden>' +
     '<button class="sv-menu-item" id="svMenuView3D">' + ((typeof icon === 'function') ? icon('shelf') : '') + '<span>Switch to classic 2D view</span></button>' +
@@ -164,28 +161,6 @@ function renderShelf3D() {
       var invBtn = document.getElementById('s3dInvBtn');
       if (invBtn) invBtn.click();
     });
-    // v432: visible Decorate button opens the inventory directly.
-    const decorateBtn = document.getElementById('svDecorate3D');
-    if (decorateBtn) decorateBtn.addEventListener('click', function () {
-      var invBtn = document.getElementById('s3dInvBtn');
-      if (invBtn) invBtn.click();
-      // Dismiss the first-run nudge.
-      try { localStorage.setItem('cozylibram.seenDecorNudge', '1'); } catch (e) {}
-      const nudge = document.getElementById('sv-decor-nudge');
-      if (nudge) nudge.remove();
-    });
-    // v432: first-run nudge — point at the Decorate button once.
-    try {
-      if (!localStorage.getItem('cozylibram.seenDecorNudge')) {
-        const nudge = document.createElement('div');
-        nudge.id = 'sv-decor-nudge';
-        nudge.innerHTML = '✨ Tap to decorate your shelf!';
-        const headBtns = document.querySelector('.sv-head-btns');
-        if (headBtns) headBtns.appendChild(nudge);
-        // Auto-dismiss after 8s.
-        setTimeout(() => { const n = document.getElementById('sv-decor-nudge'); if (n) n.remove(); }, 8000);
-      }
-    } catch (e) {}
   }
 
   // Chips: update the 3D scene in place (no remount).
