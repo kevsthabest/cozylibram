@@ -484,8 +484,9 @@ function removeDeco(g) {
 function clearDecos() { placed.slice().forEach(p => removeDeco(p.group)); }
 
 /* ============================== room decorations (v3) ==============================
-   Placed at world-space anchors around the bookcase (not on planks). PoC:
-   Halloween spiderweb + pumpkin — pairs with the app's seasonal themes. */
+   Placed freely anywhere in the room (not on planks). PoC:
+   Halloween spiderweb + pumpkin — pairs with the app's seasonal themes.
+   ROOM_ANCHORS are now just tap auto-place default spots (v6: drag is free). */
 function makeWeb() {
   const g = new THREE.Group();
   const pts = [];
@@ -561,20 +562,29 @@ function showRoomAnchors(type) {
   });
 }
 function hideRoomAnchors() { anchorMarkers.forEach(m => scene.remove(m)); anchorMarkers.length = 0; }
-function placeRoomDeco(type, anchor) {
+function placeRoomDeco(type, pos, anchor) {
   const g = ROOM_MAKERS[type]();
-  g.position.copy(anchor.pos);
+  g.position.copy(pos);
   scene.add(g);
-  anchor.usedBy = g;
-  placed.push({ group: g, room: true, anchor, type });
+  if (anchor) anchor.usedBy = g;
+  placed.push({ group: g, room: true, anchor: anchor || null, type });
   const inv = INVENTORY.find(i => i.type === type);
   if (inv && inv.owned > 0) inv.owned--;
-  hideRoomAnchors();
   pickedRoom = null;
   buildInventory();
   document.getElementById('hint').textContent = 'Open inventory to decorate · tap a placed decoration to select it';
   select(g);
   return g;
+}
+/* v6: free placement — the drop point is used directly, per decoration type:
+   pumpkin sits on the floor, spiderweb sticks to the wall (back panel plane). */
+const WALL_Z = -PLANK_D / 2 - 0.16; // bookcase back panel plane
+function roomDropPos(type, x, y, z) {
+  if (type === 'pumpkin') {
+    return new THREE.Vector3(THREE.MathUtils.clamp(x, -9, 9), 0, THREE.MathUtils.clamp(z, -2, 5));
+  }
+  // web: pin to the wall plane, facing outward; keep within the panel bounds
+  return new THREE.Vector3(THREE.MathUtils.clamp(x, -5.3, 5.3), THREE.MathUtils.clamp(y, 1, 7.6), WALL_Z + 0.05);
 }
 function discardGhost(g) {
   const ci = candleFlames.indexOf(g);
@@ -619,10 +629,10 @@ function buildInventory() {
         // v4: room decos drag from inventory (like shelf decos); tap = auto-place
         d.addEventListener('pointerdown', e => startRoomDrag(e, item, d));
         d.addEventListener('click', e => {
-          // tap (not drag): auto-place at first free anchor
+          // tap (not drag): auto-place at first free default spot
           if (d.dataset.dragged) { delete d.dataset.dragged; return; }
           const a = ROOM_ANCHORS.find(x => x.types.includes(item.type) && !x.usedBy);
-          if (a) placeRoomDeco(item.type, a);
+          if (a) placeRoomDeco(item.type, a.pos, a);
         });
       } else {
         d.addEventListener('pointerdown', e => startInvDrag(e, item, d));
@@ -642,7 +652,7 @@ function buildInventory() {
   });
   const sub = document.querySelector('#invPanel .sub');
   if (sub) sub.textContent = invTab === 'room'
-    ? 'Drag onto the room · or tap to auto-place at a free spot'
+    ? 'Drag anywhere in the room to place · or tap to auto-place'
     : 'Tap to pick up, then tap a shelf to place · or drag straight onto a shelf';
 }
 document.querySelectorAll('#invTabs button').forEach(b =>
@@ -660,18 +670,16 @@ function startInvDrag(e, item, el) {
   queueRaycast(e);
   // if this becomes a drag (not tap), the pointermove handler takes over
 }
-/* v4: room decorations drag from inventory — same tactile pattern as shelf
-   decos. Ghost follows the pointer; anchors glow as drop targets. */
+/* v6: free placement — drag anywhere in the room, drop where the finger lets go */
 function startRoomDrag(e, item, el) {
   e.preventDefault();
   deselect();
   closeInventory();
   const g = ROOM_MAKERS[item.type]();
   g.visible = false; scene.add(g);
-  roomDrag = { type: item.type, group: g, anchor: null, moved: false,
+  roomDrag = { type: item.type, group: g, moved: false,
     sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
   el.dataset.dragged = '1';
-  showRoomAnchors(item.type);
   // v5: position the ghost under the pointer immediately (1:1 on grab)
   queueRaycast(e);
 }
@@ -850,21 +858,7 @@ function processDragFrame() {
       roomDrag.targetZ = THREE.MathUtils.clamp(pt.z, -4, 4);
       roomDrag.hasTarget = true;
     }
-    // anchor snap targeting (drop target + highlight)
-    const hits = ray.intersectObjects(anchorMarkers, false);
-    let best = null;
-    if (hits.length) {
-      const a = ROOM_ANCHORS.find(x => x.id === hits[0].object.userData.anchorId);
-      if (a && !a.usedBy && a.types.includes(roomDrag.type)) best = a;
-    }
-    // highlight the targeted anchor, dim the rest
-    anchorMarkers.forEach(m => {
-      const isBest = best && m.userData.anchorId === best.id;
-      m.material.opacity = isBest ? 1 : 0.45;
-      const s = isBest ? 1.35 : 1;
-      m.userData.hiScale = s;
-    });
-    roomDrag.anchor = best; // null → drop cancels (existing behavior)
+    /* v6: no anchor snapping — free placement, drop point is used directly */
   } else if (moveDrag) {
     if (Math.hypot(e.clientX - moveDrag.sx, e.clientY - moveDrag.sy) > 8) {
       if (!moveDrag.moved) {
@@ -904,24 +898,21 @@ function processDragFrame() {
 window.addEventListener('pointerup', e => {
   snapGuide.visible = false;
   if (roomDrag) {
-    /* v4: room-deco drop — snap to the targeted anchor, else cancel */
+    /* v6: free placement — the item lands exactly where the finger drops it */
     const r = roomDrag; roomDrag = null;
     r.group.scale.setScalar(1);
-    hideRoomAnchors();
     if (!r.moved) {
-      // tap = auto-place at first free anchor
+      // tap = auto-place at first free default spot
       discardGhost(r.group);
       const a = ROOM_ANCHORS.find(x => x.types.includes(r.type) && !x.usedBy);
-      if (a) placeRoomDeco(r.type, a);
-    } else if (r.anchor && !r.anchor.usedBy) {
+      if (a) placeRoomDeco(r.type, a.pos, a);
+    } else if (r.hasTarget) {
       discardGhost(r.group);
-      const g = placeRoomDeco(r.type, r.anchor);
+      const g = placeRoomDeco(r.type, roomDropPos(r.type, r.targetX, r.targetY, r.targetZ), null);
       select(g);
     } else {
-      discardGhost(r.group); // dropped outside an anchor: cancel
+      discardGhost(r.group); // dropped outside: cancel
     }
-    // reset anchor highlight state
-    anchorMarkers.forEach(m => { m.material.opacity = 0.85; m.userData.hiScale = 1; });
     return;
   }
   if (trayDrag) {
@@ -1060,11 +1051,7 @@ function animate() {
   for (const b of fairyBulbs) {
     b.material.emissiveIntensity = 1.55 + Math.sin(t * 2.2 + b.userData.phase) * 0.4;
   }
-  // v3: pulse room anchor markers (v4: multiply by drag-highlight scale)
-  for (let i = 0; i < anchorMarkers.length; i++) {
-    const s = (1 + 0.14 * Math.sin(t * 4 + i * 1.3)) * (anchorMarkers[i].userData.hiScale || 1);
-    anchorMarkers[i].scale.set(s, s, 1);
-  }
+  // (v6: room anchor markers retired — free placement, no snap targets)
   // camera parallax
   const px = tiltOn ? tilt.x : pointerPX * 0.55;
   const py = tiltOn ? tilt.y : pointerPY * 0.4;
