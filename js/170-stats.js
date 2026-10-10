@@ -407,7 +407,7 @@ function genreEvoHTML() {
     const g = bookGenres(b)[0] || 'Other';
     totals[g] = (totals[g] || 0) + 1;
   }));
-  const topG = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+  const topG = topEntries(totals, 5).map(e => e[0]);
   const PAL = ['#e5648e', '#6aa8e5', '#e5b86a', '#8fd18f', '#b48ce5'];
   const colorOf = g => {
     const i = topG.indexOf(g);
@@ -546,7 +546,7 @@ function yearInBooksData(yr) {
   const avg = rated.length ? rated.reduce((s, b) => s + b.myRating, 0) / rated.length : null;
   const byGenre = {};
   readYr.forEach(b => { const g = bookGenres(b)[0] || 'Other'; byGenre[g] = (byGenre[g] || 0) + 1; });
-  const topGenres = Object.entries(byGenre).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topGenres = topEntries(byGenre, 3);
   const topBooks = rated.slice().sort((a, b) => b.myRating - a.myRating).slice(0, 5);
   const withPages = readYr.filter(b => (b.pageCount || 0) > 0);
   const longest = withPages.slice().sort((a, b) => b.pageCount - a.pageCount)[0] || null;
@@ -920,7 +920,7 @@ function renderStats() {
 
   const tropeCount = {};
   library.forEach(b => (b.tropes || []).forEach(t => { tropeCount[t] = (tropeCount[t] || 0) + 1; }));
-  const topTropes = Object.entries(tropeCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const topTropes = topEntries(tropeCount, 8);
 
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });

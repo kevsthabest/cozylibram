@@ -7,6 +7,34 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function uid() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* v399: Top-N entries from a count map, sorted descending. Replaces the
+   Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,N) idiom. */
+function topEntries(map, n) {
+  return Object.entries(map || {}).sort((a, b) => b[1] - a[1]).slice(0, n);
+}
+/* v399: Extract positive spice values from a book list. */
+function spiceVals(books) {
+  return books.map(b => (b.ratings || {}).spice || 0).filter(v => v > 0);
+}
+/* v399: Shared 1080x1920 story-card canvas setup. Returns {cv, x, W, H, C}
+   with gradient background painted and palette C = {ink, mut, acc, gold, grn}. */
+function cardCanvas() {
+  const W = 1080, H = 1920;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  if (!x) return null;
+  const C = { ink: '#f6eff8', mut: '#b9a8c6', acc: '#e5648e', gold: '#e5b86a', grn: '#7de2a8' };
+  const bg = x.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#2b1535'); bg.addColorStop(1, '#100a16');
+  x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  return { cv, x, W, H, C };
+}
+/* v399: Standard card footer. */
+function cardFooter(x, W) {
+  x.textAlign = 'center'; x.fillStyle = '#b9a8c6'; x.font = '36px system-ui, sans-serif';
+  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
+}
 /* v397: Simple case-insensitive normalization for comparisons.
    For full normalization (strip punctuation, articles), use CharacterStore.normName(). */
 function norm(s) {

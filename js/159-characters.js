@@ -889,20 +889,12 @@ function initD3Graph(box) {
             const toOrig = charData[toNode.id] ? charData[toNode.id]._orig : null;
             if (fromOrig && toOrig && fromOrig.id && toOrig.id) {
               const isAdmin = (typeof isAppAdmin !== 'undefined' && isAppAdmin);
-              const sb = await CharacterStore._sb();
-              const { data: { user } } = await sb.auth.getUser();
-              // Direct insert to control review_status
-              const { error } = await sb.from('character_relationships').insert({
-                character_a_id: fromOrig.id,
-                character_b_id: toOrig.id,
-                relationship_type: type,
+              await CharacterStore.createRelationship(fromOrig.id, toOrig.id, type, {
                 direction: dir,
                 importance: imp ? parseInt(imp, 10) : null,
-                tags: tags,
+                tags: tags.length ? tags : null,
                 review_status: isAdmin ? 'confirmed' : 'pending',
-                created_by: user ? user.id : null,
               });
-              if (error) throw error;
               toast(isAdmin ? 'Relationship created' : 'Suggestion submitted for review');
               // Refresh graph in place
               if (typeof renderCharacterPage === 'function') {

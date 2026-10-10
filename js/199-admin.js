@@ -1742,6 +1742,7 @@ const CharacterStore = {
         review_status: opts.review_status || 'confirmed',
         created_by: user ? user.id : null,
         notes: opts.notes || null,
+        tags: opts.tags || null,
       }).select().single();
       if (error) throw error;
       return data;
@@ -2454,8 +2455,6 @@ async function charLabCanonDetail() {
     try {
       await CharacterStore.unlink(rowId);
       await charLabCanonDetail();
-      // Refresh the list counts
-      charLabRenderUnified(document.getElementById('ob-body'));
     } catch (e) {
       b.disabled = false;
       document.getElementById('ch-unlink-msg').textContent = 'Failed: ' + ((e && e.message) || e);

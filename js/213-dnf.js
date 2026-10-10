@@ -14,6 +14,8 @@ const DNF_REASONS = [
 ];
 
 function openDnfReasonSheet(b) {
+  // Dedup: don't stack sheets if one is already open
+  if (document.querySelector('.dnf-bottom-sheet')) return;
   const reasonBtns = DNF_REASONS.map(r =>
     '<button class="dnf-reason-btn" data-reason="' + r.key + '">' +
     '<span class="dnf-icon">' + r.icon + '</span>' +
@@ -72,6 +74,8 @@ function saveDnfReason(b, reasonKey) {
       progress_pct: progressPct,
     }).then(({ error }) => {
       if (error) console.warn('[dnf] Supabase log failed:', error.message);
+    }).catch((err) => {
+      console.warn('[dnf] Supabase log network failure:', err && err.message);
     });
   }
 
