@@ -1612,44 +1612,9 @@
     }
 
     /* ============================== inventory ============================== */
-    /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
-       Quick swipe scrolls the list; holding ~280ms grabs the item for dragging.
-       If the finger moves beyond slop before the timer, it's a scroll. */
-    var HOLD_MS = 280, HOLD_SLOP = 10;
-    function pressHoldToDrag(el, startFn) {
-      var timer = null, sx = 0, sy = 0;
-      el.addEventListener('pointerdown', function (e) {
-        // Only for touch — mouse can drag immediately.
-        if (e.pointerType !== 'touch') { startFn(e); return; }
-        sx = e.clientX; sy = e.clientY;
-        // v427: clear any stale swipe-suppression flag from a previous interaction.
-        delete el.dataset.swiped;
-        timer = setTimeout(function () {
-          timer = null;
-          startFn(e);
-        }, HOLD_MS);
-        var onMove = function (me) {
-          if (Math.hypot(me.clientX - sx, me.clientY - sy) > HOLD_SLOP) {
-            // Moved — it's a scroll, cancel the hold.
-            // v427: mark as swiped so the follow-up click doesn't fire tap-to-place.
-            if (timer) { clearTimeout(timer); timer = null; }
-            el.dataset.swiped = '1';
-            el.removeEventListener('pointermove', onMove);
-            el.removeEventListener('pointerup', onUp);
-            el.removeEventListener('pointercancel', onUp);
-          }
-        };
-        var onUp = function () {
-          if (timer) { clearTimeout(timer); timer = null; }
-          el.removeEventListener('pointermove', onMove);
-          el.removeEventListener('pointerup', onUp);
-          el.removeEventListener('pointercancel', onUp);
-        };
-        el.addEventListener('pointermove', onMove);
-        el.addEventListener('pointerup', onUp);
-        el.addEventListener('pointercancel', onUp);
-      });
-    }
+    // v432: pressHoldToDrag extracted to js/219-shelf3d-drag.js (pure, tested).
+    // Local alias keeps call sites unchanged.
+    var pressHoldToDrag = window.Shelf3DDrag.pressHoldToDrag;
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
        premium flag) comes from the catalog. Lantern + globe are unlocked
@@ -1670,13 +1635,13 @@
       for (var ti = 0; ti < tabs.length; ti++) {
         tabs[ti].classList.toggle('on', tabs[ti].dataset.tab === invTab);
       }
-      INVENTORY.filter(function (item) { return (invTab === 'room') === !!item.room; })
+      // v432: tab filter extracted to js/220-shelf3d-inventory.js (pure, tested).
+      window.Shelf3DInventory.filterByTab(INVENTORY, invTab)
         .forEach(function (item) {
           var d = document.createElement('div');
           d.className = 'inv-item' + (pickedType === item.type ? ' picked' : '');
           d.dataset.deco = item.type;
-          d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
-            '<span class="cnt">\u00d7' + item.owned + '</span>';
+          d.innerHTML = window.Shelf3DInventory.invItemInnerHTML(item);
           if (item.owned > 0) {
             if (item.room) {
               // room decos: press-and-hold to drag (v420), tap = auto-place
@@ -1996,8 +1961,9 @@
             rec.pi = hit2.pi;
             rec.rec[0] = x2 - fw2 / 2; rec.rec[1] = x2 + fw2 / 2;
             // v422: update restY when shelf changes (fixes cross-shelf drag snapping back)
+            // v432: extracted to js/219-shelf3d-drag.js (pure, tested).
             var isEdge2 = !!moveDrag.group.userData.edge;
-            moveDrag.restY = LEVELS[hit2.pi] + (isEdge2 ? 0.06 : 0);
+            moveDrag.restY = window.Shelf3DDrag.computeRestY(LEVELS, hit2.pi, isEdge2);
             // 1:1 follow — ghost tracks raw pointer x; snap guide shows landing
             var rawX2 = THREE.MathUtils.clamp(hit2.point.x, -SHELF_W / 2 + 0.4, SHELF_W / 2 - 0.4);
             var lift3 = (e.pointerType === 'touch') ? 0.45 : 0;
