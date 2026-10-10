@@ -3071,3 +3071,111 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   border-radius: 8px; padding: 6px 8px; font-size: 13px; margin-left: 4px;
 }
+
+/* v405 (T1): full-width streak banner with inline definition */
+.streak-banner {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 12px 0; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(120deg, rgba(201,168,106,.18), rgba(232,160,180,.10));
+  border: 1px solid var(--line); font-size: 14px;
+}
+.streak-banner b { font-size: 15px; }
+.streak-banner .streak-def { font-size: 12px; color: var(--faint); flex-basis: 100%; }
+/* v405 (T2): estimate-only library value card */
+.valcard {
+  border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  background: var(--card); margin: 8px 0 16px; font-size: 13px;
+}
+.valcard .big { font-size: 22px; font-weight: 700; color: var(--gold); }
+.valcard .note { font-size: 11.5px; color: var(--faint); margin-top: 6px; }
+/* v405 (L3): edge fade on horizontal scrollers */
+.edge-fade {
+  -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, #000 82%, transparent);
+}
+
+
+/* v405: 3D shelf view (Three.js) — namespaced under #shelf3d */
+#shelf3d { position: relative; height: calc(100dvh - 220px); min-height: 420px; overflow: hidden; border-radius: 14px; background: #14101c; }
+#shelf3d .s3d-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #b9a8c6; font-size: 14px; }
+  #shelf3d #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #shelf3d #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 42%, transparent 55%, rgba(8,5,12,.55) 100%); }
+  #shelf3d #hud { position: absolute; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 14px 8px;
+    display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 5; }
+  #shelf3d #hud .title { font-size: 17px; letter-spacing: .04em; color: #f6eff8; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  #shelf3d #hud .title small { display: block; font-family: system-ui, sans-serif; font-size: 10px; letter-spacing: .22em;
+    color: #e5b86a; text-transform: uppercase; margin-bottom: 2px; }
+  #shelf3d #hud .btns { display: flex; gap: 8px; pointer-events: auto; }
+  #shelf3d .pill { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; border: 1px solid rgba(229,184,106,.45);
+    background: rgba(20,14,26,.72); color: #e5b86a; border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    backdrop-filter: blur(6px); }
+  #shelf3d .pill:active { transform: scale(.96); }
+  #shelf3d #hint { position: absolute; bottom: calc(86px + env(safe-area-inset-bottom)); left: 0; right: 0;
+    text-align: center; font-family: system-ui, sans-serif; font-size: 12.5px; color: #f6eff8;
+    pointer-events: none; z-index: 9; padding: 0 24px; opacity: 0; transform: translateY(8px);
+    transition: opacity .25s ease, transform .25s ease; }
+  #shelf3d #hint.show { opacity: 1; transform: translateY(0); }
+  #shelf3d #hint span { background: rgba(20,14,26,.82); border: 1px solid rgba(229,184,106,.4);
+    border-radius: 999px; padding: 8px 16px; display: inline-block;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+  #shelf3d .pill.dim { opacity: .45; }
+  /* confirm dialog */
+  #shelf3d #confirmOv { position: absolute; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center; background: rgba(8,5,12,.6);
+    backdrop-filter: blur(3px); padding: 24px; }
+  #shelf3d #confirmOv.show { display: flex; }
+  #shelf3d #confirmOv .box { background: rgba(26,19,34,.97); border: 1px solid rgba(229,184,106,.5);
+    border-radius: 16px; padding: 20px; max-width: 320px; text-align: center;
+    font-family: system-ui, sans-serif; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  #shelf3d #confirmOv p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #f6eff8; }
+  #shelf3d #confirmOv .row { display: flex; gap: 10px; }
+  #shelf3d #confirmOv button { flex: 1; border-radius: 10px; padding: 10px; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: system-ui, sans-serif; }
+  #shelf3d #confirmNo { background: transparent; color: #b9a8c6; border: 1px solid rgba(185,168,198,.4); }
+  #shelf3d #confirmYes { background: #e5b86a; color: #241a10; border: none; }
+  /* v2: inventory replaces the bottom tray */
+  #shelf3d #invBtn { position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 6;
+    width: 58px; height: 58px; border-radius: 50%; border: 1px solid rgba(229,184,106,.55);
+    background: rgba(32,24,40,.92); color: #e5b86a; font-size: 24px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+  #shelf3d #invBtn:active { transform: scale(.93); }
+  #shelf3d #invPanel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; max-height: 62%;
+    background: rgba(18,13,24,.97); border-top: 1px solid rgba(229,184,106,.35);
+    border-radius: 20px 20px 0 0; padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .28s cubic-bezier(.2,.9,.3,1.1); overflow-y: auto; }
+  #shelf3d #invPanel.open { transform: translateY(0); }
+  #shelf3d #invPanel h3 { margin: 0 0 4px; font-size: 15px; color: #f6eff8; font-family: system-ui, sans-serif; }
+  #shelf3d #invPanel .sub { font-size: 11px; color: #b9a8c6; font-family: system-ui, sans-serif; margin-bottom: 10px; }
+  #shelf3d #invGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  #shelf3d .inv-item { background: rgba(40,30,52,.9); border: 1px solid rgba(229,184,106,.25); border-radius: 12px;
+    padding: 10px 4px 8px; text-align: center; cursor: pointer; touch-action: none;
+    font-family: system-ui, sans-serif; font-size: 10px; color: #f6eff8;
+    user-select: none; -webkit-user-select: none; position: relative; }
+  #shelf3d .inv-item:active { transform: scale(.94); border-color: #e5b86a; }
+  #shelf3d .inv-item svg { width: 34px; height: 34px; display: block; margin: 0 auto 4px; }
+  #shelf3d .inv-item.picked { border-color: #e5b86a; background: rgba(229,184,106,.16);
+    box-shadow: 0 0 0 2px rgba(229,184,106,.5); }
+  #shelf3d .inv-item .cnt { position: absolute; top: 4px; right: 6px; font-size: 10px; color: #e5b86a; font-weight: 700; }
+  #shelf3d .inv-item.locked { opacity: .42; filter: grayscale(.75); }
+  #shelf3d .inv-item.locked .locktag { position: absolute; top: 4px; right: 6px; font-size: 9px; font-weight: 700;
+    color: #8a7a95; letter-spacing: .06em; }
+  #shelf3d #selmenu { position: absolute; z-index: 7; display: none; transform: translate(-50%, -110%);
+    background: rgba(24,17,32,.94); border: 1px solid rgba(229,184,106,.5); border-radius: 12px;
+    padding: 6px; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  #shelf3d #selmenu.show { display: flex; }
+  #shelf3d #selmenu button { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; border: none;
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  #shelf3d #selmenu .mv { background: #e5b86a; color: #241a10; }
+  #shelf3d #selmenu .del { background: rgba(200,60,60,.18); color: #ff9a9a; border: 1px solid rgba(200,60,60,.5); }
+  #shelf3d #selmenu .done { background: transparent; color: #b9a8c6; }
+  #shelf3d #nogl { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; font-family: system-ui, sans-serif; z-index: 20; }
+  #shelf3d .pill.on { background: #e5b86a; color: #241a10; border-color: #e5b86a; }
+  #shelf3d #tiltDbg { position: absolute; top: 64px; left: 12px; z-index: 15; display: none;
+    font: 10px/1.5 ui-monospace, monospace; color: #b9a8c6; background: rgba(10,8,14,.55);
+    padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: pre; }
+  #shelf3d #invTabs { display: flex; gap: 6px; margin: 8px 0 2px; }
+  #shelf3d #invTabs button { flex: 1; border: 1px solid rgba(229,184,106,.35); background: transparent;
+    color: #b9a8c6; border-radius: 8px; padding: 6px; font-size: 12px; }
+  #shelf3d #invTabs button.on { background: rgba(229,184,106,.2); color: #f6eff8; }

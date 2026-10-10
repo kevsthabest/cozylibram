@@ -18,7 +18,7 @@ const COVEN_NAMES = {
   velvet:      'Rose Court',
   abyss:       'The Deep',
   frost:       'Winter Court',
-  haunt:       'Crypt',
+  haunt:       'Coven', // v405 (C1): one feature, one name — was 'Crypt'
   yuletide:    'Yule Court',
   fete:        'Gala',
   amour:       "Lovers' Court",

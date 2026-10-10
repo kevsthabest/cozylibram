@@ -1070,14 +1070,20 @@ function renderStats() {
       if (b.listPrice != null && !isNaN(b.listPrice)) libEst += b.listPrice;
     });
   } catch (e) {}
+  // v405 (T2): estimate-only until >50% of books are priced. A $0.00-vs-estimate
+  // comparison reads as broken; the comparison is the problem, not the data.
+  const pricedRatio = library.length ? libPriced / library.length : 0;
   const valueSection =
-    '<div class="stat-sub">' + icon('chart') + ' Library value</div><div class="stat-row">' +
-    heroCard('covers', '$' + libActual.toFixed(2), 'Actual spent') +
-    heroCard('sparkles', '$' + libEst.toFixed(2), 'Est. value') +
-    '</div>' +
-    (libPriced < library.length
-      ? '<p class="note">' + libPriced + ' of ' + library.length + ' books priced — rest use the default estimate.</p>'
-      : '');
+    pricedRatio < 0.5
+      ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
+        '<div class="valcard"><div class="big">≈ $' + Math.round(libEst) + '</div>' +
+        '<div>Estimated collection value</div>' +
+        '<div class="note">Based on ' + libPriced + ' of ' + library.length +
+        ' priced — add prices for a sharper estimate.</div></div>'
+      : '<div class="stat-sub">' + icon('chart') + ' Library value</div><div class="stat-row">' +
+        heroCard('covers', '$' + libActual.toFixed(2), 'Actual spent') +
+        heroCard('sparkles', '$' + libEst.toFixed(2), 'Est. value') +
+        '</div>';
 
   // v128: dashboard first — this month at a glance. The full explorer lives
   // one tap behind "Explore detailed stats".
@@ -1091,10 +1097,16 @@ function renderStats() {
       heroCard('heart', avgMo != null ? '♥ ' + avgMo.toFixed(1) : '–', 'Avg rating') +
       heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time') +
       '</div>' +
+      // v405 (T1): one full-width streak banner with the definition inline —
+      // not a separate stat card + orphaned detail. Always visible; the copy
+      // adapts when there's no active streak.
+      '<div class="streak-banner">' + icon('flame') + ' <b>' +
+      (streak > 0 ? streak + '-day streak' : 'No active streak') + '</b>' +
+      '<span class="streak-def">' +
       (streak > 0
-        ? '<div class="stat-sub">' + icon('flame') + ' Streak</div><div class="stat-row">' +
-          heroCard('flame', streak > 0 ? streak : '0', 'Day streak') + '</div>'
-        : '') +
+        ? 'Log pages or finish a book each day to keep it going.'
+        : 'Log pages today to start one — one day at a time.') +
+      '</span></div>' +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
       valueSection +

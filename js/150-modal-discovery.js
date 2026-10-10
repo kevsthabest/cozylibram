@@ -1164,10 +1164,9 @@ function renderDetailModal(b, viaBook) {
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
     '<div class="sheet-grabber" aria-hidden="true"></div>' + // v215: drag-to-dismiss affordance (touch)
     '<button class="d-back" id="m-x" aria-label="Close">←</button>' +
-    // v182: mockup top-right cluster — favorite + overflow menu (moved out of
-    // the bottom bar). The menu is a floating card now.
+    // v405 (M1): single favorite heart lives in the CTA row (f-fav2) —
+    // the top-right duplicate is removed. Overflow menu keeps its entry.
     '<div class="d-topactions">' +
-    '<button class="fav-btn' + (draft.favorite ? ' on' : '') + '" id="f-fav" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
     '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
     '<div class="more-menu" id="m-moremenu" hidden>' +
     '<button class="more-item" id="m-share">' + icon('share') + ' <span>Share</span></button>' +
@@ -1240,11 +1239,16 @@ function renderDetailModal(b, viaBook) {
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
+    // v405 (M2): Ownership collapses into an accordion — secondary section,
+    // keeps Details/Your rating/Shelf-Status expanded per the design review.
+    '<details class="m-collapsible"><summary><span>' + icon('covers') + ' Ownership' +
+    ' <span class="note-inline">· ' + esc((OWNED_META[draft.owned] || OWNED_META.tobuy).label) + '</span>' +
+    '</span></summary>' +
     '<div class="field"><label>Ownership</label>' +
     '<div class="mselect" id="f-owned">' +
     '<button class="mrow" data-mrow="owned"><span class="mrow-ic" id="f-owned-ic">' + icon((OWNED_META[draft.owned] || OWNED_META.tobuy).ic) + '</span>' +
     '<span class="mrow-val" id="f-owned-val">' + (OWNED_META[draft.owned] || OWNED_META.tobuy).label + '</span><span class="mrow-chev">›</span></button>' +
-    '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div>' +
+    '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div></details>' +
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
@@ -1900,14 +1904,12 @@ function renderDetailModal(b, viaBook) {
   };
   renderQuotesSection();
 
-  // v182: the mockup shows favorite in three places — top-right heart, hero
-  // heart beside the primary action, and the ⋮ menu. One toggle, all repaint.
+  // v405 (M1): single favorite heart in the CTA row (f-fav2) + the ⋮ menu
+  // entry. One toggle, all repaint.
   const paintFav = () => {
     const on = !!draft.favorite;
-    ['f-fav', 'f-fav2'].forEach(fid => {
-      const el = document.getElementById(fid);
-      if (el) el.classList.toggle('on', on);
-    });
+    const el = document.getElementById('f-fav2');
+    if (el) el.classList.toggle('on', on);
     const fm = document.getElementById('m-favmenu');
     if (fm) fm.innerHTML = icon('heart') + ' <span>' +
       (on ? 'Remove from Favorites' : 'Add to Favorites') + '</span>';
@@ -1921,7 +1923,6 @@ function renderDetailModal(b, viaBook) {
     track(draft.favorite ? 'book_favorited' : 'book_unfavorited');
     toast(draft.favorite ? 'Pinned to favorites ❤️' : 'Removed from favorites 🤍');
   };
-  document.getElementById('f-fav').addEventListener('click', toggleFavorite);
   document.getElementById('f-fav2').addEventListener('click', toggleFavorite);
   document.getElementById('m-favmenu').addEventListener('click', () => {
     toggleFavorite();
