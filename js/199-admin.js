@@ -1955,7 +1955,7 @@ const CharacterStore = {
     if (!sb) return [];
     try {
       const { data, error } = await sb.from('book_characters')
-        .select('id, name, role, description, relationships, confidence, status, suggested_character_id, duplicate_of, character_links(character_id)')
+        .select('id, name, role, description, relationships, confidence, status, suggested_character_id, duplicate_of, first_appearance_chapter, character_links(character_id)')
         .eq('work_id', workId)
         .order('name');
       if (error) throw error;
@@ -1972,6 +1972,8 @@ const CharacterStore = {
           characterId: (link && link.character_id) || null,
           suggestedCharacterId: c.suggested_character_id || null,
           duplicateOf: c.duplicate_of || null,
+          // v402: first-appearance chapter from pipeline (null when unknown)
+          firstAppearance: (c.first_appearance_chapter != null && c.first_appearance_chapter !== '') ? c.first_appearance_chapter : null,
         };
       });
     } catch (e) { return []; }

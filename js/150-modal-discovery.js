@@ -324,6 +324,36 @@ function externalRowHTML(x, i) {
 
 // Normalize any external/discovered book shape into a transient preview book.
 // kind: 'reco' | 'release' | 'coven-reco' | 'friend' | 'external'
+/* v402: Spice Forecast sparkline — inline SVG, no external libs.
+   Takes an array of per-chapter spice levels (0-5), renders a small
+   area sparkline. Returns '' when data is insufficient. */
+function spiceSparklineHTML(levels) {
+  try {
+    if (!Array.isArray(levels) || levels.length < 2) return '';
+    const vals = levels.map(v => {
+      const n = Number(v);
+      return (isFinite(n) && n >= 0 && n <= 5) ? n : 0;
+    });
+    const W = 220, H = 36, PAD = 3;
+    const max = 5;
+    const stepX = (W - PAD * 2) / (vals.length - 1);
+    const pts = vals.map((v, i) => {
+      const x = (PAD + i * stepX).toFixed(1);
+      const y = (H - PAD - (v / max) * (H - PAD * 2)).toFixed(1);
+      return x + ',' + y;
+    });
+    const line = pts.join(' ');
+    const area = PAD + ',' + (H - PAD) + ' ' + line + ' ' + (W - PAD) + ',' + (H - PAD);
+    const peak = Math.max(...vals);
+    return '<div class="chaptermeta-row spice-forecast">' +
+      '<span class="chaptermeta-label">' + (typeof icon === 'function' ? icon('pepper') : '') + ' Spice forecast</span>' +
+      '<svg class="sparkline" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-label="Per-chapter spice levels, peak ' + peak + ' of 5">' +
+      '<polygon points="' + area + '" class="spark-area"/>' +
+      '<polyline points="' + line + '" class="spark-line"/>' +
+      '</svg></div>';
+  } catch (e) { return ''; }
+}
+
 /* v329: shared character-tab loader — used by renderDetailModal (the full
    book modal). Takes the book object directly; caches per book id so
    re-opening the tab doesn't refetch. */
@@ -351,9 +381,12 @@ async function loadCharsTabForBook(t) {
         : 'data-chbook="' + esc(c.id) + '"';
       const link = '<button class="taplink" ' + tapAttr + '>' + esc(c.name) + '</button>';
       const desc = c.description ? '<p class="note">' + esc(c.description.slice(0, 160)) + (c.description.length > 160 ? '…' : '') + '</p>' : '';
+      // v402: progressive disclosure — "Introduced in Ch. 3" only when pipeline provided it
+      const intro = (c.firstAppearance != null && c.firstAppearance !== '')
+        ? '<p class="note ch-intro">Introduced in Ch. ' + esc(String(c.firstAppearance)) + '</p>' : '';
       const rels = (c.relationships && c.relationships.length)
         ? '<p class="note">' + c.relationships.slice(0, 3).map(r => esc(r.to) + ' <i>(' + esc(r.type) + ')</i>').join(' · ') + '</p>' : '';
-      return '<div class="ch-card">' + link + desc + rels + '</div>';
+      return '<div class="ch-card">' + link + desc + intro + rels + '</div>';
     };
     const section = (title, list, id, hideTitle) => {
       if (!list.length) return '';
@@ -1230,6 +1263,9 @@ function renderDetailModal(b, viaBook) {
     '<details class="m-collapsible"><summary><span>' + icon('sparkles') + ' Mood</span></summary>' +
     '<div class="field"><label>Mood</label>' +
     '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
+    // v402: progressive disclosure — Spice Forecast sparkline + dialogue ratio,
+    // populated async when pipeline data exists; hidden otherwise.
+    '<div id="m-chaptermeta"></div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div></details>' +
 
     '<details class="m-collapsible"' + ((b.log || []).length ? ' open' : '') + '><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
@@ -1425,6 +1461,39 @@ function renderDetailModal(b, viaBook) {
     } catch (e) {}
   };
   loadSpiceBaseline();
+
+  // v402: fetch chapter-level metadata async for progressive disclosure.
+  // Renders Spice Forecast sparkline + dialogue ratio only when data exists.
+  // Also attaches trigger_chapters to the book for the warnings section.
+  const loadChapterMeta = () => {
+    try {
+      if (typeof WorkStore === 'undefined' || !WorkStore || typeof WorkStore.getChapterMeta !== 'function') return;
+      WorkStore.getChapterMeta(b).then(meta => {
+        if (!meta) return;
+        const box = document.getElementById('m-chaptermeta');
+        // Attach trigger chapters to book so hcDetailHTML can use them on repaint
+        if (meta.triggerChapters) {
+          b.trigger_chapters = meta.triggerChapters;
+          const hcEl = document.getElementById('m-hc');
+          if (hcEl && typeof hcDetailHTML === 'function') hcEl.innerHTML = hcDetailHTML(b);
+        }
+        if (!box) return;
+        let h = '';
+        // Spice Forecast sparkline (inline SVG, no libs)
+        if (meta.chapterSpice && meta.chapterSpice.length > 1) {
+          h += spiceSparklineHTML(meta.chapterSpice);
+        }
+        // Dialogue ratio stat
+        if (meta.avgDialogueRatio != null) {
+          const pct = Math.round(meta.avgDialogueRatio * 100);
+          h += '<div class="chaptermeta-row"><span class="chaptermeta-label">' + icon('quotes') + ' Dialogue</span>' +
+            '<span class="chaptermeta-val">' + pct + '% dialogue</span></div>';
+        }
+        if (h) box.innerHTML = h;
+      }).catch(() => {});
+    } catch (e) {}
+  };
+  loadChapterMeta();
 
   // v182: mockup tappable rows — the row button expands the options; picking
   // one sets the draft value, repaints the row, and collapses.

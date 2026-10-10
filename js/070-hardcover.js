@@ -254,8 +254,17 @@ function hcDetailHTML(b) {
     h += '<div class="mood-row">' + b.moods.map(m => '<span class="mood-chip">' + esc(m) + '</span>').join('') + '</div>';
   }
   if (b.contentWarnings && b.contentWarnings.length) {
+    // v402: progressive disclosure — if trigger_chapters is available, show
+    // "Ch. 1, 3, 7" next to each matching warning. Absent = plain tags as before.
+    const tc = (b.trigger_chapters && typeof b.trigger_chapters === 'object') ? b.trigger_chapters : null;
+    const chapLabel = (w) => {
+      if (!tc) return '';
+      const key = Object.keys(tc).find(k => k.toLowerCase() === String(w).toLowerCase());
+      if (!key || !Array.isArray(tc[key]) || !tc[key].length) return '';
+      return ' <span class="warn-chaps">Ch. ' + tc[key].map(n => esc(String(n))).join(', ') + '</span>';
+    };
     h += '<details class="warnings"><summary>' + icon('warn') + ' Content warnings (' + b.contentWarnings.length + ')</summary><div class="warn-tags">' +
-      b.contentWarnings.map(w => '<span class="warn-tag">' + esc(w) + '</span>').join('') + '</div></details>';
+      b.contentWarnings.map(w => '<span class="warn-tag">' + esc(w) + chapLabel(w) + '</span>').join('') + '</div></details>';
   }
   return h;
 }

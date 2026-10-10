@@ -1240,6 +1240,21 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .warn-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .warn-tag { font-size: 0.78em; padding: 3px 10px; border-radius: 999px;
   background: rgba(255, 120, 120, 0.1); border: 1px solid rgba(255, 120, 120, 0.35); }
+/* v402: chapter labels in warning tags (progressive disclosure) */
+.warn-chaps { opacity: 0.75; font-size: 0.9em; }
+/* v402: chapter metadata rows (Spice Forecast + dialogue ratio) */
+.chaptermeta-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 0; border-top: 1px solid var(--line, rgba(128,128,128,.18)); }
+.chaptermeta-row:first-child { border-top: none; }
+.chaptermeta-label { display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.85em; font-weight: 600; }
+.chaptermeta-label svg { width: 16px; height: 16px; }
+.chaptermeta-val { font-size: 0.9em; opacity: 0.9; }
+.spice-forecast .sparkline { flex-shrink: 0; }
+.spark-line { fill: none; stroke: var(--accent, #e07850); stroke-width: 2; stroke-linejoin: round; }
+.spark-area { fill: var(--accent, #e07850); opacity: 0.18; }
+/* v402: character intro chapter in book modal cards */
+.ch-intro { font-style: italic; }
 
 /* ---------- theme / accent picker ---------- */
 .swatches { display: flex; gap: 14px; padding: 4px 2px; }
