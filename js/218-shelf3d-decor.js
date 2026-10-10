@@ -235,6 +235,14 @@ window.Shelf3DDecor = (function () {
       { deco: 'applebowl', pi: 1, x: -3.4 },
       { deco: 'vase', pi: 0, x: -4.0, variant: 'harvest' },
     ],
+    solstice: [ // v416 (T6): bright summer day
+      { deco: 'succulent', pi: 1, x: 3.4 },
+      { deco: 'plant', pi: 1, x: -3.2 },
+      { deco: 'globe', pi: 0, x: 4.0 },
+      { deco: 'vase', pi: 0, x: -4.0 },
+      { deco: 'mug', pi: 0, x: 2.9 },
+      { deco: 'lights', pi: 2, x: 0, tint: '#ffe9a8' },
+    ],
   };
 
   function setFor(themeKey) {

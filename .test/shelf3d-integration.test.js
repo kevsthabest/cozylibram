@@ -97,12 +97,12 @@ const themeSrc = fs.readFileSync(ROOT + '/js/216-shelf3d-theme.js', 'utf8');
   vm.createContext(sandbox);
   vm.runInContext(themeSrc, sandbox);
   const forTheme = sandbox.window.Shelf3DTheme.forTheme;
-  const keys = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest'];
+  const keys = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','solstice'];
   const allOk = keys.every(k => {
     const p = forTheme(k, 'rose');
     return p && p.woodBase && p.mood && typeof p.ambientLevel === 'number';
   });
-  ok('all 17 themes resolve', allOk);
+  ok('all 18 themes resolve', allOk);
   const fb = forTheme('nope', 'nope');
   ok('unknown theme falls back', fb && fb.mood === 'cozy');
 }
@@ -142,12 +142,12 @@ const decorSrc = fs.readFileSync(ROOT + '/js/218-shelf3d-decor.js', 'utf8');
     vase.variants && ['amour','velvet','pastel','harvest','frost','yuletide'].every(k => vase.variants[k]));
 
   // sets: all 17 themes, every id resolves
-  const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest'];
+  const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','solstice'];
   const setsOk = themes.every(k => {
     const set = D.setFor(k);
     return Array.isArray(set) && set.length > 0 && set.every(id => ids.includes(id));
   });
-  ok('all 17 themes have valid sets', setsOk);
+  ok('all 18 themes have valid sets', setsOk);
   ok('unknown theme set falls back', D.setFor('nope').length > 0);
 
   // presets: all 17 themes, placements well-formed
@@ -159,7 +159,7 @@ const decorSrc = fs.readFileSync(ROOT + '/js/218-shelf3d-decor.js', 'utf8');
       return Number.isInteger(p.pi) && p.pi >= 0 && p.pi <= 2 && typeof p.x === 'number';
     });
   });
-  ok('all 17 themes have well-formed presets', presetsOk);
+  ok('all 18 themes have well-formed presets', presetsOk);
   ok('harvest preset carries the north-star set',
     D.presetFor('harvest').some(p => p.deco === 'lights' && p.pi === 2) &&
     D.presetFor('harvest').some(p => p.deco === 'pumpkin' && p.room));

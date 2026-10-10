@@ -17,7 +17,7 @@ const run = (js) => window.eval(js);
 const css = fs.readFileSync(ROOT + '/styles.css', 'utf8');
 
 /* ---- 1. registry ---- */
-ok('seven seasonal themes registered', run(`THEMES.filter(t => t.season).length`) === 7);
+ok('eight seasonal themes registered', run(`THEMES.filter(t => t.season).length`) === 8);
 ok('every season has a theme', (() => {
   const seasons = run(`Object.keys(SHELF_SEASONS).filter(s => s !== 'none')`);
   const mapped = run(`THEMES.filter(t => t.season).map(t => t.season)`);
@@ -67,14 +67,19 @@ run(`localStorage.removeItem('theme'); localStorage.removeItem('accent');
 localStorage.removeItem('seasonThemeNudge:christmas');
 localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`);
 
-/* ---- 5. Settings optgroup ---- */
+/* ---- 5. Settings seasonal gallery group (v416: gallery replaces optgroup) ---- */
 run(`renderSettings();`);
-ok('settings groups seasonal themes', !!window.document.querySelector('#th-theme optgroup[label="Seasonal"]'));
-ok('optgroup holds seven themes', window.document.querySelectorAll('#th-theme optgroup option').length === 7);
+ok('settings groups seasonal themes in the gallery', window.document.querySelectorAll('.tcard').length === 18);
+ok('gallery holds eight seasonal cards', (() => {
+  const seasonal = run(`THEMES.filter(t => t.season).map(t => t.key)`);
+  const cards = Array.from(window.document.querySelectorAll('.tcard')).map(c => c.dataset.th);
+  return seasonal.every(k => cards.indexOf(k) !== -1);
+})());
+ok('solstice card present', !!Array.from(window.document.querySelectorAll('.tcard')).find(c => c.dataset.th === 'solstice'));
 
 /* ---- 6. CSS variable blocks ---- */
-ok('css has all seven seasonal theme blocks',
-  ['haunt', 'yuletide', 'fete', 'amour', 'shamrock', 'pastel', 'harvest']
+ok('css has all eight seasonal theme blocks',
+  ['haunt', 'yuletide', 'fete', 'amour', 'shamrock', 'pastel', 'harvest', 'solstice']
     .every(k => css.indexOf('[data-theme="' + k + '"]') !== -1));
 ok('seasonal blocks define core vars',
   ['haunt', 'pastel'].every(k => {

@@ -16,6 +16,146 @@ function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
 function setSub(t) {
   return '<h3 class="set-sub serif">' + esc(t) + '</h3>';
 }
+
+/* ---- v416 (P1/P2/P3/P4): visual theme gallery + detail sheet ----
+   Replaces the blind theme dropdown. Tapping a card live-previews the theme
+   app-wide and opens the detail sheet; closing without "Use theme" reverts. */
+let tsSnapshot = null;   // { theme, accent } captured before previewing
+let tsPreviewTheme = null;
+let tsPreviewAccent = null; // null = theme's designed default
+
+function tsCovenDisplay(key) {
+  const n = (typeof covenNameFor === 'function') ? covenNameFor(key) : 'Coven';
+  return /^the /i.test(n) ? n : 'the ' + n;
+}
+function themeCardHTML(th) {
+  const pv = themePreview(th.key);
+  const active = getTheme() === th.key;
+  let inSeason = false;
+  try { inSeason = !!th.season && typeof shelfDefaultSeason === 'function' && shelfDefaultSeason() === th.season; } catch (e) {}
+  return '<button class="tcard' + (active ? ' sel' : '') + '" data-th="' + th.key + '"' +
+    ' aria-label="' + esc(th.name) + ' theme">' +
+    (inSeason ? '<span class="seasonbadge">IN SEASON</span>' : '') +
+    '<span class="mini" style="background:' + pv.bg + '">' +
+      '<span class="mcard" style="background:' + pv.card + ';display:block">' +
+        '<span class="mline" style="background:' + pv.ink + ';width:70%;display:block"></span>' +
+        '<span class="mline" style="background:' + pv.muted + ';width:45%;display:block"></span>' +
+      '</span>' +
+      '<span class="mpill" style="background:' + pv.accent + '"></span>' +
+    '</span>' +
+    '<span class="tmeta"><b>' + esc(th.name) + '</b><span>' + esc(tsCovenDisplay(th.key)) + '</span></span>' +
+    (active ? '<span class="check">✓</span>' : '') +
+  '</button>';
+}
+function themeGalleryHTML() {
+  const core = THEMES.filter(t => !t.season).map(themeCardHTML).join('');
+  const seasonal = THEMES.filter(t => t.season).map(themeCardHTML).join('');
+  return '<div class="tgroup-label">Core</div><div class="tgrid">' + core + '</div>' +
+    '<div class="tgroup-label">Seasonal</div><div class="tgrid">' + seasonal + '</div>';
+}
+function tsSheetHTML(th) {
+  const pv = themePreview(th.key);
+  const pairs = themeAccentPairings(th.key);
+  const defA = themeDefaultAccent(th.key);
+  const aByKey = k => ACCENTS.find(x => x.key === k) || { name: k, color: '#888' };
+  const pairBtns = pairs.map(k => {
+    const a = aByKey(k);
+    return '<button class="pair' + (k === defA ? ' sug' : '') + '" data-a="' + k + '">' +
+      '<i style="background:' + a.color + '"></i>' + esc(a.name) +
+      (k === defA ? '<span class="def">default</span>' : '') + '</button>';
+  }).join('');
+  const swatches = ACCENTS.map(a =>
+    '<button class="sw" data-a="' + a.key + '" style="--sw:' + a.color + '"' +
+    ' title="' + esc(a.name) + '" aria-label="' + esc(a.name) + ' accent"></button>').join('');
+  return '<div class="tsheet-wrap" id="tsSheetWrap">' +
+    '<div class="tsheet-scrim" id="tsScrim"></div>' +
+    '<div class="tsheet" role="dialog" aria-modal="true" aria-label="' + esc(th.name) + ' theme details">' +
+      '<div class="bigprev" style="background:' + pv.bg + '">' +
+        '<div class="bcard2" style="background:' + pv.card + '">' +
+          '<div class="bline" style="background:' + pv.ink + ';width:75%"></div>' +
+          '<div class="bline" style="background:' + pv.muted + ';width:50%"></div>' +
+        '</div>' +
+        '<div class="brow"><span class="bchip" style="background:' + pv.accent + '">Read</span>' +
+        '<span class="bchip" style="background:' + pv.card + ';color:' + pv.muted + '">TBR</span></div>' +
+      '</div>' +
+      '<h3>' + esc(th.name) + '</h3>' +
+      '<div class="cov">Your circle becomes <b>' + esc(tsCovenDisplay(th.key)) + '</b></div>' +
+      '<div class="tgroup-label" style="margin-top:2px">Accent · <span id="tsAccentName" style="color:var(--ink);text-transform:none;letter-spacing:0"></span></div>' +
+      '<div class="pairrow" id="tsPairs">' + pairBtns + '</div>' +
+      '<div class="swatches" id="tsSwatches" style="flex-wrap:wrap">' + swatches + '</div>' +
+      '<button class="btn block" id="tsUse" style="margin-top:14px">Use ' + esc(th.name) + '</button>' +
+      '<button class="btn ghost block sm" id="tsResetAccent" style="margin-top:8px">Reset accent to theme default</button>' +
+    '</div></div>';
+}
+function tsApplyPreview() {
+  document.documentElement.dataset.theme = tsPreviewTheme;
+  if (tsPreviewAccent) document.documentElement.dataset.accent = tsPreviewAccent;
+  else document.documentElement.removeAttribute('data-accent');
+  const mc = document.querySelector('meta[name="theme-color"]');
+  if (mc) mc.setAttribute('content', themeMeta(tsPreviewTheme));
+  try { if (typeof refreshCovenNav === 'function') refreshCovenNav(); } catch (e) {}
+  tsRefreshSheetAccents();
+  document.querySelectorAll('.tcard').forEach(c =>
+    c.classList.toggle('sel', c.dataset.th === tsPreviewTheme));
+}
+function tsRefreshSheetAccents() {
+  if (!tsPreviewTheme) return;
+  const cur = tsPreviewAccent || themeDefaultAccent(tsPreviewTheme);
+  const nameEl = document.getElementById('tsAccentName');
+  if (nameEl) {
+    const a = ACCENTS.find(x => x.key === cur);
+    nameEl.textContent = (a ? a.name : cur) + (tsPreviewAccent ? '' : ' (theme default)');
+  }
+  document.querySelectorAll('#tsPairs .pair').forEach(b =>
+    b.classList.toggle('sel', b.dataset.a === cur));
+  document.querySelectorAll('#tsSwatches .sw').forEach(b =>
+    b.classList.toggle('active', b.dataset.a === cur));
+}
+function tsBeginPreview(themeKey) {
+  if (!tsSnapshot) tsSnapshot = { theme: getTheme(), accent: getAccent() };
+  tsPreviewTheme = themeKey;
+  tsPreviewAccent = null; // preview the theme's designed look first
+  tsApplyPreview();
+}
+function tsOpenSheet(th) {
+  tsCloseSheet();
+  tsBeginPreview(th.key);
+  document.body.insertAdjacentHTML('beforeend', tsSheetHTML(th));
+  tsRefreshSheetAccents();
+  document.getElementById('tsScrim').addEventListener('click', tsRevert);
+  document.getElementById('tsUse').addEventListener('click', tsConfirm);
+  document.getElementById('tsResetAccent').addEventListener('click', () => {
+    tsPreviewAccent = null; tsApplyPreview();
+  });
+  const pick = k => { tsPreviewAccent = k; tsApplyPreview(); };
+  document.querySelectorAll('#tsPairs .pair').forEach(b =>
+    b.addEventListener('click', () => pick(b.dataset.a)));
+  document.querySelectorAll('#tsSwatches .sw').forEach(b =>
+    b.addEventListener('click', () => pick(b.dataset.a)));
+}
+function tsCloseSheet() {
+  const w = document.getElementById('tsSheetWrap');
+  if (w) w.remove();
+}
+function tsConfirm() {
+  const themeKey = tsPreviewTheme, accentKey = tsPreviewAccent;
+  tsCloseSheet();
+  tsSnapshot = null; tsPreviewTheme = null; tsPreviewAccent = null;
+  try {
+    localStorage.setItem('theme', themeKey);
+    if (accentKey) localStorage.setItem('accent', accentKey);
+    else localStorage.removeItem('accent');
+  } catch (e) {}
+  applyTheme();
+  renderSettings();
+  toast('Theme: ' + ((THEMES.find(t => t.key === themeKey) || {}).name || themeKey));
+}
+function tsRevert() {
+  tsCloseSheet();
+  tsSnapshot = null; tsPreviewTheme = null; tsPreviewAccent = null;
+  applyTheme();
+  renderSettings();
+}
 function renderSettings() {
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   const axTot = {};
@@ -78,20 +218,16 @@ function renderSettings() {
     '<button class="btn ghost block" id="bk-find">' + icon('search') + ' Find my library</button>' +
     '<div id="bk-found"></div>';
 
-  /* ---- Appearance ---- */
-  const themeOpt = th =>
-    '<option value="' + th.key + '"' + (getTheme() === th.key ? ' selected' : '') + '>' +
-    th.name + ' · ' + covenNameFor(th.key) + '</option>';
+  /* ---- Appearance (v416: visual theme gallery replaces the blind dropdown) ---- */
   const htmlTheme =
-    '<div class="field"><label>Theme</label><select id="th-theme" class="text-input">' +
-    THEMES.filter(t => !t.season).map(themeOpt).join('') +
-    '<optgroup label="Seasonal">' + THEMES.filter(t => t.season).map(themeOpt).join('') + '</optgroup>' +
-    '</select><p class="note">Each theme gives your social circle its own name.</p></div>' +
-    '<div class="field"><label>Accent</label><div class="swatches" id="th-accent">' +
+    '<div class="field"><label>Theme</label>' +
+    '<p class="note" style="margin:2px 0 0">Tap a theme to preview it live.</p></div>' +
+    themeGalleryHTML() +
+    '<div class="field" style="margin-top:14px"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>
-      '<button class="sw' + (getAccent() === a.key ? ' active' : '') + '" data-a="' + a.key + '"' +
+      '<button class="sw' + (effectiveAccent() === a.key ? ' active' : '') + '" data-a="' + a.key + '"' +
       ' style="--sw:' + a.color + '" title="' + a.name + '" aria-label="' + a.name + ' accent"></button>').join('') +
-    '</div></div>' +
+    '</div><p class="note">The gallery suggests pairings per theme — this stays for free choice.</p></div>' +
     '<div class="field"><label>Book pull-out animation</label><div class="seg" id="th-anim" style="grid-template-columns:1fr 1fr">' +
     ['on', 'off'].map(t =>
       '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '">' +
@@ -302,10 +438,12 @@ function renderSettings() {
     if (signedIn()) go('library');
     else { renderTopbar(); renderGate(); }
   });
-  document.getElementById('th-theme').addEventListener('change', e => {
-    localStorage.setItem('theme', e.target.value);
-    applyTheme();
-  });
+  // v416: theme gallery wiring (replaces the old #th-theme dropdown)
+  document.querySelectorAll('.tcard').forEach(card =>
+    card.addEventListener('click', () => {
+      const th = THEMES.find(t => t.key === card.dataset.th);
+      if (th) tsOpenSheet(th);
+    }));
   // v323: default price for books without a recorded cost
   var dpInput = document.getElementById('f-default-price');
   if (dpInput) dpInput.addEventListener('change', e => {

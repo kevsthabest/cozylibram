@@ -79,7 +79,10 @@ function shelf3DApplyTheme() {
     if (typeof Shelf3D === 'undefined' || !Shelf3D) return;
     if (typeof Shelf3DTheme === 'undefined' || !Shelf3DTheme) return;
     const themeKey = (typeof getTheme === 'function') ? getTheme() : 'dark';
-    const accentKey = (typeof getAccent === 'function') ? getAccent() : 'rose';
+    // v416: effective accent (user pick else theme default) so the 3D scene
+    // matches the app's designed look when no accent was explicitly chosen.
+    const accentKey = (typeof effectiveAccent === 'function') ? effectiveAccent()
+      : ((typeof getAccent === 'function' && getAccent()) || 'rose');
     const params = Shelf3DTheme.forTheme(themeKey, accentKey);
     if (typeof Shelf3D.setThemeParams === 'function') Shelf3D.setThemeParams(params);
     else if (typeof Shelf3D.setTheme === 'function') Shelf3D.setTheme('default');

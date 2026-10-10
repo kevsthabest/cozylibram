@@ -312,11 +312,14 @@ stub.rpc = (fn, args) => {
   const names = probe('JSON.stringify({ ' +
     'dark: covenNameFor("dark"), light: covenNameFor("light"), hearthside: covenNameFor("hearthside"), ' +
     'candlelight: covenNameFor("candlelight"), twilight: covenNameFor("twilight"), verdant: covenNameFor("verdant"), ' +
+    'haunt: covenNameFor("haunt"), solstice: covenNameFor("solstice"), ' +
     'bogus: covenNameFor("nope") })');
   const nm = JSON.parse(names);
   ok('every theme has a social name', nm.dark === 'Coven' && nm.light === 'Book Club' &&
     nm.hearthside === 'Fireside' && nm.candlelight === 'Salon' &&
     nm.twilight === 'Night Court' && nm.verdant === 'Grove');
+  ok('haunt coven renamed to avoid dark collision (v416 T8)', nm.haunt === 'Haunt Coven');
+  ok('solstice names the sun court (v416 T6)', nm.solstice === 'Sun Court');
   ok('unknown theme falls back to Coven', nm.bogus === 'Coven');
 
   window.localStorage.setItem('theme', 'twilight');

@@ -7,8 +7,8 @@
   --ink: #f3e9f5;
   --muted: #b9a8c4;
   --faint: #8d7b9a; /* v224 (UX-16): was #7d6b8a at ~4.1:1 — now ≈4.6:1 for AA on small labels */
-  --accent: #e5488f;
-  --accent-deep: #c2377a;
+  --accent: #8b5cf6; /* v416 (T4): violet — was rose, identical to Midnight on open */
+  --accent-deep: #6d3fd4;
   --gold: #d4a24e;
   --line: #3a2b4d;
   --ok: #7bc98a;
@@ -41,40 +41,40 @@
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
 [data-theme="hearthside"] {
-  --bg: #17100a;
-  --bg2: #201410;
-  --card: #2a1a12;
-  --card2: #352216;
-  --ink: #f6e9d6;
-  --muted: #c7a684;
-  --faint: #967850; /* v228: was #8d6f52 at 4.06:1 — now 4.57 */
-  --accent: #e5488f;
-  --accent-deep: #c2377a;
+  --bg: #1e0e0a;
+  --bg2: #261310;
+  --card: #331a12;
+  --card2: #402216;
+  --ink: #f7e8d6;
+  --muted: #d0a080;
+  --faint: #9a7a54; /* v228: was #8d6f52 at 4.06:1 — now 4.57 */
+  --accent: #e0722a; /* v416 (T2): ember-red fireside — was rose, colliding with Harvest */
+  --accent-deep: #b0511a;
   --gold: #d9a44f;
-  --line: #453020;
+  --line: #4a2c1c;
   --ok: #7bc98a;
   --danger: #e56b6b;
-  --nav-bg: rgba(23, 16, 10, 1);
-  --glow: #3a2415;
-  --floral-tint: #d9a44f;
+  --nav-bg: rgba(30, 14, 10, 1);
+  --glow: #4a2415;
+  --floral-tint: #e0722a;
 }
 [data-theme="candlelight"] {
-  --bg: #f7efdc;
-  --bg2: #eee1c6;
-  --card: #fffaf0;
-  --card2: #f6ebd2;
-  --ink: #332619;
-  --muted: #77603f;
-  --faint: #82643e; /* v228: was #ab9573 at 2.52:1 — now 4.77 */
-  --accent: #e5488f;
-  --accent-deep: #c2377a;
+  --bg: #f2e2bd;
+  --bg2: #e9d5a8;
+  --card: #faf0d8;
+  --card2: #f1e2bd;
+  --ink: #33250f;
+  --muted: #6f5a36;
+  --faint: #7a5f36; /* v228: was #ab9573 at 2.52:1 — now 4.77 */
+  --accent: #c08a24; /* v416 (T3): golden-hour — was rose, colliding with Light */
+  --accent-deep: #96690f;
   --gold: #a87b24;
-  --line: #e3d2ac;
+  --line: #dcc88f;
   --ok: #3e8e52;
   --danger: #c64f4f;
-  --nav-bg: rgba(247, 239, 220, 1);
-  --glow: #ecdcae;
-  --floral-tint: #a87b24;
+  --nav-bg: rgba(242, 226, 189, 1);
+  --glow: #e8d096;
+  --floral-tint: #c08a24;
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
 [data-theme="twilight"] {
@@ -216,13 +216,13 @@
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 [data-theme="amour"] {
-  --bg: #1d0e15; --bg2: #26121c; --card: #2f1622; --card2: #3b1c2b;
-  --ink: #f8e9ee; --muted: #cda4b2; --faint: #a17b89;
-  --accent: #e5488f; --accent-deep: #c2377a;
-  --gold: #d4a24e; --line: #4c2333;
+  --bg: #2a1420; --bg2: #331a27; --card: #3d2030; --card2: #4a2739;
+  --ink: #fbeef3; --muted: #d8b0bf; --faint: #a17b89;
+  --accent: #f2a3c0; --accent-deep: #d16a96; /* v416 (T1): blush-forward Valentine's — was rose, colliding with Velvet */
+  --gold: #d4a24e; --line: #5c2f42;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(29, 14, 21, 1); --glow: #3f1c2c; --floral-tint: #e5488f;
-  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+  --nav-bg: rgba(42, 20, 32, 1); --glow: #4a2440; --floral-tint: #f2a3c0;
+  --info: #6aa8e5; --shadow-c: rgba(0,0,0,.5);
 }
 [data-theme="shamrock"] {
   --bg: #0c1e13; --bg2: #112a19; --card: #163620; --card2: #1d4429;
@@ -250,6 +250,17 @@
   --ok: #7bc98a; --danger: #e56b6b;
   --nav-bg: rgba(25, 16, 7, 1); --glow: #3a2410; --floral-tint: #c47b4a;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
+}
+/* v416 (T6): Solstice — summer seasonal. Bright summer daylight: sunnier and
+   brighter than Light (warm-white) and Candlelight (honey). Sun-gold accents. */
+[data-theme="solstice"] {
+  --bg: #fdf1d7; --bg2: #f6e5bd; --card: #fffaf0; --card2: #f8ecd2;
+  --ink: #3a2a12; --muted: #7a6540; --faint: #77603c;
+  --accent: #c08a24; --accent-deep: #96690f;
+  --gold: #d4a24e; --line: #e6d3a0;
+  --ok: #3e8e52; --danger: #c64f4f;
+  --nav-bg: rgba(253, 241, 215, 1); --glow: #f5e3b0; --floral-tint: #c08a24;
+  --info: #3f7fc6; --shadow-c: rgba(90,70,30,.16);
 }
 /* accent overrides (rose is the default, defined above) */
 [data-accent="violet"] { --accent: #8b5cf6; --accent-deep: #6d3fd4; }
@@ -1275,6 +1286,68 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border-color: var(--bg);
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--sw);
 }
+/* v416 (P1/P2/P3/P4): visual theme gallery + detail sheet + floating confirm bar.
+   Mobile-first: two-column card grid, full-screen sheet on phones. */
+.tgroup-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+  color: var(--faint); margin: 14px 0 8px; }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tcard { border-radius: 14px; overflow: hidden; border: 1px solid var(--line);
+  background: var(--card); cursor: pointer; position: relative; padding: 0;
+  text-align: left; color: inherit; font: inherit; width: 100%; }
+.tcard .mini { height: 64px; padding: 8px; position: relative; }
+.tcard .mini .mcard { border-radius: 6px; padding: 5px 7px; margin-bottom: 5px; }
+.tcard .mini .mline { height: 5px; border-radius: 3px; margin: 3px 0; }
+.tcard .mini .mpill { display: inline-block; height: 10px; min-width: 34px; border-radius: 6px; margin-top: 4px; }
+.tcard .tmeta { padding: 7px 10px; background: rgba(0,0,0,.28); }
+.tcard .tmeta b { font-size: 12.5px; display: block; }
+.tcard .tmeta span { font-size: 10.5px; color: var(--faint); }
+.tcard .check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px;
+  font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.tcard.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tcard .seasonbadge { position: absolute; top: 6px; left: 6px; font-size: 9px;
+  font-weight: 700; background: rgba(0,0,0,.55); color: #ffd9a0;
+  border-radius: 6px; padding: 2px 8px; letter-spacing: .4px; }
+/* detail sheet */
+.tsheet-wrap { position: fixed; inset: 0; z-index: 200; display: flex;
+  align-items: flex-end; justify-content: center; }
+.tsheet-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.5); }
+.tsheet { position: relative; width: 100%; max-width: 520px; max-height: 88vh;
+  overflow-y: auto; border-radius: 20px 20px 0 0; background: var(--card);
+  border: 1px solid var(--line); border-bottom: none; padding: 16px 16px 24px;
+  animation: slideup .25s ease; }
+@media (min-width: 900px) {
+  .tsheet-wrap { align-items: center; padding: 24px; }
+  .tsheet { border-radius: 20px; border-bottom: 1px solid var(--line); }
+}
+.tsheet .bigprev { height: 120px; border-radius: 12px; padding: 12px;
+  margin-bottom: 12px; position: relative; overflow: hidden; }
+.tsheet .bigprev .bcard2 { border-radius: 8px; padding: 8px 10px; max-width: 72%; }
+.tsheet .bigprev .bline { height: 6px; border-radius: 3px; margin: 4px 0; }
+.tsheet .bigprev .brow { display: flex; gap: 6px; margin-top: 8px; }
+.tsheet .bigprev .bchip { height: 16px; border-radius: 9px; padding: 0 12px;
+  font-size: 10px; line-height: 16px; color: #fff; }
+.tsheet h3 { margin: 2px 0 2px; font-size: 17px; }
+.tsheet .cov { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.tsheet .cov b { color: var(--accent); font-weight: 600; }
+.pairrow { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+.pair { flex: 1 1 0; min-width: 0; text-align: center; font-size: 10.5px;
+  color: var(--faint); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 2px; cursor: pointer; background: none; font-family: inherit; }
+.pair i { display: block; width: 22px; height: 22px; border-radius: 50%;
+  margin: 0 auto 4px; border: 1px solid rgba(255,255,255,.25); }
+.pair.sug { border-color: var(--accent); color: var(--ink); }
+.pair.sug i { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pair.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
+.pair .def { display: block; font-size: 9px; color: var(--accent); font-weight: 700; }
+/* floating confirm bar (P3): commitment-free browsing */
+.tconfirm { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h, 68px) + 12px);
+  z-index: 210; display: flex; gap: 10px; align-items: center;
+  background: var(--card2); border: 1px solid var(--accent); border-radius: 16px;
+  padding: 10px 10px 10px 16px; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  animation: slideup .25s ease; }
+.tconfirm span { flex: 1; font-size: 13.5px; color: var(--ink); }
+.tconfirm .btn { white-space: nowrap; }
 /* page-count lookup */
 .row-flex { display: flex; gap: 8px; align-items: center; }
 .row-flex .text-input { flex: 1; min-width: 0; }

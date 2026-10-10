@@ -59,9 +59,11 @@ ok('controls landed in the right groups',
   groupOf('st-privacy-go') === 7 &&      // Privacy
   groupOf('ap-update') === 8);           // About
 ok('all pre-existing control ids still present',
-  ['th-theme', 'th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
+  ['th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
    'hc-bulk', 'hc-autoseg', 'trope-srcseg', 'ac-signup', 'ac-logout', 'ap-ver']
     .every(id => !!doc().getElementById(id)));
+ok('v416: theme gallery replaced the th-theme dropdown',
+  !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
 
 // toggling persists; a re-render restores it
 runInWindow(`

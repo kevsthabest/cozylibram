@@ -310,6 +310,7 @@ const SHELF_SEASONS = {
   thanksgiving: { label: 'Thanksgiving', icon: '🦃', decor: ['turkey', 'pie', 'leaves'] },
   halloween: { label: 'Halloween', icon: '🎃', decor: ['pumpkin', 'ghost', 'bat'] },
   christmas: { label: 'Christmas', icon: '🎄', decor: ['tree', 'snowman', 'stocking'] },
+  summer: { label: 'Summer', icon: '☀️', decor: [] }, // v416 (T6): Solstice season — 2D tray shows year-round items; 3D has a Solstice preset
 };
 
 // Easter Sunday via the Anonymous Gregorian algorithm (valid 1583-4099).
@@ -347,6 +348,7 @@ function shelfDefaultSeason(d) {
   if (t >= th - 7 * 864e5 && t <= th) return 'thanksgiving';
   if (d.getMonth() === 9) return 'halloween';
   if (d.getMonth() === 11) return 'christmas';
+  if (d.getMonth() >= 5 && d.getMonth() <= 7) return 'summer'; // v416 (T6): Jun–Aug
   return 'none';
 }
 function shelfSeason() {

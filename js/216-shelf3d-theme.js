@@ -38,6 +38,7 @@ const SHELF3D_THEMES = {
   shamrock:    { woodBase: '#3d5a34', woodDark: '#22331c', lightWarm: '#ffd86a', lightCool: '#2a8a4a', ambientLevel: 0.85, exposure: 1.05, accentGlow: '#6fce9e', floorTint: '#0c1e13', mood: 'festive' },
   pastel:      { woodBase: '#d4b8a0', woodDark: '#96745e', lightWarm: '#fff0f5', lightCool: '#ffe0ec', ambientLevel: 1.05, exposure: 1.1,  accentGlow: '#b9a3f2', floorTint: '#f7f2fa', mood: 'bright' },
   harvest:     { woodBase: '#6b4426', woodDark: '#3a2412', lightWarm: '#ffc27a', lightCool: '#b07a3a', ambientLevel: 0.8,  exposure: 1.05, accentGlow: '#c47b4a', floorTint: '#191007', mood: 'cozy' },
+  solstice:    { woodBase: '#d4a86a', woodDark: '#96703e', lightWarm: '#fff3d8', lightCool: '#ffe9b8', ambientLevel: 1.15, exposure: 1.2,  accentGlow: '#c08a24', floorTint: '#fdf1d7', mood: 'bright' }, // v416 (T6)
 };
 
 function shelf3dThemeFor(themeKey, accentKey) {

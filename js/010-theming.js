@@ -4,8 +4,8 @@
 const THEMES = [
   { key: 'dark',        name: 'Dark',        meta: '#14101a' },
   { key: 'light',       name: 'Light',       meta: '#faf5ec' },
-  { key: 'hearthside',  name: 'Hearthside',  meta: '#17100a' },
-  { key: 'candlelight', name: 'Candlelight', meta: '#f7efdc' },
+  { key: 'hearthside',  name: 'Hearthside',  meta: '#1e0e0a' }, // v416 (T2): was #17100a
+  { key: 'candlelight', name: 'Candlelight', meta: '#f2e2bd' }, // v416 (T3): was #f7efdc
   { key: 'twilight',    name: 'Twilight',    meta: '#0e1120' },
   { key: 'verdant',     name: 'Verdant',     meta: '#0d140e' },
   { key: 'midnight',    name: 'Midnight',    meta: '#191a30' },
@@ -16,10 +16,12 @@ const THEMES = [
   { key: 'haunt',       name: 'Haunt',       meta: '#150e1c', season: 'halloween' },
   { key: 'yuletide',    name: 'Yuletide',    meta: '#0c1811', season: 'christmas' },
   { key: 'fete',        name: 'Fête',        meta: '#0f1330', season: 'newyear' },
-  { key: 'amour',       name: 'Amour',       meta: '#1d0e15', season: 'valentine' },
+  { key: 'amour',       name: 'Amour',       meta: '#2a1420', season: 'valentine' }, // v416 (T1): was #1d0e15
   { key: 'shamrock',    name: 'Shamrock',    meta: '#0c1e13', season: 'stpatrick' },
   { key: 'pastel',      name: 'Pastel',      meta: '#f7f2fa', season: 'easter' },
   { key: 'harvest',     name: 'Harvest',     meta: '#191007', season: 'thanksgiving' },
+  // v416 (T6): Solstice — summer seasonal. Completes the year.
+  { key: 'solstice',    name: 'Solstice',    meta: '#fdf1d7', season: 'summer' },
 ];
 const ACCENTS = [
   { key: 'rose',   name: 'Rose',   color: '#e5488f' },
@@ -43,7 +45,68 @@ function themeMeta(key) {
   const th = THEMES.find(x => x.key === key);
   return th ? th.meta : '#14101a';
 }
-function getAccent() { return localStorage.getItem('accent') || 'rose'; }
+function getAccent() {
+  // v416: null when the user never picked one — the theme's own designed
+  // accent (its CSS --accent) wins instead of forcing rose everywhere.
+  try { return localStorage.getItem('accent'); } catch (e) { return null; }
+}
+// v416 (T4): each theme's designed default accent — mirrors the CSS --accent
+// token per theme. Used for "reset to theme default" and accent guidance.
+const THEME_DEFAULT_ACCENT = {
+  dark: 'violet', light: 'rose', hearthside: 'ember', candlelight: 'gold',
+  twilight: 'violet', verdant: 'sage', midnight: 'rose', velvet: 'rose',
+  abyss: 'teal', frost: 'rose',
+  haunt: 'ember', yuletide: 'crimson', fete: 'gold', amour: 'blush',
+  shamrock: 'mint', pastel: 'lilac', harvest: 'copper', solstice: 'gold',
+};
+function themeDefaultAccent(key) { return THEME_DEFAULT_ACCENT[key] || 'rose'; }
+// Effective accent: the user's explicit pick, else the theme's designed default.
+function effectiveAccent() { return getAccent() || themeDefaultAccent(getTheme()); }
+// v416 (P2): accent pairing guidance per theme. First entry is the theme default.
+const THEME_ACCENT_PAIRINGS = {
+  dark: ['violet', 'rose', 'gold'],
+  light: ['rose', 'gold', 'blush'],
+  hearthside: ['ember', 'copper', 'gold'],
+  candlelight: ['gold', 'copper', 'rose'],
+  twilight: ['violet', 'lilac', 'ocean'],
+  verdant: ['sage', 'mint', 'gold'],
+  midnight: ['rose', 'violet', 'gold'],
+  velvet: ['rose', 'blush', 'gold'],
+  abyss: ['teal', 'ocean', 'violet'],
+  frost: ['rose', 'ocean', 'lilac'],
+  haunt: ['ember', 'gold', 'crimson'],
+  yuletide: ['crimson', 'gold', 'mint'],
+  fete: ['gold', 'violet', 'rose'],
+  amour: ['blush', 'rose', 'lilac'],
+  shamrock: ['mint', 'sage', 'gold'],
+  pastel: ['lilac', 'blush', 'mint'],
+  harvest: ['copper', 'gold', 'ember'],
+  solstice: ['gold', 'ocean', 'blush'],
+};
+function themeAccentPairings(key) { return THEME_ACCENT_PAIRINGS[key] || [themeDefaultAccent(key)]; }
+// v416 (P1): live mini-preview tokens per theme for the gallery cards.
+// bg mirrors the THEMES meta; accent is the theme's designed default.
+const THEME_PREVIEW = {
+  dark:        { bg: '#14101a', card: '#241a30', ink: '#f3e9f5', muted: '#b9a8c4', accent: '#8b5cf6' },
+  light:       { bg: '#faf5ec', card: '#fffdf7', ink: '#2c2333', muted: '#6f5f78', accent: '#e5488f' },
+  hearthside:  { bg: '#1e0e0a', card: '#331a12', ink: '#f7e8d6', muted: '#d0a080', accent: '#e0722a' },
+  candlelight: { bg: '#f2e2bd', card: '#faf0d8', ink: '#33250f', muted: '#6f5a36', accent: '#c08a24' },
+  twilight:    { bg: '#0e1120', card: '#1a2138', ink: '#e9ebf7', muted: '#a4aac9', accent: '#8b5cf6' },
+  verdant:     { bg: '#0d140e', card: '#172419', ink: '#eaf3e5', muted: '#a5bda1', accent: '#8aa864' },
+  midnight:    { bg: '#191a30', card: '#232442', ink: '#f0edf9', muted: '#b3b0d2', accent: '#e5488f' },
+  velvet:      { bg: '#1c1219', card: '#2c1f28', ink: '#f7ecef', muted: '#c9a9b5', accent: '#e5488f' },
+  abyss:       { bg: '#0b1416', card: '#142427', ink: '#e8f2f1', muted: '#a3bcb9', accent: '#2fa39a' },
+  frost:       { bg: '#edf1f6', card: '#ffffff', ink: '#232b3a', muted: '#5d6b82', accent: '#e5488f' },
+  haunt:       { bg: '#150e1c', card: '#221630', ink: '#f5e8f0', muted: '#c2a8c8', accent: '#e0722a' },
+  yuletide:    { bg: '#0c1811', card: '#142a1c', ink: '#f0f4ec', muted: '#a9c2ae', accent: '#d43a55' },
+  fete:        { bg: '#0f1330', card: '#1a2049', ink: '#f2ecdc', muted: '#b3abd0', accent: '#c08a24' },
+  amour:       { bg: '#2a1420', card: '#3d2030', ink: '#fbeef3', muted: '#d8b0bf', accent: '#f2a3c0' },
+  shamrock:    { bg: '#0c1e13', card: '#163620', ink: '#ecf5e8', muted: '#a4c8ab', accent: '#6fce9e' },
+  pastel:      { bg: '#f7f2fa', card: '#fffdf9', ink: '#3a2c44', muted: '#6f5b79', accent: '#b9a3f2' },
+  harvest:     { bg: '#191007', card: '#2a1a0d', ink: '#f5e9d6', muted: '#c8a87e', accent: '#c47b4a' },
+  solstice:    { bg: '#fdf1d7', card: '#fffaf0', ink: '#3a2a12', muted: '#7a6540', accent: '#c08a24' },
+};
+function themePreview(key) { return THEME_PREVIEW[key] || THEME_PREVIEW.dark; }
 // v257: season -> full look (theme + accent). The nudge offers it; the
 // user's existing theme is never switched without a tap.
 const SEASON_THEMES = {
@@ -54,6 +117,7 @@ const SEASON_THEMES = {
   thanksgiving: { theme: 'harvest',  accent: 'copper', blurb: 'Thanksgiving is coming' },
   halloween:    { theme: 'haunt',    accent: 'ember',  blurb: 'Spooky season is here' },
   christmas:    { theme: 'yuletide', accent: 'crimson', blurb: 'The holidays are coming' },
+  summer:       { theme: 'solstice', accent: 'gold',   blurb: 'Long days are here' }, // v416 (T6)
 };
 function seasonThemeNudge() {
   const season = (typeof shelfSeason === 'function') ? shelfSeason() : 'none';
@@ -106,7 +170,10 @@ function wireSeasonNudge() {
 function applyTheme() {
   const t = getTheme(), a = getAccent();
   document.documentElement.dataset.theme = t;
-  document.documentElement.dataset.accent = a;
+  // v416: only override the theme's designed accent when the user picked one.
+  // No stored pick -> the theme's own CSS --accent wins (T4: Dark opens violet).
+  if (a) document.documentElement.dataset.accent = a;
+  else document.documentElement.removeAttribute('data-accent');
   const mc = document.querySelector('meta[name="theme-color"]');
   if (mc) mc.setAttribute('content', themeMeta(t));
   // v99: the social section is named per theme — keep the nav label in sync,

@@ -18,13 +18,14 @@ const COVEN_NAMES = {
   velvet:      'Rose Court',
   abyss:       'The Deep',
   frost:       'Winter Court',
-  haunt:       'Coven', // v405 (C1): one feature, one name — was 'Crypt'
+  haunt:       'Haunt Coven', // v416 (T8): was 'Coven' — collided with Dark in the picker
   yuletide:    'Yule Court',
   fete:        'Gala',
   amour:       "Lovers' Court",
   shamrock:    'Emerald Court',
   pastel:      'Spring Court',
   harvest:     'Harvest Court',
+  solstice:    'Sun Court', // v416 (T6)
 };
 function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
 function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }
