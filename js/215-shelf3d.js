@@ -1685,6 +1685,9 @@
             occupied[hit2.pi].push(rec.rec);
             rec.pi = hit2.pi;
             rec.rec[0] = x2 - fw2 / 2; rec.rec[1] = x2 + fw2 / 2;
+            // v422: update restY when shelf changes (fixes cross-shelf drag snapping back)
+            var isEdge2 = !!moveDrag.group.userData.edge;
+            moveDrag.restY = LEVELS[hit2.pi] + (isEdge2 ? 0.06 : 0);
             // 1:1 follow — ghost tracks raw pointer x; snap guide shows landing
             var rawX2 = THREE.MathUtils.clamp(hit2.point.x, -SHELF_W / 2 + 0.4, SHELF_W / 2 - 0.4);
             var lift3 = (e.pointerType === 'touch') ? 0.45 : 0;
@@ -1748,12 +1751,14 @@
         if (m.group) {
           var g3 = m.group;
           // soft settle on drop instead of an instant scale snap
-          // v413: also tween Y back to rest (fixes floating decor — lift wasn't reset)
+          // v413: tween Y back to rest (fixes floating decor)
+          // v422: restY is updated during drag when pi changes, so cross-shelf
+          // drags settle on the new shelf.
           if (m.moved) {
-            var startY = g3.position.y, endY = (typeof m.restY === 'number') ? m.restY : g3.position.y;
+            var startY2 = g3.position.y, endY2 = (typeof m.restY === 'number') ? m.restY : g3.position.y;
             tween(180, function (k) {
               g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k)));
-              g3.position.y = startY + (endY - startY) * easeOut(k);
+              g3.position.y = startY2 + (endY2 - startY2) * easeOut(k);
             });
           } else g3.scale.setScalar(1);
           select(g3);   // re-select after move
