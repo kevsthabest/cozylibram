@@ -31,8 +31,9 @@ for (const id of ids) {
   for (const f of req) if (!(f in e)) allFields = false;
   if (typeof e.svg !== 'string' || e.svg.indexOf('<svg') < 0) allSvg = false;
   if (/#[0-9a-fA-F]{3,8}\b/.test(e.svg)) noHex = false;
-  if (e.svg.indexOf('currentColor') < 0) allSvg = false;
-  if (e.file !== 'Asset/flairs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.svg') allFields = false;
+  // stormrider-vine is Kevin's own raster emblem (his explicit direction), exempt from currentColor
+  if (id !== 'stormrider-vine' && e.svg.indexOf('currentColor') < 0) allSvg = false;
+  if (e.file !== 'Asset/flairs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.png') allFields = false;
 }
 ok('every entry has id/name/motif/placement/themes/file/svg', allFields);
 ok('every svg is inline currentColor-only, no hardcoded hex', allSvg && noHex);
