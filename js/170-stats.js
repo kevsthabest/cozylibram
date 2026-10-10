@@ -44,6 +44,20 @@ function biggestDay() {
   });
   return best;
 }
+// v427 (issue #53): yearly page totals must sum actual logged pages, not
+// book pageCounts — the calendar, biggest-day, and pace all use logs.
+// Summing pageCount diverged (e.g. 400 vs 987) when logs didn't match.
+function pagesInYear(yr) {
+  let total = 0;
+  library.forEach(b => {
+    (b.log || []).forEach(e => {
+      if (e.d && e.d.slice(0, 4) === String(yr) && e.to > e.from) {
+        total += Math.max(0, e.to - e.from);
+      }
+    });
+  });
+  return total;
+}
 
 /* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
    own quartiles, so both the heatmap and the month calendar tint alike ---- */
@@ -652,7 +666,7 @@ function yearInBooksData(yr) {
   yr = yr || yibYear;
   const readYr = library.filter(b => b.status === 'read' && b.dateFinished &&
     new Date(b.dateFinished).getFullYear() === yr);
-  const pages = readYr.reduce((s, b) => s + (b.pageCount || 0), 0);
+  const pages = pagesInYear(yr); // v427: sum logs, not pageCount (issue #53)
   const rated = readYr.filter(b => (b.myRating || 0) > 0);
   const avg = rated.length ? rated.reduce((s, b) => s + b.myRating, 0) / rated.length : null;
   const byGenre = {};
@@ -1014,7 +1028,7 @@ function renderStats() {
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
-  const pagesYr = readYr.reduce((s, b) => s + (b.pageCount || 0), 0);
+  const pagesYr = pagesInYear(yr); // v427: sum logs, not pageCount (issue #53)
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const ratedYr = readYr.filter(b => b.myRating > 0);
   const avgMine = avgOf((ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0).map(b => b.myRating));
