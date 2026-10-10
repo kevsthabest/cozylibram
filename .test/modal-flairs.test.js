@@ -22,7 +22,7 @@ const run = (js) => window.eval(js);
 
 /* ---- 1. catalog structure ---- */
 const ids = JSON.parse(run('JSON.stringify(ModalFlairs.CATALOG.map(function(e){return e.id}))'));
-ok('catalog has 32 entries', ids.length === 32);
+ok('catalog has 25 entries', ids.length === 25);
 
 const req = ['id', 'name', 'motif', 'placement', 'themes', 'file', 'svg'];
 let allFields = true, allSvg = true, noHex = true;
@@ -43,44 +43,36 @@ ok('five placements', JSON.stringify(placements) === JSON.stringify(['vine','cor
 
 /* ---- 2. tiers ---- */
 const premium = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.premium}).map(function(e){return e.id}))`));
-ok('15 premium flagged (v423: +12 pack flairs)', premium.length === 15 &&
-  ['corner-gilded','watermark-moon','watermark-constellation'].every(function(id){return premium.indexOf(id) >= 0}));
+ok('8 premium flagged', premium.length === 8 &&
+  ['watermark-moon','watermark-constellation'].every(function(id){return premium.indexOf(id) >= 0}));
 const seasonal = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.seasonal}).map(function(e){return e.id}))`));
-ok('7 seasonal garlands', seasonal.length === 7 && seasonal.every(function(id){return id.indexOf('garland-') === 0}));
+ok('8 seasonal garlands', seasonal.length === 8 && seasonal.every(function(id){return id.indexOf('garland-') === 0}));
 const free = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return !e.premium && !e.seasonal}).map(function(e){return e.id}))`));
-ok('10 free core entries', free.length === 10);
+ok('9 free core entries', free.length === 9);
 
 /* ---- 3. theme mapping ---- */
-const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','stormrider','briarthrone','voidsignal','wisp','wisp-night'];
-let vineOk = true, divOk = true, cornerOk = true;
+const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','solstice','stormrider','briarthrone','voidsignal','wisp','wisp-night'];
+let vineOk = true;
+const noVine = ['fete','yuletide','twilight','midnight','haunt','shamrock','pastel','harvest','solstice'];
 for (const t of themes) {
-  const s = JSON.parse(run(`JSON.stringify({v: (ModalFlairs.flairFor('vine','${t}')||{}).id || null, d: ModalFlairs.flairFor('divider','${t}').id, c: ModalFlairs.flairFor('corners','${t}').id})`));
-  if (['fete','yuletide'].indexOf(t) < 0 && !s.v) vineOk = false;  // every other theme has a vine
-  if (['fete','yuletide'].indexOf(t) >= 0 && s.v) vineOk = false;   // ...except these two
-  if (!s.d) divOk = false;                                          // divider always resolves (diamond fallback)
-  if (s.c !== 'corner-filigree' && t !== 'voidsignal') cornerOk = false;  // free default wins over premium gilded (except voidsignal which has its own corner)
+  const s = JSON.parse(run(`JSON.stringify({v: (ModalFlairs.flairFor('vine','${t}')||{}).id || null})`));
+  if (noVine.indexOf(t) < 0 && !s.v) vineOk = false;  // every other theme has a vine
+  if (noVine.indexOf(t) >= 0 && s.v) vineOk = false;   // ...except these (garland or watermark signatures)
 }
-ok('vine mapped for 20/22 themes (fete, yuletide intentionally none)', vineOk);
-ok('divider resolves for every theme via diamond fallback', divOk);
-ok('corners default to free filigree (not premium gilded)', cornerOk);
-
-ok('midnight vine is celestial', run(`ModalFlairs.flairFor('vine','midnight').id`) === 'vine-celestial');
-ok('midnight divider prefers crescent over diamond fallback', run(`ModalFlairs.flairFor('divider','midnight').id`) === 'divider-crescent');
-ok('verdant divider is leaf', run(`ModalFlairs.flairFor('divider','verdant').id`) === 'divider-leaf');
-ok('dark divider falls back to diamond', run(`ModalFlairs.flairFor('divider','dark').id`) === 'divider-diamond');
+ok('vine mapped for 14/23 themes (9 garland/watermark themes intentionally none)', vineOk);
 ok('haunt garland is seasonal', run(`ModalFlairs.flairFor('garland','haunt').id`) === 'garland-haunt');
 ok('dark has no garland (not seasonal)', run(`ModalFlairs.flairFor('garland','dark')`) === null);
-ok('midnight watermark is moon (premium, alpha-unlocked)', run(`ModalFlairs.flairFor('watermark','midnight').id`) === 'watermark-moon');
+ok('midnight watermark is moonstars (premium, alpha-unlocked)', run(`ModalFlairs.flairFor('watermark','midnight').id`) === 'watermark-moonstars');
 
 /* ---- 3b. signature mapping (v426: one signature per theme) ---- */
 const sigExpect = {
-  dark: 'vine-botanical', light: 'vine-botanical', verdant: 'vine-botanical',
-  hearthside: 'vine-ember', candlelight: 'vine-ember',
+  dark: 'vine-sprig', light: 'vine-botanical', verdant: 'vine-lush',
+  hearthside: 'vine-ember', candlelight: 'vine-candle',
   velvet: 'vine-rose', frost: 'vine-frostcrystal', abyss: 'vine-kelp',
   haunt: 'garland-haunt', yuletide: 'garland-holly', fete: 'garland-gala',
   amour: 'garland-rose', shamrock: 'garland-clover', pastel: 'garland-blossom',
-  harvest: 'garland-wheat',
-  midnight: 'watermark-moon', twilight: 'watermark-moon',
+  harvest: 'garland-wheat', solstice: 'garland-solstice',
+  midnight: 'watermark-moonstars', twilight: 'watermark-moon',
   stormrider: 'stormrider-vine', briarthrone: 'briarthrone-vine',
   voidsignal: 'voidsignal-vine', wisp: 'wisp-vine', 'wisp-night': 'wisp-vine',
 };
@@ -89,8 +81,8 @@ for (const t of Object.keys(sigExpect)) {
   const got = run(`(ModalFlairs.signatureFor('${t}')||{}).id || null`);
   if (got !== sigExpect[t]) { sigOk = false; console.log('SIG MISMATCH', t, 'got', got, 'want', sigExpect[t]); }
 }
-ok('signature table matches the approved mapping (21 themes)', sigOk);
-ok('solstice has no signature (graceful, no crash)', run(`ModalFlairs.signatureFor('solstice')`) === null);
+ok('signature table matches the approved mapping (23 themes)', sigOk);
+ok('solstice signature is garland-solstice', run(`(ModalFlairs.signatureFor('solstice')||{}).id || null`) === 'garland-solstice');
 
 /* ---- 4. injection (v426: signature system) ---- */
 window.__theme = 'midnight';

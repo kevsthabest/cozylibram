@@ -1,5 +1,6 @@
 /* Cozy Libram — theming via data-theme + data-accent on <html> */
 :root, [data-theme="dark"] {
+  --floral-tint: var(--accent); /* Stage E: tint follows active accent */
   --bg: #14101a;
   --bg2: #1d1526;
   --card: #241a30;
@@ -15,7 +16,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(20, 16, 26, 1);
   --glow: #2b1b3d;
-  --floral-tint: #e5488f;
   --radius: 14px;
   --nav-h: 68px;
   --info: #6aa8e5; /* v228: reading-status blue, was hardcoded at 3 sites */
@@ -37,7 +37,6 @@
   --danger: #c64f4f;
   --nav-bg: rgba(250, 245, 236, 1);
   --glow: #f0dfc2;
-  --floral-tint: #c08a24;
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
 [data-theme="hearthside"] {
@@ -56,7 +55,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(30, 14, 10, 1);
   --glow: #4a2415;
-  --floral-tint: #e0722a;
 }
 [data-theme="candlelight"] {
   --bg: #f2e2bd;
@@ -74,7 +72,6 @@
   --danger: #c64f4f;
   --nav-bg: rgba(242, 226, 189, 1);
   --glow: #e8d096;
-  --floral-tint: #c08a24;
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
 [data-theme="twilight"] {
@@ -93,7 +90,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(14, 17, 32, 1);
   --glow: #1c2342;
-  --floral-tint: #8b5cf6;
 }
 [data-theme="verdant"] {
   --bg: #0d140e;
@@ -111,7 +107,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(13, 20, 14, 1);
   --glow: #1a2a1c;
-  --floral-tint: #8aa864;
 }
 /* v170: new themes — Midnight is the mockup palette (indigo-navy + gold) */
 [data-theme="midnight"] {
@@ -130,7 +125,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(25, 26, 48, 1);
   --glow: #262849;
-  --floral-tint: #f0c46c;
 }
 [data-theme="velvet"] {
   --bg: #1c1219;
@@ -148,7 +142,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(28, 18, 25, 1);
   --glow: #33202b;
-  --floral-tint: #d98aa5;
 }
 [data-theme="abyss"] {
   --bg: #0b1416;
@@ -166,7 +159,6 @@
   --danger: #e56b6b;
   --nav-bg: rgba(11, 20, 22, 1);
   --glow: #16282b;
-  --floral-tint: #7fd6c2;
 }
 [data-theme="frost"] {
   --bg: #edf1f6;
@@ -184,7 +176,6 @@
   --danger: #c64f4f;
   --nav-bg: rgba(237, 241, 246, 1);
   --glow: #dce5f0;
-  --floral-tint: #8b5cf6;
   --shadow-c: rgba(60,45,20,.18); /* v228: softer warm shadow on light themes */
 }
 /* ---------- seasonal themes (v257) ---------- */
@@ -194,7 +185,7 @@
   --accent: #e0722a; --accent-deep: #b0511a;
   --gold: #d4a24e; --line: #3d2a52;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(21, 14, 28, 1); --glow: #33184a; --floral-tint: #e0722a;
+  --nav-bg: rgba(21, 14, 28, 1); --glow: #33184a;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 [data-theme="yuletide"] {
@@ -203,7 +194,7 @@
   --accent: #d43a55; --accent-deep: #a11f3c;
   --gold: #d4a24e; --line: #234434;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(12, 24, 17, 1); --glow: #14301e; --floral-tint: #d43a55;
+  --nav-bg: rgba(12, 24, 17, 1); --glow: #14301e;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 [data-theme="fete"] {
@@ -212,7 +203,7 @@
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #e3b94f; --line: #2c3462;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(15, 19, 48, 1); --glow: #232a5e; --floral-tint: #c08a24;
+  --nav-bg: rgba(15, 19, 48, 1); --glow: #232a5e;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 [data-theme="amour"] {
@@ -221,7 +212,7 @@
   --accent: #f2a3c0; --accent-deep: #d16a96; /* v416 (T1): blush-forward Valentine's — was rose, colliding with Velvet */
   --gold: #d4a24e; --line: #5c2f42;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(42, 20, 32, 1); --glow: #4a2440; --floral-tint: #f2a3c0;
+  --nav-bg: rgba(42, 20, 32, 1); --glow: #4a2440;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.5);
 }
 [data-theme="shamrock"] {
@@ -230,7 +221,7 @@
   --accent: #6fce9e; --accent-deep: #4da878;
   --gold: #d4a24e; --line: #234d30;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(12, 30, 19, 1); --glow: #163d22; --floral-tint: #6fce9e;
+  --nav-bg: rgba(12, 30, 19, 1); --glow: #163d22;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 [data-theme="pastel"] {
@@ -239,7 +230,7 @@
   --accent: #b9a3f2; --accent-deep: #9378dd;
   --gold: #a87b24; --line: #ddd0e6;
   --ok: #3e8e52; --danger: #c64f4f;
-  --nav-bg: rgba(247, 242, 250, 1); --glow: #e8dcf2; --floral-tint: #b9a3f2;
+  --nav-bg: rgba(247, 242, 250, 1); --glow: #e8dcf2;
   --info: #3f7fc6; --shadow-c: rgba(90,70,110,.18);
 }
 [data-theme="harvest"] {
@@ -248,7 +239,7 @@
   --accent: #c47b4a; --accent-deep: #9a5a32;
   --gold: #d4a24e; --line: #453015;
   --ok: #7bc98a; --danger: #e56b6b;
-  --nav-bg: rgba(25, 16, 7, 1); --glow: #3a2410; --floral-tint: #c47b4a;
+  --nav-bg: rgba(25, 16, 7, 1); --glow: #3a2410;
   --info: #6aa8e5; --shadow-c: rgba(0,0,0,.55);
 }
 /* v416 (T6): Solstice — summer seasonal. Bright summer daylight: sunnier and
@@ -259,7 +250,7 @@
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #d4a24e; --line: #e6d3a0;
   --ok: #3e8e52; --danger: #c64f4f;
-  --nav-bg: rgba(253, 241, 215, 1); --glow: #f5e3b0; --floral-tint: #c08a24;
+  --nav-bg: rgba(253, 241, 215, 1); --glow: #f5e3b0;
   --info: #3f7fc6; --shadow-c: rgba(90,70,30,.16);
 }
 /* v423: premium theme packs */
@@ -269,7 +260,7 @@
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #e8a94e; --line: #2e3650;
   --ok: #4ecb8f; --danger: #e0637f;
-  --nav-bg: rgba(18, 20, 31, 1); --glow: #2a3350; --floral-tint: #e8a94e;
+  --nav-bg: rgba(18, 20, 31, 1); --glow: #2a3350;
   --info: #7fb3e8; --shadow-c: rgba(0,0,0,.4);
 }
 [data-theme="briarthrone"] {
@@ -278,7 +269,7 @@
   --accent: #b9a3f2; --accent-deep: #8a6fd4;
   --gold: #c9b3f5; --line: #352a44;
   --ok: #4ecb8f; --danger: #e0637f;
-  --nav-bg: rgba(19, 14, 26, 1); --glow: #352a4a; --floral-tint: #c9b3f5;
+  --nav-bg: rgba(19, 14, 26, 1); --glow: #352a4a;
   --info: #e0637f; --shadow-c: rgba(0,0,0,.4);
 }
 [data-theme="voidsignal"] {
@@ -287,7 +278,7 @@
   --accent: #3f8fd6; --accent-deep: #2a6aa8;
   --gold: #38e1ff; --line: #1e2e3a;
   --ok: #4ecb8f; --danger: #ff5470;
-  --nav-bg: rgba(10, 15, 20, 1); --glow: #1a2e3a; --floral-tint: #38e1ff;
+  --nav-bg: rgba(10, 15, 20, 1); --glow: #1a2e3a;
   --info: #38e1ff; --shadow-c: rgba(0,0,0,.4);
 }
 [data-theme="wisp"] {
@@ -296,7 +287,7 @@
   --accent: #e5488f; --accent-deep: #b8326a;
   --gold: #ffd76a; --line: #e8dcc8;
   --ok: #4ecb8f; --danger: #c64f4f;
-  --nav-bg: rgba(253, 246, 236, 1); --glow: #f5e8d0; --floral-tint: #e86a92;
+  --nav-bg: rgba(253, 246, 236, 1); --glow: #f5e8d0;
   --info: #3f7fc6; --shadow-c: rgba(90,70,50,.14);
 }
 [data-theme="wisp-night"] {
@@ -305,7 +296,7 @@
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #ffd76a; --line: #2e2148;
   --ok: #4ecb8f; --danger: #e0637f;
-  --nav-bg: rgba(14, 10, 26, 1); --glow: #2e2148; --floral-tint: #ffd76a;
+  --nav-bg: rgba(14, 10, 26, 1); --glow: #2e2148;
   --info: #a898e8; --shadow-c: rgba(0,0,0,.4);
 }
 /* accent overrides (rose is the default, defined above) */
@@ -771,19 +762,10 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .mflair-vine svg { width: 100%; height: 100%; }
 /* stormrider emblem: square crest, not a thin strip — larger, no fade mask */
 .mflair-vine--emblem { width: 158px; height: 170px; -webkit-mask-image: none; mask-image: none; opacity: .95; }
-/* corners — book-plate curls at the modal top corners, below the chrome */
-.mflair-corners { position: absolute; top: 56px; left: 0; right: 0; height: 54px; z-index: 1;
-  color: var(--floral-tint); opacity: .9; }
-.mflair-corners .c1, .mflair-corners .c2 { position: absolute; top: 0; width: 54px; height: 54px; }
-.mflair-corners .c1 { left: 8px; }
-.mflair-corners .c2 { right: 8px; transform: scaleX(-1); }
-.mflair-corners svg { width: 100%; height: 100%; }
 /* divider ornament — hairline + centered motif in normal flow */
 .mflair-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0;
   color: var(--floral-tint); opacity: .9; }
 .mflair-divider .hairline { flex: 1; height: 1px; background: var(--line); }
-.mflair-divider .motif { width: 110px; flex: none; }
-.mflair-divider .motif svg { width: 100%; height: 18px; }
 /* v426: divider motifs retired — plain hairline separators */
 .mflair-divider-plain { margin: 14px 0; }
 .mflair-divider-plain .hairline { display: block; height: 1px; background: var(--line); }

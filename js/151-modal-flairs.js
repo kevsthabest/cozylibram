@@ -48,7 +48,7 @@ window.ModalFlairs = (function () {
 
 var CATALOG = [
     { id: 'vine-botanical', name: 'Botanical laurel vine', motif: 'laurel', placement: 'vine', signature: true,
-      themes: ['dark', 'light', 'verdant', 'shamrock', 'pastel'], file: 'Asset/flairs/vine-botanical.svg',
+      themes: ['light'], file: 'Asset/flairs/vine-botanical.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Botanical laurel vine</title>
 <desc id="d">A trailing vine of paired laurel leaves on a curving stem, with budding tips.</desc>
@@ -80,31 +80,8 @@ var CATALOG = [
 <circle cx="62" cy="19" r="2.4"/>
 </g>
 </svg>` },
-    { id: 'vine-celestial', name: 'Celestial star vine', motif: 'celestial', placement: 'vine',
-      themes: ['midnight', 'twilight'], file: 'Asset/flairs/vine-celestial.svg',
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
-<title id="t">Celestial star vine</title>
-<desc id="d">Twin trailing stems studded with four-point stars, crescent moon buds and stardust.</desc>
-<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-<path d="M48,352 C36,300 62,262 46,212 C34,172 58,132 44,88 C38,62 48,36 44,14"/>
-<path d="M84,352 C94,305 72,270 86,224 C96,188 76,150 88,110 C94,88 86,64 90,40" stroke-width="1.4"/>
-</g>
-<g fill="currentColor" stroke="none">
-<path d="M44,120 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
-<path d="M50,208 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
-<path d="M42,290 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
-<path d="M88,160 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
-<path d="M84,250 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
-<path d="M90,320 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z"/>
-<path d="M66,72 C57,76.4 57,85.6 66,90 C62.9,85.1 62.9,76.9 66,72Z"/>
-<path d="M70,180 C63,183.5 63,190.5 70,194 C67.6,190.9 67.6,183.1 70,180Z"/>
-<circle cx="60" cy="40" r="1.8"/><circle cx="34" cy="160" r="1.8"/><circle cx="70" cy="250" r="1.8"/>
-<circle cx="52" cy="330" r="1.8"/><circle cx="98" cy="200" r="1.8"/><circle cx="76" cy="100" r="1.8"/>
-<circle cx="44" cy="14" r="3.2"/><circle cx="90" cy="40" r="2.6"/>
-</g>
-</svg>` },
     { id: 'vine-ember', name: 'Ember wheat vine', motif: 'ember', placement: 'vine', signature: true,
-      themes: ['hearthside', 'harvest', 'candlelight', 'haunt'], file: 'Asset/flairs/vine-ember.svg',
+      themes: ['hearthside'], file: 'Asset/flairs/vine-ember.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Ember wheat vine</title>
 <desc id="d">Upright wheat stalks with grain kernels and a curling flame-tipped tendril.</desc>
@@ -243,79 +220,99 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="75" cy="130" r="2"/><circle cx="81" cy="118" r="1.5"/>
 </g>
 </svg>` },
-    { id: 'corner-filigree', name: 'Filigree corner', motif: 'filigree', placement: 'corners',
-      themes: ['*'], file: 'Asset/flairs/corner-filigree.svg',
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="t d">
-<title id="t">Filigree corner</title>
-<desc id="d">A book-plate corner flourish: a single confident scroll with an inner echo, leaf and dots.</desc>
-<g fill="none" stroke="currentColor" stroke-linecap="round">
-<path d="M12,84 C12,52 34,24 84,12" stroke-width="2.2"/>
-<path d="M24,84 C24,60 44,36 84,24" stroke-width="1.1" opacity="0.6"/>
+    { id: 'vine-sprig', name: 'Minimal laurel sprig', motif: 'sprig', placement: 'vine', signature: true,
+      themes: ['dark'], file: 'Asset/flairs/vine-sprig.svg',
+      svg: `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 360\" role=\"img\" aria-labelledby=\"t d\">
+<title id=\"t\">Minimal laurel sprig</title>
+<desc id=\"d\">A single quiet laurel sprig with clear leaves and breathing room — the restrained signature for Dark.</desc>
+<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">
+<path d=\"M60,352 C54,300 66,252 58,202 C52,158 62,112 56,68 C53,42 58,24 55,10\"/>
 </g>
-<g fill="currentColor" stroke="none">
-<circle cx="12" cy="84" r="3"/>
-<circle cx="84" cy="12" r="3"/>
-<ellipse cx="52" cy="52" rx="8" ry="3.4" transform="rotate(-45 52 52)"/>
-<circle cx="38" cy="66" r="1.6"/>
-<circle cx="66" cy="38" r="1.6"/>
-</g>
-</svg>` },
-    { id: 'corner-gilded', name: 'Gilded corner', motif: 'gilded', placement: 'corners',
-      themes: ['*'], file: 'Asset/flairs/corner-gilded.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="t d">
-<title id="t">Gilded corner</title>
-<desc id="d">An ornate book-plate corner: double scroll, detached spiral, leaf cluster and dotted arc. Premium.</desc>
-<g fill="none" stroke="currentColor" stroke-linecap="round">
-<path d="M10,86 C10,50 32,20 86,10" stroke-width="2.4"/>
-<path d="M22,86 C22,58 42,34 86,22" stroke-width="1.2" opacity="0.65"/>
-<path d="M44,64 C54,60 64,62 66,70 C67,76 62,80 57,78 C54,77 53,73 55,70" stroke-width="1.5"/>
-</g>
-<g fill="currentColor" stroke="none">
-<circle cx="10" cy="86" r="3.2"/>
-<circle cx="86" cy="10" r="3.2"/>
-<ellipse cx="56" cy="48" rx="8" ry="3.4" transform="rotate(-45 56 48)"/>
-<ellipse cx="68" cy="38" rx="6" ry="2.6" transform="rotate(-45 68 38)"/>
-<ellipse cx="46" cy="60" rx="5" ry="2.2" transform="rotate(-45 46 60)"/>
-<circle cx="34" cy="72" r="1.6"/><circle cx="44" cy="64" r="1.3"/><circle cx="72" cy="34" r="1.6"/><circle cx="64" cy="44" r="1.3"/>
+<g fill=\"currentColor\" stroke=\"none\">
+<!-- four leaf pairs, present but unhurried -->
+<g transform=\"rotate(-34 50 288)\"><ellipse cx=\"40\" cy=\"285\" rx=\"11\" ry=\"4.2\"/></g>
+<g transform=\"rotate(34 50 288)\"><ellipse cx=\"60\" cy=\"285\" rx=\"11\" ry=\"4.2\"/></g>
+<g transform=\"rotate(-32 55 228)\"><ellipse cx=\"46\" cy=\"225\" rx=\"10\" ry=\"3.8\"/></g>
+<g transform=\"rotate(32 55 228)\"><ellipse cx=\"64\" cy=\"225\" rx=\"10\" ry=\"3.8\"/></g>
+<g transform=\"rotate(-30 57 168)\"><ellipse cx=\"49\" cy=\"165\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(30 57 168)\"><ellipse cx=\"65\" cy=\"165\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(-28 56 108)\"><ellipse cx=\"49\" cy=\"105\" rx=\"8\" ry=\"3\"/></g>
+<g transform=\"rotate(28 56 108)\"><ellipse cx=\"63\" cy=\"105\" rx=\"8\" ry=\"3\"/></g>
+<circle cx=\"55\" cy=\"10\" r=\"3.4\"/>
 </g>
 </svg>` },
-    { id: 'divider-diamond', name: 'Diamond divider', motif: 'diamond', placement: 'divider',
-      themes: ['*'], file: 'Asset/flairs/divider-diamond.svg',
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Diamond divider ornament</title>
-<desc id="d">A centered diamond motif with flanking dots for section dividers.</desc>
-<g fill="currentColor" stroke="none">
-<path d="M80,4 L86,12 L80,20 L74,12 Z"/>
-<circle cx="62" cy="12" r="2.2"/><circle cx="98" cy="12" r="2.2"/>
-<circle cx="50" cy="12" r="1.4" opacity="0.6"/><circle cx="110" cy="12" r="1.4" opacity="0.6"/>
+    { id: 'vine-candle', name: 'Candle and flame', motif: 'candle', placement: 'vine', signature: true,
+      themes: ['candlelight'], file: 'Asset/flairs/vine-candle.svg',
+      svg: `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 360\" role=\"img\" aria-labelledby=\"t d\">
+<title id=\"t\">Candle and flame</title>
+<desc id=\"d\">A slender candle with a generous flame and radiating glow lines — the signature for Candlelight.</desc>
+<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">
+<!-- glow rays above the flame -->
+<path d=\"M60,60 L60,44\" opacity=\"0.6\"/>
+<path d=\"M38,76 L28,66\" opacity=\"0.6\"/>
+<path d=\"M82,76 L92,66\" opacity=\"0.6\"/>
+<path d=\"M30,110 L16,106\" opacity=\"0.5\"/>
+<path d=\"M90,110 L104,106\" opacity=\"0.5\"/>
+<!-- candle body -->
+<path d=\"M48,352 L48,268 C48,262 52,258 56,260 C58,268 62,268 64,260 C68,258 72,262 72,268 L72,352\"/>
+<!-- melted wax drip -->
+<path d=\"M52,268 C52,278 50,286 52,294\" stroke-width=\"1.4\" opacity=\"0.7\"/>
+</g>
+<g fill=\"currentColor\" stroke=\"none\">
+<!-- flame: generous teardrop, rounded base, soft tip -->
+<path d=\"M60,250 C46,250 40,236 42,220 C44,202 42,180 48,158 C51,146 54,132 60,118 C64,132 70,148 69,166 C68,188 74,208 71,228 C69,242 66,250 60,250Z\"/>
+<!-- flame heart -->
+<ellipse cx=\"60\" cy=\"215\" rx=\"7\" ry=\"18\" opacity=\"0.45\"/>
+<!-- wick -->
+<rect x=\"58.5\" y=\"248\" width=\"3\" height=\"12\" rx=\"1.5\"/>
+<!-- leaves at the candle base -->
+<g transform=\"rotate(-35 40 340)\"><ellipse cx=\"32\" cy=\"338\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(35 80 340)\"><ellipse cx=\"88\" cy=\"338\" rx=\"9\" ry=\"3.4\"/></g>
+<!-- wax pool -->
+<ellipse cx=\"60\" cy=\"352\" rx=\"16\" ry=\"4\" opacity=\"0.5\"/>
 </g>
 </svg>` },
-    { id: 'divider-crescent', name: 'Crescent divider', motif: 'crescent', placement: 'divider',
-      themes: ['midnight', 'twilight', 'haunt'], file: 'Asset/flairs/divider-crescent.svg',
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Crescent divider ornament</title>
-<desc id="d">A centered crescent moon with flanking stars for section dividers.</desc>
-<g fill="currentColor" stroke="none">
-<path d="M84,3 C75,7.4 75,16.6 84,21 C80.9,16.1 80.9,7.9 84,3Z"/>
-<path d="M62,12 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z"/>
-<path d="M100,12 l1.3,3.2 3.2,1.3 -3.2,1.3 -1.3,3.2 -1.3,-3.2 -3.2,-1.3 3.2,-1.3z"/>
-<circle cx="50" cy="12" r="1.4" opacity="0.6"/><circle cx="112" cy="12" r="1.4" opacity="0.6"/>
+    { id: 'vine-lush', name: 'Lush botanical vine', motif: 'lush', placement: 'vine', signature: true,
+      themes: ['verdant'], file: 'Asset/flairs/vine-lush.svg',
+      svg: `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 360\" role=\"img\" aria-labelledby=\"t d\">
+<title id=\"t\">Lush botanical vine</title>
+<desc id=\"d\">A dense intertwining vine of paired laurel leaves on two curving stems — the expressive botanical signature for Verdant.</desc>
+<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">
+<path d=\"M60,352 C46,305 74,268 58,218 C46,178 70,138 56,92 C50,66 60,38 54,12\"/>
+<path d=\"M62,350 C74,310 50,275 64,230 C74,195 52,155 64,110 C70,85 60,55 66,25\" stroke-width=\"1.6\"/>
+<path d=\"M59,240 C44,234 36,222 34,206\" stroke-width=\"1.4\"/>
+<path d=\"M57,150 C71,144 79,132 81,116\" stroke-width=\"1.4\"/>
+<path d=\"M64,290 C78,284 86,272 88,256\" stroke-width=\"1.4\"/>
+<path d=\"M63,180 C49,174 41,162 39,146\" stroke-width=\"1.4\"/>
 </g>
-</svg>` },
-    { id: 'divider-leaf', name: 'Leaf divider', motif: 'leaf', placement: 'divider',
-      themes: ['verdant', 'harvest', 'shamrock', 'pastel'], file: 'Asset/flairs/divider-leaf.svg',
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Leaf divider ornament</title>
-<desc id="d">A small stem with a leaf pair for section dividers.</desc>
-<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-<path d="M80,20 C80,15 80,10 80,6"/>
-</g>
-<g fill="currentColor" stroke="none">
-<g transform="rotate(-32 80 12)"><ellipse cx="74" cy="10" rx="7" ry="2.8"/></g>
-<g transform="rotate(32 80 12)"><ellipse cx="86" cy="10" rx="7" ry="2.8"/></g>
-<circle cx="80" cy="5" r="1.8"/>
-<circle cx="58" cy="12" r="2"/><circle cx="102" cy="12" r="2"/>
-<circle cx="48" cy="12" r="1.3" opacity="0.6"/><circle cx="112" cy="12" r="1.3" opacity="0.6"/>
+<g fill=\"currentColor\" stroke=\"none\">
+<!-- main stem leaves: denser pairs -->
+<g transform=\"rotate(-38 52 310)\"><ellipse cx=\"41\" cy=\"307\" rx=\"12\" ry=\"4.6\"/></g>
+<g transform=\"rotate(38 52 310)\"><ellipse cx=\"63\" cy=\"307\" rx=\"12\" ry=\"4.6\"/></g>
+<g transform=\"rotate(-36 58 272)\"><ellipse cx=\"47\" cy=\"269\" rx=\"11.5\" ry=\"4.4\"/></g>
+<g transform=\"rotate(36 58 272)\"><ellipse cx=\"69\" cy=\"269\" rx=\"11.5\" ry=\"4.4\"/></g>
+<g transform=\"rotate(-34 57 232)\"><ellipse cx=\"47\" cy=\"229\" rx=\"11\" ry=\"4.2\"/></g>
+<g transform=\"rotate(34 57 232)\"><ellipse cx=\"67\" cy=\"229\" rx=\"11\" ry=\"4.2\"/></g>
+<g transform=\"rotate(-32 55 192)\"><ellipse cx=\"46\" cy=\"189\" rx=\"10.5\" ry=\"4\"/></g>
+<g transform=\"rotate(32 55 192)\"><ellipse cx=\"64\" cy=\"189\" rx=\"10.5\" ry=\"4\"/></g>
+<g transform=\"rotate(-30 56 152)\"><ellipse cx=\"48\" cy=\"149\" rx=\"10\" ry=\"3.8\"/></g>
+<g transform=\"rotate(30 56 152)\"><ellipse cx=\"64\" cy=\"149\" rx=\"10\" ry=\"3.8\"/></g>
+<g transform=\"rotate(-28 55 112)\"><ellipse cx=\"48\" cy=\"109\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(28 55 112)\"><ellipse cx=\"62\" cy=\"109\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(-26 55 72)\"><ellipse cx=\"49\" cy=\"69\" rx=\"8\" ry=\"3\"/></g>
+<g transform=\"rotate(26 55 72)\"><ellipse cx=\"61\" cy=\"69\" rx=\"8\" ry=\"3\"/></g>
+<!-- second stem leaves -->
+<g transform=\"rotate(40 70 300)\"><ellipse cx=\"79\" cy=\"297\" rx=\"9\" ry=\"3.4\"/></g>
+<g transform=\"rotate(-40 56 250)\"><ellipse cx=\"47\" cy=\"247\" rx=\"8.5\" ry=\"3.2\"/></g>
+<g transform=\"rotate(38 70 200)\"><ellipse cx=\"79\" cy=\"197\" rx=\"8\" ry=\"3\"/></g>
+<g transform=\"rotate(-38 58 150)\"><ellipse cx=\"50\" cy=\"147\" rx=\"7.5\" ry=\"2.8\"/></g>
+<g transform=\"rotate(36 66 100)\"><ellipse cx=\"74\" cy=\"97\" rx=\"7\" ry=\"2.6\"/></g>
+<g transform=\"rotate(-34 60 55)\"><ellipse cx=\"53\" cy=\"52\" rx=\"6.5\" ry=\"2.4\"/></g>
+<!-- top buds -->
+<circle cx=\"54\" cy=\"12\" r=\"3.6\"/>
+<circle cx=\"46\" cy=\"19\" r=\"2.4\"/>
+<circle cx=\"62\" cy=\"19\" r=\"2.4\"/>
+<circle cx=\"66\" cy=\"25\" r=\"2.8\"/>
 </g>
 </svg>` },
     { id: 'garland-haunt', name: 'Haunt garland', motif: 'haunt', placement: 'garland', signature: true,
@@ -514,8 +511,50 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <g transform="translate(375,48)"><ellipse cx="0" cy="0" rx="7" ry="3" transform="rotate(25 0 0)"/></g>
 </g>
 </svg>` },
+    { id: 'garland-solstice', name: 'Solstice sun garland', motif: 'solstice', placement: 'garland', signature: true, seasonal: true,
+      themes: ['solstice'], file: 'Asset/flairs/garland-solstice.svg',
+      svg: `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 600 90\" role=\"img\" aria-labelledby=\"t d\">
+<title id=\"t\">Solstice sun garland</title>
+<desc id=\"d\">A summer swag garland with a radiant sun centerpiece, hanging wheat sprigs and leaves — the seasonal banner for Solstice.</desc>
+<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">
+<path d=\"M0,14 Q300,66 600,14\"/>
+<!-- sun rays (no south ray — the sun rests on the swag line) -->
+<g>
+<path d=\"M300,10 L300,4\"/>
+<path d=\"M310,14 L314,10\"/><path d=\"M290,14 L286,10\"/>
+<path d=\"M314,24 L320,24\"/><path d=\"M286,24 L280,24\"/>
+<path d=\"M310,34 L314,38\"/><path d=\"M290,34 L286,38\"/>
+</g>
+<!-- hanging stems -->
+<path d=\"M150,34 L150,44\"/><path d=\"M450,34 L450,44\"/>
+</g>
+<g fill=\"currentColor\" stroke=\"none\">
+<!-- sun: smaller, resting on the swag line like a sunrise -->
+<circle cx=\"300\" cy=\"24\" r=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"/>
+<circle cx=\"300\" cy=\"24\" r=\"5\"/>
+<!-- wheat sprigs hanging left and right -->
+<g transform=\"translate(150,56) scale(1.2)\">
+<path d=\"M0,0 L0,16\" stroke=\"currentColor\" stroke-width=\"1.8\" fill=\"none\" stroke-linecap=\"round\"/>
+<ellipse cx=\"-5\" cy=\"5\" rx=\"4.5\" ry=\"2\" transform=\"rotate(-55 -5 5)\"/><ellipse cx=\"5\" cy=\"5\" rx=\"4.5\" ry=\"2\" transform=\"rotate(55 5 5)\"/>
+<ellipse cx=\"-5\" cy=\"11\" rx=\"4.2\" ry=\"1.9\" transform=\"rotate(-55 -5 11)\"/><ellipse cx=\"5\" cy=\"11\" rx=\"4.2\" ry=\"1.9\" transform=\"rotate(55 5 11)\"/>
+<ellipse cx=\"0\" cy=\"18\" rx=\"4\" ry=\"2\"/>
+</g>
+<g transform=\"translate(450,56) scale(1.2)\">
+<path d=\"M0,0 L0,16\" stroke=\"currentColor\" stroke-width=\"1.8\" fill=\"none\" stroke-linecap=\"round\"/>
+<ellipse cx=\"-5\" cy=\"5\" rx=\"4.5\" ry=\"2\" transform=\"rotate(-55 -5 5)\"/><ellipse cx=\"5\" cy=\"5\" rx=\"4.5\" ry=\"2\" transform=\"rotate(55 5 5)\"/>
+<ellipse cx=\"-5\" cy=\"11\" rx=\"4.2\" ry=\"1.9\" transform=\"rotate(-55 -5 11)\"/><ellipse cx=\"5\" cy=\"11\" rx=\"4.2\" ry=\"1.9\" transform=\"rotate(55 5 11)\"/>
+<ellipse cx=\"0\" cy=\"18\" rx=\"4\" ry=\"2\"/>
+</g>
+<!-- leaves along the swag -->
+<g transform=\"translate(225,50)\"><ellipse cx=\"0\" cy=\"0\" rx=\"7\" ry=\"3\" transform=\"rotate(-25 0 0)\"/></g>
+<g transform=\"translate(375,50)\"><ellipse cx=\"0\" cy=\"0\" rx=\"7\" ry=\"3\" transform=\"rotate(25 0 0)\"/></g>
+<!-- small sparkles for summer light -->
+<path d=\"M220,20 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z\" opacity=\"0.7\"/>
+<path d=\"M380,20 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z\" opacity=\"0.7\"/>
+</g>
+</svg>` },
     { id: 'watermark-moon', name: 'Moon phases watermark', motif: 'moon', placement: 'watermark', signature: true,
-      themes: ['midnight', 'twilight'], file: 'Asset/flairs/watermark-moon.svg', premium: true,
+      themes: ['twilight'], file: 'Asset/flairs/watermark-moon.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
 <title id="t">Moon phases watermark</title>
 <desc id="d">An arc of moon phases, from crescent to full, for atmospheric backgrounds.</desc>
@@ -557,24 +596,42 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 </g>
 </svg>` },
     /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
+    { id: 'watermark-moonstars', name: 'Moon and starfield watermark', motif: 'moonstars', placement: 'watermark', signature: true,
+      themes: ['midnight'], file: 'Asset/flairs/watermark-moonstars.svg',
+      svg: `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 400\" role=\"img\" aria-labelledby=\"t d\">
+<title id=\"t\">Moon and starfield watermark</title>
+<desc id=\"d\">A crescent moon in a dense starfield — the celestial watermark signature for Midnight, distinct from Twilight's lone moon.</desc>
+<g fill=\"currentColor\" stroke=\"none\">
+<!-- crescent moon -->
+<path d=\"M200,120 C160,120 128,152 128,192 C128,232 160,264 200,264 C172,244 160,220 160,192 C160,164 172,140 200,120Z\"/>
+<!-- dense starfield: varied sparkles and dots -->
+<g opacity=\"0.85\">
+<path d=\"M80,80 l2.4,6 6,2.4 -6,2.4 -2.4,6 -2.4,-6 -6,-2.4 6,-2.4z\"/>
+<path d=\"M320,70 l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2z\"/>
+<path d=\"M280,320 l2.4,6 6,2.4 -6,2.4 -2.4,6 -2.4,-6 -6,-2.4 6,-2.4z\"/>
+<path d=\"M100,300 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z\"/>
+<path d=\"M350,200 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z\"/>
+<path d=\"M60,180 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z\"/>
+</g>
+<g opacity=\"0.55\">
+<circle cx=\"140\" cy=\"60\" r=\"2.2\"/><circle cx=\"220\" cy=\"50\" r=\"1.8\"/><circle cx=\"300\" cy=\"140\" r=\"2\"/>
+<circle cx=\"360\" cy=\"120\" r=\"1.6\"/><circle cx=\"40\" cy=\"240\" r=\"2\"/><circle cx=\"90\" cy=\"350\" r=\"1.8\"/>
+<circle cx=\"180\" cy=\"340\" r=\"2.2\"/><circle cx=\"250\" cy=\"280\" r=\"1.6\"/><circle cx=\"330\" cy=\"260\" r=\"2\"/>
+<circle cx=\"120\" cy=\"140\" r=\"1.6\"/><circle cx=\"240\" cy=\"110\" r=\"1.8\"/><circle cx=\"200\" cy=\"300\" r=\"1.6\"/>
+</g>
+<!-- faint constellation lines tying a few stars -->
+<g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" opacity=\"0.35\" stroke-linecap=\"round\">
+<path d=\"M140,60 L220,50 L300,140\"/>
+<path d=\"M90,350 L180,340 L250,280\"/>
+</g>
+</g>
+</svg>` },
     { id: 'stormrider-vine', name: 'Stormrider emblem vine', motif: 'dragon', placement: 'vine', signature: true,
       themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.png', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 128" role="img" aria-labelledby="t d">
 <title id="t">Stormrider emblem vine</title>
 <desc id="d">Kevin's Stormrider emblem: black dragon with gold winged sword.</desc>
 <image href="Asset/packs/stormrider-vine.png" x="2" y="2" width="116" height="124" preserveAspectRatio="xMidYMid meet"/>
-</svg>` },
-    { id: 'stormrider-divider', name: 'Stormrider bolt divider', motif: 'bolt', placement: 'divider',
-      themes: ["stormrider"], file: 'Asset/packs/stormrider-divider.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Stormrider divider</title>
-<desc id="d">A lightning bolt flanked by dragon scales. Stormrider pack.</desc>
-<g fill="currentColor" stroke="none">
-<path d="M83,-2 L73,10 L78,10 L76,22 L88,8 L82,8 Z"/>
-<path d="M56,20 C50,14 50,6 56,0 C62,6 62,14 56,20Z"/>
-<path d="M104,20 C98,14 98,6 104,0 C110,6 110,14 104,20Z"/>
-<circle cx="42" cy="12" r="1.4" opacity="0.6"/><circle cx="118" cy="12" r="1.4" opacity="0.6"/>
-</g>
 </svg>` },
     { id: 'stormrider-garland', name: 'Stormrider storm garland', motif: 'storm', placement: 'garland',
       themes: ["stormrider"], file: 'Asset/packs/stormrider-garland.svg', premium: true,
@@ -643,41 +700,6 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="76" cy="300" r="1.8"/><circle cx="44" cy="90" r="1.8"/>
 </g>
 </svg>` },
-    { id: 'briarthrone-divider', name: 'Briarthrone bloom divider', motif: 'bloom', placement: 'divider',
-      themes: ["briarthrone"], file: 'Asset/packs/briarthrone-divider.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Briarthrone divider</title>
-<desc id="d">A thorn-stem divider ornament with a central night bloom. Briarthrone pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-<path d="M40,12 C60,10 100,10 120,12"/>
-</g>
-<g fill="currentColor" stroke="none">
-<path d="M60,11 l-5,-4 5,-1z"/><path d="M100,11 l5,-4 -5,-1z"/>
-<path d="M72,13 l-4,4 5,0z"/><path d="M90,13 l4,4 -5,0z"/>
-<g transform="translate(80,12) scale(.8)">
-<ellipse cx="0" cy="-6" rx="2.8" ry="5"/><ellipse cx="5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 5.2 -3)"/><ellipse cx="5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 5.2 3)"/><ellipse cx="0" cy="6" rx="2.8" ry="5"/><ellipse cx="-5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 -5.2 3)"/><ellipse cx="-5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 -5.2 -3)"/>
-<circle r="2.2"/>
-</g>
-<circle cx="30" cy="12" r="1.6"/><circle cx="130" cy="12" r="1.6"/>
-</g>
-</svg>` },
-    { id: 'briarthrone-watermark', name: 'Briarthrone starfall', motif: 'starfall', placement: 'watermark',
-      themes: ["briarthrone"], file: 'Asset/packs/briarthrone-watermark.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
-<title id="t">Briarthrone starfall</title>
-<desc id="d">A large crescent moon with falling stars for atmospheric backgrounds. Briarthrone pack.</desc>
-<g fill="currentColor" stroke="none">
-<path d="M140,50 C73,97.6 73,138.4 140,186 C117.2,153.9 117.2,82.1 140,50Z"/>
-<g opacity="0.85">
-<path d="M250,80 l3,7.8 7.8,3 -7.8,3 -3,7.8 -3,-7.8 -7.8,-3 7.8,-3z"/>
-<path d="M300,160 l2.4,6.2 6.2,2.4 -6.2,2.4 -2.4,6.2 -2.4,-6.2 -6.2,-2.4 6.2,-2.4z"/>
-<path d="M220,220 l2,5.2 5.2,2 -5.2,2 -2,5.2 -2,-5.2 -5.2,-2 5.2,-2z"/>
-<path d="M330,260 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
-<path d="M270,300 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
-</g>
-<circle cx="180" cy="250" r="2.4"/><circle cx="120" cy="300" r="2"/><circle cx="340" cy="120" r="2"/><circle cx="90" cy="220" r="2"/>
-</g>
-</svg>` },
     { id: 'voidsignal-vine', name: 'Voidsignal circuit vine', motif: 'circuit', placement: 'vine', signature: true,
       themes: ["voidsignal"], file: 'Asset/packs/voidsignal-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
@@ -701,38 +723,6 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="60" cy="300" r="7"/><circle cx="62" cy="160" r="7"/><circle cx="42" cy="100" r="7"/>
 </g>
 </svg>` },
-    { id: 'voidsignal-divider', name: 'Voidsignal chevron divider', motif: 'chevron', placement: 'divider',
-      themes: ["voidsignal"], file: 'Asset/packs/voidsignal-divider.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Voidsignal divider</title>
-<desc id="d">A chevron signal divider ornament. Voidsignal pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-<path d="M68,5 L78,12 L68,19"/>
-<path d="M82,5 L92,12 L82,19"/>
-</g>
-<g fill="currentColor" stroke="none">
-<circle cx="56" cy="12" r="2.2"/><circle cx="104" cy="12" r="2.2"/>
-<circle cx="44" cy="12" r="1.4" opacity="0.6"/><circle cx="116" cy="12" r="1.4" opacity="0.6"/>
-</g>
-</svg>` },
-    { id: 'voidsignal-corner', name: 'Voidsignal circuit corner', motif: 'circuit', placement: 'corners',
-      themes: ["voidsignal"], file: 'Asset/packs/voidsignal-corner.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="t d">
-<title id="t">Voidsignal corner</title>
-<desc id="d">An angular circuit corner with node points. Voidsignal pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M12,84 L12,40 L36,16 L84,16"/>
-<path d="M24,84 L24,48 L44,28 L84,28" stroke-width="1.2" opacity="0.6"/>
-</g>
-<g fill="currentColor" stroke="none">
-<circle cx="12" cy="84" r="3"/><circle cx="84" cy="16" r="3"/>
-<circle cx="12" cy="40" r="2.4"/><circle cx="36" cy="16" r="2.4"/>
-<circle cx="52" cy="22" r="2"/>
-</g>
-<g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55">
-<circle cx="52" cy="22" r="5.5"/>
-</g>
-</svg>` },
     { id: 'wisp-vine', name: 'Wisp firefly vine', motif: 'firefly', placement: 'vine', signature: true,
       themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
@@ -752,18 +742,6 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <path d="M84,180 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
 <path d="M36,110 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
 </g>
-</g>
-</svg>` },
-    { id: 'wisp-divider', name: 'Wisp sparkle divider', motif: 'sparkle', placement: 'divider',
-      themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-divider.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
-<title id="t">Wisp divider</title>
-<desc id="d">A sparkle-trio divider ornament. Wisp pack.</desc>
-<g fill="currentColor" stroke="none">
-<path d="M80,2 L82.1,9.9 L90,12 L82.1,14.1 L80,22 L77.9,14.1 L70,12 L77.9,9.9Z"/>
-<path d="M60,8 l1.4,3.6 3.6,1.4 -3.6,1.4 -1.4,3.6 -1.4,-3.6 -3.6,-1.4 3.6,-1.4z"/>
-<path d="M100,8 l1.4,3.6 3.6,1.4 -3.6,1.4 -1.4,3.6 -1.4,-3.6 -3.6,-1.4 3.6,-1.4z"/>
-<circle cx="46" cy="12" r="1.6"/><circle cx="114" cy="12" r="1.6"/>
 </g>
 </svg>` },
     { id: 'wisp-garland', name: 'Wisp pastel garland', motif: 'pastel', placement: 'garland',
