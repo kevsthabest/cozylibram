@@ -1,6 +1,6 @@
-// Settings groups (v117, v312): Account / Library / Purchase Ledger / Appearance / Reading /
-// Metadata / Offline / Privacy / About, each a collapsible card with
-// persisted open/closed state; all existing controls keep working.
+// Settings groups (v117, v312, v424): Account / Library / Purchase Ledger / Appearance /
+// Metadata / Offline / Privacy / About (S3 folded Reading into Library),
+// each a collapsible card with persisted open/closed state; all existing controls keep working.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -24,12 +24,12 @@ const groupTitles = () => [...doc().querySelectorAll('#view > .set-group > summa
 runInWindow(`localStorage.removeItem('spicyshelves.setgroups'); library = [];`);
 runInWindow(`view = 'settings'; renderSettings();`);
 
-ok('9 groups render in Kevin\'s order',
+ok('8 groups render in Kevin\'s order (S3: Reading folded into Library)',
   JSON.stringify(groupTitles()) ===
-  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Reading', 'Metadata', 'Offline', 'Privacy', 'About']));
+  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Metadata', 'Offline', 'Privacy', 'About']));
 ok('group summaries carry tag subtitles', (() => {
   const tags = [...doc().querySelectorAll('#view > .set-group > summary .set-tag')].map(s => s.textContent);
-  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[8]);
+  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[7]);
 })());
 ok('first group open by default, rest collapsed', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
@@ -47,23 +47,58 @@ const groupOf = (id) => {
 };
 ok('controls landed in the right groups',
   groupOf('bk-wipe') === 1 &&            // Library, moved out of About
-  groupOf('cover-offline') === 6 &&     // Offline, moved out of Covers
-  groupOf('cover-bulk') === 5 &&        // Metadata
+  groupOf('th-rmentry') === 1 &&        // Library, S3 folded from Reading
+  groupOf('cover-offline') === 5 &&     // Offline, moved out of Covers
+  groupOf('cover-bulk') === 4 &&        // Metadata
+  groupOf('st-yolo') === 4 &&           // Metadata > Covers, S2 moved from About
   groupOf('th-region') === 3 &&         // Appearance (Display)
-  groupOf('pc-backfill') === 5 &&        // Metadata
-  groupOf('meta-verify') === 5 &&
-  groupOf('hc-test') === 5 &&
+  groupOf('pc-backfill') === 4 &&       // Metadata
+  groupOf('meta-verify') === 4 &&
+  groupOf('hc-test') === 4 &&
   groupOf('ac-signin') === 0 &&         // Account
-  groupOf('ac-sync') === 0 &&
+  groupOf('ac-sync') === 0 &&           // Account card, S4
+  groupOf('ac-card-email') === 0 &&     // Account card, S4
   groupOf('st-edit-profile') === 0 &&
-  groupOf('st-privacy-go') === 7 &&      // Privacy
-  groupOf('ap-update') === 8);           // About
+  groupOf('st-privacy-go') === 6 &&      // Privacy
+  groupOf('ap-update') === 7);           // About
 ok('all pre-existing control ids still present',
   ['th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
    'hc-bulk', 'hc-autoseg', 'trope-srcseg', 'ac-signup', 'ac-logout', 'ap-ver']
     .every(id => !!doc().getElementById(id)));
 ok('v416: theme gallery replaced the th-theme dropdown',
   !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
+ok('S1: header says Settings with a sync-status line (no stat row)',
+  (() => {
+    const h2 = doc().querySelector('#view > .view-head h2');
+    const syncLine = doc().querySelector('#view > .sync-line');
+    return h2 && h2.textContent.trim() === 'Settings' &&
+      syncLine && syncLine.textContent.length > 0 &&
+      !doc().querySelector('#view > .stat-row');
+  })());
+ok('S2: About has App content + collapsed Diagnostics (YOLO moved to Covers)',
+  (() => {
+    const groups = [...doc().querySelectorAll('#view > .set-group')];
+    const about = groups[7];
+    const diag = about.querySelector('details.set-diag');
+    return !!doc().getElementById('ap-update') &&
+      !about.querySelector('#st-yolo') &&
+      !!diag && !!diag.querySelector('#ap-css') && !!diag.querySelector('#ap-css-srv');
+  })());
+ok('S4: sign-in note deduped; account card present with sync controls',
+  (() => {
+    const notes = [...doc().querySelectorAll('#view .note')];
+    const note = notes.find(p => /cloud database/.test(p.textContent));
+    return !!note && !/backed up and synced/.test(note.textContent) &&
+      !!doc().getElementById('ac-signedin') &&
+      !!doc().getElementById('ac-card-email');
+  })());
+ok('S6: privacy loading state is skeleton shimmer or resolved content (never bare Loading text)',
+  (() => {
+    const box = doc().getElementById('st-privacy');
+    if (!box) return false;
+    // Signed-out resolves immediately to the share note; signed-in shows skeleton then summary.
+    return !!box.querySelector('.skel') || !/Loading\.\.\./.test(box.textContent);
+  })());
 
 // toggling persists; a re-render restores it
 runInWindow(`
