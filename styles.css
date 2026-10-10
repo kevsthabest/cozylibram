@@ -1363,6 +1363,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .tcard .tmeta { padding: 7px 10px; background: rgba(0,0,0,.28); min-width: 0; }
 .tcard .tmeta b { font-size: 12.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tcard .tmeta span { font-size: 10.5px; color: var(--faint); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcard .mini, .tcard .tmeta { display: block; }
+.tcard[data-th] { padding: 0; border-radius: 14px; }
 .tcard .check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px;
   border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px;
   font-weight: 700; display: flex; align-items: center; justify-content: center; }
@@ -2478,7 +2480,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .tadd-row .text-input { flex: 1; min-width: 0; }
 .tadd-row .btn { flex: none; }
 #f-tropeaddtoggle { margin-top: 8px; }
-.tcard {
+.tropedb-card {
   border: 1px solid var(--line); border-radius: 12px;
   background: var(--card); padding: 12px 12px 8px;
 }

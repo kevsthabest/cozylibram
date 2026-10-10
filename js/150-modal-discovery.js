@@ -1337,7 +1337,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="f-tropesugg" class="chips"></div>' +
     '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
     '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
-    '<div class="tcard"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
+    '<div class="tropedb-card"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-characters" role="tabpanel" hidden>' +
