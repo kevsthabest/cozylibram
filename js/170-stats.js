@@ -275,6 +275,45 @@ function spiceProfileHTML() {
     '</div><p class="note">' + line + '</p>';
 }
 
+/* ---- mood profile (v405): per-axis intensity distribution. Reading
+   profile shows the average pull per axis; this shows the spread — how
+   many books sit in the high / medium / low band of each axis. ---- */
+function moodProfileHTML() {
+  const read = library.filter(b => b.status === 'read');
+  const axes = RATING_AXES.map(a => {
+    const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
+    if (!vals.length) return null;
+    return {
+      a: a, n: vals.length,
+      hi: vals.filter(v => v >= 4).length,
+      mid: vals.filter(v => v === 2 || v === 3).length,
+      lo: vals.filter(v => v <= 1).length,
+    };
+  }).filter(Boolean).sort((x, y) => y.n - x.n).slice(0, 6);
+  if (!axes.length)
+    return '<div class="stat-sub">Mood profile</div>' +
+      '<p class="note">Rate the intensity axes on your books and your mood breakdown will appear here.</p>' +
+      '<button class="btn" data-act="rate-book">Rate a book</button>';
+  const blocks = axes.map(x => {
+    const max = Math.max(x.hi, x.mid, x.lo, 1);
+    const row = (lbl, n) =>
+      '<div class="dist-row"><span class="lbl">' + lbl + '</span>' +
+      '<div class="bar"><div class="fill" style="width:' + Math.round(n / max * 100) +
+      '%;background:' + x.a.color + '"></div></div><span class="num">' + n + '</span></div>';
+    return '<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:600;margin-bottom:2px">' +
+      icon(x.a.icon || 'pepper') + ' ' + esc(x.a.label) +
+      ' <i style="font-style:normal;color:var(--faint);font-weight:400">· ' + x.n + '</i></div>' +
+      '<div class="dist">' + row('High', x.hi) + row('Med', x.mid) + row('Low', x.lo) + '</div></div>';
+  }).join('');
+  // plain-spoken line: axis with the biggest high-band share
+  const top = axes.slice().sort((p, q) => (q.hi / q.n) - (p.hi / p.n))[0];
+  const line = top && top.hi / top.n >= 0.5
+    ? 'Most of your books lean high-' + top.a.label.toLowerCase() + '.'
+    : 'Your moods are mixed — no single intensity dominates.';
+  return '<div class="stat-sub">Mood profile</div>' + blocks +
+    '<p class="note">' + line + '</p>';
+}
+
 /* ---- rating distribution (v65): histogram + the interesting read ---- */
 function ratingDistHTML() {
   const read = library.filter(b => b.status === 'read' && (b.myRating || 0) > 0);
@@ -351,6 +390,55 @@ function patternsHTML() {
     if (Math.abs(r - p) >= 0.2)
       obs.push('Your average rating has ' + (r > p ? 'risen' : 'dipped') + ' from <b>' +
         p.toFixed(1) + ' ⭐</b> to <b>' + r.toFixed(1) + ' ⭐</b> over the last 6 months.');
+  }
+
+  // v405: pace shift — trailing 30 days vs the 30 before that
+  {
+    const today = new Date();
+    let cur = 0, prev = 0;
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const k = dayKey(d);
+      let day = 0;
+      library.forEach(b => { day += pagesOnDay(b, k); });
+      if (i < 30) cur += day; else prev += day;
+    }
+    if (cur >= 50 && prev >= 50) {
+      const ratio = cur / prev;
+      const prevMonth = new Date(today);
+      prevMonth.setDate(today.getDate() - 30);
+      const mName = prevMonth.toLocaleDateString(undefined, { month: 'long' });
+      if (ratio >= 1.5)
+        obs.push('You\'re reading <b>' + ratio.toFixed(1) + '×</b> your ' + esc(mName) + ' pace — ' +
+          Math.round(cur / 30) + ' pages/day vs ' + Math.round(prev / 30) + '.');
+      else if (ratio <= 0.67)
+        obs.push('Your pace has eased to <b>' + Math.round(ratio * 100) + '%</b> of ' + esc(mName) +
+          ' — ' + Math.round(cur / 30) + ' pages/day vs ' + Math.round(prev / 30) + '.');
+    }
+  }
+
+  // v405: comfort genre — genre with the biggest share of finished books
+  {
+    const gCount = {};
+    read.forEach(b => bookGenres(b).forEach(g => { gCount[g] = (gCount[g] || 0) + 1; }));
+    const top = Object.keys(gCount).sort((a, b) => gCount[b] - gCount[a])[0];
+    if (top && gCount[top] >= 3 && read.length >= 5) {
+      const share = Math.round(gCount[top] / read.length * 100);
+      if (share >= 30)
+        obs.push('<b>' + esc(top) + '</b> is your comfort genre — <b>' + share + '%</b> of your finished books.');
+    }
+  }
+
+  // v405: late DNFs — share of DNFs abandoned after the halfway mark
+  {
+    const dnfs = library.filter(b => b.status === 'dnf' && typeof b.dnfProgressPct === 'number');
+    if (dnfs.length >= 3) {
+      const late = dnfs.filter(b => b.dnfProgressPct >= 50).length;
+      const share = Math.round(late / dnfs.length * 100);
+      if (share >= 50)
+        obs.push('You DNF <b>' + share + '%</b> of books after the halfway mark — trust your gut earlier?');
+    }
   }
 
   if (!obs.length)
@@ -1040,6 +1128,7 @@ function renderStats() {
     readingCalHTML() +
     paceHTML() +
     spiceProfileHTML() +
+    moodProfileHTML() +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() +
