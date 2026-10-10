@@ -87,7 +87,7 @@
     '.s3d-root{position:absolute;inset:0;overflow:hidden;background:#14101c;',
     '  font-family:Georgia,\'Times New Roman\',serif;color:#f6eff8;}',
     '.s3d-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}',
-    '.s3d-root #s3dScene{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}',
+    '.s3d-root #s3dScene{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;}',
     '.s3d-root #s3dVignette{position:absolute;inset:0;pointer-events:none;',
     '  background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(8,5,12,.55) 100%);}',
     '.s3d-root #s3dHud{position:absolute;top:0;left:0;right:0;',
@@ -272,7 +272,8 @@
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;  // Phase 1: cheaper than PCFSoft
+    renderer.shadowMap.autoUpdate = false;  // Phase 1: bake shadows, update on demand
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -312,7 +313,7 @@
     downLight.position.set(0, 9.5, 2.5);
     scene.add(downLight);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);  // Phase 1: 1024 instead of 2048 (4x cheaper)
     sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
     sun.shadow.camera.top = 11; sun.shadow.camera.bottom = -2;
     sun.shadow.camera.near = 1; sun.shadow.camera.far = 32;
@@ -325,22 +326,28 @@
 
     /* ----- shelf ----- */
     /* procedural wood grain — flat brown reads cheap, satin sheen reads expensive */
+    /* Phase 1: seeded RNG so wood is stable across mounts */
+    var woodSeed = 1234567;
+    function srand() {
+      woodSeed = (woodSeed * 1103515245 + 12345) & 0x7fffffff;
+      return woodSeed / 0x7fffffff;
+    }
     function woodTexture(base, streakDark, streakLight) {
       var c = document.createElement('canvas'); c.width = c.height = 256;
       var g = c.getContext('2d');
       g.fillStyle = base; g.fillRect(0, 0, 256, 256);
       var i, y, h, w, x;
       for (i = 0; i < 80; i++) {           // long grain streaks
-        y = Math.random() * 256; h = 1 + Math.random() * 3;
-        w = 120 + Math.random() * 136; x = Math.random() * 256 - 60;
-        g.fillStyle = Math.random() < 0.55 ? streakDark : streakLight;
-        g.globalAlpha = 0.05 + Math.random() * 0.11;
+        y = srand() * 256; h = 1 + srand() * 3;
+        w = 120 + srand() * 136; x = srand() * 256 - 60;
+        g.fillStyle = srand() < 0.55 ? streakDark : streakLight;
+        g.globalAlpha = 0.05 + srand() * 0.11;
         g.fillRect(x, y, w, h);
       }
       g.globalAlpha = 0.05;                    // fine speckle
       for (i = 0; i < 420; i++) {
-        g.fillStyle = Math.random() < 0.5 ? '#000' : '#fff';
-        g.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6);
+        g.fillStyle = srand() < 0.5 ? '#000' : '#fff';
+        g.fillRect(srand() * 256, srand() * 256, 1.6, 1.6);
       }
       g.globalAlpha = 1;
       var t = new THREE.CanvasTexture(c);
@@ -476,7 +483,7 @@
     }
     function setBooks(books) {
       clearBooks();
-      if (!books || !books.length) return;
+      if (!books || !books.length) { renderer.shadowMap.needsUpdate = true; markDirty(); return; }
       var list = books.slice(0, MAX_BOOKS);
       var order = [2, 1, 0];   // fill the top shelf first, like the prototype
       var li = 0;
@@ -497,6 +504,8 @@
         shelfBooks.push({ mesh: mesh, li: order[li], rec: rec });
         x += w + 0.025;
       });
+      renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake shadows after books change
+      markDirty();
     }
     var ray = new THREE.Raycaster();
     var ptr = new THREE.Vector2();
@@ -671,7 +680,7 @@
        still glow when the budget is exhausted, so the scene never looks
        broken — it just stops adding new real lights. Ghost groups (drag
        previews) also draw from the budget and release it on discard. */
-    var DECO_LIGHT_CAP = 12;
+    var DECO_LIGHT_CAP = 2;  // Phase 1: max 2 decoration point lights (was 12)
     var decoLightCount = 0;
     function decoLight(g, light) {
       g.userData.decoLights = g.userData.decoLights || 0;
@@ -1844,6 +1853,7 @@
         selRing.position.set(g.position.x, baseY + 0.03, g.position.z);
       }
       selRing.visible = true;
+      markDirty();
       // room decos can't be moved (Delete only)
       $('s3dSelMove').style.display = (p && p.room) ? 'none' : '';
       var s = toScreen(new THREE.Vector3(g.position.x, baseY + 1.15, g.position.z));
@@ -1854,6 +1864,7 @@
     }
     function deselect() {
       selected = null; selRing.visible = false; selmenu.classList.remove('show');
+      markDirty();
     }
     $('s3dSelDelete').addEventListener('click', function () {
       if (!selected) return;
@@ -2342,12 +2353,70 @@
 
     var clockT = new THREE.Clock();
     var rafId = 0;
+    /* Phase 1: render on demand + adaptive resolution */
+    var needsRender = true;  // true when camera moving, tween active, pointer down, etc.
+    var frameTimes = [];     // rolling window for adaptive resolution
+    var curPixelRatio = 1.5; // Phase 1: start at 1.5, adapt 1.0–2.0 from frame time
+    var lastFrameT = performance.now();
+    renderer.setPixelRatio(curPixelRatio);
+    /* Phase 1: WebGL context loss/restore handling */
+    canvas.addEventListener('webglcontextlost', function (e) {
+      e.preventDefault();  // allow restore
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      // Show calm retry message
+      try {
+        var msg = root.querySelector('#s3dCtxMsg');
+        if (!msg) {
+          msg = document.createElement('div');
+          msg.id = 's3dCtxMsg';
+          msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,14,26,.92);color:#f6eff8;font-family:system-ui,sans-serif;font-size:14px;text-align:center;padding:24px;z-index:20;';
+          msg.innerHTML = '<div><p style="margin:0 0 12px;">The 3D shelf paused to save memory.</p><button id="s3dCtxRetry" style="background:#e5b86a;color:#241a10;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">Tap to reload</button></div>';
+          root.appendChild(msg);
+          msg.querySelector('#s3dCtxRetry').addEventListener('click', function () {
+            try { window.location.reload(); } catch (_) {}
+          });
+        }
+        msg.style.display = 'flex';
+      } catch (_) {}
+    }, false);
+    canvas.addEventListener('webglcontextrestored', function () {
+      try {
+        var msg = root.querySelector('#s3dCtxMsg');
+        if (msg) msg.style.display = 'none';
+      } catch (_) {}
+      // Rebuild GPU resources by re-rendering; shadows need rebake
+      renderer.shadowMap.needsUpdate = true;
+      markDirty();
+      if (!rafId && !dead) animate();
+    }, false);
+    function markDirty() { needsRender = true; }
+    // Pause when tab hidden; resume when visible
+    var wasHidden = false;
+    function onVisChange() {
+      if (document.hidden) {
+        wasHidden = true;
+      } else if (wasHidden) {
+        wasHidden = false;
+        markDirty();  // re-render on return
+      }
+    }
+    on(document, 'visibilitychange', onVisChange);
+    // Check if book modal is open (pause rendering when it covers the canvas)
+    function isModalOpen() {
+      return !!(document.querySelector('.book-modal.open, #bookModal.open, .modal.open'));
+    }
     function animate() {
       if (dead) return;
       rafId = requestAnimationFrame(animate);
+      // Phase 1: skip entirely when tab hidden or modal open
+      if (document.hidden || isModalOpen()) return;
       var t = clockT.getElapsedTime();
       var now = performance.now();
+      var dt = Math.min(0.1, (now - lastFrameT) / 1000);  // seconds, clamped
+      lastFrameT = now;
       stepTweens(now);   // all UI tweens (place pop, delete shrink, mood crossfade)
+      var tweensActive = tweens.length > 0;
       processDragFrame();
       // 1:1 drag follow — ghost tracks the pointer with no easing lag, so the
       // item feels held, not chased. (Drop still snaps to the guide/rules.)
@@ -2412,19 +2481,49 @@
       var dollyK = 1 - Math.pow(1 - lk, 3);
       // v412: apply user zoom (pinch/wheel) to the target distance.
       var targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK) * zoomFactor;
-      // slow idle drift after 6s without interaction
-      var idle = (now - lastInteract) > 6000;
-      driftAmt += ((idle ? 1 : 0) - driftAmt) * 0.008;
+      // slow idle drift after 6s without interaction (Phase 1: time-based, stops after 30s)
+      var idle = (now - lastInteract) > 6000 && (now - lastInteract) < 36000;
+      var driftTarget = idle ? 1 : 0;
+      driftAmt += (driftTarget - driftAmt) * (1 - Math.exp(-dt * 2));
       var driftX = Math.sin(t * 0.24) * 0.4 * driftAmt;
       var driftY = Math.cos(t * 0.19) * 0.22 * driftAmt;
-      // camera parallax
+      // camera parallax (Phase 1: time-based damping, frame-rate independent)
+      var dampK = 1 - Math.exp(-dt * 7);  // ~0.045 at 60fps, scales with dt
       var px = tiltOn ? tilt.x : pointerPX * 0.55;
       var py = tiltOn ? tilt.y : pointerPY * 0.4;
-      camera.position.x += ((camBase.x + px * 0.9 + driftX) - camera.position.x) * 0.045;
-      camera.position.y += ((camBase.y - py * 0.55 + driftY) - camera.position.y) * 0.045;
-      camera.position.z += (targetZ - camera.position.z) * 0.045;
+      var camTX = camBase.x + px * 0.9 + driftX;
+      var camTY = camBase.y - py * 0.55 + driftY;
+      var dx = camTX - camera.position.x;
+      var dy = camTY - camera.position.y;
+      var dz = targetZ - camera.position.z;
+      var camMoved = Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001 || Math.abs(dz) > 0.001;
+      camera.position.x += dx * dampK;
+      camera.position.y += dy * dampK;
+      camera.position.z += dz * dampK;
       camera.lookAt(camTarget);
-      renderer.render(scene, camera);
+      // Phase 1: render on demand — only when something changed
+      var animating = tweensActive || camMoved || driftAmt > 0.01 ||
+        (trayDrag && trayDrag.hasTarget) || (moveDrag && moveDrag.hasTarget && moveDrag.moved) ||
+        (roomDrag && roomDrag.hasTarget) || candleFlames.length > 0 || fairyBulbs.length > 0;
+      if (animating || needsRender) {
+        renderer.render(scene, camera);
+        needsRender = false;
+        // Phase 1: adaptive resolution — track frame time, adjust pixel ratio 1.0–2.0
+        var frameMs = performance.now() - now;
+        frameTimes.push(frameMs);
+        if (frameTimes.length > 60) frameTimes.shift();
+        if (frameTimes.length === 60) {
+          var avg = frameTimes.reduce(function (a, b) { return a + b; }, 0) / 60;
+          var target = curPixelRatio;
+          if (avg > 24 && curPixelRatio > 1.0) target = Math.max(1.0, curPixelRatio - 0.25);
+          else if (avg < 12 && curPixelRatio < 2.0) target = Math.min(2.0, curPixelRatio + 0.25);
+          if (target !== curPixelRatio) {
+            curPixelRatio = target;
+            renderer.setPixelRatio(curPixelRatio);
+          }
+          frameTimes.length = 0;  // reset window after adjustment
+        }
+      }
     }
 
     /* ----- teardown: leak-free unmount ----- */
@@ -2446,12 +2545,69 @@
 
     /* ----- go ----- */
     if (opts.initialBooks) setBooks(opts.initialBooks);
-    /* Fresh mount starts empty: dress for the current app theme immediately.
-       Decorations are session-only, so this is always the "new shelf" case —
-       never a rearrangement of existing decorations. */
+    /* Phase 1: persist decoration layout to localStorage */
+    var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';
+    function saveDecoLayout() {
+      try {
+        var data = placed.map(function (p) {
+          return {
+            type: p.type,
+            pi: p.pi,
+            x: p.group.position.x,
+            z: p.group.position.z,
+            room: !!p.room
+          };
+        });
+        localStorage.setItem(DECO_STORE_KEY, JSON.stringify(data));
+      } catch (_) {}
+    }
+    function loadDecoLayout() {
+      try {
+        var raw = localStorage.getItem(DECO_STORE_KEY);
+        if (!raw) return false;
+        var data = JSON.parse(raw);
+        if (!Array.isArray(data) || !data.length) return false;
+        data.forEach(function (d) {
+          try {
+            if (d.room) {
+              // Room decorations need anchor lookup; skip if not available
+              return;
+            }
+            // placeDeco signature: (type, pi, x, opts, free)
+            if (typeof placeDeco === 'function') {
+              placeDeco(d.type, d.pi, d.x, null, true);
+              // Adjust z if needed
+              var p = placed[placed.length - 1];
+              if (p && d.z != null) p.group.position.z = d.z;
+            }
+          } catch (_) {}
+        });
+        return placed.length > 0;
+      } catch (_) { return false; }
+    }
+    /* Fresh mount: try to restore saved decorations, else dress for theme.
+       Decorations are now persistent, not session-only. */
     appTheme = (opts && opts.appTheme) || 'dark';
     dressLabel();
-    if (!placed.length) applyPreset(appTheme);
+    var restored = loadDecoLayout();
+    if (!restored && !placed.length) applyPreset(appTheme);
+    // Save on changes: hook into placeDeco and removeDeco via wrappers
+    var _origPlaceDeco = placeDeco;
+    placeDeco = function () {
+      var r = _origPlaceDeco.apply(this, arguments);
+      saveDecoLayout();
+      renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake after deco change
+      markDirty();
+      return r;
+    };
+    var _origRemoveDeco = removeDeco;
+    removeDeco = function () {
+      var r = _origRemoveDeco.apply(this, arguments);
+      saveDecoLayout();
+      renderer.shadowMap.needsUpdate = true;
+      markDirty();
+      return r;
+    };
     onboardTimer = setTimeout(function () {
       if (!dead) toast(DEFAULT_HINT, 4200);   // brief onboarding, then it gets out of the way
     }, 900);

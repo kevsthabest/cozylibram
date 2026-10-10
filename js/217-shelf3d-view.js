@@ -38,6 +38,36 @@ function shelfViewMode() {
   }
   catch (e) { return '3d'; }
 }
+/* Phase 1: capability gate — check if device can handle 3D, fall back to 2.5D if not */
+function shelf3DCapable() {
+  try {
+    // Explicit user preference overrides the gate
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('shelf') === '3d') return true;
+    if (params.get('shelf') === '2d') return false;
+    // Check if user explicitly chose 3D (stored preference)
+    const stored = localStorage.getItem('shelfViewMode');
+    if (stored === '3d') return true;  // user opted in, respect it
+    if (stored === '2d') return false;
+    // No stored preference: run capability check
+    // Check 1: WebGL available
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (!gl) return false;
+    // Check 2: Device memory (if available)
+    if (navigator.deviceMemory && navigator.deviceMemory < 4) return false;
+    // Check 3: Hardware concurrency (if available)
+    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) return false;
+    // Check 4: Mobile with small screen and low DPR might struggle
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile && window.devicePixelRatio > 2.5) {
+      // Very high DPR on mobile = expensive; still allow but adaptive res will handle it
+    }
+    return true;
+  } catch (e) {
+    return true;  // Fail open: if check fails, allow 3D (existing behavior)
+  }
+}
 function shelfSetViewMode(m) {
   try {
     localStorage.setItem('shelfViewMode', m === '2d' ? '2d' : '3d');
