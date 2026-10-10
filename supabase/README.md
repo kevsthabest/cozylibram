@@ -1,13 +1,13 @@
 # Cloud sync setup (Supabase) — Cozy Libram
 
-Optional. The app works fully offline without this. Setting it up gives you
-per-user login (email/password + Google) and long-term cloud storage of the
-library, synced across devices.
+Required. Since v204 sign-in is mandatory; Supabase is not optional. Setting
+it up gives you per-user login (email/password + Google) and long-term cloud
+storage of the library, synced across devices.
 
 ## 1. Create a Supabase project
 
 1. Go to https://supabase.com → **New project**.
-2. Pick a name (e.g. `spicy-shelves`), a database password, and a region close to you.
+2. Pick a name (e.g. `cozy-libram`), a database password, and a region close to you.
 3. Wait for the project to finish provisioning.
 
 ## 2. Create the tables
@@ -15,23 +15,31 @@ library, synced across devices.
 1. In the Supabase dashboard, open **SQL Editor** → **New query**.
 2. Paste the contents of `schema.sql` (in this folder) and **Run**.
 3. This creates:
-   - a `books` table with one row per book per user, and a Row Level
-     Security policy so each signed-in user can only read/write their own rows;
-   - a `book_meta` table: a shared per-ISBN metadata cache (covers,
-     descriptions, ratings, page counts) readable by every signed-in user,
-     so the first person to look up a book pays the API cost and everyone
-     after reads it from Supabase;
-   - a `deleted_books` table: deletion tombstones so a book deleted on one
-     device stays deleted everywhere instead of resurrecting on sync.
-   - an `analytics_events` table + `app_admins` registry (v118, first-party
-     usage analytics — see below).
-4. Re-running `schema.sql` later is safe — it only adds what's missing, so
-   run it again after updating the app to pick up new tables.
+   - `books`, `deleted_books`, `profiles`: one row per book per user, with
+     Row Level Security so each signed-in user can only read/write their
+     own rows (deletion tombstones keep a book deleted on one device deleted
+     everywhere instead of resurrecting on sync);
+   - `book_meta`: a shared per-ISBN metadata cache (covers, descriptions,
+     ratings, page counts) readable by every signed-in user, so the first
+     person to look up a book pays the API cost and everyone after reads it
+     from Supabase;
+   - `circle_links`/`circle_invites` (Coven, private social);
+   - `analytics_events` + `app_admins` (v118, first-party usage analytics —
+     see below).
+4. Run the remaining SQL files in this folder in the SQL editor
+   (`tropes.sql`, `works.sql`, `claims.sql`, `anthologies.sql`,
+   `ebook-extraction.sql`, `realtime.sql`), then every file in `migrations/`.
+   These add `works`, `editions`, `book_trope_claims`, `edition_works`
+   (anthologies), `trope_proposals`, `book_characters`, `book_trigger_claims`,
+   `edition_images`, `edition_assets`, `edition_measurements`, `spine_photos`,
+   `user_reports`, and `dnf_reasons`. Re-running the files later is safe —
+   each only adds what's missing, so run them again after updating the app to
+   pick up new tables.
 
 ## 2b. Usage analytics (v118, optional)
 
-The app records anonymous feature-usage events (adds, searches, roulette
-spins…) — never book content. To enable the pipeline:
+The app records per-user (user_id-attributed) feature-usage events (adds,
+searches, roulette spins…) — never book content. To enable the pipeline:
 
 1. In the SQL editor, run `supabase/analytics.sql` (re-run safe).
 2. Register yourself as admin:

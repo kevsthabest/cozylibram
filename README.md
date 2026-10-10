@@ -13,7 +13,7 @@ social shelves.
 
 **Add books, three taps or less**
 - 📷 Barcode scan with the phone camera (native `BarcodeDetector`,
-  Quagga2 fallback, manual ISBN as backup)
+  vendored QuaggaJS fallback, manual ISBN as backup)
 - 🔍 Title/author search across Google Books, Open Library, and Hardcover
 - ⌨️ Bulk ISBN import — paste a stack, paced lookup, one-tap add
 - 📥 Import hub: Goodreads CSV, StoryGraph CSV, Hardcover CSV, ISBN
@@ -22,15 +22,29 @@ social shelves.
 **Shelves & personal layer**
 - Shelves: To Be Read · Currently Reading · Read · Did Not Finish, plus
   a Favorites bookshelf and a Wishlist with region-aware storefront links
-  and coming-soon countdowns
+  and coming-soon countdowns. DNF gets a 3-tap reason sheet (DNF Autopsy,
+  `js/213-dnf.js`)
 - Personal ♥ rating (1–5) and genre-aware intensity axes — 🌶️ Spice for
   romance, 👻 Scare for horror, 😰 Suspense for thrillers, ⚔️ Adventure
   for fantasy/sci-fi — auto-detected per book, 1–5 each
 - Trope tags (AI-assisted), page tracking with a daily reading log,
   calendar, streaks, notes, and saved quotes
+- Character wiki (`js/159-characters.js`): principal characters with
+  cross-book identity, relationships between them, and a per-book cast —
+  plus per-user character notes
 - Hardcover enrichment in the background: series name + position,
   content warnings, mood chips, extra genres, and a blended community
   rating (ISBN-verified)
+
+**Shelf tab**
+- A 2.5D bookshelf (`js/205-shelfview.js`): deterministic spine colors
+  and geometry, TBR/Reading/Read chips, tap-to-open, device-local drag
+  reordering, layouts (My order / By series / By genre), four display
+  formats, and a 3D book view. A decorations tray (plant, candle, mug,
+  fairy lights) dresses the shelf up, and seasonal shelf themes swap in
+  for the holidays.
+- Spine-photo capture (`js/206-editioncapture.js`) feeds the shared
+  spine-image pool (`edition_images`).
 
 ![Book detail (desktop)](docs/screenshots/book-modal.png) ![Book detail (mobile)](docs/screenshots/book-modal-mobile.png)
 *Book detail — ratings, series info, tropes, and notes. Screenshots taken with a demo account.*
@@ -47,7 +61,8 @@ social shelves.
 **Stats**
 - Dashboard: books finished, pages devoured, average rating, shelf
   distribution, top tropes, current-read progress — plus a detailed
-  stats explorer
+  stats explorer, a shareable Year in Books / Reading Wrapped
+  (`js/214-wrapped.js`), and a Reading DNA card (`js/212-dna.js`)
 
 ![Discover (desktop)](docs/screenshots/discover.png) ![Discover (mobile)](docs/screenshots/discover-mobile.png)
 *The Discover tab — recommendations, new releases, and TBR Roulette. Screenshots taken with a demo account.*
@@ -69,7 +84,8 @@ social shelves.
   toasting; manual syncs report what changed
 
 **Feel**
-- 10 themes, 12 accent colors, cohesive line-art icon set, 3-step
+- 17 themes (10 core + 7 seasonal), 12 accent colors, cohesive
+  line-art icon set, 3-step
   onboarding, thoughtful empty states, full PWA (installable, offline
   covers via a size-capped cache)
 
@@ -106,17 +122,35 @@ revoke it at hardcover.app and make a fresh one.
 
 ## Supabase tables
 
-See `supabase/README.md`. Core: `books`, `deleted_books`, `profiles`
-(per-user RLS), `circle_links`/`circle_invites` (Coven),
-`analytics_events` + `app_admins` (first-party analytics, default-on
-for signed-in users with a Settings → Privacy opt-out). Trope metadata:
-`works`, `editions`, `book_trope_claims` (migrations v202–v208, applied
-to the live database).
+See `supabase/README.md`. Grouped by domain, with the SQL file that
+creates each:
+
+- `schema.sql` — `books`, `deleted_books`, `profiles` (per-user RLS),
+  `circle_links`/`circle_invites` (Coven), `book_meta` (shared per-ISBN
+  metadata cache: the first lookup pays the API cost, everyone after reads
+  from Supabase)
+- `analytics.sql` — `analytics_events` + `app_admins` (first-party
+  analytics, default-on for signed-in users with a Settings → Privacy
+  opt-out)
+- `works.sql` — `works` (canonical book identity; v289 adds
+  `spice_detected`/`spice_manual` for roulette filtering) and `editions`
+- `claims.sql` — `book_trope_claims` (work-keyed trope claims with
+  provenance)
+- `anthologies.sql` — `edition_works` (edition → works junction table)
+- `tropes.sql` — `tropes`, `book_tropes`, `trope_votes`, `trope_proposals`
+  (+ proposal votes, taxonomy metadata)
+- `ebook-extraction.sql` — `book_characters`, `book_trigger_claims`
+  (ebook processor output)
+- `realtime.sql` — adds the sync tables to the realtime publication
+- `migrations/` — `spine_photos` (v259, shared spine-image pool),
+  `edition_images` (v273), `edition_assets` + `edition_asset_slots`
+  (v284), `edition_measurements` (v287), `user_reports` + `banned_users`
+  (v246, moderation), `dnf_reasons` (v398)
 
 ## Tech notes
 
-- Single-page vanilla JS — 49 numbered classic scripts (`js/000-core.js`
-  … `js/200-boot.js`), zero runtime dependencies, no build step.
+- Single-page vanilla JS — 61 numbered classic scripts (`js/000-core.js`
+  … `js/214-wrapped.js`), zero runtime dependencies, no build step.
 - Book schema: `id, isbn, title, authors[], cover, description,
   pageCount, publishedDate, categories[], publicRating, ratingsCount,
   status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],
@@ -126,7 +160,7 @@ to the live database).
 - Service worker precaches the app; bump `APP_VERSION`
   (`js/181-appversion.js`) **and** the `sw.js` cache name together to
   force a full asset refetch (paired by `appversion.test.js`).
-- Test suite in `.test/` (117 files, jsdom — run with
+- Test suite in `.test/` (136 files, jsdom — run with
   `node .test/<name>.test.js`; `package.json` has no test script) —
   one feature per version, tests green + committed + pushed is the
   definition of done.

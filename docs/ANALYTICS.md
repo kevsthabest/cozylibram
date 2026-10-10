@@ -2,7 +2,7 @@
 
 **"We measure how Cozy Libram is used, not what is inside someone's library."**
 
-This is native product analytics: ~30 high-level events that answer product
+This is native product analytics: ~47 high-level events that answer product
 questions ("is anyone using Roulette?", "where do imports fail?"). It is not
 surveillance — the event vocabulary is a closed allowlist and the properties
 are enums and counts. There is structurally no way to send a title, author,
@@ -23,11 +23,16 @@ of properties (below), `app_version`, and a timestamp. Nothing else.
 | `book_rated` | library | — (no rating value) |
 | `book_favorited` / `book_unfavorited` | library | — |
 | `book_completed` / `book_dnf` | library | — |
+| `dnf_reason` | library | `reason`, `progress_pct` (v398: DNF Autopsy) |
+| `dna_shared` / `wrapped_shared` | library | `books`; wrapped adds `year` (v398) |
 | `search_performed` | discovery | — |
 | `discover_opened` | discovery | — |
 | `author_discovery_opened` | discovery | — |
 | `similar_books_opened` | discovery | — |
 | `release_discovery_opened` | discovery | — |
+| `release_auto_check` | discovery | `book_count` (v149: silent weekly sweep) |
+| `provider_used` | discovery | `provider`, `context` (v243: metadata backend) |
+| `book_preview_opened` / `preview_tbr` / `preview_wishlist` | discovery | `source`; opened adds `kind` (v219: read-only preview) |
 | `recommendation_opened` | discovery | `source`: coven |
 | `roulette_opened` / `roulette_spun` / `roulette_book_opened` / `roulette_book_started` | discovery | — |
 | `import_started` / `import_completed` / `import_failed` | import | `source` (same list as `book_added`); `book_count` on completed |
@@ -36,7 +41,9 @@ of properties (below), `app_version`, and a timestamp. Nothing else.
 | `friend_request_sent` / `friend_request_accepted` | social | — |
 | `shared_shelf_viewed` | social | — |
 | `friend_recommendation_used` | social | — |
+| `invite_link_shared` | social | — (v240: invite sheet / clipboard) |
 | `account_created` | onboarding | — |
+| `onboarding_started` / `onboarding_completed` / `onboarding_skipped` | onboarding | — |
 | `library_opened` | onboarding | once ever |
 | `first_book_added` / `first_book_rated` | onboarding | once ever |
 | `returned_within_7_days` | onboarding | once ever |
@@ -85,7 +92,7 @@ developer might naively pass.
 ## Adding a new event
 
 1. Ask the spec's question first: *does this answer a specific product
-   question?* If not, don't track it. (~20–30 events is the target; don't
+   question?* If not, don't track it. (~45–50 events is the target; don't
    instrument every click.)
 2. Add it to `EVENT_DEFS` in `js/065-analytics.js` with a category and the
    minimal property keys. Property values must be enums in `PROP_VALUES` or

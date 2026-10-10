@@ -1,6 +1,6 @@
 # v216 — Canonical cover cache (Supabase Storage)
 
-**Status:** spec (drafted 2026-09-30). Build after v214 (recommender diversity) and v215 (modal swipe-to-close) land.
+**Status:** SHIPPED in v216 (plus v218 downscale addendum — §11).
 **Decision:** Kevin chose Supabase Storage canonical copies over source-thumbnails or per-device canvas downscaling, explicitly for scale (more users, 400+ more books incoming).
 
 ---
@@ -172,7 +172,8 @@ Extend the **Offline** accordion group in `js/180-settings.js` (next to the exis
 4. **Tests:** new + updated suites above; **full suite green** (`node` over `.test/*.test.js`, 0 failures).
 5. **Version bump:** `APP_VERSION` in `js/181-appversion.js` + `CACHE` name in `sw.js` (forces a full asset refetch).
 6. **Commit** (message explains the per-device → flat storage change), **push** to main.
-7. **Package:** delete the previous release zip, keep only the newest `cozy-libram-vNNN.zip`.
+7. **Package:** ~~delete the previous release zip, keep only the newest
+   `cozy-libram-vNNN.zip`.~~ (release zips retired 2026-10-01)
 8. **Production verify** (cache-busted fetches, never the Settings version number alone): `sw.js` returns the new cache name; `POST /api/cache-cover` with a disallowed host returns 403 (no side effects); then one real canonicalization of a known cover URL returns 200 with a `…/storage/v1/object/public/covers/<hash>.<ext>` URL and a second call dedups to the same URL. Confirm the object exists in the bucket via `sb-query`.
 9. **Backfill:** run `scripts/backfill-covers.js` against production; confirm bucket size stays ≈150 MB.
 10. **Kevin tap-through on his phone:** adopt a cover from the picker (should feel instant — fallback is invisible), check Settings → Offline shows usage, clear + re-pre-cache.
