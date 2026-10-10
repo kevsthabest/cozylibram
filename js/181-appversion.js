@@ -11,7 +11,7 @@
 
 
 
-const APP_VERSION = 'v434';
+const APP_VERSION = 'v435';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
@@ -93,44 +93,4 @@ async function checkForAppUpdate(statusEl) {
       say('You are on the latest version ✓');
     }
   } catch (e) { say('Could not check: ' + (e && e.message ? e.message : e)); }
-}
-
-/* v432: automatic "update available" prompt. When the SW finds a new version
-   in the background, show a tap-to-refresh banner instead of silently serving
-   stale bundles. Kills the stale-bundle class of bug reports. */
-function _showUpdateBanner() {
-  if (document.getElementById('app-update-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'app-update-banner';
-  b.innerHTML = '<span>✨ A new version is available.</span>' +
-    '<button id="app-update-go">Refresh</button>' +
-    '<button id="app-update-x" aria-label="Dismiss">×</button>';
-  b.querySelector('#app-update-go').addEventListener('click', () => location.reload());
-  b.querySelector('#app-update-x').addEventListener('click', () => b.remove());
-  document.body.appendChild(b);
-}
-async function watchForAppUpdates() {
-  try {
-    if (!('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return;
-    // Already waiting? Show immediately.
-    if (reg.waiting) { _showUpdateBanner(); return; }
-    // Watch for a new SW installing in the background.
-    reg.addEventListener('updatefound', () => {
-      const nw = reg.installing;
-      if (!nw) return;
-      nw.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && reg.waiting) _showUpdateBanner();
-      });
-    });
-    // Periodic check (every 30 min) — the browser also checks on navigation.
-    setInterval(() => { reg.update().catch(() => {}); }, 30 * 60 * 1000);
-  } catch (e) {}
-}
-// Start watching once the app boots.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', watchForAppUpdates, { once: true });
-} else {
-  watchForAppUpdates();
 }
