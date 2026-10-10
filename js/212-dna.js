@@ -9,16 +9,16 @@ function readingDnaData() {
   // Top tropes (same pattern as renderStats line 921)
   const tropeCount = {};
   read.forEach(b => (b.tropes || []).forEach(t => { tropeCount[t] = (tropeCount[t] || 0) + 1; }));
-  const topTropes = Object.entries(tropeCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topTropes = topEntries(tropeCount, 5);
 
   // Avg spice (same pattern as spiceProfileHTML)
-  const spiceVals = read.map(b => (b.ratings || {}).spice || 0).filter(v => v > 0);
-  const avgSpice = spiceVals.length ? spiceVals.reduce((s, v) => s + v, 0) / spiceVals.length : 0;
+  const sVals = spiceVals(read);
+  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / sVals.length : 0;
 
   // Top genres
   const genreCount = {};
   read.forEach(b => { const g = (typeof bookGenres === 'function' ? bookGenres(b) : [])[0]; if (g) genreCount[g] = (genreCount[g] || 0) + 1; });
-  const topGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topGenres = topEntries(genreCount, 3);
 
   // Volume
   const totalPages = read.reduce((s, b) => s + (b.pageCount || 0), 0);
@@ -36,16 +36,10 @@ function readingDnaData() {
 }
 
 function drawDnaImage(d) {
-  const W = 1080, H = 1920;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const x = cv.getContext('2d');
-  if (!x) return null;
-  const ink = '#f6eff8', mut = '#b9a8c6', acc = '#e5648e', gold = '#e5b86a', grn = '#7de2a8';
-
-  const bg = x.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#2b1535'); bg.addColorStop(1, '#100a16');
-  x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  const c = cardCanvas();
+  if (!c) return null;
+  const { cv, x, W, H, C } = c;
+  const { ink, mut, acc, gold, grn } = C;
 
   // Header
   x.textAlign = 'center'; x.fillStyle = ink;
@@ -100,8 +94,7 @@ function drawDnaImage(d) {
   if (d.topAuthor) { x.fillText('✍️ Most-read: ' + d.topAuthor[0], 100, y); y += 62; }
 
   // Footer
-  x.textAlign = 'center'; x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
+  cardFooter(x, W);
   return cv;
 }
 

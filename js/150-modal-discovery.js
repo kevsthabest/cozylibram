@@ -1203,7 +1203,7 @@ function renderDetailModal(b, viaBook) {
 
     // v312: purchase ledger — what you paid, where, when
     // v396: collapsible (IA rework)
-    '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('cart') + ' Purchase' +
+    '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('tobuy') + ' Purchase' +
     (draft.purchasePrice != null ? ' <span class="note-inline">· $' + esc(String(draft.purchasePrice)) + '</span>' : '') +
     '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
@@ -1468,7 +1468,11 @@ function renderDetailModal(b, viaBook) {
       saveLibrary();
       // v398: DNF Autopsy — prompt for a reason when a book is newly marked DNF
       if (btn.dataset.s === 'dnf' && prevStatus !== 'dnf' && typeof openDnfReasonSheet === 'function') {
-        setTimeout(() => openDnfReasonSheet(b), 350);
+        setTimeout(() => {
+          // Guard: don't open the sheet if the modal was closed meanwhile
+          if (!root.isConnected) return;
+          openDnfReasonSheet(b);
+        }, 350);
       }
       root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');

@@ -10,15 +10,15 @@ function wrappedData(yr) {
     new Date(b.dateFinished).getFullYear() === (yr || yibYear));
 
   // Spice distribution for the year
-  const spiceVals = readYr.map(b => (b.ratings || {}).spice || 0).filter(v => v > 0);
-  const avgSpice = spiceVals.length ? spiceVals.reduce((s, v) => s + v, 0) / spiceVals.length : 0;
+  const sVals = spiceVals(readYr);
+  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / sVals.length : 0;
   const spiceDist = [0, 0, 0, 0, 0]; // buckets for 1-5
-  spiceVals.forEach(v => { spiceDist[Math.min(4, Math.max(0, Math.round(v) - 1))]++; });
+  sVals.forEach(v => { spiceDist[Math.min(4, Math.max(0, Math.round(v) - 1))]++; });
 
   // Year in tropes (top 5 tropes from this year's reads)
   const tropeCount = {};
   readYr.forEach(b => (b.tropes || []).forEach(t => { tropeCount[t] = (tropeCount[t] || 0) + 1; }));
-  const yearTropes = Object.entries(tropeCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const yearTropes = topEntries(tropeCount, 5);
 
   // Total hours (1 page ≈ 1 minute)
   const hours = Math.round(base.pages / 60);
@@ -31,16 +31,10 @@ function wrappedData(yr) {
 }
 
 function drawWrappedImage(d) {
-  const W = 1080, H = 1920;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const x = cv.getContext('2d');
-  if (!x) return null;
-  const ink = '#f6eff8', mut = '#b9a8c6', acc = '#e5648e', gold = '#e5b86a', grn = '#7de2a8';
-
-  const bg = x.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#1a0f2e'); bg.addColorStop(0.5, '#2b1535'); bg.addColorStop(1, '#100a16');
-  x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  const c = cardCanvas([[0, '#1a0f2e'], [0.5, '#2b1535'], [1, '#100a16']]);
+  if (!c) return null;
+  const { cv, x, W, H, C } = c;
+  const { ink, mut, acc, gold, grn } = C;
 
   // Festive header
   x.textAlign = 'center'; x.fillStyle = gold;
@@ -102,8 +96,7 @@ function drawWrappedImage(d) {
   if (d.topAuthor) { x.fillText('✍️ Top author: ' + d.topAuthor[0], 100, y); y += 56; }
   if (d.dnfs > 0) { x.fillText('📕 DNFs: ' + d.dnfs + ' (no shame)', 100, y); y += 56; }
 
-  x.textAlign = 'center'; x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
+  cardFooter(x, W);
   return cv;
 }
 
