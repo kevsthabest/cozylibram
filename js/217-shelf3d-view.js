@@ -32,7 +32,16 @@ function shelfViewMode() {
   catch (e) { return '3d'; }
 }
 function shelfSetViewMode(m) {
-  try { localStorage.setItem('shelfViewMode', m === '2d' ? '2d' : '3d'); }
+  try {
+    localStorage.setItem('shelfViewMode', m === '2d' ? '2d' : '3d');
+    // v414: clear the ?shelf= URL override — it was preventing the toggle from working
+    // (URL param takes precedence over localStorage in shelfViewMode()).
+    var url = new URL(window.location.href);
+    if (url.searchParams.has('shelf')) {
+      url.searchParams.delete('shelf');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
   catch (e) {}
 }
 // Safe no-op when Shelf3D isn't loaded or isn't mounted.
@@ -147,6 +156,9 @@ function renderShelf3D() {
   }).then(function () {
     _shelf3dMounted = true;
     shelf3DApplyTheme();
+    // v414: remove the loading overlay — it was covering the canvas and intercepting taps.
+    var loading = container.querySelector('.s3d-loading');
+    if (loading) loading.remove();
   }).catch(function () {
     // WebGL unavailable or THREE failed to load: fall back to 2D.
     // v408: session flag only, don't persist — user can retry 3D via toggle.
