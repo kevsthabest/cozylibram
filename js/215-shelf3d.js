@@ -128,7 +128,8 @@
     '.s3d-root #s3dInvBtn{position:absolute;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;',
     '  width:58px;height:58px;border-radius:50%;border:1px solid rgba(229,184,106,.55);',
     '  background:rgba(32,24,40,.92);color:#e5b86a;font-size:24px;cursor:pointer;',
-    '  box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(6px);}',
+    '  box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(6px);',
+    '  display:none;}',  // v417: hidden — inventory now in the ⋮ overflow menu
     '.s3d-root #s3dInvBtn:active{transform:scale(.93);}',
     '.s3d-root #s3dInvPanel{position:absolute;left:0;right:0;bottom:0;z-index:8;max-height:62%;',
     '  background:rgba(18,13,24,.97);border-top:1px solid rgba(229,184,106,.35);',
@@ -290,6 +291,13 @@
     var loadT0 = performance.now();
     var lastInteract = performance.now(), driftAmt = 0;
     on(window, 'pointerdown', function () { lastInteract = performance.now(); }, true);
+    // v412: pinch/wheel zoom (Kevin: spines too small on mobile).
+    // zoomFactor 1.0 = default, <1 = closer, >1 = farther. Clamped 0.5–2.0.
+    var zoomFactor = 1.0;
+    function setZoom(f) {
+      zoomFactor = Math.max(0.5, Math.min(2.0, f));
+      lastInteract = performance.now();
+    }
 
     /* lights — soft warm key + cool rim fill, lifted ambient so wood grain reads */
     var ambLight = new THREE.AmbientLight(0x9a8a76, 0.85);
@@ -1749,6 +1757,36 @@
     });
     canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
+    // v412: wheel zoom (desktop) + pinch zoom (mobile).
+    canvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      // Wheel up = zoom in (closer), wheel down = zoom out.
+      setZoom(zoomFactor * (e.deltaY > 0 ? 1.08 : 0.92));
+    }, { passive: false });
+    // Pinch: track two-pointer distance.
+    var pinchStartDist = 0, pinchStartZoom = 1.0;
+    canvas.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) {
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartZoom = zoomFactor;
+      }
+    }, { passive: true });
+    canvas.addEventListener('touchmove', function (e) {
+      if (e.touches.length === 2 && pinchStartDist > 0) {
+        e.preventDefault();  // prevent page scroll during pinch
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        var dist = Math.hypot(dx, dy);
+        // Pinch out (dist grows) = zoom in (closer).
+        setZoom(pinchStartZoom * (pinchStartDist / dist));
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchend', function (e) {
+      if (e.touches.length < 2) pinchStartDist = 0;
+    }, { passive: true });
+
     /* ============================== mood / autumn preset ============================== */
     /* autumn preset crossfades warm over ~800ms instead of instant */
     function setMood(name, ms) {
@@ -2055,7 +2093,8 @@
       // dolly-in on load (2.2s ease-out)
       var lk = Math.min(1, (now - loadT0) / 2200);
       var dollyK = 1 - Math.pow(1 - lk, 3);
-      var targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK);
+      // v412: apply user zoom (pinch/wheel) to the target distance.
+      var targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK) * zoomFactor;
       // slow idle drift after 6s without interaction
       var idle = (now - lastInteract) > 6000;
       driftAmt += ((idle ? 1 : 0) - driftAmt) * 0.008;

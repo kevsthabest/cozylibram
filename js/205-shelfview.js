@@ -715,7 +715,12 @@ function renderShelf() {
     '<button class="sv-cam" id="svView3D" aria-label="Switch to 3D view" title="Switch to 3D view">' + icon('cube') + '</button>' +
     '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
-    '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div></div>' +
+    '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button>' +
+    '<button class="sv-cam" id="svMenu" aria-label="Shelf menu" title="Shelf menu">' + icon('dots') + '</button>' +
+    '<div class="sv-menu" id="svMenuDropdown" hidden>' +
+    '<button class="sv-menu-item" id="svMenuView">' + icon('cube') + '<span>Switch to 3D view</span></button>' +
+    '<button class="sv-menu-item" id="svMenuDecor">' + icon('sparkles') + '<span>Decorations</span></button>' +
+    '</div></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(g =>
       '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
       SHELF_GROUP_LABEL[g] + ' <span class="n">' + counts[g] + '</span></button>').join('') + '</div>' +
@@ -758,6 +763,34 @@ function wireShelf() {
     try { _shelf3dWebGLFailed = false; } catch (e) {}
     renderShelf();
   });
+  // v411: overflow menu with shelf view toggle (Kevin: discoverable home for 2D/3D switch).
+  const menuBtn = document.getElementById('svMenu');
+  const menuDropdown = document.getElementById('svMenuDropdown');
+  if (menuBtn && menuDropdown) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuDropdown.hidden = !menuDropdown.hidden;
+    });
+    // Close menu when clicking outside.
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menuDropdown.hidden && !menuDropdown.contains(e.target) && e.target !== menuBtn) {
+        menuDropdown.hidden = true;
+      }
+    });
+    const menuViewBtn = document.getElementById('svMenuView');
+    if (menuViewBtn) menuViewBtn.addEventListener('click', () => {
+      if (typeof shelfSetViewMode === 'function') shelfSetViewMode('3d');
+      try { _shelf3dWebGLFailed = false; } catch (e) {}
+      menuDropdown.hidden = true;
+      renderShelf();
+    });
+    // v417: Decorations inventory in menu (Kevin: wasn't findable).
+    const menuDecorBtn = document.getElementById('svMenuDecor');
+    if (menuDecorBtn) menuDecorBtn.addEventListener('click', () => {
+      menuDropdown.hidden = true;
+      if (typeof shelfOpenDecorSheet === 'function') shelfOpenDecorSheet();
+    });
+  }
   const emptyAdd = document.getElementById('svEmptyAdd');
   if (emptyAdd) emptyAdd.addEventListener('click', () => go('add'));
   const cancel = document.getElementById('svAssignCancel');
