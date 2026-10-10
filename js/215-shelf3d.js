@@ -10,9 +10,9 @@
    button, tilt + sound toggles, dust motes, candle flicker / fairy twinkle
    animations, confirm dialog and toasts. Tap a book to open it.
 
-   Three.js (r159 UMD, vendored at js/vendor/three.min.js) is LAZY-loaded on
+   Three.js (r159 ES module, vendored at js/vendor/three.module.js) is LAZY-loaded on
    first mount via the b3dEnsureThree() pattern from js/207-book3d.js, so the
-   ~600 KB never touches initial page load.
+   ~1.2 MB never touches initial page load.
 
    Classic script, no modules. Exposes:
      window.Shelf3D = {
@@ -44,19 +44,18 @@
 
   /* ---------- Three.js lazy load ----------
      Reuses 207's global loader when present; falls back to an identical local
-     loader so this module also works standalone. Resolves with window.THREE. */
+     loader so this module also works standalone. Resolves with window.THREE.
+     Uses dynamic import() of the vendored ES module ('three' via importmap);
+     the UMD build is deprecated as of r150. */
   function s3dLoadThreeLocal() {
     if (window.THREE) return Promise.resolve(window.THREE);
     if (s3dLoadThreeLocal.p) return s3dLoadThreeLocal.p;
-    s3dLoadThreeLocal.p = new Promise(function (resolve, reject) {
-      var s = document.createElement('script');
-      s.src = 'js/vendor/three.min.js';
-      s.onload = function () {
-        if (window.THREE) resolve(window.THREE);
-        else { s3dLoadThreeLocal.p = null; reject(new Error('three failed to define THREE')); }
-      };
-      s.onerror = function () { s3dLoadThreeLocal.p = null; reject(new Error('three failed to load')); };
-      document.head.appendChild(s);
+    s3dLoadThreeLocal.p = import('three').then(function (THREE) {
+      window.THREE = THREE;
+      return THREE;
+    }).catch(function (e) {
+      s3dLoadThreeLocal.p = null;
+      throw new Error('three failed to load: ' + (e && e.message || e));
     });
     return s3dLoadThreeLocal.p;
   }
