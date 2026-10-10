@@ -79,7 +79,7 @@ ok('menu favorite label flips back', q('#m-favmenu').textContent.includes('Add t
 ok('tabs have icons', qa('.d-tab svg').length === 4);
 
 // --- 5. Details: about heading, tappable rows, more-details, log summary ---
-ok('about-this-book heading', q('#dtab-details .field label').textContent === 'About this book');
+ok('about-this-book heading', qa('#dtab-details .field label').some(l => l.textContent === 'About this book')); // v354: Title/Author fields added above
 ok('shelf row shows the current status', q('#f-status-val').textContent === 'Currently Reading');
 ok('shelf options start collapsed', q('#f-status .mrow-opts').hidden === true);
 q('#f-status [data-mrow]').click();

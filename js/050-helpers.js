@@ -14,8 +14,21 @@ function norm(s) {
 }
 /* v397: Find a character by name (case-insensitive). */
 function findCharByName(chars, name) {
-  const n = norm(name);
-  return (chars || []).find(c => norm(c.name) === n) || null;
+  // v399: use strong normalization (strip punctuation/articles) to match
+  // CharacterStore.normName dedupe paths — weak norm() lets duplicates slip.
+  const strong = (s) => String(s || '').trim().toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/^(the|a|an)\s+/, '')
+    .replace(/\s+/g, ' ').trim();
+  const n = (typeof CharacterStore !== 'undefined' && CharacterStore.normName)
+    ? CharacterStore.normName(name)
+    : strong(name);
+  return (chars || []).find(c => {
+    const cn = (typeof CharacterStore !== 'undefined' && CharacterStore.normName)
+      ? CharacterStore.normName(c.name)
+      : strong(c.name);
+    return cn === n;
+  }) || null;
 }
 /* v224 (UX-05): one display normalization for author names — unicode-normalize,
    collapse stray whitespace, strip publisher suffixes (Inc/LLC/Ltd/Co), and

@@ -248,6 +248,9 @@ function ev(uid, name, cat, props, created) {
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))',
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, works(title, series))', // v346: spoiler-gated fields
       'id, name, work_id, works!inner(authors, series)',
+      'id, character_a_id, character_b_id, relationship_type, direction, importance, review_status, source_work_id', // v395: relationship admin CRUD
+      'id, character_a_id, character_b_id, relationship_type, review_status', // v395: edge dedup fetch
+      'id, character_a_id, character_b_id, relationship_type, importance, tags, created_by', // v395: user-suggested pending edges
       'book_character_id',
       'book_characters!inner(work_id, works!inner(authors, series))',
       'id',

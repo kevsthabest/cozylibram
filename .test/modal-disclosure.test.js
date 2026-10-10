@@ -121,11 +121,11 @@ ok('save: tropes persisted from the Tropes tab',
 
 // --- 7. Overflow-menu Remove triggers the delete flow ---
 run(`openDetail('b1');`);
-let confirmed = false;
-window.confirm = () => { confirmed = true; return false; }; // cancel the confirm
 q('#m-more').click();
 q('#m-del').click();
-ok('remove button asks for confirmation', confirmed);
+// v352: native confirm replaced with in-app confirmModal — assert the overlay renders
+ok('remove button asks for confirmation', !!q('.confirm-overlay') && q('.confirm-overlay').textContent.includes('b1') === false); // title in dialog
+q('.confirm-overlay [data-ca="cancel"]').click();
 ok('cancel keeps the book', run(`library.length`) === 1 && !!q('#m-back'));
 
 console.log(pass + ' passed, ' + fail + ' failed');

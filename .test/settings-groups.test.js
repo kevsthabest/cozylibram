@@ -1,4 +1,4 @@
-// Settings groups (v117): Account / Library / Appearance / Reading /
+// Settings groups (v117, v312): Account / Library / Purchase Ledger / Appearance / Reading /
 // Metadata / Offline / Privacy / About, each a collapsible card with
 // persisted open/closed state; all existing controls keep working.
 const { JSDOM } = require('jsdom');
@@ -24,12 +24,12 @@ const groupTitles = () => [...doc().querySelectorAll('#view > .set-group > summa
 runInWindow(`localStorage.removeItem('spicyshelves.setgroups'); library = [];`);
 runInWindow(`view = 'settings'; renderSettings();`);
 
-ok('8 groups render in Kevin\'s order',
+ok('9 groups render in Kevin\'s order',
   JSON.stringify(groupTitles()) ===
-  JSON.stringify(['Account', 'Library', 'Appearance', 'Reading', 'Metadata', 'Offline', 'Privacy', 'About']));
+  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Reading', 'Metadata', 'Offline', 'Privacy', 'About']));
 ok('group summaries carry tag subtitles', (() => {
   const tags = [...doc().querySelectorAll('#view > .set-group > summary .set-tag')].map(s => s.textContent);
-  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[7]);
+  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[8]);
 })());
 ok('first group open by default, rest collapsed', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
@@ -47,17 +47,17 @@ const groupOf = (id) => {
 };
 ok('controls landed in the right groups',
   groupOf('bk-wipe') === 1 &&            // Library, moved out of About
-  groupOf('cover-offline') === 5 &&     // Offline, moved out of Covers
-  groupOf('cover-bulk') === 4 &&        // Metadata
-  groupOf('th-region') === 2 &&         // Appearance (Display)
-  groupOf('pc-backfill') === 4 &&        // Metadata
-  groupOf('meta-verify') === 4 &&
-  groupOf('hc-test') === 4 &&
+  groupOf('cover-offline') === 6 &&     // Offline, moved out of Covers
+  groupOf('cover-bulk') === 5 &&        // Metadata
+  groupOf('th-region') === 3 &&         // Appearance (Display)
+  groupOf('pc-backfill') === 5 &&        // Metadata
+  groupOf('meta-verify') === 5 &&
+  groupOf('hc-test') === 5 &&
   groupOf('ac-signin') === 0 &&         // Account
   groupOf('ac-sync') === 0 &&
   groupOf('st-edit-profile') === 0 &&
-  groupOf('st-privacy-go') === 6 &&      // Privacy
-  groupOf('ap-update') === 7);           // About
+  groupOf('st-privacy-go') === 7 &&      // Privacy
+  groupOf('ap-update') === 8);           // About
 ok('all pre-existing control ids still present',
   ['th-theme', 'th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
    'hc-bulk', 'hc-autoseg', 'trope-srcseg', 'ac-signup', 'ac-logout', 'ap-ver']

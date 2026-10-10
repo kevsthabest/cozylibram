@@ -128,8 +128,9 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   // flag is ignored and cleaned up; the gate stays.
   ok('no Continue offline button', !q('#gate-offline'));
   runInWindow("localStorage.setItem('spicyshelves.offline', '1'); boot();");
-  await tick();
-  ok('legacy offline flag ignored — gate stays', !!q('#gate-signin') && !q('#view .toolbar'));
+  await window.initCloud();
+  await tick(6);
+  ok('legacy offline flag ignored — gate stays', !!q('.gate-wrap') && !q('#view .toolbar'));
   ok('legacy offline flag cleaned up', lsGet('spicyshelves.offline') === null);
 
   // Sign in with an existing offline library → adopted into the per-user slot.
@@ -159,16 +160,15 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   const menuIds = Array.from(q('#menu-pop').querySelectorAll('[data-m]')).map(b => b.dataset.m);
   ok('menu has Profile / Settings / Logout', JSON.stringify(menuIds) === '["profile","settings","logout"]');
   ok('menu shows the account email', q('#menu-pop .menu-email').textContent === 'wife@example.com');
-  window.confirm = () => false; // dismiss the dialog → stays signed in
-  q('#menu-pop [data-m="logout"]').click();
-  await tick();
-  ok('dismissed confirm keeps the session', !q('#gate-signin') && probe('cloudUser && cloudUser.id') === 'user-1');
-  window.confirm = () => true; // confirm → sign out
-  menuBtn.click();
-  await tick();
+  // v350: topbar logout has no confirm (Advisor triage) — signs out immediately.
   q('#menu-pop [data-m="logout"]').click();
   await tick(2);
   ok('logout menu item signs out to the gate', !!q('#gate-signin') && probe('cloudUser') === null);
+  // Close any open menu before continuing
+  runInWindow(`document.querySelector('#menu-pop').hidden = true;`);
+  // Re-sign in as user-1 for the subsequent multi-user tests
+  window.__sbStub.fire('SIGNED_IN', { id: 'user-1', email: 'wife@example.com' });
+  await tick(6);
 
   // v204: sign-out returns to the gate; the books stay in the per-user
   // slot — no hand-back to the offline shelf (signed-out mode is gone).
@@ -253,8 +253,8 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   // (no more silent offline library).
   await window.cloudSignOut();
   runInWindow('delete window.SPICY_CONFIG;');
-  await window.initCloud();
   runInWindow('boot();');
+  await window.initCloud();
   await tick();
   ok('gate shown without backend config', !!q('#gate-status') && !q('#view .toolbar'));
   ok('gate names the missing setup', q('#gate-status').textContent.indexOf('isn\u2019t set up') >= 0);
