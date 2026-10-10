@@ -33,9 +33,12 @@ function themeCardHTML(th) {
   const active = getTheme() === th.key;
   let inSeason = false;
   try { inSeason = !!th.season && typeof shelfDefaultSeason === 'function' && shelfDefaultSeason() === th.season; } catch (e) {}
+  // v423: premium badge (unlocked during alpha — no paywall, just the flag).
+  const isPrem = !!th.premium;
   return '<button class="tcard' + (active ? ' sel' : '') + '" data-th="' + th.key + '"' +
-    ' aria-label="' + esc(th.name) + ' theme">' +
+    ' aria-label="' + esc(th.name) + ' theme' + (isPrem ? ', premium' : '') + '">' +
     (inSeason ? '<span class="seasonbadge">IN SEASON</span>' : '') +
+    (isPrem ? '<span class="prembadge">PREMIUM</span>' : '') +
     '<span class="mini" style="background:' + pv.bg + '">' +
       '<span class="mcard" style="background:' + pv.card + ';display:block">' +
         '<span class="mline" style="background:' + pv.ink + ';width:70%;display:block"></span>' +
@@ -48,10 +51,15 @@ function themeCardHTML(th) {
   '</button>';
 }
 function themeGalleryHTML() {
-  const core = THEMES.filter(t => !t.season).map(themeCardHTML).join('');
+  const core = THEMES.filter(t => !t.season && !t.premium).map(themeCardHTML).join('');
   const seasonal = THEMES.filter(t => t.season).map(themeCardHTML).join('');
+  // v423: premium packs get their own group. Wisp shows one card (Daybreak);
+  // the Firefly Night variant is picked via the toggle in its detail sheet.
+  const premium = THEMES.filter(t => t.premium && t.key !== 'wisp-night').map(themeCardHTML).join('');
   return '<div class="tgroup-label">Core</div><div class="tgrid">' + core + '</div>' +
-    '<div class="tgroup-label">Seasonal</div><div class="tgrid">' + seasonal + '</div>';
+    '<div class="tgroup-label">Seasonal</div><div class="tgrid">' + seasonal + '</div>' +
+    '<div class="tgroup-label">Premium</div><div class="tgrid">' + premium + '</div>' +
+    '<p class="note">Premium packs are unlocked during the alpha — no paywall yet.</p>';
 }
 function tsSheetHTML(th) {
   const pv = themePreview(th.key);
@@ -67,6 +75,14 @@ function tsSheetHTML(th) {
   const swatches = ACCENTS.map(a =>
     '<button class="sw" data-a="' + a.key + '" style="--sw:' + a.color + '"' +
     ' title="' + esc(a.name) + '" aria-label="' + esc(a.name) + ' accent"></button>').join('');
+  // v423: Wisp Daybreak / Firefly Night variant toggle.
+  const wispToggle = (th.key === 'wisp' || th.key === 'wisp-night')
+    ? '<div class="tgroup-label" style="margin-top:2px">Variant</div>' +
+      '<div class="seg" id="tsWispVar" style="grid-template-columns:1fr 1fr">' +
+      '<button data-v="wisp" class="' + (th.key === 'wisp' ? 'active' : '') + '">☀️ Daybreak</button>' +
+      '<button data-v="wisp-night" class="' + (th.key === 'wisp-night' ? 'active' : '') + '">🌙 Firefly Night</button>' +
+      '</div>'
+    : '';
   return '<div class="tsheet-wrap" id="tsSheetWrap">' +
     '<div class="tsheet-scrim" id="tsScrim"></div>' +
     '<div class="tsheet" role="dialog" aria-modal="true" aria-label="' + esc(th.name) + ' theme details">' +
@@ -80,6 +96,7 @@ function tsSheetHTML(th) {
       '</div>' +
       '<h3>' + esc(th.name) + '</h3>' +
       '<div class="cov">Your circle becomes <b>' + esc(tsCovenDisplay(th.key)) + '</b></div>' +
+      wispToggle +
       '<div class="tgroup-label" style="margin-top:2px">Accent · <span id="tsAccentName" style="color:var(--ink);text-transform:none;letter-spacing:0"></span></div>' +
       '<div class="pairrow" id="tsPairs">' + pairBtns + '</div>' +
       '<div class="swatches" id="tsSwatches" style="flex-wrap:wrap">' + swatches + '</div>' +
@@ -127,6 +144,40 @@ function tsOpenSheet(th) {
   document.getElementById('tsResetAccent').addEventListener('click', () => {
     tsPreviewAccent = null; tsApplyPreview();
   });
+  // v423: Wisp Daybreak / Firefly Night variant toggle — swaps the previewed
+  // theme (and its accent pairings) without closing the sheet.
+  document.querySelectorAll('#tsWispVar button').forEach(b =>
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#tsWispVar button').forEach(x =>
+        x.classList.toggle('active', x === b));
+      tsPreviewTheme = b.dataset.v;
+      tsPreviewAccent = null;
+      tsApplyPreview();
+      // update the sheet title + Use button for the active variant
+      const th2 = THEMES.find(t => t.key === tsPreviewTheme) || { name: tsPreviewTheme };
+      const h3 = document.querySelector('#tsSheetWrap .tsheet h3');
+      if (h3) h3.textContent = th2.name;
+      const useBtn = document.getElementById('tsUse');
+      if (useBtn) useBtn.textContent = 'Use ' + th2.name;
+      const covEl = document.querySelector('#tsSheetWrap .tsheet .cov');
+      if (covEl) covEl.innerHTML = 'Your circle becomes <b>' + esc(tsCovenDisplay(tsPreviewTheme)) + '</b>';
+      // rebuild the accent pairings for the new variant
+      const pairsEl = document.getElementById('tsPairs');
+      if (pairsEl) {
+        const pairs = themeAccentPairings(tsPreviewTheme);
+        const defA = themeDefaultAccent(tsPreviewTheme);
+        const aByKey = k => ACCENTS.find(x => x.key === k) || { name: k, color: '#888' };
+        pairsEl.innerHTML = pairs.map(k => {
+          const a = aByKey(k);
+          return '<button class="pair' + (k === defA ? ' sug' : '') + '" data-a="' + k + '">' +
+            '<i style="background:' + a.color + '"></i>' + esc(a.name) +
+            (k === defA ? '<span class="def">default</span>' : '') + '</button>';
+        }).join('');
+        pairsEl.querySelectorAll('.pair').forEach(pb =>
+          pb.addEventListener('click', () => { tsPreviewAccent = pb.dataset.a; tsApplyPreview(); }));
+      }
+      tsRefreshSheetAccents();
+    }));
   const pick = k => { tsPreviewAccent = k; tsApplyPreview(); };
   document.querySelectorAll('#tsPairs .pair').forEach(b =>
     b.addEventListener('click', () => pick(b.dataset.a)));
@@ -222,7 +273,9 @@ function renderSettings() {
   const htmlTheme =
     '<div class="field"><label>Theme</label>' +
     '<p class="note" style="margin:2px 0 0">Tap a theme to preview it live.</p></div>' +
-    themeGalleryHTML() +
+    // v423: pin the gallery to the ACTUAL theme (not the preview) so cards don't
+    // get wonky when the preview changes the document's CSS variables.
+    '<div data-theme="' + esc(getTheme()) + '">' + themeGalleryHTML() + '</div>' +
     '<div class="field" style="margin-top:14px"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>
       '<button class="sw' + (effectiveAccent() === a.key ? ' active' : '') + '" data-a="' + a.key + '"' +
