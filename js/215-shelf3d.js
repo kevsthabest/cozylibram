@@ -1106,11 +1106,288 @@
       g.userData = { decoType: 'applebowl', fw: 0.85, fd: 0.85 };
       return shadowify(g);
     }
+
+    /* ---- v423: premium theme pack builders (procedural, same style) ---- */
+    /* Stormrider */
+    function makeDragonEgg() {
+      var g = new THREE.Group();
+      var shell = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 16),
+        new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 0.35, metalness: 0.25 }));
+      shell.scale.set(1, 1.3, 1); shell.position.y = 0.39; g.add(shell);
+      var arcMat = new THREE.MeshStandardMaterial({ color: 0x7fb3e8, roughness: 0.4, metalness: 0.3 });
+      for (var r = 0; r < 3; r++) {
+        for (var i = 0; i < 6; i++) {
+          var a = (i / 6) * Math.PI * 2 + r * 0.5;
+          var arc = new THREE.Mesh(new THREE.TorusGeometry(0.16 - r * 0.03, 0.018, 6, 12, Math.PI * 0.9), arcMat);
+          arc.position.set(Math.cos(a) * 0.2, 0.28 + r * 0.16, Math.sin(a) * 0.2);
+          arc.rotation.set(Math.PI / 2 + 0.4, 0, -a);
+          g.add(arc);
+        }
+      }
+      var bolt = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.22),
+        new THREE.MeshBasicMaterial({ color: 0xe8a94e, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+      bolt.position.set(0.08, 0.5, 0.26); bolt.rotation.z = 0.2; g.add(bolt);
+      g.userData = { decoType: 'dragon-egg', fw: 0.7, fd: 0.7 };
+      return shadowify(g);
+    }
+    function makeStormLantern() {
+      var g = new THREE.Group();
+      var frame = new THREE.MeshStandardMaterial({ color: 0x1c1c28, roughness: 0.5, metalness: 0.6 });
+      [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]].forEach(function (p2) {
+        var p = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.46, 0.045), frame);
+        p.position.set(p2[0], 0.3, p2[1]); g.add(p);
+      });
+      var capT = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.34), frame);
+      capT.position.y = 0.56; g.add(capT);
+      var capB = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.34), frame);
+      capB.position.y = 0.025; g.add(capB);
+      var glass = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.44, 0.24),
+        new THREE.MeshStandardMaterial({ color: 0x9ab8d8, transparent: true, opacity: 0.25, roughness: 0.1 }));
+      glass.position.y = 0.3; g.add(glass);
+      var boltMat = new THREE.MeshStandardMaterial({ color: 0xe8a94e, emissive: 0xe8a94e, emissiveIntensity: 2.4 });
+      var bolt = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.26), boltMat);
+      bolt.position.y = 0.3; g.add(bolt);
+      var bolt2 = bolt.clone(); bolt2.rotation.y = Math.PI / 2; g.add(bolt2);
+      var gl = new THREE.PointLight(0xe8a94e, 5, 5, 1.8);
+      gl.position.y = 0.34; decoLight(g, gl);
+      g.userData = { decoType: 'storm-lantern', fw: 0.42, fd: 0.42 };
+      return shadowify(g);
+    }
+    function makeRiderBlade() {
+      var g = new THREE.Group();
+      var steel = new THREE.MeshStandardMaterial({ color: 0xb8c4d4, roughness: 0.25, metalness: 0.85 });
+      var blade = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.52, 0.02), steel);
+      blade.position.y = 0.52; g.add(blade);
+      var tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.12, 4), steel);
+      tip.position.y = 0.84; tip.rotation.y = Math.PI / 4; g.add(tip);
+      var wingMat = new THREE.MeshStandardMaterial({ color: 0x7fb3e8, roughness: 0.4, metalness: 0.5 });
+      [-1, 1].forEach(function (s) {
+        var wing = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.03), wingMat);
+        wing.position.set(s * 0.16, 0.28, 0); wing.rotation.z = s * 0.5; g.add(wing);
+      });
+      var grip = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 10),
+        new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.8 }));
+      grip.position.y = 0.16; g.add(grip);
+      var pommel = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), wingMat);
+      pommel.position.y = 0.05; g.add(pommel);
+      g.userData = { decoType: 'rider-blade', fw: 0.7, fd: 0.2 };
+      return shadowify(g);
+    }
+    /* Briarthrone */
+    function makeThornCrown() {
+      var g = new THREE.Group();
+      var band = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.045, 10, 24),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a5a, roughness: 0.7 }));
+      band.rotation.x = Math.PI / 2; band.position.y = 0.3; g.add(band);
+      var thornMat = new THREE.MeshStandardMaterial({ color: 0x6a4a3a, roughness: 0.75 });
+      for (var i = 0; i < 8; i++) {
+        var a = (i / 8) * Math.PI * 2;
+        var thorn = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.22 + (i % 3) * 0.05, 8), thornMat);
+        thorn.position.set(Math.cos(a) * 0.26, 0.42, Math.sin(a) * 0.26);
+        thorn.rotation.z = -Math.cos(a) * 0.25; thorn.rotation.x = Math.sin(a) * 0.25;
+        g.add(thorn);
+      }
+      var gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05),
+        new THREE.MeshStandardMaterial({ color: 0xe0637f, emissive: 0xe0637f, emissiveIntensity: 1.2, roughness: 0.2 }));
+      gem.position.set(0, 0.32, 0.28); g.add(gem);
+      g.userData = { decoType: 'thorn-crown', fw: 0.65, fd: 0.65 };
+      return shadowify(g);
+    }
+    function makeMoonGoblet() {
+      var g = new THREE.Group();
+      var pts = [];
+      [[0.001, 0], [0.2, 0], [0.24, 0.02], [0.2, 0.3], [0.14, 0.34], [0.13, 0.5]]
+        .forEach(function (p) { pts.push(new THREE.Vector2(p[0], p[1])); });
+      var cup = new THREE.Mesh(new THREE.LatheGeometry(pts, 18),
+        new THREE.MeshStandardMaterial({ color: 0x4a3a5a, roughness: 0.3, metalness: 0.7, side: THREE.DoubleSide }));
+      cup.position.y = 0.14; g.add(cup);
+      var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a3a5a, roughness: 0.3, metalness: 0.7 }));
+      stem.position.y = 0.07; g.add(stem);
+      var moon = new THREE.Mesh(new THREE.CircleGeometry(0.09, 20),
+        new THREE.MeshStandardMaterial({ color: 0xdfe8ff, emissive: 0xb8c8ff, emissiveIntensity: 0.8 }));
+      moon.position.set(0, 0.42, 0.16); g.add(moon);
+      var bite = new THREE.Mesh(new THREE.CircleGeometry(0.075, 20),
+        new THREE.MeshStandardMaterial({ color: 0x4a3a5a, roughness: 0.3, metalness: 0.7 }));
+      bite.position.set(0.035, 0.44, 0.165); g.add(bite);
+      g.userData = { decoType: 'moon-goblet', fw: 0.5, fd: 0.5 };
+      return shadowify(g);
+    }
+    function makeNightBloom() {
+      var g = new THREE.Group();
+      var petalMat = new THREE.MeshStandardMaterial({ color: 0xc9b3f5, roughness: 0.6, side: THREE.DoubleSide });
+      var petalMat2 = new THREE.MeshStandardMaterial({ color: 0x9a7fd4, roughness: 0.6, side: THREE.DoubleSide });
+      for (var ring = 0; ring < 2; ring++) {
+        var n = 6, r = 0.22 - ring * 0.07, y = 0.42 + ring * 0.06;
+        for (var i = 0; i < n; i++) {
+          var a = (i / n) * Math.PI * 2 + ring * 0.5;
+          var petal = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.24), ring ? petalMat2 : petalMat);
+          petal.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
+          petal.rotation.y = -a + Math.PI / 2; petal.rotation.x = -0.5;
+          g.add(petal);
+        }
+      }
+      var heart = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10),
+        new THREE.MeshStandardMaterial({ color: 0xe0637f, emissive: 0xe0637f, emissiveIntensity: 1.0 }));
+      heart.position.y = 0.46; g.add(heart);
+      var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x4a7a3a, roughness: 0.9 }));
+      stem.position.y = 0.2; g.add(stem);
+      var leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.07), petalMat2);
+      leaf.position.set(0.1, 0.28, 0); leaf.rotation.z = -0.5; leaf.rotation.y = 0.4; g.add(leaf);
+      g.userData = { decoType: 'night-bloom', fw: 0.6, fd: 0.6 };
+      return shadowify(g);
+    }
+    /* Voidsignal */
+    function makeHoloCube() {
+      var g = new THREE.Group();
+      var s = 0.3;
+      var edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(s, s, s));
+      g.add(new THREE.LineSegments(edges,
+        new THREE.LineBasicMaterial({ color: 0x38e1ff, transparent: true, opacity: 0.9 })));
+      var core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0x38e1ff, emissive: 0x38e1ff, emissiveIntensity: 2.2 }));
+      core.position.y = 0; g.add(core);
+      var nodeMat = new THREE.MeshBasicMaterial({ color: 0x38e1ff });
+      [[-s/2,-s/2,-s/2],[s/2,-s/2,-s/2],[-s/2,s/2,-s/2],[s/2,s/2,-s/2],
+       [-s/2,-s/2,s/2],[s/2,-s/2,s/2],[-s/2,s/2,s/2],[s/2,s/2,s/2]].forEach(function (p) {
+        var nd = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), nodeMat);
+        nd.position.set(p[0], p[1], p[2]); g.add(nd);
+      });
+      var holder = new THREE.Group(); holder.add(g);
+      var inner = new THREE.Group();
+      while (g.children.length) inner.add(g.children[0]);
+      holder.add(inner); inner.position.y = 0.42;
+      var base = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.06, 14),
+        new THREE.MeshStandardMaterial({ color: 0x1a2a34, roughness: 0.5, metalness: 0.6 }));
+      base.position.y = 0.03; holder.add(base);
+      var gl = new THREE.PointLight(0x38e1ff, 4, 4.5, 1.8);
+      gl.position.y = 0.42; decoLight(holder, gl);
+      holder.userData = { decoType: 'holo-cube', fw: 0.5, fd: 0.5 };
+      return shadowify(holder);
+    }
+    function makeSignalDish() {
+      var g = new THREE.Group();
+      var dishMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide });
+      var dish = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.35), dishMat);
+      dish.rotation.x = Math.PI * 0.72; dish.position.y = 0.52; g.add(dish);
+      var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), dishMat);
+      arm.position.set(0, 0.52, 0.12); arm.rotation.x = 0.9; g.add(arm);
+      var tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 10),
+        new THREE.MeshStandardMaterial({ color: 0x38e1ff, emissive: 0x38e1ff, emissiveIntensity: 2.0 }));
+      tip.position.set(0, 0.62, 0.24); g.add(tip);
+      var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.4, 10), dishMat);
+      pole.position.y = 0.2; g.add(pole);
+      var base = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.06, 14), dishMat);
+      base.position.y = 0.03; g.add(base);
+      g.userData = { decoType: 'signal-dish', fw: 0.65, fd: 0.65 };
+      return shadowify(g);
+    }
+    function makeDataCore() {
+      var g = new THREE.Group();
+      var shellMat = new THREE.MeshStandardMaterial({ color: 0x1a2a34, roughness: 0.35, metalness: 0.7, transparent: true, opacity: 0.55 });
+      var tube = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.55, 18, 1, true), shellMat);
+      tube.position.y = 0.36; g.add(tube);
+      var capMat = new THREE.MeshStandardMaterial({ color: 0x2a3a44, roughness: 0.4, metalness: 0.7 });
+      var capT = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.06, 18), capMat);
+      capT.position.y = 0.66; g.add(capT);
+      var capB = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.06, 18), capMat);
+      capB.position.y = 0.03; g.add(capB);
+      for (var i = 0; i < 3; i++) {
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.018, 8, 24),
+          new THREE.MeshStandardMaterial({ color: 0x38e1ff, emissive: 0x38e1ff, emissiveIntensity: 2.0 }));
+        ring.rotation.x = Math.PI / 2; ring.position.y = 0.22 + i * 0.14; g.add(ring);
+      }
+      var gl = new THREE.PointLight(0x38e1ff, 4, 4.5, 1.8);
+      gl.position.y = 0.4; decoLight(g, gl);
+      g.userData = { decoType: 'data-core', fw: 0.55, fd: 0.55 };
+      return shadowify(g);
+    }
+    /* Wisp */
+    function makeMushroomCottage() {
+      var g = new THREE.Group();
+      var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.42, 14),
+        new THREE.MeshStandardMaterial({ color: 0xf7ecd8, roughness: 0.8 }));
+      stem.position.y = 0.21; g.add(stem);
+      var cap = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        new THREE.MeshStandardMaterial({ color: 0xe86a92, roughness: 0.6 }));
+      cap.position.y = 0.42; g.add(cap);
+      var spotMat = new THREE.MeshStandardMaterial({ color: 0xfdf6ec, roughness: 0.7 });
+      [[0.12, 0.62, 0.2], [-0.15, 0.58, 0.18], [0, 0.68, -0.15]].forEach(function (p) {
+        var sp = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), spotMat);
+        sp.position.set(p[0], p[1], p[2]); sp.scale.y = 0.5; g.add(sp);
+      });
+      var door = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.8 }));
+      door.position.set(0, 0.18, 0.235); g.add(door);
+      var knob = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0xffd76a, emissive: 0xffd76a, emissiveIntensity: 1.0 }));
+      knob.position.set(0.045, 0.18, 0.245); g.add(knob);
+      g.userData = { decoType: 'mushroom-cottage', fw: 0.75, fd: 0.75 };
+      return shadowify(g);
+    }
+    function makeFireflyJar() {
+      var g = new THREE.Group();
+      var glass = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.17, 0.44, 16),
+        new THREE.MeshStandardMaterial({ color: 0xd8e4e8, transparent: true, opacity: 0.3, roughness: 0.1 }));
+      glass.position.y = 0.26; g.add(glass);
+      var lidMat = new THREE.MeshStandardMaterial({ color: 0x8a7a68, roughness: 0.7 });
+      var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 16), lidMat);
+      lid.position.y = 0.5; g.add(lid);
+      var base = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.19, 0.04, 16), lidMat);
+      base.position.y = 0.02; g.add(base);
+      var flyMat = new THREE.MeshStandardMaterial({ color: 0xffd76a, emissive: 0xffd76a, emissiveIntensity: 2.6 });
+      [[0.06, 0.3, 0.05], [-0.07, 0.22, -0.03], [0.02, 0.38, -0.06], [-0.04, 0.33, 0.08]].forEach(function (p) {
+        var f = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), flyMat);
+        f.position.set(p[0], p[1], p[2]); g.add(f);
+        var halo = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.25 }));
+        halo.position.copy(f.position); g.add(halo);
+      });
+      var gl = new THREE.PointLight(0xffd76a, 5, 4.5, 1.8);
+      gl.position.y = 0.3; decoLight(g, gl);
+      g.userData = { decoType: 'firefly-jar', fw: 0.45, fd: 0.45 };
+      return shadowify(g);
+    }
+    function makeWispLantern() {
+      var g = new THREE.Group();
+      var paper = new THREE.Mesh(new THREE.SphereGeometry(0.26, 18, 14),
+        new THREE.MeshStandardMaterial({ color: 0xfdf6ec, roughness: 0.9, transparent: true, opacity: 0.92 }));
+      paper.scale.y = 0.85; paper.position.y = 0.42; g.add(paper);
+      var starMat = new THREE.MeshStandardMaterial({ color: 0xe86a92, emissive: 0xe86a92, emissiveIntensity: 1.4 });
+      for (var i = 0; i < 5; i++) {
+        var a = (i / 5) * Math.PI * 2;
+        var star = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.07), starMat);
+        star.position.set(Math.cos(a) * 0.2, 0.42 + Math.sin(i * 2.3) * 0.1, Math.sin(a) * 0.2);
+        star.lookAt(0, 0.42, 0); star.rotateY(Math.PI);
+        g.add(star);
+      }
+      var ribMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc8, roughness: 0.8 });
+      for (var r = 0; r < 3; r++) {
+        var rib = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.008, 6, 24), ribMat);
+        rib.rotation.x = Math.PI / 2; rib.scale.y = 0.85;
+        rib.position.y = 0.32 + r * 0.1; g.add(rib);
+      }
+      var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.05, 10), ribMat);
+      cap.position.y = 0.66; g.add(cap);
+      var tassel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.14, 6), ribMat);
+      tassel.position.y = 0.1; g.add(tassel);
+      var gl = new THREE.PointLight(0xffe0a0, 4, 4.5, 1.8);
+      gl.position.y = 0.42; decoLight(g, gl);
+      g.userData = { decoType: 'wisp-lantern', fw: 0.6, fd: 0.6 };
+      return shadowify(g);
+    }
+
     var DECO_MAKERS = { plant: makePlant, candle: makeCandle, mug: makeMug, stack: makeStack,
       lights: makeFairyLights, clock: makeClock, photo: makePhoto, succulent: makeSucculent,
       lantern: makeLantern, globe: makeGlobe, vase: makeVase, stargarland: makeStarGarland,
       gifts: makeGifts, eggs: makeEggs, coins: makeCoins, clover: makeClover,
-      applebowl: makeAppleBowl };
+      applebowl: makeAppleBowl,
+      /* v423: premium packs */
+      dragonEgg: makeDragonEgg, stormLantern: makeStormLantern, riderBlade: makeRiderBlade,
+      thornCrown: makeThornCrown, moonGoblet: makeMoonGoblet, nightBloom: makeNightBloom,
+      holoCube: makeHoloCube, signalDish: makeSignalDish, dataCore: makeDataCore,
+      mushroomCottage: makeMushroomCottage, fireflyJar: makeFireflyJar, wispLantern: makeWispLantern };
 
     /* ============================== placement ============================== */
     var placed = [];   // {group, pi, rec, type} or {group, room:true, anchor, type}

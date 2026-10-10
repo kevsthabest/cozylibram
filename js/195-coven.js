@@ -26,6 +26,12 @@ const COVEN_NAMES = {
   pastel:      'Spring Court',
   harvest:     'Harvest Court',
   solstice:    'Sun Court', // v416 (T6)
+  // v423: premium packs
+  stormrider:  'Storm Court',
+  briarthrone: 'Thorn Court',
+  voidsignal:  'Void Court',
+  wisp:        'Firefly Court',
+  'wisp-night':'Firefly Court',
 };
 function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
 function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }

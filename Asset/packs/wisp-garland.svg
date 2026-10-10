@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Wisp garland</title>
+<desc id="d">A pastel garland with hanging stars, moons and dots. Wisp pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,56)"><path d="M0,-9 L2.1,-2.1 L9,0 L2.1,2.1 L0,9 L-2.1,2.1 L-9,0 L-2.1,-2.1Z"/></g>
+<g transform="translate(300,66)"><path d="M0,-11 C-11,-5.6 -11,5.6 0,11 C-3.8,6 -3.8,-6 0,-11Z"/></g>
+<g transform="translate(450,54)"><path d="M0,-9 L2.1,-2.1 L9,0 L2.1,2.1 L0,9 L-2.1,2.1 L-9,0 L-2.1,-2.1Z"/></g>
+<g transform="translate(225,52)"><circle cx="0" cy="0" r="4"/></g>
+<g transform="translate(375,52)"><circle cx="0" cy="0" r="4"/></g>
+<g opacity="0.7">
+<path d="M80,30 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+<path d="M520,28 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+</g>
+</g>
+</svg>

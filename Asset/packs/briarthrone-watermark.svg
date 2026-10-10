@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
+<title id="t">Briarthrone starfall</title>
+<desc id="d">A large crescent moon with falling stars for atmospheric backgrounds. Briarthrone pack.</desc>
+<g fill="currentColor" stroke="none">
+<path d="M140,50 C73,97.6 73,138.4 140,186 C117.2,153.9 117.2,82.1 140,50Z"/>
+<g opacity="0.85">
+<path d="M250,80 l3,7.8 7.8,3 -7.8,3 -3,7.8 -3,-7.8 -7.8,-3 7.8,-3z"/>
+<path d="M300,160 l2.4,6.2 6.2,2.4 -6.2,2.4 -2.4,6.2 -2.4,-6.2 -6.2,-2.4 6.2,-2.4z"/>
+<path d="M220,220 l2,5.2 5.2,2 -5.2,2 -2,5.2 -2,-5.2 -5.2,-2 5.2,-2z"/>
+<path d="M330,260 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M270,300 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+</g>
+<circle cx="180" cy="250" r="2.4"/><circle cx="120" cy="300" r="2"/><circle cx="340" cy="120" r="2"/><circle cx="90" cy="220" r="2"/>
+</g>
+</svg>
