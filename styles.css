@@ -3351,3 +3351,22 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #shelf3d #s3dInvTabs button { flex: 1; border: 1px solid rgba(229,184,106,.35); background: transparent;
     color: #b9a8c6; border-radius: 8px; padding: 6px; font-size: 12px; }
   #shelf3d #s3dInvTabs button.on { background: rgba(229,184,106,.2); color: #f6eff8; }
+
+/* v432: "update available" banner — tap to refresh into the new SW. */
+#app-update-banner {
+  position: fixed; left: 12px; right: 12px; bottom: 76px; z-index: 9999;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--accent); border-radius: 12px;
+  padding: 10px 12px; font-size: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+}
+#app-update-banner span { flex: 1; }
+#app-update-banner #app-update-go {
+  background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+  padding: 8px 14px; font-weight: 700; font-size: 14px;
+}
+#app-update-banner #app-update-x {
+  background: transparent; border: 0; color: var(--faint);
+  font-size: 20px; line-height: 1; padding: 4px 8px;
+}
