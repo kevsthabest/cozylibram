@@ -222,7 +222,9 @@ function renderSettings() {
   const htmlTheme =
     '<div class="field"><label>Theme</label>' +
     '<p class="note" style="margin:2px 0 0">Tap a theme to preview it live.</p></div>' +
-    themeGalleryHTML() +
+    // v423: pin the gallery to the ACTUAL theme (not the preview) so cards don't
+    // get wonky when the preview changes the document's CSS variables.
+    '<div data-theme="' + esc(getTheme()) + '">' + themeGalleryHTML() + '</div>' +
     '<div class="field" style="margin-top:14px"><label>Accent</label><div class="swatches" id="th-accent">' +
     ACCENTS.map(a =>
       '<button class="sw' + (effectiveAccent() === a.key ? ' active' : '') + '" data-a="' + a.key + '"' +
