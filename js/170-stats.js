@@ -523,8 +523,22 @@ function seriesHTML() {
   const rows = names.slice(0, 10).map(sn => {
     const books = byName[sn];
     const readN = books.filter(b => b.status === 'read').length;
-    const next = books.filter(b => b.status !== 'read' && b.status !== 'dnf')
-      .sort((a, b) => ((a.series && a.series.position) || 99) - ((b.series && b.series.position) || 99))[0];
+    // v403: "Next up" should be the next UNREAD book, not one already being read.
+    // Prefer TBR books; if currently reading one, suggest the next after it.
+    const sorted = books.slice().sort((a, b) =>
+      ((a.series && a.series.position) || 99) - ((b.series && b.series.position) || 99));
+    const currentlyReading = sorted.find(b => b.status === 'reading');
+    let next;
+    if (currentlyReading) {
+      const idx = sorted.indexOf(currentlyReading);
+      next = sorted.slice(idx + 1).find(b => b.status === 'tbr');
+    } else {
+      next = sorted.find(b => b.status === 'tbr');
+    }
+    // Fallback: if no TBR, show the earliest non-read/non-dnf (old behavior)
+    if (!next) {
+      next = sorted.find(b => b.status !== 'read' && b.status !== 'dnf');
+    }
     return '<div class="series-row"><div class="sinfo"><span class="sname">' + esc(sn) + '</span>' +
       '<span class="scount">' + readN + ' read</span></div>' +
       (next ? '<div class="snext">Next up: <button class="taplink" data-id="' + next.id + '">' +

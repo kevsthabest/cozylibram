@@ -3,7 +3,7 @@
 /* ---------------- library view ---------------- */
 function filteredBooks() {
   const q = query.trim().toLowerCase();
-  return library.filter(b => {
+  const out = library.filter(b => {
     if (filter !== 'all' && b.status !== filter) return false;
     if (ownFilter === 'owned' && b.owned !== 'owned') return false;
     if (ownFilter === 'tobuy' && b.owned !== 'tobuy') return false;
@@ -12,6 +12,19 @@ function filteredBooks() {
     return (b.title + ' ' + b.authors.join(' ') + ' ' + b.tropes.join(' '))
       .toLowerCase().includes(q);
   });
+  // v404: sort
+  const by = {
+    title: (a, b) => String(a.title || '').localeCompare(String(b.title || '')),
+    author: (a, b) => String((a.authors || [])[0] || '').localeCompare(String((b.authors || [])[0] || '')),
+    rating: (a, b) => (b.myRating || b.publicRating || 0) - (a.myRating || a.publicRating || 0),
+    progress: (a, b) => {
+      const pa = a.pageCount ? (a.progress || 0) / a.pageCount : 0;
+      const pb = b.pageCount ? (b.progress || 0) / b.pageCount : 0;
+      return pb - pa;
+    },
+    added: (a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')),
+  }[sortBy] || ((a, b) => 0);
+  return out.sort(by);
 }
 
 /* v125: glanceable cards — favorite heart overlaid on the cover, status strip
@@ -61,8 +74,18 @@ function bookTile(b, i) {
   // finished book is recognizable in grid view too.
   const readSeal = b.status === 'read'
     ? '<span class="tile-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
+  // v404: status/progress badge on grid tiles (TBR vs Reading vs progress)
+  let gridBadge = '';
+  if (b.status === 'reading' && b.pageCount) {
+    const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
+    gridBadge = '<span class="bt-badge">' + pct + '%</span>';
+  } else if (b.status === 'tbr') {
+    gridBadge = '<span class="bt-badge">TBR</span>';
+  } else if (b.status === 'dnf') {
+    gridBadge = '<span class="bt-badge">DNF</span>';
+  }
   return '<div class="book-tile' + anim + '" data-id="' + esc(b.id) + '">' +
-    '<div class="bt-cover">' + inner + coverFav(b) + readSeal + tileStatusBar(b) + '</div>' +
-    '<div class="bt-title">' + esc(b.title) + '</div></div>';
+    '<div class="bt-cover">' + inner + coverFav(b) + readSeal + gridBadge + tileStatusBar(b) + '</div>' +
+    '<div class="bt-title" title="' + esc(b.title) + '">' + esc(b.title) + '</div></div>';
 }
 

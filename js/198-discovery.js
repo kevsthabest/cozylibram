@@ -354,6 +354,82 @@ function discTile(ic, title, blurb, target) {
 // books and favorites; tapping one opens its detail sheet, whose Discovery
 // section already lists similar books from her shelves.
 // v224 (UX-06): the section carries a proper label now, not just the prompt.
+// v403: Show books similar to a seed book (from recommendations).
+// Filters the recommendation pool by seed's author/genres.
+function showSimilarToSeed(seed) {
+  const seedAuthors = (seed.authors || []).map(a => String(a).trim().toLowerCase());
+  const seedGenres = (typeof bookGenres === 'function' ? bookGenres(seed) : [])
+    .map(g => String(g).trim().toLowerCase());
+  const seedTropes = (seed.tropes || []).map(t => String(t).trim().toLowerCase());
+
+  // Score recommendations by overlap with seed
+  const scored = (visibleRecos || []).map(r => {
+    const c = r.c;
+    let score = 0;
+    const cAuthors = (c.authors || []).map(a => String(a).trim().toLowerCase());
+    if (seedAuthors.some(a => cAuthors.includes(a))) score += 3;
+    const cGenres = (c.genres || []).map(g => String(g).trim().toLowerCase());
+    if (seedGenres.some(g => cGenres.includes(g))) score += 2;
+    const cTropes = (c.tropes || []).map(t => String(t).trim().toLowerCase());
+    const tropeOverlap = seedTropes.filter(t => cTropes.includes(t)).length;
+    score += Math.min(tropeOverlap, 3);
+    return { r, score };
+  }).filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const box = document.getElementById('disc-reco');
+  if (!box) return;
+
+  // Show the recommendations section with filtered results
+  const p = document.getElementById('disc-similar');
+  if (p) p.hidden = true; // hide seeds, show results
+
+  if (!scored.length) {
+    box.innerHTML = '<h3 class="wish-section">' + icon('covers') +
+      ' Books like ' + esc(seed.title) + '</h3>' +
+      '<p class="note">No similar books found in recommendations yet. ' +
+      'Try the "Recommended for you" scan.</p>' +
+      '<button class="btn ghost sm" id="sim-back">← Back to seeds</button>';
+  } else {
+    box.innerHTML = '<h3 class="wish-section">' + icon('covers') +
+      ' Books like ' + esc(seed.title) + '</h3>' +
+      '<div class="grid">' + scored.slice(0, 12).map((x, i) => {
+        const c = x.r.c;
+        return '<div class="book-card rel-card" data-i="' + i + '">' +
+          '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
+          '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
+          '<span class="why-chip">≈' + Math.round((x.r.sim || 0) * 100) + '% match</span>' +
+          '</div></div>';
+      }).join('') + '</div>' +
+      '<button class="btn ghost sm" id="sim-back">← Back to seeds</button>';
+    // Wire up the filtered cards
+    const filtered = scored.slice(0, 12).map(x => x.r);
+    box.querySelectorAll('.rel-card').forEach(card =>
+      card.addEventListener('click', () => {
+        const r = filtered[Number(card.dataset.i)];
+        if (r) openRecoPreview(r);
+      }));
+  }
+  const back = document.getElementById('sim-back');
+  if (back) back.addEventListener('click', () => {
+    box.innerHTML = '';
+    delete box.dataset.loaded;
+    const sp = document.getElementById('disc-similar');
+    if (sp) {
+      sp.hidden = false;
+      sp.innerHTML = similarSeedHTML();
+      sp.querySelectorAll('[data-seed]').forEach(s =>
+        s.addEventListener('click', () => {
+          const sd = library.find(b => b.id === s.dataset.seed);
+          if (sd) showSimilarToSeed(sd);
+        }));
+    }
+  });
+  // Ensure the recommendations section is visible
+  const recoSection = document.getElementById('disc-reco');
+  if (recoSection) recoSection.hidden = false;
+}
+
 function similarSeedHTML() {
   const head = '<h3 class="wish-section">' + icon('covers') + ' Similar Books</h3>';
   const seeds = library.filter(b => b.favorite || (b.myRating || 0) >= 4)
@@ -366,21 +442,6 @@ function similarSeedHTML() {
     (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
              : '<span class="sim-nocover">' + icon('covers') + '</span>') +
     '<small>' + esc(b.title) + '</small></button>').join('') + '</div>';
-}
-
-// v175: "From Your <covenName>" chips deep-link into the Coven tab's sections.
-// Coven renders async, so poll briefly for the target instead of assuming
-// it is already in the DOM.
-function covenJump(sel) {
-  go('coven');
-  const t0 = Date.now();
-  const iv = setInterval(() => {
-    const el = document.querySelector(sel);
-    if (el) {
-      clearInterval(iv);
-      if (el.scrollIntoView) el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-    } else if (Date.now() - t0 > 6000) clearInterval(iv);
-  }, 150);
 }
 
 function renderDiscover() {
@@ -422,12 +483,7 @@ function renderDiscover() {
     '<span class="disc-go" aria-hidden="true">→</span></button>' +
 
     '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenName()) + '</h3>' +
-    '<button class="taplink" id="disc-coven-all">View All →</button></div>' +
-    '<div class="chips">' +
-    '<button class="chip" data-cj="#reco-slot">Recommendations</button>' +
-    '<button class="chip" data-cj="#cc-friends">Shared Shelves</button>' +
-    '<button class="chip" data-cj="#stats-slot">Friend Activity</button>' +
-    '</div></div>' +
+    '<button class="taplink" id="disc-coven-all">View All →</button></div></div>' +
 
     '<div class="disc-releases"><div id="release-results"></div></div>');
   wireReleaseCheck();
@@ -450,7 +506,14 @@ function renderDiscover() {
       if (!p.hidden) {
         p.innerHTML = similarSeedHTML();
         p.querySelectorAll('[data-seed]').forEach(s =>
-          s.addEventListener('click', () => openDetail(s.dataset.seed)));
+          s.addEventListener('click', () => {
+            // v403: seed click shows books SIMILAR to the seed, not the seed itself.
+            // Filter recommendations by the seed's author/genres and show them.
+            const seed = library.find(b => b.id === s.dataset.seed);
+            if (seed) {
+              showSimilarToSeed(seed);
+            }
+          }));
       }
     }
     else if (t === 'recommended') {
@@ -461,8 +524,6 @@ function renderDiscover() {
     // 'releases' is owned by wireReleaseCheck (shared with the Wishlist button).
   }));
   document.getElementById('disc-coven-all').addEventListener('click', () => go('coven'));
-  document.querySelectorAll('[data-cj]').forEach(c =>
-    c.addEventListener('click', () => covenJump(c.dataset.cj)));
 }
 
 /* ---------------- Recommended for you (v213, diversity v214) ----------------
@@ -782,7 +843,15 @@ let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219
 function openRecoPreview(r) {
   const c = r.c;
   const why = [];
-  if (c.loveAuthor) why.push('<span class="why-chip">' + icon('heart') + ' ' + esc(c.loveAuthor) + '</span>');
+  if (c.loveAuthor) {
+    // v403: show "because you read X" with a specific book title if available
+    const byAuthor = (typeof library !== 'undefined' ? library : [])
+      .filter(b => (b.authors || []).some(a => String(a).trim().toLowerCase() === String(c.loveAuthor).trim().toLowerCase()))
+      .sort((a, b) => (b.myRating || 0) - (a.myRating || 0));
+    const exemplar = byAuthor[0];
+    why.push('<span class="why-chip">' + icon('heart') + ' ' +
+      (exemplar ? 'Because you read ' + esc(exemplar.title) : esc(c.loveAuthor)) + '</span>');
+  }
   recoSharedTropes((c.title || '') + ' ' + (c.description || ''), visibleRecoLoved).slice(0, 2)
     .forEach(t => why.push('<span class="why-chip">✦ ' + esc(t) + '</span>'));
   if (r.sim != null) why.push('<span class="why-chip">≈' + Math.round(r.sim * 100) + '% match</span>');
