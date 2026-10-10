@@ -65,6 +65,9 @@ function shelf3DApplyTheme() {
     const params = Shelf3DTheme.forTheme(themeKey, accentKey);
     if (typeof Shelf3D.setThemeParams === 'function') Shelf3D.setThemeParams(params);
     else if (typeof Shelf3D.setTheme === 'function') Shelf3D.setTheme('default');
+    // v406: tell the engine the app theme key (dress-button label). Never
+    // rearranges decorations — the button only fires on explicit tap.
+    if (typeof Shelf3D.setAppTheme === 'function') Shelf3D.setAppTheme(themeKey);
   } catch (e) {}
 }
 
@@ -129,6 +132,7 @@ function renderShelf3D() {
       if (typeof openDetail === 'function') openDetail(id, null);
     },
     initialBooks: shelfBooks3D(shown),
+    appTheme: (typeof getTheme === 'function') ? getTheme() : 'dark',
   }).then(function () {
     _shelf3dMounted = true;
     shelf3DApplyTheme();

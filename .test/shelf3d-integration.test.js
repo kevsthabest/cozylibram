@@ -107,5 +107,72 @@ const themeSrc = fs.readFileSync(ROOT + '/js/216-shelf3d-theme.js', 'utf8');
   ok('unknown theme falls back', fb && fb.mood === 'cozy');
 }
 
+
+/* ---- 7. decoration catalog (218-shelf3d-decor.js, v406) ---- */
+const decorSrc = fs.readFileSync(ROOT + '/js/218-shelf3d-decor.js', 'utf8');
+{
+  const vm = require('vm');
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(decorSrc, sandbox);
+  const D = sandbox.window.Shelf3DDecor;
+  ok('catalog module loads', !!D && Array.isArray(D.CATALOG));
+
+  // entry shape
+  const ids = D.CATALOG.map(e => e.id);
+  ok('all ids unique', new Set(ids).size === ids.length);
+  const shapeOk = D.CATALOG.every(e =>
+    typeof e.id === 'string' && typeof e.name === 'string' &&
+    typeof e.build === 'string' && typeof e.svg === 'string' &&
+    typeof e.stock === 'number' && typeof e.premium === 'boolean');
+  ok('every entry has id/name/build/svg/stock/premium', shapeOk);
+  ok('no locked entries (lantern+globe unlocked)', D.CATALOG.every(e => !e.locked));
+  const prem = id => D.CATALOG.find(e => e.id === id).premium;
+  ok('lantern flagged premium', prem('lantern') === true);
+  ok('globe flagged premium', prem('globe') === true);
+  ok('moon flagged premium', prem('moon') === true);
+  ok('stargarland flagged premium', prem('stargarland') === true);
+  ok('snowflake flagged premium', prem('snowflake') === true);
+  ok('basics not premium', prem('plant') === false && prem('candle') === false && prem('mug') === false);
+  const roomIds = D.CATALOG.filter(e => e.room).map(e => e.id).sort();
+  ok('room tab has web/pumpkin/moon/snowflake',
+    JSON.stringify(roomIds) === JSON.stringify(['moon', 'pumpkin', 'snowflake', 'web']));
+  const vase = D.CATALOG.find(e => e.id === 'vase');
+  ok('vase has 6 theme variants',
+    vase.variants && ['amour','velvet','pastel','harvest','frost','yuletide'].every(k => vase.variants[k]));
+
+  // sets: all 17 themes, every id resolves
+  const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest'];
+  const setsOk = themes.every(k => {
+    const set = D.setFor(k);
+    return Array.isArray(set) && set.length > 0 && set.every(id => ids.includes(id));
+  });
+  ok('all 17 themes have valid sets', setsOk);
+  ok('unknown theme set falls back', D.setFor('nope').length > 0);
+
+  // presets: all 17 themes, placements well-formed
+  const presetsOk = themes.every(k => {
+    const pre = D.presetFor(k);
+    return Array.isArray(pre) && pre.length > 0 && pre.every(p => {
+      if (!ids.includes(p.deco)) return false;
+      if (p.room) return typeof p.x === 'number';
+      return Number.isInteger(p.pi) && p.pi >= 0 && p.pi <= 2 && typeof p.x === 'number';
+    });
+  });
+  ok('all 17 themes have well-formed presets', presetsOk);
+  ok('harvest preset carries the north-star set',
+    D.presetFor('harvest').some(p => p.deco === 'lights' && p.pi === 2) &&
+    D.presetFor('harvest').some(p => p.deco === 'pumpkin' && p.room));
+  const p1 = D.presetFor('dark'), p2 = D.presetFor('dark');
+  p1[0].x = 999;
+  ok('presetFor returns copies', p2[0].x !== 999);
+}
+
+/* ---- 8. 218 file wiring ---- */
+ok('sw.js precaches 218-shelf3d-decor.js', swJs.includes('218-shelf3d-decor.js'));
+ok('index.html loads 218-shelf3d-decor.js', html.includes('js/218-shelf3d-decor.js'));
+ok('218 loads before 215 in index.html',
+  html.indexOf('js/218-shelf3d-decor.js') < html.indexOf('js/215-shelf3d.js'));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

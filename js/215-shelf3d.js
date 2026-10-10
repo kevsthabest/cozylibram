@@ -2,10 +2,12 @@
    prototype/threejs-shelf spike (prototype-shelf.html, v7).
 
    Renders the user's library as physical books on a wooden bookcase in a
-   cozy room: decoration inventory with counts (Shelf/Room tabs), all twelve
+   cozy room: decoration inventory with counts (Shelf/Room tabs), all 21
    decorations (plant, candle, mug, book stack, fairy lights, clock, photo
-   frame, succulent, spiderweb, pumpkin, lantern, globe), the Autumn cozy
-   preset, tilt + sound toggles, dust motes, candle flicker / fairy twinkle
+   frame, succulent, lantern, globe, spiderweb, pumpkin, stems vase, crescent
+   moon, star garland, gift boxes, painted eggs, snowflake, gold coins,
+   clover, apple bowl), per-theme presets with a "Dress shelf for <theme>"
+   button, tilt + sound toggles, dust motes, candle flicker / fairy twinkle
    animations, confirm dialog and toasts. Tap a book to open it.
 
    Three.js (r159 UMD, vendored at js/vendor/three.min.js) is LAZY-loaded on
@@ -14,11 +16,12 @@
 
    Classic script, no modules. Exposes:
      window.Shelf3D = {
-       mount(container, opts),   // -> Promise<handle>; opts = { onBookTap(bookId), initialBooks }
+       mount(container, opts),   // -> Promise<handle>; opts = { onBookTap(bookId), initialBooks, appTheme }
        unmount(),
        setBooks(books),          // books: [{id, title, spineC1, spineC2, spineW, spineH}]
        setTheme(themeKey),       // 'autumn' or anything else (= default look)
-       setThemeParams(params)    // full app-theme params from Shelf3DTheme.forTheme()
+       setThemeParams(params),   // full app-theme params from Shelf3DTheme.forTheme()
+       setAppTheme(themeKey)     // app theme key: updates the dress button label (never rearranges)
      }
 
    The instance owns ALL of its state (no module-level Three.js objects), so
@@ -144,9 +147,6 @@
     '.s3d-root .inv-item.picked{border-color:#e5b86a;background:rgba(229,184,106,.16);',
     '  box-shadow:0 0 0 2px rgba(229,184,106,.5);}',
     '.s3d-root .inv-item .cnt{position:absolute;top:4px;right:6px;font-size:10px;color:#e5b86a;font-weight:700;}',
-    '.s3d-root .inv-item.locked{opacity:.42;filter:grayscale(.75);}',
-    '.s3d-root .inv-item.locked .locktag{position:absolute;top:4px;right:6px;font-size:9px;font-weight:700;',
-    '  color:#8a7a95;letter-spacing:.06em;}',
     '.s3d-root #s3dSelmenu{position:absolute;z-index:7;display:none;transform:translate(-50%,-110%);',
     '  background:rgba(24,17,32,.94);border:1px solid rgba(229,184,106,.5);border-radius:12px;',
     '  padding:6px;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);}',
@@ -174,7 +174,7 @@
     '  <div class="btns">',
     '    <button class="pill" id="s3dTiltBtn">Tilt: off</button>',
     '    <button class="pill" id="s3dSndBtn">Sound: on</button>',
-    '    <button class="pill" id="s3dPresetBtn">Autumn cozy</button>',
+    '    <button class="pill" id="s3dPresetBtn">Dress shelf</button>',
     '  </div>',
     '</div>',
     '<div id="s3dTiltDbg"></div>',
@@ -651,13 +651,38 @@
     var flameTex = flameTexture();
 
     var candleFlames = [];
-    function makeCandle() {
+
+    /* ---- mobile point-light budget (Pixel 7 Pro reference) ----
+       Forward renderer: every point light adds per-fragment shader cost.
+       Cap decoration point lights at 12 simultaneous; emissive materials
+       still glow when the budget is exhausted, so the scene never looks
+       broken — it just stops adding new real lights. Ghost groups (drag
+       previews) also draw from the budget and release it on discard. */
+    var DECO_LIGHT_CAP = 12;
+    var decoLightCount = 0;
+    function decoLight(g, light) {
+      g.userData.decoLights = g.userData.decoLights || 0;
+      if (decoLightCount < DECO_LIGHT_CAP) {
+        g.add(light);
+        g.userData.decoLights++;
+        decoLightCount++;
+      }
+      return light;
+    }
+    function releaseDecoLights(g) {
+      var n = (g.userData && g.userData.decoLights) || 0;
+      decoLightCount = Math.max(0, decoLightCount - n);
+      if (g.userData) g.userData.decoLights = 0;
+    }
+
+    function makeCandle(opts) {
+      opts = opts || {};
       var g = new THREE.Group();
       var brass = new THREE.MeshStandardMaterial({ color: 0x9a743d, roughness: 0.45, metalness: 0.7 });
       var saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.05, 18), brass);
       saucer.position.y = 0.025; g.add(saucer);
       var b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.165, 0.55, 18),
-        new THREE.MeshStandardMaterial({ color: 0xe9dcc4, roughness: 0.6 }));
+        new THREE.MeshStandardMaterial({ color: new THREE.Color(opts.tint || '#e9dcc4'), roughness: 0.6 }));
       b2.position.y = 0.325; g.add(b2);
       var wick = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.09, 6),
         new THREE.MeshStandardMaterial({ color: 0x1a1410 }));
@@ -665,8 +690,8 @@
       var flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTex,
         blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       flame.position.y = 0.78; flame.scale.set(0.24, 0.34, 1); g.add(flame);
-      var glow = new THREE.PointLight(0xff9a3c, 14, 11, 1.6);
-      glow.position.y = 0.85; g.add(glow);
+      var glow = new THREE.PointLight(new THREE.Color(opts.glow || opts.tint2 || '#ff9a3c'), 14, 11, 1.6);
+      glow.position.y = 0.85; decoLight(g, glow);
       g.userData = { decoType: 'candle', fw: 0.55, fd: 0.55, glow: glow, flame: flame, seed: Math.random() * 10 };
       candleFlames.push(g);
       return shadowify(g);
@@ -702,7 +727,8 @@
     }
 
     var fairyBulbs = [];
-    function makeFairyLights() {
+    function makeFairyLights(opts) {
+      opts = opts || {};
       var g = new THREE.Group();
       var W = 6, pts = [];
       var n = 26;
@@ -714,10 +740,12 @@
       g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.016, 6),
         new THREE.MeshStandardMaterial({ color: 0x33291d, roughness: 0.9 })));
       var bulbGeo = new THREE.SphereGeometry(0.055, 10, 10);
+      var bulbC = new THREE.Color(opts.tint || '#ffd9a0');
+      var glowC = new THREE.Color(opts.glow || opts.tint || '#ffb84d');
       pts.forEach(function (p, i) {
         if (i % 2 === 0) return;
         var b = new THREE.Mesh(bulbGeo, new THREE.MeshStandardMaterial({
-          color: 0xffd9a0, emissive: 0xffb84d, emissiveIntensity: 1.7, roughness: 0.4 }));
+          color: bulbC, emissive: glowC, emissiveIntensity: 1.7, roughness: 0.4 }));
         b.position.copy(p); b.position.y -= 0.08;
         b.userData.phase = (fairyBulbs.length % 13) * 0.75;   // staggered wave along the string
         g.add(b); fairyBulbs.push(b);
@@ -726,14 +754,15 @@
       // 3 strategic point lights along the string so bulbs cast real light
       // on nearby books/shelf (one per ~2 bulbs, perf-safe)
       [-2, 0, 2].forEach(function (lx) {
-        var pl = new THREE.PointLight(0xffb84d, 5, 5.5, 1.8);
+        var pl = new THREE.PointLight(glowC, 5, 5.5, 1.8);
         pl.position.set(lx, -0.15, 0.25);
-        g.add(pl);
+        decoLight(g, pl);
       });
       return shadowify(g);
     }
 
-    function makeClock() {
+    function makeClock(opts) {
+      opts = opts || {};
       var g = new THREE.Group();
       var wood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.7 });
       var frame = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.65, 0.12), wood);
@@ -742,10 +771,13 @@
         new THREE.MeshStandardMaterial({ color: 0xf2e8d5, roughness: 0.6 }));
       face.position.set(0, 0.35, 0.065); g.add(face);
       var handMat = new THREE.MeshStandardMaterial({ color: 0x2a2018 });
+      // variant 'midnight': both hands at 12 for the fête theme
+      var hourA = opts.variant === 'midnight' ? 0 : -0.9;
+      var minA = opts.variant === 'midnight' ? 0 : 0.5;
       var hourH = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.13, 0.01), handMat);
-      hourH.position.set(0, 0.38, 0.07); hourH.rotation.z = -0.9; g.add(hourH);
+      hourH.position.set(0, 0.38, 0.07); hourH.rotation.z = hourA; g.add(hourH);
       var minH = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.19, 0.01), handMat);
-      minH.position.set(0, 0.40, 0.07); minH.rotation.z = 0.5; g.add(minH);
+      minH.position.set(0, 0.40, 0.07); minH.rotation.z = minA; g.add(minH);
       g.userData = { decoType: 'clock', fw: 0.6, fd: 0.3 };
       return shadowify(g);
     }
@@ -816,7 +848,7 @@
         new THREE.MeshStandardMaterial({ color: 0xffcf7a, emissive: 0xff9a2a, emissiveIntensity: 2.6 }));
       core.position.y = 0.3; g.add(core);
       var gl = new THREE.PointLight(0xff9a3c, 6, 5.5, 1.8);
-      gl.position.y = 0.36; g.add(gl);
+      gl.position.y = 0.36; decoLight(g, gl);
       g.userData = { decoType: 'lantern', fw: 0.45, fd: 0.45 };
       return shadowify(g);
     }
@@ -841,9 +873,231 @@
       g.userData = { decoType: 'globe', fw: 0.62, fd: 0.62 };
       return shadowify(g);
     }
+    /* ---- P0 new builds (per-theme catalog) ---- */
+    function vasePalette(variant) {
+      var D = (window.Shelf3DDecor && Shelf3DDecor.get('vase')) || {};
+      var v = (D.variants && D.variants[variant]) || {};
+      return { flower: v.flower || '#e5488f', stem: v.stem || '#4a7a3a' };
+    }
+    function makeVase(opts) {
+      opts = opts || {};
+      var pal = opts.variant ? vasePalette(opts.variant)
+        : { flower: opts.tint || '#e5488f', stem: opts.tint2 || '#4a7a3a' };
+      var g = new THREE.Group();
+      // lathe vase profile
+      var pts = [];
+      [[0.001, 0], [0.16, 0], [0.2, 0.06], [0.22, 0.18], [0.15, 0.34], [0.09, 0.42], [0.1, 0.48]]
+        .forEach(function (p) { pts.push(new THREE.Vector2(p[0], p[1])); });
+      var vase = new THREE.Mesh(new THREE.LatheGeometry(pts, 18),
+        new THREE.MeshStandardMaterial({ color: 0x7a8a9a, roughness: 0.35, metalness: 0.1 }));
+      g.add(vase);
+      var stemMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.stem), roughness: 0.9 });
+      var flowerMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.flower), roughness: 0.7 });
+      var heads = [[-0.09, 0.78, 0.02], [0.07, 0.88, -0.03], [0.0, 0.98, 0.04], [-0.02, 0.7, -0.06], [0.1, 0.72, 0.05]];
+      heads.forEach(function (h, i) {
+        var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.42, 6), stemMat);
+        stem.position.set(h[0] / 2, 0.62, h[2] / 2);
+        stem.rotation.z = -h[0] * 1.4; stem.rotation.x = h[2] * 1.4;
+        g.add(stem);
+        var bloom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.055 + (i % 2) * 0.015, 0), flowerMat);
+        bloom.position.set(h[0], h[1], h[2]);
+        g.add(bloom);
+      });
+      g.userData = { decoType: 'vase', fw: 0.5, fd: 0.5 };
+      return shadowify(g);
+    }
+    function makeMoon(opts) {
+      opts = opts || {};
+      var g = new THREE.Group();
+      // crescent: outer disc with an offset disc hole, extruded thin
+      var shape = new THREE.Shape();
+      shape.absarc(0, 0, 0.42, 0, Math.PI * 2, false);
+      var hole = new THREE.Path();
+      hole.absarc(0.17, 0.1, 0.36, 0, Math.PI * 2, true);
+      shape.holes.push(hole);
+      var geo = new THREE.ExtrudeGeometry(shape, { depth: 0.07, bevelEnabled: false, curveSegments: 28 });
+      var moon = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: new THREE.Color(opts.tint || '#dfe8ff'), emissive: new THREE.Color(opts.tint || '#b8ccff'),
+        emissiveIntensity: 0.85, roughness: 0.5 }));
+      g.add(moon);
+      var ml = new THREE.PointLight(0xb8c8ff, 3, 6, 1.8);
+      ml.position.set(0, 0, 0.5); decoLight(g, ml);
+      g.userData = { decoType: 'moon', fw: 0.9, fd: 0.9 };
+      return shadowify(g);
+    }
+    function starShape(r) {
+      var s = new THREE.Shape();
+      for (var i = 0; i < 10; i++) {
+        var a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        var rr = i % 2 === 0 ? r : r * 0.45;
+        var x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+        if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
+      }
+      s.closePath();
+      return s;
+    }
+    function makeStarGarland(opts) {
+      opts = opts || {};
+      var g = new THREE.Group();
+      var W = 5.2, pts = [];
+      var n = 22;
+      for (var i = 0; i <= n; i++) {
+        var t = i / n;
+        pts.push(new THREE.Vector3(-W / 2 + t * W, -0.24 * Math.sin(Math.PI * t) - 0.04, 0));
+      }
+      var curve = new THREE.CatmullRomCurve3(pts);
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 36, 0.014, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2c2c34, roughness: 0.9 })));
+      var starGeo = new THREE.ExtrudeGeometry(starShape(0.075), { depth: 0.03, bevelEnabled: false });
+      var glowC = new THREE.Color(opts.glow || opts.tint || '#cfe0ff');
+      pts.forEach(function (p, i) {
+        if (i % 3 !== 1) return;
+        var st = new THREE.Mesh(starGeo, new THREE.MeshStandardMaterial({
+          color: 0xe8f0ff, emissive: glowC, emissiveIntensity: 1.9, roughness: 0.4 }));
+        st.position.set(p.x - 0.075, p.y - 0.16, -0.015);
+        st.userData.phase = (fairyBulbs.length % 11) * 0.9;
+        g.add(st); fairyBulbs.push(st);
+      });
+      g.userData = { decoType: 'stargarland', fw: 5.6, fd: 0.5, edge: true };
+      [-1.5, 1.5].forEach(function (lx) {
+        var pl = new THREE.PointLight(glowC, 4, 5, 1.8);
+        pl.position.set(lx, -0.15, 0.25);
+        decoLight(g, pl);
+      });
+      return shadowify(g);
+    }
+    function makeGifts(opts) {
+      opts = opts || {};
+      var g = new THREE.Group();
+      var boxC = new THREE.Color(opts.tint || '#d43a55');
+      var box2C = new THREE.Color(opts.tint2 || '#2a6a3a');
+      var ribC = new THREE.Color(opts.ribbon || '#f2d06a');
+      var mk = function (w, h, d, c, x, y, z, ry) {
+        var b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }));
+        b.position.set(x, y, z); b.rotation.y = ry || 0; g.add(b);
+        var r1 = new THREE.Mesh(new THREE.BoxGeometry(w + 0.012, h + 0.012, 0.07),
+          new THREE.MeshStandardMaterial({ color: ribC, roughness: 0.5 }));
+        r1.position.set(x, y, z); r1.rotation.y = ry || 0; g.add(r1);
+        var r2 = new THREE.Mesh(new THREE.BoxGeometry(0.07, h + 0.012, d + 0.012),
+          new THREE.MeshStandardMaterial({ color: ribC, roughness: 0.5 }));
+        r2.position.set(x, y, z); r2.rotation.y = ry || 0; g.add(r2);
+      };
+      mk(0.62, 0.4, 0.5, boxC, -0.05, 0.2, 0, 0.1);
+      mk(0.44, 0.32, 0.4, box2C, 0.02, 0.56, 0.02, -0.14);
+      var bow = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.018, 8, 14),
+        new THREE.MeshStandardMaterial({ color: ribC, roughness: 0.5 }));
+      bow.position.set(0.02, 0.75, 0.02); bow.rotation.x = Math.PI / 2; g.add(bow);
+      g.userData = { decoType: 'gifts', fw: 0.75, fd: 0.6 };
+      return shadowify(g);
+    }
+    function makeEggs(opts) {
+      opts = opts || {};
+      var g = new THREE.Group();
+      var pts = [];
+      [[0.001, 0], [0.2, 0], [0.3, 0.05], [0.32, 0.12], [0.28, 0.16]]
+        .forEach(function (p) { pts.push(new THREE.Vector2(p[0], p[1])); });
+      var bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 16),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7, side: THREE.DoubleSide }));
+      g.add(bowl);
+      var cols = opts.tints || ['#f2a3c0', '#b9a3f2', '#a8d8c8'];
+      cols.forEach(function (c, i) {
+        var e = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: 0.45 }));
+        e.scale.y = 1.3;
+        e.position.set(-0.14 + i * 0.14, 0.22, (i % 2) * 0.06 - 0.03);
+        e.rotation.z = (i - 1) * 0.2;
+        g.add(e);
+      });
+      g.userData = { decoType: 'eggs', fw: 0.7, fd: 0.7 };
+      return shadowify(g);
+    }
+    function makeSnowflake() {
+      var g = new THREE.Group();
+      var mat = new THREE.MeshStandardMaterial({ color: 0xdfeaf8, emissive: 0x9fc4e8,
+        emissiveIntensity: 0.7, roughness: 0.3, metalness: 0.2 });
+      for (var i = 0; i < 3; i++) {
+        var armG = new THREE.Group();
+        var arm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.85, 0.035), mat);
+        armG.add(arm);
+        // small branches near both tips, angled outward
+        [0.28, -0.28].forEach(function (y) {
+          [0.55, -0.55].forEach(function (a) {
+            var br = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.18, 0.03), mat);
+            br.position.set(Math.sin(a) * 0.08, y + Math.cos(a) * 0.07, 0);
+            br.rotation.z = -a;
+            armG.add(br);
+          });
+        });
+        armG.rotation.z = (i / 3) * Math.PI;
+        g.add(armG);
+      }
+      var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 6), mat);
+      hub.rotation.x = Math.PI / 2; g.add(hub);
+      g.userData = { decoType: 'snowflake', fw: 0.95, fd: 0.95 };
+      return shadowify(g);
+    }
+    /* ---- P1 new builds ---- */
+    function makeCoins() {
+      var g = new THREE.Group();
+      var gold = new THREE.MeshStandardMaterial({ color: 0xd8a83a, roughness: 0.3, metalness: 0.9 });
+      var y = 0;
+      for (var i = 0; i < 6; i++) {
+        var c = new THREE.Mesh(new THREE.CylinderGeometry(0.16 - (i % 3) * 0.012, 0.16 - (i % 3) * 0.012, 0.055, 16), gold);
+        c.position.set(((i * 37) % 5 - 2) * 0.012, y + 0.028, ((i * 53) % 5 - 2) * 0.012);
+        g.add(c); y += 0.055;
+      }
+      g.userData = { decoType: 'coins', fw: 0.42, fd: 0.42 };
+      return shadowify(g);
+    }
+    function makeClover() {
+      var g = new THREE.Group();
+      var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.22, 12),
+        new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 0.8 }));
+      pot.position.y = 0.11; g.add(pot);
+      var leafMat = new THREE.MeshStandardMaterial({ color: 0x2a8a4a, roughness: 0.85, side: THREE.DoubleSide });
+      var stemMat = new THREE.MeshStandardMaterial({ color: 0x1f6a38, roughness: 0.9 });
+      [[-0.09, 0.42, 0.03], [0.09, 0.46, -0.02], [0.0, 0.54, 0.04], [0.05, 0.38, -0.05]].forEach(function (p) {
+        var st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.24, 6), stemMat);
+        st.position.set(p[0] / 2, 0.3, p[2] / 2); st.rotation.z = -p[0] * 2; g.add(st);
+        for (var l = 0; l < 3; l++) {
+          var leaf = new THREE.Mesh(new THREE.CircleGeometry(0.055, 10), leafMat);
+          var a = (l / 3) * Math.PI * 2;
+          leaf.position.set(p[0] + Math.cos(a) * 0.05, p[1], p[2] + Math.sin(a) * 0.05);
+          leaf.rotation.x = -Math.PI / 2 + 0.5;
+          leaf.rotation.z = a;
+          g.add(leaf);
+        }
+      });
+      g.userData = { decoType: 'clover', fw: 0.45, fd: 0.45 };
+      return shadowify(g);
+    }
+    function makeAppleBowl() {
+      var g = new THREE.Group();
+      var pts = [];
+      [[0.001, 0], [0.24, 0], [0.36, 0.06], [0.38, 0.16], [0.34, 0.2]]
+        .forEach(function (p) { pts.push(new THREE.Vector2(p[0], p[1])); });
+      var bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 18),
+        new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.65, side: THREE.DoubleSide }));
+      g.add(bowl);
+      var appleCols = [0xc0392b, 0xd43a55, 0xa83232];
+      appleCols.forEach(function (c, i) {
+        var a = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12),
+          new THREE.MeshStandardMaterial({ color: c, roughness: 0.35 }));
+        a.position.set(-0.15 + i * 0.15, 0.26, (i % 2) * 0.08 - 0.04);
+        g.add(a);
+        var st = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.06, 6),
+          new THREE.MeshStandardMaterial({ color: 0x4a3a22, roughness: 0.9 }));
+        st.position.set(a.position.x, 0.37, a.position.z); g.add(st);
+      });
+      g.userData = { decoType: 'applebowl', fw: 0.85, fd: 0.85 };
+      return shadowify(g);
+    }
     var DECO_MAKERS = { plant: makePlant, candle: makeCandle, mug: makeMug, stack: makeStack,
       lights: makeFairyLights, clock: makeClock, photo: makePhoto, succulent: makeSucculent,
-      lantern: makeLantern, globe: makeGlobe };
+      lantern: makeLantern, globe: makeGlobe, vase: makeVase, stargarland: makeStarGarland,
+      gifts: makeGifts, eggs: makeEggs, coins: makeCoins, clover: makeClover,
+      applebowl: makeAppleBowl };
 
     /* ============================== placement ============================== */
     var placed = [];   // {group, pi, rec, type} or {group, room:true, anchor, type}
@@ -898,31 +1152,14 @@
     /* placements consume inventory — every placement path funnels through
        placeDeco/placeRoomDeco, so owned counts always decrement. `free`
        skips the count for preset items. */
-    var totalPlaced = 0;
     function consumeInventory(type) {
       var inv = null;
       INVENTORY.forEach(function (i) { if (i.type === type) inv = i; });
-      if (inv && inv.owned > 0 && !inv.locked) { inv.owned--; totalPlaced++; checkUnlocks(); }
+      if (inv && inv.owned > 0) { inv.owned--; }
       buildInventory();
     }
-    function unlockMsg(item) {
-      var need = item.type === 'lantern' ? 10 : 20;
-      var left = Math.max(0, need - totalPlaced);
-      return item.name + ' unlocks after placing ' + need + ' decorations' +
-        (left > 0 ? ' (' + left + ' to go)' : '');
-    }
-    function checkUnlocks() {
-      [['Lantern', 'lantern', 10], ['Globe', 'globe', 20]].forEach(function (u) {
-        var it = null;
-        INVENTORY.forEach(function (i) { if (i.type === u[1]) it = i; });
-        if (it && it.locked && totalPlaced >= u[2]) {
-          it.locked = false; it.owned = 1;
-          toast(u[0] + ' unlocked \u2014 check your inventory!');
-        }
-      });
-    }
-    function placeDeco(type, pi, x, free) {
-      var g = DECO_MAKERS[type]();
+    function placeDeco(type, pi, x, free, opts) {
+      var g = DECO_MAKERS[type](opts || {});
       var fw = g.userData.fw;
       x = findFreeSpot(pi, x, fw);
       if (g.userData.edge) {
@@ -933,7 +1170,7 @@
       g.scale.setScalar(0.01);   // 220ms ease-out-back pop on place
       scene.add(g);
       var rec = registerSpot(pi, x, fw);
-      placed.push({ group: g, pi: pi, rec: rec, type: type });
+      placed.push({ group: g, pi: pi, rec: rec, type: type, opts: opts || null });
       tween(220, function (k) { g.scale.setScalar(Math.max(0.01, easeOutBack(k))); });
       if (!free) consumeInventory(type);
       sfx('place');
@@ -949,6 +1186,7 @@
       }
       var ci = candleFlames.indexOf(g);
       if (ci >= 0) candleFlames.splice(ci, 1);
+      releaseDecoLights(g);
       g.traverse(function (o) {
         if (o.isMesh && o.material && o.material.emissive) {
           var bi = fairyBulbs.indexOf(o); if (bi >= 0) fairyBulbs.splice(bi, 1);
@@ -1016,22 +1254,24 @@
       g.userData = { decoType: 'pumpkin', room: true };
       return shadowify(g);
     }
-    var ROOM_MAKERS = { web: makeWeb, pumpkin: makePumpkin };
+    var ROOM_MAKERS = { web: makeWeb, pumpkin: makePumpkin, moon: makeMoon, snowflake: makeSnowflake };
     var ROOM_ANCHORS = [
       { id: 'webL', types: ['web'], pos: new THREE.Vector3(-SHELF_W / 2 - 0.4, TOP_Y - 1.1, 0.7) },
       { id: 'webR', types: ['web'], pos: new THREE.Vector3(SHELF_W / 2 + 0.4, TOP_Y - 1.1, 0.7) },
       { id: 'floorL', types: ['pumpkin'], pos: new THREE.Vector3(-SHELF_W / 2 - 2.0, 0, 1.5) },
-      { id: 'floorR', types: ['pumpkin'], pos: new THREE.Vector3(SHELF_W / 2 + 2.0, 0, 1.5) }
+      { id: 'floorR', types: ['pumpkin'], pos: new THREE.Vector3(SHELF_W / 2 + 2.0, 0, 1.5) },
+      { id: 'moonC', types: ['moon'], pos: new THREE.Vector3(SHELF_W / 2 - 0.8, TOP_Y - 2.2, WALL_Z + 0.1) },
+      { id: 'flakeC', types: ['snowflake'], pos: new THREE.Vector3(-SHELF_W / 2 + 0.8, TOP_Y - 2.6, WALL_Z + 0.1) }
     ];
     ROOM_ANCHORS.forEach(function (a) { a.usedBy = null; });
-    function placeRoomDeco(type, pos, anchor, free) {
-      var g = ROOM_MAKERS[type]();
+    function placeRoomDeco(type, pos, anchor, free, opts) {
+      var g = ROOM_MAKERS[type](opts || {});
       g.position.copy(pos);
       g.scale.setScalar(0.01);   // 220ms ease-out-back pop on place
       scene.add(g);
       tween(220, function (k) { g.scale.setScalar(Math.max(0.01, easeOutBack(k))); });
       if (anchor) anchor.usedBy = g;
-      placed.push({ group: g, room: true, anchor: anchor || null, type: type });
+      placed.push({ group: g, room: true, anchor: anchor || null, type: type, opts: opts || null });
       if (!free) consumeInventory(type); else buildInventory();
       setHint(DEFAULT_HINT);
       select(g);
@@ -1059,19 +1299,21 @@
       return v;
     }
     /* free placement — the drop point is used directly, per decoration type:
-       pumpkin sits on the floor (clamped, never under the bookcase),
-       spiderweb sticks to the wall (back panel plane). */
+       floor items sit on the floor (clamped, never under the bookcase),
+       wall items stick to the wall (back panel plane). */
+    var ROOM_WALL_TYPES = ['web', 'moon', 'snowflake'];
     function roomDropPos(type, x, y, z) {
       if (type === 'pumpkin') {
         return clampFloorPos(new THREE.Vector3(x, 0, z));
       }
-      // web: pin to the wall plane, facing outward; keep within the panel bounds
+      // wall: pin to the wall plane, facing outward; keep within the panel bounds
       return new THREE.Vector3(THREE.MathUtils.clamp(x, -5.3, 5.3),
         THREE.MathUtils.clamp(y, 1, 7.6), WALL_Z + 0.05);
     }
     function discardGhost(g) {
       var ci = candleFlames.indexOf(g);
       if (ci >= 0) candleFlames.splice(ci, 1);
+      releaseDecoLights(g);
       var keep = [];
       g.traverse(function (o) { if (o.isMesh && fairyBulbs.indexOf(o) >= 0) keep.push(o); });
       keep.forEach(function (o) { fairyBulbs.splice(fairyBulbs.indexOf(o), 1); });
@@ -1080,21 +1322,18 @@
     }
 
     /* ============================== inventory ============================== */
-    var INVENTORY = [
-      { type: 'plant', name: 'Plant', owned: 3, svg: '<svg viewBox="0 0 30 30"><path d="M10 22 L20 22 L18 28 L12 28 Z" fill="#a85f32"/><path d="M15 22 C15 14 12 10 6 8 C12 8 14 12 15 16 C16 12 18 8 24 8 C18 10 15 14 15 22" fill="#4a7a3a"/></svg>' },
-      { type: 'candle', name: 'Candle', owned: 5, svg: '<svg viewBox="0 0 30 30"><rect x="12" y="13" width="6" height="12" rx="1" fill="#e8dcc8"/><ellipse cx="15" cy="13" rx="3" ry="1.4" fill="#d8cbb2"/><path d="M15 4 C17 8 17.5 10 15 12 C12.5 10 13 8 15 4" fill="#ff9a2a"/></svg>' },
-      { type: 'mug', name: 'Mug', owned: 2, svg: '<svg viewBox="0 0 30 30"><rect x="8" y="12" width="11" height="13" rx="2" fill="#b5542a"/><path d="M19 15 c4 0 4 7 0 7" stroke="#b5542a" stroke-width="2.6" fill="none"/></svg>' },
-      { type: 'stack', name: 'Book stack', owned: 4, svg: '<svg viewBox="0 0 30 30"><rect x="6" y="20" width="18" height="5" rx="1" fill="#7a4a5a"/><rect x="7" y="15" width="16" height="5" rx="1" fill="#3a5a7a"/><rect x="6" y="10" width="18" height="5" rx="1" fill="#8a6a2a"/></svg>' },
-      { type: 'lights', name: 'Fairy lights', owned: 2, svg: '<svg viewBox="0 0 30 30"><path d="M3 8 Q15 18 27 8" stroke="#5a4a3a" stroke-width="1.4" fill="none"/><circle cx="8" cy="11.5" r="1.8" fill="#ffcf7a"/><circle cx="15" cy="13" r="1.8" fill="#ffcf7a"/><circle cx="22" cy="11.5" r="1.8" fill="#ffcf7a"/></svg>' },
-      { type: 'clock', name: 'Clock', owned: 1, svg: '<svg viewBox="0 0 30 30"><rect x="8" y="5" width="14" height="17" rx="2" fill="#5a3a22"/><circle cx="15" cy="13.5" r="5.5" fill="#f2e8d5"/><path d="M15 13.5 L15 10 M15 13.5 L18 14.5" stroke="#2a2018" stroke-width="1.4"/></svg>' },
-      { type: 'photo', name: 'Photo frame', owned: 2, svg: '<svg viewBox="0 0 30 30"><rect x="8" y="5" width="14" height="18" rx="1" fill="#8a6a3a"/><rect x="10.5" y="7.5" width="9" height="13" fill="#2a3a5a"/><circle cx="18" cy="11" r="2" fill="#f6eff8"/></svg>' },
-      { type: 'succulent', name: 'Succulent', owned: 3, svg: '<svg viewBox="0 0 30 30"><path d="M11 20 L19 20 L17.5 26 L12.5 26 Z" fill="#7a8a9a"/><path d="M15 20 C15 15 13 12 9 11 C13 11 14 14 15 17 C16 14 17 11 21 11 C17 12 15 15 15 20" fill="#6a9a7a"/></svg>' },
-      { type: 'lantern', name: 'Lantern', owned: 0, locked: true, svg: '<svg viewBox="0 0 30 30"><rect x="10" y="8" width="10" height="14" rx="3" fill="#3a3a4a"/><circle cx="15" cy="15" r="3" fill="#ffcf7a" opacity=".5"/></svg>' },
-      { type: 'globe', name: 'Globe', owned: 0, locked: true, svg: '<svg viewBox="0 0 30 30"><circle cx="15" cy="14" r="8" fill="#3a5a7a"/><path d="M15 6 a8 8 0 0 1 0 16" fill="#4a7a3a"/><rect x="13" y="22" width="4" height="4" fill="#5a3a22"/></svg>' },
-      /* room decorations — placed freely in the room, not on planks */
-      { type: 'web', name: 'Spiderweb', room: true, owned: 2, svg: '<svg viewBox="0 0 30 30"><g stroke="#cfd6e4" stroke-width="1" fill="none" opacity=".85"><circle cx="15" cy="15" r="4"/><circle cx="15" cy="15" r="8"/><circle cx="15" cy="15" r="12"/><path d="M15 3 V27 M3 15 H27 M6.5 6.5 L23.5 23.5 M23.5 6.5 L6.5 23.5"/></g><circle cx="19" cy="19" r="1.6" fill="#1a1420"/></svg>' },
-      { type: 'pumpkin', name: 'Pumpkin', room: true, owned: 2, svg: '<svg viewBox="0 0 30 30"><ellipse cx="15" cy="18" rx="9" ry="7" fill="#c25a1e"/><rect x="14" y="8" width="2.4" height="5" rx="1" fill="#4a5a2a"/></svg>' }
-    ];
+    /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
+       `owned` is session state; everything else (name, icon, room tab,
+       premium flag) comes from the catalog. Lantern + globe are unlocked
+       per Kevin's approval — no locks, no paywall during alpha. */
+    var INVENTORY = (function () {
+      var D = (typeof window.Shelf3DDecor !== 'undefined' && window.Shelf3DDecor)
+        ? window.Shelf3DDecor.CATALOG : [];
+      return D.map(function (d) {
+        return { type: d.id, name: d.name, room: !!d.room, mount: d.mount || null,
+          premium: !!d.premium, owned: d.stock || 0, svg: d.svg };
+      });
+    })();
     var pickedType = null, invTab = 'shelf';
     function buildInventory() {
       var grid = $('s3dInvGrid');
@@ -1106,15 +1345,11 @@
       INVENTORY.filter(function (item) { return (invTab === 'room') === !!item.room; })
         .forEach(function (item) {
           var d = document.createElement('div');
-          d.className = 'inv-item' + (item.locked ? ' locked' : '') +
-            (pickedType === item.type ? ' picked' : '');
+          d.className = 'inv-item' + (pickedType === item.type ? ' picked' : '');
           d.dataset.deco = item.type;
           d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
-            (item.locked ? '<span class="locktag">LOCKED</span>' : '<span class="cnt">\u00d7' + item.owned + '</span>');
-          if (item.locked) {
-            // explain the lock instead of dead-silence
-            d.addEventListener('click', function () { toast(unlockMsg(item)); });
-          } else if (item.owned > 0) {
+            '<span class="cnt">\u00d7' + item.owned + '</span>';
+          if (item.owned > 0) {
             if (item.room) {
               // room decos drag from inventory (like shelf decos); tap = auto-place
               d.addEventListener('pointerdown', function (e) { startRoomDrag(e, item, d); });
@@ -1229,9 +1464,12 @@
       return o;
     }
     function showSnap(type, pi, x) {
-      var gw = { plant: 0.75, candle: 0.55, mug: 0.6, stack: 1.2, lights: 6.4 }[type] || 0.7;
-      if (type === 'lights') {
-        snapGuide.scale.set(6.2, 1, 0.5);
+      var edge = (type === 'lights' || type === 'stargarland');
+      var gw = { plant: 0.75, candle: 0.55, mug: 0.6, stack: 1.2, lights: 6.4, stargarland: 5.6,
+        vase: 0.5, gifts: 0.75, eggs: 0.7, coins: 0.42, clover: 0.45, applebowl: 0.85,
+        lantern: 0.45, globe: 0.62, clock: 0.6, photo: 0.55, succulent: 0.5 }[type] || 0.7;
+      if (edge) {
+        snapGuide.scale.set(type === 'lights' ? 6.2 : 5.4, 1, 0.5);
         snapGuide.position.set(THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2),
           LEVELS[pi] + 0.05, PLANK_D / 2 - 0.4);
       } else {
@@ -1571,45 +1809,70 @@
       } catch (e) {}
     }
 
-    /* autumn cozy preset — confirm before wiping, toggleable back to default */
-    var presetBtn = $('s3dPresetBtn');
-    var autumnOn = false, preAutumn = null;
+    /* ---- per-theme presets + "Dress shelf for <theme>" ----
+       Each app theme has a preset arrangement (js/218-shelf3d-decor.js).
+       - A fresh mount starts empty, so it auto-applies the current theme's
+         preset immediately (decorations are session-only).
+       - The dress button applies the preset on explicit tap ONLY: switching
+         the app theme never rearranges mid-session decorations.
+       - Toggleable: tapping again restores the pre-dress arrangement. */
+    var dressBtn = $('s3dPresetBtn');
+    var dressOn = false, preDress = null, appTheme = 'dark', dressedTheme = null;
+    function themeDisplayName(k) {
+      return String(k || 'dark').replace(/^[a-z]/, function (c) { return c.toUpperCase(); });
+    }
+    function dressLabel() {
+      dressBtn.textContent = dressOn ? 'Default look' : 'Dress shelf for ' + themeDisplayName(appTheme);
+      dressBtn.classList.toggle('on', dressOn);
+    }
     function snapshotDecos() {
       return placed.map(function (p) {
-        return { type: p.type, room: !!p.room, pi: p.pi, pos: p.group.position.clone() };
+        return { type: p.type, room: !!p.room, pi: p.pi, pos: p.group.position.clone(), opts: p.opts };
       });
     }
     function restoreDecos(snap) {
       clearDecos();
       snap.forEach(function (s) {
-        if (s.room) placeRoomDeco(s.type, s.pos, null, true);
-        else placeDeco(s.type, s.pi, s.pos.x, true);
+        if (s.room) placeRoomDeco(s.type, s.pos, null, true, s.opts);
+        else placeDeco(s.type, s.pi, s.pos.x, true, s.opts);
       });
       deselect();
     }
-    presetBtn.addEventListener('click', function () {
-      if (autumnOn) {   // toggle back to the user's own arrangement
-        restoreDecos(preAutumn);
-        preAutumn = null; autumnOn = false;
-        presetBtn.textContent = 'Autumn cozy';
-        presetBtn.classList.remove('on');
-        setMood('default'); sfx('preset');
+    function applyPreset(themeKey) {
+      var D = (typeof window.Shelf3DDecor !== 'undefined') ? window.Shelf3DDecor : null;
+      var items = D ? D.presetFor(themeKey) : [];
+      items.forEach(function (it) {
+        if (it.room) {
+          placeRoomDeco(it.deco, roomDropPos(it.deco, it.x || 0, it.y || 3, it.z || 1), null, true, it);
+        } else {
+          placeDeco(it.deco, it.pi || 0, it.x || 0, true, it);
+        }
+      });
+      dressedTheme = themeKey;
+      deselect();
+    }
+    /* Public: the host view calls this when the app theme changes. Updates
+       the dress button label; never touches existing decorations. */
+    function setAppTheme(key) {
+      appTheme = key || 'dark';
+      dressLabel();
+    }
+    dressBtn.addEventListener('click', function () {
+      if (dressOn) {   // toggle back to the user's own arrangement
+        restoreDecos(preDress);
+        preDress = null; dressOn = false;
+        dressLabel();
+        sfx('preset');
         toast('Back to your decorations');
         return;
       }
       var doApply = function () {
-        preAutumn = snapshotDecos();
+        preDress = snapshotDecos();
         clearDecos();
-        select(placeDeco('lights', 2, 0, true));
-        placeDeco('plant', 1, 3.0, true);
-        placeDeco('candle', 1, 4.15, true);
-        placeDeco('mug', 0, 2.9, true);
-        placeDeco('stack', 0, 4.15, true);
-        deselect();
-        autumnOn = true;
-        presetBtn.textContent = 'Default look';
-        presetBtn.classList.add('on');
-        setMood('autumn'); sfx('preset');
+        applyPreset(appTheme);
+        dressOn = true;
+        dressLabel();
+        sfx('preset');
       };
       if (placed.length) {
         confirmDlg('This replaces your current decorations. Continue?').then(function (ok) {
@@ -1812,12 +2075,19 @@
 
     /* ----- go ----- */
     if (opts.initialBooks) setBooks(opts.initialBooks);
+    /* Fresh mount starts empty: dress for the current app theme immediately.
+       Decorations are session-only, so this is always the "new shelf" case —
+       never a rearrangement of existing decorations. */
+    appTheme = (opts && opts.appTheme) || 'dark';
+    dressLabel();
+    if (!placed.length) applyPreset(appTheme);
     onboardTimer = setTimeout(function () {
       if (!dead) toast(DEFAULT_HINT, 4200);   // brief onboarding, then it gets out of the way
     }, 900);
     animate();
 
-    return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams, unmount: unmount };
+    return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams,
+      setAppTheme: setAppTheme, unmount: unmount };
   }
 
   /* ============================== public API ============================== */
@@ -1837,7 +2107,8 @@
         return Promise.reject(e instanceof Error ? e : new Error(String(e)));
       }
       active = inst;
-      return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams, unmount: unmount };
+      return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams,
+        setAppTheme: inst.setAppTheme, unmount: unmount };
     });
   }
   function unmount() {
@@ -1852,7 +2123,11 @@
   function setThemeParams(p) {
     if (active) active.setThemeParams(p);
   }
+  function setAppTheme(key) {
+    if (active) active.setAppTheme(key);
+  }
 
-  window.Shelf3D = { mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams };
+  window.Shelf3D = { mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
+    setThemeParams: setThemeParams, setAppTheme: setAppTheme };
 
 })();
