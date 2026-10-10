@@ -52,7 +52,8 @@ ok('null input -> empty', run(`shelfBooks3D(null).length`) === 0);
 /* ---- 3. theme application (mocked Shelf3D) ---- */
 run(`
   window.__themeApplied = null;
-  window.Shelf3D = { mounted: true, setTheme: function (p) { window.__themeApplied = p; }, unmount: function () { window.Shelf3D.mounted = false; } };
+  window.Shelf3D = { setTheme: function (p) { window.__themeApplied = p; }, unmount: function () {} };
+  _shelf3dMounted = true;
 `);
 run(`shelf3DApplyTheme()`);
 {
@@ -62,14 +63,14 @@ run(`shelf3DApplyTheme()`);
   ok('theme has mood', typeof p.mood === 'string');
   ok('theme has accent glow', /^#[0-9a-f]{6}$/i.test(p.accentGlow));
 }
-run(`window.Shelf3D.mounted = false; window.__themeApplied = null;`);
+run(`_shelf3dMounted = false; window.__themeApplied = null;`);
 ok('no-op when unmounted', run(`shelf3DApplyTheme(), window.__themeApplied === null`));
 
 /* ---- 4. unmount safety ---- */
 ok('unmount safe when never mounted', run(`shelfUnmount3D(), true`));
-run(`window.Shelf3D.mounted = true`);
+run(`_shelf3dMounted = true`);
 run(`shelfUnmount3D()`);
-ok('unmount clears mounted flag', run(`window.Shelf3D.mounted === false`));
+ok('unmount clears local flag', run(`_shelf3dMounted === false`));
 run(`delete window.Shelf3D`);
 ok('unmount safe when Shelf3D undefined', run(`shelfUnmount3D(), true`));
 
