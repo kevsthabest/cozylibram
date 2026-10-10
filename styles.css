@@ -3000,3 +3000,43 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   transition: transform 0.15s ease;
 }
 .m-collapsible[open] summary::after { transform: rotate(90deg); }
+
+/* v398: Reading DNA */
+.dna-preview { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 8px 0 16px; }
+.dna-preview .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dna-preview .chip { background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; font-size: 13px; }
+.dna-preview .chip b { color: var(--gold); margin-left: 4px; }
+
+/* v398: DNF Autopsy bottom sheet */
+.dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }
+.dnf-sheet { padding: 8px 4px 16px; text-align: center; }
+.dnf-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+.dnf-sub { color: var(--faint); font-size: 14px; margin: 0 0 16px; }
+.dnf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dnf-reason-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 8px; cursor: pointer; font-size: 14px; color: var(--ink);
+  transition: border-color 0.15s, transform 0.1s;
+}
+.dnf-reason-btn:active { transform: scale(0.96); border-color: var(--gold); }
+.dnf-reason-btn .dnf-icon { font-size: 28px; }
+.dnf-reason-btn .dnf-label { font-weight: 600; }
+
+/* v398: Reading Wrapped banner */
+.wrapped-banner {
+  position: fixed; bottom: 76px; left: 12px; right: 12px; z-index: 500;
+  animation: wrapped-slide-up 0.4s ease;
+}
+.wrapped-banner-inner {
+  background: linear-gradient(135deg, #2b1535, #1a0f2e);
+  border: 1px solid var(--gold); border-radius: 16px;
+  padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.wrapped-banner-inner span { flex: 1; font-weight: 600; font-size: 15px; }
+.wrapped-dismiss { background: none; border: none; color: var(--faint); font-size: 18px; cursor: pointer; padding: 4px; }
+@keyframes wrapped-slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
