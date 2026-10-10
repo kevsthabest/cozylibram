@@ -77,7 +77,9 @@ async function cloudPushNow() {
   /* v167: log every outcome. A silently dropped push is exactly what the
      Observatory log viewer exists to catch. */
   if (!sb || !cloudUser) { AppLog.warn('sync', 'push skipped: not signed in'); return false; }
-  if (cloudSyncing) { AppLog.warn('sync', 'push skipped: another sync in flight'); return false; }
+  // v162: a push that lands while another sync is in flight used to be
+  // silently dropped — reschedule it so the change still goes up.
+  if (cloudSyncing) { AppLog.warn('sync', 'push deferred: sync in flight, rescheduled'); scheduleCloudPush(); return false; }
   cloudSyncing = true;
   syncBegin(); // v144: the dot covers push activity too
   try {
@@ -376,10 +378,15 @@ async function cloudSignIn(email, password) {
 }
 async function cloudSignOut() {
   const sb = await cloudClient().catch(() => null);
-  /* v167: answer the pending-push question in the log — if a debounced
-     push was scheduled but never ran, the next "push skipped: not signed
-     in" entry explains where the change went. */
+  /* v167: log the sign-out. With the v162 flush below, a pending debounced
+     push is sent before sign-out instead of being silently dropped. */
   AppLog.info('sync', 'sign-out requested' + (cloudSyncing ? ' (a sync was in flight)' : ''));
+  // v162: flush any pending debounced push before signing out. A change made
+  // within ~2.5s of sign-out used to be silently dropped: the timer later
+  // fired with cloudUser == null and did nothing, so the cloud kept the old
+  // version (and clearing site data made the loss permanent).
+  clearTimeout(cloudTimer);
+  if (sb && cloudUser) await cloudPushNow();
   if (sb) await sb.auth.signOut().catch(() => {});
   // The SIGNED_OUT event also triggers leaveApp; the cloudUser guard keeps it
   // from running twice (e.g. when the event doesn't fire while offline).
