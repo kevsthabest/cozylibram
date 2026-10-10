@@ -1617,15 +1617,15 @@
        If the finger moves beyond slop before the timer, it's a scroll. */
     var HOLD_MS = 280, HOLD_SLOP = 10;
     function pressHoldToDrag(el, startFn) {
-      var timer = null, sx = 0, sy = 0, fired = false;
+      var timer = null, sx = 0, sy = 0;
       el.addEventListener('pointerdown', function (e) {
         // Only for touch — mouse can drag immediately.
         if (e.pointerType !== 'touch') { startFn(e); return; }
-        sx = e.clientX; sy = e.clientY; fired = false;
+        sx = e.clientX; sy = e.clientY;
         // v427: clear any stale swipe-suppression flag from a previous interaction.
         delete el.dataset.swiped;
         timer = setTimeout(function () {
-          timer = null; fired = true;
+          timer = null;
           startFn(e);
         }, HOLD_MS);
         var onMove = function (me) {

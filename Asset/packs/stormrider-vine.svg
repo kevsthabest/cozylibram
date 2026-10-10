@@ -1,39 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Stormrider vine</title>
-<desc id="d">A draconic vine: large overlapping dragon scales, an unfurled wing, claw marks and lightning buds. Stormrider pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-<path d="M60,352 C42,308 78,272 58,222 C42,182 72,142 56,96 C48,68 60,44 56,22"/>
-<path d="M58,222 C44,214 36,202 34,186" stroke-width="1.4"/>
-</g>
+<desc id="d">A top-down dragon silhouette vine: heraldic head, one spread wing pair, slender tapering body and spade tail tip. Stormrider pack.</desc>
 <g fill="currentColor" stroke="none">
-<!-- dragon scales: large, pointed, overlapping -->
-<g transform="rotate(-36 52 306)"><path d="M52,306 C42,296 40,280 48,266 C56,280 56,296 52,306Z"/></g>
-<g transform="rotate(36 52 306)"><path d="M52,306 C42,296 40,280 48,266 C56,280 56,296 52,306Z"/></g>
-<g transform="rotate(-34 60 258)"><path d="M60,258 C51,249 49,234 56,221 C63,234 63,249 60,258Z"/></g>
-<g transform="rotate(34 60 258)"><path d="M60,258 C51,249 49,234 56,221 C63,234 63,249 60,258Z"/></g>
-<g transform="rotate(-32 57 210)"><path d="M57,210 C49,202 47,188 53,176 C60,188 60,202 57,210Z"/></g>
-<g transform="rotate(32 57 210)"><path d="M57,210 C49,202 47,188 53,176 C60,188 60,202 57,210Z"/></g>
-<g transform="rotate(-30 56 162)"><path d="M56,162 C49,155 48,143 53,133 C59,143 59,155 56,162Z"/></g>
-<g transform="rotate(30 56 162)"><path d="M56,162 C49,155 48,143 53,133 C59,143 59,155 56,162Z"/></g>
-<g transform="rotate(-28 56 118)"><path d="M56,118 C50,112 49,102 53,94 C58,102 58,112 56,118Z"/></g>
-<g transform="rotate(28 56 118)"><path d="M56,118 C50,112 49,102 53,94 C58,102 58,112 56,118Z"/></g>
-<g transform="rotate(-50 34 184)"><path d="M34,184 C28,178 27,168 31,160 C36,168 36,178 34,184Z"/></g>
-<!-- dragon wing unfurling from the top -->
-<g transform="translate(56,48) rotate(-18) scale(.85)">
-<path d="M0,0 Q28,-28 62,-24 Q50,-10 42,-4 Q34,-12 26,-6 Q18,-12 10,-6 Q4,-8 0,0Z"/>
-<path d="M14,-8 L22,-22 M30,-13 L36,-26 M46,-16 L50,-28" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<!-- heraldic dragon-head finial -->
+<g transform="translate(60,28)">
+<path d="M-14,-2 C-22,-8 -28,-16 -32,-26 C-24,-20 -15,-13 -7,-9 Z"/>
+<path d="M14,-2 C22,-8 28,-16 32,-26 C24,-20 15,-13 7,-9 Z"/>
+<path fill-rule="evenodd" d="M-20,0 C-20,-8 -10,-14 0,-14 C10,-14 20,-8 20,0 L12,14 L0,26 L-12,14 Z M-13,-1 L-5,1 L-6,4 L-14,2 Z M13,-1 L14,2 L6,4 L5,1 Z"/>
+<path d="M-7,20 L-4,29 L-1,20 Z"/>
+<path d="M7,20 L4,29 L1,20 Z"/>
 </g>
-<!-- lightning buds -->
-<g transform="translate(88,120) scale(.8)"><path d="M3,-12 L-5,2 L-1,2 L-3,12 L5,-3 L1,-3 Z"/></g>
-<g transform="translate(28,250) scale(.7)"><path d="M3,-12 L-5,2 L-1,2 L-3,12 L5,-3 L1,-3 Z"/></g>
+<!-- slender tapering body -->
+<path d="M56,58 C57,140 58,220 59,298 L60,326 L61,298 C62,220 63,140 64,58 C62,56 58,56 56,58 Z"/>
+<!-- one spread wing pair -->
+<g transform="translate(57,112)">
+<path d="M0,0 Q-22,-17 -45,-13 Q-37,-5 -31,-1 Q-25,-5 -19,1 Q-13,-1 -7,5 Q-3,2 0,9 Z"/>
+<path d="M-10,-5 L-17,-13 M-21,-7 L-28,-14 M-32,-9 L-38,-13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
 </g>
-<!-- claw marks: curved tapered slashes -->
-<g fill="currentColor" stroke="none" opacity="0.9">
-<path d="M80,190 C86,176 90,162 92,148 C88,162 82,176 74,188Z"/>
-<path d="M90,194 C96,180 100,166 102,152 C98,166 92,180 84,192Z"/>
-<path d="M100,198 C106,184 110,170 112,156 C108,170 102,184 94,196Z"/>
+<g transform="translate(63,112) scale(-1,1)">
+<path d="M0,0 Q-22,-17 -45,-13 Q-37,-5 -31,-1 Q-25,-5 -19,1 Q-13,-1 -7,5 Q-3,2 0,9 Z"/>
+<path d="M-10,-5 L-17,-13 M-21,-7 L-28,-14 M-32,-9 L-38,-13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
 </g>
-<g fill="currentColor" stroke="none">
-<circle cx="44" cy="330" r="2"/><circle cx="72" cy="290" r="1.8"/>
+<!-- spade tail tip, fused to the body -->
+<path d="M60,322 L52,340 L60,358 L68,340 Z"/>
+<path d="M53,338 L45,342 L53,345 Z"/>
+<path d="M67,338 L75,342 L67,345 Z"/>
 </g>
 </svg>

@@ -19,6 +19,13 @@ const SHELF3D_MAX_BOOKS = 60;
 let _shelf3dMounted = false;
 // v408: session flag for WebGL failure — don't persist '2d', just skip 3D this session.
 let _shelf3dWebGLFailed = false;
+// v427: guard for the document-level menu-close listener (added once, not per render).
+let _shelf3dMenuDocWired = false;
+function _shelf3dCloseMenu(e) {
+  const dd = document.getElementById('svMenuDropdown3D');
+  const btn = document.getElementById('svMenu3D');
+  if (dd && btn && !dd.hidden && !dd.contains(e.target) && e.target !== btn) dd.hidden = true;
+}
 
 function shelfViewMode() {
   try {
@@ -131,47 +138,26 @@ function renderShelf3D() {
   const menuBtn3D = document.getElementById('svMenu3D');
   const menuDropdown3D = document.getElementById('svMenuDropdown3D');
   if (menuBtn3D && menuDropdown3D) {
-    // v427: robust toggle — set both hidden property and inline display.
-    // Belt-and-suspenders against CSS specificity issues.
-    function setMenu3DVisible(visible) {
-      var dd = document.getElementById('svMenuDropdown3D');
-      if (!dd) return;
-      dd.hidden = !visible;
-      dd.style.display = visible ? '' : 'none';
-    }
-    function isMenu3DVisible() {
-      var dd = document.getElementById('svMenuDropdown3D');
-      return dd && !dd.hidden && dd.style.display !== 'none';
-    }
     menuBtn3D.addEventListener('click', function (e) {
       e.stopPropagation();
-      e.preventDefault();
-      setMenu3DVisible(!isMenu3DVisible());
+      menuDropdown3D.hidden = !menuDropdown3D.hidden;
     });
-    // v427: named handler, removed before re-adding (fixes #45 listener leak).
-    if (window._shelf3dMenuCloser) {
-      document.removeEventListener('click', window._shelf3dMenuCloser);
+    // v427: wired once (was leaking a listener per render).
+    if (!_shelf3dMenuDocWired) {
+      document.addEventListener('click', _shelf3dCloseMenu);
+      _shelf3dMenuDocWired = true;
     }
-    window._shelf3dMenuCloser = function (e) {
-      var dd = document.getElementById('svMenuDropdown3D');
-      var btn = document.getElementById('svMenu3D');
-      if (dd && !dd.hidden && dd.style.display !== 'none' &&
-          !dd.contains(e.target) && e.target !== btn) {
-        setMenu3DVisible(false);
-      }
-    };
-    document.addEventListener('click', window._shelf3dMenuCloser);
     const menuView3DBtn = document.getElementById('svMenuView3D');
     if (menuView3DBtn) menuView3DBtn.addEventListener('click', function () {
       shelfSetViewMode('2d');
-      setMenu3DVisible(false);
+      menuDropdown3D.hidden = true;
       renderShelf();
     });
     // v417: Decorations inventory in menu (Kevin: wasn't findable in 3D).
     // Triggers the existing s3dInvBtn; the ▦ button itself is hidden via CSS.
     const menuDecor3DBtn = document.getElementById('svMenuDecor3D');
     if (menuDecor3DBtn) menuDecor3DBtn.addEventListener('click', function () {
-      setMenu3DVisible(false);
+      menuDropdown3D.hidden = true;
       var invBtn = document.getElementById('s3dInvBtn');
       if (invBtn) invBtn.click();
     });

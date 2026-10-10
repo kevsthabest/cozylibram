@@ -497,8 +497,12 @@ function renderDiscover() {
     else if (t === 'favorites') { // v173 home-tile behavior: the shelf lives on Library home
       filter = 'all'; ownFilter = 'all'; query = '';
       go('library');
-      const f = document.querySelector('.fav-shelf');
-      if (f && f.scrollIntoView) f.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      // v427: defer scroll until after paint — synchronous scrollIntoView
+      // after go() raced the render and silently failed (issue #52).
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const f = document.querySelector('.fav-shelf');
+        if (f && f.scrollIntoView) f.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+      }));
     }
     else if (t === 'similar') {
       const p = document.getElementById('disc-sim');
@@ -882,7 +886,7 @@ function recoCardHTML(r, i, lovedIds) {
   recoSharedTropes((c.title || '') + ' ' + (c.description || ''), lovedIds).slice(0, 2)
     .forEach(t => chips.push('<span class="why-chip">\u2726 ' + esc(t) + '</span>'));
   if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
-  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c) +
+  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c, 'reco-cover') +
     '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
     '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
     (chips.length ? '<div class="why-chips">' + chips.join('') + '</div>' : '') +
@@ -892,6 +896,15 @@ function recoCardHTML(r, i, lovedIds) {
 }
 
 function wireRecoResults(box) {
+  // v427 (issue #54): the cover gets an explicit preview handler. Tapping
+  // the cover was falling through to +TBR on some devices — the cover now
+  // opens the preview directly and never triggers the add button.
+  box.querySelectorAll('.rel-card .reco-cover').forEach(cv => cv.addEventListener('click', e => {
+    e.stopPropagation();
+    const card = cv.closest('.rel-card');
+    const r = card && visibleRecos[Number(card.dataset.i)];
+    if (r) openRecoPreview(r);
+  }));
   box.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', e => {
     if (e.target.closest('[data-add]') || e.target.closest('[data-dis]')) return;
     const r = visibleRecos[Number(card.dataset.i)];
