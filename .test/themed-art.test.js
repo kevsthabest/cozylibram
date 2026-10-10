@@ -32,16 +32,16 @@ for (const t of THEMES) {
   }
 }
 
-// 2. styles.css maps each art theme to its vine
+// 2. v418: the full-height .modal::after vine strip is retired (it got
+// sliced by section backgrounds). The flair system replaces it: five
+// divider-proof placements, theme-matched via js/151-modal-flairs.js.
 const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
-for (const t of THEMES) {
-  ok(`styles.css: [data-theme="${t}"] .modal::after -> vine-${t}.svg`,
-    css.includes(`[data-theme="${t}"] .modal::after`) && css.includes(`Asset/themes/vine-${t}.svg`));
+ok('styles.css: retired .modal::after vine strip (no per-theme vine rules)',
+  !css.includes('.modal::after') || !/\.modal::after[^}]*vine-/.test(css));
+for (const sel of ['.mflair-vine', '.mflair-corners', '.mflair-divider', '.mflair-garland', '.mflair-watermark']) {
+  ok(`styles.css: flair placement ${sel}`, css.includes(sel));
 }
-
-// no theme is left on the old tinted silhouette
-ok('styles.css: bespoke vine rules clear mask-image',
-  /\[data-theme="twilight"\][\s\S]{0,900}?mask-image:\s*none/.test(css));
+ok('styles.css: flairs tint via --floral-tint', css.includes('color: var(--floral-tint)'));
 
 // 3. sw.js precaches the art and matches the app version
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
