@@ -483,8 +483,10 @@ function renderLibrary() {
       const total = b.pageCount || 0;
       const oldP = b.progress || 0;
       b.progress = total ? Math.max(0, Math.min(total, oldP + Number(el.dataset.step))) : Math.max(0, oldP + Number(el.dataset.step));
+      b._mtime = Date.now();
       if (typeof logPages === 'function') logPages(b, oldP, b.progress);
       if (typeof saveLibrary === 'function') saveLibrary();
+      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
       renderLibrary();
       toast('Page ' + b.progress + (total ? ' of ' + total : ''));
     }));
