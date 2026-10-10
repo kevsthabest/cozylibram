@@ -62,6 +62,14 @@
   #selmenu .done { background: transparent; color: #b9a8c6; }
   #nogl { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
     text-align: center; padding: 24px; font-family: system-ui, sans-serif; z-index: 20; }
+  .pill.on { background: #e5b86a; color: #241a10; border-color: #e5b86a; }
+  #tiltDbg { position: absolute; top: 64px; left: 12px; z-index: 15; display: none;
+    font: 10px/1.5 ui-monospace, monospace; color: #b9a8c6; background: rgba(10,8,14,.55);
+    padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: pre; }
+  #invTabs { display: flex; gap: 6px; margin: 8px 0 2px; }
+  #invTabs button { flex: 1; border: 1px solid rgba(229,184,106,.35); background: transparent;
+    color: #b9a8c6; border-radius: 8px; padding: 6px; font-size: 12px; }
+  #invTabs button.on { background: rgba(229,184,106,.2); color: #f6eff8; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three/three.module.js" } }
@@ -74,15 +82,17 @@
   <div id="hud">
     <div class="title"><small>Prototype</small>Cozy Libram · 3D Shelf</div>
     <div class="btns">
-      <button class="pill" id="tiltBtn" style="display:none">Enable tilt</button>
+      <button class="pill" id="tiltBtn">Tilt: off</button>
       <button class="pill" id="presetBtn">Autumn cozy</button>
     </div>
   </div>
+  <div id="tiltDbg"></div>
   <div id="hint">Open inventory to decorate &middot; tap a placed decoration to select it</div>
   <button id="invBtn" aria-label="Open decoration inventory">▦</button>
   <div id="invPanel">
     <h3>Decoration inventory</h3>
     <div class="sub">Tap to pick up, then tap a shelf to place &middot; or drag straight onto a shelf</div>
+    <div id="invTabs"><button data-tab="shelf" class="on">Shelf</button><button data-tab="room">Room</button></div>
     <div id="invGrid"></div>
   </div>
   <div id="selmenu">
@@ -461,8 +471,8 @@ function removeDeco(g) {
   const i = placed.findIndex(p => p.group === g);
   if (i >= 0) {
     const [p] = placed.splice(i, 1);
-    const oi = occupied[p.pi].indexOf(p.rec);
-    if (oi >= 0) occupied[p.pi].splice(oi, 1);
+    if (p.room) { if (p.anchor) p.anchor.usedBy = null; }
+    else { const oi = occupied[p.pi].indexOf(p.rec); if (oi >= 0) occupied[p.pi].splice(oi, 1); }
   }
   const ci = candleFlames.indexOf(g);
   if (ci >= 0) candleFlames.splice(ci, 1);
@@ -472,6 +482,100 @@ function removeDeco(g) {
   deselect();
 }
 function clearDecos() { placed.slice().forEach(p => removeDeco(p.group)); }
+
+/* ============================== room decorations (v3) ==============================
+   Placed at world-space anchors around the bookcase (not on planks). PoC:
+   Halloween spiderweb + pumpkin — pairs with the app's seasonal themes. */
+function makeWeb() {
+  const g = new THREE.Group();
+  const pts = [];
+  const R = 0.95, spokes = 8, rings = 4;
+  for (let s = 0; s < spokes; s++) {
+    const a = (s / spokes) * Math.PI * 2;
+    pts.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, 0));
+  }
+  for (let r = 1; r <= rings; r++) {
+    const rr = (r / rings) * R;
+    for (let s = 0; s < spokes; s++) {
+      const a0 = (s / spokes) * Math.PI * 2, a1 = ((s + 1) / spokes) * Math.PI * 2;
+      const sag = 0.05 * rr * Math.sin(((s + 0.5) / spokes) * Math.PI * 2);
+      pts.push(new THREE.Vector3(Math.cos(a0) * rr, Math.sin(a0) * rr - sag, 0),
+               new THREE.Vector3(Math.cos(a1) * rr, Math.sin(a1) * rr - sag, 0));
+    }
+  }
+  pts.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, R + 0.55, 0)); // hanging thread
+  g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: 0xe8ecf4, transparent: true, opacity: 0.55 })));
+  const spider = new THREE.Group();
+  spider.add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10),
+    new THREE.MeshStandardMaterial({ color: 0x1c1420, roughness: 0.7 })));
+  const legMat = new THREE.MeshBasicMaterial({ color: 0x1c1420 });
+  for (let i = 0; i < 8; i++) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.17, 4), legMat);
+    const a = (i / 8) * Math.PI * 2;
+    leg.position.set(Math.cos(a) * 0.1, -0.01, Math.sin(a) * 0.1);
+    leg.rotation.z = Math.cos(a) * 1.15; leg.rotation.x = -Math.sin(a) * 1.15;
+    spider.add(leg);
+  }
+  spider.position.set(0.32, -0.38, 0.03);
+  g.add(spider);
+  g.userData = { decoType: 'web', room: true };
+  return g;
+}
+function makePumpkin() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 14),
+    new THREE.MeshStandardMaterial({ color: 0xc25a1e, roughness: 0.65 }));
+  body.scale.y = 0.78; body.position.y = 0.33; g.add(body);
+  const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x9c4413, roughness: 0.7 });
+  for (let i = 0; i < 6; i++) {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.415, 0.03, 8, 24), ridgeMat);
+    r.position.y = 0.33; r.scale.y = 0.78; r.rotation.y = (i / 6) * Math.PI;
+    g.add(r);
+  }
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.075, 0.22, 8),
+    new THREE.MeshStandardMaterial({ color: 0x4a5a2a, roughness: 0.9 }));
+  stem.position.y = 0.7; stem.rotation.z = 0.15; g.add(stem);
+  g.userData = { decoType: 'pumpkin', room: true };
+  return shadowify(g);
+}
+const ROOM_MAKERS = { web: makeWeb, pumpkin: makePumpkin };
+const ROOM_ANCHORS = [
+  { id: 'webL', types: ['web'], pos: new THREE.Vector3(-SHELF_W / 2 - 0.4, TOP_Y - 1.1, 0.7) },
+  { id: 'webR', types: ['web'], pos: new THREE.Vector3(SHELF_W / 2 + 0.4, TOP_Y - 1.1, 0.7) },
+  { id: 'floorL', types: ['pumpkin'], pos: new THREE.Vector3(-SHELF_W / 2 - 2.0, 0, 1.5) },
+  { id: 'floorR', types: ['pumpkin'], pos: new THREE.Vector3(SHELF_W / 2 + 2.0, 0, 1.5) },
+];
+const anchorMarkers = [];
+function showRoomAnchors(type) {
+  hideRoomAnchors();
+  ROOM_ANCHORS.filter(a => a.types.includes(type) && !a.usedBy).forEach(a => {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.4, 32),
+      new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.85,
+        side: THREE.DoubleSide, depthWrite: false }));
+    m.position.copy(a.pos);
+    if (a.id.startsWith('floor')) m.rotation.x = -Math.PI / 2;
+    m.position.y += a.id.startsWith('floor') ? 0.03 : 0;
+    m.userData.anchorId = a.id;
+    scene.add(m); anchorMarkers.push(m);
+  });
+}
+function hideRoomAnchors() { anchorMarkers.forEach(m => scene.remove(m)); anchorMarkers.length = 0; }
+function placeRoomDeco(type, anchor) {
+  const g = ROOM_MAKERS[type]();
+  g.position.copy(anchor.pos);
+  scene.add(g);
+  anchor.usedBy = g;
+  placed.push({ group: g, room: true, anchor, type });
+  const inv = INVENTORY.find(i => i.type === type);
+  if (inv && inv.owned > 0) inv.owned--;
+  hideRoomAnchors();
+  pickedRoom = null;
+  buildInventory();
+  document.getElementById('hint').textContent = 'Open inventory to decorate · tap a placed decoration to select it';
+  select(g);
+  return g;
+}
 function discardGhost(g) {
   const ci = candleFlames.indexOf(g);
   if (ci >= 0) candleFlames.splice(ci, 1);
@@ -493,32 +597,57 @@ const INVENTORY = [
   { type: 'succulent', name: 'Succulent', owned: 3, svg: '<svg viewBox="0 0 30 30"><path d="M11 20 L19 20 L17.5 26 L12.5 26 Z" fill="#7a8a9a"/><path d="M15 20 C15 15 13 12 9 11 C13 11 14 14 15 17 C16 14 17 11 21 11 C17 12 15 15 15 20" fill="#6a9a7a"/></svg>' },
   { type: 'lantern', name: 'Lantern', owned: 0, locked: true, svg: '<svg viewBox="0 0 30 30"><rect x="10" y="8" width="10" height="14" rx="3" fill="#3a3a4a"/><circle cx="15" cy="15" r="3" fill="#ffcf7a" opacity=".5"/></svg>' },
   { type: 'globe', name: 'Globe', owned: 0, locked: true, svg: '<svg viewBox="0 0 30 30"><circle cx="15" cy="14" r="8" fill="#3a5a7a"/><path d="M15 6 a8 8 0 0 1 0 16" fill="#4a7a3a"/><rect x="13" y="22" width="4" height="4" fill="#5a3a22"/></svg>' },
+  /* v3: room decorations — placed at anchors around the bookcase, not on planks */
+  { type: 'web', name: 'Spiderweb', room: true, owned: 2, svg: '<svg viewBox="0 0 30 30"><g stroke="#cfd6e4" stroke-width="1" fill="none" opacity=".85"><circle cx="15" cy="15" r="4"/><circle cx="15" cy="15" r="8"/><circle cx="15" cy="15" r="12"/><path d="M15 3 V27 M3 15 H27 M6.5 6.5 L23.5 23.5 M23.5 6.5 L6.5 23.5"/></g><circle cx="19" cy="19" r="1.6" fill="#1a1420"/></svg>' },
+  { type: 'pumpkin', name: 'Pumpkin', room: true, owned: 2, svg: '<svg viewBox="0 0 30 30"><ellipse cx="15" cy="18" rx="9" ry="7" fill="#c25a1e"/><rect x="14" y="8" width="2.4" height="5" rx="1" fill="#4a5a2a"/></svg>' },
 ];
-let pickedType = null;
+let pickedType = null, pickedRoom = null, invTab = 'shelf';
 function buildInventory() {
   const grid = document.getElementById('invGrid');
   grid.innerHTML = '';
-  INVENTORY.forEach(item => {
+  document.querySelectorAll('#invTabs button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === invTab));
+  INVENTORY.filter(item => (invTab === 'room') === !!item.room).forEach(item => {
     const d = document.createElement('div');
-    d.className = 'inv-item' + (item.locked ? ' locked' : '') + (pickedType === item.type ? ' picked' : '');
+    d.className = 'inv-item' + (item.locked ? ' locked' : '') +
+      (pickedType === item.type || pickedRoom === item.type ? ' picked' : '');
     d.dataset.deco = item.type;
     d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
       (item.locked ? '' : '<span class="cnt">×' + item.owned + '</span>');
-    if (!item.locked) {
-      d.addEventListener('pointerdown', e => startInvDrag(e, item, d));
-      d.addEventListener('click', e => {
-        // tap (not drag): pick up for tap-to-place
-        if (d.dataset.dragged) { delete d.dataset.dragged; return; }
-        pickedType = pickedType === item.type ? null : item.type;
-        buildInventory();
-        document.getElementById('hint').textContent = pickedType
-          ? 'Tap a shelf to place the ' + item.name.toLowerCase() + ' · tap again to cancel'
-          : 'Open inventory to decorate · tap a placed decoration to select it';
-      });
+    if (!item.locked && item.owned > 0) {
+      if (item.room) {
+        d.addEventListener('click', () => {
+          // v3: room flow — tap item, then tap a glowing anchor in the scene
+          if (pickedRoom === item.type) { pickedRoom = null; hideRoomAnchors(); }
+          else { pickedType = null; pickedRoom = item.type; showRoomAnchors(item.type); }
+          buildInventory();
+          document.getElementById('hint').textContent = pickedRoom
+            ? 'Tap a glowing anchor to hang the ' + item.name.toLowerCase() + ' · tap again to cancel'
+            : 'Open inventory to decorate · tap a placed decoration to select it';
+        });
+      } else {
+        d.addEventListener('pointerdown', e => startInvDrag(e, item, d));
+        d.addEventListener('click', e => {
+          // tap (not drag): pick up for tap-to-place
+          if (d.dataset.dragged) { delete d.dataset.dragged; return; }
+          pickedRoom = null; hideRoomAnchors();
+          pickedType = pickedType === item.type ? null : item.type;
+          buildInventory();
+          document.getElementById('hint').textContent = pickedType
+            ? 'Tap a shelf to place the ' + item.name.toLowerCase() + ' · tap again to cancel'
+            : 'Open inventory to decorate · tap a placed decoration to select it';
+        });
+      }
     }
     grid.appendChild(d);
   });
+  const sub = document.querySelector('#invPanel .sub');
+  if (sub) sub.textContent = invTab === 'room'
+    ? 'Room decor hangs around the bookcase · tap to pick up, then tap a glowing anchor'
+    : 'Tap to pick up, then tap a shelf to place · or drag straight onto a shelf';
 }
+document.querySelectorAll('#invTabs button').forEach(b =>
+  b.addEventListener('click', () => { invTab = b.dataset.tab; buildInventory(); }));
 function startInvDrag(e, item, el) {
   e.preventDefault();
   deselect();
@@ -531,7 +660,10 @@ function startInvDrag(e, item, el) {
   // if this becomes a drag (not tap), the pointermove handler takes over
 }
 function openInventory() { document.getElementById('invPanel').classList.add('open'); }
-function closeInventory() { document.getElementById('invPanel').classList.remove('open'); }
+function closeInventory() {
+  document.getElementById('invPanel').classList.remove('open');
+  if (pickedRoom) { pickedRoom = null; hideRoomAnchors(); buildInventory(); }
+}
 document.getElementById('invBtn').addEventListener('click', () => {
   const p = document.getElementById('invPanel');
   p.classList.contains('open') ? closeInventory() : (buildInventory(), openInventory());
@@ -540,6 +672,16 @@ buildInventory();
 
 /* tap-shelf-to-place when a type is picked */
 canvas.addEventListener('pointerdown', e => {
+  if (pickedRoom && !trayDrag) {
+    // v3: room flow — tap a glowing anchor marker
+    setPtr(e); ray.setFromCamera(ptr, camera);
+    const hits = ray.intersectObjects(anchorMarkers, false);
+    if (hits.length) {
+      const a = ROOM_ANCHORS.find(x => x.id === hits[0].object.userData.anchorId);
+      if (a && !a.usedBy) placeRoomDeco(pickedRoom, a);
+    }
+    return;
+  }
   if (pickedType && !trayDrag) {
     const hit = zoneHit(e);
     if (hit) {
@@ -600,12 +742,16 @@ function toScreen(v3) {
 }
 function select(g) {
   selected = g;
-  const r = Math.max(g.userData.fw, g.userData.fd) / 2 + 0.18;
+  const p = placed.find(pp => pp.group === g);
+  const baseY = (p && p.room) ? g.position.y : LEVELS[p.pi];
+  const r = (p && p.room) ? 0.8
+    : Math.max(g.userData.fw || 0.8, g.userData.fd || 0.8) / 2 + 0.18;
   selRing.scale.set(r / 0.47, r / 0.47, 1);
-  const pi = placed.find(p => p.group === g).pi;
-  selRing.position.set(g.position.x, LEVELS[pi] + 0.02, g.position.z);
+  selRing.position.set(g.position.x, baseY + 0.02, g.position.z);
   selRing.visible = true;
-  const s = toScreen(new THREE.Vector3(g.position.x, LEVELS[pi] + 1.15, g.position.z));
+  // v3: room decos can't be moved (Delete only)
+  document.getElementById('selMove').style.display = (p && p.room) ? 'none' : '';
+  const s = toScreen(new THREE.Vector3(g.position.x, baseY + 1.15, g.position.z));
   selmenu.style.left = Math.max(90, Math.min(window.innerWidth - 90, s.x)) + 'px';
   selmenu.style.top = Math.max(120, s.y) + 'px';
   selmenu.classList.add('show');
@@ -730,7 +876,9 @@ window.addEventListener('pointerup', e => {
 /* drag placed decorations + tap select (canvas) */
 let moveDrag = null;
 canvas.addEventListener('pointerdown', e => {
+  if (pickedRoom) return; // v3: anchor placement handled above
   const g = decoAt(e);
+  if (g && g.userData.room) { select(g); return; } // v3: room decos tap-select (no drag)
   if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
     targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
 });
@@ -754,21 +902,49 @@ document.getElementById('presetBtn').addEventListener('click', () => {
 });
 
 /* ============================== parallax ============================== */
+/* v3: explicit user toggle (all platforms). Previously tilt auto-enabled on the
+   first stray sensor event with no way to turn it off on Android (the button
+   was iOS-only) — and on some Android/Chrome builds the events never fire at
+   all, so the debug readout below reports raw values for diagnosis. */
 let pointerPX = 0, pointerPY = 0;
-let tilt = { x: 0, y: 0 }, tiltOn = false;
-window.addEventListener('deviceorientation', e => {
-  if (e.gamma == null || e.beta == null) return;
-  tiltOn = true;
+let tilt = { x: 0, y: 0 }, tiltOn = false, tiltEvents = 0, tiltLast = null;
+function onTilt(e) {
+  tiltEvents++;
+  tiltLast = e;
+  if (e.gamma == null || e.beta == null) { tiltDbg(); return; }
   tilt.x = THREE.MathUtils.clamp(e.gamma / 35, -1, 1);
   tilt.y = THREE.MathUtils.clamp((e.beta - 45) / 35, -1, 1);
-});
-if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-  const b = document.getElementById('tiltBtn');
-  b.style.display = '';
-  b.addEventListener('click', async () => {
-    try { await DeviceOrientationEvent.requestPermission(); b.style.display = 'none'; } catch (_) {}
-  });
+  tiltDbg();
 }
+const tiltBtn = document.getElementById('tiltBtn');
+function tiltDbg() {
+  const d = document.getElementById('tiltDbg');
+  if (!tiltOn) { d.style.display = 'none'; return; }
+  d.style.display = 'block';
+  if (!tiltEvents) { d.textContent = 'tilt: waiting for sensor events…'; return; }
+  const l = tiltLast, f = v => (v == null ? '–' : v.toFixed(0));
+  d.textContent = 'tilt ev#' + tiltEvents + '  α' + f(l.alpha) + ' β' + f(l.beta) + ' γ' + f(l.gamma);
+}
+async function setTilt(on) {
+  if (on === tiltOn) return;
+  if (on) {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') return; }
+      catch (_) { return; }
+    }
+    tiltEvents = 0; tiltLast = null;
+    window.addEventListener('deviceorientation', onTilt);
+    tiltOn = true;
+  } else {
+    window.removeEventListener('deviceorientation', onTilt);
+    tiltOn = false;
+    tilt.x = 0; tilt.y = 0;   // camera lerps back to pointer control
+  }
+  tiltBtn.textContent = tiltOn ? 'Tilt: on' : 'Tilt: off';
+  tiltBtn.classList.toggle('on', tiltOn);
+  tiltDbg();
+}
+tiltBtn.addEventListener('click', () => setTilt(!tiltOn));
 
 /* ============================== loop / resize ============================== */
 function layout() {
@@ -809,6 +985,11 @@ function animate() {
   // fairy twinkle
   for (const b of fairyBulbs) {
     b.material.emissiveIntensity = 1.55 + Math.sin(t * 2.2 + b.userData.phase) * 0.4;
+  }
+  // v3: pulse room anchor markers
+  for (let i = 0; i < anchorMarkers.length; i++) {
+    const s = 1 + 0.14 * Math.sin(t * 4 + i * 1.3);
+    anchorMarkers[i].scale.set(s, s, 1);
   }
   // camera parallax
   const px = tiltOn ? tilt.x : pointerPX * 0.55;
