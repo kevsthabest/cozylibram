@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Gala star garland</title>
+<desc id="d">A swag garland with hanging celebration stars for the New Year fete.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,54)"><path d="M0,-10 L2.4,-2.4 L10,0 L2.4,2.4 L0,10 L-2.4,2.4 L-10,0 L-2.4,-2.4Z"/></g>
+<g transform="translate(300,64)"><path d="M0,-12 L2.8,-2.8 L12,0 L2.8,2.8 L0,12 L-2.8,2.8 L-12,0 L-2.8,-2.8Z"/></g>
+<g transform="translate(450,52)"><path d="M0,-10 L2.4,-2.4 L10,0 L2.4,2.4 L0,10 L-2.4,2.4 L-10,0 L-2.4,-2.4Z"/></g>
+<g transform="translate(225,54)"><path d="M0,-7 L1.7,-1.7 L7,0 L1.7,1.7 L0,7 L-1.7,1.7 L-7,0 L-1.7,-1.7Z"/></g>
+<g transform="translate(375,54)"><path d="M0,-7 L1.7,-1.7 L7,0 L1.7,1.7 L0,7 L-1.7,1.7 L-7,0 L-1.7,-1.7Z"/></g>
+<circle cx="80" cy="26" r="2"/><circle cx="520" cy="24" r="2"/><circle cx="190" cy="40" r="1.6"/><circle cx="410" cy="40" r="1.6"/><circle cx="260" cy="46" r="1.6"/><circle cx="340" cy="46" r="1.6"/>
+</g>
+</svg>

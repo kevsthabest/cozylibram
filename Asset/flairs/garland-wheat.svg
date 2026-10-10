@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Wheat garland</title>
+<desc id="d">A swag garland with hanging wheat sprigs and leaves for Harvest.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,54) scale(1.25)">
+<path d="M0,0 L0,18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<ellipse cx="-5" cy="6" rx="4.5" ry="2" transform="rotate(-55 -5 6)"/><ellipse cx="5" cy="6" rx="4.5" ry="2" transform="rotate(55 5 6)"/>
+<ellipse cx="-5" cy="12" rx="4.2" ry="1.9" transform="rotate(-55 -5 12)"/><ellipse cx="5" cy="12" rx="4.2" ry="1.9" transform="rotate(55 5 12)"/>
+<ellipse cx="0" cy="20" rx="4" ry="2"/>
+</g>
+<g transform="translate(300,62) scale(1.2)">
+<path d="M0,0 L0,18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<ellipse cx="-5" cy="6" rx="4.5" ry="2" transform="rotate(-55 -5 6)"/><ellipse cx="5" cy="6" rx="4.5" ry="2" transform="rotate(55 5 6)"/>
+<ellipse cx="-5" cy="12" rx="4.2" ry="1.9" transform="rotate(-55 -5 12)"/><ellipse cx="5" cy="12" rx="4.2" ry="1.9" transform="rotate(55 5 12)"/>
+<ellipse cx="0" cy="20" rx="4" ry="2"/>
+</g>
+<g transform="translate(450,52) scale(1.25)">
+<path d="M0,0 L0,18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<ellipse cx="-5" cy="6" rx="4.5" ry="2" transform="rotate(-55 -5 6)"/><ellipse cx="5" cy="6" rx="4.5" ry="2" transform="rotate(55 5 6)"/>
+<ellipse cx="-5" cy="12" rx="4.2" ry="1.9" transform="rotate(-55 -5 12)"/><ellipse cx="5" cy="12" rx="4.2" ry="1.9" transform="rotate(55 5 12)"/>
+<ellipse cx="0" cy="20" rx="4" ry="2"/>
+</g>
+<g transform="translate(225,48)"><ellipse cx="0" cy="0" rx="7" ry="3" transform="rotate(-25 0 0)"/></g>
+<g transform="translate(375,48)"><ellipse cx="0" cy="0" rx="7" ry="3" transform="rotate(25 0 0)"/></g>
+</g>
+</svg>

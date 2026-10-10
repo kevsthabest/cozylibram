@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Abyssal kelp strands</title>
+<desc id="d">Flowing kelp ribbons with pneumatocyst air bladders, drifting upward.</desc>
+<g fill="currentColor" stroke="none" opacity="0.92">
+<path d="M46,352 C38,310 52,285 46,250 C41,222 50,200 47,175 C45,155 48,140 47,128
+C49,142 54,160 56,180 C59,205 50,228 55,255 C60,285 50,315 52,352Z"/>
+<path d="M74,352 C80,315 68,292 74,260 C79,235 70,215 74,192 C77,175 73,160 75,148
+C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
+</g>
+<g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+<!-- pneumatocyst stalks -->
+<path d="M44,240 l-12,-6"/><path d="M50,200 l12,-7"/><path d="M46,160 l-11,-5"/>
+<path d="M76,250 l11,-6"/><path d="M76,210 l-11,-6"/><path d="M75,170 l10,-5"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="30" cy="232" r="4"/><circle cx="64" cy="191" r="4"/><circle cx="33" cy="153" r="3.4"/>
+<circle cx="89" cy="242" r="3.6"/><circle cx="63" cy="202" r="3.4"/><circle cx="87" cy="163" r="3"/>
+<!-- blade leaves -->
+<ellipse cx="30" cy="280" rx="9" ry="3" transform="rotate(-50 30 280)"/>
+<ellipse cx="64" cy="140" rx="8" ry="2.8" transform="rotate(42 64 140)"/>
+<ellipse cx="90" cy="300" rx="8" ry="2.8" transform="rotate(50 90 300)"/>
+<!-- rising bubbles -->
+<circle cx="47" cy="110" r="2.6"/><circle cx="54" cy="96" r="2"/><circle cx="43" cy="86" r="1.5"/>
+<circle cx="75" cy="130" r="2"/><circle cx="81" cy="118" r="1.5"/>
+</g>
+</svg>

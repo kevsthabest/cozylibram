@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Botanical laurel vine</title>
+<desc id="d">A trailing vine of paired laurel leaves on a curving stem, with budding tips.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M60,352 C46,305 74,268 58,218 C46,178 70,138 56,92 C50,66 60,38 54,12"/>
+<path d="M59,240 C44,234 36,222 34,206" stroke-width="1.4"/>
+<path d="M57,150 C71,144 79,132 81,116" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<!-- paired leaves: each leaf offset from the stem, inner tip at the node -->
+<g transform="rotate(-38 52 302)"><ellipse cx="41" cy="299" rx="12" ry="4.6"/></g>
+<g transform="rotate(38 52 302)"><ellipse cx="63" cy="299" rx="12" ry="4.6"/></g>
+<g transform="rotate(-36 62 256)"><ellipse cx="51" cy="253" rx="11" ry="4.2"/></g>
+<g transform="rotate(36 62 256)"><ellipse cx="73" cy="253" rx="11" ry="4.2"/></g>
+<g transform="rotate(-34 57 210)"><ellipse cx="47" cy="207" rx="10" ry="4"/></g>
+<g transform="rotate(34 57 210)"><ellipse cx="67" cy="207" rx="10" ry="4"/></g>
+<g transform="rotate(-32 54 164)"><ellipse cx="45" cy="161" rx="9" ry="3.6"/></g>
+<g transform="rotate(32 54 164)"><ellipse cx="63" cy="161" rx="9" ry="3.6"/></g>
+<g transform="rotate(-30 59 118)"><ellipse cx="51" cy="115" rx="8" ry="3.2"/></g>
+<g transform="rotate(30 59 118)"><ellipse cx="67" cy="115" rx="8" ry="3.2"/></g>
+<g transform="rotate(-28 55 74)"><ellipse cx="48" cy="71" rx="7" ry="2.8"/></g>
+<g transform="rotate(28 55 74)"><ellipse cx="62" cy="71" rx="7" ry="2.8"/></g>
+<!-- branch-tip leaves -->
+<g transform="rotate(-52 34 204)"><ellipse cx="27" cy="200" rx="7.5" ry="3"/></g>
+<g transform="rotate(52 81 114)"><ellipse cx="88" cy="110" rx="7.5" ry="3"/></g>
+<!-- top buds -->
+<circle cx="54" cy="12" r="3.6"/>
+<circle cx="46" cy="19" r="2.4"/>
+<circle cx="62" cy="19" r="2.4"/>
+</g>
+</svg>
