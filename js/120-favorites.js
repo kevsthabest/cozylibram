@@ -40,7 +40,7 @@ function recentlyAddedHTML() {
   if (!rec.length) return '';
   // v405 (L2): live count on View All — a decorative-looking control erodes trust.
   return '<section class="home-sec"><div class="recent-strip"><div class="recent-head"><h3 class="serif">' + icon('history') + ' Recently Added</h3>' +
-    '<button class="btn ghost sm" id="ra-all">View all " + library.length + " \u2192</button></div>' +
+    '<button class="btn ghost sm" id="ra-all">View all ' + library.length + ' \u2192</button></div>' +
     '<div class="recent-row edge-fade">' + rec.map(b => {
       const cov = b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
         : '<div class="recent-nocover">' + icon('covers') + '</div>';
