@@ -17,6 +17,8 @@ const SHELF3D_MAX_BOOKS = 60;
 // Local mount-state tracking (robust even if the engine's `mounted` flag
 // is missing or the engine is still loading).
 let _shelf3dMounted = false;
+// v408: session flag for WebGL failure — don't persist '2d', just skip 3D this session.
+let _shelf3dWebGLFailed = false;
 
 function shelfViewMode() {
   try { return localStorage.getItem('shelfViewMode') || '3d'; }
@@ -123,7 +125,9 @@ function renderShelf3D() {
   // Mount the 3D scene.
   const container = document.getElementById('shelf3d');
   if (!container || typeof Shelf3D === 'undefined') {
-    shelfSetViewMode('2d');
+    // v408: don't persist '2d' on fallback — a transient failure shouldn't
+    // permanently flip the preference. Session flag only.
+    _shelf3dWebGLFailed = true;
     renderShelf();
     return;
   }
@@ -138,8 +142,9 @@ function renderShelf3D() {
     shelf3DApplyTheme();
   }).catch(function () {
     // WebGL unavailable or THREE failed to load: fall back to 2D.
+    // v408: session flag only, don't persist — user can retry 3D via toggle.
     _shelf3dMounted = false;
-    shelfSetViewMode('2d');
+    _shelf3dWebGLFailed = true;
     renderShelf();
   });
 }
