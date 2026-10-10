@@ -84,6 +84,9 @@ run(`shelfOrderCache = null;`);
 ok('shelfOrder reloads from storage', run(`shelfOrder().tbr.join(',')`) === 'x,y');
 window.localStorage.removeItem('spicyshelves.shelforder.v1');
 
+/* v405: force 2D mode for the 2.5D render tests (3D is the default). */
+run(`shelfSetViewMode('2d');`);
+
 /* ---- 8. renderShelf smoke test ---- */
 run(`library = [
   {id:'b1', title:'Fourth Wing', authors:['Rebecca Yarros'], status:'tbr'},
