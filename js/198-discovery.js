@@ -36,9 +36,17 @@ function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId)
 function topReleaseAuthors() {
   const map = {};
   library.forEach(b => {
-    (b.authors || []).forEach(a => {
+    // v402: skip "Full Cast" and dramatized-audiobook cast members — they're
+    // not authors, and scanning them produces actor-credited junk releases.
+    const isDramatized = (b.authors || []).some(a =>
+      String(a || '').trim().toLowerCase() === 'full cast');
+    (b.authors || []).forEach((a, idx) => {
       const k = String(a || '').trim();
       if (!k) return;
+      if (k.toLowerCase() === 'full cast') return;
+      // For dramatized editions, only the first author is the real author;
+      // the rest are cast members.
+      if (isDramatized && idx > 0) return;
       const e = map[k] || (map[k] = { name: k, n: 0, stars: 0, sn: 0 });
       e.n++;
       if (b.myRating > 0) { e.stars += b.myRating; e.sn++; }
@@ -96,6 +104,11 @@ async function checkNewReleases(onTick, onFound) {
         if (b.id == null || seen.has(b.id) || isReleaseDismissed(b.id)) return;
         const c = hcBookToCandidate(b);
         if (!c.releaseDate || c.releaseDate <= today) return; // defensive: the server filters too
+        // v402: suppress absurd dates (Hardcover placeholder data, e.g. year 2200).
+        // Anything more than 2 years out is not a real announced release.
+        const maxDate = new Date();
+        maxDate.setFullYear(maxDate.getFullYear() + 2);
+        if (c.releaseDate > maxDate.toISOString().slice(0, 10)) return;
         seen.add(b.id);
         if (releaseInLibrary(c)) return;
         out.push(c);
