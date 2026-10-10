@@ -184,10 +184,17 @@ function paceHTML() {
   const withPages = read.filter(b => (b.pageCount || 0) > 0);
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const avgLen = avgOf(withPages.map(b => b.pageCount));
-  const avgDays = avgOf(read
+  const daysData = read
     .filter(b => b.dateAdded && b.dateFinished)
     .map(b => (new Date(b.dateFinished) - new Date(b.dateAdded)) / 864e5)
-      .filter(d => d >= 0 && d < 3650));
+      .filter(d => d >= 0 && d < 3650);
+  const avgDays = avgOf(daysData);
+  // v400: qualify small-n averages
+  const avgDaysLabel = avgDays != null ? (() => {
+    const d = Math.max(1, Math.round(avgDays));
+    const base = d + (d === 1 ? ' day' : ' days');
+    return daysData.length < 5 ? base + ' <span class="note">(based on ' + daysData.length + ' book' + (daysData.length === 1 ? '' : 's') + ')</span>' : base;
+  })() : null;
   const streak = readingStreak(), best = longestStreak();
 
   let html = '<div class="stat-sub">Reading pace</div>';
@@ -195,16 +202,16 @@ function paceHTML() {
     ? '<p class="pace-hero">Your average pace is <b>' + Math.round(perDay) + ' pages/day</b></p>' +
       '<div class="pace-grid">' +
       '<div class="pace"><div class="n">' + Math.round(perDay) + '</div><div class="l">pages / day</div></div>' +
-      '<div class="pace"><div class="n">' + fmtBig(perDay * 7) + '</div><div class="l">pages / week</div></div>' +
-      '<div class="pace"><div class="n">' + fmtBig(perDay * 30.44) + '</div><div class="l">pages / month</div></div>' +
+      '<div class="pace"><div class="n">' + Math.round(perDay * 7).toLocaleString() + '</div><div class="l">pages / week</div></div>' +
+      '<div class="pace"><div class="n">' + Math.round(perDay * 30.44).toLocaleString() + '</div><div class="l">pages / month</div></div>' +
       '</div>'
     : '<p class="note">Log pages for a few days and your pace will show up here.</p>';
   const kv = (label, val) =>
     '<div class="kv-row"><span>' + label + '</span><b>' + val + '</b></div>';
   html += '<div class="kv">' +
     (avgLen != null ? kv(icon('reading') + ' Average book', Math.round(avgLen) + ' pages') : '') +
-    (avgDays != null ? (() => { const d = Math.max(1, Math.round(avgDays)); return kv(icon('hourglass') + ' Average time to finish', d + (d === 1 ? ' day' : ' days')); })() : '') +
-    kv(icon('flame') + ' Current streak', streak > 0 ? streak + '-day' : '–') +
+    (avgDaysLabel != null ? kv(icon('hourglass') + ' Average time to finish', avgDaysLabel) : '') +
+    kv(icon('flame') + ' Current streak', streak > 0 ? streak + '-day' : '0 days — log pages today to start a streak') +
     kv(icon('medal') + ' Longest streak', best > 0 ? best + '-day' : '–') +
     '</div>';
   return html;
@@ -249,7 +256,8 @@ function spiceProfileHTML() {
   }).filter(Boolean).sort((x, y) => y.n - x.n);
   if (!rows.length)
     return '<div class="stat-sub">Reading profile</div>' +
-      '<p class="note">Rate the intensity axes on your books and your profile will appear here.</p>';
+      '<p class="note">Rate the intensity axes on your books and your profile will appear here.</p>' +
+      '<button class="btn" data-act="rate-book">Rate a book</button>';
   const meter = avg => {
     const f = Math.round(avg / 5 * 10);
     return '<span class="mfill">' + '█'.repeat(f) + '</span><span class="mdim">' + '░'.repeat(10 - f) + '</span>';
@@ -355,7 +363,8 @@ function patternsHTML() {
 
   if (!obs.length)
     return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div>' +
-      '<p class="note">Finish and rate a few more books and your patterns will start showing here.</p>';
+      '<p class="note">Finish and rate a few more books and your patterns will start showing here.</p>' +
+      '<button class="btn" data-act="rate-book">Rate a book</button>';
   return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div><div class="patterns">' +
     obs.slice(0, 6).map(o => '<div class="pattern"><span class="pi">' + icon('bulb') + '</span><p>' + o + '</p></div>').join('') +
     '</div>';
@@ -507,7 +516,15 @@ function seriesHTML() {
     const sn = b.series && b.series.name;
     if (sn) (byName[sn] = byName[sn] || []).push(b);
   });
-  const names = Object.keys(byName).sort((a, b) => byName[b].length - byName[a].length);
+  // v400: hide 0-progress series and single-book "series" (not real series)
+  const names = Object.keys(byName)
+    .filter(sn => {
+      const books = byName[sn];
+      if (books.length < 2) return false; // single book isn't a series
+      const readN = books.filter(b => b.status === 'read').length;
+      return readN > 0; // hide 0-progress
+    })
+    .sort((a, b) => byName[b].length - byName[a].length);
   if (!names.length)
     return '<div class="stat-sub">' + icon('series') + ' Series</div>' +
       '<p class="note">Books with series info will group here.</p>';
@@ -986,7 +1003,7 @@ function renderStats() {
       '</div>' +
       (streak > 0
         ? '<div class="stat-sub">' + icon('flame') + ' Streak</div><div class="stat-row">' +
-          heroCard('flame', streak, 'Day streak') + '</div>'
+          heroCard('flame', streak > 0 ? streak : '0', 'Day streak') + '</div>'
         : '') +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
@@ -1011,7 +1028,7 @@ function renderStats() {
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
     '<div class="stat"><div class="n">' + (pagesYr > 999 ? (pagesYr / 1000).toFixed(1) + 'k' : pagesYr) + '</div><div class="l">Pages</div></div>' +
     '<div class="stat"><div class="n">' + (avgMine != null ? '♥ ' + avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
-    '<div class="stat"><div class="n">' + (streak > 0 ? '🔥 ' + streak : '–') + '</div><div class="l">Day streak</div></div>' +
+    '<div class="stat"><div class="n">' + (streak > 0 ? '🔥 ' + streak : '0') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
     '<div class="search-row" style="margin:10px 0 2px"><button class="btn ghost" id="st-yib">' + icon('sparkles') + ' My ' + yr + ' in Books</button></div>' +
     nowReading +
@@ -1083,5 +1100,12 @@ function renderStats() {
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));
   document.querySelectorAll('.kv-row.tap').forEach(r =>
     r.addEventListener('click', () => openDetail(r.dataset.id)));
+  // v400: empty-state CTA — open a read book to rate axes
+  document.querySelectorAll('[data-act="rate-book"]').forEach(b =>
+    b.addEventListener('click', () => {
+      const read = library.filter(x => x.status === 'read');
+      if (read.length) openDetail(read[0].id);
+      else go('library');
+    }));
 }
 

@@ -2659,7 +2659,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* ---------- shelf layouts (v261) ---------- */
 .sv-section-label { display: flex; align-items: center; gap: 10px;
   margin: 20px 6px 8px; color: var(--muted); font-size: 12px;
-  letter-spacing: .14em; text-transform: uppercase; }
+  letter-spacing: .14em; text-transform: uppercase;
+  position: relative; z-index: 1; /* v400: clear sticky tab row in split layout */ }
 .sv-section:first-child .sv-section-label { margin-top: 4px; }
 .sv-section-label::before, .sv-section-label::after { content: ''; flex: 1; height: 1px;
   background: var(--line); }

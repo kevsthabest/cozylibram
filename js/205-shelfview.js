@@ -129,8 +129,22 @@ function shelfLayoutSections(books, layout) {
     };
     const arr = [...groups.values()];
     arr.forEach(g => g.books.sort((a, b) => (posNum(a) - posNum(b)) || byTitle(a, b)));
-    arr.sort((a, b) => ((a.label === 'Standalone') - (b.label === 'Standalone')) || a.label.localeCompare(b.label));
-    return arr;
+    // v400: cluster small series (<3 books) to avoid wasting planks
+    const big = [], small = [];
+    arr.forEach(g => {
+      if (g.label === 'Standalone') big.push(g);
+      else if (g.books.length >= 3) big.push(g);
+      else small.push(g);
+    });
+    if (small.length) {
+      const clustered = { label: 'More series', books: [] };
+      small.sort((a, b) => a.label.localeCompare(b.label)).forEach(g => {
+        clustered.books.push(...g.books);
+      });
+      big.push(clustered);
+    }
+    big.sort((a, b) => ((a.label === 'Standalone') - (b.label === 'Standalone')) || a.label.localeCompare(b.label));
+    return big;
   }
   if (layout === 'genre') {
     const groups = new Map();
@@ -928,10 +942,16 @@ function shelfOpenPhotoSheet(id) {
   const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === id);
   if (!book) return;
   const pose = shelfPoseOf(book);
+  const curStatus = String(book.status || 'tbr');
   const { sheet, close } = shelfSheetShell(esc(book.title || 'Untitled'),
     '<div class="sv-seg" role="group" aria-label="Display style">' +
     [['up', 'Upright'], ['down', 'Laid down'], ['face', 'Face out']].map(p =>
       '<button data-pose="' + p[0] + '" class="' + (pose === p[0] ? 'active' : '') + '">' + p[1] + '</button>'
+    ).join('') + '</div>' +
+    // v400: move to shelf (status) from long-press menu
+    '<div class="sv-seg" role="group" aria-label="Shelf">' +
+    [['tbr', 'TBR'], ['reading', 'Reading'], ['read', 'Read']].map(s =>
+      '<button data-shelf="' + s[0] + '" class="' + (curStatus === s[0] ? 'active' : '') + '">' + s[1] + '</button>'
     ).join('') + '</div>' +
     '<button class="sv-sheet-btn" id="svPhotoTake">' + icon('camera') + ' Photograph spine</button>' +
     /* M5: the button must also appear for binary spines (spinePhotoAssetId /
@@ -943,6 +963,19 @@ function shelfOpenPhotoSheet(id) {
     b.addEventListener('click', () => {
       shelfSetPose(book, b.dataset.pose); // re-renders #view; the sheet lives on body
       sheet.querySelectorAll('[data-pose]').forEach(x => x.classList.toggle('active', x === b));
+    }));
+  // v400: shelf move — update status and re-render
+  sheet.querySelectorAll('[data-shelf]').forEach(b =>
+    b.addEventListener('click', () => {
+      const ns = b.dataset.shelf;
+      if (ns !== book.status) {
+        book.status = ns;
+        book._mtime = Date.now();
+        if (typeof saveLibrary === 'function') saveLibrary();
+        if (typeof schedulePush === 'function') schedulePush();
+        close();
+        renderShelf();
+      }
     }));
   document.getElementById('svSheetCancel').addEventListener('click', close);
   document.getElementById('svPhotoTake').addEventListener('click', () => { close(); shelfStartCapture(id); });
