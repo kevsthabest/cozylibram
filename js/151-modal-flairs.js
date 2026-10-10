@@ -559,10 +559,10 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
     /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
     { id: 'stormrider-vine', name: 'Stormrider emblem vine', motif: 'dragon', placement: 'vine', signature: true,
       themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.png', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 128" role="img" aria-labelledby="t d">
 <title id="t">Stormrider emblem vine</title>
 <desc id="d">Kevin's Stormrider emblem: black dragon with gold winged sword.</desc>
-<image href="Asset/packs/stormrider-vine.png" x="4" y="120" width="112" height="120" preserveAspectRatio="xMidYMid meet"/>
+<image href="Asset/packs/stormrider-vine.png" x="2" y="2" width="116" height="124" preserveAspectRatio="xMidYMid meet"/>
 </svg>` },
     { id: 'stormrider-divider', name: 'Stormrider bolt divider', motif: 'bolt', placement: 'divider',
       themes: ["stormrider"], file: 'Asset/packs/stormrider-divider.svg', premium: true,
@@ -912,7 +912,8 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
         }
       } else if (sig.placement === 'vine') {
         var hv = modal.querySelector('.d-hero');
-        if (hv) hv.appendChild(el('<div class="mflair mflair-vine" aria-hidden="true">' +
+        var vcls = sig.id === 'stormrider-vine' ? ' mflair-vine--emblem' : '';
+        if (hv) hv.appendChild(el('<div class="mflair mflair-vine' + vcls + '" aria-hidden="true">' +
           namespaced(sig.svg) + '</div>'));
       } else if (sig.placement === 'watermark') {
         modal.insertBefore(el('<div class="mflair mflair-watermark" aria-hidden="true">' +
