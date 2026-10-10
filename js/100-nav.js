@@ -18,6 +18,8 @@ function navTab(v) {
 }
 function go(v) {
   stopScan();
+  // v405: unmount the 3D shelf when navigating away (frees WebGL context).
+  if (typeof shelfUnmount3D === 'function') shelfUnmount3D();
   if (typeof routeBackClosed === 'function') routeBackClosed(); // v224 (UX-23): route entries die on navigation
   if (rouletteTimer) { clearInterval(rouletteTimer); rouletteTimer = null; }
   view = v;

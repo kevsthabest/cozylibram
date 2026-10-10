@@ -619,6 +619,15 @@ function shelfItemHTML(item) {
 }
 
 function renderShelf() {
+  // v405: 3D shelf integration. Unmount any live 3D scene first (safe no-op
+  // when not mounted), then branch to the 3D renderer when that's the
+  // active view mode.
+  if (typeof shelfUnmount3D === 'function') shelfUnmount3D();
+  if (typeof shelfViewMode === 'function' && shelfViewMode() === '3d' &&
+      typeof renderShelf3D === 'function') {
+    renderShelf3D();
+    return;
+  }
   const books = typeof library !== 'undefined' ? library : [];
   const counts = {};
   SHELF_GROUPS.forEach(g => { counts[g] = shelfGroupBooks(books, g).length; });
