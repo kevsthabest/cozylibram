@@ -21,7 +21,14 @@ let _shelf3dMounted = false;
 let _shelf3dWebGLFailed = false;
 
 function shelfViewMode() {
-  try { return localStorage.getItem('shelfViewMode') || '3d'; }
+  try {
+    // v409: URL override (?shelf=3d or ?shelf=2d) for emergency escape from stuck states.
+    // Checked first, before localStorage.
+    const params = new URLSearchParams(window.location.search);
+    const urlMode = params.get('shelf');
+    if (urlMode === '3d' || urlMode === '2d') return urlMode;
+    return localStorage.getItem('shelfViewMode') || '3d';
+  }
   catch (e) { return '3d'; }
 }
 function shelfSetViewMode(m) {
