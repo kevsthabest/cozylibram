@@ -306,7 +306,17 @@ function renderSettings() {
     ['auto'].concat(STORE_REGION_KEYS).map(r =>
       '<button data-r="' + r + '" class="' + (storeRegionSetting() === r ? 'active' : '') + '">' +
       (r === 'auto' ? icon('globe') + ' Auto' : STORE_REGIONS[r].label) + '</button>').join('') +
-    '</div></div>';
+    '</div></div>' +
+    // v432: visible shelf view preference (2D/3D) — the v407 one-way trap proved
+    // invisible preferences are a design smell.
+    '<div class="field"><label>Shelf view</label><div class="seg" id="th-shelfview" style="grid-template-columns:1fr 1fr">' +
+    ['3d', '2d'].map(m =>
+      '<button data-m="' + m + '" class="' + (shelfViewMode() === m ? 'active' : '') + '">' +
+      (m === '3d' ? icon('cube') + ' 3D' : icon('shelf') + ' 2D') + '</button>').join('') +
+    '</div></div>' +
+    '<p class="note">Switch between the 3D bookshelf and the classic 2D view.</p>' +
+    '<div class="field"><button class="btn ghost" id="th-shelfreset">Reset shelf layout</button></div>' +
+    '<p class="note">Clears decoration placements and the shelf view preference — a safety net for shelf weirdness.</p>';
 
   /* ---- Reading ---- */
   const htmlReadLog =
@@ -544,6 +554,26 @@ function renderSettings() {
       document.querySelectorAll('#th-region button').forEach(x => x.classList.toggle('active', x === btn));
       toast('Store region: ' + (btn.dataset.r === 'auto' ? 'auto-detect 🌍' : STORE_REGIONS[btn.dataset.r].label));
     }));
+
+  // v432: shelf view preference toggle
+  document.querySelectorAll('#th-shelfview button').forEach(btn =>
+    btn.addEventListener('click', () => {
+      shelfSetViewMode(btn.dataset.m);
+      document.querySelectorAll('#th-shelfview button').forEach(x => x.classList.toggle('active', x === btn));
+      toast('Shelf view: ' + (btn.dataset.m === '3d' ? '3D 📚' : '2D 📖'));
+    }));
+
+  // v432: reset shelf layout — clears decorations and view preference
+  document.getElementById('th-shelfreset').addEventListener('click', () => {
+    if (!confirm('Reset the shelf? This clears decoration placements and the 2D/3D view preference.')) return;
+    try {
+      localStorage.removeItem('shelfViewMode');
+      // Clear 3D decoration layouts (per-device keys)
+      Object.keys(localStorage).filter(k => k.indexOf('shelf3d') === 0 || k.indexOf('shelfDeco') === 0)
+        .forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+    toast('Shelf reset — reload to see the default layout.');
+  });
 
   document.getElementById('bk-export').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ app: 'cozy-libram', version: 1, exported: new Date().toISOString(), books: library }, null, 2)],
