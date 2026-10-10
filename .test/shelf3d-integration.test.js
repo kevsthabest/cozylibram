@@ -52,7 +52,11 @@ ok('null input -> empty', run(`shelfBooks3D(null).length`) === 0);
 /* ---- 3. theme application (mocked Shelf3D) ---- */
 run(`
   window.__themeApplied = null;
-  window.Shelf3D = { setTheme: function (p) { window.__themeApplied = p; }, unmount: function () {} };
+  window.Shelf3D = {
+    setTheme: function (p) { window.__themeApplied = p; },
+    setThemeParams: function (p) { window.__themeApplied = p; },
+    unmount: function () {}
+  };
   _shelf3dMounted = true;
 `);
 run(`shelf3DApplyTheme()`);
