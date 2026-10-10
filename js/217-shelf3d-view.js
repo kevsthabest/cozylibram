@@ -19,6 +19,13 @@ const SHELF3D_MAX_BOOKS = 60;
 let _shelf3dMounted = false;
 // v408: session flag for WebGL failure — don't persist '2d', just skip 3D this session.
 let _shelf3dWebGLFailed = false;
+// v427: guard for the document-level menu-close listener (added once, not per render).
+let _shelf3dMenuDocWired = false;
+function _shelf3dCloseMenu(e) {
+  const dd = document.getElementById('svMenuDropdown3D');
+  const btn = document.getElementById('svMenu3D');
+  if (dd && btn && !dd.hidden && !dd.contains(e.target) && e.target !== btn) dd.hidden = true;
+}
 
 function shelfViewMode() {
   try {
@@ -135,11 +142,11 @@ function renderShelf3D() {
       e.stopPropagation();
       menuDropdown3D.hidden = !menuDropdown3D.hidden;
     });
-    document.addEventListener('click', function closeMenu3D(e) {
-      if (!menuDropdown3D.hidden && !menuDropdown3D.contains(e.target) && e.target !== menuBtn3D) {
-        menuDropdown3D.hidden = true;
-      }
-    });
+    // v427: wired once (was leaking a listener per render).
+    if (!_shelf3dMenuDocWired) {
+      document.addEventListener('click', _shelf3dCloseMenu);
+      _shelf3dMenuDocWired = true;
+    }
     const menuView3DBtn = document.getElementById('svMenuView3D');
     if (menuView3DBtn) menuView3DBtn.addEventListener('click', function () {
       shelfSetViewMode('2d');

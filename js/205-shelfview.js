@@ -505,6 +505,13 @@ let shelfOrderCache = null;
 let pendingSpinePhoto = null; // cropped data URL waiting for the user to tap a spine
 let pendingSpinePhotoAi = false; // v259: was it an AI-verified tight crop? (shareable)
 let shelfSheetToken = null;
+// v427: guard for the document-level menu-close listener (added once, not per render).
+let _shelfMenuDocWired = false;
+function _shelfCloseMenu(e) {
+  const dd = document.getElementById('svMenuDropdown');
+  const btn = document.getElementById('svMenu');
+  if (dd && btn && !dd.hidden && !dd.contains(e.target) && e.target !== btn) dd.hidden = true;
+}
 /* v285: shelf photos are binary IDB assets, never book JSON. */
 const shelfAssetUrls = new Map();
 const shelfAssetPending = new Set();
@@ -771,12 +778,11 @@ function wireShelf() {
       e.stopPropagation();
       menuDropdown.hidden = !menuDropdown.hidden;
     });
-    // Close menu when clicking outside.
-    document.addEventListener('click', function closeMenu(e) {
-      if (!menuDropdown.hidden && !menuDropdown.contains(e.target) && e.target !== menuBtn) {
-        menuDropdown.hidden = true;
-      }
-    });
+    // Close menu when clicking outside. v427: wired once (was leaking a listener per render).
+    if (!_shelfMenuDocWired) {
+      document.addEventListener('click', _shelfCloseMenu);
+      _shelfMenuDocWired = true;
+    }
     const menuViewBtn = document.getElementById('svMenuView');
     if (menuViewBtn) menuViewBtn.addEventListener('click', () => {
       if (typeof shelfSetViewMode === 'function') shelfSetViewMode('3d');
@@ -1334,6 +1340,9 @@ function shelfReviewCapture(dataUrl, bookId) {
     document.getElementById('svUsePhoto').addEventListener('click', () => {
       if (bookId) {
         shelfAssignPhoto(bookId, cropped);
+        // v427: clear any stale pending photo from a header-button capture.
+        pendingSpinePhoto = null;
+        pendingSpinePhotoAi = false;
         const bk = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
         if (ai && bk) spinePhotoShare(bk, cropped, true); // v259: contribute the anonymous crop
       } else {
