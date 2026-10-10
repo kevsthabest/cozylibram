@@ -14,6 +14,10 @@
 
 const SHELF3D_MAX_BOOKS = 60;
 
+// Local mount-state tracking (robust even if the engine's `mounted` flag
+// is missing or the engine is still loading).
+let _shelf3dMounted = false;
+
 function shelfViewMode() {
   try { return localStorage.getItem('shelfViewMode') || '3d'; }
   catch (e) { return '3d'; }
@@ -24,8 +28,12 @@ function shelfSetViewMode(m) {
 }
 // Safe no-op when Shelf3D isn't loaded or isn't mounted.
 function shelfUnmount3D() {
+  if (!_shelf3dMounted) return;
+  _shelf3dMounted = false;
   try {
-    if (typeof Shelf3D !== 'undefined' && Shelf3D && Shelf3D.mounted) Shelf3D.unmount();
+    if (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.unmount === 'function') {
+      Shelf3D.unmount();
+    }
   } catch (e) {}
 }
 
@@ -49,7 +57,8 @@ function shelfBooks3D(books) {
 
 function shelf3DApplyTheme() {
   try {
-    if (typeof Shelf3D === 'undefined' || !Shelf3D || !Shelf3D.mounted) return;
+    if (!_shelf3dMounted) return;
+    if (typeof Shelf3D === 'undefined' || !Shelf3D) return;
     if (typeof Shelf3DTheme === 'undefined' || !Shelf3DTheme) return;
     const themeKey = (typeof getTheme === 'function') ? getTheme() : 'dark';
     const accentKey = (typeof getAccent === 'function') ? getAccent() : 'rose';
@@ -97,7 +106,7 @@ function renderShelf3D() {
         c.classList.toggle('active', c === ch);
       });
       try {
-        if (typeof Shelf3D !== 'undefined' && Shelf3D && Shelf3D.mounted) {
+        if (_shelf3dMounted && typeof Shelf3D !== 'undefined' && Shelf3D) {
           Shelf3D.setBooks(shelfBooks3D(
             (typeof shelfBooks === 'function') ? shelfBooks() : []
           ));
@@ -119,9 +128,11 @@ function renderShelf3D() {
     },
     initialBooks: shelfBooks3D(shown),
   }).then(function () {
+    _shelf3dMounted = true;
     shelf3DApplyTheme();
   }).catch(function () {
     // WebGL unavailable or THREE failed to load: fall back to 2D.
+    _shelf3dMounted = false;
     shelfSetViewMode('2d');
     renderShelf();
   });
