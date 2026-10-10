@@ -1853,6 +1853,7 @@
         selRing.position.set(g.position.x, baseY + 0.03, g.position.z);
       }
       selRing.visible = true;
+      markDirty();
       // room decos can't be moved (Delete only)
       $('s3dSelMove').style.display = (p && p.room) ? 'none' : '';
       var s = toScreen(new THREE.Vector3(g.position.x, baseY + 1.15, g.position.z));
@@ -1863,6 +1864,7 @@
     }
     function deselect() {
       selected = null; selRing.visible = false; selmenu.classList.remove('show');
+      markDirty();
     }
     $('s3dSelDelete').addEventListener('click', function () {
       if (!selected) return;
