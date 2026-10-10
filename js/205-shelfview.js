@@ -397,21 +397,41 @@ function shelfSaveDecor(group, list) {
   saveShelfOrder(o);
   shelfOrderCache = o;
 }
+// v432: undo stack for decoration moves/deletes. Snapshots the list before
+// each mutation; shelfDecorUndo() restores the last snapshot.
+const _decorUndoStack = [];
+function _decorPushUndo(group) {
+  try {
+    _decorUndoStack.push({ group, list: JSON.parse(JSON.stringify(shelfDecorItems(group))) });
+    if (_decorUndoStack.length > 20) _decorUndoStack.shift();
+  } catch (e) {}
+}
+function shelfDecorUndo() {
+  const prev = _decorUndoStack.pop();
+  if (!prev) { toast('Nothing to undo.'); return false; }
+  shelfSaveDecor(prev.group, prev.list);
+  if (typeof renderShelf === 'function') renderShelf();
+  toast('Undone.');
+  return true;
+}
 function shelfDecorAdd(group, decorId, bookCount) {
   if (!SHELF_DECOR[decorId]) return;
   const list = shelfDecorItems(group);
   if (list.filter(x => x.d === decorId).length >= 3 || list.length >= 6) return;
+  _decorPushUndo(group);
   list.push({ d: decorId, at: bookCount });
   shelfSaveDecor(group, list);
 }
 function shelfDecorRemove(group, di) {
   const list = shelfDecorItems(group);
+  _decorPushUndo(group);
   list.splice(di, 1);
   shelfSaveDecor(group, list);
 }
 function shelfDecorMove(group, di, at) {
   const list = shelfDecorItems(group);
   if (!list[di]) return;
+  _decorPushUndo(group);
   list[di] = { d: list[di].d, at: Math.max(0, at | 0) };
   shelfSaveDecor(group, list);
 }
@@ -722,6 +742,8 @@ function renderShelf() {
     '<button class="sv-cam" id="svView3D" aria-label="Switch to 3D view" title="Switch to 3D view">' + icon('cube') + '</button>' +
     '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
+    // v432: undo for decoration moves/deletes.
+    '<button class="sv-cam" id="svUndoDecor" aria-label="Undo decoration change" title="Undo">↩️</button>' +
     '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button>' +
     '<button class="sv-cam" id="svMenu" aria-label="Shelf menu" title="Shelf menu">' + icon('dots') + '</button>' +
     '<div class="sv-menu" id="svMenuDropdown" hidden>' +
@@ -762,6 +784,9 @@ function wireShelf() {
   if (decorBtn) decorBtn.addEventListener('click', () => shelfOpenDecorSheet());
   const layoutBtn = document.getElementById('svLayout');
   if (layoutBtn) layoutBtn.addEventListener('click', () => shelfOpenLayoutSheet());
+  // v432: undo button for decoration changes.
+  const undoBtn = document.getElementById('svUndoDecor');
+  if (undoBtn) undoBtn.addEventListener('click', () => shelfDecorUndo());
   // v408: 3D view toggle — the 3D view has a 2D toggle, but 2D had no way back (launch-blocker).
   const view3DBtn = document.getElementById('svView3D');
   if (view3DBtn) view3DBtn.addEventListener('click', () => {
