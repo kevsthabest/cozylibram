@@ -23,9 +23,29 @@
     background: rgba(20,14,26,.72); color: #e5b86a; border-radius: 999px; padding: 8px 14px; cursor: pointer;
     backdrop-filter: blur(6px); }
   .pill:active { transform: scale(.96); }
-  #hint { position: absolute; top: calc(64px + env(safe-area-inset-top)); left: 0; right: 0; text-align: center;
-    font-family: system-ui, sans-serif; font-size: 12px; color: rgba(246,239,248,.62); pointer-events: none; z-index: 5;
-    text-shadow: 0 1px 6px rgba(0,0,0,.7); padding: 0 16px; }
+  #hint { position: absolute; bottom: calc(86px + env(safe-area-inset-bottom)); left: 0; right: 0;
+    text-align: center; font-family: system-ui, sans-serif; font-size: 12.5px; color: #f6eff8;
+    pointer-events: none; z-index: 9; padding: 0 24px; opacity: 0; transform: translateY(8px);
+    transition: opacity .25s ease, transform .25s ease; }
+  #hint.show { opacity: 1; transform: translateY(0); }
+  #hint span { background: rgba(20,14,26,.82); border: 1px solid rgba(229,184,106,.4);
+    border-radius: 999px; padding: 8px 16px; display: inline-block;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+  .pill.dim { opacity: .45; }
+  /* confirm dialog */
+  #confirmOv { position: absolute; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center; background: rgba(8,5,12,.6);
+    backdrop-filter: blur(3px); padding: 24px; }
+  #confirmOv.show { display: flex; }
+  #confirmOv .box { background: rgba(26,19,34,.97); border: 1px solid rgba(229,184,106,.5);
+    border-radius: 16px; padding: 20px; max-width: 320px; text-align: center;
+    font-family: system-ui, sans-serif; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  #confirmOv p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #f6eff8; }
+  #confirmOv .row { display: flex; gap: 10px; }
+  #confirmOv button { flex: 1; border-radius: 10px; padding: 10px; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: system-ui, sans-serif; }
+  #confirmNo { background: transparent; color: #b9a8c6; border: 1px solid rgba(185,168,198,.4); }
+  #confirmYes { background: #e5b86a; color: #241a10; border: none; }
   /* v2: inventory replaces the bottom tray */
   #invBtn { position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 6;
     width: 58px; height: 58px; border-radius: 50%; border: 1px solid rgba(229,184,106,.55);
@@ -49,8 +69,9 @@
   .inv-item.picked { border-color: #e5b86a; background: rgba(229,184,106,.16);
     box-shadow: 0 0 0 2px rgba(229,184,106,.5); }
   .inv-item .cnt { position: absolute; top: 4px; right: 6px; font-size: 10px; color: #e5b86a; font-weight: 700; }
-  .inv-item.locked { opacity: .38; filter: grayscale(.7); }
-  .inv-item.locked::after { content: '🔒'; position: absolute; top: 4px; right: 6px; font-size: 12px; }
+  .inv-item.locked { opacity: .42; filter: grayscale(.75); }
+  .inv-item.locked .locktag { position: absolute; top: 4px; right: 6px; font-size: 9px; font-weight: 700;
+    color: #8a7a95; letter-spacing: .06em; }
   #selmenu { position: absolute; z-index: 7; display: none; transform: translate(-50%, -110%);
     background: rgba(24,17,32,.94); border: 1px solid rgba(229,184,106,.5); border-radius: 12px;
     padding: 6px; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
@@ -83,11 +104,12 @@
     <div class="title"><small>Prototype</small>Cozy Libram · 3D Shelf</div>
     <div class="btns">
       <button class="pill" id="tiltBtn">Tilt: off</button>
+      <button class="pill" id="sndBtn">Sound: on</button>
       <button class="pill" id="presetBtn">Autumn cozy</button>
     </div>
   </div>
   <div id="tiltDbg"></div>
-  <div id="hint">Open inventory to decorate &middot; tap a placed decoration to select it</div>
+  <div id="hint"><span></span></div>
   <button id="invBtn" aria-label="Open decoration inventory">▦</button>
   <div id="invPanel">
     <h3>Decoration inventory</h3>
@@ -100,6 +122,9 @@
     <button class="del" id="selDelete">Delete</button>
     <button class="done" id="selDone">Done</button>
   </div>
+  <div id="confirmOv"><div class="box"><p id="confirmMsg"></p><div class="row">
+    <button id="confirmNo">Cancel</button><button id="confirmYes">Continue</button>
+  </div></div></div>
   <div id="nogl"><p>This prototype needs WebGL.<br>Please open it in a modern mobile browser.</p></div>
 </div>
 <script type="module">
@@ -119,32 +144,40 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.15;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14101c);
 scene.fog = new THREE.Fog(0x14101c, 20, 38);
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-const camBase = new THREE.Vector3(0, 4.4, 12.5);
-const camTarget = new THREE.Vector3(0, 3.7, 0);
+/* v7: pulled-back default framing (was 0,4.4,12.5) + gentle dolly-in on load */
+const camBase = new THREE.Vector3(0, 4.8, 13.4);
+const camTarget = new THREE.Vector3(0, 3.6, 0);
 camera.position.copy(camBase);
+camera.position.z *= 1.22;   // dolly start; eases to camBase over ~2.2s
 camera.lookAt(camTarget);
+const loadT0 = performance.now();
+let lastInteract = performance.now(), driftAmt = 0;
+window.addEventListener('pointerdown', () => { lastInteract = performance.now(); }, true);
 
-/* lights */
-scene.add(new THREE.AmbientLight(0x9a8a76, 0.55));
-const hemi = new THREE.HemisphereLight(0x8a7ab0, 0x2a1c12, 0.35);
+/* lights — v7: raised ~60% toward the autumn look (soft warm key + cool rim
+   fill, lifted ambient so wood grain reads; near-black becomes moody, not unlit) */
+const ambLight = new THREE.AmbientLight(0x9a8a76, 0.85);
+scene.add(ambLight);
+const hemi = new THREE.HemisphereLight(0x8a7ab0, 0x2a1c12, 0.55);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffe2b8, 2.0);
+const sun = new THREE.DirectionalLight(0xffe2b8, 2.3);
 sun.position.set(6, 11, 8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
 sun.shadow.camera.top = 11; sun.shadow.camera.bottom = -2;
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 32;
-sun.shadow.bias = -0.0006;
+sun.shadow.bias = -0.0002;
+sun.shadow.normalBias = 0.035;   // v7: kills the triangular light-leak on the bottom shelf
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x7a6ac0, 0.5);
+const rim = new THREE.DirectionalLight(0x7a6ac0, 0.6);
 rim.position.set(-7, 6, -4);
 scene.add(rim);
 
@@ -152,8 +185,34 @@ scene.add(rim);
 const SHELF_W = 10, PLANK_D = 2.6, PLANK_T = 0.28, SIDE_T = 0.3;
 const LEVELS = [0.64, 3.64, 6.64];           // top surface Y of each plank
 const TOP_Y = 8.04;
-const woodMat = new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.72, metalness: 0.05 });
-const woodDark = new THREE.MeshStandardMaterial({ color: 0x4e3320, roughness: 0.8 });
+/* v7: procedural wood grain — flat brown reads cheap, satin sheen reads expensive */
+function woodTexture(base, streakDark, streakLight) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = base; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 80; i++) {           // long grain streaks
+    const y = Math.random() * 256, h = 1 + Math.random() * 3;
+    const w = 120 + Math.random() * 136, x = Math.random() * 256 - 60;
+    g.fillStyle = Math.random() < 0.55 ? streakDark : streakLight;
+    g.globalAlpha = 0.05 + Math.random() * 0.11;
+    g.fillRect(x, y, w, h);
+  }
+  g.globalAlpha = 0.05;                    // fine speckle
+  for (let i = 0; i < 420; i++) {
+    g.fillStyle = Math.random() < 0.5 ? '#000' : '#fff';
+    g.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6);
+  }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 1);
+  return t;
+}
+const woodMat = new THREE.MeshStandardMaterial({
+  map: woodTexture('#6e4a2c', '#281608', '#c89664'), roughness: 0.52, metalness: 0.05 });
+const woodDark = new THREE.MeshStandardMaterial({
+  map: woodTexture('#4e3320', '#1c0e05', '#9a7048'), roughness: 0.58, metalness: 0.05 });
 
 function box(w, h, d, mat, x, y, z, shadow = true) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -171,10 +230,51 @@ const back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y)
 back.position.set(0, TOP_Y / 2, -PLANK_D / 2 - 0.16);
 back.receiveShadow = true;
 scene.add(back);
+/* v7: ground the room — radial vignette floor + hint of wall (fixes the black void,
+   gives the pumpkin/spiderweb context) */
+function floorTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 256, 30, 256, 256, 256);
+  gr.addColorStop(0, '#3a2a20'); gr.addColorStop(0.45, '#241a20');
+  gr.addColorStop(1, '#14101c');
+  g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 const floor = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
-  new THREE.MeshStandardMaterial({ color: 0x100c16, roughness: 1 }));
+  new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.95 }));
 floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true;
 scene.add(floor);
+(function wallHint() {   // faint warm wall far behind the bookcase
+  const c = document.createElement('canvas'); c.width = 4; c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, '#221822'); gr.addColorStop(0.7, '#1a1420'); gr.addColorStop(1, '#14101c');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 18),
+    new THREE.MeshBasicMaterial({ map: t, fog: true }));
+  wall.position.set(0, 8, -9); scene.add(wall);
+})();
+/* v7: dust motes drifting in the light — cheap Points, ~130 particles */
+const MOTES = 130;
+const moteBase = new Float32Array(MOTES * 3), motePhase = new Float32Array(MOTES);
+const moteGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(MOTES * 3);
+  for (let i = 0; i < MOTES; i++) {
+    moteBase[i * 3] = -7 + Math.random() * 14;
+    moteBase[i * 3 + 1] = 0.5 + Math.random() * 8;
+    moteBase[i * 3 + 2] = -2 + Math.random() * 6;
+    motePhase[i] = Math.random() * Math.PI * 2;
+    pos[i * 3] = moteBase[i * 3]; pos[i * 3 + 1] = moteBase[i * 3 + 1]; pos[i * 3 + 2] = moteBase[i * 3 + 2];
+  }
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+}
+const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ color: 0xffd9a0, size: 0.05,
+  transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false }));
+scene.add(motes);
 
 /* ============================== books ============================== */
 function spineTexture(title, bgCss) {
@@ -246,8 +346,108 @@ fillShelf(0, [
 ], 0.58);
 Math.random = _rand;
 
+/* ============================== v7 helpers ==============================
+   toast/hint, tiny tween engine, WebAudio sfx, promise confirm dialog */
+let toastTimer = null;
+const DEFAULT_HINT = 'Open inventory to decorate · tap a placed decoration to select it';
+function setHint(msg) {
+  const h = document.getElementById('hint');
+  h.firstElementChild.textContent = msg;
+  h.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = null;
+}
+function toast(msg, ms = 2400) {
+  setHint(msg);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => document.getElementById('hint').classList.remove('show'), ms);
+}
+const tweens = [];
+function tween(dur, onU, onC) { tweens.push({ t0: performance.now(), dur, onU, onC }); }
+function stepTweens(now) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i], k = Math.min(1, (now - tw.t0) / tw.dur);
+    tw.onU(k);
+    if (k >= 1) { tweens.splice(i, 1); if (tw.onC) tw.onC(); }
+  }
+}
+const easeOutBack = k => { const c = 1.70158; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+
+/* subtle WebAudio sfx — mutable via the Sound pill (premium rec #10) */
+let audioCtx = null, soundOn = true;
+function ac() {
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+  return audioCtx;
+}
+function sfx(kind) {
+  if (!soundOn) return;
+  const a = ac(); if (!a) return;
+  if (a.state === 'suspended') a.resume();
+  const t0 = a.currentTime;
+  if (kind === 'place' || kind === 'delete') {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(kind === 'place' ? 430 : 300, t0);
+    o.frequency.exponentialRampToValueAtTime(kind === 'place' ? 170 : 120, t0 + 0.09);
+    g.gain.setValueAtTime(0.10, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+    o.connect(g); g.connect(a.destination);
+    o.start(t0); o.stop(t0 + 0.13);
+  } else if (kind === 'preset') {
+    const len = 0.5, buf = a.createBuffer(1, a.sampleRate * len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1;
+    f.frequency.setValueAtTime(380, t0);
+    f.frequency.exponentialRampToValueAtTime(2400, t0 + len);
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.08, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + len);
+    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.start(t0);
+  }
+}
+window.addEventListener('pointerdown', () => ac(), { once: true });  // unlock audio on first gesture
+
+/* confirm dialog (promise-based) */
+let confirmRes = null;
+function confirmDlg(msg) {
+  return new Promise(res => {
+    confirmRes = res;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmOv').classList.add('show');
+  });
+}
+document.getElementById('confirmYes').addEventListener('click', () => {
+  document.getElementById('confirmOv').classList.remove('show');
+  if (confirmRes) { confirmRes(true); confirmRes = null; }
+});
+document.getElementById('confirmNo').addEventListener('click', () => {
+  document.getElementById('confirmOv').classList.remove('show');
+  if (confirmRes) { confirmRes(false); confirmRes = null; }
+});
+
 /* ============================== decorations ============================== */
 function shadowify(g) { g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); return g; }
+
+/* v7: leaf texture — plants read as folded paper with cones; textured quads read as leaves */
+function leafTexture(c1, c2) {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+  g.fillStyle = gr;
+  g.beginPath();
+  g.moveTo(32, 4);
+  g.bezierCurveTo(56, 34, 54, 84, 32, 124);
+  g.bezierCurveTo(10, 84, 8, 34, 32, 4);
+  g.fill();
+  g.strokeStyle = 'rgba(20,40,16,.55)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(32, 10); g.lineTo(32, 118); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const plantLeafTex = leafTexture('#5d8d46', '#3d6a30');
 
 function makePlant() {
   const g = new THREE.Group();
@@ -257,21 +457,42 @@ function makePlant() {
   const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 14),
     new THREE.MeshStandardMaterial({ color: 0x2e2118, roughness: 1 }));
   soil.position.y = 0.4; g.add(soil);
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d7d3d, roughness: 0.9 });
-  const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x5d8d46, roughness: 0.9 });
+  const leafMat = new THREE.MeshStandardMaterial({ map: plantLeafTex, transparent: true,
+    alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.9 });
   for (let i = 0; i < 7; i++) {
     const tall = i === 0;
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.085, tall ? 0.95 : 0.55 + Math.random() * 0.25, 8),
-      i % 2 ? leafMat : leafMat2);
     const a = (i / 7) * Math.PI * 2;
     const r = tall ? 0 : 0.13;
-    leaf.position.set(Math.cos(a) * r, 0.42 + (tall ? 0.48 : 0.3), Math.sin(a) * r);
-    if (!tall) { leaf.rotation.z = Math.cos(a) * 0.42; leaf.rotation.x = -Math.sin(a) * 0.42; }
-    g.add(leaf);
+    const w = tall ? 0.34 : 0.26 + Math.random() * 0.08;
+    const h = tall ? 1.0 : 0.6 + Math.random() * 0.25;
+    // two crossed quads per leaf for a hint of volume
+    for (let k = 0; k < 2; k++) {
+      const leaf = new THREE.Mesh(new THREE.PlaneGeometry(w, h), leafMat);
+      leaf.position.set(Math.cos(a) * r, 0.42 + h / 2 - 0.05, Math.sin(a) * r);
+      leaf.rotation.y = a + k * Math.PI / 2;
+      if (!tall) { leaf.rotation.z = Math.cos(a) * 0.38; leaf.rotation.x = -Math.sin(a) * 0.38; }
+      g.add(leaf);
+    }
   }
   g.userData = { decoType: 'plant', fw: 0.75, fd: 0.75 };
   return shadowify(g);
 }
+
+/* v7: flame as a flickering additive sprite — the flat white cone never read as fire */
+function flameTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 36, 2, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(255,244,214,1)');
+  gr.addColorStop(0.35, 'rgba(255,186,96,.95)');
+  gr.addColorStop(0.7, 'rgba(255,122,30,.4)');
+  gr.addColorStop(1, 'rgba(255,100,20,0)');
+  g.fillStyle = gr;
+  g.beginPath(); g.ellipse(32, 32, 20, 28, 0, 0, 7); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const flameTex = flameTexture();
 
 const candleFlames = [];
 function makeCandle() {
@@ -285,9 +506,9 @@ function makeCandle() {
   const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.09, 6),
     new THREE.MeshStandardMaterial({ color: 0x1a1410 }));
   wick.position.y = 0.63; g.add(wick);
-  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 10),
-    new THREE.MeshStandardMaterial({ color: 0xffc86a, emissive: 0xff8a1a, emissiveIntensity: 3.2 }));
-  flame.position.y = 0.74; g.add(flame);
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTex,
+    blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  flame.position.y = 0.78; flame.scale.set(0.24, 0.34, 1); g.add(flame);
   const glow = new THREE.PointLight(0xff9a3c, 14, 11, 1.6);
   glow.position.y = 0.85; g.add(glow);
   g.userData = { decoType: 'candle', fw: 0.55, fd: 0.55, glow, flame, seed: Math.random() * 10 };
@@ -342,7 +563,7 @@ function makeFairyLights() {
     const b = new THREE.Mesh(bulbGeo, new THREE.MeshStandardMaterial({
       color: 0xffd9a0, emissive: 0xffb84d, emissiveIntensity: 1.7, roughness: 0.4 }));
     b.position.copy(p); b.position.y -= 0.08;
-    b.userData.phase = Math.random() * Math.PI * 2;
+    b.userData.phase = (fairyBulbs.length % 13) * 0.75;   // v7: staggered wave along the string
     g.add(b); fairyBulbs.push(b);
   });
   g.userData = { decoType: 'lights', fw: 6.4, fd: 0.5, edge: true };
@@ -357,7 +578,7 @@ function makeFairyLights() {
 }
 
 const DECO_MAKERS = { plant: makePlant, candle: makeCandle, mug: makeMug, stack: makeStack, lights: makeFairyLights,
-  clock: makeClock, photo: makePhoto, succulent: makeSucculent };
+  clock: makeClock, photo: makePhoto, succulent: makeSucculent, lantern: makeLantern, globe: makeGlobe };
 
 /* v2: new inventory decorations */
 function makeClock() {
@@ -400,24 +621,72 @@ function makePhoto() {
   g.userData = { decoType: 'photo', fw: 0.55, fd: 0.3 };
   return shadowify(g);
 }
+const succLeafTex = leafTexture('#7aaa8a', '#55855f');
 function makeSucculent() {
   const g = new THREE.Group();
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.28, 12),
     new THREE.MeshStandardMaterial({ color: 0x7a8a9a, roughness: 0.7 }));
   pot.position.y = 0.14; g.add(pot);
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x6a9a7a, roughness: 0.85 });
-  const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x7aaa8a, roughness: 0.85 });
+  const leafMat = new THREE.MeshStandardMaterial({ map: succLeafTex, transparent: true,
+    alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.85 });
   for (let ring = 0; ring < 3; ring++) {
     const n = 5 + ring * 2, r = 0.05 + ring * 0.055, y = 0.3 + ring * 0.09;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + ring * 0.4;
-      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 6), i % 2 ? leafMat : leafMat2);
-      leaf.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
-      leaf.rotation.z = Math.cos(a) * 0.7; leaf.rotation.x = -Math.sin(a) * 0.7;
+      const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.3), leafMat);
+      leaf.position.set(Math.cos(a) * r, y + 0.08, Math.sin(a) * r);
+      leaf.rotation.y = a;
+      leaf.rotation.z = Math.cos(a) * 0.65; leaf.rotation.x = -Math.sin(a) * 0.65;
       g.add(leaf);
     }
   }
   g.userData = { decoType: 'succulent', fw: 0.5, fd: 0.5 };
+  return shadowify(g);
+}
+/* v7: unlockable decorations — earned by placing, not bought */
+function makeLantern() {
+  const g = new THREE.Group();
+  const frame = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.55, metalness: 0.45 });
+  const post = new THREE.BoxGeometry(0.05, 0.5, 0.05);
+  [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]].forEach(([x, z]) => {
+    const p = new THREE.Mesh(post, frame); p.position.set(x, 0.32, z); g.add(p);
+  });
+  const capT = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 0.38), frame);
+  capT.position.y = 0.6; g.add(capT);
+  const capB = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.38), frame);
+  capB.position.y = 0.05; g.add(capB);
+  const knob = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 8, 16), frame);
+  knob.position.y = 0.66; g.add(knob);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.48, 0.27),
+    new THREE.MeshStandardMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.22, roughness: 0.15 }));
+  glass.position.y = 0.32; g.add(glass);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10),
+    new THREE.MeshStandardMaterial({ color: 0xffcf7a, emissive: 0xff9a2a, emissiveIntensity: 2.6 }));
+  core.position.y = 0.3; g.add(core);
+  const gl = new THREE.PointLight(0xff9a3c, 6, 5.5, 1.8);
+  gl.position.y = 0.36; g.add(gl);
+  g.userData = { decoType: 'lantern', fw: 0.45, fd: 0.45 };
+  return shadowify(g);
+}
+function makeGlobe() {
+  const g = new THREE.Group();
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+  const x2 = c.getContext('2d');
+  x2.fillStyle = '#2a5a8a'; x2.fillRect(0, 0, 128, 64);
+  x2.fillStyle = '#4a7a3a';
+  [[30, 20, 13, 7], [70, 36, 17, 9], [102, 18, 9, 6], [52, 50, 11, 5]].forEach(([x, y, w, h]) => {
+    x2.beginPath(); x2.ellipse(x, y, w, h, 0.4, 0, 7); x2.fill();
+  });
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 16),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }));
+  ball.position.y = 0.52; ball.rotation.z = 0.41; g.add(ball);
+  const standMat = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.6 });
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.3, 10), standMat);
+  stand.position.y = 0.15; g.add(stand);
+  const baseD = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.05, 14), standMat);
+  baseD.position.y = 0.025; g.add(baseD);
+  g.userData = { decoType: 'globe', fw: 0.62, fd: 0.62 };
   return shadowify(g);
 }
 const placed = [];   // {group, pi, x0, x1}
@@ -434,6 +703,19 @@ const zones = LEVELS.map((topY, pi) => {
 const snapGuide = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
   new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.38, depthWrite: false }));
 snapGuide.visible = false; scene.add(snapGuide);
+/* v7: blob shadow under the dragged item — tightens as it lands (premium rec #6) */
+const blobShadow = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m);
+  return m;
+})();
 
 function findFreeSpot(pi, x, fw) {
   const minX = -SHELF_W / 2 + 0.45 + fw / 2, maxX = SHELF_W / 2 - 0.45 - fw / 2;
@@ -453,7 +735,31 @@ function registerSpot(pi, x, fw) {
   occupied[pi].push(rec);
   return rec;
 }
-function placeDeco(type, pi, x) {
+/* v7: placements consume inventory (broken fix #1) — every placement path funnels
+   through placeDeco/placeRoomDeco, so owned counts always decrement. `free`
+   skips the count for preset items. */
+let totalPlaced = 0;
+function consumeInventory(type) {
+  const inv = INVENTORY.find(i => i.type === type);
+  if (inv && inv.owned > 0 && !inv.locked) { inv.owned--; totalPlaced++; checkUnlocks(); }
+  buildInventory();
+}
+function unlockMsg(item) {
+  const need = item.type === 'lantern' ? 10 : 20;
+  const left = Math.max(0, need - totalPlaced);
+  return item.name + ' unlocks after placing ' + need + ' decorations' +
+    (left > 0 ? ' (' + left + ' to go)' : '');
+}
+function checkUnlocks() {
+  [['Lantern', 'lantern', 10], ['Globe', 'globe', 20]].forEach(([name, type, need]) => {
+    const it = INVENTORY.find(i => i.type === type);
+    if (it.locked && totalPlaced >= need) {
+      it.locked = false; it.owned = 1;
+      toast(name + ' unlocked — check your inventory!');
+    }
+  });
+}
+function placeDeco(type, pi, x, free = false) {
   const g = DECO_MAKERS[type]();
   const fw = g.userData.fw;
   x = findFreeSpot(pi, x, fw);
@@ -462,9 +768,13 @@ function placeDeco(type, pi, x) {
   } else {
     g.position.set(x, LEVELS[pi], 0.1);
   }
+  g.scale.setScalar(0.01);   // v7: 220ms ease-out-back pop on place
   scene.add(g);
   const rec = registerSpot(pi, x, fw);
   placed.push({ group: g, pi, rec, type });
+  tween(220, k => g.scale.setScalar(Math.max(0.01, easeOutBack(k))));
+  if (!free) consumeInventory(type);
+  sfx('place');
   return g;
 }
 function removeDeco(g) {
@@ -562,18 +872,19 @@ function showRoomAnchors(type) {
   });
 }
 function hideRoomAnchors() { anchorMarkers.forEach(m => scene.remove(m)); anchorMarkers.length = 0; }
-function placeRoomDeco(type, pos, anchor) {
+function placeRoomDeco(type, pos, anchor, free = false) {
   const g = ROOM_MAKERS[type]();
   g.position.copy(pos);
+  g.scale.setScalar(0.01);   // v7: 220ms ease-out-back pop on place
   scene.add(g);
+  tween(220, k => g.scale.setScalar(Math.max(0.01, easeOutBack(k))));
   if (anchor) anchor.usedBy = g;
   placed.push({ group: g, room: true, anchor: anchor || null, type });
-  const inv = INVENTORY.find(i => i.type === type);
-  if (inv && inv.owned > 0) inv.owned--;
   pickedRoom = null;
-  buildInventory();
-  document.getElementById('hint').textContent = 'Open inventory to decorate · tap a placed decoration to select it';
+  if (!free) consumeInventory(type); else buildInventory();
+  setHint(DEFAULT_HINT);
   select(g);
+  sfx('place');
   return g;
 }
 /* v6: free placement — the drop point is used directly, per decoration type:
@@ -623,8 +934,11 @@ function buildInventory() {
       (pickedType === item.type || pickedRoom === item.type ? ' picked' : '');
     d.dataset.deco = item.type;
     d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
-      (item.locked ? '' : '<span class="cnt">×' + item.owned + '</span>');
-    if (!item.locked && item.owned > 0) {
+      (item.locked ? '<span class="locktag">LOCKED</span>' : '<span class="cnt">×' + item.owned + '</span>');
+    if (item.locked) {
+      // v7: explain the lock instead of dead-silence (confusing fix #3)
+      d.addEventListener('click', () => toast(unlockMsg(item)));
+    } else if (item.owned > 0) {
       if (item.room) {
         // v4: room decos drag from inventory (like shelf decos); tap = auto-place
         d.addEventListener('pointerdown', e => startRoomDrag(e, item, d));
@@ -642,9 +956,9 @@ function buildInventory() {
           pickedRoom = null; hideRoomAnchors();
           pickedType = pickedType === item.type ? null : item.type;
           buildInventory();
-          document.getElementById('hint').textContent = pickedType
+          setHint(pickedType
             ? 'Tap a shelf to place the ' + item.name.toLowerCase() + ' · tap again to cancel'
-            : 'Open inventory to decorate · tap a placed decoration to select it';
+            : DEFAULT_HINT);
         });
       }
     }
@@ -692,6 +1006,10 @@ document.getElementById('invBtn').addEventListener('click', () => {
   const p = document.getElementById('invPanel');
   p.classList.contains('open') ? closeInventory() : (buildInventory(), openInventory());
 });
+/* v7: Escape reliably dismisses the panel and clears selection (broken fix #2) */
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeInventory(); deselect(); }
+});
 buildInventory();
 
 /* tap-shelf-to-place when a type is picked */
@@ -700,13 +1018,11 @@ canvas.addEventListener('pointerdown', e => {
   if (pickedType && !trayDrag && !roomDrag) {
     const hit = zoneHit(e);
     if (hit) {
-      const g = placeDeco(pickedType, hit.pi, hit.point.x);
+      const g = placeDeco(pickedType, hit.pi, hit.point.x);  // v7: decrements inventory
+      closeInventory();   // v7: dismiss the panel after tap-to-place (broken fix #2)
       select(g);
-      const inv = INVENTORY.find(i => i.type === pickedType);
-      if (inv && inv.owned > 0) { inv.owned--; if (inv.owned === 0) pickedType = null; }
       pickedType = null;
-      buildInventory();
-      document.getElementById('hint').textContent = 'Open inventory to decorate · tap a placed decoration to select it';
+      setHint(DEFAULT_HINT);
     }
   }
 });
@@ -747,9 +1063,21 @@ function showSnap(type, pi, x) {
   snapGuide.visible = true;
 }
 
-/* selection */
-const selRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40),
-  new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+/* selection — v7: soft pulsing glow hugging the footprint (not a flat ellipse) */
+function glowRingTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.strokeStyle = '#e5b86a'; g.lineWidth = 9;
+  g.shadowColor = '#e5b86a'; g.shadowBlur = 20;
+  g.beginPath(); g.arc(64, 64, 42, 0, 7); g.stroke();
+  g.shadowBlur = 0; g.lineWidth = 3; g.strokeStyle = 'rgba(255,240,210,.9)';
+  g.beginPath(); g.arc(64, 64, 42, 0, 7); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const selRing = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: glowRingTexture(), transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
 selRing.rotation.x = -Math.PI / 2; selRing.visible = false; scene.add(selRing);
 let selected = null;
 const selmenu = document.getElementById('selmenu');
@@ -763,8 +1091,15 @@ function select(g) {
   const baseY = (p && p.room) ? g.position.y : LEVELS[p.pi];
   const r = (p && p.room) ? 0.8
     : Math.max(g.userData.fw || 0.8, g.userData.fd || 0.8) / 2 + 0.18;
-  selRing.scale.set(r / 0.47, r / 0.47, 1);
-  selRing.position.set(g.position.x, baseY + 0.02, g.position.z);
+  const gs = r * 2.6;   // glow texture is a soft ring on a 1x1 plane
+  selRing.scale.set(gs, gs, 1);
+  if (p && p.room && p.type === 'web') {   // web hangs vertical on the wall
+    selRing.rotation.set(0, 0, 0);
+    selRing.position.set(g.position.x, g.position.y, g.position.z + 0.12);
+  } else {
+    selRing.rotation.set(-Math.PI / 2, 0, 0);
+    selRing.position.set(g.position.x, baseY + 0.03, g.position.z);
+  }
   selRing.visible = true;
   // v3: room decos can't be moved (Delete only)
   document.getElementById('selMove').style.display = (p && p.room) ? 'none' : '';
@@ -776,13 +1111,16 @@ function select(g) {
 function deselect() {
   selected = null; selRing.visible = false; selmenu.classList.remove('show');
 }
-document.getElementById('selDelete').addEventListener('click', () => { if (selected) removeDeco(selected); });
+document.getElementById('selDelete').addEventListener('click', () => {
+  if (!selected) return;
+  const g = selected;   // v7: shrink-out over 180ms instead of vanishing (premium rec #6)
+  deselect(); sfx('delete');
+  tween(180, k => g.scale.setScalar(Math.max(0.001, 1 - k)), () => removeDeco(g));
+});
 document.getElementById('selDone').addEventListener('click', deselect);
 document.getElementById('selMove').addEventListener('click', () => {
   selmenu.classList.remove('show');
-  document.getElementById('hint').textContent = 'Drag the decoration to move it · tap elsewhere to finish';
-  setTimeout(() => { document.getElementById('hint').textContent =
-    'Open inventory to decorate · tap a placed decoration to select it'; }, 2600);
+  toast('Drag the decoration to move it · tap elsewhere to finish', 2600);
 });
 
 /* drag from inventory — v2: lerped ghost follow + scale feedback for tactile feel */
@@ -934,9 +1272,13 @@ window.addEventListener('pointerup', e => {
   }
   if (moveDrag) {
     const m = moveDrag; moveDrag = null;
-    m.group.scale.setScalar(1); // v2: restore scale
-    if (!m.moved && m.group) select(m.group);
-    else if (m.group) select(m.group); // re-select after move
+    if (m.group) {
+      const g = m.group;
+      // v7: soft settle on drop instead of an instant scale snap
+      if (m.moved) tween(180, k => g.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k))));
+      else g.scale.setScalar(1);
+      select(g);   // re-select after move
+    }
     return;
   }
 });
@@ -957,15 +1299,62 @@ canvas.addEventListener('pointerup', e => {
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-/* autumn cozy preset */
-document.getElementById('presetBtn').addEventListener('click', () => {
+/* v7: mood lighting — autumn preset crossfades warm over ~800ms instead of instant */
+function setMood(name, ms = 800) {
+  const T = name === 'autumn'
+    ? { amb: 0.72, hemi: 0.5, sun: 2.7, sunC: 0xffc98a, rim: 0.8, exp: 1.25 }
+    : { amb: 0.85, hemi: 0.55, sun: 2.3, sunC: 0xffe2b8, rim: 0.6, exp: 1.15 };
+  const S = { amb: ambLight.intensity, hemi: hemi.intensity, sun: sun.intensity,
+    sunC: sun.color.clone(), rim: rim.intensity, exp: renderer.toneMappingExposure };
+  const TC = new THREE.Color(T.sunC);
+  tween(ms, k => {
+    ambLight.intensity = S.amb + (T.amb - S.amb) * k;
+    hemi.intensity = S.hemi + (T.hemi - S.hemi) * k;
+    sun.intensity = S.sun + (T.sun - S.sun) * k;
+    sun.color.copy(S.sunC).lerp(TC, k);
+    rim.intensity = S.rim + (T.rim - S.rim) * k;
+    renderer.toneMappingExposure = S.exp + (T.exp - S.exp) * k;
+  });
+}
+
+/* autumn cozy preset — v7: confirm before wiping (confusing fix #1),
+   toggleable back to default (confusing fix #2) */
+const presetBtn = document.getElementById('presetBtn');
+let autumnOn = false, preAutumn = null;
+function snapshotDecos() {
+  return placed.map(p => ({ type: p.type, room: !!p.room, pi: p.pi, pos: p.group.position.clone() }));
+}
+function restoreDecos(snap) {
   clearDecos();
-  select(placeDeco('lights', 2, 0));
-  placeDeco('plant', 1, 3.0);
-  placeDeco('candle', 1, 4.15);
-  placeDeco('mug', 0, 2.9);
-  placeDeco('stack', 0, 4.15);
+  snap.forEach(s => {
+    if (s.room) placeRoomDeco(s.type, s.pos, null, true);
+    else placeDeco(s.type, s.pi, s.pos.x, true);
+  });
   deselect();
+}
+presetBtn.addEventListener('click', async () => {
+  if (autumnOn) {   // toggle back to the user's own arrangement
+    restoreDecos(preAutumn);
+    preAutumn = null; autumnOn = false;
+    presetBtn.textContent = 'Autumn cozy';
+    presetBtn.classList.remove('on');
+    setMood('default'); sfx('preset');
+    toast('Back to your decorations');
+    return;
+  }
+  if (placed.length && !(await confirmDlg('This replaces your current decorations. Continue?'))) return;
+  preAutumn = snapshotDecos();
+  clearDecos();
+  select(placeDeco('lights', 2, 0, true));
+  placeDeco('plant', 1, 3.0, true);
+  placeDeco('candle', 1, 4.15, true);
+  placeDeco('mug', 0, 2.9, true);
+  placeDeco('stack', 0, 4.15, true);
+  deselect();
+  autumnOn = true;
+  presetBtn.textContent = 'Default look';
+  presetBtn.classList.add('on');
+  setMood('autumn'); sfx('preset');
 });
 
 /* ============================== parallax ============================== */
@@ -984,6 +1373,25 @@ function onTilt(e) {
   tiltDbg();
 }
 const tiltBtn = document.getElementById('tiltBtn');
+/* v7: desktop gets feedback instead of dead silence (broken fix #3) */
+const canTilt = ('ontouchstart' in window || navigator.maxTouchPoints > 0) &&
+  typeof DeviceOrientationEvent !== 'undefined';
+if (!canTilt) {
+  tiltBtn.classList.add('dim');
+  tiltBtn.title = 'Tilt parallax needs a mobile device with motion sensors';
+}
+tiltBtn.addEventListener('click', () => {
+  if (!canTilt) { toast('Tilt needs a mobile device with motion sensors'); return; }
+  setTilt(!tiltOn);
+});
+/* v7: sound mute toggle (premium rec #10) */
+const sndBtn = document.getElementById('sndBtn');
+sndBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  sndBtn.textContent = soundOn ? 'Sound: on' : 'Sound: off';
+  sndBtn.classList.toggle('dim', !soundOn);
+  if (soundOn) sfx('place');
+});
 function tiltDbg() {
   const d = document.getElementById('tiltDbg');
   if (!tiltOn) { d.style.display = 'none'; return; }
@@ -1011,14 +1419,14 @@ async function setTilt(on) {
   tiltBtn.classList.toggle('on', tiltOn);
   tiltDbg();
 }
-tiltBtn.addEventListener('click', () => setTilt(!tiltOn));
+/* (tilt button click is wired above, with desktop feedback) */
 
 /* ============================== loop / resize ============================== */
 function layout() {
   const w = window.innerWidth, h = window.innerHeight, a = w / h;
   camera.aspect = a; camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  camBase.set(0, 4.4, a >= 1 ? 12.5 : 12.5 * Math.min(2.1, 1.3 / a));
+  camBase.set(0, 4.8, a >= 1 ? 13.4 : 13.4 * Math.min(2.1, 1.3 / a));
 }
 window.addEventListener('resize', layout);
 layout();
@@ -1027,6 +1435,8 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const t = clock.getElapsedTime();
+  const now = performance.now();
+  stepTweens(now);   // v7: all UI tweens (place pop, delete shrink, mood crossfade)
   // v2: process throttled drag raycasts
   processDragFrame();
   // v5: 1:1 drag follow — ghost tracks the pointer with no easing lag, so the
@@ -1040,27 +1450,70 @@ function animate() {
   if (moveDrag && moveDrag.hasTarget && moveDrag.moved) {
     moveDrag.group.position.set(moveDrag.targetX, moveDrag.targetY, moveDrag.targetZ);
   }
-  // candle flicker — v2: synced with stronger base intensity (14)
+  // v7: blob shadow under shelf drags — visible while lifted, tightens on landing
+  const shelfDrag = (trayDrag && trayDrag.hasTarget && trayDrag.pi >= 0) ? trayDrag
+    : (moveDrag && moveDrag.hasTarget && moveDrag.moved) ? moveDrag : null;
+  if (shelfDrag) {
+    const g = shelfDrag.group, fw = g.userData.fw || 0.8;
+    const pi = shelfDrag === trayDrag ? trayDrag.pi
+      : (placed.find(p => p.group === g) || {}).pi;
+    if (pi != null && pi >= 0) {
+      blobShadow.visible = true;
+      blobShadow.position.set(shelfDrag.targetX, LEVELS[pi] + 0.02, shelfDrag.targetZ);
+      const s = fw * 1.7;
+      blobShadow.scale.set(s, s, 1);
+      blobShadow.material.opacity += (0.32 - blobShadow.material.opacity) * 0.2;
+    }
+  } else if (blobShadow.visible) {
+    blobShadow.material.opacity -= 0.06;   // tighten + fade on landing
+    const s = blobShadow.scale.x;
+    blobShadow.scale.set(s * 0.94, s * 0.94, 1);
+    if (blobShadow.material.opacity <= 0.01) blobShadow.visible = false;
+  }
+  // candle flicker — v7: sprite flame + synced point light
   for (const g of candleFlames) {
     const u = g.userData, s = u.seed;
     u.glow.intensity = 14 + Math.sin(t * 13 + s) * 2.2 + Math.sin(t * 29 + s * 1.7) * 1.4;
-    u.flame.scale.set(1 + Math.sin(t * 17 + s) * 0.08, 1 + Math.sin(t * 23 + s) * 0.14, 1);
-    u.flame.material.emissiveIntensity = 3.2 + Math.sin(t * 19 + s) * 0.5;
+    u.flame.scale.set(0.24 * (1 + Math.sin(t * 17 + s) * 0.14),
+                      0.34 * (1 + Math.sin(t * 23 + s) * 0.18), 1);
+    u.flame.position.x = Math.sin(t * 11 + s) * 0.012;
   }
-  // fairy twinkle
+  // fairy twinkle — v7: staggered wave along the string
   for (const b of fairyBulbs) {
     b.material.emissiveIntensity = 1.55 + Math.sin(t * 2.2 + b.userData.phase) * 0.4;
   }
+  // v7: dust motes drifting in the light
+  {
+    const mp = moteGeo.attributes.position;
+    for (let i = 0; i < MOTES; i++) {
+      const ph = motePhase[i];
+      mp.array[i * 3] = moteBase[i * 3] + Math.sin(t * 0.22 + ph) * 0.35;
+      mp.array[i * 3 + 1] = moteBase[i * 3 + 1] + Math.sin(t * 0.16 + ph * 1.7) * 0.4;
+    }
+    mp.needsUpdate = true;
+  }
+  // v7: selection glow pulse
+  if (selRing.visible) selRing.material.opacity = 0.62 + Math.sin(t * 3.2) * 0.22;
   // (v6: room anchor markers retired — free placement, no snap targets)
+  // v7: dolly-in on load (2.2s ease-out)
+  const lk = Math.min(1, (now - loadT0) / 2200);
+  const dollyK = 1 - Math.pow(1 - lk, 3);
+  const targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK);
+  // v7: slow idle drift after 6s without interaction
+  const idle = (now - lastInteract) > 6000;
+  driftAmt += ((idle ? 1 : 0) - driftAmt) * 0.008;
+  const driftX = Math.sin(t * 0.24) * 0.4 * driftAmt;
+  const driftY = Math.cos(t * 0.19) * 0.22 * driftAmt;
   // camera parallax
   const px = tiltOn ? tilt.x : pointerPX * 0.55;
   const py = tiltOn ? tilt.y : pointerPY * 0.4;
-  camera.position.x += ((camBase.x + px * 0.9) - camera.position.x) * 0.045;
-  camera.position.y += ((camBase.y - py * 0.55) - camera.position.y) * 0.045;
-  camera.position.z += (camBase.z - camera.position.z) * 0.045;
+  camera.position.x += ((camBase.x + px * 0.9 + driftX) - camera.position.x) * 0.045;
+  camera.position.y += ((camBase.y - py * 0.55 + driftY) - camera.position.y) * 0.045;
+  camera.position.z += (targetZ - camera.position.z) * 0.045;
   camera.lookAt(camTarget);
   renderer.render(scene, camera);
 }
+setTimeout(() => toast(DEFAULT_HINT, 4200), 900);   // v7: brief onboarding, then it gets out of the way
 animate();
 </script>
 </body>
