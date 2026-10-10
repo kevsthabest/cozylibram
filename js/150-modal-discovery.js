@@ -367,12 +367,21 @@ async function loadCharsTabForBook(t) {
     box.innerHTML = '<p class="note">Character module not loaded — try fully closing and reopening the app.</p>';
     return;
   }
-  try {
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
-    const workId = await Promise.race([resolveWork(t), timeout]);
-    if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
-    const cast = await Promise.race([CharacterWiki.getCast(workId), timeout]);
-    if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
+  // v404: separate timeouts per stage, retry button on failure
+  const loadWithRetry = async (attempt) => {
+    try {
+      const stageTimeout = (ms, label) => new Promise((_, rej) =>
+        setTimeout(() => rej(new Error(label + ' timeout')), ms));
+      const workId = await Promise.race([
+        resolveWork(t),
+        stageTimeout(8000, 'work-resolve')
+      ]);
+      if (!workId) { box.innerHTML = '<p class="note">No work linked.</p>'; return; }
+      const cast = await Promise.race([
+        CharacterWiki.getCast(workId),
+        stageTimeout(8000, 'character-fetch')
+      ]);
+      if (!cast.total) { box.innerHTML = '<p class="note">No characters recorded for this book yet.</p>'; return; }
     const card = (c) => {
       // v329: all characters tappable — linked open the wiki, unlinked open book detail
       const tapAttr = c.characterId
@@ -412,9 +421,18 @@ async function loadCharsTabForBook(t) {
     box.querySelectorAll('[data-chbook]').forEach(b => b.addEventListener('click', () => {
       openBookCharacter(b.getAttribute('data-chbook'));
     }));
-  } catch (e) {
-    box.innerHTML = '<p class="note">Could not load characters: ' + esc((e && e.message) || 'unknown error') + '</p>';
-  }
+    } catch (e) {
+      const msg = esc((e && e.message) || 'unknown error');
+      box.innerHTML = '<p class="note">Could not load characters: ' + msg + '</p>' +
+        '<p><button class="btn sm" id="m-chars-retry">Retry</button></p>';
+      const rb = document.getElementById('m-chars-retry');
+      if (rb) rb.addEventListener('click', () => {
+        box.innerHTML = '<p class="note">Loading characters…</p>';
+        loadWithRetry((attempt || 0) + 1);
+      });
+    }
+  };
+  loadWithRetry(0);
 }
 
 /* v337: load memorable quotes for a book's work into the modal Details tab. */
