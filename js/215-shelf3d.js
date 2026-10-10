@@ -138,9 +138,10 @@
     '.s3d-root #s3dInvPanel.open{transform:translateY(0);}',
     '.s3d-root #s3dInvPanel h3{margin:0 0 4px;font-size:15px;color:#f6eff8;font-family:system-ui,sans-serif;}',
     '.s3d-root #s3dInvPanel .sub{font-size:11px;color:#b9a8c6;font-family:system-ui,sans-serif;margin-bottom:10px;}',
-    '.s3d-root #s3dInvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}',
-    '.s3d-root .inv-item{background:rgba(40,30,52,.9);border:1px solid rgba(229,184,106,.25);border-radius:12px;',
-    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:pan-y;',  // v420: allow vertical scroll; press-hold for drag
+    '.s3d-root #s3dInvGrid{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 10px;',
+    '  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;}',
+    '.s3d-root .inv-item{flex:0 0 auto;width:70px;background:rgba(40,30,52,.9);border:1px solid rgba(229,184,106,.25);border-radius:12px;',
+    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:pan-x;',  // v442: horizontal row; swipe scrolls, vertical drag picks up
     '  font-family:system-ui,sans-serif;font-size:10px;color:#f6eff8;',
     '  user-select:none;-webkit-user-select:none;position:relative;}',
     '.s3d-root .inv-item:active{transform:scale(.94);border-color:#e5b86a;}',
@@ -163,7 +164,18 @@
     '.s3d-root #s3dInvTabs{display:flex;gap:6px;margin:8px 0 2px;}',
     '.s3d-root #s3dInvTabs button{flex:1;border:1px solid rgba(229,184,106,.35);background:transparent;',
     '  color:#b9a8c6;border-radius:8px;padding:6px;font-size:12px;}',
-    '.s3d-root #s3dInvTabs button.on{background:rgba(229,184,106,.2);color:#f6eff8;}'
+    '.s3d-root #s3dInvTabs button.on{background:rgba(229,184,106,.2);color:#f6eff8;}',
+    '.s3d-root #s3dPlaceBar{position:absolute;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9;',
+    '  display:none;align-items:center;gap:10px;background:rgba(24,17,32,.96);',
+    '  border:1px solid rgba(229,184,106,.5);border-radius:14px;padding:10px 12px;',
+    '  font-family:system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5);}',
+    '.s3d-root #s3dPlaceBar.show{display:flex;}',
+    '.s3d-root #s3dPlaceMsg{flex:1;font-size:13px;color:#f6eff8;}',
+    '.s3d-root #s3dPlaceMsg b{color:#e5b86a;}',
+    '.s3d-root #s3dPlaceBar button{font-family:system-ui,sans-serif;font-size:12px;font-weight:600;border:none;',
+    '  border-radius:8px;padding:8px 12px;cursor:pointer;white-space:nowrap;}',
+    '.s3d-root #s3dPlaceUndo{background:#e5b86a;color:#241a10;}',
+    '.s3d-root #s3dPlaceCancel{background:transparent;color:#b9a8c6;border:1px solid rgba(185,168,198,.4);}'
   ].join('\n');
 
   /* ---------- DOM markup (built inside the mount container) ---------- */
@@ -187,6 +199,9 @@
     '  <div id="s3dInvTabs"><button data-tab="shelf" class="on">Shelf</button><button data-tab="room">Room</button></div>',
     '  <div id="s3dInvGrid"></div>',
     '</div>',
+    '<div id="s3dPlaceBar"><span id="s3dPlaceMsg"></span>',
+    '  <button id="s3dPlaceUndo" style="display:none">Put back</button>',
+    '  <button id="s3dPlaceCancel">Cancel</button></div>',
     '<div id="s3dSelmenu">',
     '  <button class="mv" id="s3dSelMove">Move</button>',
     '  <button class="del" id="s3dSelDelete">Delete</button>',
@@ -369,10 +384,10 @@
       return m;
     }
     LEVELS.forEach(function (topY) {
-      box(SHELF_W + SIDE_T * 2, PLANK_T, PLANK_D, woodMat, 0, topY - PLANK_T / 2, 0);
+      box(SHELF_W, PLANK_T, PLANK_D, woodMat, 0, topY - PLANK_T / 2, 0);   // v442: planks sit between the side panels (was SHELF_W + SIDE_T * 2) — fixes z-fighting where planks met sides
     });
-    box(SIDE_T, TOP_Y, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
-    box(SIDE_T, TOP_Y, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
+    box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
+    box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark,  (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
     box(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);          // crown
     var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y),
       new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 }));
@@ -1425,6 +1440,21 @@
     var snapGuide = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
       new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.38, depthWrite: false }));
     snapGuide.visible = false; scene.add(snapGuide);
+    /* v442: shelf drop-target highlights — shown while an item is picked up or dragged */
+    var zoneHL = LEVELS.map(function (topY) {
+      var m = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W, 0.6),
+        new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.22,
+          depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, topY + 0.05, 0);
+      m.visible = false;
+      scene.add(m);
+      return m;
+    });
+    function highlightZones(on) {
+      zoneHL.forEach(function (m) { m.visible = !!on; });
+      markDirty();
+    }
     /* blob shadow under the dragged item — tightens as it lands */
     var blobShadow = (function () {
       var c = document.createElement('canvas'); c.width = c.height = 64;
@@ -1639,43 +1669,125 @@
     }
 
     /* ============================== inventory ============================== */
-    /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
-       Quick swipe scrolls the list; holding grabs the item for dragging.
-       If the finger moves beyond slop before the timer, it's a scroll.
-       v439: retuned 280ms/10px -> 450ms/14px. The 280ms dwell was shorter
-       than a natural scroll-initiating pause, so hesitant touches were
-       hijacked into drags (inventory closed, scroll impossible). 450ms
-       matches platform long-press timing; 14px forgives finger jitter. */
-    var HOLD_MS = 450, HOLD_SLOP = 14;
-    function pressHoldToDrag(el, startFn) {
-      var timer = null, sx = 0, sy = 0;
+    /* v442: gesture disambiguation (replaces pressHoldToDrag — no hold timer).
+       Tiles live in a single horizontal row with touch-action:pan-x, so
+       horizontal swipes scroll the row natively (the browser takes the
+       gesture and we get pointercancel). A vertical drag picks the item up
+       instantly and starts a 3D drag. Tap/click = pick up for tap-to-place.
+       Mouse: drag starts after ~6px of movement; a plain click = pick up. */
+    function bindTileGestures(el, item) {
+      var sx = 0, sy = 0, live = false, decided = false, pid = null;
+      function reset() { live = false; decided = false; pid = null; }
       el.addEventListener('pointerdown', function (e) {
-        // Only for touch — mouse can drag immediately.
-        if (e.pointerType !== 'touch') { startFn(e); return; }
-        sx = e.clientX; sy = e.clientY;
-        timer = setTimeout(function () {
-          timer = null;
-          startFn(e);
-        }, HOLD_MS);
-        var onMove = function (me) {
-          if (Math.hypot(me.clientX - sx, me.clientY - sy) > HOLD_SLOP) {
-            // Moved — it's a scroll, cancel the hold.
-            if (timer) { clearTimeout(timer); timer = null; }
-            el.removeEventListener('pointermove', onMove);
-            el.removeEventListener('pointerup', onUp);
-            el.removeEventListener('pointercancel', onUp);
-          }
-        };
-        var onUp = function () {
-          if (timer) { clearTimeout(timer); timer = null; }
-          el.removeEventListener('pointermove', onMove);
-          el.removeEventListener('pointerup', onUp);
-          el.removeEventListener('pointercancel', onUp);
-        };
-        el.addEventListener('pointermove', onMove);
-        el.addEventListener('pointerup', onUp);
-        el.addEventListener('pointercancel', onUp);
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        sx = e.clientX; sy = e.clientY; live = true; decided = false; pid = e.pointerId;
       });
+      el.addEventListener('pointermove', function (e) {
+        if (!live || decided || e.pointerId !== pid) return;
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        var ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax > 12 && ax > ay * 1.4) { decided = true; return; }  // horizontal: let it scroll
+        var thresh = (e.pointerType === 'mouse') ? 6 : 10;
+        if (ay > thresh && ay > ax) {
+          decided = true;
+          try { el.setPointerCapture(e.pointerId); } catch (err) {}
+          if (item.room) startRoomDrag(e, item, el); else startInvDrag(e, item, el);
+          return;
+        }
+        if (Math.hypot(dx, dy) > 16) decided = true;  // diagonal drift: treat as scroll
+      });
+      el.addEventListener('pointerup', function (e) {
+        if (!live || e.pointerId !== pid) return;
+        var wasTap = !decided;
+        reset();
+        if (wasTap) pickUp(item);
+      });
+      el.addEventListener('pointercancel', function () { reset(); });
+      el.addEventListener('lostpointercapture', function () { cancelActiveDrag(); });
+    }
+    /* inventory lookup by catalog id */
+    function invByType(type) {
+      var found = null;
+      INVENTORY.forEach(function (i) { if (i.type === type) found = i; });
+      return found;
+    }
+    function firstFreeAnchor(type) {
+      var a = null;
+      ROOM_ANCHORS.forEach(function (x) {
+        if (!a && x.types.indexOf(type) >= 0 && !x.usedBy) a = x;
+      });
+      return a;
+    }
+    function restoreInventory(type) {
+      var inv = invByType(type);
+      if (inv) inv.owned++;
+      buildInventory();
+    }
+    /* slim placing bar: "Placing: X. Tap a shelf" + Cancel, or "Placed X." + Put back */
+    var pendingUndo = null;   // {type, name, group}
+    function showPlacingBar(item) {
+      $('s3dPlaceMsg').innerHTML = 'Placing: <b>' + esc(item.name) + '</b> &middot; tap a shelf to place';
+      $('s3dPlaceUndo').style.display = 'none';
+      $('s3dPlaceCancel').style.display = '';
+      $('s3dPlaceBar').classList.add('show');
+      highlightZones(true);
+    }
+    function showUndoBar(item, group) {
+      pendingUndo = { type: item.type, name: item.name, group: group };
+      $('s3dPlaceMsg').innerHTML = 'Placed <b>' + esc(item.name) + '</b>';
+      $('s3dPlaceCancel').style.display = 'none';
+      $('s3dPlaceUndo').style.display = '';
+      $('s3dPlaceBar').classList.add('show');
+      highlightZones(false);
+    }
+    function hidePlaceBar() {
+      $('s3dPlaceBar').classList.remove('show');
+      highlightZones(false);
+      pendingUndo = null;
+    }
+    function clearUndo() { if (pendingUndo) hidePlaceBar(); }
+    /* tap on a tile = pick up for tap-to-place (panel closes, shelves stay visible) */
+    function pickUp(item) {
+      clearUndo();
+      deselect();
+      pickedType = item.type;
+      closeInventory();
+      showPlacingBar(item);
+      setHint(item.room ? 'Tap the room to place the ' + item.name.toLowerCase()
+                        : 'Tap a shelf to place the ' + item.name.toLowerCase());
+    }
+    /* shared post-placement: select + undo bar so a mistake costs one tap */
+    function afterPlace(item, group) {
+      if (!item || !group) return;
+      pickedType = null;
+      select(group);
+      showUndoBar(item, group);
+      setHint(DEFAULT_HINT);
+    }
+    /* cancel any in-flight drag: discard ghost, clear state (inventory is only
+       consumed on drop, so no stock to restore) */
+    function cancelActiveDrag() {
+      var had = false;
+      if (trayDrag) { discardGhost(trayDrag.group); trayDrag = null; had = true; }
+      if (roomDrag) { discardGhost(roomDrag.group); roomDrag = null; had = true; }
+      if (moveDrag) {
+        var m = moveDrag; moveDrag = null; had = true;
+        if (m.orig && m.orig.rec) {
+          var rec = null;
+          placed.forEach(function (p) { if (p.group === m.group) rec = p; });
+          if (rec) {
+            var oi = occupied[rec.pi].indexOf(rec.rec);
+            if (oi >= 0) occupied[rec.pi].splice(oi, 1);
+            rec.pi = m.orig.pi;
+            rec.rec[0] = m.orig.rec[0]; rec.rec[1] = m.orig.rec[1];
+            occupied[rec.pi].push(rec.rec);
+            m.group.position.set((rec.rec[0] + rec.rec[1]) / 2, m.orig.y, m.group.position.z);
+          }
+          m.group.scale.setScalar(1);
+          select(m.group);
+        }
+      }
+      if (had) { snapGuide.visible = false; highlightZones(false); markDirty(); }
     }
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
@@ -1704,39 +1816,13 @@
           d.dataset.deco = item.type;
           d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
             '<span class="cnt">\u00d7' + item.owned + '</span>';
-          if (item.owned > 0) {
-            if (item.room) {
-              // room decos: press-and-hold to drag (v420), tap = auto-place
-              pressHoldToDrag(d, function (e) { startRoomDrag(e, item, d); });
-              d.addEventListener('click', function () {
-                // tap (not drag): auto-place at first free default spot
-                if (d.dataset.dragged) { delete d.dataset.dragged; return; }
-                var a = null;
-                ROOM_ANCHORS.forEach(function (x) {
-                  if (!a && x.types.indexOf(item.type) >= 0 && !x.usedBy) a = x;
-                });
-                if (a) placeRoomDeco(item.type, a.pos, a);
-              });
-            } else {
-              // v420: press-and-hold to drag; tap = pick up for tap-to-place
-              pressHoldToDrag(d, function (e) { startInvDrag(e, item, d); });
-              d.addEventListener('click', function () {
-                // tap (not drag): pick up for tap-to-place
-                if (d.dataset.dragged) { delete d.dataset.dragged; return; }
-                pickedType = pickedType === item.type ? null : item.type;
-                buildInventory();
-                setHint(pickedType
-                  ? 'Tap a shelf to place the ' + item.name.toLowerCase() + ' \u00b7 tap again to cancel'
-                  : DEFAULT_HINT);
-              });
-            }
-          }
+          if (item.owned > 0) bindTileGestures(d, item);   // v442: swipe scrolls, vertical drag picks up, tap picks up
           grid.appendChild(d);
         });
       var sub = root.querySelector('#s3dInvPanel .sub');
       if (sub) sub.textContent = invTab === 'room'
-        ? 'Drag anywhere in the room to place \u00b7 or tap to auto-place'
-        : 'Tap to pick up, then tap a shelf to place \u00b7 or drag straight onto a shelf';
+        ? 'Swipe to browse \u00b7 drag up to place \u00b7 tap to pick up, then tap the room'
+        : 'Swipe to browse \u00b7 drag up to place \u00b7 tap to pick up, then tap a shelf';
     }
     var invTabBtns = root.querySelectorAll('#s3dInvTabs button');
     for (var ibi = 0; ibi < invTabBtns.length; ibi++) {
@@ -1746,27 +1832,29 @@
     }
     function startInvDrag(e, item, el) {
       e.preventDefault();
+      clearUndo();
       deselect();
       closeInventory();
-      var g = decoMakerFor(item.type)();
+      var maker = decoMakerFor(item.type);
+      if (!maker) { toast('Could not load ' + item.name, 2200); return; }
+      var g = maker();
       g.visible = false; scene.add(g);
       trayDrag = { type: item.type, group: g, pi: -1, x: 0, moved: false,
         sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
-      el.dataset.dragged = '1';
+      highlightZones(true);
       // position the ghost under the pointer immediately (1:1 on grab)
       queueRaycast(e);
-      // if this becomes a drag (not tap), the pointermove handler takes over
     }
     /* free placement — drag anywhere in the room, drop where the finger lets go */
     function startRoomDrag(e, item, el) {
       e.preventDefault();
+      clearUndo();
       deselect();
       closeInventory();
       var g = ROOM_MAKERS[item.type]();
       g.visible = false; scene.add(g);
       roomDrag = { type: item.type, group: g, moved: false,
         sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
-      el.dataset.dragged = '1';
       // position the ghost under the pointer immediately (1:1 on grab)
       queueRaycast(e);
     }
@@ -1777,11 +1865,20 @@
     $('s3dInvBtn').addEventListener('click', function () {
       var p = $('s3dInvPanel');
       if (p.classList.contains('open')) closeInventory();
-      else { buildInventory(); openInventory(); }
+      else { clearUndo(); buildInventory(); openInventory(); }
+    });
+    /* v442: placing-bar buttons */
+    $('s3dPlaceCancel').addEventListener('click', function () {
+      pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);
+    });
+    $('s3dPlaceUndo').addEventListener('click', function () {
+      var u = pendingUndo; pendingUndo = null;
+      if (u) { removeDeco(u.group); restoreInventory(u.type); }
+      hidePlaceBar(); setHint(DEFAULT_HINT); buildInventory();
     });
     /* Escape reliably dismisses the panel and clears selection */
     on(window, 'keydown', function (e) {
-      if (e.key === 'Escape') { closeInventory(); deselect(); }
+      if (e.key === 'Escape') { closeInventory(); deselect(); pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT); }
     });
     buildInventory();
 
@@ -1790,14 +1887,21 @@
     canvas.addEventListener('pointerdown', function (e) {
       downX = e.clientX; downY = e.clientY;
       if (pickedType && !trayDrag && !roomDrag) {
-        var hit = zoneHit(e);
-        if (hit) {
-          var g = placeDeco(pickedType, hit.pi, hit.point.x);  // decrements inventory
-          closeInventory();   // dismiss the panel after tap-to-place
-          select(g);
-          pickedType = null;
-          setHint(DEFAULT_HINT);
+        var item = invByType(pickedType);
+        if (item && item.room) {
+          // room deco picked up: tap = auto-place at first free anchor
+          var a = firstFreeAnchor(item.type);
+          pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);
+          if (a) { var g2 = placeRoomDeco(item.type, a.pos, a); afterPlace(item, g2); }
+          else toast('No free spot for the ' + item.name.toLowerCase(), 2200);
           tapPlacedDeco = true;   // suppress book-tap on the matching pointerup
+        } else if (item) {
+          var hit = zoneHit(e);
+          if (hit) {
+            var g = placeDeco(pickedType, hit.pi, hit.point.x);  // decrements inventory
+            afterPlace(item, g);
+            tapPlacedDeco = true;   // suppress book-tap on the matching pointerup
+          }
         }
       }
     });
@@ -2019,21 +2123,16 @@
       snapGuide.visible = false;
       if (roomDrag) {
         /* free placement — the item lands exactly where the finger drops it
-           (pumpkins clamped into FLOOR_BOUNDS, never under the bookcase) */
+           (pumpkins clamped into FLOOR_BOUNDS, never under the bookcase).
+           v442: tap no longer starts a drag (tap = pick up instead), so a
+           release without a target cancels instead of auto-placing. */
         var r = roomDrag; roomDrag = null;
         r.group.scale.setScalar(1);
-        if (!r.moved) {
-          // tap = auto-place at first free default spot
-          discardGhost(r.group);
-          var a = null;
-          ROOM_ANCHORS.forEach(function (x) {
-            if (!a && x.types.indexOf(r.type) >= 0 && !x.usedBy) a = x;
-          });
-          if (a) placeRoomDeco(r.type, a.pos, a);
-        } else if (r.hasTarget) {
+        highlightZones(false);
+        if (r.moved && r.hasTarget) {
           discardGhost(r.group);
           var g = placeRoomDeco(r.type, roomDropPos(r.type, r.targetX, r.targetY, r.targetZ), null);
-          select(g);
+          afterPlace(invByType(r.type), g);
         } else {
           discardGhost(r.group); // dropped outside: cancel
         }
@@ -2042,15 +2141,11 @@
       if (trayDrag) {
         var t = trayDrag; trayDrag = null;
         t.group.scale.setScalar(1); // restore scale on drop
-        if (!t.moved) {
-          // tap = auto-place at a sensible default
-          discardGhost(t.group);
-          if (t.type === 'lights') placeDeco('lights', 2, 0);
-          else placeDeco(t.type, 1, 2.6 + Math.random() * 1.2);
-        } else if (t.pi >= 0) {
+        highlightZones(false);
+        if (t.pi >= 0) {
           discardGhost(t.group);
           var g2 = placeDeco(t.type, t.pi, t.x);
-          select(g2);
+          afterPlace(invByType(t.type), g2);
         } else {
           discardGhost(t.group); // dropped outside: cancel
         }
@@ -2058,6 +2153,7 @@
       }
       if (moveDrag) {
         var m = moveDrag; moveDrag = null;
+        highlightZones(false);
         if (m.group) {
           var g3 = m.group;
           // soft settle on drop instead of an instant scale snap
@@ -2077,14 +2173,25 @@
       }
     });
 
+    // v442: pointercancel (browser claimed the gesture mid-drag, interruption, …)
+    // discards the ghost and clears drag state instead of leaving it stuck.
+    on(window, 'pointercancel', function (e) { cancelActiveDrag(); });
+
     /* drag placed decorations + tap select (canvas); tap a book -> onBookTap */
     canvas.addEventListener('pointerdown', function (e) {
       var g = decoAt(e);
       if (g && g.userData.room) { select(g); return; } // room decos tap-select (no drag)
-      if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
-        targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
-        // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
-        restY: g.position.y };
+      if (g) {
+        var rec0 = null, pi0 = -1;
+        placed.forEach(function (pp) { if (pp.group === g) { rec0 = pp.rec.slice(); pi0 = pp.pi; } });
+        moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
+          targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
+          // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
+          restY: g.position.y,
+          // v442: snapshot for pointercancel restore
+          orig: { pi: pi0, rec: rec0, y: g.position.y } };
+        highlightZones(true);
+      }
     });
     canvas.addEventListener('pointerup', function (e) {
       // handled in window pointerup via moveDrag; tap-empty deselects here,
