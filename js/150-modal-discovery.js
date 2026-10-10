@@ -357,11 +357,10 @@ function spiceSparklineHTML(levels) {
 /* v329: shared character-tab loader — used by renderDetailModal (the full
    book modal). Takes the book object directly; caches per book id so
    re-opening the tab doesn't refetch. */
-const _charsTabLoaded = {};
 async function loadCharsTabForBook(t) {
-  const cacheKey = (t && t.id) || 'unknown';
-  if (_charsTabLoaded[cacheKey]) return;
-  _charsTabLoaded[cacheKey] = true;
+  // v403 fix: no persistent cache across modal instances.
+  // The modal HTML re-renders fresh each time with "Loading...", so a stale
+  // cache hit leaves the placeholder forever. Just load every time.
   const box = document.getElementById('m-charstab');
   if (!box) return;
   if (typeof CharacterWiki === 'undefined') {
