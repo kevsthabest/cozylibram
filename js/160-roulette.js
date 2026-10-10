@@ -189,7 +189,7 @@ function updatePickCount() {
   const candidates = pickCandidates();
   const n = candidates.length;
   el.innerHTML = n
-    ? '<b style="color:var(--gold)">' + n + '</b> book' + (n === 1 ? '' : 's') + ' match your mood'
+    ? '<b style="color:var(--gold)">' + n + '</b>&nbsp;book' + (n === 1 ? '' : 's') + ' match your mood'
     : 'No TBR books match — loosen the filters a little.';
   const btn = document.getElementById('pk-spin');
   if (btn) btn.disabled = !n;

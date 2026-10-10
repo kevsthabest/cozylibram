@@ -74,7 +74,14 @@ function displayAuthorName(n) {
   return s;
 }
 function displayAuthors(arr) {
-  return (arr || []).map(displayAuthorName).filter(Boolean).join(', ');
+  const list = (arr || []).map(displayAuthorName).filter(Boolean);
+  // v403: truncate long cast lists (dramatized audiobooks) to avoid tall rows
+  if (list.length > 3) {
+    // If "Full Cast" is in the list, show it; otherwise first 2 + et al.
+    if (list.some(n => n.toLowerCase() === 'full cast')) return 'Full Cast';
+    return list.slice(0, 2).join(', ') + ' et al.';
+  }
+  return list.join(', ');
 }
 // v79: cohesive line-art icon set (inline SVG, inherits text color). Used for
 // the library toolbar and view headers instead of mixed emoji glyphs.

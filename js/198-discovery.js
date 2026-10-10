@@ -341,8 +341,8 @@ async function maybeAutoReleaseCheck() {
    "What are you in the mood for?" per the UI mockup: a featured Surprise Me
    card, four tiles (My Favorites / Similar Books / Authors / New Releases),
    a full-width Recommended banner (v234 UX-06: the fifth tile sat orphaned
-   on its own grid row), a Search-the-Library-&-Beyond row, and a
-   From-Your-Coven section. Every tile routes to a real feature; the release
+   on its own grid row), an Add-a-book row, and a
+   From-Your-<covenName> section. Every tile routes to a real feature; the release
    check runs inline under the New Releases tile. */
 function discTile(ic, title, blurb, target) {
   return '<button class="disc-tile" data-dtile="' + target + '">' +
@@ -368,7 +368,7 @@ function similarSeedHTML() {
     '<small>' + esc(b.title) + '</small></button>').join('') + '</div>';
 }
 
-// v175: "From Your Coven" chips deep-link into the Coven tab's sections.
+// v175: "From Your <covenName>" chips deep-link into the Coven tab's sections.
 // Coven renders async, so poll briefly for the target instead of assuming
 // it is already in the DOM.
 function covenJump(sel) {
@@ -417,11 +417,11 @@ function renderDiscover() {
 
     '<button class="disc-search" data-dtile="search">' +
     '<span class="disc-ic">' + icon('search') + '</span>' +
-    '<span class="disc-tx"><b>Search the Library &amp; Beyond</b>' +
+    '<span class="disc-tx"><b>Add a book</b>' +
     '<small>Search across your library and external sources</small></span>' +
     '<span class="disc-go" aria-hidden="true">→</span></button>' +
 
-    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your Coven</h3>' +
+    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenName()) + '</h3>' +
     '<button class="taplink" id="disc-coven-all">View All →</button></div>' +
     '<div class="chips">' +
     '<button class="chip" data-cj="#reco-slot">Recommendations</button>' +
@@ -724,6 +724,13 @@ async function embedTextsClient(texts) {
 // Fresh books by her loved authors (Hardcover books table, newest first).
 // Reuses hcBookToCandidate / releaseInLibrary; one author failing never
 // kills the sweep (same pacing as the release check).
+// v403: filter merchandise (tarot decks, coloring books, etc.) — Hardcover's
+// books table includes non-book formats.
+const RECO_MERCH_RE = /\b(tarot|coloring book|journal|calendar|poster|sticker|notebook|planner|deck|playmat|puzzle)\b/i;
+function isRecoMerch(c) {
+  const t = String((c && c.title) || '');
+  return RECO_MERCH_RE.test(t);
+}
 async function sweepRecoCandidates(authors, dismissed) {
   const out = [], seen = new Set();
   for (const a of (authors || []).slice(0, 6)) {
@@ -738,6 +745,7 @@ async function sweepRecoCandidates(authors, dismissed) {
         if (dismissed.has('hc:' + b.id)) return;
         const c = hcBookToCandidate(b);
         if (releaseInLibrary(c)) return;
+        if (isRecoMerch(c)) return; // v403: skip merchandise
         seen.add(b.id);
         c.loveAuthor = a;
         out.push(c);
