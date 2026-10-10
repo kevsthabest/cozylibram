@@ -14,6 +14,8 @@ let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
 const run = (js) => window.eval(js);
 const q = (s) => window.document.querySelector(s);
+// v398: Enhance buttons gated on EC_ENHANCE_AVAILABLE (Gemini shut down 2026-10-02)
+const ENHANCE_ON = run(`typeof EC_ENHANCE_AVAILABLE !== 'undefined' && EC_ENHANCE_AVAILABLE`);
 const near = (a, b, eps) => Math.abs(a - b) < (eps || 1e-6);
 
 /* ---- 1. ecSolveHomography: identity ---- */
@@ -433,11 +435,15 @@ run(`document.getElementById('ec-edge-no').click();`);
 // Pretend all three faces were captured, then render the review.
 run(`EC.results = { jacket: { spine: 'data:image/jpeg;base64,S', front: 'data:image/jpeg;base64,F', back: 'data:image/jpeg;base64,B' } };
 EC.idx = EC.steps.length; ecRenderReview();`);
-ok('review thumbs have Enhance buttons',
-  run(`document.querySelectorAll('#ec-wizard [data-ec-enhance]').length`) === 3);
+// v398: Enhance buttons are gated on EC_ENHANCE_AVAILABLE (Gemini image editing shut down 2026-10-02)
+// (ENHANCE_ON defined at top)
+ok('review thumbs have Enhance buttons (when available)',
+  run(`document.querySelectorAll('#ec-wizard [data-ec-enhance]').length`) === (ENHANCE_ON ? 3 : 0));
+if (ENHANCE_ON) {
 run(`document.querySelector('#ec-wizard [data-ec-enhance="jacket:spine"]').click();`);
 ok('enhance picker opens with both modes',
   !!q('#ec-enhance #ec-eh-sharpen') && !!q('#ec-enhance #ec-eh-restore'));
+}
 // Compare overlay renders standalone and Keep fires the context store.
 run(`window.__kept = null;
 EC.eh = { label: function () { return 'Spine'; },
@@ -500,7 +506,8 @@ ecRunEnhance('data:image/jpeg;base64,IN', 'sharpen').then(
   run(`library = [{ id: 'ecb6', title: 'Enhance Saved',
     editionFaces: { jacket: { spine: 'data:image/jpeg;base64,OLD' } } }];
 ecStartScan('ecb6');`);
-  ok('saved faces have enhance buttons', !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  ok('saved faces have enhance buttons (when available)', (!!q('#ec-wizard [data-ec-eh="jacket:spine"]')) === ENHANCE_ON);
+  if (ENHANCE_ON) {
   run(`window.__ehDone3 = false;
 window.fetch = async () => ({ ok: true, status: 200,
   json: async () => ({ image: 'data:image/jpeg;base64,NEW' }) });
@@ -518,6 +525,7 @@ ecRunEnhance && null;
   ok('kept enhancement is stored on the saved face',
     run(`library[0].editionFaces.jacket.spine`) === 'data:image/jpeg;base64,NEW' &&
     !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  } // end if (ENHANCE_ON)
   run(`document.getElementById('ec-ap-cancel').click();`);
 
   // v283: rescan with "Plain pages" clears a stale saved fore-edge.
@@ -763,7 +771,8 @@ library = [{ id: 'ecb10', title: 'Binary Enhance', isbn13: '9780000000010',
     path: 'spine/jacket/old.jpg', width: 120, height: 200 } } },
   spinePhotoAssetId: 'old-id' }];
 ecStartScan('ecb10');`);
-  ok('binary saved face has an enhance button', !!q('#ec-wizard [data-ec-eh="jacket:spine"]'));
+  ok('binary saved face has an enhance button (when available)', (!!q('#ec-wizard [data-ec-eh="jacket:spine"]')) === ENHANCE_ON);
+  if (ENHANCE_ON) {
   run(`document.querySelector('#ec-wizard [data-ec-eh="jacket:spine"]').click();`);
   await flush('!!document.getElementById("ec-eh-sharpen")');
   ok('binary face enhance resolves the ref and opens the picker', !!q('#ec-enhance #ec-eh-sharpen'));
@@ -780,6 +789,7 @@ ecStartScan('ecb10');`);
     run(`library[0].editionFaceRefs.jacket.spine.path`) === 'spine/jacket/' + 'ee'.repeat(32) + '.jpg' &&
     run(`library[0].spinePhotoAssetId`) === run(`library[0].editionFaceRefs.jacket.spine.assetId`) &&
     !run(`library[0].editionFaces`));
+  } // end if (ENHANCE_ON)
   run(`document.getElementById('ec-ap-cancel').click();`);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

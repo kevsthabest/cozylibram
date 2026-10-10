@@ -6,9 +6,9 @@ const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8')
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in logremove tests'); };
-window.confirm = () => true; // auto-accept the removal confirm
 
 require('./harness').loadApp(window);
+window.confirmModal = () => Promise.resolve(true); // v352: auto-accept the in-app removal confirm
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
@@ -47,7 +47,9 @@ ok('button appears when toggle is on', !!q('#m-rmlog'));
 ok('button names the page count', (q('#m-rmlog').textContent || '').includes('10 pages'));
 
 // 3. removing clears the entry, rolls progress back, and Save does not re-log
+(async () => {
 q('#m-rmlog').click();
+await new Promise(r => setTimeout(r, 0)); // let the confirmModal promise chain settle
 ok('entry removed', (book('r1').log || []).length === 0);
 ok('progress rolled back to day start', book('r1').progress === 40);
 ok('button disappears after removal', q('#m-rmlog') === null);
@@ -70,6 +72,7 @@ offBtn.click();
 runInWindow(`window.__v = localStorage.getItem('spicyshelves.logremove');`);
 ok('toggle persists off', window.__v === 'off');
 ok('off becomes active', q('#th-rmentry button[data-t="off"]').classList.contains('active'));
-
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
+})().then(() => {
+console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
+});

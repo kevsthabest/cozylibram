@@ -1173,7 +1173,6 @@ function renderDetailModal(b, viaBook) {
     '<input class="text-input" id="f-author" value="' + esc((b.authors || []).join(', ')) + '" maxlength="300" placeholder="Separate multiple with commas"></div>' +
     // v182: mockup "About this book" section (the hero carries its own copy on desktop).
     (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
-    '<div class="field" id="m-quotes-wrap" style="display:none"><label>' + icon('quotes') + ' Memorable quotes</label><div id="m-quotes"></div></div>' +
     // v131: your rating — hearts + word label, now on the Details tab.
     '<div class="field"><label>Your rating</label>' +
     '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +

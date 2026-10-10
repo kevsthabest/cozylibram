@@ -163,8 +163,8 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   const forbidden = ['title', 'author', 'authors', 'isbn', 'rating', 'myRating', 'notes', 'shelf', 'cover'];
   const leaked = Object.entries(defs).filter(([n, d]) => (d.p || []).some(k => forbidden.includes(k)));
   ok('no event declares a book-content property', leaked.length === 0);
-  ok('event count stays in the 20–45 range', // v219: 42 with the preview events
-    Object.keys(defs).length >= 20 && Object.keys(defs).length <= 45);
+  ok('event count stays in the 20–50 range', // v219: 42 with the preview events; v398: 46 with DNA/DNF/Wrapped
+    Object.keys(defs).length >= 20 && Object.keys(defs).length <= 50);
 
   // 15b. v243: provider_used event for metadata-backend measurement.
   ok('provider_used declared with provider+context props',
