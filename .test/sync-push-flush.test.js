@@ -56,7 +56,7 @@ require('./harness').loadApp(window);
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
 const runInWindow = (js) => { const s = window.document.createElement('script'); s.textContent = js; window.document.body.appendChild(s); };
-const probe = (js) => { runInWindow('window.__probe = (' + js + ');'); return window.__probe; };
+const probe = (js) => window.eval(js);
 const tick = (n) => new Promise(r => { let i = 0; const step = () => (++i >= (n || 3) ? r() : setTimeout(step, 20)); step(); });
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const cloudCover = (id) => {
