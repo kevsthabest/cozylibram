@@ -13,7 +13,7 @@ function readingDnaData() {
 
   // Avg spice (same pattern as spiceProfileHTML)
   const sVals = spiceVals(read);
-  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / spiceVals.length : 0;
+  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / sVals.length : 0;
 
   // Top genres
   const genreCount = {};

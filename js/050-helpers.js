@@ -17,8 +17,9 @@ function spiceVals(books) {
   return books.map(b => (b.ratings || {}).spice || 0).filter(v => v > 0);
 }
 /* v399: Shared 1080x1920 story-card canvas setup. Returns {cv, x, W, H, C}
-   with gradient background painted and palette C = {ink, mut, acc, gold, grn}. */
-function cardCanvas() {
+   with gradient background painted and palette C = {ink, mut, acc, gold, grn}.
+   Pass stops for a custom gradient (default: DNA 2-stop). */
+function cardCanvas(stops) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -26,7 +27,7 @@ function cardCanvas() {
   if (!x) return null;
   const C = { ink: '#f6eff8', mut: '#b9a8c6', acc: '#e5648e', gold: '#e5b86a', grn: '#7de2a8' };
   const bg = x.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#2b1535'); bg.addColorStop(1, '#100a16');
+  (stops || [[0, '#2b1535'], [1, '#100a16']]).forEach(([o, c]) => bg.addColorStop(o, c));
   x.fillStyle = bg; x.fillRect(0, 0, W, H);
   return { cv, x, W, H, C };
 }

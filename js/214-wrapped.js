@@ -11,7 +11,7 @@ function wrappedData(yr) {
 
   // Spice distribution for the year
   const sVals = spiceVals(readYr);
-  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / spiceVals.length : 0;
+  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / sVals.length : 0;
   const spiceDist = [0, 0, 0, 0, 0]; // buckets for 1-5
   sVals.forEach(v => { spiceDist[Math.min(4, Math.max(0, Math.round(v) - 1))]++; });
 
@@ -31,7 +31,7 @@ function wrappedData(yr) {
 }
 
 function drawWrappedImage(d) {
-  const c = cardCanvas();
+  const c = cardCanvas([[0, '#1a0f2e'], [0.5, '#2b1535'], [1, '#100a16']]);
   if (!c) return null;
   const { cv, x, W, H, C } = c;
   const { ink, mut, acc, gold, grn } = C;
