@@ -656,6 +656,8 @@ function startInvDrag(e, item, el) {
   trayDrag = { type: item.type, group: g, pi: -1, x: 0, moved: false,
     sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
   el.dataset.dragged = '1';
+  // v5: position the ghost under the pointer immediately (1:1 on grab)
+  queueRaycast(e);
   // if this becomes a drag (not tap), the pointermove handler takes over
 }
 /* v4: room decorations drag from inventory — same tactile pattern as shelf
@@ -670,6 +672,8 @@ function startRoomDrag(e, item, el) {
     sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
   el.dataset.dragged = '1';
   showRoomAnchors(item.type);
+  // v5: position the ghost under the pointer immediately (1:1 on grab)
+  queueRaycast(e);
 }
 function openInventory() { document.getElementById('invPanel').classList.add('open'); }
 function closeInventory() {
@@ -702,6 +706,8 @@ canvas.addEventListener('pointerdown', e => {
 /* ============================== interaction ============================== */
 const ray = new THREE.Raycaster();
 const ptr = new THREE.Vector2();
+/* v5: reusable camera-facing plane for 1:1 room-deco drag follow */
+const dragPlane = new THREE.Plane();
 function setPtr(e) {
   ptr.x = (e.clientX / window.innerWidth) * 2 - 1;
   ptr.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -799,16 +805,20 @@ function processDragFrame() {
     const hit = zoneHit(e);
     if (hit) {
       const fw = trayDrag.group.userData.fw;
-      const x = findFreeSpot(hit.pi, hit.point.x, fw);
+      const x = findFreeSpot(hit.pi, hit.point.x, fw); // snapped, for drop
       trayDrag.pi = hit.pi; trayDrag.x = x;
       trayDrag.group.visible = true;
-      // v2: store target, lerp in animate() for buttery follow
+      // v5: 1:1 follow — ghost tracks the raw pointer x (not the snapped
+      // spot); the snap guide shows the landing spot. Touch lifts the ghost
+      // so the finger doesn't occlude it.
+      const rawX = THREE.MathUtils.clamp(hit.point.x, -SHELF_W / 2 + 0.4, SHELF_W / 2 - 0.4);
+      const lift = (e.pointerType === 'touch') ? 0.45 : 0;
       if (trayDrag.group.userData.edge) {
-        trayDrag.targetX = THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2);
-        trayDrag.targetY = LEVELS[hit.pi] + 0.06;
+        trayDrag.targetX = THREE.MathUtils.clamp(rawX, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2);
+        trayDrag.targetY = LEVELS[hit.pi] + 0.06 + lift;
         trayDrag.targetZ = PLANK_D / 2 - 0.4;
       } else {
-        trayDrag.targetX = x; trayDrag.targetY = LEVELS[hit.pi]; trayDrag.targetZ = 0.1;
+        trayDrag.targetX = rawX; trayDrag.targetY = LEVELS[hit.pi] + lift; trayDrag.targetZ = 0.1;
       }
       trayDrag.hasTarget = true;
       showSnap(trayDrag.type, hit.pi, x);
@@ -817,8 +827,10 @@ function processDragFrame() {
       trayDrag.hasTarget = false;
     }
   } else if (roomDrag) {
-    /* v4: room-deco drag — raycast against glowing anchor markers; the ghost
-       snaps to the nearest free anchor and the marker brightens as a target. */
+    /* v5: 1:1 follow — the ghost tracks the pointer on a camera-facing plane
+       through the bookcase (no easing); anchors glow as snap targets and the
+       drop snaps to the targeted anchor. Touch lifts the ghost so the finger
+       doesn't occlude it. */
     if (Math.hypot(e.clientX - roomDrag.sx, e.clientY - roomDrag.sy) > 8) {
       if (!roomDrag.moved) {
         roomDrag.moved = true;
@@ -826,6 +838,19 @@ function processDragFrame() {
       }
     }
     setPtr(e); ray.setFromCamera(ptr, camera);
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    dragPlane.setFromNormalAndCoplanarPoint(camDir, new THREE.Vector3(0, 3, 0));
+    const pt = new THREE.Vector3();
+    if (ray.ray.intersectPlane(dragPlane, pt)) {
+      roomDrag.group.visible = true;
+      const lift = (e.pointerType === 'touch') ? 0.45 : 0;
+      roomDrag.targetX = THREE.MathUtils.clamp(pt.x, -9, 9);
+      roomDrag.targetY = THREE.MathUtils.clamp(pt.y + lift, 0.2, 9);
+      roomDrag.targetZ = THREE.MathUtils.clamp(pt.z, -4, 4);
+      roomDrag.hasTarget = true;
+    }
+    // anchor snap targeting (drop target + highlight)
     const hits = ray.intersectObjects(anchorMarkers, false);
     let best = null;
     if (hits.length) {
@@ -839,16 +864,7 @@ function processDragFrame() {
       const s = isBest ? 1.35 : 1;
       m.userData.hiScale = s;
     });
-    if (best) {
-      roomDrag.anchor = best;
-      roomDrag.group.visible = true;
-      roomDrag.targetX = best.pos.x; roomDrag.targetY = best.pos.y; roomDrag.targetZ = best.pos.z;
-      roomDrag.hasTarget = true;
-    } else {
-      roomDrag.anchor = null;
-      roomDrag.group.visible = false;
-      roomDrag.hasTarget = false;
-    }
+    roomDrag.anchor = best; // null → drop cancels (existing behavior)
   } else if (moveDrag) {
     if (Math.hypot(e.clientX - moveDrag.sx, e.clientY - moveDrag.sy) > 8) {
       if (!moveDrag.moved) {
@@ -864,16 +880,19 @@ function processDragFrame() {
         const fw = moveDrag.group.userData.fw;
         const oi = occupied[hit.pi].indexOf(rec.rec);
         if (oi >= 0) occupied[hit.pi].splice(oi, 1);
-        const x = findFreeSpot(hit.pi, hit.point.x, fw);
+        const x = findFreeSpot(hit.pi, hit.point.x, fw); // snapped, for drop
         occupied[hit.pi].push(rec.rec);
         rec.pi = hit.pi;
         rec.rec[0] = x - fw / 2; rec.rec[1] = x + fw / 2;
+        // v5: 1:1 follow — ghost tracks raw pointer x; snap guide shows landing
+        const rawX = THREE.MathUtils.clamp(hit.point.x, -SHELF_W / 2 + 0.4, SHELF_W / 2 - 0.4);
+        const lift = (e.pointerType === 'touch') ? 0.45 : 0;
         if (moveDrag.group.userData.edge) {
-          moveDrag.targetX = THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2);
-          moveDrag.targetY = LEVELS[hit.pi] + 0.06;
+          moveDrag.targetX = THREE.MathUtils.clamp(rawX, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2);
+          moveDrag.targetY = LEVELS[hit.pi] + 0.06 + lift;
           moveDrag.targetZ = PLANK_D / 2 - 0.4;
         } else {
-          moveDrag.targetX = x; moveDrag.targetY = LEVELS[hit.pi]; moveDrag.targetZ = 0.1;
+          moveDrag.targetX = rawX; moveDrag.targetY = LEVELS[hit.pi] + lift; moveDrag.targetZ = 0.1;
         }
         moveDrag.hasTarget = true;
         showSnap(moveDrag.group.userData.decoType, hit.pi, x);
@@ -1019,25 +1038,16 @@ function animate() {
   const t = clock.getElapsedTime();
   // v2: process throttled drag raycasts
   processDragFrame();
-  // v2: lerp dragged ghosts toward targets for buttery follow
+  // v5: 1:1 drag follow — ghost tracks the pointer with no easing lag, so the
+  // item feels held, not chased. (Drop still snaps to the guide/anchor.)
   if (trayDrag && trayDrag.hasTarget && trayDrag.group.visible) {
-    const g = trayDrag.group.position;
-    g.x += (trayDrag.targetX - g.x) * 0.35;
-    g.y += (trayDrag.targetY - g.y) * 0.35;
-    g.z += (trayDrag.targetZ - g.z) * 0.35;
+    trayDrag.group.position.set(trayDrag.targetX, trayDrag.targetY, trayDrag.targetZ);
   }
-  // v4: lerp room-deco ghost toward the targeted anchor
   if (roomDrag && roomDrag.hasTarget && roomDrag.group.visible) {
-    const g = roomDrag.group.position;
-    g.x += (roomDrag.targetX - g.x) * 0.35;
-    g.y += (roomDrag.targetY - g.y) * 0.35;
-    g.z += (roomDrag.targetZ - g.z) * 0.35;
+    roomDrag.group.position.set(roomDrag.targetX, roomDrag.targetY, roomDrag.targetZ);
   }
   if (moveDrag && moveDrag.hasTarget && moveDrag.moved) {
-    const g = moveDrag.group.position;
-    g.x += (moveDrag.targetX - g.x) * 0.35;
-    g.y += (moveDrag.targetY - g.y) * 0.35;
-    g.z += (moveDrag.targetZ - g.z) * 0.35;
+    moveDrag.group.position.set(moveDrag.targetX, moveDrag.targetY, moveDrag.targetZ);
   }
   // candle flicker — v2: synced with stronger base intensity (14)
   for (const g of candleFlames) {
