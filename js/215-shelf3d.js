@@ -1705,8 +1705,14 @@
         if (m.group) {
           var g3 = m.group;
           // soft settle on drop instead of an instant scale snap
-          if (m.moved) tween(180, function (k) { g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k))); });
-          else g3.scale.setScalar(1);
+          // v413: also tween Y back to rest (fixes floating decor — lift wasn't reset)
+          if (m.moved) {
+            var startY = g3.position.y, endY = (typeof m.restY === 'number') ? m.restY : g3.position.y;
+            tween(180, function (k) {
+              g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k)));
+              g3.position.y = startY + (endY - startY) * easeOut(k);
+            });
+          } else g3.scale.setScalar(1);
           select(g3);   // re-select after move
         }
         return;
@@ -1718,7 +1724,9 @@
       var g = decoAt(e);
       if (g && g.userData.room) { select(g); return; } // room decos tap-select (no drag)
       if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
-        targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
+        targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
+        // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
+        restY: g.position.y };
     });
     canvas.addEventListener('pointerup', function (e) {
       // handled in window pointerup via moveDrag; tap-empty deselects here,
