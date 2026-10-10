@@ -710,7 +710,7 @@ function renderShelf() {
   setView(
     '<div class="shelfview">' +
     '<div class="sv-head"><h2>Shelf</h2><div class="sv-head-btns">' +
-    '<button class="sv-cam" id="svView3D" aria-label="Switch to 3D view" title="Switch to 3D view">' + icon('box') + '</button>' +
+    '<button class="sv-cam" id="svView3D" aria-label="Switch to 3D view" title="Switch to 3D view">' + icon('cube') + '</button>' +
     '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
     '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button></div></div>' +
