@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Voidsignal circuit vine</title>
+<desc id="d">An angular circuit-trace vine with node points. Voidsignal pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M60,352 L60,300 L40,280 L40,230 L62,208 L62,160 L42,140 L42,100 L60,82 L60,40"/>
+<path d="M40,280 L24,264 L24,240" stroke-width="1.4"/>
+<path d="M62,208 L84,186 L84,160" stroke-width="1.4"/>
+<path d="M42,140 L26,124" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="60" cy="352" r="3.4"/><circle cx="60" cy="300" r="3"/>
+<circle cx="40" cy="280" r="3"/><circle cx="40" cy="230" r="3"/>
+<circle cx="62" cy="208" r="3"/><circle cx="62" cy="160" r="3"/>
+<circle cx="42" cy="140" r="3"/><circle cx="42" cy="100" r="3"/>
+<circle cx="60" cy="82" r="3"/><circle cx="60" cy="40" r="3.4"/>
+<circle cx="24" cy="240" r="2.4"/><circle cx="84" cy="160" r="2.4"/><circle cx="26" cy="124" r="2.2"/>
+</g>
+<g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55" stroke-linecap="round">
+<circle cx="60" cy="300" r="7"/><circle cx="62" cy="160" r="7"/><circle cx="42" cy="100" r="7"/>
+</g>
+</svg>

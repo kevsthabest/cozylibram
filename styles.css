@@ -262,6 +262,52 @@
   --nav-bg: rgba(253, 241, 215, 1); --glow: #f5e3b0; --floral-tint: #c08a24;
   --info: #3f7fc6; --shadow-c: rgba(90,70,30,.16);
 }
+/* v423: premium theme packs */
+[data-theme="stormrider"] {
+  --bg: #12141f; --bg2: #0e1019; --card: #1d2233; --card2: #161b2a;
+  --ink: #eef1f8; --muted: #8a94b8; --faint: #6a7494;
+  --accent: #c08a24; --accent-deep: #96690f;
+  --gold: #e8a94e; --line: #2e3650;
+  --ok: #4ecb8f; --danger: #e0637f;
+  --nav-bg: rgba(18, 20, 31, 1); --glow: #2a3350; --floral-tint: #e8a94e;
+  --info: #7fb3e8; --shadow-c: rgba(0,0,0,.4);
+}
+[data-theme="briarthrone"] {
+  --bg: #130e1a; --bg2: #0f0b14; --card: #211628; --card2: #1a1120;
+  --ink: #f3e9f5; --muted: #a898b8; --faint: #84748f;
+  --accent: #b9a3f2; --accent-deep: #8a6fd4;
+  --gold: #c9b3f5; --line: #352a44;
+  --ok: #4ecb8f; --danger: #e0637f;
+  --nav-bg: rgba(19, 14, 26, 1); --glow: #352a4a; --floral-tint: #c9b3f5;
+  --info: #e0637f; --shadow-c: rgba(0,0,0,.4);
+}
+[data-theme="voidsignal"] {
+  --bg: #0a0f14; --bg2: #070b0f; --card: #111a22; --card2: #0d141b;
+  --ink: #e6f1f5; --muted: #7a94a8; --faint: #5a7488;
+  --accent: #3f8fd6; --accent-deep: #2a6aa8;
+  --gold: #38e1ff; --line: #1e2e3a;
+  --ok: #4ecb8f; --danger: #ff5470;
+  --nav-bg: rgba(10, 15, 20, 1); --glow: #1a2e3a; --floral-tint: #38e1ff;
+  --info: #38e1ff; --shadow-c: rgba(0,0,0,.4);
+}
+[data-theme="wisp"] {
+  --bg: #fdf6ec; --bg2: #f6ead6; --card: #ffffff; --card2: #faf3e6;
+  --ink: #3a2f28; --muted: #8a7a68; --faint: #6a5a4c;
+  --accent: #e5488f; --accent-deep: #b8326a;
+  --gold: #ffd76a; --line: #e8dcc8;
+  --ok: #4ecb8f; --danger: #c64f4f;
+  --nav-bg: rgba(253, 246, 236, 1); --glow: #f5e8d0; --floral-tint: #e86a92;
+  --info: #3f7fc6; --shadow-c: rgba(90,70,50,.14);
+}
+[data-theme="wisp-night"] {
+  --bg: #0e0a1a; --bg2: #0a0714; --card: #1a1230; --card2: #140e26;
+  --ink: #f5eefb; --muted: #a898c8; --faint: #8474a0;
+  --accent: #c08a24; --accent-deep: #96690f;
+  --gold: #ffd76a; --line: #2e2148;
+  --ok: #4ecb8f; --danger: #e0637f;
+  --nav-bg: rgba(14, 10, 26, 1); --glow: #2e2148; --floral-tint: #ffd76a;
+  --info: #a898e8; --shadow-c: rgba(0,0,0,.4);
+}
 /* accent overrides (rose is the default, defined above) */
 [data-accent="violet"] { --accent: #8b5cf6; --accent-deep: #6d3fd4; }
 [data-accent="gold"] { --accent: #c08a24; --accent-deep: #96690f; }
@@ -1316,6 +1362,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .tcard.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tcard .seasonbadge { position: absolute; top: 6px; left: 6px; font-size: 9px;
   font-weight: 700; background: rgba(0,0,0,.55); color: #ffd9a0;
+  border-radius: 6px; padding: 2px 8px; letter-spacing: .4px; }
+/* v421: premium badge on theme cards */
+.tcard .prembadge { position: absolute; top: 6px; right: 6px; font-size: 9px;
+  font-weight: 700; background: var(--gold, #d4a24e); color: #1a1206;
   border-radius: 6px; padding: 2px 8px; letter-spacing: .4px; }
 /* detail sheet */
 .tsheet-wrap { position: fixed; inset: 0; z-index: 200; display: flex;

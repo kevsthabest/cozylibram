@@ -69,7 +69,7 @@ localStorage.removeItem('spicyshelves.shelforder.v1'); shelfOrderCache = null;`)
 
 /* ---- 5. Settings seasonal gallery group (v416: gallery replaces optgroup) ---- */
 run(`renderSettings();`);
-ok('settings groups seasonal themes in the gallery', window.document.querySelectorAll('.tcard').length === 18);
+ok('settings groups seasonal themes in the gallery', window.document.querySelectorAll('.tcard').length === 22);
 ok('gallery holds eight seasonal cards', (() => {
   const seasonal = run(`THEMES.filter(t => t.season).map(t => t.key)`);
   const cards = Array.from(window.document.querySelectorAll('.tcard')).map(c => c.dataset.th);

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Voidsignal divider</title>
+<desc id="d">A chevron signal divider ornament. Voidsignal pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M68,5 L78,12 L68,19"/>
+<path d="M82,5 L92,12 L82,19"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="56" cy="12" r="2.2"/><circle cx="104" cy="12" r="2.2"/>
+<circle cx="44" cy="12" r="1.4" opacity="0.6"/><circle cx="116" cy="12" r="1.4" opacity="0.6"/>
+</g>
+</svg>

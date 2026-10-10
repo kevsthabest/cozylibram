@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Briarthrone divider</title>
+<desc id="d">A thorn-stem divider ornament with a central night bloom. Briarthrone pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+<path d="M40,12 C60,10 100,10 120,12"/>
+</g>
+<g fill="currentColor" stroke="none">
+<path d="M60,11 l-5,-4 5,-1z"/><path d="M100,11 l5,-4 -5,-1z"/>
+<path d="M72,13 l-4,4 5,0z"/><path d="M90,13 l4,4 -5,0z"/>
+<g transform="translate(80,12) scale(.8)">
+<ellipse cx="0" cy="-6" rx="2.8" ry="5"/><ellipse cx="5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 5.2 -3)"/><ellipse cx="5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 5.2 3)"/><ellipse cx="0" cy="6" rx="2.8" ry="5"/><ellipse cx="-5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 -5.2 3)"/><ellipse cx="-5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 -5.2 -3)"/>
+<circle r="2.2"/>
+</g>
+<circle cx="30" cy="12" r="1.6"/><circle cx="130" cy="12" r="1.6"/>
+</g>
+</svg>
