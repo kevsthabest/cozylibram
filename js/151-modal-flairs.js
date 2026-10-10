@@ -28,8 +28,8 @@
    backgrounds, so the old full-height-strip slicing bug can't recur):
      vine      — anchored inside .d-hero (position:relative), right side,
                  bottom fade via CSS mask; compact on mobile
-     corners   — book-plate corners at the modal bottom corners, clear of the
-                 hero vine
+     corners   — single book-plate ornament at the hero's top-left, clear of
+                 the vine and action buttons
      divider   — hairline + centered motif in normal flow, injected between
                  the Details panel's section blocks
      garland   — hangs from the modal top edge (seasonal themes only)
@@ -660,14 +660,13 @@ var CATALOG = [
           namespaced(sig.svg) + '</div>'), modal.firstChild);
       }
     }
-    // corners: theme-matched book-plate ornaments at the modal bottom corners,
-    // clear of the hero vine. Secondary to the signature (max 2 decorative
-    // elements per the restraint rule).
+    // corners: single theme-matched book-plate ornament at the hero's top-left,
+    // clear of the vine (top-right) and action buttons (bottom). Secondary to
+    // the signature (max 2 decorative elements per the restraint rule).
     var cn = flairFor('corners', theme);
     if (cn) {
       modal.insertBefore(el('<div class="mflair mflair-corners" aria-hidden="true">' +
-        '<span class="mflair-corner mflair-corner-tl">' + namespaced(cn.svg) + '</span>' +
-        '<span class="mflair-corner mflair-corner-tr">' + namespaced(cn.svg) + '</span>' +
+        '<span class="mflair-corner">' + namespaced(cn.svg) + '</span>' +
         '</div>'), modal.firstChild);
     }
     // watermark stays faint as today, unless it is the signature — but yields

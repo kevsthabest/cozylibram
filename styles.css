@@ -778,14 +778,13 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .mflair-watermark { position: absolute; top: 50%; left: 50%; width: 340px; height: 340px;
   transform: translate(-50%,-50%); z-index: 0; color: var(--floral-tint); opacity: .06; }
 .mflair-watermark svg { width: 100%; height: 100%; }
-/* corners — book-plate ornaments at the modal bottom corners, clear of the
-   hero vine. Secondary to the signature vine; subtle by design. */
-.mflair-corners { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1;
+/* corners — single book-plate ornament at the hero's top-left, clear of the
+   vine (top-right) and the action buttons (bottom). Secondary to the
+   signature vine; subtle by design. */
+.mflair-corners { position: absolute; top: 0; left: 0; z-index: 1;
   pointer-events: none; color: var(--floral-tint); opacity: .55; }
-.mflair-corner { position: absolute; bottom: 8px; width: 52px; height: 52px; }
+.mflair-corner { position: absolute; top: 8px; left: 8px; width: 52px; height: 52px; }
 .mflair-corner svg { width: 100%; height: 100%; display: block; }
-.mflair-corner-tl { left: 8px; }
-.mflair-corner-tr { right: 8px; transform: scaleX(-1); }
 .modal.detail-v174 .d-hero, .modal.detail-v174 .d-panel,
 .modal.detail-v174 .modal-actions { position: relative; z-index: 1; }
 @media (min-width: 900px) {
@@ -796,10 +795,10 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   /* mobile: compact vine tucks into the hero's right padding, capped at .7 */
   .mflair-vine { width: 44px; height: 130px; top: 4px; right: 8px; opacity: .7; }
   .mflair-vine--emblem { width: 125px; height: 134px; opacity: .9; }
-  /* mobile: smaller corners, tighter to the edges */
-  .mflair-corner { width: 38px; height: 38px; bottom: 6px; }
-  .mflair-corner-tl { left: 6px; }
-  .mflair-corner-tr { right: 6px; }
+  /* mobile: hero text clears the vine (was only padded at 900px+) */
+  .modal.detail-v174 .d-hero-text { padding-right: 60px; }
+  /* mobile: smaller corner, tighter to the edge */
+  .mflair-corner { width: 38px; height: 38px; top: 6px; left: 6px; }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }
