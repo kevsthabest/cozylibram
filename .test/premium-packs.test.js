@@ -62,6 +62,12 @@ for (const [theme, vine] of [['stormrider','stormrider-vine'],['briarthrone','br
 let flairSvgOk = true;
 for (const id of expectedFlairs) {
   const e = JSON.parse(run(`JSON.stringify(ModalFlairs.byId('${id}'))`));
+  if (id === 'stormrider-vine') {
+    // Kevin's own raster emblem (his explicit direction): PNG file, <image> wrapper
+    if (!e || typeof e.svg !== 'string' || e.svg.indexOf('<image') < 0) flairSvgOk = false;
+    if (e.file !== 'Asset/packs/stormrider-vine.png') flairSvgOk = false;
+    continue;
+  }
   if (!e || typeof e.svg !== 'string' || e.svg.indexOf('currentColor') < 0) flairSvgOk = false;
   if (/#[0-9a-fA-F]{3,8}\b/.test(e.svg)) flairSvgOk = false;
   if (e.file !== 'Asset/packs/' + id + '.svg') flairSvgOk = false;
@@ -94,7 +100,7 @@ for (const k of ['stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'
 
 /* ---- 6. source SVG files exist ---- */
 for (const id of expectedFlairs) {
-  ok('source SVG exists: ' + id, fs.existsSync(ROOT + '/Asset/packs/' + id + '.svg'));
+  ok('source asset exists: ' + id, fs.existsSync(ROOT + '/Asset/packs/' + id + '.svg') || fs.existsSync(ROOT + '/Asset/packs/' + id + '.png'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
