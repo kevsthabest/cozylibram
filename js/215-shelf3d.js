@@ -1398,6 +1398,18 @@
       holoCube: makeHoloCube, signalDish: makeSignalDish, dataCore: makeDataCore,
       mushroomCottage: makeMushroomCottage, fireflyJar: makeFireflyJar, wispLantern: makeWispLantern };
 
+    /* v439: catalog id -> maker function. The v424 pack decorations have
+       hyphenated catalog ids but camelCase DECO_MAKERS keys, linked by the
+       catalog `build` field (which nothing consumed until now). Falls back
+       to the raw id so un-catalogued types keep working. */
+    function decoMakerFor(type) {
+      var key = type;
+      var D = (typeof window.Shelf3DDecor !== 'undefined') ? window.Shelf3DDecor : null;
+      var def = D ? D.get(type) : null;
+      if (def && def.build) key = def.build;
+      return DECO_MAKERS[key] || null;
+    }
+
     /* ============================== placement ============================== */
     var placed = [];   // {group, pi, rec, type} or {group, room:true, anchor, type}
 
@@ -1458,7 +1470,13 @@
       buildInventory();
     }
     function placeDeco(type, pi, x, free, opts) {
-      var g = DECO_MAKERS[type](opts || {});
+      /* v439: resolve the catalog build key — v424 pack decorations use
+         hyphenated ids ('holo-cube') while DECO_MAKERS is keyed by the
+         catalog `build` name ('holoCube'). Without this, placing any of
+         the 12 pack decorations throws "DECO_MAKERS[type] is not a function". */
+      var maker = decoMakerFor(type);
+      if (!maker) throw new Error('Unknown decoration: ' + type);
+      var g = maker(opts || {});
       var fw = g.userData.fw;
       x = findFreeSpot(pi, x, fw);
       if (g.userData.edge) {
@@ -1622,9 +1640,13 @@
 
     /* ============================== inventory ============================== */
     /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
-       Quick swipe scrolls the list; holding ~280ms grabs the item for dragging.
-       If the finger moves beyond slop before the timer, it's a scroll. */
-    var HOLD_MS = 280, HOLD_SLOP = 10;
+       Quick swipe scrolls the list; holding grabs the item for dragging.
+       If the finger moves beyond slop before the timer, it's a scroll.
+       v439: retuned 280ms/10px -> 450ms/14px. The 280ms dwell was shorter
+       than a natural scroll-initiating pause, so hesitant touches were
+       hijacked into drags (inventory closed, scroll impossible). 450ms
+       matches platform long-press timing; 14px forgives finger jitter. */
+    var HOLD_MS = 450, HOLD_SLOP = 14;
     function pressHoldToDrag(el, startFn) {
       var timer = null, sx = 0, sy = 0;
       el.addEventListener('pointerdown', function (e) {
@@ -1726,7 +1748,7 @@
       e.preventDefault();
       deselect();
       closeInventory();
-      var g = DECO_MAKERS[item.type]();
+      var g = decoMakerFor(item.type)();
       g.visible = false; scene.add(g);
       trayDrag = { type: item.type, group: g, pi: -1, x: 0, moved: false,
         sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
@@ -2573,9 +2595,10 @@
               // Room decorations need anchor lookup; skip if not available
               return;
             }
-            // placeDeco signature: (type, pi, x, opts, free)
+            // placeDeco signature: (type, pi, x, free, opts) — free=true so
+            // restoring a saved layout never consumes inventory counts.
             if (typeof placeDeco === 'function') {
-              placeDeco(d.type, d.pi, d.x, null, true);
+              placeDeco(d.type, d.pi, d.x, true);
               // Adjust z if needed
               var p = placed[placed.length - 1];
               if (p && d.z != null) p.group.position.z = d.z;
