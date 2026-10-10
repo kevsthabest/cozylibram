@@ -1747,7 +1747,29 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 @media (min-width: 900px) {
   #view:has(> .set-group) { columns: 2; column-gap: 16px; }
   #view > .set-group { break-inside: avoid; }
-  #view > .view-head, #view > .stat-row { column-span: all; }
+  #view > .view-head, #view > .sync-line { column-span: all; }
+}
+/* S1 (settings review): slim sync-status line under the Settings header. */
+.sync-line { display: flex; align-items: center; gap: 8px; font-size: 13px;
+  color: var(--dim); margin: 2px 0 12px; padding: 0 2px; }
+.sync-dot.ok { color: #7fc98f; }
+.sync-dot.off { color: var(--faint); }
+.sync-dot.syncing { color: #e8c86a; animation: sync-pulse 1.2s ease-in-out infinite; }
+@keyframes sync-pulse { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .sync-dot.syncing { animation: none; } }
+/* S2 (settings review): collapsed Diagnostics sub-details in About. */
+.set-diag { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 12px; margin-top: 10px; }
+.set-diag summary { cursor: pointer; font-size: 13px; color: var(--faint); list-style: none; }
+.set-diag summary::-webkit-details-marker { display: none; }
+/* S6 (settings review): skeleton shimmer for the async privacy summary. */
+.skel { height: 12px; border-radius: 6px; margin: 6px 0;
+  background: linear-gradient(90deg, var(--line) 25%, rgba(255,255,255,.08) 50%, var(--line) 75%);
+  background-size: 200% 100%; animation: skel-shimmer 1.2s infinite; }
+@keyframes skel-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+/* S5 (settings review): trope-source segmented control wraps 2x2 on narrow phones. */
+@media (max-width: 400px) {
+  #trope-srcseg { grid-template-columns: repeat(2, 1fr) !important; }
 }
 /* v117: grouped settings — icon+title+tag summary, subsection headers */
 .set-st { display: flex; flex-direction: column; gap: 2px; }

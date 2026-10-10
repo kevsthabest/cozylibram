@@ -459,16 +459,22 @@ function refreshAccountUI() {
   if (!st) return; // settings not open
   const inEl = document.getElementById('ac-signedin');
   const outEl = document.getElementById('ac-signedout');
+  // S4 (settings review): account card vs login form; subsection header follows state.
+  const subhead = document.getElementById('ac-subhead');
+  const cardEmail = document.getElementById('ac-card-email');
   if (!cloudConfigured()) {
     st.textContent = 'Cloud sync is off — add supabase_url and supabase_anon_key to server-config.json on your home PC.';
     if (inEl) inEl.style.display = 'none';
     if (outEl) outEl.style.display = '';
+    if (subhead) subhead.textContent = 'Login';
     return;
   }
   if (cloudUser) {
     st.innerHTML = icon('cloud') + ' Signed in as ' + esc(cloudUser.email);
     if (inEl) inEl.style.display = '';
     if (outEl) outEl.style.display = 'none';
+    if (subhead) subhead.textContent = 'Account';
+    if (cardEmail) cardEmail.textContent = cloudUser.email;
     const last = document.getElementById('ac-last');
     if (last) {
       const base = cloudSyncing ? 'Syncing…' :
@@ -482,6 +488,7 @@ function refreshAccountUI() {
     st.textContent = 'Not signed in.';
     if (inEl) inEl.style.display = 'none';
     if (outEl) outEl.style.display = '';
+    if (subhead) subhead.textContent = 'Login';
   }
 }
 

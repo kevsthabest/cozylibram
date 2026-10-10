@@ -156,26 +156,42 @@ function tsRevert() {
   applyTheme();
   renderSettings();
 }
+/* S1 (settings review): slim sync-status line for the Settings header --
+   answers "is my library safe?" -- reuses the last-sync timestamp from 090-sync. */
+function syncAgo(ts) {
+  if (!ts) return 'never';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+function syncStatusLine() {
+  try {
+    const n = (typeof library !== 'undefined' && library) ? library.length : 0;
+    const booksTxt = n + (n === 1 ? ' book' : ' books') + ' safe';
+    if (typeof cloudConfigured === 'function' && !cloudConfigured()) {
+      return '<span class="sync-dot off">\u25cb</span> Offline \u2014 changes will sync later';
+    }
+    if (typeof cloudUser === 'undefined' || !cloudUser) {
+      return '<span class="sync-dot off">\u25cb</span> Not signed in \u2014 library lives on this device';
+    }
+    if (typeof cloudSyncing !== 'undefined' && cloudSyncing) {
+      return '<span class="sync-dot syncing">\u25cf</span> Syncing\u2026';
+    }
+    const last = (typeof cloudLastSync !== 'undefined' && cloudLastSync) ? cloudLastSync : 0;
+    return '<span class="sync-dot ok">\u25cf</span> Synced ' + syncAgo(last) + ' \u00b7 ' + booksTxt;
+  } catch (e) { return ''; }
+}
 function renderSettings() {
-  const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
-  const axTot = {};
-  library.forEach(b => {
-    if (counts[b.status] != null) counts[b.status]++;
-    if (b.status !== 'read') return;
-    RATING_AXES.forEach(a => {
-      const v = (b.ratings || {})[a.key] || 0;
-      if (v > 0) {
-        axTot[a.key] = axTot[a.key] || { t: 0, n: 0 };
-        axTot[a.key].t += v; axTot[a.key].n++;
-      }
-    });
-  });
-  const ax0 = Object.keys(axTot).sort((x, y) => axTot[y].n - axTot[x].n)[0];
 
   /* ---- Account ---- */
+  const prof = loadProfile();
+  const profName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
   const htmlLogin =
-    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices. ' +
-    'Sign-in keeps your library backed up and synced across devices.</p>' +
+    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices.</p>' +
     '<p class="note" id="ac-status">Checking…</p>' +
     '<div id="ac-signedout">' +
     '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
@@ -185,21 +201,20 @@ function renderSettings() {
     (window.isSecureContext
       ? '<button class="btn ghost block" id="ac-google" style="margin-top:8px">Sign in with Google</button>'
       : '<p class="note">Google sign-in needs localhost or HTTPS — on this connection, use email &amp; password.</p>') +
-    '</div>';
+    '</div>' +
+    '<div id="ac-signedin" style="display:none">' +
+    '<div class="pf-row">' + avatarHTML(prof, 'st-avatar-card') +
+    '<div><div class="st-pname" id="ac-card-name">' + (profName ? esc(profName) : 'Your profile') + '</div>' +
+    '<div class="note" id="ac-card-email" style="margin:0"></div></div></div>' +
+    '<div class="search-row" style="margin-top:8px"><button class="btn ghost" id="ac-sync">' + icon('cloud') + ' Sync now</button>' +
+    '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
+    '<p class="note" id="ac-last"></p></div>';
 
-  const prof = loadProfile();
-  const profName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
   const htmlProfile =
     '<div class="pf-row">' + avatarHTML(prof, 'st-avatar') +
     '<div><div class="st-pname">' + (profName ? esc(profName) : 'Your profile') + '</div>' +
     '<button class="btn ghost sm" id="st-edit-profile">Edit profile</button></div></div>' +
     '<p class="note">Your name and picture show up for your ' + esc(covenName().toLowerCase()) + '.</p>';
-
-  const htmlSync =
-    '<div id="ac-signedin" style="display:none">' +
-    '<div class="search-row"><button class="btn ghost" id="ac-sync">' + icon('cloud') + ' Sync now</button>' +
-    '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
-    '<p class="note" id="ac-last"></p></div>';
 
   /* ---- Library ---- */
   const htmlBackup =
@@ -233,7 +248,7 @@ function renderSettings() {
     '<div class="field"><label>Book pull-out animation</label><div class="seg" id="th-anim" style="grid-template-columns:1fr 1fr">' +
     ['on', 'off'].map(t =>
       '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? icon('sparkles') + ' On' : icon('dnf') + ' Off') + '</button>').join('') +
+      (t === 'on' ? icon('sparkles') + ' On' : icon('pause') + ' Off') + '</button>').join('') +
     '</div></div>';
 
   const htmlDisplay =
@@ -292,7 +307,10 @@ function renderSettings() {
     '<button class="btn ghost block" id="cover-bulk">' + icon('download') + ' Download missing covers</button>' +
     '<p class="note" id="cover-bulk-note">' +
     library.filter(b => !b.cover).length + ' of ' + library.length +
-    ' books are missing covers.</p>';
+    ' books are missing covers.</p>' +
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-yolo" ' +
+    (typeof ecYoloEnabled === 'function' && ecYoloEnabled() ? 'checked' : '') + '> AI crop (YOLO)' +
+    '<span class="chk-hint">On-device book detection for tighter cover crops. Turn off if you see odd permission prompts.</span></label>';
 
   /* ---- Offline ---- */
   const htmlOffline =
@@ -311,9 +329,11 @@ function renderSettings() {
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
   const htmlPrivacy =
-    '<div id="st-privacy"><p class="note">Loading…</p></div>' +
-    htmlSpoiler +
+    setSub('Coven sharing') +
+    '<div id="st-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
     '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
+    setSub('Preferences') +
+    htmlSpoiler +
     // v118: usage-analytics opt-out. Default ON for signed-in users; never
     // tracks guests, never collects book content — see docs/ANALYTICS.md.
     '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-analytics" ' +
@@ -325,15 +345,14 @@ function renderSettings() {
   /* ---- About ---- */
   const htmlAbout =
     '<p class="note">Version on this device: <b id="ap-ver">checking…</b></p>' +
-    '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
-    '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '<div class="search-row"><button class="btn ghost" id="ap-update">Check for updates</button></div>' +
     '<p class="note" id="ap-status"></p>' +
-    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-yolo" ' +
-    (typeof ecYoloEnabled === 'function' && ecYoloEnabled() ? 'checked' : '') + '> AI crop (YOLO)' +
-    '<span class="chk-hint">On-device book detection for tighter orbit crops. Turn off if you see odd permission prompts.</span></label>' +
     '<div class="search-row"><a class="btn ghost" href="./downloads/cozylibram.apk" download>Download APK (Android v1.0.7)</a></div>' +
-    '<p class="note">Install the Android app directly — no GitHub login needed.</p>';
+    '<p class="note">Install the Android app directly — no GitHub login needed.</p>' +
+    '<details class="set-diag"><summary>Diagnostics</summary>' +
+    '<p class="note">Cover grid CSS (this device): <b id="ap-css">checking…</b></p>' +
+    '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
+    '</details>';
 
   let openIdx = [0];
   try {
@@ -390,35 +409,29 @@ function renderSettings() {
 
   const groups = [
     ['user', 'Account', 'Sign in, profile & sync',
-      setSub('Login') + htmlLogin + setSub('Profile & avatar') + htmlProfile + setSub('Cloud sync') + htmlSync],
+      '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin + setSub('Profile & avatar') + htmlProfile],
     ['covers', 'Library', 'Backups, imports & data',
-      setSub('Backup & export') + htmlBackup + setSub('Data management') + htmlData],
+      setSub('Backup & export') + htmlBackup + setSub('Reading log') + htmlReadLog + setSub('Data management') + htmlData],
     ['tobuy', 'Purchase Ledger', 'Spending & collection value',
       setSub('Ledger') + htmlLedger],
     ['sparkles', 'Appearance', 'Theme & display',
       setSub('Theme') + htmlTheme + setSub('Display') + htmlDisplay],
-    ['reading', 'Reading', 'Logging & progress',
-      setSub('Reading log') + htmlReadLog],
     ['doc', 'Metadata', 'Enrichment & corrections',
+      '<p class="note">Bulk tools that keep titles, covers, and tags accurate — nothing changes without your review.</p>' +
       setSub('Hardcover') + htmlHardcover + setSub('Metadata check') + htmlMetaCheck +
       setSub('Page counts') + htmlPageCounts + setSub('Covers') + htmlCovers],
     ['download', 'Offline', 'On this device',
       setSub('Cover cache') + htmlOffline],
     ['eyeoff', 'Privacy', 'Sharing',
-      setSub('Coven sharing') + htmlPrivacy],
+      htmlPrivacy],
     ['help', 'About', 'Version & diagnostics',
       setSub('App') + htmlAbout],
   ];
 
   setView(
     '<div class="view-head"><button class="btn ghost sm" id="st-back">← Back</button>' +
-    '<h2 class="section serif">Your shelves at a glance</h2></div>' +
-    '<div class="stat-row">' +
-    '<div class="stat"><div class="n">' + counts.tbr + '</div><div class="l">TBR</div></div>' +
-    '<div class="stat"><div class="n">' + counts.reading + '</div><div class="l">Reading</div></div>' +
-    '<div class="stat"><div class="n">' + counts.read + '</div><div class="l">Read</div></div>' +
-    '<div class="stat"><div class="n">' + (ax0 ? (axTot[ax0].t / axTot[ax0].n).toFixed(1) : '–') + '</div><div class="l">' + (ax0 ? 'Avg ' + icon(axisByKey(ax0).icon || 'pepper') : 'Avg 💥') + '</div></div>' +
-    '</div>' +
+    '<h2 class="section serif">Settings</h2></div>' +
+    '<p class="sync-line">' + syncStatusLine() + '</p>' +
     groups.map((g, i) => setGroupShell(g[0], g[1], g[2], g[3], i, openIdx)).join('')
   );
 
