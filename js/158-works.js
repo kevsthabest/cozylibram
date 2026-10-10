@@ -153,6 +153,30 @@ const WorkStore = {
     } catch (e) { return null; }
   },
 
+  /* v402: fetch chapter-level metadata for progressive disclosure.
+     Returns { triggerChapters, chapterSpice, avgDialogueRatio } (nulls when
+     absent), or null when the work can't be resolved. Never throws. */
+  async getChapterMeta(book, opts) {
+    opts = opts || {};
+    try {
+      const id = await this.resolve(book, opts);
+      if (!id) return null;
+      let sb = null;
+      try { sb = opts.getClient ? await opts.getClient() : await cloudClient(); }
+      catch (e) { sb = null; }
+      if (!sb) return null;
+      const { data, error } = await sb.from('works')
+        .select('trigger_chapters, chapter_spice, avg_dialogue_ratio')
+        .eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      return {
+        triggerChapters: (data.trigger_chapters && typeof data.trigger_chapters === 'object') ? data.trigger_chapters : null,
+        chapterSpice: Array.isArray(data.chapter_spice) ? data.chapter_spice : null,
+        avgDialogueRatio: (typeof data.avg_dialogue_ratio === 'number' && isFinite(data.avg_dialogue_ratio)) ? data.avg_dialogue_ratio : null,
+      };
+    } catch (e) { return null; }
+  },
+
   /* v272: merge provider IDs into a work's provider_ids JSONB. Only fills
      keys that are absent or different — a capture never clobbers a
      previously stored identity. No-op when there's nothing to merge. */
