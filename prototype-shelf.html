@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14101c">
+<title>Cozy Libram — 3D Shelf Prototype</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #14101c;
+    font-family: Georgia, 'Times New Roman', serif; color: #f6eff8; }
+  #app { position: fixed; inset: 0; }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 42%, transparent 55%, rgba(8,5,12,.55) 100%); }
+  #hud { position: absolute; top: 0; left: 0; right: 0; padding: calc(10px + env(safe-area-inset-top)) 14px 8px;
+    display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 5; }
+  #hud .title { font-size: 17px; letter-spacing: .04em; color: #f6eff8; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  #hud .title small { display: block; font-family: system-ui, sans-serif; font-size: 10px; letter-spacing: .22em;
+    color: #e5b86a; text-transform: uppercase; margin-bottom: 2px; }
+  #hud .btns { display: flex; gap: 8px; pointer-events: auto; }
+  .pill { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; border: 1px solid rgba(229,184,106,.45);
+    background: rgba(20,14,26,.72); color: #e5b86a; border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    backdrop-filter: blur(6px); }
+  .pill:active { transform: scale(.96); }
+  #hint { position: absolute; top: calc(64px + env(safe-area-inset-top)); left: 0; right: 0; text-align: center;
+    font-family: system-ui, sans-serif; font-size: 12px; color: rgba(246,239,248,.62); pointer-events: none; z-index: 5;
+    text-shadow: 0 1px 6px rgba(0,0,0,.7); padding: 0 16px; }
+  #tray { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(10,7,14,.92), rgba(10,7,14,0));
+    display: flex; gap: 10px; justify-content: center; align-items: stretch; }
+  .tray-btn { flex: 1; max-width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: rgba(32,24,40,.85); border: 1px solid rgba(229,184,106,.28); border-radius: 14px;
+    padding: 10px 4px 8px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+    color: #f6eff8; font-family: system-ui, sans-serif; font-size: 11px; }
+  .tray-btn:active { cursor: grabbing; transform: scale(.95); border-color: #e5b86a; }
+  .tray-btn svg { width: 30px; height: 30px; }
+  #selmenu { position: absolute; z-index: 7; display: none; transform: translate(-50%, -110%);
+    background: rgba(24,17,32,.94); border: 1px solid rgba(229,184,106,.5); border-radius: 12px;
+    padding: 6px; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  #selmenu.show { display: flex; }
+  #selmenu button { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; border: none;
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  #selmenu .mv { background: #e5b86a; color: #241a10; }
+  #selmenu .del { background: rgba(200,60,60,.18); color: #ff9a9a; border: 1px solid rgba(200,60,60,.5); }
+  #selmenu .done { background: transparent; color: #b9a8c6; }
+  #nogl { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; font-family: system-ui, sans-serif; z-index: 20; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+  <div id="hud">
+    <div class="title"><small>Prototype</small>Cozy Libram · 3D Shelf</div>
+    <div class="btns">
+      <button class="pill" id="tiltBtn" style="display:none">Enable tilt</button>
+      <button class="pill" id="presetBtn">Autumn cozy</button>
+    </div>
+  </div>
+  <div id="hint">Drag decorations from the tray onto a shelf &middot; tap one to select it</div>
+  <div id="tray">
+    <div class="tray-btn" data-deco="plant">
+      <svg viewBox="0 0 30 30"><path d="M10 22 L20 22 L18 28 L12 28 Z" fill="#a85f32"/><path d="M15 22 C15 14 12 10 6 8 C12 8 14 12 15 16 C16 12 18 8 24 8 C18 10 15 14 15 22" fill="#4a7a3a"/></svg>
+      Plant</div>
+    <div class="tray-btn" data-deco="candle">
+      <svg viewBox="0 0 30 30"><rect x="12" y="13" width="6" height="12" rx="1" fill="#e8dcc8"/><ellipse cx="15" cy="13" rx="3" ry="1.4" fill="#d8cbb2"/><path d="M15 4 C17 8 17.5 10 15 12 C12.5 10 13 8 15 4" fill="#ff9a2a"/></svg>
+      Candle</div>
+    <div class="tray-btn" data-deco="mug">
+      <svg viewBox="0 0 30 30"><rect x="8" y="12" width="11" height="13" rx="2" fill="#b5542a"/><path d="M19 15 c4 0 4 7 0 7" stroke="#b5542a" stroke-width="2.6" fill="none"/></svg>
+      Mug</div>
+    <div class="tray-btn" data-deco="stack">
+      <svg viewBox="0 0 30 30"><rect x="6" y="20" width="18" height="5" rx="1" fill="#7a4a5a"/><rect x="7" y="15" width="16" height="5" rx="1" fill="#3a5a7a"/><rect x="6" y="10" width="18" height="5" rx="1" fill="#8a6a2a"/></svg>
+      Book stack</div>
+    <div class="tray-btn" data-deco="lights">
+      <svg viewBox="0 0 30 30"><path d="M3 8 Q15 18 27 8" stroke="#5a4a3a" stroke-width="1.4" fill="none"/><circle cx="8" cy="11.5" r="1.8" fill="#ffcf7a"/><circle cx="15" cy="13" r="1.8" fill="#ffcf7a"/><circle cx="22" cy="11.5" r="1.8" fill="#ffcf7a"/></svg>
+      Fairy lights</div>
+  </div>
+  <div id="selmenu">
+    <button class="mv" id="selMove">Move</button>
+    <button class="del" id="selDelete">Delete</button>
+    <button class="done" id="selDone">Done</button>
+  </div>
+  <div id="nogl"><p>This prototype needs WebGL.<br>Please open it in a modern mobile browser.</p></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================== basics ============================== */
+const canvas = document.getElementById('scene');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+} catch (e) {
+  document.getElementById('nogl').style.display = 'flex';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14101c);
+scene.fog = new THREE.Fog(0x14101c, 20, 38);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+const camBase = new THREE.Vector3(0, 4.4, 12.5);
+const camTarget = new THREE.Vector3(0, 3.7, 0);
+camera.position.copy(camBase);
+camera.lookAt(camTarget);
+
+/* lights */
+scene.add(new THREE.AmbientLight(0x9a8a76, 0.55));
+const hemi = new THREE.HemisphereLight(0x8a7ab0, 0x2a1c12, 0.35);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffe2b8, 2.0);
+sun.position.set(6, 11, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
+sun.shadow.camera.top = 11; sun.shadow.camera.bottom = -2;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 32;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0x7a6ac0, 0.5);
+rim.position.set(-7, 6, -4);
+scene.add(rim);
+
+/* ============================== shelf ============================== */
+const SHELF_W = 10, PLANK_D = 2.6, PLANK_T = 0.28, SIDE_T = 0.3;
+const LEVELS = [0.64, 3.64, 6.64];           // top surface Y of each plank
+const TOP_Y = 8.04;
+const woodMat = new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.72, metalness: 0.05 });
+const woodDark = new THREE.MeshStandardMaterial({ color: 0x4e3320, roughness: 0.8 });
+
+function box(w, h, d, mat, x, y, z, shadow = true) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.castShadow = shadow; m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+LEVELS.forEach(topY => box(SHELF_W + SIDE_T * 2, PLANK_T, PLANK_D, woodMat, 0, topY - PLANK_T / 2, 0));
+box(SIDE_T, TOP_Y, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
+box(SIDE_T, TOP_Y, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
+box(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);          // crown
+const back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y),
+  new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 }));
+back.position.set(0, TOP_Y / 2, -PLANK_D / 2 - 0.16);
+back.receiveShadow = true;
+scene.add(back);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
+  new THREE.MeshStandardMaterial({ color: 0x100c16, roughness: 1 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true;
+scene.add(floor);
+
+/* ============================== books ============================== */
+function spineTexture(title, bgCss) {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = bgCss; g.fillRect(0, 0, 128, 512);
+  const grad = g.createLinearGradient(0, 0, 128, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,.28)'); grad.addColorStop(0.18, 'rgba(0,0,0,0)');
+  grad.addColorStop(0.82, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,.28)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 512);
+  g.fillStyle = 'rgba(229,184,106,.85)';
+  g.fillRect(14, 26, 100, 5); g.fillRect(14, 481, 100, 5);
+  let fs = 36;
+  const setF = () => { g.font = '600 ' + fs + 'px Georgia, serif'; };
+  setF();
+  let t = title;
+  while (g.measureText(t).width > 400 && fs > 15) { fs -= 2; setF(); }
+  while (g.measureText(t).width > 400 && t.length > 5) t = t.slice(0, -2);
+  if (t !== title) t = t.trimEnd().slice(0, -1) + '…';
+  g.fillStyle = 'rgba(246,239,248,.94)';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.save(); g.translate(64, 256); g.rotate(-Math.PI / 2);
+  g.fillText(t, 0, 0); g.restore();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+function makeBook(title, css, w, h, d) {
+  const col = new THREE.Color(css);
+  const spine = new THREE.MeshStandardMaterial({ map: spineTexture(title, css), roughness: 0.75 });
+  const cloth = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.82), roughness: 0.85 });
+  const pages = new THREE.MeshStandardMaterial({ color: 0xe6dabd, roughness: 0.95 });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [cloth, cloth, pages, cloth, spine, cloth]);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+/* occupied x-intervals per shelf level, for decoration collision */
+const occupied = LEVELS.map(() => []);
+function fillShelf(li, titles, fillFrac) {
+  let x = -SHELF_W / 2 + 0.35;
+  const limit = -SHELF_W / 2 + SHELF_W * fillFrac;
+  for (const t of titles) {
+    const w = 0.34 + Math.random() * 0.26;
+    const h = 1.7 + Math.random() * 0.8;
+    const d = 1.7 + Math.random() * 0.3;
+    if (x + w > limit) break;
+    const b = makeBook(t[0], t[1], w, h, d);
+    b.position.set(x + w / 2, LEVELS[li] + h / 2, (Math.random() - 0.5) * 0.24);
+    scene.add(b);
+    occupied[li].push([x, x + w]);
+    x += w + 0.025;
+  }
+}
+const rnd = (() => { let s = 42; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const _rand = Math.random; Math.random = rnd;   // deterministic demo layout
+fillShelf(2, [
+  ['The Midnight Library', '#7a4a5a'], ['Dune', '#b06a2a'], ['Fourth Wing', '#3a3f6a'],
+  ['Beach Read', '#4a8a8a'], ['Iron Flame', '#8a2a2a'], ['The Housemaid', '#33333a'],
+  ['ACOTAR', '#5a3a6a'], ['Project Hail Mary', '#2a6a8a'], ['Onyx Storm', '#2a3a5a'],
+], 0.97);
+fillShelf(1, [
+  ['Haunting Adeline', '#6a2a4a'], ['The Only Good Indians', '#3a5a3a'],
+  ['Tomorrow ×3', '#8a6a2a'], ['Cat and Mouse', '#4a4a5a'],
+], 0.58);
+fillShelf(0, [
+  ['Credence', '#7a3a2a'], ['Den of Vipers', '#3a2a2a'], ['Flock', '#5a5a7a'],
+  ['Exodus', '#2a5a6a'], ['God of Ruin', '#6a3a3a'],
+], 0.58);
+Math.random = _rand;
+
+/* ============================== decorations ============================== */
+function shadowify(g) { g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); return g; }
+
+function makePlant() {
+  const g = new THREE.Group();
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.21, 0.4, 14),
+    new THREE.MeshStandardMaterial({ color: 0xa85f32, roughness: 0.85 }));
+  pot.position.y = 0.2; g.add(pot);
+  const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 14),
+    new THREE.MeshStandardMaterial({ color: 0x2e2118, roughness: 1 }));
+  soil.position.y = 0.4; g.add(soil);
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4d7d3d, roughness: 0.9 });
+  const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x5d8d46, roughness: 0.9 });
+  for (let i = 0; i < 7; i++) {
+    const tall = i === 0;
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.085, tall ? 0.95 : 0.55 + Math.random() * 0.25, 8),
+      i % 2 ? leafMat : leafMat2);
+    const a = (i / 7) * Math.PI * 2;
+    const r = tall ? 0 : 0.13;
+    leaf.position.set(Math.cos(a) * r, 0.42 + (tall ? 0.48 : 0.3), Math.sin(a) * r);
+    if (!tall) { leaf.rotation.z = Math.cos(a) * 0.42; leaf.rotation.x = -Math.sin(a) * 0.42; }
+    g.add(leaf);
+  }
+  g.userData = { decoType: 'plant', fw: 0.75, fd: 0.75 };
+  return shadowify(g);
+}
+
+const candleFlames = [];
+function makeCandle() {
+  const g = new THREE.Group();
+  const brass = new THREE.MeshStandardMaterial({ color: 0x9a743d, roughness: 0.45, metalness: 0.7 });
+  const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.05, 18), brass);
+  saucer.position.y = 0.025; g.add(saucer);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.165, 0.55, 18),
+    new THREE.MeshStandardMaterial({ color: 0xe9dcc4, roughness: 0.6 }));
+  body.position.y = 0.325; g.add(body);
+  const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.09, 6),
+    new THREE.MeshStandardMaterial({ color: 0x1a1410 }));
+  wick.position.y = 0.63; g.add(wick);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 10),
+    new THREE.MeshStandardMaterial({ color: 0xffc86a, emissive: 0xff8a1a, emissiveIntensity: 3.2 }));
+  flame.position.y = 0.74; g.add(flame);
+  const glow = new THREE.PointLight(0xff9a3c, 4, 7, 2);
+  glow.position.y = 0.85; g.add(glow);
+  g.userData = { decoType: 'candle', fw: 0.55, fd: 0.55, glow, flame, seed: Math.random() * 10 };
+  candleFlames.push(g);
+  return shadowify(g);
+}
+
+function makeMug() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0xb5542a, roughness: 0.55 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.36, 18), mat);
+  body.position.y = 0.18; g.add(body);
+  const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.165, 18),
+    new THREE.MeshStandardMaterial({ color: 0x2e1c10, roughness: 0.35 }));
+  coffee.rotation.x = -Math.PI / 2; coffee.position.y = 0.362; g.add(coffee);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.032, 10, 20, Math.PI), mat);
+  handle.position.set(0.2, 0.19, 0); handle.rotation.z = -Math.PI / 2; g.add(handle);
+  g.userData = { decoType: 'mug', fw: 0.6, fd: 0.6 };
+  return shadowify(g);
+}
+
+function makeStack() {
+  const g = new THREE.Group();
+  const cols = ['#7a4a5a', '#3a5a7a', '#8a6a2a'];
+  const sizes = [[1.1, 0.22, 0.8], [0.94, 0.2, 0.74], [1.0, 0.18, 0.7]];
+  let y = 0;
+  sizes.forEach((s, i) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(s[0], s[1], s[2]),
+      new THREE.MeshStandardMaterial({ color: new THREE.Color(cols[i]), roughness: 0.8 }));
+    m.position.y = y + s[1] / 2; m.rotation.y = (i - 1) * 0.14;
+    g.add(m); y += s[1];
+  });
+  g.userData = { decoType: 'stack', fw: 1.2, fd: 0.9 };
+  return shadowify(g);
+}
+
+const fairyBulbs = [];
+function makeFairyLights() {
+  const g = new THREE.Group();
+  const W = 6, pts = [];
+  const n = 26;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    pts.push(new THREE.Vector3(-W / 2 + t * W, -0.28 * Math.sin(Math.PI * t) - 0.04, 0));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.016, 6),
+    new THREE.MeshStandardMaterial({ color: 0x33291d, roughness: 0.9 })));
+  const bulbGeo = new THREE.SphereGeometry(0.055, 10, 10);
+  pts.forEach((p, i) => {
+    if (i % 2 === 0) return;
+    const b = new THREE.Mesh(bulbGeo, new THREE.MeshStandardMaterial({
+      color: 0xffd9a0, emissive: 0xffb84d, emissiveIntensity: 1.7, roughness: 0.4 }));
+    b.position.copy(p); b.position.y -= 0.08;
+    b.userData.phase = Math.random() * Math.PI * 2;
+    g.add(b); fairyBulbs.push(b);
+  });
+  g.userData = { decoType: 'lights', fw: 6.4, fd: 0.5, edge: true };
+  return shadowify(g);
+}
+
+const DECO_MAKERS = { plant: makePlant, candle: makeCandle, mug: makeMug, stack: makeStack, lights: makeFairyLights };
+const placed = [];   // {group, pi, x0, x1}
+
+/* drop zones: invisible boxes over each plank for raycast snapping */
+const zones = LEVELS.map((topY, pi) => {
+  const z = new THREE.Mesh(new THREE.BoxGeometry(SHELF_W + 0.6, 0.9, PLANK_D + 1.2),
+    new THREE.MeshBasicMaterial({ visible: false }));
+  z.position.set(0, topY + 0.25, 0);
+  z.userData.pi = pi;
+  scene.add(z);
+  return z;
+});
+const snapGuide = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
+  new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.38, depthWrite: false }));
+snapGuide.visible = false; scene.add(snapGuide);
+
+function findFreeSpot(pi, x, fw) {
+  const minX = -SHELF_W / 2 + 0.45 + fw / 2, maxX = SHELF_W / 2 - 0.45 - fw / 2;
+  x = THREE.MathUtils.clamp(x, minX, maxX);
+  const occ = occupied[pi].slice().sort((a, b) => a[0] - b[0]);
+  for (let off = 0; off <= SHELF_W; off += 0.15) {
+    for (const sx of [x + off, x - off]) {
+      if (sx < minX || sx > maxX) continue;
+      const a = sx - fw / 2 - 0.07, b = sx + fw / 2 + 0.07;
+      if (!occ.some(([o0, o1]) => a < o1 && b > o0)) return sx;
+    }
+  }
+  return x;
+}
+function registerSpot(pi, x, fw) {
+  const rec = [x - fw / 2, x + fw / 2];
+  occupied[pi].push(rec);
+  return rec;
+}
+function placeDeco(type, pi, x) {
+  const g = DECO_MAKERS[type]();
+  const fw = g.userData.fw;
+  x = findFreeSpot(pi, x, fw);
+  if (g.userData.edge) {
+    g.position.set(x, LEVELS[pi] + 0.06, PLANK_D / 2 - 0.4);
+  } else {
+    g.position.set(x, LEVELS[pi], 0.1);
+  }
+  scene.add(g);
+  const rec = registerSpot(pi, x, fw);
+  placed.push({ group: g, pi, rec, type });
+  return g;
+}
+function removeDeco(g) {
+  const i = placed.findIndex(p => p.group === g);
+  if (i >= 0) {
+    const [p] = placed.splice(i, 1);
+    const oi = occupied[p.pi].indexOf(p.rec);
+    if (oi >= 0) occupied[p.pi].splice(oi, 1);
+  }
+  const ci = candleFlames.indexOf(g);
+  if (ci >= 0) candleFlames.splice(ci, 1);
+  g.traverse(o => { if (o.isMesh && o.material && o.material.emissive) {
+    const bi = fairyBulbs.indexOf(o); if (bi >= 0) fairyBulbs.splice(bi, 1); } });
+  scene.remove(g);
+  deselect();
+}
+function clearDecos() { placed.slice().forEach(p => removeDeco(p.group)); }
+function discardGhost(g) {
+  const ci = candleFlames.indexOf(g);
+  if (ci >= 0) candleFlames.splice(ci, 1);
+  const keep = [];
+  g.traverse(o => { if (o.isMesh && fairyBulbs.includes(o)) keep.push(o); });
+  keep.forEach(o => fairyBulbs.splice(fairyBulbs.indexOf(o), 1));
+  scene.remove(g);
+}
+
+/* ============================== interaction ============================== */
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+function setPtr(e) {
+  ptr.x = (e.clientX / window.innerWidth) * 2 - 1;
+  ptr.y = -(e.clientY / window.innerHeight) * 2 + 1;
+}
+function zoneHit(e) {
+  setPtr(e); ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(zones, false);
+  return hits.length ? { pi: hits[0].object.userData.pi, point: hits[0].point } : null;
+}
+function decoAt(e) {
+  setPtr(e); ray.setFromCamera(ptr, camera);
+  const groups = placed.map(p => p.group);
+  const hits = ray.intersectObjects(groups, true);
+  if (!hits.length) return null;
+  let o = hits[0].object;
+  while (o && !o.userData.decoType) o = o.parent;
+  return o;
+}
+function showSnap(type, pi, x) {
+  const g = { plant: 0.75, candle: 0.55, mug: 0.6, stack: 1.2, lights: 6.4 }[type] || 0.7;
+  if (type === 'lights') {
+    snapGuide.scale.set(6.2, 1, 0.5);
+    snapGuide.position.set(THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2),
+      LEVELS[pi] + 0.05, PLANK_D / 2 - 0.4);
+  } else {
+    snapGuide.scale.set(g, 1, 0.8);
+    snapGuide.position.set(x, LEVELS[pi] + 0.03, 0.1);
+  }
+  snapGuide.visible = true;
+}
+
+/* selection */
+const selRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 40),
+  new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+selRing.rotation.x = -Math.PI / 2; selRing.visible = false; scene.add(selRing);
+let selected = null;
+const selmenu = document.getElementById('selmenu');
+function toScreen(v3) {
+  const v = v3.clone().project(camera);
+  return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+}
+function select(g) {
+  selected = g;
+  const r = Math.max(g.userData.fw, g.userData.fd) / 2 + 0.18;
+  selRing.scale.set(r / 0.47, r / 0.47, 1);
+  const pi = placed.find(p => p.group === g).pi;
+  selRing.position.set(g.position.x, LEVELS[pi] + 0.02, g.position.z);
+  selRing.visible = true;
+  const s = toScreen(new THREE.Vector3(g.position.x, LEVELS[pi] + 1.15, g.position.z));
+  selmenu.style.left = Math.max(90, Math.min(window.innerWidth - 90, s.x)) + 'px';
+  selmenu.style.top = Math.max(120, s.y) + 'px';
+  selmenu.classList.add('show');
+}
+function deselect() {
+  selected = null; selRing.visible = false; selmenu.classList.remove('show');
+}
+document.getElementById('selDelete').addEventListener('click', () => { if (selected) removeDeco(selected); });
+document.getElementById('selDone').addEventListener('click', deselect);
+document.getElementById('selMove').addEventListener('click', () => {
+  selmenu.classList.remove('show');
+  document.getElementById('hint').textContent = 'Drag the decoration to move it · tap elsewhere to finish';
+  setTimeout(() => { document.getElementById('hint').textContent =
+    'Drag decorations from the tray onto a shelf · tap one to select it'; }, 2600);
+});
+
+/* drag from tray */
+let trayDrag = null;
+document.querySelectorAll('.tray-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    deselect();
+    const type = btn.dataset.deco;
+    const g = DECO_MAKERS[type]();
+    g.visible = false; scene.add(g);
+    trayDrag = { type, group: g, pi: -1, x: 0, moved: false, sx: e.clientX, sy: e.clientY };
+  });
+});
+window.addEventListener('pointermove', e => {
+  if (trayDrag) {
+    if (Math.hypot(e.clientX - trayDrag.sx, e.clientY - trayDrag.sy) > 8) trayDrag.moved = true;
+    const hit = zoneHit(e);
+    if (hit) {
+      const fw = trayDrag.group.userData.fw;
+      const x = findFreeSpot(hit.pi, hit.point.x, fw);
+      trayDrag.pi = hit.pi; trayDrag.x = x;
+      trayDrag.group.visible = true;
+      if (trayDrag.group.userData.edge) {
+        trayDrag.group.position.set(THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2),
+          LEVELS[hit.pi] + 0.06, PLANK_D / 2 - 0.4);
+      } else {
+        trayDrag.group.position.set(x, LEVELS[hit.pi], 0.1);
+      }
+      showSnap(trayDrag.type, hit.pi, x);
+    } else {
+      trayDrag.pi = -1; trayDrag.group.visible = false; snapGuide.visible = false;
+    }
+    return;
+  }
+  if (moveDrag) {
+    if (Math.hypot(e.clientX - moveDrag.sx, e.clientY - moveDrag.sy) > 8) moveDrag.moved = true;
+    if (moveDrag.moved) {
+      const hit = zoneHit(e);
+      if (hit) {
+        const rec = placed.find(p => p.group === moveDrag.group);
+        const fw = moveDrag.group.userData.fw;
+        // temporarily free own spot so it doesn't collide with itself
+        const oi = occupied[hit.pi].indexOf(rec.rec);
+        if (oi >= 0) occupied[hit.pi].splice(oi, 1);
+        const x = findFreeSpot(hit.pi, hit.point.x, fw);
+        occupied[hit.pi].push(rec.rec);
+        rec.pi = hit.pi;
+        rec.rec[0] = x - fw / 2; rec.rec[1] = x + fw / 2;
+        if (moveDrag.group.userData.edge) {
+          moveDrag.group.position.set(THREE.MathUtils.clamp(x, -SHELF_W / 2 + 3.2, SHELF_W / 2 - 3.2),
+            LEVELS[hit.pi] + 0.06, PLANK_D / 2 - 0.4);
+        } else {
+          moveDrag.group.position.set(x, LEVELS[hit.pi], 0.1);
+        }
+        showSnap(moveDrag.group.userData.decoType, hit.pi, x);
+        if (selected === moveDrag.group) select(moveDrag.group);
+      }
+    }
+    return;
+  }
+  // hover parallax (desktop)
+  pointerPX = (e.clientX / window.innerWidth) * 2 - 1;
+  pointerPY = (e.clientY / window.innerHeight) * 2 - 1;
+});
+window.addEventListener('pointerup', e => {
+  snapGuide.visible = false;
+  if (trayDrag) {
+    const t = trayDrag; trayDrag = null;
+    if (!t.moved) {
+      // tap = auto-place at a sensible default
+      discardGhost(t.group);
+      if (t.type === 'lights') placeDeco('lights', 2, 0);
+      else placeDeco(t.type, 1, 2.6 + Math.random() * 1.2);
+    } else if (t.pi >= 0) {
+      discardGhost(t.group);
+      const g = placeDeco(t.type, t.pi, t.x);
+      select(g);
+    } else {
+      discardGhost(t.group); // dropped outside: cancel
+    }
+    return;
+  }
+  if (moveDrag) {
+    const m = moveDrag; moveDrag = null;
+    if (!m.moved && m.group) select(m.group);
+    return;
+  }
+});
+
+/* drag placed decorations + tap select (canvas) */
+let moveDrag = null;
+canvas.addEventListener('pointerdown', e => {
+  const g = decoAt(e);
+  if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY };
+});
+canvas.addEventListener('pointerup', e => {
+  // handled in window pointerup via moveDrag; tap-empty deselects here
+  if (!moveDrag) {
+    if (!decoAt(e)) deselect();
+  }
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+/* autumn cozy preset */
+document.getElementById('presetBtn').addEventListener('click', () => {
+  clearDecos();
+  select(placeDeco('lights', 2, 0));
+  placeDeco('plant', 1, 3.0);
+  placeDeco('candle', 1, 4.15);
+  placeDeco('mug', 0, 2.9);
+  placeDeco('stack', 0, 4.15);
+  deselect();
+});
+
+/* ============================== parallax ============================== */
+let pointerPX = 0, pointerPY = 0;
+let tilt = { x: 0, y: 0 }, tiltOn = false;
+window.addEventListener('deviceorientation', e => {
+  if (e.gamma == null || e.beta == null) return;
+  tiltOn = true;
+  tilt.x = THREE.MathUtils.clamp(e.gamma / 35, -1, 1);
+  tilt.y = THREE.MathUtils.clamp((e.beta - 45) / 35, -1, 1);
+});
+if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+  const b = document.getElementById('tiltBtn');
+  b.style.display = '';
+  b.addEventListener('click', async () => {
+    try { await DeviceOrientationEvent.requestPermission(); b.style.display = 'none'; } catch (_) {}
+  });
+}
+
+/* ============================== loop / resize ============================== */
+function layout() {
+  const w = window.innerWidth, h = window.innerHeight, a = w / h;
+  camera.aspect = a; camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  camBase.set(0, 4.4, a >= 1 ? 12.5 : 12.5 * Math.min(2.1, 1.3 / a));
+}
+window.addEventListener('resize', layout);
+layout();
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  // candle flicker
+  for (const g of candleFlames) {
+    const u = g.userData, s = u.seed;
+    u.glow.intensity = 3.6 + Math.sin(t * 13 + s) * 0.5 + Math.sin(t * 29 + s * 1.7) * 0.35;
+    u.flame.scale.set(1 + Math.sin(t * 17 + s) * 0.08, 1 + Math.sin(t * 23 + s) * 0.14, 1);
+  }
+  // fairy twinkle
+  for (const b of fairyBulbs) {
+    b.material.emissiveIntensity = 1.55 + Math.sin(t * 2.2 + b.userData.phase) * 0.4;
+  }
+  // camera parallax
+  const px = tiltOn ? tilt.x : pointerPX * 0.55;
+  const py = tiltOn ? tilt.y : pointerPY * 0.4;
+  camera.position.x += ((camBase.x + px * 0.9) - camera.position.x) * 0.045;
+  camera.position.y += ((camBase.y - py * 0.55) - camera.position.y) * 0.045;
+  camera.position.z += (camBase.z - camera.position.z) * 0.045;
+  camera.lookAt(camTarget);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
