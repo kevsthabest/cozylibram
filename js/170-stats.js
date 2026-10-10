@@ -935,10 +935,6 @@ function renderStats() {
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
-  const tropeCount = {};
-  library.forEach(b => (b.tropes || []).forEach(t => { tropeCount[t] = (tropeCount[t] || 0) + 1; }));
-  const topTropes = topEntries(tropeCount, 8);
-
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
   const max = Math.max(1, counts.tbr, counts.reading, counts.read, counts.dnf);
@@ -1045,12 +1041,7 @@ function renderStats() {
     genreEvoHTML() +
     recordsHTML() +
     seriesHTML() +
-    '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>' +
-    (topTropes.length
-      ? '<div class="stat-sub">Top tropes</div><div class="trope-cloud">' +
-        topTropes.map(([t, n]) => '<span class="trope-pill">' + esc(t) + '<span class="c">' + n + '</span></span>').join('') +
-        '</div>'
-      : '<p class="note">Tag tropes on your books and they\'ll show up here.</p>')
+    '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>'
   );
 
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
