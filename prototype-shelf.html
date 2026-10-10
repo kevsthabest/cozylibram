@@ -616,14 +616,13 @@ function buildInventory() {
       (item.locked ? '' : '<span class="cnt">×' + item.owned + '</span>');
     if (!item.locked && item.owned > 0) {
       if (item.room) {
-        d.addEventListener('click', () => {
-          // v3: room flow — tap item, then tap a glowing anchor in the scene
-          if (pickedRoom === item.type) { pickedRoom = null; hideRoomAnchors(); }
-          else { pickedType = null; pickedRoom = item.type; showRoomAnchors(item.type); }
-          buildInventory();
-          document.getElementById('hint').textContent = pickedRoom
-            ? 'Tap a glowing anchor to hang the ' + item.name.toLowerCase() + ' · tap again to cancel'
-            : 'Open inventory to decorate · tap a placed decoration to select it';
+        // v4: room decos drag from inventory (like shelf decos); tap = auto-place
+        d.addEventListener('pointerdown', e => startRoomDrag(e, item, d));
+        d.addEventListener('click', e => {
+          // tap (not drag): auto-place at first free anchor
+          if (d.dataset.dragged) { delete d.dataset.dragged; return; }
+          const a = ROOM_ANCHORS.find(x => x.types.includes(item.type) && !x.usedBy);
+          if (a) placeRoomDeco(item.type, a);
         });
       } else {
         d.addEventListener('pointerdown', e => startInvDrag(e, item, d));
@@ -643,7 +642,7 @@ function buildInventory() {
   });
   const sub = document.querySelector('#invPanel .sub');
   if (sub) sub.textContent = invTab === 'room'
-    ? 'Room decor hangs around the bookcase · tap to pick up, then tap a glowing anchor'
+    ? 'Drag onto the room · or tap to auto-place at a free spot'
     : 'Tap to pick up, then tap a shelf to place · or drag straight onto a shelf';
 }
 document.querySelectorAll('#invTabs button').forEach(b =>
@@ -659,6 +658,19 @@ function startInvDrag(e, item, el) {
   el.dataset.dragged = '1';
   // if this becomes a drag (not tap), the pointermove handler takes over
 }
+/* v4: room decorations drag from inventory — same tactile pattern as shelf
+   decos. Ghost follows the pointer; anchors glow as drop targets. */
+function startRoomDrag(e, item, el) {
+  e.preventDefault();
+  deselect();
+  closeInventory();
+  const g = ROOM_MAKERS[item.type]();
+  g.visible = false; scene.add(g);
+  roomDrag = { type: item.type, group: g, anchor: null, moved: false,
+    sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
+  el.dataset.dragged = '1';
+  showRoomAnchors(item.type);
+}
 function openInventory() { document.getElementById('invPanel').classList.add('open'); }
 function closeInventory() {
   document.getElementById('invPanel').classList.remove('open');
@@ -672,17 +684,8 @@ buildInventory();
 
 /* tap-shelf-to-place when a type is picked */
 canvas.addEventListener('pointerdown', e => {
-  if (pickedRoom && !trayDrag) {
-    // v3: room flow — tap a glowing anchor marker
-    setPtr(e); ray.setFromCamera(ptr, camera);
-    const hits = ray.intersectObjects(anchorMarkers, false);
-    if (hits.length) {
-      const a = ROOM_ANCHORS.find(x => x.id === hits[0].object.userData.anchorId);
-      if (a && !a.usedBy) placeRoomDeco(pickedRoom, a);
-    }
-    return;
-  }
-  if (pickedType && !trayDrag) {
+  // v4: room tap-anchor flow retired — room decos now drag (or tap = auto-place)
+  if (pickedType && !trayDrag && !roomDrag) {
     const hit = zoneHit(e);
     if (hit) {
       const g = placeDeco(pickedType, hit.pi, hit.point.x);
@@ -770,12 +773,13 @@ document.getElementById('selMove').addEventListener('click', () => {
 
 /* drag from inventory — v2: lerped ghost follow + scale feedback for tactile feel */
 let trayDrag = null;
+let roomDrag = null; // v4: room-deco drag from inventory onto anchors
 let raycastQueued = false, lastRayEvent = null;
 // (inventory items wire their own pointerdown via startInvDrag)
 // v2: throttle raycasts to once per animation frame for smooth 60fps drag
 function queueRaycast(e) { lastRayEvent = e; raycastQueued = true; }
 window.addEventListener('pointermove', e => {
-  if (trayDrag || moveDrag) { queueRaycast(e); return; }
+  if (trayDrag || moveDrag || roomDrag) { queueRaycast(e); return; }
   // hover parallax (desktop)
   pointerPX = (e.clientX / window.innerWidth) * 2 - 1;
   pointerPY = (e.clientY / window.innerHeight) * 2 - 1;
@@ -812,6 +816,39 @@ function processDragFrame() {
       trayDrag.pi = -1; trayDrag.group.visible = false; snapGuide.visible = false;
       trayDrag.hasTarget = false;
     }
+  } else if (roomDrag) {
+    /* v4: room-deco drag — raycast against glowing anchor markers; the ghost
+       snaps to the nearest free anchor and the marker brightens as a target. */
+    if (Math.hypot(e.clientX - roomDrag.sx, e.clientY - roomDrag.sy) > 8) {
+      if (!roomDrag.moved) {
+        roomDrag.moved = true;
+        roomDrag.group.scale.setScalar(1.18); // tactile pick-up feedback
+      }
+    }
+    setPtr(e); ray.setFromCamera(ptr, camera);
+    const hits = ray.intersectObjects(anchorMarkers, false);
+    let best = null;
+    if (hits.length) {
+      const a = ROOM_ANCHORS.find(x => x.id === hits[0].object.userData.anchorId);
+      if (a && !a.usedBy && a.types.includes(roomDrag.type)) best = a;
+    }
+    // highlight the targeted anchor, dim the rest
+    anchorMarkers.forEach(m => {
+      const isBest = best && m.userData.anchorId === best.id;
+      m.material.opacity = isBest ? 1 : 0.45;
+      const s = isBest ? 1.35 : 1;
+      m.userData.hiScale = s;
+    });
+    if (best) {
+      roomDrag.anchor = best;
+      roomDrag.group.visible = true;
+      roomDrag.targetX = best.pos.x; roomDrag.targetY = best.pos.y; roomDrag.targetZ = best.pos.z;
+      roomDrag.hasTarget = true;
+    } else {
+      roomDrag.anchor = null;
+      roomDrag.group.visible = false;
+      roomDrag.hasTarget = false;
+    }
   } else if (moveDrag) {
     if (Math.hypot(e.clientX - moveDrag.sx, e.clientY - moveDrag.sy) > 8) {
       if (!moveDrag.moved) {
@@ -847,6 +884,27 @@ function processDragFrame() {
 
 window.addEventListener('pointerup', e => {
   snapGuide.visible = false;
+  if (roomDrag) {
+    /* v4: room-deco drop — snap to the targeted anchor, else cancel */
+    const r = roomDrag; roomDrag = null;
+    r.group.scale.setScalar(1);
+    hideRoomAnchors();
+    if (!r.moved) {
+      // tap = auto-place at first free anchor
+      discardGhost(r.group);
+      const a = ROOM_ANCHORS.find(x => x.types.includes(r.type) && !x.usedBy);
+      if (a) placeRoomDeco(r.type, a);
+    } else if (r.anchor && !r.anchor.usedBy) {
+      discardGhost(r.group);
+      const g = placeRoomDeco(r.type, r.anchor);
+      select(g);
+    } else {
+      discardGhost(r.group); // dropped outside an anchor: cancel
+    }
+    // reset anchor highlight state
+    anchorMarkers.forEach(m => { m.material.opacity = 0.85; m.userData.hiScale = 1; });
+    return;
+  }
   if (trayDrag) {
     const t = trayDrag; trayDrag = null;
     t.group.scale.setScalar(1); // v2: restore scale on drop
@@ -876,7 +934,6 @@ window.addEventListener('pointerup', e => {
 /* drag placed decorations + tap select (canvas) */
 let moveDrag = null;
 canvas.addEventListener('pointerdown', e => {
-  if (pickedRoom) return; // v3: anchor placement handled above
   const g = decoAt(e);
   if (g && g.userData.room) { select(g); return; } // v3: room decos tap-select (no drag)
   if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
@@ -969,6 +1026,13 @@ function animate() {
     g.y += (trayDrag.targetY - g.y) * 0.35;
     g.z += (trayDrag.targetZ - g.z) * 0.35;
   }
+  // v4: lerp room-deco ghost toward the targeted anchor
+  if (roomDrag && roomDrag.hasTarget && roomDrag.group.visible) {
+    const g = roomDrag.group.position;
+    g.x += (roomDrag.targetX - g.x) * 0.35;
+    g.y += (roomDrag.targetY - g.y) * 0.35;
+    g.z += (roomDrag.targetZ - g.z) * 0.35;
+  }
   if (moveDrag && moveDrag.hasTarget && moveDrag.moved) {
     const g = moveDrag.group.position;
     g.x += (moveDrag.targetX - g.x) * 0.35;
@@ -986,9 +1050,9 @@ function animate() {
   for (const b of fairyBulbs) {
     b.material.emissiveIntensity = 1.55 + Math.sin(t * 2.2 + b.userData.phase) * 0.4;
   }
-  // v3: pulse room anchor markers
+  // v3: pulse room anchor markers (v4: multiply by drag-highlight scale)
   for (let i = 0; i < anchorMarkers.length; i++) {
-    const s = 1 + 0.14 * Math.sin(t * 4 + i * 1.3);
+    const s = (1 + 0.14 * Math.sin(t * 4 + i * 1.3)) * (anchorMarkers[i].userData.hiScale || 1);
     anchorMarkers[i].scale.set(s, s, 1);
   }
   // camera parallax
