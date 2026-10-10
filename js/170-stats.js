@@ -341,14 +341,6 @@ function patternsHTML() {
       obs.push('You\'re most likely to finish books between <b>' + best.label + ' pages</b>.');
   }
 
-  // trope rating
-  const byTrope = {};
-  rated.forEach(b => (b.tropes || []).forEach(t => { (byTrope[t] = byTrope[t] || []).push(b.myRating); }));
-  const tk = Object.keys(byTrope).filter(t => byTrope[t].length >= 3)
-    .sort((a, b) => avgOf(byTrope[b]) - avgOf(byTrope[a]))[0];
-  if (tk)
-    obs.push('Books tagged <b>' + esc(tk) + '</b> average <b>' + avgOf(byTrope[tk]).toFixed(1) + ' ⭐</b> for you.');
-
   // rating trend: last 6 months vs prior 6
   const now = Date.now(), M = 30.44 * 864e5;
   const finAge = b => b.dateFinished ? now - new Date(b.dateFinished).getTime() : Infinity;
