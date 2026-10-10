@@ -131,26 +131,47 @@ function renderShelf3D() {
   const menuBtn3D = document.getElementById('svMenu3D');
   const menuDropdown3D = document.getElementById('svMenuDropdown3D');
   if (menuBtn3D && menuDropdown3D) {
+    // v427: robust toggle — set both hidden property and inline display.
+    // Belt-and-suspenders against CSS specificity issues.
+    function setMenu3DVisible(visible) {
+      var dd = document.getElementById('svMenuDropdown3D');
+      if (!dd) return;
+      dd.hidden = !visible;
+      dd.style.display = visible ? '' : 'none';
+    }
+    function isMenu3DVisible() {
+      var dd = document.getElementById('svMenuDropdown3D');
+      return dd && !dd.hidden && dd.style.display !== 'none';
+    }
     menuBtn3D.addEventListener('click', function (e) {
       e.stopPropagation();
-      menuDropdown3D.hidden = !menuDropdown3D.hidden;
+      e.preventDefault();
+      setMenu3DVisible(!isMenu3DVisible());
     });
-    document.addEventListener('click', function closeMenu3D(e) {
-      if (!menuDropdown3D.hidden && !menuDropdown3D.contains(e.target) && e.target !== menuBtn3D) {
-        menuDropdown3D.hidden = true;
+    // v427: named handler, removed before re-adding (fixes #45 listener leak).
+    if (window._shelf3dMenuCloser) {
+      document.removeEventListener('click', window._shelf3dMenuCloser);
+    }
+    window._shelf3dMenuCloser = function (e) {
+      var dd = document.getElementById('svMenuDropdown3D');
+      var btn = document.getElementById('svMenu3D');
+      if (dd && !dd.hidden && dd.style.display !== 'none' &&
+          !dd.contains(e.target) && e.target !== btn) {
+        setMenu3DVisible(false);
       }
-    });
+    };
+    document.addEventListener('click', window._shelf3dMenuCloser);
     const menuView3DBtn = document.getElementById('svMenuView3D');
     if (menuView3DBtn) menuView3DBtn.addEventListener('click', function () {
       shelfSetViewMode('2d');
-      menuDropdown3D.hidden = true;
+      setMenu3DVisible(false);
       renderShelf();
     });
     // v417: Decorations inventory in menu (Kevin: wasn't findable in 3D).
     // Triggers the existing s3dInvBtn; the ▦ button itself is hidden via CSS.
     const menuDecor3DBtn = document.getElementById('svMenuDecor3D');
     if (menuDecor3DBtn) menuDecor3DBtn.addEventListener('click', function () {
-      menuDropdown3D.hidden = true;
+      setMenu3DVisible(false);
       var invBtn = document.getElementById('s3dInvBtn');
       if (invBtn) invBtn.click();
     });
