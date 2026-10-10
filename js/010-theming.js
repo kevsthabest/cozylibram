@@ -181,5 +181,7 @@ function applyTheme() {
   try {
     if (typeof refreshCovenNav === 'function') refreshCovenNav();
     if ((view === 'coven' || view === 'coven-friend') && typeof render === 'function') render();
+    // v418: re-apply modal flairs — motif follows the theme.
+    if (typeof ModalFlairs !== 'undefined' && typeof ModalFlairs.refresh === 'function') ModalFlairs.refresh();
   } catch (e) {}
 }

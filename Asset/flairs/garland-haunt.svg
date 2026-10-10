@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Haunt garland</title>
+<desc id="d">A twisted swag garland with hanging bats and mini pumpkins for Halloween.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M0,18 Q300,70 600,18" stroke-width="1.2" opacity="0.6"/>
+<path d="M150,32 L150,44"/><path d="M300,38 L300,52"/><path d="M450,30 L450,42"/>
+<path d="M225,36 L225,46"/><path d="M375,36 L375,46"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,54)"><path d="M-14,2 Q-9,-10 0,-3 Q9,-10 14,2 Q8,6 0,5 Q-8,6 -14,2Z"/><circle cx="0" cy="2" r="3"/></g>
+<g transform="translate(300,64)"><path d="M-16,2 Q-10,-11 0,-3 Q10,-11 16,2 Q9,7 0,6 Q-9,7 -16,2Z"/><circle cx="0" cy="3" r="3.4"/></g>
+<g transform="translate(450,52)"><path d="M-13,2 Q-8,-9 0,-3 Q8,-9 13,2 Q7,6 0,5 Q-7,6 -13,2Z"/><circle cx="0" cy="2" r="2.8"/></g>
+<g transform="translate(225,58)">
+<ellipse cx="0" cy="4" rx="9" ry="7"/><rect x="-1.5" y="-6" width="3" height="6" rx="1"/>
+<path d="M-6,-1 L-6,9 M0,-2 L0,10 M6,-1 L6,9" stroke="currentColor" stroke-width="1.2"/>
+</g>
+<g transform="translate(375,58)">
+<ellipse cx="0" cy="4" rx="7.5" ry="6"/><rect x="-1.2" y="-5" width="2.4" height="5" rx="1"/>
+<path d="M-5,-1 L-5,8 M0,-2 L0,9 M5,-1 L5,8" stroke="currentColor" stroke-width="1"/>
+</g>
+<circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/><circle cx="260" cy="42" r="1.5"/><circle cx="340" cy="42" r="1.5"/>
+</g>
+</svg>

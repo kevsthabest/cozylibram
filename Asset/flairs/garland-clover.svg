@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Clover garland</title>
+<desc id="d">A swag garland with hanging clover clusters for Shamrock.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,58)">
+<circle cx="-7" cy="0" r="6"/><circle cx="7" cy="0" r="6"/><circle cx="0" cy="-7" r="6"/>
+<path d="M0,6 L0,14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+</g>
+<g transform="translate(300,68) scale(1.25)">
+<circle cx="-7" cy="0" r="6"/><circle cx="7" cy="0" r="6"/><circle cx="0" cy="-7" r="6"/>
+<path d="M0,6 L0,14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+</g>
+<g transform="translate(450,56)">
+<circle cx="-7" cy="0" r="6"/><circle cx="7" cy="0" r="6"/><circle cx="0" cy="-7" r="6"/>
+<path d="M0,6 L0,14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+</g>
+<g transform="translate(225,52)"><circle cx="0" cy="0" r="4"/></g>
+<g transform="translate(375,52)"><circle cx="0" cy="0" r="4"/></g>
+<circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/>
+</g>
+</svg>

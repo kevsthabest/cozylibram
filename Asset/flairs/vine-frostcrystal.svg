@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Frost crystal spray</title>
+<desc id="d">A curving branch bearing hexagonal frost crystals of decreasing size, with ice dots.</desc>
+<g fill="none" stroke="currentColor" stroke-linecap="round">
+<path d="M60,352 C54,300 66,242 58,182 C52,132 62,82 58,32" stroke-width="1.8"/>
+<!-- crystals: hexagon + three arms + center dot -->
+<g stroke-width="1.6">
+<path d="M66,300 L59,288 L45,288 L38,300 L45,312 L59,312 Z"/>
+<path d="M52,288 L52,312 M41.6,294 L62.4,306 M62.4,294 L41.6,306" stroke-width="1"/>
+</g>
+<g stroke-width="1.5">
+<path d="M78,250 L72,240 L60,240 L54,250 L60,260 L72,260 Z"/>
+<path d="M66,240 L66,260 M57.4,245 L74.6,255 M74.6,245 L57.4,255" stroke-width="1"/>
+</g>
+<g stroke-width="1.4">
+<path d="M64,200 L59,191 L49,191 L44,200 L49,209 L59,209 Z"/>
+<path d="M54,191 L54,209 M46.1,195.5 L61.9,204.5 M61.9,195.5 L46.1,204.5" stroke-width="0.9"/>
+</g>
+<g stroke-width="1.3">
+<path d="M70,150 L66,143 L58,143 L54,150 L58,157 L66,157 Z"/>
+<path d="M62,143 L62,157 M55.8,146.5 L68.2,153.5 M68.2,146.5 L55.8,153.5" stroke-width="0.9"/>
+</g>
+<g stroke-width="1.2">
+<path d="M63,100 L60,95 L54,95 L51,100 L54,105 L60,105 Z"/>
+<path d="M57,95 L57,105 M52.7,97.5 L61.3,102.5 M61.3,97.5 L52.7,102.5" stroke-width="0.8"/>
+</g>
+<g stroke-width="1.1">
+<path d="M62,56 L60,52 L56,52 L54,56 L56,60 L60,60 Z"/>
+<path d="M58,52 L58,60" stroke-width="0.8"/>
+</g>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="52" cy="300" r="1.8"/><circle cx="66" cy="250" r="1.6"/><circle cx="54" cy="200" r="1.5"/>
+<circle cx="62" cy="150" r="1.4"/><circle cx="57" cy="100" r="1.3"/><circle cx="58" cy="56" r="1.2"/>
+<!-- ice dots -->
+<circle cx="36" cy="270" r="1.6"/><circle cx="80" cy="224" r="1.6"/><circle cx="40" cy="176" r="1.5"/>
+<circle cx="76" cy="128" r="1.5"/><circle cx="44" cy="84" r="1.4"/><circle cx="70" cy="40" r="1.4"/>
+<circle cx="58" cy="32" r="2"/>
+</g>
+</svg>

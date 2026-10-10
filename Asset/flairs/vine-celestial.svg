@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Celestial star vine</title>
+<desc id="d">Twin trailing stems studded with four-point stars, crescent moon buds and stardust.</desc>
+<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+<path d="M48,352 C36,300 62,262 46,212 C34,172 58,132 44,88 C38,62 48,36 44,14"/>
+<path d="M84,352 C94,305 72,270 86,224 C96,188 76,150 88,110 C94,88 86,64 90,40" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<path d="M44,120 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
+<path d="M50,208 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
+<path d="M42,290 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M88,160 l2.2,5.6 5.6,2.2 -5.6,2.2 -2.2,5.6 -2.2,-5.6 -5.6,-2.2 5.6,-2.2z"/>
+<path d="M84,250 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M90,320 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z"/>
+<path d="M66,72 C57,76.4 57,85.6 66,90 C62.9,85.1 62.9,76.9 66,72Z"/>
+<path d="M70,180 C63,183.5 63,190.5 70,194 C67.6,190.9 67.6,183.1 70,180Z"/>
+<circle cx="60" cy="40" r="1.8"/><circle cx="34" cy="160" r="1.8"/><circle cx="70" cy="250" r="1.8"/>
+<circle cx="52" cy="330" r="1.8"/><circle cx="98" cy="200" r="1.8"/><circle cx="76" cy="100" r="1.8"/>
+<circle cx="44" cy="14" r="3.2"/><circle cx="90" cy="40" r="2.6"/>
+</g>
+</svg>

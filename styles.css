@@ -708,42 +708,51 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 }
 @media (min-width: 600px) { .sheet-grabber { display: none; } }
 .modal { overscroll-behavior: contain; transition: transform .22s ease; }
+/* v418: modal flair system — theme-matched decorative SVG.
+   Retires the full-height .modal::after vine strip (v170/v183/v415): any
+   full-height strip gets sliced by section backgrounds. The five
+   divider-proof placements below never cross a section boundary. */
+.d-hero { position: relative; }
+.mflair { pointer-events: none; }
+.mflair svg { display: block; }
+/* header vine — anchored in the hero, fading before the first divider */
+.mflair-vine {
+  position: absolute; top: 6px; right: 10px; width: 64px; height: 188px;
+  color: var(--floral-tint); opacity: .85;
+  -webkit-mask-image: linear-gradient(180deg,#000 70%,transparent);
+  mask-image: linear-gradient(180deg,#000 70%,transparent);
+}
+.mflair-vine svg { width: 100%; height: 100%; }
+/* corners — book-plate curls at the modal top corners, below the chrome */
+.mflair-corners { position: absolute; top: 56px; left: 0; right: 0; height: 54px; z-index: 1;
+  color: var(--floral-tint); opacity: .9; }
+.mflair-corners .c1, .mflair-corners .c2 { position: absolute; top: 0; width: 54px; height: 54px; }
+.mflair-corners .c1 { left: 8px; }
+.mflair-corners .c2 { right: 8px; transform: scaleX(-1); }
+.mflair-corners svg { width: 100%; height: 100%; }
+/* divider ornament — hairline + centered motif in normal flow */
+.mflair-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--floral-tint); opacity: .9; }
+.mflair-divider .hairline { flex: 1; height: 1px; background: var(--line); }
+.mflair-divider .motif { width: 110px; flex: none; }
+.mflair-divider .motif svg { width: 100%; height: 18px; }
+/* garland — seasonal swag from the modal top edge */
+.mflair-garland { position: absolute; top: 0; left: 0; right: 0; height: 58px; z-index: 1;
+  color: var(--floral-tint); opacity: .9; }
+.mflair-garland svg { width: 100%; height: 100%; }
+/* watermark — faint atmospheric backdrop, content paints above it */
+.mflair-watermark { position: absolute; top: 50%; left: 50%; width: 340px; height: 340px;
+  transform: translate(-50%,-50%); z-index: 0; color: var(--floral-tint); opacity: .06; }
+.mflair-watermark svg { width: 100%; height: 100%; }
+.modal.detail-v174 .d-hero, .modal.detail-v174 .d-panel,
+.modal.detail-v174 .modal-actions { position: relative; z-index: 1; }
 @media (min-width: 900px) {
-  .modal::after {
-    content: ''; position: absolute; top: 18px; right: 10px; bottom: 18px; width: 76px;
-    /* v415: z-index above content backgrounds (fixes vine interrupted by divider) */
-    z-index: 1;
-    background: var(--floral-tint, transparent);
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 600'%3E%3Cpath d='M55 595C35 510 75 460 55 380C35 300 75 250 55 170C47 128 60 88 52 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Cg fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M51 522C32 514 24 496 22 476'/%3E%3Cpath d='M57 442C77 434 85 416 87 396'/%3E%3Cpath d='M50 342C31 334 25 316 25 298'/%3E%3Cpath d='M56 262C75 254 81 236 81 218'/%3E%3Cpath d='M52 152C35 144 29 128 29 112'/%3E%3Cpath d='M53 78C64 70 68 58 68 46'/%3E%3C/g%3E%3Cg fill='white'%3E%3Cellipse cx='20' cy='470' rx='11' ry='6' transform='rotate(-38 20 470)'/%3E%3Cellipse cx='89' cy='390' rx='11' ry='6' transform='rotate(38 89 390)'/%3E%3Cellipse cx='23' cy='292' rx='11' ry='6' transform='rotate(-38 23 292)'/%3E%3Cellipse cx='83' cy='212' rx='11' ry='6' transform='rotate(38 83 212)'/%3E%3Cellipse cx='27' cy='106' rx='10' ry='5.5' transform='rotate(-38 27 106)'/%3E%3Cellipse cx='70' cy='40' rx='10' ry='5.5' transform='rotate(38 70 40)'/%3E%3Ccircle cx='52' cy='22' r='6'/%3E%3Ccircle cx='42' cy='30' r='4.5'/%3E%3Ccircle cx='62' cy='30' r='4.5'/%3E%3C/g%3E%3C/svg%3E"); -webkit-mask-repeat: no-repeat;
-    -webkit-mask-position: right center; -webkit-mask-size: contain;
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 600'%3E%3Cpath d='M55 595C35 510 75 460 55 380C35 300 75 250 55 170C47 128 60 88 52 28' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Cg fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M51 522C32 514 24 496 22 476'/%3E%3Cpath d='M57 442C77 434 85 416 87 396'/%3E%3Cpath d='M50 342C31 334 25 316 25 298'/%3E%3Cpath d='M56 262C75 254 81 236 81 218'/%3E%3Cpath d='M52 152C35 144 29 128 29 112'/%3E%3Cpath d='M53 78C64 70 68 58 68 46'/%3E%3C/g%3E%3Cg fill='white'%3E%3Cellipse cx='20' cy='470' rx='11' ry='6' transform='rotate(-38 20 470)'/%3E%3Cellipse cx='89' cy='390' rx='11' ry='6' transform='rotate(38 89 390)'/%3E%3Cellipse cx='23' cy='292' rx='11' ry='6' transform='rotate(-38 23 292)'/%3E%3Cellipse cx='83' cy='212' rx='11' ry='6' transform='rotate(38 83 212)'/%3E%3Cellipse cx='27' cy='106' rx='10' ry='5.5' transform='rotate(-38 27 106)'/%3E%3Cellipse cx='70' cy='40' rx='10' ry='5.5' transform='rotate(38 70 40)'/%3E%3Ccircle cx='52' cy='22' r='6'/%3E%3Ccircle cx='42' cy='30' r='4.5'/%3E%3Ccircle cx='62' cy='30' r='4.5'/%3E%3C/g%3E%3C/svg%3E"); mask-repeat: no-repeat;
-    mask-position: right center; mask-size: contain;
-    opacity: 0.5; pointer-events: none;
-  }
-  /* v183: bespoke per-theme modal artwork — replaces the tinted silhouette
-     with each theme's own art. v184 completed the set: all ten themes now
-     have bespoke vines (dark laurel, light morning garden, hearthside ember
-     wheat, candlelight flame vine). */
-  [data-theme="twilight"] .modal::after, [data-theme="verdant"] .modal::after,
-  [data-theme="velvet"] .modal::after, [data-theme="abyss"] .modal::after,
-  [data-theme="frost"] .modal::after, [data-theme="midnight"] .modal::after,
-  [data-theme="dark"] .modal::after, [data-theme="light"] .modal::after,
-  [data-theme="hearthside"] .modal::after, [data-theme="candlelight"] .modal::after {
-    background-color: transparent;
-    -webkit-mask-image: none; mask-image: none;
-    background-repeat: no-repeat; background-position: right center; background-size: contain;
-    opacity: 0.6;
-  }
-  [data-theme="twilight"] .modal::after { background-image: url("Asset/themes/vine-twilight.svg"); }
-  [data-theme="verdant"] .modal::after { background-image: url("Asset/themes/vine-verdant.svg"); }
-  [data-theme="velvet"] .modal::after { background-image: url("Asset/themes/vine-velvet.svg"); }
-  [data-theme="abyss"] .modal::after { background-image: url("Asset/themes/vine-abyss.svg"); }
-  [data-theme="frost"] .modal::after { background-image: url("Asset/themes/vine-frost.svg"); }
-  [data-theme="midnight"] .modal::after { background-image: url("Asset/themes/vine-midnight.svg"); }
-  [data-theme="dark"] .modal::after { background-image: url("Asset/themes/vine-dark.svg"); }
-  [data-theme="light"] .modal::after { background-image: url("Asset/themes/vine-light.svg"); }
-  [data-theme="hearthside"] .modal::after { background-image: url("Asset/themes/vine-hearthside.svg"); }
-  [data-theme="candlelight"] .modal::after { background-image: url("Asset/themes/vine-candlelight.svg"); }
+  /* desktop: hero text clears the vine */
+  .modal.detail-v174 .d-hero-text { padding-right: 76px; }
+}
+@media (max-width: 899px) {
+  /* mobile: compact vine tucks into the hero's right padding */
+  .mflair-vine { width: 44px; height: 130px; top: 4px; right: 8px; }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }

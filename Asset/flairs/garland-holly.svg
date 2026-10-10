@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Holly garland</title>
+<desc id="d">A swag garland with hanging holly leaves and berry clusters for Yuletide.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,48"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,60) rotate(-10)">
+<path d="M0,0 C-10,-4 -16,-12 -18,-24 C-8,-21 -2,-11 0,-2Z"/>
+<path d="M0,0 C10,-4 16,-12 18,-24 C8,-21 2,-11 0,-2Z"/>
+<path d="M-6,-12 L-12,-16 M6,-12 L12,-16" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+<circle cx="-8" cy="8" r="3"/><circle cx="0" cy="11" r="3"/><circle cx="8" cy="8" r="3"/>
+</g>
+<g transform="translate(300,70) rotate(8) scale(1.2)">
+<path d="M0,0 C-10,-4 -16,-12 -18,-24 C-8,-21 -2,-11 0,-2Z"/>
+<path d="M0,0 C10,-4 16,-12 18,-24 C8,-21 2,-11 0,-2Z"/>
+<path d="M-6,-12 L-12,-16 M6,-12 L12,-16" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+<circle cx="-8" cy="8" r="3"/><circle cx="0" cy="11" r="3"/><circle cx="8" cy="8" r="3"/>
+</g>
+<g transform="translate(450,58) rotate(-8)">
+<path d="M0,0 C-10,-4 -16,-12 -18,-24 C-8,-21 -2,-11 0,-2Z"/>
+<path d="M0,0 C10,-4 16,-12 18,-24 C8,-21 2,-11 0,-2Z"/>
+<path d="M-6,-12 L-12,-16 M6,-12 L12,-16" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+<circle cx="-8" cy="8" r="3"/><circle cx="0" cy="11" r="3"/><circle cx="8" cy="8" r="3"/>
+</g>
+<g transform="translate(225,56)"><circle cx="-5" cy="0" r="3"/><circle cx="3" cy="2" r="3"/><circle cx="0" cy="-5" r="3"/></g>
+<g transform="translate(375,56)"><circle cx="-5" cy="0" r="3"/><circle cx="3" cy="2" r="3"/><circle cx="0" cy="-5" r="3"/></g>
+</g>
+</svg>

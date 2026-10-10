@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Ember wheat vine</title>
+<desc id="d">Upright wheat stalks with grain kernels and a curling flame-tipped tendril.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M42,352 C38,300 46,240 42,180 C40,140 46,100 44,60"/>
+<path d="M72,352 C76,310 68,270 73,230 C77,195 70,160 74,125" stroke-width="1.8"/>
+<path d="M58,352 C50,320 66,300 58,270 C52,248 64,232 60,210" stroke-width="1.4"/>
+<path d="M60,210 C70,202 78,190 79,176 C80,166 76,158 70,154 C74,160 74,168 70,174" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<!-- wheat kernels: paired grains along the two main rachises -->
+<g>
+<ellipse cx="34" cy="180" rx="7" ry="3" transform="rotate(-55 34 180)"/><ellipse cx="50" cy="180" rx="7" ry="3" transform="rotate(55 50 180)"/>
+<ellipse cx="34" cy="160" rx="6.6" ry="2.8" transform="rotate(-55 34 160)"/><ellipse cx="50" cy="160" rx="6.6" ry="2.8" transform="rotate(55 50 160)"/>
+<ellipse cx="34" cy="140" rx="6.2" ry="2.6" transform="rotate(-55 34 140)"/><ellipse cx="50" cy="140" rx="6.2" ry="2.6" transform="rotate(55 50 140)"/>
+<ellipse cx="35" cy="120" rx="5.8" ry="2.4" transform="rotate(-55 35 120)"/><ellipse cx="49" cy="120" rx="5.8" ry="2.4" transform="rotate(55 49 120)"/>
+<ellipse cx="36" cy="100" rx="5.4" ry="2.2" transform="rotate(-55 36 100)"/><ellipse cx="48" cy="100" rx="5.4" ry="2.2" transform="rotate(55 48 100)"/>
+<ellipse cx="38" cy="80" rx="5" ry="2" transform="rotate(-55 38 80)"/><ellipse cx="46" cy="80" rx="5" ry="2" transform="rotate(55 46 80)"/>
+<ellipse cx="42" cy="58" rx="4.6" ry="2.4"/>
+</g>
+<g>
+<ellipse cx="65" cy="230" rx="6.4" ry="2.8" transform="rotate(-55 65 230)"/><ellipse cx="81" cy="230" rx="6.4" ry="2.8" transform="rotate(55 81 230)"/>
+<ellipse cx="64" cy="210" rx="6" ry="2.6" transform="rotate(-55 64 210)"/><ellipse cx="82" cy="210" rx="6" ry="2.6" transform="rotate(55 82 210)"/>
+<ellipse cx="63" cy="190" rx="5.6" ry="2.4" transform="rotate(-55 63 190)"/><ellipse cx="83" cy="190" rx="5.6" ry="2.4" transform="rotate(55 83 190)"/>
+<ellipse cx="64" cy="170" rx="5.2" ry="2.2" transform="rotate(-55 64 170)"/><ellipse cx="82" cy="170" rx="5.2" ry="2.2" transform="rotate(55 82 170)"/>
+<ellipse cx="66" cy="150" rx="4.8" ry="2" transform="rotate(-55 66 150)"/><ellipse cx="80" cy="150" rx="4.8" ry="2" transform="rotate(55 80 150)"/>
+<ellipse cx="72" cy="132" rx="4.2" ry="2" transform="rotate(-25 72 132)"/><ellipse cx="72" cy="132" rx="4.2" ry="2" transform="rotate(25 72 132)"/>
+</g>
+<!-- curling tendril tip -->
+<circle cx="70" cy="154" r="2.4"/>
+<!-- scattered grain dots -->
+<circle cx="58" cy="270" r="2.2"/><circle cx="52" cy="300" r="2.2"/><circle cx="88" cy="270" r="2"/>
+</g>
+</svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Rose cane vine</title>
+<desc id="d">A thorny rose cane with leaves and two rosebuds.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M55,352 C48,305 68,270 56,222 C47,184 66,148 56,108 C50,84 60,58 55,40"/>
+<path d="M56,222 C42,216 34,204 32,190" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<path d="M52,280 l-7,-3 6,-4z"/><path d="M60,250 l7,-3 -6,-4z"/>
+<path d="M54,190 l-7,-3 6,-4z"/><path d="M58,140 l7,-3 -6,-4z"/>
+<path d="M54,96 l-6,-3 5,-4z"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="rotate(-40 48 300)"><ellipse cx="38" cy="297" rx="11" ry="4.4"/></g>
+<g transform="rotate(40 62 262)"><ellipse cx="72" cy="259" rx="11" ry="4.4"/></g>
+<g transform="rotate(-40 50 200)"><ellipse cx="41" cy="197" rx="10" ry="4"/></g>
+<g transform="rotate(40 60 160)"><ellipse cx="69" cy="157" rx="10" ry="4"/></g>
+<g transform="rotate(-38 52 120)"><ellipse cx="44" cy="117" rx="8.5" ry="3.4"/></g>
+<g transform="rotate(-52 26 186)"><ellipse cx="19" cy="182" rx="7.5" ry="3"/></g>
+</g>
+<!-- rosebuds: teardrop bloom + inner petal + sepals -->
+<g transform="translate(55,30)">
+<path d="M0,-13 C7,-9 9,-1 5,6 C2,11 -2,11 -5,6 C-9,-1 -7,-9 0,-13Z" fill="none" stroke="currentColor" stroke-width="2"/>
+<path d="M0,-7 C3,-4 4,1 2,5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M-4,11 L-10,17 M0,12 L0,19 M4,11 L10,17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+</g>
+<g transform="translate(30,188) scale(.7)">
+<path d="M0,-13 C7,-9 9,-1 5,6 C2,11 -2,11 -5,6 C-9,-1 -7,-9 0,-13Z" fill="none" stroke="currentColor" stroke-width="2.6"/>
+<path d="M0,-7 C3,-4 4,1 2,5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+<path d="M-4,11 L-10,17 M0,12 L0,19 M4,11 L10,17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+</g>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
+<title id="t">Moon phases watermark</title>
+<desc id="d">An arc of moon phases, from crescent to full, for atmospheric backgrounds.</desc>
+<g fill="currentColor" stroke="none">
+<circle cx="60" cy="320" r="26"/>
+<path d="M132,268 C109,285.9 109,302.1 132,320 C123,307.7 123,280.3 132,268Z"/>
+<path d="M208,232 C185,249.9 185,266.1 208,284 C199,271.7 199,244.3 208,232Z"/>
+<circle cx="280" cy="200" r="26"/>
+<path d="M348,148 C371,165.9 371,182.1 348,200 C357,187.7 357,160.3 348,148Z"/>
+<path d="M96,120 C79,133.9 79,146.1 96,160 C89.5,150.7 89.5,129.3 96,120Z"/>
+<circle cx="170" cy="90" r="20"/>
+<g opacity="0.7">
+<path d="M250,60 l2,5.2 5.2,2 -5.2,2 -2,5.2 -2,-5.2 -5.2,-2 5.2,-2z"/>
+<path d="M310,110 l1.6,4 4,1.6 -4,1.6 -1.6,4 -1.6,-4 -4,-1.6 4,-1.6z"/>
+<circle cx="120" cy="220" r="2.4"/><circle cx="230" cy="320" r="2.4"/><circle cx="340" cy="260" r="2"/>
+</g>
+</g>
+</svg>
