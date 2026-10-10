@@ -38,9 +38,12 @@ for (const t of THEMES) {
 const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
 ok('styles.css: retired .modal::after vine strip (no per-theme vine rules)',
   !css.includes('.modal::after') || !/\.modal::after[^}]*vine-/.test(css));
-for (const sel of ['.mflair-vine', '.mflair-corners', '.mflair-divider', '.mflair-garland', '.mflair-watermark']) {
+// v426: restraint — corners retired from injection, divider motifs retired,
+// top-edge garland retired in favor of the in-flow banner.
+for (const sel of ['.mflair-vine', '.mflair-banner', '.mflair-divider-plain', '.mflair-watermark']) {
   ok(`styles.css: flair placement ${sel}`, css.includes(sel));
 }
+ok('styles.css: top-edge garland rules retired', !/\.mflair-garland\s*\{/.test(css));
 ok('styles.css: flairs tint via --floral-tint', css.includes('color: var(--floral-tint)'));
 
 // 3. sw.js precaches the art and matches the app version

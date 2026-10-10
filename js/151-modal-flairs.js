@@ -47,7 +47,7 @@
 window.ModalFlairs = (function () {
 
 var CATALOG = [
-    { id: 'vine-botanical', name: 'Botanical laurel vine', motif: 'laurel', placement: 'vine',
+    { id: 'vine-botanical', name: 'Botanical laurel vine', motif: 'laurel', placement: 'vine', signature: true,
       themes: ['dark', 'light', 'verdant', 'shamrock', 'pastel'], file: 'Asset/flairs/vine-botanical.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Botanical laurel vine</title>
@@ -103,7 +103,7 @@ var CATALOG = [
 <circle cx="44" cy="14" r="3.2"/><circle cx="90" cy="40" r="2.6"/>
 </g>
 </svg>` },
-    { id: 'vine-ember', name: 'Ember wheat vine', motif: 'ember', placement: 'vine',
+    { id: 'vine-ember', name: 'Ember wheat vine', motif: 'ember', placement: 'vine', signature: true,
       themes: ['hearthside', 'harvest', 'candlelight', 'haunt'], file: 'Asset/flairs/vine-ember.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Ember wheat vine</title>
@@ -139,7 +139,7 @@ var CATALOG = [
 <circle cx="58" cy="270" r="2.2"/><circle cx="52" cy="300" r="2.2"/><circle cx="88" cy="270" r="2"/>
 </g>
 </svg>` },
-    { id: 'vine-rose', name: 'Rose cane vine', motif: 'rose', placement: 'vine',
+    { id: 'vine-rose', name: 'Rose cane vine', motif: 'rose', placement: 'vine', signature: true,
       themes: ['velvet', 'amour'], file: 'Asset/flairs/vine-rose.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Rose cane vine</title>
@@ -173,7 +173,7 @@ var CATALOG = [
 <path d="M-4,11 L-10,17 M0,12 L0,19 M4,11 L10,17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
 </g>
 </svg>` },
-    { id: 'vine-frostcrystal', name: 'Frost crystal spray', motif: 'frost', placement: 'vine',
+    { id: 'vine-frostcrystal', name: 'Frost crystal spray', motif: 'frost', placement: 'vine', signature: true,
       themes: ['frost'], file: 'Asset/flairs/vine-frostcrystal.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Frost crystal spray</title>
@@ -215,7 +215,7 @@ var CATALOG = [
 <circle cx="58" cy="32" r="2"/>
 </g>
 </svg>` },
-    { id: 'vine-kelp', name: 'Abyssal kelp strands', motif: 'kelp', placement: 'vine',
+    { id: 'vine-kelp', name: 'Abyssal kelp strands', motif: 'kelp', placement: 'vine', signature: true,
       themes: ['abyss'], file: 'Asset/flairs/vine-kelp.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Abyssal kelp strands</title>
@@ -318,7 +318,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="48" cy="12" r="1.3" opacity="0.6"/><circle cx="112" cy="12" r="1.3" opacity="0.6"/>
 </g>
 </svg>` },
-    { id: 'garland-haunt', name: 'Haunt garland', motif: 'haunt', placement: 'garland',
+    { id: 'garland-haunt', name: 'Haunt garland', motif: 'haunt', placement: 'garland', signature: true,
       themes: ['haunt'], file: 'Asset/flairs/garland-haunt.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Haunt garland</title>
@@ -344,7 +344,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/><circle cx="260" cy="42" r="1.5"/><circle cx="340" cy="42" r="1.5"/>
 </g>
 </svg>` },
-    { id: 'garland-holly', name: 'Holly garland', motif: 'holly', placement: 'garland',
+    { id: 'garland-holly', name: 'Holly garland', motif: 'holly', placement: 'garland', signature: true,
       themes: ['yuletide'], file: 'Asset/flairs/garland-holly.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Holly garland</title>
@@ -377,7 +377,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <g transform="translate(375,56)"><circle cx="-5" cy="0" r="3"/><circle cx="3" cy="2" r="3"/><circle cx="0" cy="-5" r="3"/></g>
 </g>
 </svg>` },
-    { id: 'garland-gala', name: 'Gala star garland', motif: 'gala', placement: 'garland',
+    { id: 'garland-gala', name: 'Gala star garland', motif: 'gala', placement: 'garland', signature: true,
       themes: ['fete'], file: 'Asset/flairs/garland-gala.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Gala star garland</title>
@@ -396,7 +396,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="80" cy="26" r="2"/><circle cx="520" cy="24" r="2"/><circle cx="190" cy="40" r="1.6"/><circle cx="410" cy="40" r="1.6"/><circle cx="260" cy="46" r="1.6"/><circle cx="340" cy="46" r="1.6"/>
 </g>
 </svg>` },
-    { id: 'garland-rose', name: 'Rose garland', motif: 'rose', placement: 'garland',
+    { id: 'garland-rose', name: 'Rose garland', motif: 'rose', placement: 'garland', signature: true,
       themes: ['amour'], file: 'Asset/flairs/garland-rose.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Rose garland</title>
@@ -427,7 +427,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <g transform="translate(375,52)"><ellipse cx="0" cy="0" rx="6" ry="2.6" transform="rotate(25 0 0)"/></g>
 </g>
 </svg>` },
-    { id: 'garland-clover', name: 'Clover garland', motif: 'clover', placement: 'garland',
+    { id: 'garland-clover', name: 'Clover garland', motif: 'clover', placement: 'garland', signature: true,
       themes: ['shamrock'], file: 'Asset/flairs/garland-clover.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Clover garland</title>
@@ -455,7 +455,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/>
 </g>
 </svg>` },
-    { id: 'garland-blossom', name: 'Blossom garland', motif: 'blossom', placement: 'garland',
+    { id: 'garland-blossom', name: 'Blossom garland', motif: 'blossom', placement: 'garland', signature: true,
       themes: ['pastel'], file: 'Asset/flairs/garland-blossom.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Blossom garland</title>
@@ -482,7 +482,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <g transform="translate(375,52)"><circle cx="0" cy="0" r="3.4"/></g>
 </g>
 </svg>` },
-    { id: 'garland-wheat', name: 'Wheat garland', motif: 'wheat', placement: 'garland',
+    { id: 'garland-wheat', name: 'Wheat garland', motif: 'wheat', placement: 'garland', signature: true,
       themes: ['harvest'], file: 'Asset/flairs/garland-wheat.svg', seasonal: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Wheat garland</title>
@@ -514,7 +514,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <g transform="translate(375,48)"><ellipse cx="0" cy="0" rx="7" ry="3" transform="rotate(25 0 0)"/></g>
 </g>
 </svg>` },
-    { id: 'watermark-moon', name: 'Moon phases watermark', motif: 'moon', placement: 'watermark',
+    { id: 'watermark-moon', name: 'Moon phases watermark', motif: 'moon', placement: 'watermark', signature: true,
       themes: ['midnight', 'twilight'], file: 'Asset/flairs/watermark-moon.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
 <title id="t">Moon phases watermark</title>
@@ -557,7 +557,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 </g>
 </svg>` },
     /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
-    { id: 'stormrider-vine', name: 'Stormrider dragon vine', motif: 'dragon', placement: 'vine',
+    { id: 'stormrider-vine', name: 'Stormrider dragon vine', motif: 'dragon', placement: 'vine', signature: true,
       themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Stormrider vine</title>
@@ -638,7 +638,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/>
 </g>
 </svg>` },
-    { id: 'briarthrone-vine', name: 'Briarthrone thorn vine', motif: 'thorn', placement: 'vine',
+    { id: 'briarthrone-vine', name: 'Briarthrone thorn vine', motif: 'thorn', placement: 'vine', signature: true,
       themes: ["briarthrone"], file: 'Asset/packs/briarthrone-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Briarthrone vine</title>
@@ -712,7 +712,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="180" cy="250" r="2.4"/><circle cx="120" cy="300" r="2"/><circle cx="340" cy="120" r="2"/><circle cx="90" cy="220" r="2"/>
 </g>
 </svg>` },
-    { id: 'voidsignal-vine', name: 'Voidsignal circuit vine', motif: 'circuit', placement: 'vine',
+    { id: 'voidsignal-vine', name: 'Voidsignal circuit vine', motif: 'circuit', placement: 'vine', signature: true,
       themes: ["voidsignal"], file: 'Asset/packs/voidsignal-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Voidsignal circuit vine</title>
@@ -767,7 +767,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="52" cy="22" r="5.5"/>
 </g>
 </svg>` },
-    { id: 'wisp-vine', name: 'Wisp firefly vine', motif: 'firefly', placement: 'vine',
+    { id: 'wisp-vine', name: 'Wisp firefly vine', motif: 'firefly', placement: 'vine', signature: true,
       themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Wisp firefly vine</title>
@@ -859,6 +859,23 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
     };
   }
 
+  // v426: one signature flair per theme — the modal's single decorative
+  // statement. Exact theme match. Seasonal garland wins ties (the theme's
+  // seasonal identity is its signature); otherwise free entries win over
+  // premium.
+  function signatureFor(theme) {
+    var exact = [];
+    for (var i = 0; i < CATALOG.length; i++) {
+      var e = CATALOG[i];
+      if (!e.signature) continue;
+      if (e.themes.indexOf(theme) >= 0) exact.push(e);
+    }
+    if (!exact.length) return null;
+    for (var s = 0; s < exact.length; s++) if (exact[s].seasonal) return exact[s];
+    for (var j = 0; j < exact.length; j++) if (!exact[j].premium) return exact[j];
+    return exact[0];
+  }
+
   // Namespace the SVG's internal title/desc ids per injection so repeated
   // flairs never produce duplicate ids.
   var _uid = 0;
@@ -897,47 +914,56 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
     return out;
   }
 
+  // v426: signature system — one flair per modal. Renders:
+  //  1. the theme's signature at full presence (vine in hero, garland as an
+  //     in-flow banner above the Details panel, watermark as backdrop),
+  //  2. the watermark faint as before (skipped when the watermark IS the
+  //     signature — midnight/twilight get one moon, not two),
+  //  3. plain hairline separators between section blocks — no motifs.
+  // Corners are retired from injection; the absolute top-edge garland is
+  // retired (seasonal garlands now live in the document flow).
   function apply(root) {
     root = root || document;
     var modal = root.querySelector ? root.querySelector('#modal-root .modal') : null;
     if (!modal) return false;
     clear(modal);
     var theme = (typeof getTheme === 'function') ? getTheme() : 'dark';
-    var set = flairsForTheme(theme);
-
-    // header vine — anchored in the hero
-    var hero = modal.querySelector('.d-hero');
-    if (hero && set.vine) {
-      hero.appendChild(el(
-        '<div class="mflair mflair-vine" aria-hidden="true">' + namespaced(set.vine.svg) + '</div>'));
-    }
-    // corners — modal top corners, below the back/⋮ chrome
-    if (set.corners) {
-      modal.appendChild(el('<div class="mflair mflair-corners" aria-hidden="true">' +
-        '<span class="c1">' + namespaced(set.corners.svg) + '</span>' +
-        '<span class="c2">' + namespaced(set.corners.svg) + '</span></div>'));
-    }
-    // garland — seasonal themes only, top edge
-    if (set.garland) {
-      modal.appendChild(el(
-        '<div class="mflair mflair-garland" aria-hidden="true">' + namespaced(set.garland.svg) + '</div>'));
-    }
-    // watermark — faint atmospheric backdrop (premium), first child so it
-    // paints under the content
-    if (set.watermark) {
-      modal.insertBefore(el(
-        '<div class="mflair mflair-watermark" aria-hidden="true">' + namespaced(set.watermark.svg) + '</div>'),
-        modal.firstChild);
-    }
-    // divider ornaments — between Details-panel section blocks
+    var sig = signatureFor(theme);
+    var wm = flairFor('watermark', theme);
     var panel = modal.querySelector('#dtab-details');
-    if (panel && set.divider) {
+
+    if (sig) {
+      if (sig.placement === 'garland') {
+        // in-flow banner: full-width, normal document flow — physically
+        // cannot overlap the cover or nav chrome
+        var banner = el('<div class="mflair mflair-banner" aria-hidden="true">' +
+          namespaced(sig.svg) + '</div>');
+        if (panel && panel.parentNode) panel.parentNode.insertBefore(banner, panel);
+        else {
+          var bh = modal.querySelector('.d-hero');
+          if (bh && bh.parentNode) bh.parentNode.insertBefore(banner, bh.nextSibling);
+          else modal.appendChild(banner);
+        }
+      } else if (sig.placement === 'vine') {
+        var hv = modal.querySelector('.d-hero');
+        if (hv) hv.appendChild(el('<div class="mflair mflair-vine" aria-hidden="true">' +
+          namespaced(sig.svg) + '</div>'));
+      } else if (sig.placement === 'watermark') {
+        modal.insertBefore(el('<div class="mflair mflair-watermark" aria-hidden="true">' +
+          namespaced(sig.svg) + '</div>'), modal.firstChild);
+      }
+    }
+    // watermark stays faint as today, unless it is the signature
+    if (wm && (!sig || wm.id !== sig.id)) {
+      modal.insertBefore(el('<div class="mflair mflair-watermark" aria-hidden="true">' +
+        namespaced(wm.svg) + '</div>'), modal.firstChild);
+    }
+    // divider ornaments retired — plain hairlines between section blocks
+    if (panel) {
       var blocks = sectionBlocks(panel);
       for (var i = blocks.length - 1; i > 0; i--) {
-        panel.insertBefore(el('<div class="mflair mflair-divider" aria-hidden="true">' +
-          '<span class="hairline"></span><span class="motif">' +
-          namespaced(set.divider.svg) + '</span><span class="hairline"></span></div>'),
-          blocks[i]);
+        panel.insertBefore(el('<div class="mflair mflair-divider-plain" aria-hidden="true">' +
+          '<span class="hairline"></span></div>'), blocks[i]);
       }
     }
     return true;
@@ -955,6 +981,7 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
     byId: byId,
     flairFor: flairFor,
     flairsForTheme: flairsForTheme,
+    signatureFor: signatureFor,
     apply: apply,
     refresh: refresh,
   };
