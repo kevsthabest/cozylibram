@@ -87,7 +87,7 @@ ok('index.html loads 215-shelf3d.js', html.includes('js/215-shelf3d.js'));
 ok('index.html loads 216-shelf3d-theme.js', html.includes('js/216-shelf3d-theme.js'));
 ok('index.html loads 217-shelf3d-view.js', html.includes('js/217-shelf3d-view.js'));
 const css = fs.readFileSync(ROOT + '/styles.css', 'utf8');
-ok('styles.css has namespaced 3D styles', css.includes('#shelf3d #scene'));
+ok('styles.css has namespaced 3D styles', css.includes('#shelf3d #s3dScene'));
 
 /* ---- 6. theme module standalone ---- */
 const themeSrc = fs.readFileSync(ROOT + '/js/216-shelf3d-theme.js', 'utf8');
