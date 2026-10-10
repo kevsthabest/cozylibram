@@ -128,34 +128,6 @@ const THEME_PREVIEW = {
   'wisp-night':{ bg: '#0e0a1a', card: '#1a1230', ink: '#f5eefb', muted: '#a898c8', accent: '#c08a24' },
 };
 function themePreview(key) { return THEME_PREVIEW[key] || THEME_PREVIEW.dark; }
-// v432: theme schema validation — fail loud at startup, not silently in
-// production. Every THEMES entry must have key/name/meta; every theme key
-// must have a THEME_PREVIEW entry with bg/card/ink/muted/accent. A typo in
-// a new theme (Solstice was hand-added) previously produced broken CSS vars
-// with no error. Throws a descriptive Error so tests and dev catch it.
-function validateThemes() {
-  var errors = [];
-  var seen = {};
-  THEMES.forEach(function (t, i) {
-    ['key', 'name', 'meta'].forEach(function (f) {
-      if (!t[f]) errors.push('THEMES[' + i + '] missing required field "' + f + '"');
-    });
-    if (t.key) {
-      if (seen[t.key]) errors.push('duplicate theme key "' + t.key + '"');
-      seen[t.key] = true;
-      var pv = THEME_PREVIEW[t.key];
-      if (!pv) {
-        errors.push('theme "' + t.key + '" has no THEME_PREVIEW entry');
-      } else {
-        ['bg', 'card', 'ink', 'muted', 'accent'].forEach(function (f) {
-          if (!pv[f]) errors.push('THEME_PREVIEW.' + t.key + ' missing "' + f + '"');
-        });
-      }
-    }
-  });
-  if (errors.length) throw new Error('Theme schema validation failed:\n' + errors.join('\n'));
-}
-validateThemes();
 // v257: season -> full look (theme + accent). The nudge offers it; the
 // user's existing theme is never switched without a tap.
 const SEASON_THEMES = {

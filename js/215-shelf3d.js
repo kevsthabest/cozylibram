@@ -1612,9 +1612,40 @@
     }
 
     /* ============================== inventory ============================== */
-    // v432: pressHoldToDrag extracted to js/219-shelf3d-drag.js (pure, tested).
-    // Local alias keeps call sites unchanged.
-    var pressHoldToDrag = window.Shelf3DDrag.pressHoldToDrag;
+    /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
+       Quick swipe scrolls the list; holding ~280ms grabs the item for dragging.
+       If the finger moves beyond slop before the timer, it's a scroll. */
+    var HOLD_MS = 280, HOLD_SLOP = 10;
+    function pressHoldToDrag(el, startFn) {
+      var timer = null, sx = 0, sy = 0;
+      el.addEventListener('pointerdown', function (e) {
+        // Only for touch — mouse can drag immediately.
+        if (e.pointerType !== 'touch') { startFn(e); return; }
+        sx = e.clientX; sy = e.clientY;
+        timer = setTimeout(function () {
+          timer = null;
+          startFn(e);
+        }, HOLD_MS);
+        var onMove = function (me) {
+          if (Math.hypot(me.clientX - sx, me.clientY - sy) > HOLD_SLOP) {
+            // Moved — it's a scroll, cancel the hold.
+            if (timer) { clearTimeout(timer); timer = null; }
+            el.removeEventListener('pointermove', onMove);
+            el.removeEventListener('pointerup', onUp);
+            el.removeEventListener('pointercancel', onUp);
+          }
+        };
+        var onUp = function () {
+          if (timer) { clearTimeout(timer); timer = null; }
+          el.removeEventListener('pointermove', onMove);
+          el.removeEventListener('pointerup', onUp);
+          el.removeEventListener('pointercancel', onUp);
+        };
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerup', onUp);
+        el.addEventListener('pointercancel', onUp);
+      });
+    }
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
        premium flag) comes from the catalog. Lantern + globe are unlocked
@@ -1635,21 +1666,19 @@
       for (var ti = 0; ti < tabs.length; ti++) {
         tabs[ti].classList.toggle('on', tabs[ti].dataset.tab === invTab);
       }
-      // v432: tab filter extracted to js/220-shelf3d-inventory.js (pure, tested).
-      window.Shelf3DInventory.filterByTab(INVENTORY, invTab)
+      INVENTORY.filter(function (item) { return (invTab === 'room') === !!item.room; })
         .forEach(function (item) {
           var d = document.createElement('div');
           d.className = 'inv-item' + (pickedType === item.type ? ' picked' : '');
           d.dataset.deco = item.type;
-          d.innerHTML = window.Shelf3DInventory.invItemInnerHTML(item);
+          d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
+            '<span class="cnt">\u00d7' + item.owned + '</span>';
           if (item.owned > 0) {
             if (item.room) {
               // room decos: press-and-hold to drag (v420), tap = auto-place
               pressHoldToDrag(d, function (e) { startRoomDrag(e, item, d); });
               d.addEventListener('click', function () {
                 // tap (not drag): auto-place at first free default spot
-                // v427: swiped also suppresses (quick swipe shouldn't tap-to-place).
-                if (d.dataset.swiped) { delete d.dataset.swiped; return; }
                 if (d.dataset.dragged) { delete d.dataset.dragged; return; }
                 var a = null;
                 ROOM_ANCHORS.forEach(function (x) {
@@ -1662,8 +1691,6 @@
               pressHoldToDrag(d, function (e) { startInvDrag(e, item, d); });
               d.addEventListener('click', function () {
                 // tap (not drag): pick up for tap-to-place
-                // v427: swiped also suppresses (quick swipe shouldn't tap-to-place).
-                if (d.dataset.swiped) { delete d.dataset.swiped; return; }
                 if (d.dataset.dragged) { delete d.dataset.dragged; return; }
                 pickedType = pickedType === item.type ? null : item.type;
                 buildInventory();
@@ -1845,12 +1872,11 @@
     var trayDrag = null;
     var roomDrag = null; // room-deco drag from inventory
     var moveDrag = null; // drag placed decorations
-    var moveRoomDrag = null; // v427: drag placed room decorations (floor/wall)
     var raycastQueued = false, lastRayEvent = null;
     // throttle raycasts to once per animation frame for smooth 60fps drag
     function queueRaycast(e) { lastRayEvent = e; raycastQueued = true; }
     on(window, 'pointermove', function (e) {
-      if (trayDrag || moveDrag || roomDrag || moveRoomDrag) { queueRaycast(e); return; }
+      if (trayDrag || moveDrag || roomDrag) { queueRaycast(e); return; }
       // hover parallax (desktop)
       var r = canvas.getBoundingClientRect();
       pointerPX = ((e.clientX - r.left) / r.width) * 2 - 1;
@@ -1916,30 +1942,6 @@
           roomDrag.targetZ = THREE.MathUtils.clamp(pt.z, -4, 4);
           roomDrag.hasTarget = true;
         }
-      } else if (moveRoomDrag) {
-        /* v427: moving a placed room decoration — same camera-plane tracking
-           as roomDrag, but updates the existing group (no new placement). */
-        if (Math.hypot(e.clientX - moveRoomDrag.sx, e.clientY - moveRoomDrag.sy) > 8) {
-          if (!moveRoomDrag.moved) {
-            moveRoomDrag.moved = true;
-            moveRoomDrag.group.scale.setScalar(1.18);
-            deselect();
-          }
-        }
-        if (moveRoomDrag.moved) {
-          setPtr(e); ray.setFromCamera(ptr, camera);
-          var camDir2 = new THREE.Vector3();
-          camera.getWorldDirection(camDir2);
-          dragPlane.setFromNormalAndCoplanarPoint(camDir2, new THREE.Vector3(0, 3, 0));
-          var pt2 = new THREE.Vector3();
-          if (ray.ray.intersectPlane(dragPlane, pt2)) {
-            var lift2b = (e.pointerType === 'touch') ? 0.45 : 0;
-            moveRoomDrag.targetX = THREE.MathUtils.clamp(pt2.x, -9, 9);
-            moveRoomDrag.targetY = THREE.MathUtils.clamp(pt2.y + lift2b, 0.2, 9);
-            moveRoomDrag.targetZ = THREE.MathUtils.clamp(pt2.z, -4, 4);
-            moveRoomDrag.hasTarget = true;
-          }
-        }
       } else if (moveDrag) {
         if (Math.hypot(e.clientX - moveDrag.sx, e.clientY - moveDrag.sy) > 8) {
           if (!moveDrag.moved) {
@@ -1961,9 +1963,8 @@
             rec.pi = hit2.pi;
             rec.rec[0] = x2 - fw2 / 2; rec.rec[1] = x2 + fw2 / 2;
             // v422: update restY when shelf changes (fixes cross-shelf drag snapping back)
-            // v432: extracted to js/219-shelf3d-drag.js (pure, tested).
             var isEdge2 = !!moveDrag.group.userData.edge;
-            moveDrag.restY = window.Shelf3DDrag.computeRestY(LEVELS, hit2.pi, isEdge2);
+            moveDrag.restY = LEVELS[hit2.pi] + (isEdge2 ? 0.06 : 0);
             // 1:1 follow — ghost tracks raw pointer x; snap guide shows landing
             var rawX2 = THREE.MathUtils.clamp(hit2.point.x, -SHELF_W / 2 + 0.4, SHELF_W / 2 - 0.4);
             var lift3 = (e.pointerType === 'touch') ? 0.45 : 0;
@@ -2002,22 +2003,6 @@
           select(g);
         } else {
           discardGhost(r.group); // dropped outside: cancel
-        }
-        return;
-      }
-      if (moveRoomDrag) {
-        /* v427: drop a moved room decoration — update the existing group's
-           position via roomDropPos (no new placement, no inventory change). */
-        var mr = moveRoomDrag; moveRoomDrag = null;
-        if (mr.group) {
-          mr.group.scale.setScalar(1);
-          if (mr.moved && mr.hasTarget) {
-            var newPos = roomDropPos(mr.group.userData.decoType,
-              mr.targetX, mr.targetY, mr.targetZ);
-            mr.group.position.copy(newPos);
-            sfx('place');
-          }
-          select(mr.group); // re-select after move (or tap)
         }
         return;
       }
@@ -2062,13 +2047,7 @@
     /* drag placed decorations + tap select (canvas); tap a book -> onBookTap */
     canvas.addEventListener('pointerdown', function (e) {
       var g = decoAt(e);
-      // v427: room decos can be dragged to relocate (was tap-select only).
-      // Uses moveRoomDrag with camera-plane tracking like roomDrag.
-      if (g && g.userData.room) {
-        moveRoomDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
-          targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
-        return;
-      }
+      if (g && g.userData.room) { select(g); return; } // room decos tap-select (no drag)
       if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
         targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
         // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
@@ -2381,9 +2360,6 @@
       if (moveDrag && moveDrag.hasTarget && moveDrag.moved) {
         moveDrag.group.position.set(moveDrag.targetX, moveDrag.targetY, moveDrag.targetZ);
       }
-      if (moveRoomDrag && moveRoomDrag.hasTarget && moveRoomDrag.moved) {
-        moveRoomDrag.group.position.set(moveRoomDrag.targetX, moveRoomDrag.targetY, moveRoomDrag.targetZ);
-      }
       // blob shadow under shelf drags — visible while lifted, tightens on landing
       var shelfDrag = (trayDrag && trayDrag.hasTarget && trayDrag.pi >= 0) ? trayDrag
         : (moveDrag && moveDrag.hasTarget && moveDrag.moved) ? moveDrag : null;
@@ -2461,7 +2437,7 @@
       clearTimeout(toastTimer); toastTimer = null;
       clearTimeout(onboardTimer); onboardTimer = null;
       tweens.length = 0;
-      trayDrag = null; roomDrag = null; moveDrag = null; moveRoomDrag = null;
+      trayDrag = null; roomDrag = null; moveDrag = null;
       if (audioCtx) { try { audioCtx.close(); } catch (e) {} audioCtx = null; }
       try { disposeDeep(scene); } catch (e) {}
       try { renderer.dispose(); } catch (e) {}
