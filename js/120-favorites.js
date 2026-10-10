@@ -415,15 +415,17 @@ function renderLibrary() {
     chip('tbr', icon('tbr') + ' TBR · ' + counts.tbr, filter === 'tbr') +
     chip('reading', icon('reading') + ' Reading · ' + counts.reading, filter === 'reading') +
     chip('read', icon('read') + ' Read · ' + counts.read, filter === 'read') +
-    chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') +
+    // v403: hide zero-count filters (they only show empty views)
+    (counts.dnf > 0 ? chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') : '') +
     '</div>';
   const ownCounts = { owned: 0, tobuy: 0, borrowed: 0 };
   library.forEach(b => { const k = b.owned === 'tobuy' ? 'tobuy' : b.owned === 'borrowed' ? 'borrowed' : 'owned'; ownCounts[k]++; });
   html += '<div class="chips">' +
     '<button class="chip' + (ownFilter === 'all' ? ' active' : '') + '" data-of="all">Ownership: All</button>' +
     '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">' + icon('owned') + ' Owned · ' + ownCounts.owned + '</button>' +
-    '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' To buy · ' + ownCounts.tobuy + '</button>' +
-    '<button class="chip' + (ownFilter === 'borrowed' ? ' active' : '') + '" data-of="borrowed">' + icon('borrowed') + ' Borrowed · ' + ownCounts.borrowed + '</button>' +
+    // v403: hide zero-count filters
+    (ownCounts.tobuy > 0 ? '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' To buy · ' + ownCounts.tobuy + '</button>' : '') +
+    (ownCounts.borrowed > 0 ? '<button class="chip' + (ownFilter === 'borrowed' ? ' active' : '') + '" data-of="borrowed">' + icon('borrowed') + ' Borrowed · ' + ownCounts.borrowed + '</button>' : '') +
     '</div>';
 
   if (!books.length) {
@@ -485,8 +487,10 @@ function renderLibrary() {
     }));
   const raa = document.getElementById('ra-all');
   if (raa) raa.addEventListener('click', () => {
-    const qel = document.getElementById('q');
-    if (qel && qel.scrollIntoView) qel.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
+    // v403: scroll to the full library list (not the search box)
+    const grid = document.querySelector('.book-grid:not(.fav-covers)');
+    const target = grid || document.getElementById('q');
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
   });
   const lq = document.getElementById('lib-quotes');
   if (lq) lq.addEventListener('click', () => go('quotes'));
