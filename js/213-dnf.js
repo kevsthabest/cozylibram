@@ -54,6 +54,8 @@ function openDnfReasonSheet(b) {
 function saveDnfReason(b, reasonKey) {
   const reason = DNF_REASONS.find(r => r.key === reasonKey);
   if (!reason) return;
+  // Guard: user may have changed status away from DNF during the sheet delay
+  if (b.status !== 'dnf') return;
 
   // Local-first: store on the book object (syncs via existing book sync)
   b.dnfReason = reasonKey;

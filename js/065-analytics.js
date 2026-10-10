@@ -31,6 +31,9 @@ const EVENT_DEFS = {
   book_unfavorited:     { c: 'library',   p: [] },
   book_completed:       { c: 'library',   p: [] },
   book_dnf:             { c: 'library',   p: [] },
+  dnf_reason:           { c: 'library',   p: ['reason', 'progress_pct'] }, // v398: DNF Autopsy
+  dna_shared:           { c: 'library',   p: ['books'] }, // v398: Reading DNA card shared
+  wrapped_shared:       { c: 'library',   p: ['year', 'books'] }, // v398: Reading Wrapped shared
   // discovery
   search_performed:         { c: 'discovery', p: [] },
   provider_used:            { c: 'discovery', p: ['provider', 'context'] }, // v243: which metadata backend served data
