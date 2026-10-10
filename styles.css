@@ -782,10 +782,14 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .mflair-divider .hairline { flex: 1; height: 1px; background: var(--line); }
 .mflair-divider .motif { width: 110px; flex: none; }
 .mflair-divider .motif svg { width: 100%; height: 18px; }
-/* garland — seasonal swag from the modal top edge */
-.mflair-garland { position: absolute; top: 0; left: 0; right: 0; height: 58px; z-index: 1;
-  color: var(--floral-tint); opacity: .9; }
-.mflair-garland svg { width: 100%; height: 100%; }
+/* v426: divider motifs retired — plain hairline separators */
+.mflair-divider-plain { margin: 14px 0; }
+.mflair-divider-plain .hairline { display: block; height: 1px; background: var(--line); }
+/* v426: garland top-edge retired — seasonal garlands now render as an
+   in-flow banner between the hero and the Details panel (normal document
+   flow, full width, cannot overlap cover or chrome) */
+.mflair-banner { color: var(--floral-tint); opacity: .9; margin: 2px 0 6px; }
+.mflair-banner svg { width: 100%; height: 54px; display: block; }
 /* watermark — faint atmospheric backdrop, content paints above it */
 .mflair-watermark { position: absolute; top: 50%; left: 50%; width: 340px; height: 340px;
   transform: translate(-50%,-50%); z-index: 0; color: var(--floral-tint); opacity: .06; }
@@ -797,8 +801,8 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   .modal.detail-v174 .d-hero-text { padding-right: 76px; }
 }
 @media (max-width: 899px) {
-  /* mobile: compact vine tucks into the hero's right padding */
-  .mflair-vine { width: 44px; height: 130px; top: 4px; right: 8px; }
+  /* mobile: compact vine tucks into the hero's right padding, capped at .7 */
+  .mflair-vine { width: 44px; height: 130px; top: 4px; right: 8px; opacity: .7; }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }

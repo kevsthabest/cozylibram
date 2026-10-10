@@ -71,7 +71,27 @@ ok('haunt garland is seasonal', run(`ModalFlairs.flairFor('garland','haunt').id`
 ok('dark has no garland (not seasonal)', run(`ModalFlairs.flairFor('garland','dark')`) === null);
 ok('midnight watermark is moon (premium, alpha-unlocked)', run(`ModalFlairs.flairFor('watermark','midnight').id`) === 'watermark-moon');
 
-/* ---- 4. injection ---- */
+/* ---- 3b. signature mapping (v426: one signature per theme) ---- */
+const sigExpect = {
+  dark: 'vine-botanical', light: 'vine-botanical', verdant: 'vine-botanical',
+  hearthside: 'vine-ember', candlelight: 'vine-ember',
+  velvet: 'vine-rose', frost: 'vine-frostcrystal', abyss: 'vine-kelp',
+  haunt: 'garland-haunt', yuletide: 'garland-holly', fete: 'garland-gala',
+  amour: 'garland-rose', shamrock: 'garland-clover', pastel: 'garland-blossom',
+  harvest: 'garland-wheat',
+  midnight: 'watermark-moon', twilight: 'watermark-moon',
+  stormrider: 'stormrider-vine', briarthrone: 'briarthrone-vine',
+  voidsignal: 'voidsignal-vine', wisp: 'wisp-vine', 'wisp-night': 'wisp-vine',
+};
+let sigOk = true;
+for (const t of Object.keys(sigExpect)) {
+  const got = run(`(ModalFlairs.signatureFor('${t}')||{}).id || null`);
+  if (got !== sigExpect[t]) { sigOk = false; console.log('SIG MISMATCH', t, 'got', got, 'want', sigExpect[t]); }
+}
+ok('signature table matches the approved mapping (21 themes)', sigOk);
+ok('solstice has no signature (graceful, no crash)', run(`ModalFlairs.signatureFor('solstice')`) === null);
+
+/* ---- 4. injection (v426: signature system) ---- */
 window.__theme = 'midnight';
 window.document.getElementById('modal-root').innerHTML =
   '<div class="modal detail-v174"><div class="d-hero"><h2>T</h2></div>' +
@@ -84,11 +104,13 @@ window.document.getElementById('modal-root').innerHTML =
 ok('apply returns true', run('ModalFlairs.apply()') === true);
 
 const q = (sel) => window.document.querySelectorAll(sel).length;
-ok('vine injected in hero', q('.mflair-vine') === 1);
-ok('corners injected (mirrored pair)', q('.mflair-corners') === 1 && q('.mflair-corners .c1') === 1 && q('.mflair-corners .c2') === 1);
-ok('no garland for non-seasonal theme', q('.mflair-garland') === 0);
-ok('watermark injected (premium, alpha-unlocked)', q('.mflair-watermark') === 1);
-ok('divider ornaments between the 3 fields', q('.mflair-divider') === 2);
+// midnight signature is the moon watermark — one at signature presence,
+// no faint duplicate, no vine (celestial vine retired for these themes)
+ok('midnight: signature watermark injected once', q('.mflair-watermark') === 1);
+ok('midnight: no vine (watermark is the signature)', q('.mflair-vine') === 0);
+ok('corners retired from injection', q('.mflair-corners') === 0);
+ok('no absolute top-edge garland', q('.mflair-garland') === 0);
+ok('plain hairline dividers between the 3 fields (no motifs)', q('.mflair-divider-plain') === 2 && q('.mflair-divider .motif') === 0);
 
 let ariaOk = true;
 window.document.querySelectorAll('.mflair').forEach(function(n){ if (n.getAttribute('aria-hidden') !== 'true') ariaOk = false; });
@@ -98,13 +120,27 @@ ok('no duplicate svg title ids (namespaced)', window.document.querySelectorAll('
 
 // idempotent re-apply (theme change path)
 run('ModalFlairs.apply()');
-ok('re-apply is idempotent (no duplicates)', q('.mflair-vine') === 1 && q('.mflair-divider') === 2);
+ok('re-apply is idempotent (no duplicates)', q('.mflair-watermark') === 1 && q('.mflair-divider-plain') === 2);
 
-// seasonal theme: garland appears, vine absent for yuletide
+// seasonal theme: garland becomes an in-flow banner, no vine for yuletide
 window.__theme = 'yuletide';
 run('ModalFlairs.apply()');
-ok('yuletide: garland-holly injected', q('.mflair-garland') === 1);
+ok('yuletide: garland-holly injected as in-flow banner', q('.mflair-banner') === 1);
+ok('yuletide: banner sits above the Details panel', (function(){
+  const b = window.document.querySelector('.mflair-banner');
+  const p = window.document.querySelector('#dtab-details');
+  return b && p && b.parentNode === p.parentNode &&
+    (b.compareDocumentPosition(p) & window.Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+})());
 ok('yuletide: no vine (by design)', q('.mflair-vine') === 0);
+ok('yuletide: no absolute garland strip', q('.mflair-garland') === 0);
+
+// vine theme: dark gets the botanical vine at full presence
+window.__theme = 'dark';
+run('ModalFlairs.apply()');
+ok('dark: signature vine injected in hero', q('.mflair-vine') === 1);
+ok('dark: no banner (not seasonal)', q('.mflair-banner') === 0);
+ok('dark: no watermark (theme has none)', q('.mflair-watermark') === 0);
 
 // no modal open -> false, no throw
 window.document.getElementById('modal-root').innerHTML = '';
