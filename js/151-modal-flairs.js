@@ -557,36 +557,12 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 </g>
 </svg>` },
     /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
-    { id: 'stormrider-vine', name: 'Stormrider dragon vine', motif: 'dragon', placement: 'vine', signature: true,
-      themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
-<title id="t">Stormrider vine</title>
-<desc id="d">A top-down dragon silhouette vine: heraldic head, one spread wing pair, slender tapering body and spade tail tip. Stormrider pack.</desc>
-<g fill="currentColor" stroke="none">
-<!-- heraldic dragon-head finial -->
-<g transform="translate(60,28)">
-<path d="M-14,-2 C-22,-8 -28,-16 -32,-26 C-24,-20 -15,-13 -7,-9 Z"/>
-<path d="M14,-2 C22,-8 28,-16 32,-26 C24,-20 15,-13 7,-9 Z"/>
-<path fill-rule="evenodd" d="M-20,0 C-20,-8 -10,-14 0,-14 C10,-14 20,-8 20,0 L12,14 L0,26 L-12,14 Z M-13,-1 L-5,1 L-6,4 L-14,2 Z M13,-1 L14,2 L6,4 L5,1 Z"/>
-<path d="M-7,20 L-4,29 L-1,20 Z"/>
-<path d="M7,20 L4,29 L1,20 Z"/>
-</g>
-<!-- slender tapering body -->
-<path d="M56,58 C57,140 58,220 59,298 L60,326 L61,298 C62,220 63,140 64,58 C62,56 58,56 56,58 Z"/>
-<!-- one spread wing pair -->
-<g transform="translate(57,112)">
-<path d="M0,0 Q-22,-17 -45,-13 Q-37,-5 -31,-1 Q-25,-5 -19,1 Q-13,-1 -7,5 Q-3,2 0,9 Z"/>
-<path d="M-10,-5 L-17,-13 M-21,-7 L-28,-14 M-32,-9 L-38,-13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-</g>
-<g transform="translate(63,112) scale(-1,1)">
-<path d="M0,0 Q-22,-17 -45,-13 Q-37,-5 -31,-1 Q-25,-5 -19,1 Q-13,-1 -7,5 Q-3,2 0,9 Z"/>
-<path d="M-10,-5 L-17,-13 M-21,-7 L-28,-14 M-32,-9 L-38,-13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-</g>
-<!-- spade tail tip, fused to the body -->
-<path d="M60,322 L52,340 L60,358 L68,340 Z"/>
-<path d="M53,338 L45,342 L53,345 Z"/>
-<path d="M67,338 L75,342 L67,345 Z"/>
-</g>
+    { id: 'stormrider-vine', name: 'Stormrider emblem vine', motif: 'dragon', placement: 'vine', signature: true,
+      themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.png', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 128" role="img" aria-labelledby="t d">
+<title id="t">Stormrider emblem vine</title>
+<desc id="d">Kevin's Stormrider emblem: black dragon with gold winged sword.</desc>
+<image href="Asset/packs/stormrider-vine.png" x="2" y="2" width="116" height="124" preserveAspectRatio="xMidYMid meet"/>
 </svg>` },
     { id: 'stormrider-divider', name: 'Stormrider bolt divider', motif: 'bolt', placement: 'divider',
       themes: ["stormrider"], file: 'Asset/packs/stormrider-divider.svg', premium: true,
@@ -936,7 +912,8 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
         }
       } else if (sig.placement === 'vine') {
         var hv = modal.querySelector('.d-hero');
-        if (hv) hv.appendChild(el('<div class="mflair mflair-vine" aria-hidden="true">' +
+        var vcls = sig.id === 'stormrider-vine' ? ' mflair-vine--emblem' : '';
+        if (hv) hv.appendChild(el('<div class="mflair mflair-vine' + vcls + '" aria-hidden="true">' +
           namespaced(sig.svg) + '</div>'));
       } else if (sig.placement === 'watermark') {
         modal.insertBefore(el('<div class="mflair mflair-watermark" aria-hidden="true">' +
