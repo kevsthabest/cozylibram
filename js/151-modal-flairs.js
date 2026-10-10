@@ -555,7 +555,273 @@ C77,162 82,180 80,200 C78,225 86,245 82,270 C78,300 86,325 82,352Z"/>
 <circle cx="110" cy="180" r="2"/><circle cx="200" cy="120" r="2"/><circle cx="270" cy="90" r="2"/>
 <circle cx="90" cy="120" r="1.8"/><circle cx="350" cy="220" r="1.8"/>
 </g>
-</svg>` }
+</svg>` },
+    /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
+    { id: 'stormrider-vine', name: 'Stormrider dragon vine', motif: 'dragon', placement: 'vine',
+      themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Stormrider vine</title>
+<desc id="d">A draconic vine: large overlapping dragon scales, an unfurled wing, claw marks and lightning buds. Stormrider pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M60,352 C42,308 78,272 58,222 C42,182 72,142 56,96 C48,68 60,44 56,22"/>
+<path d="M58,222 C44,214 36,202 34,186" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<!-- dragon scales: large, pointed, overlapping -->
+<g transform="rotate(-36 52 306)"><path d="M52,306 C42,296 40,280 48,266 C56,280 56,296 52,306Z"/></g>
+<g transform="rotate(36 52 306)"><path d="M52,306 C42,296 40,280 48,266 C56,280 56,296 52,306Z"/></g>
+<g transform="rotate(-34 60 258)"><path d="M60,258 C51,249 49,234 56,221 C63,234 63,249 60,258Z"/></g>
+<g transform="rotate(34 60 258)"><path d="M60,258 C51,249 49,234 56,221 C63,234 63,249 60,258Z"/></g>
+<g transform="rotate(-32 57 210)"><path d="M57,210 C49,202 47,188 53,176 C60,188 60,202 57,210Z"/></g>
+<g transform="rotate(32 57 210)"><path d="M57,210 C49,202 47,188 53,176 C60,188 60,202 57,210Z"/></g>
+<g transform="rotate(-30 56 162)"><path d="M56,162 C49,155 48,143 53,133 C59,143 59,155 56,162Z"/></g>
+<g transform="rotate(30 56 162)"><path d="M56,162 C49,155 48,143 53,133 C59,143 59,155 56,162Z"/></g>
+<g transform="rotate(-28 56 118)"><path d="M56,118 C50,112 49,102 53,94 C58,102 58,112 56,118Z"/></g>
+<g transform="rotate(28 56 118)"><path d="M56,118 C50,112 49,102 53,94 C58,102 58,112 56,118Z"/></g>
+<g transform="rotate(-50 34 184)"><path d="M34,184 C28,178 27,168 31,160 C36,168 36,178 34,184Z"/></g>
+<!-- dragon wing unfurling from the top -->
+<g transform="translate(56,48) rotate(-18) scale(.85)">
+<path d="M0,0 Q28,-28 62,-24 Q50,-10 42,-4 Q34,-12 26,-6 Q18,-12 10,-6 Q4,-8 0,0Z"/>
+<path d="M14,-8 L22,-22 M30,-13 L36,-26 M46,-16 L50,-28" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+</g>
+<!-- lightning buds -->
+<g transform="translate(88,120) scale(.8)"><path d="M3,-12 L-5,2 L-1,2 L-3,12 L5,-3 L1,-3 Z"/></g>
+<g transform="translate(28,250) scale(.7)"><path d="M3,-12 L-5,2 L-1,2 L-3,12 L5,-3 L1,-3 Z"/></g>
+</g>
+<!-- claw marks: curved tapered slashes -->
+<g fill="currentColor" stroke="none" opacity="0.9">
+<path d="M80,190 C86,176 90,162 92,148 C88,162 82,176 74,188Z"/>
+<path d="M90,194 C96,180 100,166 102,152 C98,166 92,180 84,192Z"/>
+<path d="M100,198 C106,184 110,170 112,156 C108,170 102,184 94,196Z"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="44" cy="330" r="2"/><circle cx="72" cy="290" r="1.8"/>
+</g>
+</svg>` },
+    { id: 'stormrider-divider', name: 'Stormrider bolt divider', motif: 'bolt', placement: 'divider',
+      themes: ["stormrider"], file: 'Asset/packs/stormrider-divider.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Stormrider divider</title>
+<desc id="d">A lightning bolt flanked by dragon scales. Stormrider pack.</desc>
+<g fill="currentColor" stroke="none">
+<path d="M83,-2 L73,10 L78,10 L76,22 L88,8 L82,8 Z"/>
+<path d="M56,20 C50,14 50,6 56,0 C62,6 62,14 56,20Z"/>
+<path d="M104,20 C98,14 98,6 104,0 C110,6 110,14 104,20Z"/>
+<circle cx="42" cy="12" r="1.4" opacity="0.6"/><circle cx="118" cy="12" r="1.4" opacity="0.6"/>
+</g>
+</svg>` },
+    { id: 'stormrider-garland', name: 'Stormrider storm garland', motif: 'storm', placement: 'garland',
+      themes: ["stormrider"], file: 'Asset/packs/stormrider-garland.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Stormrider garland</title>
+<desc id="d">A storm garland with hanging cloud puffs and lightning bolts. Stormrider pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,56)">
+<circle cx="-10" cy="0" r="8"/><circle cx="0" cy="-4" r="10"/><circle cx="10" cy="0" r="8"/><rect x="-14" y="-2" width="28" height="10" rx="5"/>
+<path d="M-2,8 L-8,20 L-4,20 L-6,30 L4,16 L0,16 Z"/>
+</g>
+<g transform="translate(300,66) scale(1.2)">
+<circle cx="-10" cy="0" r="8"/><circle cx="0" cy="-4" r="10"/><circle cx="10" cy="0" r="8"/><rect x="-14" y="-2" width="28" height="10" rx="5"/>
+<path d="M-2,8 L-8,20 L-4,20 L-6,30 L4,16 L0,16 Z"/>
+</g>
+<g transform="translate(450,54)">
+<circle cx="-10" cy="0" r="8"/><circle cx="0" cy="-4" r="10"/><circle cx="10" cy="0" r="8"/><rect x="-14" y="-2" width="28" height="10" rx="5"/>
+<path d="M-2,8 L-8,20 L-4,20 L-6,30 L4,16 L0,16 Z"/>
+</g>
+<g transform="translate(225,54)"><path d="M3,-10 L-5,2 L-1,2 L-3,10 L5,-4 L1,-4 Z"/></g>
+<g transform="translate(375,54)"><path d="M3,-10 L-5,2 L-1,2 L-3,10 L5,-4 L1,-4 Z"/></g>
+<circle cx="80" cy="26" r="1.8"/><circle cx="520" cy="24" r="1.8"/>
+</g>
+</svg>` },
+    { id: 'briarthrone-vine', name: 'Briarthrone thorn vine', motif: 'thorn', placement: 'vine',
+      themes: ["briarthrone"], file: 'Asset/packs/briarthrone-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Briarthrone vine</title>
+<desc id="d">A gnarled thorn vine with night-bloom buds and scattered stars. Briarthrone pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M60,352 C38,310 82,276 60,228 C42,190 78,156 60,112 C48,82 66,52 58,24"/>
+<path d="M60,228 C46,220 38,208 36,192" stroke-width="1.4"/>
+<path d="M60,150 C74,142 82,130 84,114" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<path d="M52,290 l-8,-2 7,-5z"/><path d="M64,262 l8,-2 -7,-5z"/>
+<path d="M50,200 l-8,-2 7,-5z"/><path d="M66,170 l8,-2 -7,-5z"/>
+<path d="M52,120 l-7,-2 6,-5z"/><path d="M62,80 l7,-2 -6,-5z"/>
+</g>
+<g fill="currentColor" stroke="none">
+<!-- night blooms: 6-petal star flowers -->
+<g transform="translate(58,24)">
+<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
+<circle r="2.6"/>
+</g>
+<g transform="translate(36,192) scale(.75)">
+<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
+<circle r="2.6"/>
+</g>
+<g transform="translate(84,114) scale(.65)">
+<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
+<circle r="2.6"/>
+</g>
+<!-- leaves -->
+<g transform="rotate(-40 46 320)"><ellipse cx="37" cy="317" rx="10" ry="4" transform="rotate(0)"/></g>
+<g transform="rotate(40 68 270)"><ellipse cx="77" cy="267" rx="10" ry="4"/></g>
+<g transform="rotate(-38 50 130)"><ellipse cx="42" cy="127" rx="8" ry="3.4"/></g>
+<!-- stars -->
+<path d="M86,60 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M30,250 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+<circle cx="76" cy="300" r="1.8"/><circle cx="44" cy="90" r="1.8"/>
+</g>
+</svg>` },
+    { id: 'briarthrone-divider', name: 'Briarthrone bloom divider', motif: 'bloom', placement: 'divider',
+      themes: ["briarthrone"], file: 'Asset/packs/briarthrone-divider.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Briarthrone divider</title>
+<desc id="d">A thorn-stem divider ornament with a central night bloom. Briarthrone pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+<path d="M40,12 C60,10 100,10 120,12"/>
+</g>
+<g fill="currentColor" stroke="none">
+<path d="M60,11 l-5,-4 5,-1z"/><path d="M100,11 l5,-4 -5,-1z"/>
+<path d="M72,13 l-4,4 5,0z"/><path d="M90,13 l4,4 -5,0z"/>
+<g transform="translate(80,12) scale(.8)">
+<ellipse cx="0" cy="-6" rx="2.8" ry="5"/><ellipse cx="5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 5.2 -3)"/><ellipse cx="5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 5.2 3)"/><ellipse cx="0" cy="6" rx="2.8" ry="5"/><ellipse cx="-5.2" cy="3" rx="2.8" ry="5" transform="rotate(120 -5.2 3)"/><ellipse cx="-5.2" cy="-3" rx="2.8" ry="5" transform="rotate(60 -5.2 -3)"/>
+<circle r="2.2"/>
+</g>
+<circle cx="30" cy="12" r="1.6"/><circle cx="130" cy="12" r="1.6"/>
+</g>
+</svg>` },
+    { id: 'briarthrone-watermark', name: 'Briarthrone starfall', motif: 'starfall', placement: 'watermark',
+      themes: ["briarthrone"], file: 'Asset/packs/briarthrone-watermark.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="t d">
+<title id="t">Briarthrone starfall</title>
+<desc id="d">A large crescent moon with falling stars for atmospheric backgrounds. Briarthrone pack.</desc>
+<g fill="currentColor" stroke="none">
+<path d="M140,50 C73,97.6 73,138.4 140,186 C117.2,153.9 117.2,82.1 140,50Z"/>
+<g opacity="0.85">
+<path d="M250,80 l3,7.8 7.8,3 -7.8,3 -3,7.8 -3,-7.8 -7.8,-3 7.8,-3z"/>
+<path d="M300,160 l2.4,6.2 6.2,2.4 -6.2,2.4 -2.4,6.2 -2.4,-6.2 -6.2,-2.4 6.2,-2.4z"/>
+<path d="M220,220 l2,5.2 5.2,2 -5.2,2 -2,5.2 -2,-5.2 -5.2,-2 5.2,-2z"/>
+<path d="M330,260 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M270,300 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+</g>
+<circle cx="180" cy="250" r="2.4"/><circle cx="120" cy="300" r="2"/><circle cx="340" cy="120" r="2"/><circle cx="90" cy="220" r="2"/>
+</g>
+</svg>` },
+    { id: 'voidsignal-vine', name: 'Voidsignal circuit vine', motif: 'circuit', placement: 'vine',
+      themes: ["voidsignal"], file: 'Asset/packs/voidsignal-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Voidsignal circuit vine</title>
+<desc id="d">An angular circuit-trace vine with node points. Voidsignal pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M60,352 L60,300 L40,280 L40,230 L62,208 L62,160 L42,140 L42,100 L60,82 L60,40"/>
+<path d="M40,280 L24,264 L24,240" stroke-width="1.4"/>
+<path d="M62,208 L84,186 L84,160" stroke-width="1.4"/>
+<path d="M42,140 L26,124" stroke-width="1.4"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="60" cy="352" r="3.4"/><circle cx="60" cy="300" r="3"/>
+<circle cx="40" cy="280" r="3"/><circle cx="40" cy="230" r="3"/>
+<circle cx="62" cy="208" r="3"/><circle cx="62" cy="160" r="3"/>
+<circle cx="42" cy="140" r="3"/><circle cx="42" cy="100" r="3"/>
+<circle cx="60" cy="82" r="3"/><circle cx="60" cy="40" r="3.4"/>
+<circle cx="24" cy="240" r="2.4"/><circle cx="84" cy="160" r="2.4"/><circle cx="26" cy="124" r="2.2"/>
+</g>
+<g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55" stroke-linecap="round">
+<circle cx="60" cy="300" r="7"/><circle cx="62" cy="160" r="7"/><circle cx="42" cy="100" r="7"/>
+</g>
+</svg>` },
+    { id: 'voidsignal-divider', name: 'Voidsignal chevron divider', motif: 'chevron', placement: 'divider',
+      themes: ["voidsignal"], file: 'Asset/packs/voidsignal-divider.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Voidsignal divider</title>
+<desc id="d">A chevron signal divider ornament. Voidsignal pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M68,5 L78,12 L68,19"/>
+<path d="M82,5 L92,12 L82,19"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="56" cy="12" r="2.2"/><circle cx="104" cy="12" r="2.2"/>
+<circle cx="44" cy="12" r="1.4" opacity="0.6"/><circle cx="116" cy="12" r="1.4" opacity="0.6"/>
+</g>
+</svg>` },
+    { id: 'voidsignal-corner', name: 'Voidsignal circuit corner', motif: 'circuit', placement: 'corners',
+      themes: ["voidsignal"], file: 'Asset/packs/voidsignal-corner.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="t d">
+<title id="t">Voidsignal corner</title>
+<desc id="d">An angular circuit corner with node points. Voidsignal pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12,84 L12,40 L36,16 L84,16"/>
+<path d="M24,84 L24,48 L44,28 L84,28" stroke-width="1.2" opacity="0.6"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="12" cy="84" r="3"/><circle cx="84" cy="16" r="3"/>
+<circle cx="12" cy="40" r="2.4"/><circle cx="36" cy="16" r="2.4"/>
+<circle cx="52" cy="22" r="2"/>
+</g>
+<g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55">
+<circle cx="52" cy="22" r="5.5"/>
+</g>
+</svg>` },
+    { id: 'wisp-vine', name: 'Wisp firefly vine', motif: 'firefly', placement: 'vine',
+      themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
+<title id="t">Wisp firefly vine</title>
+<desc id="d">A wandering dotted trail with glowing firefly orbs. Wisp pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 9">
+<path d="M60,352 C40,310 80,280 60,235 C44,198 76,168 60,128 C48,98 70,70 60,40"/>
+</g>
+<g fill="currentColor" stroke="none">
+<circle cx="60" cy="352" r="5"/><circle cx="60" cy="352" r="9" opacity="0.25"/>
+<circle cx="66" cy="280" r="4.4"/><circle cx="66" cy="280" r="8" opacity="0.25"/>
+<circle cx="52" cy="210" r="5"/><circle cx="52" cy="210" r="9" opacity="0.25"/>
+<circle cx="64" cy="140" r="4"/><circle cx="64" cy="140" r="7.4" opacity="0.25"/>
+<circle cx="58" cy="72" r="4.6"/><circle cx="58" cy="72" r="8.4" opacity="0.25"/>
+<circle cx="60" cy="40" r="3.6"/><circle cx="60" cy="40" r="6.6" opacity="0.25"/>
+<g opacity="0.7">
+<path d="M84,180 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
+<path d="M36,110 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+</g>
+</g>
+</svg>` },
+    { id: 'wisp-divider', name: 'Wisp sparkle divider', motif: 'sparkle', placement: 'divider',
+      themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-divider.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Wisp divider</title>
+<desc id="d">A sparkle-trio divider ornament. Wisp pack.</desc>
+<g fill="currentColor" stroke="none">
+<path d="M80,2 L82.1,9.9 L90,12 L82.1,14.1 L80,22 L77.9,14.1 L70,12 L77.9,9.9Z"/>
+<path d="M60,8 l1.4,3.6 3.6,1.4 -3.6,1.4 -1.4,3.6 -1.4,-3.6 -3.6,-1.4 3.6,-1.4z"/>
+<path d="M100,8 l1.4,3.6 3.6,1.4 -3.6,1.4 -1.4,3.6 -1.4,-3.6 -3.6,-1.4 3.6,-1.4z"/>
+<circle cx="46" cy="12" r="1.6"/><circle cx="114" cy="12" r="1.6"/>
+</g>
+</svg>` },
+    { id: 'wisp-garland', name: 'Wisp pastel garland', motif: 'pastel', placement: 'garland',
+      themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-garland.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
+<title id="t">Wisp garland</title>
+<desc id="d">A pastel garland with hanging stars, moons and dots. Wisp pack.</desc>
+<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+<path d="M0,12 Q300,64 600,12"/>
+<path d="M150,32 L150,42"/><path d="M300,38 L300,50"/><path d="M450,30 L450,40"/>
+<path d="M225,36 L225,44"/><path d="M375,36 L375,44"/>
+</g>
+<g fill="currentColor" stroke="none">
+<g transform="translate(150,56)"><path d="M0,-9 L2.1,-2.1 L9,0 L2.1,2.1 L0,9 L-2.1,2.1 L-9,0 L-2.1,-2.1Z"/></g>
+<g transform="translate(300,66)"><path d="M0,-11 C-11,-5.6 -11,5.6 0,11 C-3.8,6 -3.8,-6 0,-11Z"/></g>
+<g transform="translate(450,54)"><path d="M0,-9 L2.1,-2.1 L9,0 L2.1,2.1 L0,9 L-2.1,2.1 L-9,0 L-2.1,-2.1Z"/></g>
+<g transform="translate(225,52)"><circle cx="0" cy="0" r="4"/></g>
+<g transform="translate(375,52)"><circle cx="0" cy="0" r="4"/></g>
+<g opacity="0.7">
+<path d="M80,30 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+<path d="M520,28 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
+</g>
+</g>
+</svg>` },
   ];
 
   var PLACEMENTS = ['vine', 'corners', 'divider', 'garland', 'watermark'];

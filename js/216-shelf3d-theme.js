@@ -39,6 +39,12 @@ const SHELF3D_THEMES = {
   pastel:      { woodBase: '#d4b8a0', woodDark: '#96745e', lightWarm: '#fff0f5', lightCool: '#ffe0ec', ambientLevel: 1.05, exposure: 1.1,  accentGlow: '#b9a3f2', floorTint: '#f7f2fa', mood: 'bright' },
   harvest:     { woodBase: '#6b4426', woodDark: '#3a2412', lightWarm: '#ffc27a', lightCool: '#b07a3a', ambientLevel: 0.8,  exposure: 1.05, accentGlow: '#c47b4a', floorTint: '#191007', mood: 'cozy' },
   solstice:    { woodBase: '#d4a86a', woodDark: '#96703e', lightWarm: '#fff3d8', lightCool: '#ffe9b8', ambientLevel: 1.15, exposure: 1.2,  accentGlow: '#c08a24', floorTint: '#fdf1d7', mood: 'bright' }, // v416 (T6)
+  // v423: premium packs.
+  stormrider:  { woodBase: '#3d3a55', woodDark: '#222031', lightWarm: '#ffd9a0', lightCool: '#5a6a9a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#e8a94e', floorTint: '#12141f', mood: 'moody' },
+  briarthrone: { woodBase: '#4a2f52', woodDark: '#2a1a30', lightWarm: '#d8c0ff', lightCool: '#5a3a6a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#c9b3f5', floorTint: '#130e1a', mood: 'moody' },
+  voidsignal:  { woodBase: '#2a3a44', woodDark: '#162026', lightWarm: '#a0e8ff', lightCool: '#1a3a44', ambientLevel: 0.9,  exposure: 1.0,  accentGlow: '#38e1ff', floorTint: '#0a0f14', mood: 'moody' },
+  wisp:        { woodBase: '#c9a06a', woodDark: '#8a6a3f', lightWarm: '#fff2dc', lightCool: '#ffe9c9', ambientLevel: 1.1,  exposure: 1.15, accentGlow: '#e86a92', floorTint: '#fdf6ec', mood: 'bright' },
+  'wisp-night':{ woodBase: '#3a2a55', woodDark: '#1e1430', lightWarm: '#ffe9a0', lightCool: '#4a3a7a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#ffd76a', floorTint: '#0e0a1a', mood: 'moody' },
 };
 
 function shelf3dThemeFor(themeKey, accentKey) {

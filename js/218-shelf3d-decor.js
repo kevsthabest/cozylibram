@@ -89,6 +89,35 @@ window.Shelf3DDecor = (function () {
       svg: '<svg viewBox="0 0 30 30"><circle cx="11" cy="12" r="4" fill="#2a8a4a"/><circle cx="19" cy="12" r="4" fill="#2a8a4a"/><circle cx="15" cy="17" r="4" fill="#35a055"/><path d="M15 20 C15 23 14 25 12 27" stroke="#2a8a4a" stroke-width="1.6" fill="none"/></svg>' },
     { id: 'applebowl', name: 'Apple bowl', build: 'applebowl', stock: 1, premium: false,
       svg: '<svg viewBox="0 0 30 30"><ellipse cx="11" cy="12" rx="3.6" ry="3.2" fill="#c0392b"/><ellipse cx="18" cy="11" rx="3.6" ry="3.2" fill="#d43a55"/><ellipse cx="15" cy="15" rx="3.6" ry="3.2" fill="#e05252"/><path d="M6 18 h18 l-3 7 h-12 Z" fill="#8a6a4a"/></svg>' },
+    /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
+    /* Stormrider */
+    { id: 'dragon-egg', name: 'Dragon egg', build: 'dragonEgg', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><path d="M15 4 C21 4 25 12 25 19 C25 24 20 27 15 27 C10 27 5 24 5 19 C5 12 9 4 15 4Z" fill="#3a4a6a"/><path d="M10 14 Q13 11 16 14 M14 19 Q17 16 20 19" stroke="#7fb3e8" stroke-width="1.2" fill="none"/></svg>' },
+    { id: 'storm-lantern', name: 'Storm lantern', build: 'stormLantern', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><rect x="10" y="8" width="10" height="14" rx="2" fill="#2a2a3a"/><path d="M16 11 L12 17 L14.5 17 L13.5 21 L18 15 L15.5 15 Z" fill="#e8a94e"/></svg>' },
+    { id: 'rider-blade', name: 'Rider blade', build: 'riderBlade', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><path d="M15 3 L17 8 L16 20 L15 24 L14 20 L13 8 Z" fill="#b8c4d4"/><path d="M15 20 C11 17 7 16 4 16 C8 18 12 20 15 22 C18 20 22 18 26 16 C23 16 19 17 15 20Z" fill="#7fb3e8"/></svg>' },
+    /* Briarthrone */
+    { id: 'thorn-crown', name: 'Thorn crown', build: 'thornCrown', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><ellipse cx="15" cy="20" rx="9" ry="3" fill="none" stroke="#8a6a5a" stroke-width="2"/><path d="M8 18 L6 10 L10 16 M14 17 L14 8 L17 15 M20 17 L22 9 L24 16" stroke="#8a6a5a" stroke-width="1.6" fill="none"/></svg>' },
+    { id: 'moon-goblet', name: 'Moon goblet', build: 'moonGoblet', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><path d="M10 6 L20 6 C20 13 18 16 15 16 C12 16 10 13 10 6Z" fill="#4a3a5a"/><path d="M15 22 L15 26 M12 26 L18 26" stroke="#4a3a5a" stroke-width="2"/><path d="M16 9 C14 10.5 14 12.5 16 14 C15 12.5 15 10.5 16 9Z" fill="#dfe8ff"/></svg>' },
+    { id: 'night-bloom', name: 'Night bloom', build: 'nightBloom', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><g fill="#c9b3f5"><ellipse cx="15" cy="8" rx="2.5" ry="5"/><ellipse cx="21" cy="13" rx="2.5" ry="5" transform="rotate(60 21 13)"/><ellipse cx="9" cy="13" rx="2.5" ry="5" transform="rotate(-60 9 13)"/></g><circle cx="15" cy="14" r="2.4" fill="#e0637f"/><path d="M15 17 L15 26" stroke="#4a7a3a" stroke-width="1.6"/></svg>' },
+    /* Voidsignal */
+    { id: 'holo-cube', name: 'Holo cube', build: 'holoCube', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><g fill="none" stroke="#38e1ff" stroke-width="1.4"><path d="M15 6 L24 11 L24 20 L15 25 L6 20 L6 11 Z"/><path d="M15 6 L15 15.5 L24 20 M15 15.5 L6 20"/></g><circle cx="15" cy="15.5" r="2.4" fill="#38e1ff"/></svg>' },
+    { id: 'signal-dish', name: 'Signal dish', build: 'signalDish', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><path d="M8 12 C10 19 16 22 24 22 C18 18 14 14 12 8Z" fill="#3a4a5a"/><path d="M15 22 L15 27 M12 27 L18 27" stroke="#3a4a5a" stroke-width="2"/><circle cx="22" cy="8" r="2" fill="#38e1ff"/></svg>' },
+    { id: 'data-core', name: 'Data core', build: 'dataCore', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><ellipse cx="15" cy="8" rx="7" ry="2.4" fill="none" stroke="#38e1ff" stroke-width="1.6"/><path d="M8 8 L8 22 M22 8 L22 22" stroke="#38e1ff" stroke-width="1.6"/><ellipse cx="15" cy="22" rx="7" ry="2.4" fill="#38e1ff" opacity="0.5"/></svg>' },
+    /* Wisp */
+    { id: 'mushroom-cottage', name: 'Mushroom cottage', build: 'mushroomCottage', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><path d="M15 3 C8 3 4 8 3 13 C7 11 11 11 15 11 C19 11 23 11 27 13 C26 8 22 3 15 3Z" fill="#e86a92"/><circle cx="11" cy="8" r="1.6" fill="#fdf6ec"/><circle cx="18" cy="7" r="2" fill="#fdf6ec"/><rect x="11" y="12" width="8" height="10" rx="1" fill="#f7ecd8"/><rect x="13.5" y="15" width="3" height="7" rx="1" fill="#8a6a4a"/></svg>' },
+    { id: 'firefly-jar', name: 'Firefly jar', build: 'fireflyJar', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><rect x="10" y="7" width="10" height="16" rx="3" fill="none" stroke="#8a7a68" stroke-width="1.6"/><circle cx="14" cy="14" r="1.8" fill="#ffd76a"/><circle cx="17" cy="18" r="2.2" fill="#ffd76a"/><circle cx="15" cy="21" r="1.4" fill="#ffd76a"/></svg>' },
+    { id: 'wisp-lantern', name: 'Wisp lantern', build: 'wispLantern', stock: 1, premium: true,
+      svg: '<svg viewBox="0 0 30 30"><circle cx="15" cy="14" r="8" fill="#fdf6ec" stroke="#e86a92" stroke-width="1.4"/><path d="M15 22 L15 26 M12 26 L18 26" stroke="#8a7a68" stroke-width="1.6"/><path d="M15 8 l1 2.6 2.6 1 -2.6 1 -1 2.6 -1-2.6 -2.6-1 2.6-1z" fill="#e86a92"/></svg>' },
   ];
 
   var byId = {};
@@ -113,6 +142,12 @@ window.Shelf3DDecor = (function () {
     shamrock:    ['plant', 'candle', 'mug', 'stack', 'coins', 'clover'],
     pastel:      ['succulent', 'lights', 'plant', 'photo', 'eggs', 'vase'],
     harvest:     ['pumpkin', 'lights', 'stack', 'mug', 'vase', 'applebowl'],
+    /* v423: premium packs */
+    stormrider:  ['dragon-egg', 'storm-lantern', 'rider-blade', 'candle', 'stack'],
+    briarthrone: ['thorn-crown', 'moon-goblet', 'night-bloom', 'candle', 'photo'],
+    voidsignal:  ['holo-cube', 'signal-dish', 'data-core', 'lights', 'globe'],
+    wisp:        ['mushroom-cottage', 'firefly-jar', 'wisp-lantern', 'succulent', 'lights'],
+    'wisp-night':['firefly-jar', 'wisp-lantern', 'mushroom-cottage', 'moon', 'lights'],
   };
 
   /* Per-theme preset arrangements. pi: 0 bottom, 1 middle, 2 top edge.
@@ -242,6 +277,42 @@ window.Shelf3DDecor = (function () {
       { deco: 'vase', pi: 0, x: -4.0 },
       { deco: 'mug', pi: 0, x: 2.9 },
       { deco: 'lights', pi: 2, x: 0, tint: '#ffe9a8' },
+    ],
+    /* v423: premium packs */
+    stormrider: [
+      { deco: 'dragon-egg', pi: 1, x: 3.6 },
+      { deco: 'storm-lantern', pi: 1, x: -3.4 },
+      { deco: 'rider-blade', pi: 0, x: 3.2 },
+      { deco: 'candle', pi: 0, x: -3.2, tint: '#e8a94e' },
+      { deco: 'stack', pi: 0, x: 0.5 },
+    ],
+    briarthrone: [
+      { deco: 'thorn-crown', pi: 2, x: 0 },
+      { deco: 'moon-goblet', pi: 1, x: 3.6 },
+      { deco: 'night-bloom', pi: 1, x: -3.4 },
+      { deco: 'candle', pi: 0, x: 3.2, tint: '#c9b3f5' },
+      { deco: 'photo', pi: 0, x: -3.0 },
+    ],
+    voidsignal: [
+      { deco: 'holo-cube', pi: 1, x: 0 },
+      { deco: 'signal-dish', pi: 1, x: 3.6 },
+      { deco: 'data-core', pi: 0, x: -3.2 },
+      { deco: 'lights', pi: 2, x: 0, tint: '#38e1ff' },
+      { deco: 'globe', pi: 0, x: 3.4 },
+    ],
+    wisp: [
+      { deco: 'mushroom-cottage', pi: 0, x: -3.2 },
+      { deco: 'firefly-jar', pi: 1, x: 3.6 },
+      { deco: 'wisp-lantern', pi: 1, x: -3.6 },
+      { deco: 'succulent', pi: 0, x: 3.2 },
+      { deco: 'lights', pi: 2, x: 0, tint: '#ffd0e0' },
+    ],
+    'wisp-night': [
+      { deco: 'firefly-jar', pi: 1, x: 0 },
+      { deco: 'wisp-lantern', pi: 1, x: 3.6 },
+      { deco: 'mushroom-cottage', pi: 0, x: -3.2 },
+      { deco: 'moon', room: true, x: -4.2, y: 5.2 },
+      { deco: 'lights', pi: 2, x: 0, tint: '#ffd76a' },
     ],
   };
 

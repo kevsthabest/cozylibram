@@ -49,9 +49,10 @@ ok('unknown theme falls back to its default', window.themeAccentPairings('nope')
 window.localStorage.setItem('theme', 'light');
 window.renderSettings();
 const cards = qa('.tcard');
-ok('gallery has 18 theme cards (10 core + 8 seasonal)', cards.length === 18);
+ok('gallery has 22 theme cards (10 core + 8 seasonal + 4 premium)', cards.length === 22);
 ok('core cards first', cards.slice(0, 10).map(c => c.dataset.th).join(',') === 'dark,light,hearthside,candlelight,twilight,verdant,midnight,velvet,abyss,frost');
-ok('seasonal cards follow', cards.slice(10).map(c => c.dataset.th).join(',') === 'haunt,yuletide,fete,amour,shamrock,pastel,harvest,solstice');
+ok('seasonal cards follow', cards.slice(10, 18).map(c => c.dataset.th).join(',') === 'haunt,yuletide,fete,amour,shamrock,pastel,harvest,solstice');
+ok('premium cards last (v423)', cards.slice(18).map(c => c.dataset.th).join(',') === 'stormrider,briarthrone,voidsignal,wisp');
 ok('no blind dropdown remains', !q('#th-theme'));
 const darkCard = cards.find(c => c.dataset.th === 'dark');
 ok('cards show the per-theme social name', cards.every(c => c.querySelector('.tmeta span').textContent.length > 0));

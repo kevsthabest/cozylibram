@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 24" role="img" aria-labelledby="t d">
+<title id="t">Stormrider divider</title>
+<desc id="d">A lightning bolt flanked by dragon scales. Stormrider pack.</desc>
+<g fill="currentColor" stroke="none">
+<path d="M83,-2 L73,10 L78,10 L76,22 L88,8 L82,8 Z"/>
+<path d="M56,20 C50,14 50,6 56,0 C62,6 62,14 56,20Z"/>
+<path d="M104,20 C98,14 98,6 104,0 C110,6 110,14 104,20Z"/>
+<circle cx="42" cy="12" r="1.4" opacity="0.6"/><circle cx="118" cy="12" r="1.4" opacity="0.6"/>
+</g>
+</svg>

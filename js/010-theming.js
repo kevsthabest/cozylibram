@@ -22,6 +22,12 @@ const THEMES = [
   { key: 'harvest',     name: 'Harvest',     meta: '#191007', season: 'thanksgiving' },
   // v416 (T6): Solstice — summer seasonal. Completes the year.
   { key: 'solstice',    name: 'Solstice',    meta: '#fdf1d7', season: 'summer' },
+  // v423: premium theme packs (flagged premium, unlocked during alpha).
+  { key: 'stormrider',  name: 'Stormrider',  meta: '#12141f', premium: true, pack: 'stormrider' },
+  { key: 'briarthrone', name: 'Briarthrone', meta: '#130e1a', premium: true, pack: 'briarthrone' },
+  { key: 'voidsignal',  name: 'Voidsignal',  meta: '#0a0f14', premium: true, pack: 'voidsignal' },
+  { key: 'wisp',        name: 'Wisp',        meta: '#fdf6ec', premium: true, pack: 'wisp' },
+  { key: 'wisp-night',  name: 'Wisp Night',  meta: '#0e0a1a', premium: true, pack: 'wisp' },
 ];
 const ACCENTS = [
   { key: 'rose',   name: 'Rose',   color: '#e5488f' },
@@ -58,6 +64,9 @@ const THEME_DEFAULT_ACCENT = {
   abyss: 'teal', frost: 'rose',
   haunt: 'ember', yuletide: 'crimson', fete: 'gold', amour: 'blush',
   shamrock: 'mint', pastel: 'lilac', harvest: 'copper', solstice: 'gold',
+  // v423: premium packs
+  stormrider: 'gold', briarthrone: 'lilac', voidsignal: 'ocean',
+  wisp: 'rose', 'wisp-night': 'gold',
 };
 function themeDefaultAccent(key) { return THEME_DEFAULT_ACCENT[key] || 'rose'; }
 // Effective accent: the user's explicit pick, else the theme's designed default.
@@ -82,6 +91,12 @@ const THEME_ACCENT_PAIRINGS = {
   pastel: ['lilac', 'blush', 'mint'],
   harvest: ['copper', 'gold', 'ember'],
   solstice: ['gold', 'ocean', 'blush'],
+  // v423: premium packs
+  stormrider: ['gold', 'ocean', 'ember'],
+  briarthrone: ['lilac', 'crimson', 'violet'],
+  voidsignal: ['ocean', 'teal', 'crimson'],
+  wisp: ['rose', 'blush', 'mint'],
+  'wisp-night': ['gold', 'rose', 'violet'],
 };
 function themeAccentPairings(key) { return THEME_ACCENT_PAIRINGS[key] || [themeDefaultAccent(key)]; }
 // v416 (P1): live mini-preview tokens per theme for the gallery cards.
@@ -105,6 +120,12 @@ const THEME_PREVIEW = {
   pastel:      { bg: '#f7f2fa', card: '#fffdf9', ink: '#3a2c44', muted: '#6f5b79', accent: '#b9a3f2' },
   harvest:     { bg: '#191007', card: '#2a1a0d', ink: '#f5e9d6', muted: '#c8a87e', accent: '#c47b4a' },
   solstice:    { bg: '#fdf1d7', card: '#fffaf0', ink: '#3a2a12', muted: '#7a6540', accent: '#c08a24' },
+  // v423: premium packs
+  stormrider:  { bg: '#12141f', card: '#1d2233', ink: '#eef1f8', muted: '#8a94b8', accent: '#c08a24' },
+  briarthrone: { bg: '#130e1a', card: '#211628', ink: '#f3e9f5', muted: '#a898b8', accent: '#b9a3f2' },
+  voidsignal:  { bg: '#0a0f14', card: '#111a22', ink: '#e6f1f5', muted: '#7a94a8', accent: '#3f8fd6' },
+  wisp:        { bg: '#fdf6ec', card: '#ffffff', ink: '#3a2f28', muted: '#8a7a68', accent: '#e5488f' },
+  'wisp-night':{ bg: '#0e0a1a', card: '#1a1230', ink: '#f5eefb', muted: '#a898c8', accent: '#c08a24' },
 };
 function themePreview(key) { return THEME_PREVIEW[key] || THEME_PREVIEW.dark; }
 // v257: season -> full look (theme + accent). The nudge offers it; the

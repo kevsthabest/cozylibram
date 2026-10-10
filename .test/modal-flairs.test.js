@@ -22,7 +22,7 @@ const run = (js) => window.eval(js);
 
 /* ---- 1. catalog structure ---- */
 const ids = JSON.parse(run('JSON.stringify(ModalFlairs.CATALOG.map(function(e){return e.id}))'));
-ok('catalog has 20 entries', ids.length === 20);
+ok('catalog has 32 entries', ids.length === 32);
 
 const req = ['id', 'name', 'motif', 'placement', 'themes', 'file', 'svg'];
 let allFields = true, allSvg = true, noHex = true;
@@ -32,7 +32,7 @@ for (const id of ids) {
   if (typeof e.svg !== 'string' || e.svg.indexOf('<svg') < 0) allSvg = false;
   if (/#[0-9a-fA-F]{3,8}\b/.test(e.svg)) noHex = false;
   if (e.svg.indexOf('currentColor') < 0) allSvg = false;
-  if (e.file !== 'Asset/flairs/' + id + '.svg') allFields = false;
+  if (e.file !== 'Asset/flairs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.svg') allFields = false;
 }
 ok('every entry has id/name/motif/placement/themes/file/svg', allFields);
 ok('every svg is inline currentColor-only, no hardcoded hex', allSvg && noHex);
@@ -42,23 +42,24 @@ ok('five placements', JSON.stringify(placements) === JSON.stringify(['vine','cor
 
 /* ---- 2. tiers ---- */
 const premium = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.premium}).map(function(e){return e.id}))`));
-ok('3 premium flagged', JSON.stringify(premium) === JSON.stringify(['corner-gilded','watermark-moon','watermark-constellation']));
+ok('15 premium flagged (v423: +12 pack flairs)', premium.length === 15 &&
+  ['corner-gilded','watermark-moon','watermark-constellation'].every(function(id){return premium.indexOf(id) >= 0}));
 const seasonal = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.seasonal}).map(function(e){return e.id}))`));
 ok('7 seasonal garlands', seasonal.length === 7 && seasonal.every(function(id){return id.indexOf('garland-') === 0}));
 const free = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return !e.premium && !e.seasonal}).map(function(e){return e.id}))`));
 ok('10 free core entries', free.length === 10);
 
 /* ---- 3. theme mapping ---- */
-const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest'];
+const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','stormrider','briarthrone','voidsignal','wisp','wisp-night'];
 let vineOk = true, divOk = true, cornerOk = true;
 for (const t of themes) {
   const s = JSON.parse(run(`JSON.stringify({v: (ModalFlairs.flairFor('vine','${t}')||{}).id || null, d: ModalFlairs.flairFor('divider','${t}').id, c: ModalFlairs.flairFor('corners','${t}').id})`));
   if (['fete','yuletide'].indexOf(t) < 0 && !s.v) vineOk = false;  // every other theme has a vine
   if (['fete','yuletide'].indexOf(t) >= 0 && s.v) vineOk = false;   // ...except these two
   if (!s.d) divOk = false;                                          // divider always resolves (diamond fallback)
-  if (s.c !== 'corner-filigree') cornerOk = false;                  // free default wins over premium gilded
+  if (s.c !== 'corner-filigree' && t !== 'voidsignal') cornerOk = false;  // free default wins over premium gilded (except voidsignal which has its own corner)
 }
-ok('vine mapped for 16/17 themes (fete, yuletide intentionally none)', vineOk);
+ok('vine mapped for 20/22 themes (fete, yuletide intentionally none)', vineOk);
 ok('divider resolves for every theme via diamond fallback', divOk);
 ok('corners default to free filigree (not premium gilded)', cornerOk);
 
