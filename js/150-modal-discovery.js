@@ -2041,6 +2041,9 @@ function renderDetailModal(b, viaBook) {
     close(); render();
     toast('Removed');
   });
+
+  // v418: theme-matched modal flairs (vine/corners/divider/garland/watermark).
+  try { if (typeof ModalFlairs !== 'undefined') ModalFlairs.apply(); } catch (e) {}
 }
 
 

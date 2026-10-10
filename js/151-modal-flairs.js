@@ -104,7 +104,7 @@ var CATALOG = [
 </g>
 </svg>` },
     { id: 'vine-ember', name: 'Ember wheat vine', motif: 'ember', placement: 'vine',
-      themes: ['hearthside', 'harvest', 'candlelight'], file: 'Asset/flairs/vine-ember.svg',
+      themes: ['hearthside', 'harvest', 'candlelight', 'haunt'], file: 'Asset/flairs/vine-ember.svg',
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
 <title id="t">Ember wheat vine</title>
 <desc id="d">Upright wheat stalks with grain kernels and a curling flame-tipped tendril.</desc>
