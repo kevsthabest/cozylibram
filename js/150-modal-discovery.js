@@ -1280,8 +1280,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="f-tropesugg" class="chips"></div>' +
     '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
     '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
-    '<div class="tcard"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div>' +
-    '<button class="btn ghost sm" id="m-tropepropose" style="margin-top:4px">＋ Propose a trope</button></div></div>' +
+    '<div class="tcard"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-characters" role="tabpanel" hidden>' +
@@ -1760,9 +1759,7 @@ function renderDetailModal(b, viaBook) {
     inp.value = cur.join(', ');
     syncTropeChips();
   });
-  // v155: propose-a-trope sheet, with this book as the originating book.
-  const tpb = document.getElementById('m-tropepropose');
-  if (tpb) tpb.addEventListener('click', () => openTropeProposalSheet(b));
+  // v155: trope proposal UI removed (v401) — tropes are fully automated.
 
   // v182: mockup "Save note" — notes save immediately (like quotes), and the
   // draft stays in sync so the modal Save can't clobber them.
