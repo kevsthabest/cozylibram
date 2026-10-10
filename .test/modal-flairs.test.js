@@ -22,7 +22,7 @@ const run = (js) => window.eval(js);
 
 /* ---- 1. catalog structure ---- */
 const ids = JSON.parse(run('JSON.stringify(ModalFlairs.CATALOG.map(function(e){return e.id}))'));
-ok('catalog has 25 entries', ids.length === 25);
+ok('catalog has 36 entries', ids.length === 36);
 
 const req = ['id', 'name', 'motif', 'placement', 'themes', 'file', 'svg'];
 let allFields = true, allSvg = true, noHex = true;
@@ -30,7 +30,10 @@ for (const id of ids) {
   const e = JSON.parse(run(`JSON.stringify(ModalFlairs.byId('${id}'))`));
   for (const f of req) if (!(f in e)) allFields = false;
   if (typeof e.svg !== 'string' || e.svg.indexOf('<svg') < 0) allSvg = false;
-  if (/#[0-9a-fA-F]{3,8}\b/.test(e.svg)) noHex = false;
+  // No hardcoded hex except #000 (pure black at low opacity for shading —
+  // neutral, works on any background; used by velvet/verdant vines)
+  const hexes = e.svg.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
+  if (hexes.some(h => h.toLowerCase() !== '#000')) noHex = false;
   // stormrider-vine is Kevin's own raster emblem (his explicit direction), exempt from currentColor
   if (id !== 'stormrider-vine' && e.svg.indexOf('currentColor') < 0) allSvg = false;
   if (e.file !== 'Asset/flairs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.png') allFields = false;
@@ -48,31 +51,33 @@ ok('8 premium flagged', premium.length === 8 &&
 const seasonal = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.seasonal}).map(function(e){return e.id}))`));
 ok('8 seasonal garlands', seasonal.length === 8 && seasonal.every(function(id){return id.indexOf('garland-') === 0}));
 const free = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return !e.premium && !e.seasonal}).map(function(e){return e.id}))`));
-ok('9 free core entries', free.length === 9);
+ok('20 free core entries (10 vines + 10 corners)', free.length === 20);
 
 /* ---- 3. theme mapping ---- */
 const themes = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','solstice','stormrider','briarthrone','voidsignal','wisp','wisp-night'];
 let vineOk = true;
-const noVine = ['fete','yuletide','twilight','midnight','haunt','shamrock','pastel','harvest','solstice'];
+// Claude set: all 10 core themes have vines. Seasonal garland themes and
+// solstice (banner-only) intentionally have none.
+const noVine = ['fete','yuletide','haunt','shamrock','pastel','harvest','solstice'];
 for (const t of themes) {
   const s = JSON.parse(run(`JSON.stringify({v: (ModalFlairs.flairFor('vine','${t}')||{}).id || null})`));
-  if (noVine.indexOf(t) < 0 && !s.v) vineOk = false;  // every other theme has a vine
-  if (noVine.indexOf(t) >= 0 && s.v) vineOk = false;   // ...except these (garland or watermark signatures)
+  if (noVine.indexOf(t) < 0 && !s.v) vineOk = false;
+  if (noVine.indexOf(t) >= 0 && s.v) vineOk = false;
 }
-ok('vine mapped for 14/23 themes (9 garland/watermark themes intentionally none)', vineOk);
+ok('vine mapped for 16/23 themes (7 garland themes intentionally none)', vineOk);
 ok('haunt garland is seasonal', run(`ModalFlairs.flairFor('garland','haunt').id`) === 'garland-haunt');
 ok('dark has no garland (not seasonal)', run(`ModalFlairs.flairFor('garland','dark')`) === null);
-ok('midnight watermark is moonstars (premium, alpha-unlocked)', run(`ModalFlairs.flairFor('watermark','midnight').id`) === 'watermark-moonstars');
+ok('dark has corners (Claude set)', run(`ModalFlairs.flairFor('corners','dark').id`) === 'corner-nightshade');
 
-/* ---- 3b. signature mapping (v426: one signature per theme) ---- */
+/* ---- 3b. signature mapping (Claude core10 set: each core theme's vine) ---- */
 const sigExpect = {
-  dark: 'vine-sprig', light: 'vine-botanical', verdant: 'vine-lush',
-  hearthside: 'vine-ember', candlelight: 'vine-candle',
-  velvet: 'vine-rose', frost: 'vine-frostcrystal', abyss: 'vine-kelp',
+  dark: 'vine-nightshade', light: 'vine-bookrose', verdant: 'vine-fernshroom',
+  hearthside: 'vine-fireoak', candlelight: 'vine-taper',
+  twilight: 'vine-starcompass', midnight: 'vine-moonphases',
+  velvet: 'vine-thornrose', frost: 'vine-frostbranch', abyss: 'vine-jellyfish',
   haunt: 'garland-haunt', yuletide: 'garland-holly', fete: 'garland-gala',
   amour: 'garland-rose', shamrock: 'garland-clover', pastel: 'garland-blossom',
   harvest: 'garland-wheat', solstice: 'garland-solstice',
-  midnight: 'watermark-moonstars', twilight: 'watermark-moon',
   stormrider: 'stormrider-vine', briarthrone: 'briarthrone-vine',
   voidsignal: 'voidsignal-vine', wisp: 'wisp-vine', 'wisp-night': 'wisp-vine',
 };
@@ -97,11 +102,10 @@ window.document.getElementById('modal-root').innerHTML =
 ok('apply returns true', run('ModalFlairs.apply()') === true);
 
 const q = (sel) => window.document.querySelectorAll(sel).length;
-// midnight signature is the moon watermark — one at signature presence,
-// no faint duplicate, no vine (celestial vine retired for these themes)
-ok('midnight: signature watermark injected once', q('.mflair-watermark') === 1);
-ok('midnight: no vine (watermark is the signature)', q('.mflair-vine') === 0);
-ok('corners retired from injection', q('.mflair-corners') === 0);
+// midnight signature is now the moon-phase vine; corners also render
+ok('midnight: signature vine injected in hero', q('.mflair-vine') === 1);
+ok('midnight: corners injected', q('.mflair-corners') === 1);
+ok('midnight: no watermark (vine is the signature)', q('.mflair-watermark') === 0);
 ok('no absolute top-edge garland', q('.mflair-garland') === 0);
 ok('plain hairline dividers between the 3 fields (no motifs)', q('.mflair-divider-plain') === 2 && q('.mflair-divider .motif') === 0);
 
@@ -113,7 +117,7 @@ ok('no duplicate svg title ids (namespaced)', window.document.querySelectorAll('
 
 // idempotent re-apply (theme change path)
 run('ModalFlairs.apply()');
-ok('re-apply is idempotent (no duplicates)', q('.mflair-watermark') === 1 && q('.mflair-divider-plain') === 2);
+ok('re-apply is idempotent (no duplicates)', q('.mflair-vine') === 1 && q('.mflair-corners') === 1 && q('.mflair-divider-plain') === 2);
 
 // seasonal theme: garland becomes an in-flow banner, no vine for yuletide
 window.__theme = 'yuletide';
@@ -128,10 +132,11 @@ ok('yuletide: banner sits above the Details panel', (function(){
 ok('yuletide: no vine (by design)', q('.mflair-vine') === 0);
 ok('yuletide: no absolute garland strip', q('.mflair-garland') === 0);
 
-// vine theme: dark gets the botanical vine at full presence
+// vine theme: dark gets the nightshade vine at full presence, plus corners
 window.__theme = 'dark';
 run('ModalFlairs.apply()');
 ok('dark: signature vine injected in hero', q('.mflair-vine') === 1);
+ok('dark: corners injected', q('.mflair-corners') === 1);
 ok('dark: no banner (not seasonal)', q('.mflair-banner') === 0);
 ok('dark: no watermark (theme has none)', q('.mflair-watermark') === 0);
 
