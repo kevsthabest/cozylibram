@@ -972,7 +972,7 @@ function shelfOpenPhotoSheet(id) {
         book.status = ns;
         book._mtime = Date.now();
         if (typeof saveLibrary === 'function') saveLibrary();
-        if (typeof schedulePush === 'function') schedulePush();
+        if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
         close();
         renderShelf();
       }
