@@ -105,6 +105,7 @@ function renderShelf3D() {
     '<button class="sv-cam" id="svMenu3D" aria-label="Shelf menu" title="Shelf menu">' + ((typeof icon === 'function') ? icon('dots') : '⋮') + '</button>' +
     '<div class="sv-menu" id="svMenuDropdown3D" hidden>' +
     '<button class="sv-menu-item" id="svMenuView3D">' + ((typeof icon === 'function') ? icon('shelf') : '') + '<span>Switch to classic 2D view</span></button>' +
+    '<button class="sv-menu-item" id="svMenuDecor3D">' + ((typeof icon === 'function') ? icon('sparkles') : '') + '<span>Decorations</span></button>' +
     '</div></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(function (g) {
       return '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
@@ -141,6 +142,14 @@ function renderShelf3D() {
       shelfSetViewMode('2d');
       menuDropdown3D.hidden = true;
       renderShelf();
+    });
+    // v417: Decorations inventory in menu (Kevin: wasn't findable in 3D).
+    // Triggers the existing s3dInvBtn; the ▦ button itself is hidden via CSS.
+    const menuDecor3DBtn = document.getElementById('svMenuDecor3D');
+    if (menuDecor3DBtn) menuDecor3DBtn.addEventListener('click', function () {
+      menuDropdown3D.hidden = true;
+      var invBtn = document.getElementById('s3dInvBtn');
+      if (invBtn) invBtn.click();
     });
   }
 

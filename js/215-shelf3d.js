@@ -128,7 +128,8 @@
     '.s3d-root #s3dInvBtn{position:absolute;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:6;',
     '  width:58px;height:58px;border-radius:50%;border:1px solid rgba(229,184,106,.55);',
     '  background:rgba(32,24,40,.92);color:#e5b86a;font-size:24px;cursor:pointer;',
-    '  box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(6px);}',
+    '  box-shadow:0 4px 16px rgba(0,0,0,.5);backdrop-filter:blur(6px);',
+    '  display:none;}',  // v417: hidden — inventory now in the ⋮ overflow menu
     '.s3d-root #s3dInvBtn:active{transform:scale(.93);}',
     '.s3d-root #s3dInvPanel{position:absolute;left:0;right:0;bottom:0;z-index:8;max-height:62%;',
     '  background:rgba(18,13,24,.97);border-top:1px solid rgba(229,184,106,.35);',
