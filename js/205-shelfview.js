@@ -654,7 +654,9 @@ function renderShelf() {
   if (typeof shelfUnmount3D === 'function') shelfUnmount3D();
   // v408: skip 3D if WebGL failed this session (don't keep retrying a broken context).
   const webglFailed = (typeof _shelf3dWebGLFailed !== 'undefined' && _shelf3dWebGLFailed);
-  if (!webglFailed && typeof shelfViewMode === 'function' && shelfViewMode() === '3d' &&
+  // Phase 1: capability gate — fall back to 2.5D on weak devices
+  const capable = (typeof shelf3DCapable === 'function') ? shelf3DCapable() : true;
+  if (!webglFailed && capable && typeof shelfViewMode === 'function' && shelfViewMode() === '3d' &&
       typeof renderShelf3D === 'function') {
     renderShelf3D();
     return;
