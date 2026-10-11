@@ -1044,7 +1044,8 @@ function renderStats() {
   const pagesYr = pagesInYear(yr); // v427: sum logs, not pageCount (issue #53)
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const ratedYr = readYr.filter(b => b.myRating > 0);
-  const avgMine = avgOf((ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0).map(b => b.myRating));
+  const ratedAll = (ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0);
+  const avgMine = avgOf(ratedAll.map(b => b.myRating));
   const streak = readingStreak();
 
   // v128: this month's numbers power the dashboard hero cards.
@@ -1057,7 +1058,8 @@ function renderStats() {
   const mLast = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
   const mPfx = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
   const pagesMo = pagesInRange(mPfx + '-01', mPfx + '-' + String(mLast).padStart(2, '0'));
-  const avgMo = avgOf(readMo.filter(b => b.myRating > 0).map(b => b.myRating));
+  const ratedMo = readMo.filter(b => b.myRating > 0);
+  const avgMo = avgOf(ratedMo.map(b => b.myRating));
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
@@ -1162,7 +1164,9 @@ function renderStats() {
       '<div class="stat-row">' +
       heroCard('covers', readMo.length, 'Books finished') +
       heroCard('doc', pagesMo > 999 ? (pagesMo / 1000).toFixed(1) + 'k' : pagesMo, 'Pages') +
-      heroCard('heart', avgMo != null ? avgMo.toFixed(1) : '–', 'Avg rating') +
+      (ratedMo.length
+        ? heroCard('heart', avgMo.toFixed(1) + ' ★', 'Avg rating (' + ratedMo.length + ')')
+        : '<button class="stat hero" data-act="rate-book" style="cursor:pointer"><div class="n">' + icon('heart') + '</div><div class="l">Rate a book</div></button>') +
       heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time (est.)') +
       '</div>' +
       // v447: gentle month-over-month note — cozy framing, not KPI deltas
@@ -1234,7 +1238,9 @@ function renderStats() {
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
     '<div class="stat"><div class="n">' + (pagesYr > 999 ? (pagesYr / 1000).toFixed(1) + 'k' : pagesYr) + '</div><div class="l">Pages</div></div>' +
-    '<div class="stat"><div class="n">' + icon('heart') + ' ' + (avgMine != null ? avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
+    (ratedAll.length
+      ? '<div class="stat"><div class="n">' + icon('heart') + ' ' + avgMine.toFixed(1) + ' ★</div><div class="l">Avg rating (' + ratedAll.length + ')</div></div>'
+      : '<button class="stat" data-act="rate-book" style="cursor:pointer"><div class="n">' + icon('heart') + '</div><div class="l">Rate a book</div></button>') +
     '<div class="stat"><div class="n">' + icon('flame') + ' ' + (streak > 0 ? streak : '0') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
     '<button class="yib-card" id="st-yib">' + icon('sparkles') +
