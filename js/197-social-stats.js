@@ -186,7 +186,7 @@ async function loadCovenStats() {
   if (devourer && devourer.books > 0) awards.push({ label: 'Page Devourer', person: devourer.p,
     detail: devourer.books + ' finished · ' + devourer.pages.toLocaleString() + ' pages this month' });
   push(people.filter(p => p.stats.dnf >= 2).sort((a, b) => b.stats.dnf - a.stats.dnf)[0],
-    'DNF Royalty', p => p.stats.dnf + ' books abandoned, zero regrets');
+    'Fearless Quitter', p => p.stats.dnf + ' books abandoned, zero regrets');
 
   // Soulmate scores + taste overlap per friend.
   const soulmates = others.map(p => ({ p: p, sm: soulmateScore(me, p.stats) }))
@@ -258,8 +258,8 @@ function covenStatsHTML(d) {
     html += '</div>';
   }
 
-  // Superlatives
-  if (d.awards.length) {
+  // Superlatives — only with 3+ people (you + 2 friends)
+  if (d.awards.length && d.people.length >= 3) {
     html += '<div class="circle-card"><h3 style="margin:0 0 10px">Superlatives</h3><div class="circle-list">';
     d.awards.forEach(a => {
       html += '<div class="circle-row">' + statAvatar(a.person) +
