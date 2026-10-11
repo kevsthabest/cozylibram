@@ -323,7 +323,7 @@ function renderCoven() {
       circleUpgradeAvatars(document.getElementById('view'));
       if (typeof refreshRecos === 'function') refreshRecos();
       if (typeof refreshCovenStats === 'function') refreshCovenStats();
-      consumePendingInvite();
+      consumePendingInvite(code, lists.friends);
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
@@ -362,11 +362,18 @@ function renderInviteAccept(slot, inv) {
 }
 // A deep-link token (or a pasted link) waiting on the coven tab: resolve it
 // into the accept card, or surface why it's unusable.
-function consumePendingInvite() {
+function consumePendingInvite(code, friends) {
   if (!pendingInviteToken) return;
-  const slot = document.getElementById('cc-accept-slot');
+  // v454: invite UI lives in the sheet now — open it for the deep link
+  let slot = document.getElementById('cc-accept-slot');
+  if (!slot) {
+    if (typeof openInviteSheet === 'function' && code) {
+      openInviteSheet(code, null, friends || []);
+      slot = document.getElementById('cc-accept-slot');
+    }
+    if (!slot) { clearPendingInvite(); return; }
+  }
   const msg = document.getElementById('cc-msg');
-  if (!slot) { clearPendingInvite(); return; }
   slot.innerHTML = '<p class="note" style="text-align:center">Checking that invite…</p>';
   resolveInviteToken(pendingInviteToken).then(inv => {
     const s2 = document.getElementById('cc-accept-slot');

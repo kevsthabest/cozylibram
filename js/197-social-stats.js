@@ -38,7 +38,7 @@ function pagesInRangeFor(books, start, end) {
     (books || []).forEach(b => {
       const f = b.dateFinished ? String(b.dateFinished).slice(0, 10) : '';
       if ((b.status === 'read' || f) && f >= start && f <= end) {
-        pages += Number(b.pageCount) || 0;
+        pages += Number(b.pageCount) || Number(b.pages) || 0;
       }
     });
     return { pages: pages, estimated: true };
