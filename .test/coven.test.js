@@ -309,28 +309,18 @@ stub.rpc = (fn, args) => {
   ok('friend shelf shows their books', fvText.indexOf('Shared Tome') !== -1);
   ok('friend shelf does not leak my books', fvText.indexOf('Mine') === -1);
 
-  // ---- v99: per-theme naming ----
-  const names = probe('JSON.stringify({ ' +
-    'dark: covenNameFor("dark"), light: covenNameFor("light"), hearthside: covenNameFor("hearthside"), ' +
-    'candlelight: covenNameFor("candlelight"), twilight: covenNameFor("twilight"), verdant: covenNameFor("verdant"), ' +
-    'haunt: covenNameFor("haunt"), solstice: covenNameFor("solstice"), ' +
-    'bogus: covenNameFor("nope") })');
-  const nm = JSON.parse(names);
-  ok('every theme has a social name', nm.dark === 'Coven' && nm.light === 'Book Club' &&
-    nm.hearthside === 'Fireside' && nm.candlelight === 'Salon' &&
-    nm.twilight === 'Night Court' && nm.verdant === 'Grove');
-  ok('haunt coven renamed to avoid dark collision (v416 T8)', nm.haunt === 'Haunt Coven');
-  ok('solstice names the sun court (v416 T6)', nm.solstice === 'Sun Court');
-  ok('unknown theme falls back to Coven', nm.bogus === 'Coven');
+  // ---- social section is always "The Hearth" (Kevin's call, 2026-10-11) ----
+  // Theme-specific names (Night Court, Harvest Court, ...) are retired.
+  ok('covenName() is always The Hearth', probe('covenName()') === 'The Hearth');
 
   window.localStorage.setItem('theme', 'twilight');
   useAs(A);
   await probe('renderCoven()'); await tick(5);
-  ok('heading follows the theme', q('#view').textContent.indexOf('Night Court') !== -1);
-  ok('nav label follows the theme', window.document.querySelector('.bottom-nav [data-nav="coven"] span').textContent === 'Night Court');
+  ok('heading is The Hearth regardless of theme', q('#view').textContent.indexOf('The Hearth') !== -1);
+  ok('nav label is The Hearth regardless of theme', window.document.querySelector('.bottom-nav [data-nav="coven"] span').textContent === 'The Hearth');
   window.localStorage.setItem('theme', 'dark');
   await probe('renderCoven()'); await tick(5);
-  ok('heading returns to Coven on dark', q('#view h2').textContent.indexOf('Coven') !== -1);
+  ok('heading stays The Hearth on dark', q('#view h2').textContent.indexOf('The Hearth') !== -1);
 
   // ---- v100: stats slot integration (real refresh path, stub cloud) ----
   useAs(A);
