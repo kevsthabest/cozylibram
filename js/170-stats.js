@@ -47,16 +47,22 @@ function biggestDay() {
 // v427 (issue #53): yearly page totals must sum actual logged pages, not
 // book pageCounts — the calendar, biggest-day, and pace all use logs.
 // Summing pageCount diverged (e.g. 400 vs 987) when logs didn't match.
-function pagesInYear(yr) {
+// v454: ONE helper for all log-based page sums — pagesInRange(start, end)
+// takes YYYY-MM-DD strings, sums (to - from) from reading logs only.
+function pagesInRange(start, end) {
   let total = 0;
   library.forEach(b => {
     (b.log || []).forEach(e => {
-      if (e.d && e.d.slice(0, 4) === String(yr) && e.to > e.from) {
+      const d = String(e.d || '');
+      if (d >= start && d <= end && e.to > e.from) {
         total += Math.max(0, e.to - e.from);
       }
     });
   });
   return total;
+}
+function pagesInYear(yr) {
+  return pagesInRange(String(yr) + '-01-01', String(yr) + '-12-31');
 }
 
 /* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
@@ -1047,11 +1053,10 @@ function renderStats() {
   const readMo = read.filter(b => { const d = b.dateFinished && new Date(b.dateFinished); return d && d >= mStart; });
   // v447: dashboard pages use logged session pages (not finished books' page
   // counts) so in-progress reading counts and the number matches the detail view.
-  const pagesByDay = pagesByDayMap();
-  const monthPrefix = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
-  const pagesMo = Object.keys(pagesByDay)
-    .filter(k => k.indexOf(monthPrefix) === 0)
-    .reduce((s, k) => s + pagesByDay[k].pages, 0);
+  // v454: via the single pagesInRange helper.
+  const mLast = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
+  const mPfx = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
+  const pagesMo = pagesInRange(mPfx + '-01', mPfx + '-' + String(mLast).padStart(2, '0'));
   const avgMo = avgOf(readMo.filter(b => b.myRating > 0).map(b => b.myRating));
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
