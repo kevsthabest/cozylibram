@@ -135,18 +135,14 @@ const MILESTONE_CATALOG = [
     copy: 'Ten dark romances. No judgment \u2014 only admiration.',
     hint: 'Read 10 dark romances',
     genre: 'dark romance' },
-  { id: 'taste-brave-12', cat: 'taste', icon: 'shield',
-    title: 'Fearless reader',
-    copy: 'Twelve books with 3+ trigger warnings. You don\u2019t flinch.',
-    hint: 'Read 12 books with 3+ trigger warnings' },
+  { id: 'aware-choice-5', cat: 'taste', icon: 'eye',
+    title: 'A Thoughtful Choice',
+    copy: 'You checked the warnings on 5 books before starting. Informed reader.',
+    hint: 'Check content warnings on 5 books before starting' },
   { id: 'taste-devoted-3', cat: 'taste', icon: 'heart',
     title: 'Devoted fan',
     copy: 'Three books by the same author. That\u2019s not casual.',
     hint: 'Read 3 books by one author' },
-  { id: 'taste-fearless-star', cat: 'taste', icon: 'star',
-    title: 'Brave heart',
-    copy: 'A 5-star rating on a book with 5+ warnings. Bold taste.',
-    hint: 'Give 5 stars to a book with 5+ trigger warnings' },
 
   // ---- Green wave: TBR archaeology ----
   { id: 'tbr-forgotten-scroll', cat: 'journey', icon: 'scroll',
@@ -458,12 +454,11 @@ function detectMilestones(lib) {
     if (dr.length >= 10) found.push({ id: 'taste-dark-romance-10', achievedAt: null });
   } catch (e) {}
 
-  // Taste: trigger-warning bravery
+  // Taste: thoughtful warning checks (replaces trigger-bravery, v467)
+  // Celebrates agency (checking) not exposure (pushing through).
   try {
-    const brave = read.filter(b => (b.triggerWarnings || b.contentWarnings || []).length >= 3);
-    if (brave.length >= 12) found.push({ id: 'taste-brave-12', achievedAt: null });
-    const fearless = brave.find(b => (b.myRating || 0) >= 5 && (b.triggerWarnings || b.contentWarnings || []).length >= 5);
-    if (fearless) found.push({ id: 'taste-fearless-star', achievedAt: fearless.dateFinished ? new Date(fearless.dateFinished).toISOString() : null });
+    const checked = (typeof library !== 'undefined' ? library : []).filter(b => b && b.triggerCheckSeen).length;
+    if (checked >= 5) found.push({ id: 'aware-choice-5', achievedAt: null });
   } catch (e) {}
 
   // Taste: devoted fan (3+ books, one author)
