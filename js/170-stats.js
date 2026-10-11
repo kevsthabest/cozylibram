@@ -12,7 +12,66 @@ function libraryDefaultPrice() {
     var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice'));
     if (!isNaN(v) && v >= 0) return Math.round(v * 100) / 100;
   } catch (e) {}
-  return 24.99;
+  // no stored default — fall back to the regional estimate (see below)
+  var ccy = (typeof userCurrency === 'function') ? userCurrency() : 'CAD';
+  return CURRENCY_DEFAULTS[ccy] != null ? CURRENCY_DEFAULTS[ccy] : 24.99;
+}
+
+/* v480: regional currency. Book values follow the reader's region: the
+   browser locale maps to a currency plus a per-market default estimate.
+   These are static regional averages, NOT live conversion — estimates stay
+   estimates. purchasePrice is always in the user's own currency: it is
+   formatted, never converted. Default: CAD (home market). */
+var CURRENCY_DEFAULTS = {
+  USD: 19.99,  // United States
+  CAD: 24.99,  // Canada
+  EUR: 17.99,  // Eurozone
+  GBP: 14.99,  // United Kingdom
+  AUD: 29.99,  // Australia
+  NZD: 32.99,  // New Zealand
+  CHF: 21.90,  // Switzerland
+  SEK: 199,    // Sweden
+  NOK: 219,    // Norway
+  DKK: 149,    // Denmark
+  MXN: 349,    // Mexico
+  BRL: 99.90,  // Brazil
+  INR: 499,    // India
+  JPY: 2800    // Japan
+};
+function userCurrency() {
+  var lang = '';
+  try { lang = String(navigator.language || '').toLowerCase(); } catch (e) {}
+  var parts = lang.split(/[-_]/);
+  var country = (parts[1] || '').toUpperCase();
+  var COUNTRY_CCY = {
+    US: 'USD', CA: 'CAD', GB: 'GBP', AU: 'AUD', NZ: 'NZD', JP: 'JPY',
+    CH: 'CHF', SE: 'SEK', NO: 'NOK', DK: 'DKK', MX: 'MXN', BR: 'BRL', IN: 'INR'
+  };
+  if (COUNTRY_CCY[country]) return COUNTRY_CCY[country];
+  // language-only tags: eurozone languages default to EUR
+  var EURO_LANGS = ['de', 'fr', 'es', 'it', 'nl', 'pt', 'fi', 'el', 'ga',
+    'et', 'lv', 'lt', 'sk', 'sl', 'mt'];
+  if (EURO_LANGS.indexOf(parts[0]) >= 0) return 'EUR';
+  return 'CAD';
+}
+function userLocale() {
+  try { return navigator.language || 'en-CA'; } catch (e) { return 'en-CA'; }
+}
+/* Format a money amount in the user's currency. opts.digits controls
+   decimals (default 2). Falls back to bare $ on ancient engines. */
+function formatMoney(amount, opts) {
+  opts = opts || {};
+  var digits = (opts.digits != null) ? opts.digits : 2;
+  try {
+    return new Intl.NumberFormat(userLocale(), {
+      style: 'currency',
+      currency: userCurrency(),
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    }).format(Number(amount) || 0);
+  } catch (e) {
+    return '$' + (Number(amount) || 0).toFixed(digits);
+  }
 }
 function estimateBookValue(b) {
   if (b && b.purchasePrice != null && !isNaN(b.purchasePrice))
