@@ -225,7 +225,8 @@ async function circleSavePrivacy(share, hidden) {
    Hearth, ask whether their shelves should be shared. The profiles.share_library
    toggle is global, so this prompt runs once per device (localStorage flag) —
    answering sets the standing preference; later acceptances respect it.
-   Dismissing the sheet counts as "not now": sharing stays off. */
+   "Not now"/dismiss means defer, not revoke: an existing opt-in is never
+   silently revoked. Only an explicit "Yes, share" writes to the profile. */
 var SHELF_SHARE_ASKED_KEY = 'cozylibram.shelfShareAsked';
 function shelfShareAsked() {
   try { return localStorage.getItem(SHELF_SHARE_ASKED_KEY) === '1'; } catch (e) { return true; }
@@ -240,20 +241,27 @@ async function maybeAskShelfShare(friendName) {
   let decided = false;
   const finish = async (share) => {
     if (decided) return; decided = true;
-    try {
-      await circleSavePrivacy(share, hidden);
+    if (share) {
+      try {
+        await circleSavePrivacy(true, hidden);
+        markShelfShareAsked();
+      } catch (e) { /* save failed: flag stays unset, prompt returns next time */ }
+    } else {
+      // "Not now"/dismiss means defer, not revoke: leave profiles.share_library
+      // untouched so an existing opt-in is never silently revoked for all
+      // existing friends. Just record that we asked so the prompt doesn't return.
       markShelfShareAsked();
-    } catch (e) { /* save failed: flag stays unset, prompt returns next time */ }
+    }
     covenCloseSheet();
     toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase()
-                : 'Your shelves stay private — change this anytime in Privacy settings');
+                : 'No changes — manage sharing anytime in Privacy settings');
   };
   const nm = esc(friendName || 'your new friend');
   const body =
     '<p><b>' + nm + '</b> is now in your ' + esc(covenName().toLowerCase()) + '.</p>' +
     '<p class="note">Let them browse your shelves? You can change this anytime in Privacy settings.</p>' +
     '<div class="modal-actions" style="margin-top:16px">' +
-    '<button class="btn" id="cc-ss-yes" style="flex:1;min-height:44px">Yes, share</button>' +
+    '<button class="btn ghost" id="cc-ss-yes" style="flex:1;min-height:44px">Yes, share</button>' +
     '<button class="btn ghost" id="cc-ss-no" style="flex:1;min-height:44px">Not now</button>' +
     '</div>';
   covenOpenSheet('Share your shelves?', body, null, () => { if (!decided) finish(false); });
