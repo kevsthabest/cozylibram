@@ -1107,13 +1107,42 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .pattern .pi { flex: none; }
 .pattern p { margin: 0; }
 .pattern p b { color: var(--ink); }
+/* v447: insight of the week — featured pattern at the dashboard top */
+.insight-card { display: flex; gap: 10px; align-items: flex-start; background: var(--card2);
+  border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;
+  font-size: 14px; }
+.insight-card .pi { flex: none; color: var(--gold); }
+.insight-card p { margin: 0; }
+.insight-card p b { color: var(--ink); }
+/* v447: Year in Books — promoted from ghost button to shareable card */
+.yib-card { display: flex; gap: 12px; align-items: center; width: 100%;
+  background: linear-gradient(135deg, var(--card2), var(--card));
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+  margin: 10px 0 14px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; }
+.yib-card svg { width: 28px; height: 28px; color: var(--gold); flex: none; }
+.yib-card .yib-title { font-weight: 600; font-size: 16px; }
+.yib-card .yib-go { margin-left: auto; font-size: 22px; color: var(--muted); flex: none; }
+.yib-card:hover .yib-go { color: var(--ink); }
+/* v447: stats detail section navigation */
+.stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.stat-nav .chip { cursor: pointer; }
+/* v447: desktop detail view — two columns instead of one stretched column */
+@media (min-width: 900px) {
+  #st-sec-activity, #st-sec-pace, #st-sec-taste, #st-sec-records { break-inside: avoid; }
+  .stat-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; align-items: start; }
+}
 /* personal records + series (v66) */
 .records { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
-.record-card { background: var(--card); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; }
+/* v447: portrait thumbnail beside text, not a wide crop */
+.record-card { background: var(--card); border-radius: 12px; padding: 10px; cursor: pointer; }
 .record-card .rlbl { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
-.record-card .cover-wrap { width: 100%; height: 118px; flex: none; margin: 0 auto 8px; }
+.record-card .rcard-body { display: flex; gap: 10px; align-items: center; }
+.record-card .cover-wrap { width: 44px; height: 66px; flex: none; margin: 0; }
 .record-card .rtitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-card .rstat { font-size: 12px; color: var(--muted); margin-top: 2px; }
+/* v447: bigday card has no cover — keep it centered */
+#bigday { text-align: center; }
+#bigday .bigday-num { font-size: 28px; font-weight: 700; color: var(--ink); }
 .bigday-num { height: 118px; display: flex; align-items: center; justify-content: center;
   font-size: 38px; font-weight: 800; color: var(--accent);
   background: linear-gradient(140deg, var(--card2), var(--bg2)); border-radius: 8px; margin-bottom: 8px; }
