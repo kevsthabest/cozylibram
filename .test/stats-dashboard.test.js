@@ -57,22 +57,22 @@ ok('dash: monthly numbers (1 book, 300 pages, 4.0, ~5h)',
   /4\.0/.test(viewHTML()) && /~5h/.test(viewHTML()));
 ok('dash: currently-reading strip kept', /Currently reading/.test(viewHTML()));
 ok('dash: shelf distribution kept', /Shelves/.test(viewHTML()));
-ok('dash: explore entry point', !!q('#st-explore'));
+ok('dash: segmented control present', !!q('#st-modeseg'));
 
 // --- 2. Detail sections NOT on the dashboard ---
 ok('dash: heatmap hidden', !q('#heatmap'));
 ok('dash: reading calendar hidden', !q('#readcal'));
 ok('dash: rating distribution hidden', !/Rating distribution/i.test(viewHTML()));
 
-// --- 3. Explore -> detail ---
-q('#st-explore').click();
+// --- 3. Segmented control -> detail ---
+q('#st-modeseg button[data-m="detail"]').click();
 ok('detail: full explorer renders', !!q('#heatmap') && !!q('#readcal'));
 ok('detail: yearly overview kept', /Read in /.test(viewHTML()));
-ok('detail: back-to-dashboard button', !!q('#st-backdash'));
+ok('detail: segmented control persists', !!q('#st-modeseg'));
 
 // --- 4. Back -> dashboard ---
-q('#st-backdash').click();
-ok('dash: back returns to dashboard', !!q('#st-explore') && !q('#heatmap'));
+q('#st-modeseg button[data-m="dash"]').click();
+ok('dash: back returns to dashboard', !!q('#st-modeseg') && !q('#heatmap'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

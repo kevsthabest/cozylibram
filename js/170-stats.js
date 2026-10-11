@@ -604,9 +604,11 @@ function recordsHTML() {
   const cards = [];
   const card = (icon, label, b, stat) => {
     if (!b) return;
-    cards.push('<div class="record-card" data-id="' + esc(b.id) + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
-      '<div class="rcard-body">' + coverHTML(b) + '<div><div class="rtitle">' + esc(b.title) + '</div>' +
-      '<div class="rstat">' + stat + '</div></div></div></div>');
+    // v454 Part 2: row layout — portrait cover left, label/title/value right
+    cards.push('<div class="record-row" data-id="' + esc(b.id) + '">' + coverHTML(b, 'rec-cov') +
+      '<div class="rmeta"><div class="rlbl">' + icon + ' ' + label + '</div>' +
+      '<div class="rtitle">' + esc(b.title) + '</div>' +
+      '<div class="rstat">' + stat + '</div></div></div>');
   };
   if (withPages.length) {
     const s = withPages.slice().sort((a, b) => b.pageCount - a.pageCount);
@@ -1059,6 +1061,14 @@ function fallbackCopy(t, done) {
 function renderStats() {
   // v448: backfill milestones once (idempotent — no-op after first run)
   try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
+  // v454 Part 2: Dashboard / Details segmented control
+  const modeSeg = '<div class="seg seg-2" id="st-modeseg" style="margin-bottom:14px">' +
+    '<button data-m="dash"' + (statsMode === 'dash' ? ' class="active"' : '') + '>Dashboard</button>' +
+    '<button data-m="detail"' + (statsMode === 'detail' ? ' class="active"' : '') + '>Details</button></div>';
+  const wireModeSeg = () => {
+    document.querySelectorAll('#st-modeseg button').forEach(b =>
+      b.addEventListener('click', () => { statsMode = b.dataset.m; renderStats(); }));
+  };
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
@@ -1179,6 +1189,7 @@ function renderStats() {
     } catch (e) {}
     setView(
       '<h2 class="section serif">Reading stats</h2>' +
+      modeSeg +
       milestoneCard +
       insightCard +
       '<div class="stat-sub">' + icon('calendar') + ' ' + esc(monthName) + '</div>' +
@@ -1220,16 +1231,11 @@ function renderStats() {
       '</span></div>' +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
-      valueSection +
-      '<div class="search-row" style="margin:16px 0"><button class="btn ghost block" id="st-explore">' +
-      icon('chart') + ' Explore detailed stats →</button></div>'
+      valueSection
     );
+    wireModeSeg();
     document.querySelectorAll('.now-reading .book-card').forEach(c =>
       c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
-    document.getElementById('st-explore').addEventListener('click', () => {
-      statsMode = 'detail';
-      renderStats();
-    });
     // v448: milestone celebration — "seen" means the reader engaged:
     // clicking "View milestones" or explicitly dismissing the card.
     // Merely rendering the card does not consume the celebration.
@@ -1253,8 +1259,8 @@ function renderStats() {
   }
 
   setView(
-    '<button class="btn ghost sm" id="st-backdash" style="margin-bottom:10px">← Dashboard</button>' +
     '<h2 class="section serif">Reading stats</h2>' +
+    modeSeg +
     '<div class="stat-sub">Overview</div>' +
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
@@ -1271,22 +1277,22 @@ function renderStats() {
     nowReading +
     dailyStatsHTML() +
     // v447: section navigation for the long detail view
-    '<div class="stat-nav">' +
+    '<div class="stat-nav sticky">' +
     ['Activity|st-sec-activity', 'Pace|st-sec-pace', 'Taste|st-sec-taste', 'Records|st-sec-records'].map(s => {
       const parts = s.split('|');
       return '<button class="chip" data-target="' + parts[1] + '">' + parts[0] + '</button>';
     }).join('') +
     '</div>' +
     '<div class="stat-sub">Explore</div>' +
-    '<div id="st-sec-activity">' + heatmapHTML() + readingCalHTML() + '</div>' +
+    '<div class="st-sec" id="st-sec-activity"><button class="st-sec-head" data-sec="st-sec-activity"><span>Activity</span><span class="chev">▾</span></button><div class="st-sec-body">' + heatmapHTML() + readingCalHTML() + '</div></div>' +
     '<div class="stat-detail-grid">' +
-    '<div id="st-sec-pace">' + paceHTML() + '</div>' +
-    '<div id="st-sec-taste">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
+    '<div class="st-sec" id="st-sec-pace"><button class="st-sec-head" data-sec="st-sec-pace"><span>Pace</span><span class="chev">▾</span></button><div class="st-sec-body">' + paceHTML() + '</div></div>' +
+    '<div class="st-sec" id="st-sec-taste"><button class="st-sec-head" data-sec="st-sec-taste"><span>Taste</span><span class="chev">▾</span></button><div class="st-sec-body">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
-    ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div>' +
+    ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div></div>' +
     '</div>' +
-    '<div id="st-sec-records">' + recordsHTML() + seriesHTML() + '</div>' +
+    '<div class="st-sec" id="st-sec-records"><button class="st-sec-head" data-sec="st-sec-records"><span>Records</span><span class="chev">▾</span></button><div class="st-sec-body">' + recordsHTML() + seriesHTML() + '</div></div>' +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>'
   );
 
@@ -1316,7 +1322,7 @@ function renderStats() {
       calSel = (calSel === c.dataset.day) ? null : c.dataset.day;
       renderStats();
     }));
-  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .series-row [data-id]').forEach(c =>
+  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .record-row[data-id], .series-row [data-id]').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   const sra = document.getElementById('sr-all');
   if (sra) sra.addEventListener('click', () => { seriesReturn = 'stats'; go('series'); });
@@ -1335,10 +1341,20 @@ function renderStats() {
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   });
-  document.getElementById('st-backdash').addEventListener('click', () => {
-    statsMode = 'dash';
-    renderStats();
-  });
+  wireModeSeg();
+  // v454 Part 2: jump chips scroll to sections; section heads collapse/expand
+  document.querySelectorAll('.stat-nav .chip').forEach(ch =>
+    ch.addEventListener('click', () => {
+      const el = document.getElementById(ch.dataset.target);
+      if (el) {
+        el.classList.remove('collapsed');
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }));
+  document.querySelectorAll('.st-sec-head').forEach(h =>
+    h.addEventListener('click', () => {
+      document.getElementById(h.dataset.sec).classList.toggle('collapsed');
+    }));
   document.getElementById('st-yib').addEventListener('click', () => renderYearInBooks(new Date().getFullYear()));
   document.querySelectorAll('#evo-gran button').forEach(b2 =>
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));

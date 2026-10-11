@@ -609,6 +609,8 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 
 /* segmented status control */
 .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* v454: two-option segmented control */
+.seg-2 { grid-template-columns: repeat(2, 1fr); }
 .seg button {
   border: 1px solid var(--line);
   background: var(--bg2);
@@ -1153,7 +1155,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .milestone-row .ms-share svg { width: 18px; height: 18px; }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+/* v454 Part 2: sticky jump chips */
+.stat-nav.sticky { position: sticky; top: 0; z-index: 20; background: var(--bg);
+  padding: 8px 0; margin: 0 -4px; padding-left: 4px; padding-right: 4px; }
 .stat-nav .chip { cursor: pointer; }
+/* v454 Part 2: collapsible detail sections */
+.st-sec-head { display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: 0; padding: 12px 0; cursor: pointer;
+  color: var(--ink); font-size: 15px; font-weight: 600; min-height: 44px; }
+.st-sec-head .chev { color: var(--muted); transition: transform 0.2s; }
+.st-sec.collapsed .st-sec-head .chev { transform: rotate(-90deg); }
+.st-sec.collapsed .st-sec-body { display: none; }
 /* v447: desktop detail view — two columns instead of one stretched column */
 @media (min-width: 900px) {
   #st-sec-activity, #st-sec-pace, #st-sec-taste, #st-sec-records { break-inside: avoid; }
@@ -1168,6 +1180,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .record-card .cover-wrap { width: 44px; height: 66px; flex: none; margin: 0; }
 .record-card .rtitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-card .rstat { font-size: 12px; color: var(--muted); margin-top: 2px; }
+/* v454 Part 2: record rows — 46x69 portrait cover left, label/title/value right */
+.record-row { display: flex; gap: 12px; align-items: center; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px; cursor: pointer;
+  min-height: 44px; margin-bottom: 8px; }
+.record-row .cover-wrap { width: 46px; height: 69px; flex: none; margin: 0; border-radius: 6px; }
+.record-row .rmeta { flex: 1; min-width: 0; }
+.record-row .rlbl { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); }
+.record-row .rtitle { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0; }
+.record-row .rstat { font-size: 13px; color: var(--muted); }
 /* v447: bigday card has no cover — keep it centered */
 #bigday { text-align: center; }
 #bigday .bigday-num { font-size: 28px; font-weight: 700; color: var(--ink); }
