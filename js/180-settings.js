@@ -399,7 +399,12 @@ function renderSettings() {
     (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Usage analytics' +
     '<span class="chk-hint">Helps improve the app. Counts how features are used — never what books you own.</span></label>' +
     '<p class="note" style="margin-top:6px"><a href="#" id="st-analytics-what">What exactly is collected?</a></p>' +
-    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
+    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>' +
+    // v454: library value opt-in (default OFF)
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-showvalue" ' +
+    (function() { try { return localStorage.getItem('cozylibram.showLibraryValue') === '1' ? 'checked' : ''; } catch (e) { return ''; } })() + '> ' +
+    icon('chart') + ' Show library value' +
+    '<span class="chk-hint">Estimates your collection\u2019s value from book prices in Stats.</span></label>';
 
   /* ---- About ---- */
   const htmlAbout =
@@ -660,6 +665,12 @@ function renderSettings() {
   document.getElementById('st-analytics').addEventListener('change', e => {
     setAnalyticsEnabled(e.target.checked);
     toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');
+  });
+  // v454: library value opt-in
+  var valTgl = document.getElementById('st-showvalue');
+  if (valTgl) valTgl.addEventListener('change', e => {
+    try { localStorage.setItem('cozylibram.showLibraryValue', e.target.checked ? '1' : '0'); } catch (err) {}
+    toast(e.target.checked ? 'Library value on — see it in Stats' : 'Library value off');
   });
   var yoloTgl = document.getElementById('st-yolo');
   if (yoloTgl) yoloTgl.addEventListener('change', e => {

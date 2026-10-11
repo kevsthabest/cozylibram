@@ -47,16 +47,22 @@ function biggestDay() {
 // v427 (issue #53): yearly page totals must sum actual logged pages, not
 // book pageCounts — the calendar, biggest-day, and pace all use logs.
 // Summing pageCount diverged (e.g. 400 vs 987) when logs didn't match.
-function pagesInYear(yr) {
+// v454: ONE helper for all log-based page sums — pagesInRange(start, end)
+// takes YYYY-MM-DD strings, sums (to - from) from reading logs only.
+function pagesInRange(start, end) {
   let total = 0;
   library.forEach(b => {
     (b.log || []).forEach(e => {
-      if (e.d && e.d.slice(0, 4) === String(yr) && e.to > e.from) {
+      const d = String(e.d || '');
+      if (d >= start && d <= end && e.to > e.from) {
         total += Math.max(0, e.to - e.from);
       }
     });
   });
   return total;
+}
+function pagesInYear(yr) {
+  return pagesInRange(String(yr) + '-01-01', String(yr) + '-12-31');
 }
 
 /* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
@@ -262,7 +268,26 @@ function dailyStatsHTML() {
 
 /* ---- reading profile (v65): per-axis intensity meters + one plain-spoken
    line about what she reaches for. Descriptive, not judgmental. ---- */
+/* v454: single taste gate — replaces three separate empty-state cards.
+   Shows once when fewer than 3 books are rated. */
+function tasteRatedCount() {
+  return library.filter(b => (b.myRating || 0) > 0).length;
+}
+function tasteGateNeeded() {
+  return tasteRatedCount() < 3;
+}
+function tasteGateHTML() {
+  const n = Math.min(tasteRatedCount(), 3);
+  const pct = Math.round(n / 3 * 100);
+  return '<div class="stat-sub">Reading profile</div>' +
+    '<div class="valcard"><div class="big">Unlock your reading profile</div>' +
+    '<p class="note">Rate 3 books to reveal your mood, spice and reading DNA.</p>' +
+    '<div class="progress-line" style="margin:8px 0"><span class="fill" style="width:' + pct + '%"></span></div>' +
+    '<div class="note">' + n + ' of 3 rated</div>' +
+    '<div style="margin-top:10px"><button class="btn" data-act="rate-book">Rate a book</button></div></div>';
+}
 function spiceProfileHTML() {
+  if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const rows = RATING_AXES.map(a => {
     const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
@@ -293,6 +318,7 @@ function spiceProfileHTML() {
    profile shows the average pull per axis; this shows the spread — how
    many books sit in the high / medium / low band of each axis. ---- */
 function moodProfileHTML() {
+  if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const axes = RATING_AXES.map(a => {
     const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
@@ -459,6 +485,7 @@ function patternObservations() {
   return obs;
 }
 function patternsHTML() {
+  if (tasteGateNeeded()) return '';
   const obs = patternObservations();
   if (!obs.length)
     return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div>' +
@@ -1038,7 +1065,8 @@ function renderStats() {
   const pagesYr = pagesInYear(yr); // v427: sum logs, not pageCount (issue #53)
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const ratedYr = readYr.filter(b => b.myRating > 0);
-  const avgMine = avgOf((ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0).map(b => b.myRating));
+  const ratedAll = (ratedYr.length ? ratedYr : read).filter(b => b.myRating > 0);
+  const avgMine = avgOf(ratedAll.map(b => b.myRating));
   const streak = readingStreak();
 
   // v128: this month's numbers power the dashboard hero cards.
@@ -1047,12 +1075,12 @@ function renderStats() {
   const readMo = read.filter(b => { const d = b.dateFinished && new Date(b.dateFinished); return d && d >= mStart; });
   // v447: dashboard pages use logged session pages (not finished books' page
   // counts) so in-progress reading counts and the number matches the detail view.
-  const pagesByDay = pagesByDayMap();
-  const monthPrefix = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
-  const pagesMo = Object.keys(pagesByDay)
-    .filter(k => k.indexOf(monthPrefix) === 0)
-    .reduce((s, k) => s + pagesByDay[k].pages, 0);
-  const avgMo = avgOf(readMo.filter(b => b.myRating > 0).map(b => b.myRating));
+  // v454: via the single pagesInRange helper.
+  const mLast = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate();
+  const mPfx = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
+  const pagesMo = pagesInRange(mPfx + '-01', mPfx + '-' + String(mLast).padStart(2, '0'));
+  const ratedMo = readMo.filter(b => b.myRating > 0);
+  const avgMo = avgOf(ratedMo.map(b => b.myRating));
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
@@ -1082,28 +1110,34 @@ function renderStats() {
     '<div class="stat hero"><div class="n">' + icon(ic) + ' ' + n + '</div><div class="l">' + l + '</div></div>';
 
   // v324: library value — actual spent vs estimated value
+  // v454: ONE value per book — purchasePrice if present, otherwise listPrice,
+  // never both, never an invented default.
   var libActual = 0, libEst = 0, libPriced = 0;
-  var libDefault = 24.99;
-  try { var dpv = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(dpv) && dpv >= 0) libDefault = dpv; } catch (e) {}
+  function bookValue(b) {
+    if (b.purchasePrice != null && !isNaN(b.purchasePrice)) return b.purchasePrice;
+    if (b.listPrice != null && !isNaN(b.listPrice)) return b.listPrice;
+    return null;
+  }
   try {
     library.forEach(function(b) {
+      const v = bookValue(b);
       if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
         libActual += b.purchasePrice;
         libPriced++;
-        libEst += b.purchasePrice; // actual price counts toward value too
-      } else if (b.listPrice != null && !isNaN(b.listPrice)) {
-        libEst += b.listPrice;
-      } else {
-        libEst += libDefault;
       }
+      if (v != null) libEst += v;
     });
   } catch (e) {}
   // v405 (T2): estimate-only until >50% of books are priced. A $0.00-vs-estimate
   // comparison reads as broken; the comparison is the problem, not the data.
   // v447: with no priced books the estimate is pure invention ($24.99 x N) —
   // show a prompt instead of a made-up number.
+  // v454: library value is opt-in — hidden unless the user enables it.
+  // No invented defaults; without price data show the prompt.
+  let showValue = false;
+  try { showValue = localStorage.getItem('cozylibram.showLibraryValue') === '1'; } catch (e) {}
   const pricedRatio = library.length ? libPriced / library.length : 0;
-  const valueSection =
+  const valueSection = !showValue ? '' :
     libPriced === 0
       ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
         '<div class="valcard"><div>Add prices to see your collection&rsquo;s value.</div>' +
@@ -1151,16 +1185,18 @@ function renderStats() {
       '<div class="stat-row">' +
       heroCard('covers', readMo.length, 'Books finished') +
       heroCard('doc', pagesMo > 999 ? (pagesMo / 1000).toFixed(1) + 'k' : pagesMo, 'Pages') +
-      heroCard('heart', avgMo != null ? avgMo.toFixed(1) : '–', 'Avg rating') +
+      (ratedMo.length
+        ? heroCard('heart', avgMo.toFixed(1) + ' ★', 'Avg rating (' + ratedMo.length + ')')
+        : '<button class="stat hero" data-act="rate-book" style="cursor:pointer"><div class="n">' + icon('heart') + '</div><div class="l">Rate a book</div></button>') +
       heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time (est.)') +
       '</div>' +
       // v447: gentle month-over-month note — cozy framing, not KPI deltas
+      // v454: via the single pagesInRange helper.
       (() => {
         const lastMo = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
-        const lastPrefix = lastMo.getFullYear() + '-' + String(lastMo.getMonth() + 1).padStart(2, '0');
-        const pagesLast = Object.keys(pagesByDay)
-          .filter(k => k.indexOf(lastPrefix) === 0)
-          .reduce((s, k) => s + pagesByDay[k].pages, 0);
+        const lastPfx = lastMo.getFullYear() + '-' + String(lastMo.getMonth() + 1).padStart(2, '0');
+        const lastLast = new Date(lastMo.getFullYear(), lastMo.getMonth() + 1, 0).getDate();
+        const pagesLast = pagesInRange(lastPfx + '-01', lastPfx + '-' + String(lastLast).padStart(2, '0'));
         if (pagesLast < 20 || pagesMo < 20) return '';
         const ratio = pagesMo / pagesLast;
         const lastName = lastMo.toLocaleDateString(undefined, { month: 'long' });
@@ -1223,7 +1259,9 @@ function renderStats() {
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
     '<div class="stat"><div class="n">' + (pagesYr > 999 ? (pagesYr / 1000).toFixed(1) + 'k' : pagesYr) + '</div><div class="l">Pages</div></div>' +
-    '<div class="stat"><div class="n">' + icon('heart') + ' ' + (avgMine != null ? avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
+    (ratedAll.length
+      ? '<div class="stat"><div class="n">' + icon('heart') + ' ' + avgMine.toFixed(1) + ' ★</div><div class="l">Avg rating (' + ratedAll.length + ')</div></div>'
+      : '<button class="stat" data-act="rate-book" style="cursor:pointer"><div class="n">' + icon('heart') + '</div><div class="l">Rate a book</div></button>') +
     '<div class="stat"><div class="n">' + icon('flame') + ' ' + (streak > 0 ? streak : '0') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
     '<button class="yib-card" id="st-yib">' + icon('sparkles') +
@@ -1243,7 +1281,7 @@ function renderStats() {
     '<div id="st-sec-activity">' + heatmapHTML() + readingCalHTML() + '</div>' +
     '<div class="stat-detail-grid">' +
     '<div id="st-sec-pace">' + paceHTML() + '</div>' +
-    '<div id="st-sec-taste">' + spiceProfileHTML() + moodProfileHTML() +
+    '<div id="st-sec-taste">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div>' +
