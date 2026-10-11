@@ -1191,12 +1191,12 @@ function renderStats() {
       heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time (est.)') +
       '</div>' +
       // v447: gentle month-over-month note — cozy framing, not KPI deltas
+      // v454: via the single pagesInRange helper.
       (() => {
         const lastMo = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
-        const lastPrefix = lastMo.getFullYear() + '-' + String(lastMo.getMonth() + 1).padStart(2, '0');
-        const pagesLast = Object.keys(pagesByDay)
-          .filter(k => k.indexOf(lastPrefix) === 0)
-          .reduce((s, k) => s + pagesByDay[k].pages, 0);
+        const lastPfx = lastMo.getFullYear() + '-' + String(lastMo.getMonth() + 1).padStart(2, '0');
+        const lastLast = new Date(lastMo.getFullYear(), lastMo.getMonth() + 1, 0).getDate();
+        const pagesLast = pagesInRange(lastPfx + '-01', lastPfx + '-' + String(lastLast).padStart(2, '0'));
         if (pagesLast < 20 || pagesMo < 20) return '';
         const ratio = pagesMo / pagesLast;
         const lastName = lastMo.toLocaleDateString(undefined, { month: 'long' });
