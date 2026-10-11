@@ -381,7 +381,8 @@ function consumePendingInvite() {
 }
 function renderCovenMain(code, lists, priv) {
   const shelves = ['tbr', 'reading', 'read', 'dnf'];
-  let html = '<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
+  let html = '<div class="view-head" style="position:relative"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2>' +
+    '<button id="cc-privacy-gear" aria-label="Privacy settings" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)">' + icon('gear') + '</button></div>' +
     '<p class="note" style="text-align:center">Your private reading ' + covenName().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
     // v454: friends strip — horizontal scroll row under the title
     '<div class="friend-strip" id="friendStrip">' +
@@ -427,19 +428,6 @@ function renderCovenMain(code, lists, priv) {
     html += '</div>';
   }
 
-  // Privacy
-  html += '<h2 class="section serif">Privacy</h2><div class="circle-card">' +
-    '<div class="field"><label>Share my shelves with my ' + covenName().toLowerCase() + '</label>' +
-    '<div class="seg" id="cc-share">' +
-      '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
-      '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
-    '<p class="note">When off, friends still see you in their ' + covenName().toLowerCase() + ', but none of your books.</p></div>' +
-    '<div class="field"><label>Hide these shelves from my ' + covenName().toLowerCase() + '</label>' +
-    '<div class="chips" id="cc-hide">' +
-      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
-        STATUS[s] + '</button>').join('') +
-    '</div></div></div>';
-
   setView(html);
 
   // Wire up
@@ -477,25 +465,9 @@ function renderCovenMain(code, lists, priv) {
   document.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
     openReportSheet(b.dataset.report, b.dataset.name || 'this user');
   }));
-  document.querySelectorAll('#cc-share button').forEach(b => b.addEventListener('click', async () => {
-    const share = b.dataset.v === '1';
-    try {
-      await circleSavePrivacy(share, priv.hidden);
-      document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
-      toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase() : 'Your shelves are hidden from your ' + covenName().toLowerCase());
-    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
-  }));
-  document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
-    const s = ch.dataset.shelf;
-    const hidden = priv.hidden.slice();
-    const i = hidden.indexOf(s);
-    if (i === -1) hidden.push(s); else hidden.splice(i, 1);
-    try {
-      await circleSavePrivacy(priv.share, hidden);
-      priv.hidden = hidden;
-      ch.classList.toggle('active', i === -1);
-    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
-  }));
+  // v454: privacy gear opens the sheet
+  const gearBtn = document.getElementById('cc-privacy-gear');
+  if (gearBtn) gearBtn.addEventListener('click', () => openPrivacySheet(priv, shelves, gearBtn));
 }
 
 /* ---------- friend shelf browser (read-only) ---------- */
@@ -569,6 +541,42 @@ function openCovenBook(b) {
     contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
     onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null
   });
+}
+
+/* v454: privacy sheet — same controls as the old Privacy section, in a bottom sheet. */
+function openPrivacySheet(priv, shelves, opener) {
+  const body =
+    '<div class="field"><label>Share my shelves with my ' + covenName().toLowerCase() + '</label>' +
+    '<div class="seg" id="cc-share">' +
+      '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
+      '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
+    '<p class="note">When off, friends still see you in their ' + covenName().toLowerCase() + ', but none of your books.</p></div>' +
+    '<div class="field"><label>Hide these shelves from my ' + covenName().toLowerCase() + '</label>' +
+    '<div class="chips" id="cc-hide">' +
+      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
+        STATUS[s] + '</button>').join('') +
+    '</div></div>';
+  covenOpenSheet('Privacy', body, opener);
+  // Same handlers as before
+  document.querySelectorAll('#cc-share button').forEach(b => b.addEventListener('click', async () => {
+    const share = b.dataset.v === '1';
+    try {
+      await circleSavePrivacy(share, priv.hidden);
+      document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
+      toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase() : 'Your shelves are hidden from your ' + covenName().toLowerCase());
+    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
+  }));
+  document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
+    const s = ch.dataset.shelf;
+    const hidden = priv.hidden.slice();
+    const i = hidden.indexOf(s);
+    if (i === -1) hidden.push(s); else hidden.splice(i, 1);
+    try {
+      await circleSavePrivacy(priv.share, hidden);
+      priv.hidden = hidden;
+      ch.classList.toggle('active', i === -1);
+    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
+  }));
 }
 
 /* v454: invite sheet — the invite card UI moved into a bottom sheet. */
