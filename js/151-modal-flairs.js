@@ -329,12 +329,8 @@ var CATALOG = [
 </svg>` },
     /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
     { id: 'stormrider-vine', name: 'Stormrider emblem vine', motif: 'dragon', placement: 'vine', signature: true,
-      themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.png', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 128" role="img" aria-labelledby="t d">
-<title id="t">Stormrider emblem vine</title>
-<desc id="d">Kevin's Stormrider emblem: black dragon with gold winged sword.</desc>
-<image href="Asset/packs/stormrider-vine.png" x="2" y="2" width="116" height="124" preserveAspectRatio="xMidYMid meet"/>
-</svg>` },
+      themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" role="img" aria-labelledby="t d"><title id="t">Stormrider emblem</title><desc id="d">A winged dragon with a winged sword, in one tint.</desc><g fill="currentColor" fill-opacity=".42"><path d="M72,60 L46,40 L8,32 L4,30 L14,46 Q18,52 20,66 Q24,56 30,74 Q36,62 42,88 Q50,72 58,100 Q66,84 74,98 Z"/><path d="M72,60 L46,40 L8,32 L4,30 L14,46 Q18,52 20,66 Q24,56 30,74 Q36,62 42,88 Q50,72 58,100 Q66,84 74,98 Z" transform="translate(160,0) scale(-1,1)"/><path d="M80,38 C71,50 70,74 74,98 C76,114 78,132 80,150 C82,132 84,114 86,98 C90,74 89,50 80,38Z"/><path d="M80,4 L85,12 L92,6 L88,18 L85,24 L84,36 L76,36 L75,24 L72,18 L68,6 L75,12Z"/><path d="M80,150 l4,4 4,-4 -4,12 -4,-12 -4,4z" fill-opacity="1"/></g><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".9"><path d="M72,60 L46,40 L8,32 M46,40 L20,66 M46,40 L42,88 M46,40 L58,100" /><path d="M72,60 L46,40 L8,32 M46,40 L20,66 M46,40 L42,88 M46,40 L58,100" transform="translate(160,0) scale(-1,1)"/></g><g fill="currentColor"><path d="M80,52 L84,64 L83,112 L80,122 L77,112 L76,64Z"/><path d="M80,64 L58,58 L46,62 L56,64 L42,70 L56,70 L46,78 L60,74 L72,70Z"/><path d="M80,64 L102,58 L114,62 L104,64 L118,70 L104,70 L114,78 L100,74 L88,70Z"/><circle cx="80" cy="50" r="4"/></g><g fill="currentColor"><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(18,118)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(142,120)"/><path d="M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4Z" transform="translate(30,18)"/><path d="M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4Z" transform="translate(130,20)"/></g></svg>` },
     { id: 'stormrider-garland', name: 'Stormrider storm garland', motif: 'storm', placement: 'garland',
       themes: ["stormrider"], file: 'Asset/packs/stormrider-garland.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
@@ -365,88 +361,17 @@ var CATALOG = [
 </svg>` },
     { id: 'briarthrone-vine', name: 'Briarthrone thorn vine', motif: 'thorn', placement: 'vine', signature: true,
       themes: ["briarthrone"], file: 'Asset/packs/briarthrone-vine.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
-<title id="t">Briarthrone vine</title>
-<desc id="d">A gnarled thorn vine with night-bloom buds and scattered stars. Briarthrone pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-<path d="M60,352 C38,310 82,276 60,228 C42,190 78,156 60,112 C48,82 66,52 58,24"/>
-<path d="M60,228 C46,220 38,208 36,192" stroke-width="1.4"/>
-<path d="M60,150 C74,142 82,130 84,114" stroke-width="1.4"/>
-</g>
-<g fill="currentColor" stroke="none">
-<path d="M52,290 l-8,-2 7,-5z"/><path d="M64,262 l8,-2 -7,-5z"/>
-<path d="M50,200 l-8,-2 7,-5z"/><path d="M66,170 l8,-2 -7,-5z"/>
-<path d="M52,120 l-7,-2 6,-5z"/><path d="M62,80 l7,-2 -6,-5z"/>
-</g>
-<g fill="currentColor" stroke="none">
-<!-- night blooms: 6-petal star flowers -->
-<g transform="translate(58,24)">
-<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
-<circle r="2.6"/>
-</g>
-<g transform="translate(36,192) scale(.75)">
-<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
-<circle r="2.6"/>
-</g>
-<g transform="translate(84,114) scale(.65)">
-<ellipse cx="0" cy="-8" rx="3.4" ry="6"/><ellipse cx="7" cy="-4" rx="3.4" ry="6" transform="rotate(60 7 -4)"/><ellipse cx="7" cy="4" rx="3.4" ry="6" transform="rotate(120 7 4)"/><ellipse cx="0" cy="8" rx="3.4" ry="6"/><ellipse cx="-7" cy="4" rx="3.4" ry="6" transform="rotate(120 -7 4)"/><ellipse cx="-7" cy="-4" rx="3.4" ry="6" transform="rotate(60 -7 -4)"/>
-<circle r="2.6"/>
-</g>
-<!-- leaves -->
-<g transform="rotate(-40 46 320)"><ellipse cx="37" cy="317" rx="10" ry="4" transform="rotate(0)"/></g>
-<g transform="rotate(40 68 270)"><ellipse cx="77" cy="267" rx="10" ry="4"/></g>
-<g transform="rotate(-38 50 130)"><ellipse cx="42" cy="127" rx="8" ry="3.4"/></g>
-<!-- stars -->
-<path d="M86,60 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
-<path d="M30,250 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
-<circle cx="76" cy="300" r="1.8"/><circle cx="44" cy="90" r="1.8"/>
-</g>
-</svg>` },
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d"><title id="t">Briarthrone briar</title><desc id="d">A thorned briar with night roses and a crescent moon.</desc><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M60,352 C56.7,343.3 36.7,317 40,300 C43.3,283 79,267.3 80,250 C81,232.7 46.3,214.3 46,196 C45.7,177.7 76.7,157.7 78,140 C79.3,122.3 56.7,105.3 54,90 C51.3,74.7 60.7,55 62,48"/></g><g fill="currentColor"><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(56.8,345.8) rotate(-29.6)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(45.9,325.9) rotate(-205.5)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(39.6,303.7) rotate(0.8)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(50.2,284.7) rotate(-134.4)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(70.6,266.2) rotate(44.6)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(79.9,247.1) rotate(-188.8)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(67.1,227.2) rotate(-42.9)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(49.6,206.7) rotate(-211.2)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(48.5,186) rotate(25.5)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(64,164.6) rotate(-140.4)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(77.3,143.7) rotate(16.1)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(73.8,124) rotate(-208.2)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(61.3,105.2) rotate(-33.9)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(53.7,87.4) rotate(-185.1)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(55.6,69.2) rotate(14)" fill="currentColor"/><path d="M0,-3 L8,-0.3 L0,3Z" transform="translate(60.5,53.4) rotate(-161.9)" fill="currentColor"/></g><g fill="currentColor" fill-opacity=".7"><path d="M0,0 C6,-7 16.8,-6 24,0 C16.8,6 6,7 0,0Z" transform="translate(39.7,302.1) rotate(-155.1)"/><path d="M0,0 C6,-7 16.8,-6 24,0 C16.8,6 6,7 0,0Z" transform="translate(80,247.9) rotate(-25.7)"/><path d="M0,0 C6,-7 16.8,-6 24,0 C16.8,6 6,7 0,0Z" transform="translate(47.1,189.3) rotate(-141.3)"/><path d="M0,0 C6,-7 16.8,-6 24,0 C16.8,6 6,7 0,0Z" transform="translate(76.3,129.5) rotate(-40.5)"/></g><g fill="currentColor"><circle cx="88.8" cy="260.2" r="11" fill-opacity=".9"/><circle cx="88.8" cy="260.2" r="5.5" fill-opacity=".45"/></g><g fill="currentColor"><circle cx="58.2" cy="155.3" r="12" fill-opacity=".9"/><circle cx="58.2" cy="155.3" r="6" fill-opacity=".45"/></g><g fill="currentColor"><path d="M7.4,-11.9 A14,14 0 1 0 7.4,11.9 A12.8,12.8 0 1 1 7.4,-11.9Z" transform="translate(62,26) rotate(-30)"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(96,60)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(26,120)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(100,200)"/></g></svg>` },
     { id: 'voidsignal-vine', name: 'Voidsignal circuit vine', motif: 'circuit', placement: 'vine', signature: true,
       themes: ["voidsignal"], file: 'Asset/packs/voidsignal-vine.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
-<title id="t">Voidsignal circuit vine</title>
-<desc id="d">An angular circuit-trace vine with node points. Voidsignal pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-<path d="M60,352 L60,300 L40,280 L40,230 L62,208 L62,160 L42,140 L42,100 L60,82 L60,40"/>
-<path d="M40,280 L24,264 L24,240" stroke-width="1.4"/>
-<path d="M62,208 L84,186 L84,160" stroke-width="1.4"/>
-<path d="M42,140 L26,124" stroke-width="1.4"/>
-</g>
-<g fill="currentColor" stroke="none">
-<circle cx="60" cy="352" r="3.4"/><circle cx="60" cy="300" r="3"/>
-<circle cx="40" cy="280" r="3"/><circle cx="40" cy="230" r="3"/>
-<circle cx="62" cy="208" r="3"/><circle cx="62" cy="160" r="3"/>
-<circle cx="42" cy="140" r="3"/><circle cx="42" cy="100" r="3"/>
-<circle cx="60" cy="82" r="3"/><circle cx="60" cy="40" r="3.4"/>
-<circle cx="24" cy="240" r="2.4"/><circle cx="84" cy="160" r="2.4"/><circle cx="26" cy="124" r="2.2"/>
-</g>
-<g fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55" stroke-linecap="round">
-<circle cx="60" cy="300" r="7"/><circle cx="62" cy="160" r="7"/><circle cx="42" cy="100" r="7"/>
-</g>
-</svg>` },
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d"><title id="t">Voidsignal trace</title><desc id="d">A circuit trace rising to a beacon that sends out signal arcs.</desc><path d="M60,352 L60,300 L38,278 L38,230 L62,206 L62,160 L40,138 L40,100 L60,80" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><circle cx="60" cy="300" r="3.2"/><circle cx="38" cy="278" r="3.2"/><circle cx="38" cy="230" r="3.2"/><circle cx="62" cy="206" r="3.2"/><circle cx="62" cy="160" r="3.2"/><circle cx="40" cy="138" r="3.2"/><circle cx="40" cy="100" r="3.2"/></g><path d="M38,278 L22,262 L22,240 M62,206 L84,184 L84,160 M40,138 L24,122" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".7"/><g fill="currentColor"><circle cx="60" cy="62" r="6"/></g><path d="M46.1,54 A16,16 0 0 1 73.9,54" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.9"/><path d="M37.5,49 A26,26 0 0 1 82.5,49" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.6"/><path d="M28.8,44 A36,36 0 0 1 91.2,44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.35"/><g fill="currentColor"><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(98,110)"/><path d="M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4Z" transform="translate(22,190)"/></g></svg>` },
     { id: 'wisp-vine', name: 'Wisp firefly vine', motif: 'firefly', placement: 'vine', signature: true,
-      themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-vine.svg', premium: true,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d">
-<title id="t">Wisp firefly vine</title>
-<desc id="d">A wandering dotted trail with glowing firefly orbs. Wisp pack.</desc>
-<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 9">
-<path d="M60,352 C40,310 80,280 60,235 C44,198 76,168 60,128 C48,98 70,70 60,40"/>
-</g>
-<g fill="currentColor" stroke="none">
-<circle cx="60" cy="352" r="5"/><circle cx="60" cy="352" r="9" opacity="0.25"/>
-<circle cx="66" cy="280" r="4.4"/><circle cx="66" cy="280" r="8" opacity="0.25"/>
-<circle cx="52" cy="210" r="5"/><circle cx="52" cy="210" r="9" opacity="0.25"/>
-<circle cx="64" cy="140" r="4"/><circle cx="64" cy="140" r="7.4" opacity="0.25"/>
-<circle cx="58" cy="72" r="4.6"/><circle cx="58" cy="72" r="8.4" opacity="0.25"/>
-<circle cx="60" cy="40" r="3.6"/><circle cx="60" cy="40" r="6.6" opacity="0.25"/>
-<g opacity="0.7">
-<path d="M84,180 l1.8,4.6 4.6,1.8 -4.6,1.8 -1.8,4.6 -1.8,-4.6 -4.6,-1.8 4.6,-1.8z"/>
-<path d="M36,110 l1.5,3.8 3.8,1.5 -3.8,1.5 -1.5,3.8 -1.5,-3.8 -3.8,-1.5 3.8,-1.5z"/>
-</g>
-</g>
-</svg>` },
-    { id: 'wisp-garland', name: 'Wisp pastel garland', motif: 'pastel', placement: 'garland',
+      themes: ["wisp"], file: 'Asset/packs/wisp-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d"><title id="t">Wisp trail</title><desc id="d">A dotted trail of floating dandelion wisps and a glowing spark.</desc><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 9"><path d="M60,352 C56.7,343.3 36.7,317.3 40,300 C43.3,282.7 79.3,266.3 80,248 C80.7,229.7 44,209.7 44,190 C44,170.3 78.3,147.7 80,130 C81.7,112.3 57,98.3 54,84 C51,69.7 60.7,50.7 62,44"/></g><g transform="translate(41.4,295.9) rotate(-40)"><path d="M0,0 C10.2,-2.7 23.8,-2.7 34,0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M34,0 L42.2,-9.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="42.2" cy="-9.1" r="1.8" fill="currentColor"/><path d="M34,0 L45.2,-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="45.2" cy="-5" r="1.8" fill="currentColor"/><path d="M34,0 L46.2,0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="46.2" cy="0" r="1.8" fill="currentColor"/><path d="M34,0 L45.2,5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="45.2" cy="5" r="1.8" fill="currentColor"/><path d="M34,0 L42.2,9.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="42.2" cy="9.1" r="1.8" fill="currentColor"/></g><g transform="translate(67.6,225.3) rotate(200)"><path d="M0,0 C9,-2.4 21,-2.4 30,0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M30,0 L37.2,-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="37.2" cy="-8" r="1.8" fill="currentColor"/><path d="M30,0 L39.9,-4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="39.9" cy="-4.4" r="1.8" fill="currentColor"/><path d="M30,0 L40.8,0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="40.8" cy="0" r="1.8" fill="currentColor"/><path d="M30,0 L39.9,4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="39.9" cy="4.4" r="1.8" fill="currentColor"/><path d="M30,0 L37.2,8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="37.2" cy="8" r="1.8" fill="currentColor"/></g><g transform="translate(72.4,145.8) rotate(-30)"><path d="M0,0 C10.8,-2.9 25.2,-2.9 36,0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M36,0 L44.7,-9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="44.7" cy="-9.6" r="1.8" fill="currentColor"/><path d="M36,0 L47.8,-5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="47.8" cy="-5.3" r="1.8" fill="currentColor"/><path d="M36,0 L49,0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="49" cy="0" r="1.8" fill="currentColor"/><path d="M36,0 L47.8,5.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="47.8" cy="5.3" r="1.8" fill="currentColor"/><path d="M36,0 L44.7,9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="44.7" cy="9.6" r="1.8" fill="currentColor"/></g><g transform="translate(55.1,87.4) rotate(205)"><path d="M0,0 C9,-2.4 21,-2.4 30,0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M30,0 L37.2,-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="37.2" cy="-8" r="1.8" fill="currentColor"/><path d="M30,0 L39.9,-4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="39.9" cy="-4.4" r="1.8" fill="currentColor"/><path d="M30,0 L40.8,0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="40.8" cy="0" r="1.8" fill="currentColor"/><path d="M30,0 L39.9,4.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="39.9" cy="4.4" r="1.8" fill="currentColor"/><path d="M30,0 L37.2,8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="37.2" cy="8" r="1.8" fill="currentColor"/></g><g fill="currentColor"><circle cx="62" cy="44" r="6"/><circle cx="62" cy="44" r="11" fill-opacity=".22"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(98,100)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(24,200)"/></g></svg>` },
+        { id: 'wisp-night-vine', name: 'Wisp Night firefly vine', motif: 'firefly', placement: 'vine', signature: true,
+      themes: ["wisp-night"], file: 'Asset/packs/wisp-night-vine.svg', premium: true,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 360" role="img" aria-labelledby="t d"><title id="t">Wisp Night fireflies</title><desc id="d">A dotted trail of fireflies rising to a crescent moon.</desc><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 9" stroke-opacity=".85"><path d="M60,352 C56.7,343.3 36.7,317.3 40,300 C43.3,282.7 79.3,266.3 80,248 C80.7,229.7 44,209.7 44,190 C44,170.3 78.3,147.7 80,130 C81.7,112.3 57,98.3 54,84 C51,69.7 60.7,50.7 62,44"/></g><g fill="currentColor"><circle cx="38.8" cy="337.1" r="5"/><circle cx="38.8" cy="337.1" r="9.5" fill-opacity=".24"/><circle cx="38" cy="283.6" r="4"/><circle cx="38" cy="283.6" r="7.6" fill-opacity=".24"/><circle cx="60.4" cy="232.3" r="5"/><circle cx="60.4" cy="232.3" r="9.5" fill-opacity=".24"/><circle cx="36" cy="175.4" r="4.4"/><circle cx="36" cy="175.4" r="8.4" fill-opacity=".24"/><circle cx="65.2" cy="119.8" r="5"/><circle cx="65.2" cy="119.8" r="9.5" fill-opacity=".24"/><circle cx="40.4" cy="76.8" r="4"/><circle cx="40.4" cy="76.8" r="7.6" fill-opacity=".24"/><path d="M7.9,-12.7 A15,15 0 1 0 7.9,12.7 A13.8,13.8 0 1 1 7.9,-12.7Z" transform="translate(86,40) rotate(-40)"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(98,140)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(24,220)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(100,300)"/></g></svg>` },
+{ id: 'wisp-garland', name: 'Wisp pastel garland', motif: 'pastel', placement: 'garland',
       themes: ["wisp","wisp-night"], file: 'Asset/packs/wisp-garland.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" role="img" aria-labelledby="t d">
 <title id="t">Wisp garland</title>
