@@ -1,6 +1,25 @@
 'use strict';
 
 /* ---------------- stats view ---------------- */
+
+/* v476: shared library-value estimate. Global so Settings (180) and the book
+   modal (150) use the same number — Stats and Ledger always agree.
+   Returns { value, actual }: `actual` is true when the user entered a real
+   purchase price (their data is preferred, never discarded); otherwise the
+   flat estimate default. Always an estimate — label it as such in UI. */
+function libraryDefaultPrice() {
+  try {
+    var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice'));
+    if (!isNaN(v) && v >= 0) return Math.round(v * 100) / 100;
+  } catch (e) {}
+  return 24.99;
+}
+function estimateBookValue(b) {
+  if (b && b.purchasePrice != null && !isNaN(b.purchasePrice))
+    return { value: b.purchasePrice, actual: true };
+  return { value: libraryDefaultPrice(), actual: false };
+}
+
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 // v128: dashboard-first. 'dash' shows this month's hero numbers + glanceable
@@ -1119,49 +1138,21 @@ function renderStats() {
   const heroCard = (ic, n, l) =>
     '<div class="stat hero"><div class="n">' + icon(ic) + ' ' + n + '</div><div class="l">' + l + '</div></div>';
 
-  // v324: library value — actual spent vs estimated value
-  // v454: ONE value per book — purchasePrice if present, otherwise listPrice,
-  // never both, never an invented default.
-  var libActual = 0, libEst = 0, libPriced = 0;
-  function bookValue(b) {
-    if (b.purchasePrice != null && !isNaN(b.purchasePrice)) return b.purchasePrice;
-    if (b.listPrice != null && !isNaN(b.listPrice)) return b.listPrice;
-    return null;
-  }
+  // v476: library value — automated estimates, no manual entry required.
+  // estimateBookValue() is global so Settings and the book modal share it.
+  // purchasePrice wins when the user entered one (their data is kept);
+  // otherwise the flat estimate default. Always labeled an estimate.
+  var libEst = 0;
   try {
     library.forEach(function(b) {
-      const v = bookValue(b);
-      if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
-        libActual += b.purchasePrice;
-        libPriced++;
-      }
-      if (v != null) libEst += v;
+      libEst += estimateBookValue(b).value;
     });
   } catch (e) {}
-  // v405 (T2): estimate-only until >50% of books are priced. A $0.00-vs-estimate
-  // comparison reads as broken; the comparison is the problem, not the data.
-  // v447: with no priced books the estimate is pure invention ($24.99 x N) —
-  // show a prompt instead of a made-up number.
-  // v454: library value is opt-in — hidden unless the user enables it.
-  // No invented defaults; without price data show the prompt.
-  let showValue = false;
-  try { showValue = localStorage.getItem('cozylibram.showLibraryValue') === '1'; } catch (e) {}
-  const pricedRatio = library.length ? libPriced / library.length : 0;
-  const valueSection = !showValue ? '' :
-    libPriced === 0
-      ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
-        '<div class="valcard"><div>Add prices to see your collection&rsquo;s value.</div>' +
-        '<div class="note">Tap a book → Details → Price. The estimate sharpens as you add more.</div></div>'
-      : pricedRatio < 0.5
-      ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
-        '<div class="valcard"><div class="big">≈ $' + Math.round(libEst) + '</div>' +
-        '<div>Estimated collection value</div>' +
-        '<div class="note">Based on ' + libPriced + ' of ' + library.length +
-        ' priced — add prices for a sharper estimate.</div></div>'
-      : '<div class="stat-sub">' + icon('chart') + ' Library value</div><div class="stat-row">' +
-        heroCard('covers', '$' + libActual.toFixed(2), 'Actual spent') +
-        heroCard('sparkles', '$' + libEst.toFixed(2), 'Est. value') +
-        '</div>';
+  const valueSection =
+    '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
+    '<div class="valcard"><div class="big">≈ $' + Math.round(libEst) + '</div>' +
+    '<div>Estimated collection value</div>' +
+    '<div class="note">A rough estimate — actual prices vary.</div></div>';
 
   // v128: dashboard first — this month at a glance. The full explorer lives
   // one tap behind "Explore detailed stats".
