@@ -3262,6 +3262,18 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v398: DNF Autopsy bottom sheet */
 .dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }
 .dnf-sheet { padding: 8px 4px 16px; text-align: center; }
+
+/* v455: Trigger check bottom sheet — gentle heads-up, never a gate */
+.tc-sheet { max-height: 75vh; overflow-y: auto; }
+.tc-inner { padding: 6px 4px 8px; text-align: center; }
+.tc-emoji { font-size: 30px; margin-bottom: 6px; }
+.tc-title { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; margin: 0 0 6px; }
+.tc-sub { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+.tc-sub b { color: var(--ink); }
+.tc-tags { justify-content: center; margin: 0 0 12px; }
+.tc-note { color: var(--faint); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
+.tc-start { width: 100%; margin-bottom: 8px; }
+.tc-later { width: 100%; }
 .dnf-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
 .dnf-sub { color: var(--faint); font-size: 14px; margin: 0 0 16px; }
 .dnf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
