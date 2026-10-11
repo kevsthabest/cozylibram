@@ -80,11 +80,10 @@ function showOnbStep(n) {
   on('onb-search', () => { addTab = 'search'; onbDone(false); go('add'); });
   on('onb-scan', () => { addTab = 'scan'; onbDone(false); go('add'); });
   on('onb-import', () => {
-    // Settings → Library group holds the import hub (Goodreads, StoryGraph,
-    // Hardcover, Bookmory, ISBN lists…).
-    try { localStorage.setItem('spicyshelves.setgroups', JSON.stringify([1])); } catch (e) {}
+    // v455: the import concierge is the first-run hero — it opens directly
+    // instead of deep-linking into Settings.
     onbDone(false);
-    go('settings');
+    try { openImportConcierge(); } catch (e) { go('settings'); }
   });
 }
 

@@ -3484,3 +3484,89 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .friend-actions.show-all .btn { display: inline-flex; }
   .friend-actions.show-all .friend-menu-btn { display: none; }
 }
+
+/* ---------------- Import Concierge (v455, public-launch #1) ---------------- */
+#ic-overlay {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.ic-sheet {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 480px; max-height: 92dvh;
+  overflow-y: auto; padding: 20px 20px 28px; position: relative;
+  animation: ic-up 0.25s ease-out;
+}
+@keyframes ic-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ic-close {
+  position: absolute; top: 10px; right: 14px;
+  background: none; border: none; color: var(--faint);
+  font-size: 26px; line-height: 1; cursor: pointer; padding: 6px;
+}
+.ic-dots { display: flex; gap: 6px; justify-content: center; margin: 4px 0 2px; }
+.ic-dot { width: 22px; height: 4px; border-radius: 2px; background: var(--line); }
+.ic-dot.on { background: var(--accent); }
+.ic-dot.past { background: var(--faint); opacity: 0.5; }
+.ic-stepname { text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); margin-bottom: 12px; }
+.ic-icon { text-align: center; margin: 6px 0 2px; }
+.ic-icon .ticon { width: 44px; height: 44px; opacity: 0.85; }
+.ic-icon.spin .ticon { animation: ic-spin 1.6s linear infinite; }
+@keyframes ic-spin { to { transform: rotate(360deg); } }
+.ic-sheet h2.serif { text-align: center; margin: 4px 0 6px; }
+.ic-sheet > #ic-body > .note, .ic-sheet #ic-body > p.note { text-align: center; }
+.ic-back { background: none; border: none; color: var(--faint); font-size: 13px; cursor: pointer; padding: 4px 0; margin-bottom: 4px; }
+.ic-sources { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.ic-source {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; cursor: pointer; color: var(--ink); width: 100%;
+}
+.ic-source:active { border-color: var(--accent); }
+.ic-source-ic .ticon { width: 30px; height: 30px; opacity: 0.9; }
+.ic-source-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ic-source-tx b { font-size: 15px; }
+.ic-source-tx span { font-size: 12px; color: var(--muted); }
+.ic-source-go { color: var(--faint); font-size: 18px; }
+.ic-fine { font-size: 12px; }
+.ic-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 2px dashed var(--line); border-radius: 14px; padding: 26px 16px;
+  margin: 12px 0; cursor: pointer; text-align: center;
+}
+.ic-drop.over { border-color: var(--accent); background: var(--bg); }
+.ic-drop-ic .ticon { width: 34px; height: 34px; opacity: 0.8; }
+.ic-drop b { font-size: 15px; }
+#ic-body .btn.block { margin-top: 10px; }
+#ic-paste { margin-top: 10px; width: 100%; }
+#ic-paste.ic-error { border-color: var(--danger, #c0392b); }
+.ic-progress { height: 10px; border-radius: 5px; background: var(--bg); overflow: hidden; margin: 16px 0 8px; }
+.ic-bar { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), var(--gold, #d4a574)); transition: width 0.2s; }
+.ic-report-hero { text-align: center; margin: 8px 0 14px; }
+.ic-bignum { font-size: 44px; font-weight: 700; font-family: Georgia, serif; color: var(--ink); }
+.ic-bignum span { font-size: 18px; color: var(--faint); font-weight: 400; }
+.ic-missgroup { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+.ic-misshead { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; margin: 12px 0 6px; }
+.ic-misshead .ticon { width: 18px; height: 18px; }
+.ic-peek { margin: 6px 0 12px; }
+.ic-peekrow { padding: 8px 2px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; }
+.ic-peekrow b { font-size: 14px; }
+.ic-peekrow span { font-size: 12px; color: var(--muted); }
+.ic-misses { margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.ic-miss { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.ic-miss-tx { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.ic-miss-tx b { font-size: 14px; }
+.ic-miss-tx span { font-size: 12px; color: var(--muted); }
+.ic-miss-actions { display: flex; gap: 8px; }
+.btn.sm { padding: 6px 12px; font-size: 13px; }
+.ic-findres { margin-top: 8px; }
+.ic-pick { display: flex; flex-direction: column; text-align: left; width: 100%; background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-top: 6px; cursor: pointer; color: var(--ink); }
+.ic-pick b { font-size: 13px; }
+.ic-pick span { font-size: 12px; color: var(--muted); }
+.ic-hub-hero { margin-bottom: 12px; }
+.ic-hub-hero .note { margin-top: 6px; }
+@media (min-width: 760px) {
+  #ic-overlay { align-items: center; padding: 20px; }
+  .ic-sheet { border-radius: 20px; }
+}
