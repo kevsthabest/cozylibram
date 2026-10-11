@@ -218,6 +218,9 @@ async function cloudFirstSync(opts) {
     const remote = await cloudPullRows();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); changed = true; }
     await cloudPushNow();
+    // v474: merge milestone achievements across devices (fire-and-forget —
+    // the milestone pull never blocks the library sync).
+    try { if (typeof syncMilestonesFromCloud === 'function') syncMilestonesFromCloud().catch(function () {}); } catch (e) {}
     await repairFriendPollution();
     if (announce) toast(changed ? '☁️ Library updated' : '☁️ Already up to date');
     AppLog.info('sync', 'first sync done' + (changed ? ' (library changed)' : ''));
