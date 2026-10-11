@@ -218,7 +218,9 @@ async function loadCovenStats() {
 // --- UI --------------------------------------------------------------------
 function statAvatar(p) {
   if (p.profile) return circAvatarHTML(p.profile, 'c-avatar');
-  return '<span class="c-avatar" aria-hidden="true">Y</span>';
+  // v454: letter circle with the person's initial — never the dragon default
+  const initial = esc(String(p.name || '?').trim().charAt(0).toUpperCase() || '?');
+  return '<span class="c-avatar letter" aria-hidden="true">' + initial + '</span>';
 }
 function covenStatsHTML(d) {
   if (!d || !d.people || d.people.length < 2) return '';
