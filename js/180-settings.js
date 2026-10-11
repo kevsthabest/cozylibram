@@ -24,9 +24,10 @@ let tsSnapshot = null;   // { theme, accent } captured before previewing
 let tsPreviewTheme = null;
 let tsPreviewAccent = null; // null = theme's designed default
 
-function tsCovenDisplay(key) {
-  const n = (typeof covenNameFor === 'function') ? covenNameFor(key) : 'Coven';
-  return /^the /i.test(n) ? n : 'the ' + n;
+/* Social section name shown on theme cards. Kevin's call (2026-10-11):
+   always "Social Hub" — the old per-theme names are retired. */
+function tsCovenDisplay() {
+  return 'the Social Hub';
 }
 function themeCardHTML(th) {
   const pv = themePreview(th.key);
@@ -46,7 +47,7 @@ function themeCardHTML(th) {
       '</span>' +
       '<span class="mpill" style="background:' + pv.accent + '"></span>' +
     '</span>' +
-    '<span class="tmeta"><b>' + esc(th.name) + '</b><span>' + esc(tsCovenDisplay(th.key)) + '</span></span>' +
+    '<span class="tmeta"><b>' + esc(th.name) + '</b><span>' + esc(tsCovenDisplay()) + '</span></span>' +
     (active ? '<span class="check">✓</span>' : '') +
   '</button>';
 }
@@ -95,7 +96,7 @@ function tsSheetHTML(th) {
         '<span class="bchip" style="background:' + pv.card + ';color:' + pv.muted + '">TBR</span></div>' +
       '</div>' +
       '<h3>' + esc(th.name) + '</h3>' +
-      '<div class="cov">Your circle becomes <b>' + esc(tsCovenDisplay(th.key)) + '</b></div>' +
+      '<div class="cov">Your social circle: <b>' + esc(tsCovenDisplay()) + '</b></div>' +
       wispToggle +
       '<div class="tgroup-label" style="margin-top:2px">Accent · <span id="tsAccentName" style="color:var(--ink);text-transform:none;letter-spacing:0"></span></div>' +
       '<div class="pairrow" id="tsPairs">' + pairBtns + '</div>' +
@@ -159,7 +160,7 @@ function tsOpenSheet(th) {
       const useBtn = document.getElementById('tsUse');
       if (useBtn) useBtn.textContent = 'Use ' + th2.name;
       const covEl = document.querySelector('#tsSheetWrap .tsheet .cov');
-      if (covEl) covEl.innerHTML = 'Your circle becomes <b>' + esc(tsCovenDisplay(tsPreviewTheme)) + '</b>';
+      if (covEl) covEl.innerHTML = 'Your social circle: <b>' + esc(tsCovenDisplay()) + '</b>';
       const pairsEl = document.getElementById('tsPairs');
       if (pairsEl) {
         const pairs = themeAccentPairings(tsPreviewTheme);
@@ -399,7 +400,7 @@ function renderSettings() {
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
   const htmlPrivacy =
-    setSub('Coven sharing') +
+    setSub('Social Hub sharing') +
     '<div id="st-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
     '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
     setSub('Preferences') +
