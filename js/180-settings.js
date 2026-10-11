@@ -233,7 +233,7 @@ function syncStatusLine() {
       return '<span class="sync-dot syncing">\u25cf</span> Syncing\u2026';
     }
     const last = (typeof cloudLastSync !== 'undefined' && cloudLastSync) ? cloudLastSync : 0;
-    return '<span class="sync-dot ok">\u25cf</span> Synced ' + syncAgo(last) + ' \u00b7 ' + booksTxt;
+    return '<span class="sync-dot ok">\u25cf</span> Up to date \u00b7 ' + booksTxt;
   } catch (e) { return ''; }
 }
 function renderSettings() {
@@ -242,7 +242,7 @@ function renderSettings() {
   const prof = loadProfile();
   const profName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
   const htmlLogin =
-    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices.</p>' +
+    '<p class="note">Sign in to keep your library safe and synced across devices.</p>' +
     '<p class="note" id="ac-status">Checking…</p>' +
     '<div id="ac-signedout">' +
     '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +

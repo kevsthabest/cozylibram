@@ -1,5 +1,6 @@
-// Settings groups (v117, v312, v424): Account / Library / Purchase Ledger / Appearance /
-// Metadata / Offline / Privacy / About (S3 folded Reading into Library),
+// Settings groups (v117, v312, v424, v476): Account / Library / Purchase Ledger /
+// Appearance / Offline / Privacy / About (S3 folded Reading into Library;
+// v476 removed the Metadata group — enrichment is automatic now),
 // each a collapsible card with persisted open/closed state; all existing controls keep working.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
@@ -24,16 +25,16 @@ const groupTitles = () => [...doc().querySelectorAll('#view > .set-group > summa
 runInWindow(`localStorage.removeItem('spicyshelves.setgroups'); library = [];`);
 runInWindow(`view = 'settings'; renderSettings();`);
 
-ok('8 groups render in Kevin\'s order (S3: Reading folded into Library)',
+ok('7 groups render in Kevin\'s order (S3: Reading folded into Library; v476: Metadata removed)',
   JSON.stringify(groupTitles()) ===
-  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Metadata', 'Offline', 'Privacy', 'About']));
+  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Offline', 'Privacy', 'About']));
 ok('group summaries carry tag subtitles', (() => {
   const tags = [...doc().querySelectorAll('#view > .set-group > summary .set-tag')].map(s => s.textContent);
-  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[7]);
+  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[6]);
 })());
 ok('first group open by default, rest collapsed', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
-  return g[0].open === true && g[1].open === false && g[7].open === false;
+  return g[0].open === true && g[1].open === false && g[6].open === false;
 })());
 ok('subsections exist inside groups',
   doc().querySelector('#view > .set-group .set-sub') !== null &&
@@ -45,25 +46,25 @@ const groupOf = (id) => {
   const det = el && el.closest('.set-group');
   return det ? [...doc().querySelectorAll('#view > .set-group')].indexOf(det) : -1;
 };
-ok('controls landed in the right groups',
+ok('controls landed in the right groups (v476: Metadata removed)',
   groupOf('bk-wipe') === 1 &&            // Library, moved out of About
   groupOf('th-rmentry') === 1 &&        // Library, S3 folded from Reading
-  groupOf('cover-offline') === 5 &&     // Offline, moved out of Covers
-  groupOf('cover-bulk') === 4 &&        // Metadata
-  groupOf('st-yolo') === 4 &&           // Metadata > Covers, S2 moved from About
+  groupOf('cover-offline') === 4 &&     // Offline (was 5 before Metadata removal)
+  groupOf('st-yolo') === 3 &&           // Appearance > Display (was Metadata > Covers)
   groupOf('th-region') === 3 &&         // Appearance (Display)
-  groupOf('pc-backfill') === 4 &&       // Metadata
-  groupOf('meta-verify') === 4 &&
-  groupOf('hc-test') === 4 &&
+  groupOf('cover-bulk') === -1 &&       // v476: removed with Metadata group
+  groupOf('pc-backfill') === -1 &&      // v476: removed with Metadata group
+  groupOf('meta-verify') === -1 &&      // v476: removed with Metadata group
+  groupOf('hc-test') === -1 &&          // v476: removed with Metadata group
   groupOf('ac-signin') === 0 &&         // Account
   groupOf('ac-sync') === 0 &&           // Account card, S4
   groupOf('ac-card-email') === 0 &&     // Account card, S4
   groupOf('st-edit-profile') === 0 &&
-  groupOf('st-privacy-go') === 6 &&      // Privacy
-  groupOf('ap-update') === 7);           // About
-ok('all pre-existing control ids still present',
+  groupOf('st-privacy-go') === 5 &&      // Privacy (was 6)
+  groupOf('ap-update') === 6);           // About (was 7)
+ok('all pre-existing control ids still present (v476: metadata bulk ids removed)',
   ['th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
-   'hc-bulk', 'hc-autoseg', 'trope-srcseg', 'ac-signup', 'ac-logout', 'ap-ver']
+   'ac-signup', 'ac-logout', 'ap-ver']
     .every(id => !!doc().getElementById(id)));
 ok('v416: theme gallery replaced the th-theme dropdown',
   !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
@@ -75,10 +76,10 @@ ok('S1: header says Settings with a sync-status line (no stat row)',
       syncLine && syncLine.textContent.length > 0 &&
       !doc().querySelector('#view > .stat-row');
   })());
-ok('S2: About has App content + collapsed Diagnostics (YOLO moved to Covers)',
+ok('S2: About has App content + collapsed Diagnostics (v476: YOLO in Display)',
   (() => {
     const groups = [...doc().querySelectorAll('#view > .set-group')];
-    const about = groups[7];
+    const about = groups[6];
     const diag = about.querySelector('details.set-diag');
     return !!doc().getElementById('ap-update') &&
       !about.querySelector('#st-yolo') &&
@@ -87,7 +88,7 @@ ok('S2: About has App content + collapsed Diagnostics (YOLO moved to Covers)',
 ok('S4: sign-in note deduped; account card present with sync controls',
   (() => {
     const notes = [...doc().querySelectorAll('#view .note')];
-    const note = notes.find(p => /cloud database/.test(p.textContent));
+    const note = notes.find(p => /keep your library safe and synced/.test(p.textContent));
     return !!note && !/backed up and synced/.test(note.textContent) &&
       !!doc().getElementById('ac-signedin') &&
       !!doc().getElementById('ac-card-email');
@@ -103,15 +104,15 @@ ok('S6: privacy loading state is skeleton shimmer or resolved content (never bar
 // toggling persists; a re-render restores it
 runInWindow(`
   const gs = document.querySelectorAll('#view > .set-group');
-  gs[0].open = false; gs[4].open = true;
-  gs[4].dispatchEvent(new Event('toggle'));
+  gs[0].open = false; gs[3].open = true;
+  gs[3].dispatchEvent(new Event('toggle'));
   window.__saved = localStorage.getItem('spicyshelves.setgroups');
 `);
-ok('toggle persists open groups', window.__saved === '[4]');
+ok('toggle persists open groups', window.__saved === '[3]');
 runInWindow(`renderSettings();`);
 ok('re-render restores persisted state', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
-  return g[4].open === true && g[0].open === false;
+  return g[3].open === true && g[0].open === false;
 })());
 
 console.log(`\n${pass} passed, ${fail} failed`);
