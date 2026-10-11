@@ -311,7 +311,7 @@ function ccWatch() {
     var tropedb = document.getElementById('m-tropedb');
     if (tropedb) injectTropeSuggest(tropedb);
     var chars = document.getElementById('m-charstab');
-    if (chars && chars.querySelector('.ch-card')) injectCharsSuggest(chars);
+    if (chars) injectCharsSuggest(chars);
     var warns = document.querySelector('details.warnings');
     if (warns) injectTriggerSuggest(warns);
   });
