@@ -3674,3 +3674,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .survey-chip.on { background: var(--accent, #8b7cf6); color: #fff; border-color: transparent; }
 .survey-actions { display: flex; gap: 8px; margin-top: 12px; }
 .survey-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+
+/* v476: metadata compare sheet — per-field Yours/Found pickers */
+.mcmp-field { margin: 12px 0; }
+.mcmp-lab { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.mcmp-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mcmp-opt { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--card); text-align: left; min-height: 44px; font: inherit; color: inherit; cursor: pointer; }
+.mcmp-opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mcmp-who { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.mcmp-val { display: block; margin-top: 4px; overflow-wrap: anywhere; }

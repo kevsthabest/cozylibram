@@ -102,7 +102,10 @@ function compareBookMeta(book, meta) {
     flags.push({ field: 'pageCount', label: 'Pages', from: String(book.pageCount), to: String(meta.pageCount) });
   }
   const by = parseYear(book.publishedDate);
-  if (meta.year && by && meta.year !== by) {
+  if (meta.year && !by) {
+    // v476: missing year is a blank-fill, not a conflict
+    flags.push({ field: 'year', label: 'Published', from: '(missing)', to: String(meta.year) });
+  } else if (meta.year && by && meta.year !== by) {
     flags.push({ field: 'year', label: 'Published', from: String(by), to: String(meta.year) });
   }
   if (!book.cover && meta.cover) {
@@ -111,18 +114,77 @@ function compareBookMeta(book, meta) {
   return flags;
 }
 
+// v476: blanks auto-fill silently (they can never clobber an intentional
+// edit); conflicts go to the compare sheet. Only pageCount/cover/year
+// auto-fill — title/authors blanks are decided by the reader in the sheet.
+var META_BLANK_FILL = { pageCount: 1, cover: 1, year: 1 };
+function isBlankFillFlag(f) {
+  return !!META_BLANK_FILL[f.field] &&
+    (f.from === '(missing)' || f.from === 'No cover');
+}
+
+// Field-scoped apply (v476): the compare sheet applies per-field picks.
+async function applyMetaField(book, meta, field) {
+  if (field === 'title') book.title = meta.title;
+  else if (field === 'authors') book.authors = (meta.authors || []).slice();
+  else if (field === 'pageCount') book.pageCount = meta.pageCount;
+  else if (field === 'year') book.publishedDate = String(meta.year);
+  // v216: adopted remote covers go through the canonical bucket (falls
+  // back to the remote URL on any failure — never a lost cover).
+  else if (field === 'cover') book.cover = await canonicalizeCoverUrl(meta.cover);
+}
+
 async function applyVerifyFix(book, meta, flags) {
-  for (const f of flags) {
-    if (f.field === 'title') book.title = meta.title;
-    else if (f.field === 'authors') book.authors = (meta.authors || []).slice();
-    else if (f.field === 'pageCount') book.pageCount = meta.pageCount;
-    else if (f.field === 'year') book.publishedDate = String(meta.year);
-    // v216: adopted remote covers go through the canonical bucket (falls
-    // back to the remote URL on any failure — never a lost cover).
-    else if (f.field === 'cover') book.cover = await canonicalizeCoverUrl(meta.cover);
-  }
+  for (const f of flags) await applyMetaField(book, meta, f.field);
   book._mtime = Date.now();
   saveLibrary();
+}
+
+// v476: conflict store — books whose metadata disagrees with the source on
+// both-sides-present fields. Persisted so the quiet badge survives reloads.
+var META_CONFLICTS_KEY = 'spicyshelves.meta_conflicts.v1';
+var metaConflicts = {};
+function metaConflictsLoad() {
+  try { metaConflicts = JSON.parse(localStorage.getItem(META_CONFLICTS_KEY)) || {}; }
+  catch (e) { metaConflicts = {}; }
+}
+function metaConflictsSave() {
+  try { localStorage.setItem(META_CONFLICTS_KEY, JSON.stringify(metaConflicts)); }
+  catch (e) {}
+}
+function metaConflictFor(bookId) { return metaConflicts[bookId] || null; }
+function metaConflictClear(bookId) { delete metaConflicts[bookId]; metaConflictsSave(); }
+metaConflictsLoad();
+
+// v476: quiet background compare sweep. Runs at most once per 24h, paced,
+// offline-guarded, no toasts. Blanks auto-fill; conflicts are stored for
+// the quiet badge in the book modal. Hardcover-first priority lives in
+// fetchMetaByISBN (v270) — do not regress it.
+var META_COMPARE_KEY = 'spicyshelves.meta_compare_at';
+async function runMetaCompareSweep() {
+  try {
+    const last = Number(localStorage.getItem(META_COMPARE_KEY) || 0);
+    if (Date.now() - last < 86400000) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const targets = library.filter(b => cleanISBN(b.isbn));
+    for (let i = 0; i < targets.length; i++) {
+      const book = targets[i];
+      try {
+        const meta = await fetchMetaByISBN(book.isbn);
+        if (!meta) continue;
+        const flags = compareBookMeta(book, meta);
+        if (!flags.length) { delete metaConflicts[book.id]; continue; }
+        const blanks = flags.filter(isBlankFillFlag);
+        const conflicts = flags.filter(f => !isBlankFillFlag(f));
+        if (blanks.length) await applyVerifyFix(book, meta, blanks);
+        if (conflicts.length) metaConflicts[book.id] = { meta: meta, flags: conflicts };
+        else delete metaConflicts[book.id];
+      } catch (e) { /* next book */ }
+      await new Promise(r => setTimeout(r, 350));
+    }
+    metaConflictsSave();
+    localStorage.setItem(META_COMPARE_KEY, String(Date.now()));
+  } catch (e) {}
 }
 
 // The check itself, separated from the UI so tests can drive it directly.
@@ -143,80 +205,79 @@ async function checkLibraryMetadata(paceMs, onProgress) {
   return { results: results, notFound: notFound, checked: targets.length };
 }
 
-let verifyRunning = false;
-let verifyResults = []; // [{book, meta, flags}] awaiting review
-
-async function runMetadataCheck() {
-  if (verifyRunning) return;
-  const btn = document.getElementById('meta-verify');
-  const note = document.getElementById('meta-verify-note');
-  verifyRunning = true;
-  if (btn) btn.disabled = true;
-  const out = await checkLibraryMetadata(350, (i, n) => {
-    if (note) note.textContent = 'Checking ' + i + ' / ' + n + '…';
-  });
-  verifyRunning = false;
-  if (btn) btn.disabled = false;
-  verifyResults = out.results;
-  verifyNotFound = out.notFound;
-  if (note) note.textContent = 'Checked ' + out.checked + ' books — ' +
-    out.results.length + ' differ.';
-  openVerifyResults();
-}
-
-let verifyNotFound = 0;
-
-function openVerifyResults() {
-  view = 'verify';
-  render();
-  window.scrollTo(0, 0);
-}
+// v476: the old bulk flow (runMetadataCheck → verify view → "Apply all
+// fixes") is replaced by the compare sheet (openMetaCompareSheet) below.
+// Blanks auto-fill in runMetaCompareSweep; conflicts get per-field review.
 
 function verifyFlagHTML(f) {
   return '<span class="vf"><b>' + esc(f.label) + ':</b> <s>' + esc(f.from) +
     '</s> → <b>' + esc(f.to) + '</b></span>';
 }
 
-function renderVerify() {
-  let html = '<div class="view-head"><button class="btn ghost sm" id="v-back">← Back</button></div>' +
-    '<div class="wish-head"><h2 class="serif">' + icon('search') + ' Metadata check</h2>';
-  if (!verifyResults.length) {
-    html += '<p class="note">Everything matches Open Library / Google Books ✨</p></div>' +
-      '<div class="empty"><div class="big">' + icon('sparkles') + '</div><h2 class="serif">All clean</h2>' +
-      '<p>No differences found in the books we could check.</p></div>';
-  } else {
-    html += '<p class="note">' + verifyResults.length + ' book' +
-      (verifyResults.length === 1 ? '' : 's') + ' differ' +
-      (verifyNotFound ? ' · ' + verifyNotFound + ' ISBNs not found on either source' : '') +
-      '</p></div>' +
-      '<button class="btn block" id="v-apply-all" style="margin-bottom:12px">Apply all fixes</button>' +
-      '<div class="collection-list">' + verifyResults.map(r =>
-        '<div class="crow vbook">' +
-        (r.book.cover
-          ? '<img src="' + esc(r.book.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-          : '<span class="cnocover">' + icon('covers') + '</span>') +
-        '<span class="ctext"><b>' + esc(r.book.title || 'Unknown title') + '</b>' +
-        '<span class="vflags">' + r.flags.map(verifyFlagHTML).join('') + '</span></span>' +
-        '<button class="btn small" data-vfix="' + esc(r.book.id) + '">Fix</button></div>'
-      ).join('') + '</div>';
-  }
-  setView(html);
-  document.getElementById('v-back').addEventListener('click', () => { view = 'settings'; render(); });
-  const all = document.getElementById('v-apply-all');
-  if (all) all.addEventListener('click', async () => {
-    for (const r of verifyResults) await applyVerifyFix(r.book, r.meta, r.flags);
-    verifyResults = [];
-    toast('✅ All metadata fixes applied');
-    render();
+// v476: the full-page verify view is replaced by the compare sheet below.
+// verifyFlagHTML's <s>old</s> → <b>new</b> diff visual is reused there.
+
+/* ---- Metadata compare sheet (v476) ---- */
+
+/* Per-field compare: "Yours" vs "Found", default Yours (safe). Nothing
+   changes until the reader confirms. Uses the app's sheet pattern
+   (collection-overlay + modal-backdrop + overlayOpened, wireSheetDrag). */
+function openMetaCompareSheet(bookId) {
+  const entry = metaConflictFor(bookId);
+  if (!entry) return;
+  const book = library.find(b => b.id === bookId);
+  if (!book) { metaConflictClear(bookId); return; }
+  const flags = entry.flags, meta = entry.meta;
+  const sel = {};
+  flags.forEach(f => { sel[f.field] = 'yours'; });
+
+  const rowHTML = (f) =>
+    '<div class="mcmp-field" data-mf="' + esc(f.field) + '">' +
+    '<div class="mcmp-lab">' + esc(f.label) + '</div>' +
+    '<div class="mcmp-opts">' +
+    '<button class="mcmp-opt on" data-pick="yours"><span class="mcmp-who">Yours</span>' +
+    '<span class="mcmp-val">' + esc(f.from) + '</span></button>' +
+    '<button class="mcmp-opt" data-pick="found"><span class="mcmp-who">Found</span>' +
+    '<span class="mcmp-val">' + esc(f.to) + '</span></button>' +
+    '</div></div>';
+
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="mc-back"><div class="modal" role="dialog" aria-label="Compare metadata">' +
+    '<button class="modal-close" id="mc-x">\u2715</button>' +
+    '<h2 class="serif">We found some differences</h2>' +
+    '<p class="note">Which looks right? Tap your pick for each field — nothing changes until you confirm.</p>' +
+    '<div id="mc-fields">' + flags.map(rowHTML).join('') + '</div>' +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="mc-keep">Keep mine</button>' +
+    '<button class="btn" id="mc-apply">Apply my picks</button></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('sheet', closeDom);
+  const close = () => { overlayClosed(ovToken); closeDom(); };
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(ov.querySelector('#mc-back .modal'), close);
+  ov.querySelector('#mc-back').addEventListener('click', e => { if (e.target.id === 'mc-back') close(); });
+  ov.querySelector('#mc-x').addEventListener('click', close);
+  ov.querySelector('#mc-keep').addEventListener('click', close);
+  ov.querySelectorAll('.mcmp-field').forEach(fieldEl => {
+    const fname = fieldEl.dataset.mf;
+    fieldEl.querySelectorAll('.mcmp-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        sel[fname] = opt.dataset.pick;
+        fieldEl.querySelectorAll('.mcmp-opt').forEach(o => o.classList.toggle('on', o === opt));
+      });
+    });
   });
-  document.querySelectorAll('[data-vfix]').forEach(btn =>
-    btn.addEventListener('click', async () => {
-      const i = verifyResults.findIndex(r => r.book.id === btn.dataset.vfix);
-      if (i === -1) return;
-      const r = verifyResults[i];
-      await applyVerifyFix(r.book, r.meta, r.flags);
-      verifyResults.splice(i, 1);
-      toast('✅ Fixed');
-      render();
-    }));
+  ov.querySelector('#mc-apply').addEventListener('click', async () => {
+    const fields = flags.map(f => f.field).filter(fd => sel[fd] === 'found');
+    for (const fd of fields) await applyMetaField(book, meta, fd);
+    if (fields.length) { book._mtime = Date.now(); saveLibrary(); }
+    metaConflictClear(bookId);
+    close();
+    const wrap = document.getElementById('m-metadiff-wrap');
+    if (wrap) wrap.remove();
+    toast(fields.length ? 'Updated — thanks for checking \uD83E\uDD0E' : 'Kept yours — no changes');
+  });
 }

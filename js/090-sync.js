@@ -480,12 +480,11 @@ function refreshAccountUI() {
     if (cardEmail) cardEmail.textContent = cloudUser.email;
     const last = document.getElementById('ac-last');
     if (last) {
+      // v476: realtime status removed from user-facing text — it's an
+      // implementation detail; the "Last synced" timestamp says enough.
       const base = cloudSyncing ? 'Syncing…' :
         (cloudLastSync ? 'Last synced ' + new Date(cloudLastSync).toLocaleString() : 'Not synced yet');
-      const rt = rtStatus === 'live' ? ' · Realtime on' : // v143
-        rtStatus === 'connecting' ? ' · Realtime connecting…' :
-        rtStatus === 'error' ? ' · Realtime unavailable' : '';
-      last.textContent = base + rt;
+      last.textContent = base;
     }
   } else {
     st.textContent = 'Not signed in.';

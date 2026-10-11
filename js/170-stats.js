@@ -1139,9 +1139,9 @@ function fallbackCopy(t, done) {
 function renderStats() {
   // v448: backfill milestones once (idempotent — no-op after first run)
   try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
-  // v454 Part 2: Dashboard / Details segmented control
+  // v454 Part 2: Overview / Details segmented control
   const modeSeg = '<div class="seg seg-2" id="st-modeseg" style="margin-bottom:14px">' +
-    '<button data-m="dash"' + (statsMode === 'dash' ? ' class="active"' : '') + '>Dashboard</button>' +
+    '<button data-m="dash"' + (statsMode === 'dash' ? ' class="active"' : '') + '>Overview</button>' +
     '<button data-m="detail"' + (statsMode === 'detail' ? ' class="active"' : '') + '>Details</button></div>';
   const wireModeSeg = () => {
     document.querySelectorAll('#st-modeseg button').forEach(b =>

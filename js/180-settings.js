@@ -2,8 +2,9 @@
 
 /* ---------------- backup view ---------------- */
 /* ---------------- settings groups (v117) ---------------- */
-// Kevin's IA: Account / Library / Appearance / Reading / Metadata / Offline /
-// Privacy / About. Groups render directly as <details> cards (no post-hoc DOM
+// Kevin's IA: Account / Library / Appearance / Reading / Offline /
+// Privacy / About. (Metadata group removed v476 — enrichment now runs
+// automatically in the background; see autoEnrichSweep + boot sequence.). Groups render directly as <details> cards (no post-hoc DOM
 // wrapping); open/closed state persists per device in spicyshelves.setgroups.
 function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
   return '<details class="set-group"' + (openIdx.indexOf(idx) !== -1 ? ' open' : '') + '>' +
@@ -232,7 +233,7 @@ function syncStatusLine() {
       return '<span class="sync-dot syncing">\u25cf</span> Syncing\u2026';
     }
     const last = (typeof cloudLastSync !== 'undefined' && cloudLastSync) ? cloudLastSync : 0;
-    return '<span class="sync-dot ok">\u25cf</span> Synced ' + syncAgo(last) + ' \u00b7 ' + booksTxt;
+    return '<span class="sync-dot ok">\u25cf</span> Up to date \u00b7 ' + booksTxt;
   } catch (e) { return ''; }
 }
 function renderSettings() {
@@ -241,7 +242,7 @@ function renderSettings() {
   const prof = loadProfile();
   const profName = ((prof.firstName || '') + ' ' + (prof.lastName || '')).trim();
   const htmlLogin =
-    '<p class="note">Sign in to keep your library safe in your own cloud database and synced across devices.</p>' +
+    '<p class="note">Sign in to keep your library safe and synced across devices.</p>' +
     '<p class="note" id="ac-status">Checking…</p>' +
     '<div id="ac-signedout">' +
     '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
@@ -317,7 +318,12 @@ function renderSettings() {
     '</div></div>' +
     '<p class="note">Switch between the 3D bookshelf and the classic 2D view.</p>' +
     '<div class="field"><button class="btn ghost" id="th-shelfreset">Reset shelf layout</button></div>' +
-    '<p class="note">Clears decoration placements and the shelf view preference — a safety net for shelf weirdness.</p>';
+    '<p class="note">Clears decoration placements and the shelf view preference — a safety net for shelf weirdness.</p>' +
+    // v476: moved from the removed Metadata section — it's a capture
+    // preference, not metadata enrichment.
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-yolo" ' +
+    (typeof ecYoloEnabled === 'function' && ecYoloEnabled() ? 'checked' : '') + '> AI crop' +
+    '<span class="chk-hint">On-device book detection for tighter cover crops. Turn off if you see odd permission prompts.</span></label>';
 
   /* ---- Reading ---- */
   const htmlReadLog =
@@ -339,49 +345,10 @@ function renderSettings() {
     '<button class="btn ghost block" id="st-warnprefs">' + icon('eye') + ' Set warning preferences</button>' +
     '<p class="note">Choose warnings to surface prominently and how much detail you want. Private to this device.</p></div>';
 
-  /* ---- Metadata ---- */
-  const htmlHardcover =
-    '<p class="note">Connect your free Hardcover account to auto-pull series info, content warnings, moods, and trope tags.</p>' +
-    '<div class="search-row"><button class="btn ghost" id="hc-test">Test connection</button>' +
-    '<button class="btn ghost" id="hc-bulk">Enrich all books</button></div>' +
-    '<div class="field"><label>Background auto-enrich</label><div class="seg" id="hc-autoseg" style="grid-template-columns:1fr 1fr">' +
-    ['off', 'on'].map(t =>
-      '<button data-t="' + t + '" class="' + (hcAutoEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? icon('sparkles') + ' On' : icon('pause') + ' Off') + '</button>').join('') +
-    '</div></div>' +
-    '<p class="note">When on, unenriched books are quietly enriched from Hardcover a few seconds after the app opens — no need to tap “Enrich all books”.</p>' +
-    '<div class="field"><label>Trope suggestions</label><div class="seg" id="trope-srcseg" style="grid-template-columns:repeat(4,1fr)">' +
-    TROPE_SOURCES.map(t =>
-      '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '">' +
-      TROPE_SRC_LABELS[t] + '</button>').join('') +
-    '</div></div>' +
-    '<p class="note">Where automatic trope suggestions come from in the book editor: scan the blurb for trope keywords (offline), pull community tags from Hardcover, or both. Suggestions never overwrite the tropes already saved on a book.</p>';
-
-  const htmlMetaCheck =
-    '<p class="note">Compare every book with an ISBN against Open Library and Google Books — ' +
-    'flags wrong titles, authors, page counts, publish years, and missing covers. ' +
-    'You review each difference and apply the fixes you want; nothing changes on its own.</p>' +
-    '<button class="btn ghost block" id="meta-verify">' + icon('search') + ' Check metadata</button>' +
-    '<p class="note" id="meta-verify-note">' +
-    library.filter(b => cleanISBN(b.isbn)).length + ' of ' + library.length +
-    ' books have ISBNs to check.</p>';
-
-  const htmlPageCounts =
-    '<p class="note">Look up total pages by ISBN for books that are missing them — ' +
-    'checked via Google Books first, then Open Library.</p>' +
-    '<button class="btn ghost block" id="pc-backfill">' + icon('doc') + ' Fill missing page counts</button>' +
-    '<p class="note" id="pc-backfill-note"></p>';
-
-  const htmlCovers =
-    '<p class="note">Fetch covers for every book that doesn\'t have one yet — same sources as the cover picker ' +
-    '(Google Books, Open Library, Apple Books, Hardcover). Each candidate is checked to make sure it actually loads before it\'s saved.</p>' +
-    '<button class="btn ghost block" id="cover-bulk">' + icon('download') + ' Download missing covers</button>' +
-    '<p class="note" id="cover-bulk-note">' +
-    library.filter(b => !b.cover).length + ' of ' + library.length +
-    ' books are missing covers.</p>' +
-    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-yolo" ' +
-    (typeof ecYoloEnabled === 'function' && ecYoloEnabled() ? 'checked' : '') + '> AI crop (YOLO)' +
-    '<span class="chk-hint">On-device book detection for tighter cover crops. Turn off if you see odd permission prompts.</span></label>';
+  /* ---- Metadata (v476: section hidden — enrichment is automatic now) ---- */
+  // htmlHardcover / htmlMetaCheck / htmlPageCounts / htmlCovers removed.
+  // The YOLO crop toggle moved to Display (it's a capture preference,
+  // not metadata enrichment).
 
   /* ---- Offline ---- */
   const htmlOffline =
@@ -471,10 +438,12 @@ function renderSettings() {
       setSub('Ledger') + htmlLedger],
     ['sparkles', 'Appearance', 'Theme & display',
       setSub('Theme') + htmlTheme + setSub('Display') + htmlDisplay],
-    ['doc', 'Metadata', 'Enrichment & corrections',
-      '<p class="note">Bulk tools that keep titles, covers, and tags accurate — nothing changes without your review.</p>' +
-      setSub('Hardcover') + htmlHardcover + setSub('Metadata check') + htmlMetaCheck +
-      setSub('Page counts') + htmlPageCounts + setSub('Covers') + htmlCovers],
+    // v476: Metadata group removed — Hardcover auto-enrich, page-count
+    // backfill, and cover download now run automatically on boot (see
+    // 095-gate.js). The bulk-action UI is gone; the functions remain for
+    // the automatic path. Metadata corrections: blanks auto-fill in the
+    // compare sweep (134-verify.js); conflicts get a per-field compare
+    // sheet from the quiet badge in the book modal.
     ['download', 'Offline', 'On this device',
       setSub('Cover cache') + htmlOffline],
     ['eyeoff', 'Privacy', 'Sharing',
@@ -755,58 +724,12 @@ function renderSettings() {
   // v224 (UX-13): the import hub is shared with the Add screen.
   wireImportHub('im');
 
-  // Hardcover wiring
-  document.getElementById('pc-backfill').addEventListener('click', () => backfillPageCounts());
-  document.getElementById('meta-verify').addEventListener('click', () => runMetadataCheck());
-  document.getElementById('hc-test').addEventListener('click', async () => {
-    if (!hcReady()) { toast('No Hardcover key on this server'); return; }
-    toast('Testing Hardcover…');
-    try {
-      const data = await hcGraphQL('query { search(query: "Dune", query_type: "Book", per_page: 1) { results } }');
-      const hits = hcHits(data);
-      toast(hits.length ? 'Connected ✓ — found "' + hits[0].document.title + '"' : 'Connected, but got no results.');
-    } catch (e) { toast('Failed: ' + e.message); }
-  });
-  document.getElementById('hc-bulk').addEventListener('click', async () => {
-    const btn = document.getElementById('hc-bulk');
-    if (!hcReady()) { toast('No Hardcover key on this server'); return; }
-    if (btn.disabled || hcEnrichBusy) return;
-    btn.disabled = true; hcEnrichBusy = true;
-    const targets = library.filter(b => !b.hcEnriched);
-    let ok = 0;
-    for (let i = 0; i < targets.length; i++) {
-      btn.textContent = 'Enriching ' + (i + 1) + '/' + targets.length + '…';
-      try { if (await enrichHardcover(targets[i])) ok++; } catch (e) { /* skip */ }
-      await new Promise(r => setTimeout(r, 1100)); // stay under the 60 req/min limit
-    }
-    saveLibrary(); render();
-    hcEnrichBusy = false;
-    btn.textContent = 'Enrich all books';
-    toast('Hardcover enrichment complete ✨');
-  });
-  document.querySelectorAll('#hc-autoseg button').forEach(btn =>
-    btn.addEventListener('click', () => {
-      try { localStorage.setItem(HC_AUTO_KEY, btn.dataset.t === 'on' ? '1' : '0'); } catch (e) {}
-      document.querySelectorAll('#hc-autoseg button').forEach(x => x.classList.toggle('active', x === btn));
-      toast(btn.dataset.t === 'on' ? 'Background auto-enrich on ✨' : 'Background auto-enrich off ⏸️');
-    }));
-  // v107: bulk cover download
-  let coverBulkBusy = false;
-  document.getElementById('cover-bulk').addEventListener('click', async () => {
-    const btn = document.getElementById('cover-bulk');
-    if (btn.disabled || coverBulkBusy) return;
-    if (!library.some(b => !b.cover)) { toast('Every book already has a cover ✨'); return; }
-    btn.disabled = true; coverBulkBusy = true;
-    const res = await downloadMissingCovers((i, n) => { btn.textContent = 'Downloading ' + i + '/' + n + '…'; });
-    coverBulkBusy = false; btn.disabled = false;
-    btn.innerHTML = icon('download') + ' Download missing covers';
-    const left = library.filter(b => !b.cover).length;
-    document.getElementById('cover-bulk-note').textContent =
-      left + ' of ' + library.length + ' books are missing covers.';
-    toast(res.done
-      ? 'Downloaded ' + res.done + ' cover' + (res.done === 1 ? '' : 's') + ' ✨'
-      : 'No covers found this time');
-  });
+  // v476: Metadata section removed — enrichment runs automatically on boot
+  // (see 095-gate.js). The bulk-action buttons (hc-test, hc-bulk,
+  // hc-autoseg, pc-backfill, meta-verify, cover-bulk) no longer exist in
+  // the UI; their handlers are removed. The underlying functions
+  // (enrichHardcover, backfillPageCounts, downloadMissingCovers) remain
+  // for the automatic path; corrections use the compare sheet (134-verify.js).
   // v109: pre-cache every remote cover through an <img> load so the service
   // worker's image cache picks it up (destination === 'image').
   let coverOfflineBusy = false;

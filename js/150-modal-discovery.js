@@ -1227,6 +1227,10 @@ function renderDetailModal(b, viaBook) {
     '<input class="text-input" id="f-title" value="' + esc(b.title || '') + '" maxlength="300"></div>' +
     '<div class="field"><label>' + icon('user') + ' Author(s)</label>' +
     '<input class="text-input" id="f-author" value="' + esc((b.authors || []).join(', ')) + '" maxlength="300" placeholder="Separate multiple with commas"></div>' +
+    // v476: quiet metadata-diff badge — opens the compare sheet, never interrupts
+    (typeof metaConflictFor === 'function' && metaConflictFor(b.id) ?
+      '<div class="field" id="m-metadiff-wrap"><button class="taplink" id="m-metadiff">' +
+      icon('search') + ' We found some differences — which looks right?</button></div>' : '') +
     // v182: mockup "About this book" section (the hero carries its own copy on desktop).
     (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
     // v131: your rating — hearts + word label, now on the Details tab.
@@ -2013,6 +2017,9 @@ function renderDetailModal(b, viaBook) {
   });
   // v224 (UX-10): Share also sits in the primary row, next to the heart.
   document.getElementById('m-share2').addEventListener('click', () => shareBookCard(b.id));
+  // v476: quiet metadata-diff badge → compare sheet
+  const mdBtn = document.getElementById('m-metadiff');
+  if (mdBtn) mdBtn.addEventListener('click', () => openMetaCompareSheet(b.id));
   document.getElementById('m-save').addEventListener('click', () => {
     // v354: save edited title/author
     const newTitle = document.getElementById('f-title').value.trim();
