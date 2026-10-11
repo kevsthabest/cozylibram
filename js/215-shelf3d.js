@@ -2758,8 +2758,18 @@
     }, 900);
     animate();
 
+    /* v455: synchronous snapshot for shelfies. Forces a render then reads the
+       drawing buffer in the same task — no preserveDrawingBuffer cost. */
+    function capture() {
+      if (dead) return null;
+      try {
+        renderer.render(scene, camera);
+        return canvas.toDataURL('image/png');
+      } catch (e) { return null; }
+    }
+
     return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams,
-      setAppTheme: setAppTheme, unmount: unmount };
+      setAppTheme: setAppTheme, unmount: unmount, capture: capture };
   }
 
   /* ============================== public API ============================== */
@@ -2780,7 +2790,7 @@
       }
       active = inst;
       return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams,
-        setAppTheme: inst.setAppTheme, unmount: unmount };
+        setAppTheme: inst.setAppTheme, unmount: unmount, capture: inst.capture };
     });
   }
   function unmount() {
@@ -2798,8 +2808,15 @@
   function setAppTheme(key) {
     if (active) active.setAppTheme(key);
   }
+  /* v455: shelfie snapshot — null when not mounted. */
+  function capture() {
+    if (active && typeof active.capture === 'function') {
+      try { return active.capture(); } catch (e) { return null; }
+    }
+    return null;
+  }
 
   window.Shelf3D = { mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
-    setThemeParams: setThemeParams, setAppTheme: setAppTheme };
+    setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture };
 
 })();
