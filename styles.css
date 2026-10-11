@@ -831,6 +831,8 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   .modal.detail-v174 .d-hero-text { padding-right: 0; }
   /* mobile: smaller corner, tighter to the edge */
   .mflair-corner { width: 38px; height: 38px; top: 6px; left: 6px; }
+  /* mobile: ISBN/Set-edition button on its own centred line */
+  .d-meta .taplink { flex-basis: 100%; justify-content: center; }
 }
 
 @keyframes slideup { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }
@@ -2329,7 +2331,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .d-hero .pub-rating { margin-bottom: 8px; }
 .d-meta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
   color: var(--muted); font-size: 13px; }
-.d-meta span:not(:last-child)::after { content: '·'; margin-left: 8px; color: var(--faint); }
+.d-meta span:not(:last-of-type)::after { content: '·'; margin-left: 8px; color: var(--faint); }
 .d-hero .release-line { margin-top: 6px; }
 .d-tabs {
   display: flex; gap: 4px; position: sticky; top: -18px; z-index: 5;
