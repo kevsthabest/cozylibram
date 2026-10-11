@@ -206,3 +206,34 @@ function applyTheme() {
     if (typeof ModalFlairs !== 'undefined' && typeof ModalFlairs.refresh === 'function') ModalFlairs.refresh();
   } catch (e) {}
 }
+
+/* ---------------- theme schema validation (startup assertion) ----------------
+   Runs at boot (this is a classic script, loaded before first render).
+   Catches malformed theme definitions early in production: every theme must
+   have a unique string key, a display name, and a valid hex meta color.
+   Logs clear errors; never throws (a bad theme must not break the app). */
+(function validateThemes() {
+  function fail(msg) {
+    try {
+      if (typeof AppLog !== 'undefined' && AppLog.error) AppLog.error('theme', msg);
+    } catch (e) {}
+    try { console.error('[theme-schema] ' + msg); } catch (e) {}
+  }
+  try {
+    if (!Array.isArray(THEMES) || !THEMES.length) { fail('THEMES is empty or not an array'); return; }
+    var seen = {};
+    THEMES.forEach(function (t, i) {
+      var where = 'THEMES[' + i + ']';
+      if (!t || typeof t !== 'object') { fail(where + ' is not an object'); return; }
+      if (typeof t.key !== 'string' || !t.key) fail(where + ' missing/invalid key');
+      else if (seen[t.key]) fail(where + ' duplicate key "' + t.key + '"');
+      else seen[t.key] = true;
+      if (typeof t.name !== 'string' || !t.name) fail(where + ' (' + t.key + ') missing/invalid name');
+      if (typeof t.meta !== 'string' || !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(t.meta))
+        fail(where + ' (' + t.key + ') invalid meta color "' + t.meta + '" (expected #rgb or #rrggbb)');
+      if (t.season != null && typeof t.season !== 'string') fail(where + ' (' + t.key + ') invalid season');
+      if (t.premium != null && typeof t.premium !== 'boolean') fail(where + ' (' + t.key + ') invalid premium flag');
+      if (t.pack != null && typeof t.pack !== 'string') fail(where + ' (' + t.key + ') invalid pack');
+    });
+  } catch (e) { fail('validator crashed: ' + (e && e.message ? e.message : e)); }
+})();
