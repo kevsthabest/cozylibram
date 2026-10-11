@@ -79,10 +79,10 @@ run(`go = window.__realGo2;`);
 clearFlag();
 run(`library = []; maybeOnboard();`);
 run(`go = function(v) { window.__went = v; };`);
+run(`window.__concierge = false; openImportConcierge = function() { window.__concierge = true; };`);
 q('#onb-import').click();
-ok('onboarding: import CTA opens settings at the Library group',
-  run(`window.__went`) === 'settings' &&
-  run(`localStorage.getItem('spicyshelves.setgroups')`) === '[1]');
+ok('onboarding: import CTA opens the import concierge (v455 first-run hero)',
+  run(`window.__concierge`) === true && !q('#onb-overlay') && run(`onboarded()`) === true);
 run(`go = window.__realGo2;`);
 
 // --- 8. Analytics events allowlisted ---
