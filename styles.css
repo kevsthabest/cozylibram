@@ -3457,3 +3457,5 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .coven-sheet.open { transform: translateY(0); }
 .sheet-grabber { width: 40px; height: 4px; border-radius: 2px; background: var(--line);
   margin: 0 auto 12px; }
+/* v454: three-option segmented control */
+.seg-3 { grid-template-columns: repeat(3, 1fr); }

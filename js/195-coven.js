@@ -394,7 +394,7 @@ function renderCovenMain(code, lists, priv) {
     }).join('') +
     '</div>';
 
-  html += '<div id="reco-slot"></div><div id="stats-slot"></div>';
+  html += '<div id="stats-slot"></div>';
 
   // Requests
   if (lists.received.length || lists.sent.length) {
