@@ -1104,10 +1104,21 @@ async function renderCharacterPage() {
       // v348: first appearance — earliest book by seriesPos (Advisor MEDIUM).
       // v349: null seriesPos → Infinity (deprioritize unknowns when seeking earliest),
       // opposite of v347's -1 for story-latest. Chapters aren't comparable across books.
+      // v466: spoiler-gate — only show if the book is in the local library and marked read.
+      // If not in library or not read, omit entirely (not blurred).
       const withChap = d.instances.filter(i => i.firstAppearance != null);
       if (!withChap.length) return '';
       const first = [...withChap].sort((a, b) =>
         ((a.seriesPos == null ? Infinity : a.seriesPos) - (b.seriesPos == null ? Infinity : b.seriesPos)))[0];
+      const normT = t => String(t || '').toLowerCase().replace(/\s*\(.*\)\s*$/, '').trim();
+      const key = normT(first.workTitle);
+      let bookRead = false;
+      try {
+        for (const b of (typeof library !== 'undefined' ? library : []) || []) {
+          if (b && b.title && normT(b.title) === key && b.status === 'read') { bookRead = true; break; }
+        }
+      } catch (e) {}
+      if (!bookRead) return '';
       return '<p class="note">First appears: Chapter ' + first.firstAppearance +
         (withChap.length > 1 ? ' (' + esc(first.workTitle) + ')' : '') + '</p>';
     })() +
