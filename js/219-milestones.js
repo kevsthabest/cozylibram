@@ -713,17 +713,16 @@ function detectMilestones(lib) {
 }
 
 /* ---- Store: localStorage (sync) + Supabase (shared) ----
-   loadMilestones()/saveMilestones() stay synchronous — every caller
-   (detectors, backfill, UI) uses them inline. An in-memory cache is the
-   sync-path source of truth; localStorage is the durable offline copy;
-   the Supabase `milestones` table is the cross-device truth when signed
-   in. Writes push to Supabase on a 2.5s debounce (same cadence as the
-   library sync); reads merge remote rows on sign-in and on first sync
-   load (fire-and-forget — the sync path never blocks on network).
-   Milestones are never un-earned, so the sync is upsert-only. */
+   loadMilestones()/saveMilestones() stay synchronous with the exact old
+   contract — localStorage is read fresh on every load, so it remains the
+   durable offline copy and the single sync-path store. The Supabase
+   `milestones` table is the cross-device truth when signed in: writes push
+   on a 2.5s debounce (same cadence as the library sync); reads merge remote
+   rows on sign-in and on first sync load (fire-and-forget — the sync path
+   never blocks on network). Milestones are never un-earned, so the sync is
+   upsert-only. */
 const MILESTONE_KEY = 'cozylibram.milestones';
 const MILESTONE_OWNER_KEY = 'cozylibram.milestones.owner';
-var __msCache = null;        // in-memory store; null until first sync load
 var __msMergedUid = null;    // uid we last merged remote milestones for
 var __msMergeRetryAt = 0;    // backoff: don't hammer a failing pull
 var __msPushTimer = null;
@@ -743,30 +742,22 @@ function msSignedUid() {
   catch (e) { return null; }
 }
 function loadMilestones() {
-  var uid = msSignedUid();
-  if (!__msCache) {
-    // Owner guard: on a shared device localStorage may hold another user's
-    // achievements. Never surface those — the merge below pulls the right ones.
-    var owner = msOwner();
-    __msCache = (uid && owner && owner !== uid) ? {} : msLocalLoad();
-  }
+  var store = msLocalLoad();
   // Lazy first-merge: once per signed-in user, pull remote milestones and
   // union them in. Fire-and-forget; a failed pull backs off for 60s.
+  var uid = msSignedUid();
   if (uid && __msMergedUid !== uid && Date.now() >= __msMergeRetryAt) {
     __msMergedUid = uid;
     try { syncMilestonesFromCloud().catch(function () {}); } catch (e) {}
   }
-  return __msCache;
+  return store;
 }
 function saveMilestones(store) {
-  __msCache = store;
   msLocalSave(store);
   scheduleMilestonePush();
 }
-/* Reset the in-memory sync state on sign-out. localStorage keeps the last
-   user's data under their owner key; the next sign-in re-merges. */
+/* Reset the sync state on sign-out so the next sign-in re-merges. */
 function resetMilestoneSync() {
-  __msCache = null;
   __msMergedUid = null;
   __msMergeRetryAt = 0;
   if (__msPushTimer) { clearTimeout(__msPushTimer); __msPushTimer = null; }
@@ -820,10 +811,9 @@ async function syncMilestonesFromCloud() {
       remote[r.milestone_id] = { achievedAt: r.achieved_at || null, seen: !!r.seen };
     });
     var owner = msOwner();
-    var local = __msCache || msLocalLoad();
+    var local = msLocalLoad();
     var base = (owner && owner !== uid) ? {} : local;
     var merged = mergeMilestoneStores(base, remote);
-    __msCache = merged;
     msLocalSave(merged);
     try { localStorage.setItem(MILESTONE_OWNER_KEY, uid); } catch (e) {}
     __msMergeRetryAt = 0;
@@ -851,7 +841,7 @@ async function pushMilestonesToCloud() {
     var sb = await cloudClient().catch(function () { return null; });
     var uid = msSignedUid();
     if (!sb || !uid) return;
-    var store = __msCache || {};
+    var store = msLocalLoad();
     var ids = Object.keys(store);
     if (!ids.length) return;
     var now = new Date().toISOString();
