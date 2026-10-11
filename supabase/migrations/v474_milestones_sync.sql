@@ -31,10 +31,10 @@ drop policy if exists "milestones: update own" on public.milestones;
 create policy "milestones: update own" on public.milestones
   for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-drop policy if exists "milestones: delete own" on public.milestones;
-create policy "milestones: delete own" on public.milestones
-  for delete to authenticated using (auth.uid() = user_id);
-
 drop policy if exists "milestones: admin all" on public.milestones;
 create policy "milestones: admin all" on public.milestones
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- No "delete own" policy: milestones are never un-earned, so the sync is
+-- upsert-only. Users cannot delete their own rows; admins manage via the
+-- "admin all" policy above.

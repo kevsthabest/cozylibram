@@ -756,11 +756,18 @@ function saveMilestones(store) {
   msLocalSave(store);
   scheduleMilestonePush();
 }
-/* Reset the sync state on sign-out so the next sign-in re-merges. */
+/* Reset the sync state on sign-out so the next sign-in re-merges. A pending
+   push is flushed first (fire-and-forget): clearing the timer without pushing
+   would drop achievements earned <2.5s before sign-out, and the next sign-in
+   would overwrite localStorage before they ever reached the cloud. At this
+   point in leaveApp the auth session is still valid, so the push lands. */
 function resetMilestoneSync() {
   __msMergedUid = null;
   __msMergeRetryAt = 0;
-  if (__msPushTimer) { clearTimeout(__msPushTimer); __msPushTimer = null; }
+  if (__msPushTimer) {
+    clearTimeout(__msPushTimer); __msPushTimer = null;
+    try { pushMilestonesToCloud().catch(function () {}); } catch (e) {}
+  }
 }
 
 /* Pure merge for milestone stores. Union of achieved milestones:
@@ -787,10 +794,16 @@ function mergeMilestoneStores(local, remote) {
   });
   return out;
 }
-/* ISO-8601 timestamps compare lexicographically; null means "earned before
-   we could date it" and loses to any real date. */
+/* Earliest of two achievedAt values. Compared as Date objects, not ISO
+   strings: Supabase returns timestamptz with +00:00 offsets while the client
+   writes .000Z, and string comparison would be wrong if formats ever mixed
+   (e.g. a local date-only string). Null means "earned before we could date
+   it" and loses to any real date. */
 function earliestAchievedAt(a, b) {
-  if (a && b) return a < b ? a : b;
+  if (a && b) {
+    var ta = new Date(a).getTime(), tb = new Date(b).getTime();
+    if (!isNaN(ta) && !isNaN(tb)) return ta <= tb ? a : b;
+  }
   return a || b || null;
 }
 
