@@ -3459,3 +3459,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   margin: 0 auto 12px; }
 /* v454: three-option segmented control */
 .seg-3 { grid-template-columns: repeat(3, 1fr); }
+/* v454: friend actions — collapse to "..." on narrow widths */
+.friend-actions .friend-menu-btn { display: none; }
+@media (max-width: 480px) {
+  .friend-actions .btn:not(.friend-menu-btn) { display: none; }
+  .friend-actions .friend-menu-btn { display: inline-flex; }
+  .friend-actions.show-all .btn { display: inline-flex; }
+  .friend-actions.show-all .friend-menu-btn { display: none; }
+}

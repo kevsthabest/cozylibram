@@ -413,20 +413,6 @@ function renderCovenMain(code, lists, priv) {
     html += '</div>';
   }
 
-  // Friends
-  html += '<h2 class="section serif" id="cc-friends">My ' + covenName() + (lists.friends.length ? ' (' + lists.friends.length + ')' : '') + '</h2>';
-  if (!lists.friends.length) {
-    html += '<p class="note" style="text-align:center">No friends yet — share your invite link above.</p>';
-  } else {
-    html += '<div class="circle-list">';
-    lists.friends.forEach(f => {
-      html += circleRowHTML(f.profile, f.name,
-        '<button class="btn ghost sm" data-view="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Shelves</button>' +
-        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>' +
-        '<button class="btn ghost sm" data-report="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Report</button>');
-    });
-    html += '</div>';
-  }
 
   setView(html);
 
@@ -434,7 +420,7 @@ function renderCovenMain(code, lists, priv) {
   const rerender = () => renderCoven();
   // v454: invite tile opens the sheet; friend tiles open shelves
   const inviteBtn = document.getElementById('cc-invite-open');
-  if (inviteBtn) inviteBtn.addEventListener('click', () => openInviteSheet(code, inviteBtn));
+  if (inviteBtn) inviteBtn.addEventListener('click', () => openInviteSheet(code, inviteBtn, lists.friends));
   document.querySelectorAll('.friend-tile[data-friend]').forEach(t =>
     t.addEventListener('click', () => {
       circFriend = { id: t.dataset.friend, name: t.dataset.name };
@@ -580,7 +566,7 @@ function openPrivacySheet(priv, shelves, opener) {
 }
 
 /* v454: invite sheet — the invite card UI moved into a bottom sheet. */
-function openInviteSheet(code, opener) {
+function openInviteSheet(code, opener, friends) {
   const body =
     '<div class="field"><label>Invite a friend</label>' +
     '<p class="note">Share your personal invite link — they tap it, sign in (or create an account), and you’re connected. Nothing to type.</p>' +
@@ -592,7 +578,20 @@ function openInviteSheet(code, opener) {
       'autocapitalize="none" autocomplete="off" spellcheck="false">' +
       '<button class="btn" id="cc-send">Continue</button></div>' +
     '<p class="note" id="cc-msg"></p></div>' +
-    '<div id="cc-accept-slot"></div>';
+    '<div id="cc-accept-slot"></div>' +
+    '<div class="field" style="margin-top:16px"><label>Manage friends' + (friends && friends.length ? ' (' + friends.length + ')' : '') + '</label>' +
+    ((friends && friends.length) ?
+      '<div class="circle-list">' + friends.map(f =>
+        '<div class="circle-row">' + circAvatarHTML(f.profile, 'c-avatar') +
+        '<div class="circle-meta"><b>' + esc(f.name) + '</b></div>' +
+        '<div class="circle-actions friend-actions">' +
+        '<button class="btn ghost sm" data-view="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Shelves</button>' +
+        '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>' +
+        '<button class="btn ghost sm" data-report="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Report</button>' +
+        '<button class="btn ghost sm friend-menu-btn" data-fmenu="' + esc(f.id) + '" aria-label="More options">…</button>' +
+        '</div></div>').join('') + '</div>'
+      : '<p class="note">No friends yet.</p>') +
+    '</div>';
   const ref = covenOpenSheet('Invite', body, opener);
   // Wire the invite controls (same handlers as the old card)
   document.getElementById('cc-share').addEventListener('click', () => shareInviteLink(code));
@@ -611,6 +610,24 @@ function openInviteSheet(code, opener) {
       renderInviteAccept(slot, await resolveInviteToken(input.value));
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
+  // Wire Manage friends buttons (same handlers as the old list)
+  ref.sheet.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+    ref.close();
+    circFriend = { id: b.dataset.view, name: b.dataset.name };
+    circShelf = 'all';
+    go('coven-friend');
+  }));
+  ref.sheet.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => {
+    openRemoveFriendSheet(b.dataset.remove, b.dataset.name || 'this friend');
+  }));
+  ref.sheet.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
+    openReportSheet(b.dataset.report, b.dataset.name || 'this user');
+  }));
+  // v454: "..." menu toggles the full button row on narrow widths
+  ref.sheet.querySelectorAll('[data-fmenu]').forEach(b => b.addEventListener('click', () => {
+    const row = b.closest('.friend-actions');
+    if (row) row.classList.toggle('show-all');
+  }));
   return ref;
 }
 function covenOpenSheet(title, bodyHTML, opener) {
