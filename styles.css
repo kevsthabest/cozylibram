@@ -609,6 +609,8 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 
 /* segmented status control */
 .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* v454: two-option segmented control */
+.seg-2 { grid-template-columns: repeat(2, 1fr); }
 .seg button {
   border: 1px solid var(--line);
   background: var(--bg2);

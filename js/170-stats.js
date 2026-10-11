@@ -1059,6 +1059,14 @@ function fallbackCopy(t, done) {
 function renderStats() {
   // v448: backfill milestones once (idempotent — no-op after first run)
   try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
+  // v454 Part 2: Dashboard / Details segmented control
+  const modeSeg = '<div class="seg seg-2" id="st-modeseg" style="margin-bottom:14px">' +
+    '<button data-m="dash"' + (statsMode === 'dash' ? ' class="active"' : '') + '>Dashboard</button>' +
+    '<button data-m="detail"' + (statsMode === 'detail' ? ' class="active"' : '') + '>Details</button></div>';
+  const wireModeSeg = () => {
+    document.querySelectorAll('#st-modeseg button').forEach(b =>
+      b.addEventListener('click', () => { statsMode = b.dataset.m; renderStats(); }));
+  };
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
@@ -1179,6 +1187,7 @@ function renderStats() {
     } catch (e) {}
     setView(
       '<h2 class="section serif">Reading stats</h2>' +
+      modeSeg +
       milestoneCard +
       insightCard +
       '<div class="stat-sub">' + icon('calendar') + ' ' + esc(monthName) + '</div>' +
@@ -1220,16 +1229,11 @@ function renderStats() {
       '</span></div>' +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
-      valueSection +
-      '<div class="search-row" style="margin:16px 0"><button class="btn ghost block" id="st-explore">' +
-      icon('chart') + ' Explore detailed stats →</button></div>'
+      valueSection
     );
+    wireModeSeg();
     document.querySelectorAll('.now-reading .book-card').forEach(c =>
       c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
-    document.getElementById('st-explore').addEventListener('click', () => {
-      statsMode = 'detail';
-      renderStats();
-    });
     // v448: milestone celebration — "seen" means the reader engaged:
     // clicking "View milestones" or explicitly dismissing the card.
     // Merely rendering the card does not consume the celebration.
@@ -1253,8 +1257,8 @@ function renderStats() {
   }
 
   setView(
-    '<button class="btn ghost sm" id="st-backdash" style="margin-bottom:10px">← Dashboard</button>' +
     '<h2 class="section serif">Reading stats</h2>' +
+    modeSeg +
     '<div class="stat-sub">Overview</div>' +
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
@@ -1335,10 +1339,7 @@ function renderStats() {
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
   });
-  document.getElementById('st-backdash').addEventListener('click', () => {
-    statsMode = 'dash';
-    renderStats();
-  });
+  wireModeSeg();
   document.getElementById('st-yib').addEventListener('click', () => renderYearInBooks(new Date().getFullYear()));
   document.querySelectorAll('#evo-gran button').forEach(b2 =>
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));
