@@ -604,9 +604,11 @@ function recordsHTML() {
   const cards = [];
   const card = (icon, label, b, stat) => {
     if (!b) return;
-    cards.push('<div class="record-card" data-id="' + esc(b.id) + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
-      '<div class="rcard-body">' + coverHTML(b) + '<div><div class="rtitle">' + esc(b.title) + '</div>' +
-      '<div class="rstat">' + stat + '</div></div></div></div>');
+    // v454 Part 2: row layout — portrait cover left, label/title/value right
+    cards.push('<div class="record-row" data-id="' + esc(b.id) + '">' + coverHTML(b, 'rec-cov') +
+      '<div class="rmeta"><div class="rlbl">' + icon + ' ' + label + '</div>' +
+      '<div class="rtitle">' + esc(b.title) + '</div>' +
+      '<div class="rstat">' + stat + '</div></div></div>');
   };
   if (withPages.length) {
     const s = withPages.slice().sort((a, b) => b.pageCount - a.pageCount);
@@ -1320,7 +1322,7 @@ function renderStats() {
       calSel = (calSel === c.dataset.day) ? null : c.dataset.day;
       renderStats();
     }));
-  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .series-row [data-id]').forEach(c =>
+  document.querySelectorAll('#heat-books .cal-book, #cal-books .cal-book, .dstat-card .cal-book, .record-card[data-id], .record-row[data-id], .series-row [data-id]').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
   const sra = document.getElementById('sr-all');
   if (sra) sra.addEventListener('click', () => { seriesReturn = 'stats'; go('series'); });
