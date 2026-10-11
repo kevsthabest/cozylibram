@@ -160,20 +160,50 @@ function buddyReads(myS, frS) {
 // --- superlatives: who in the circle gets which playful award ----------------
 // Extracted as a pure function for testability. people = [{ id, name,
 // profile, stats }] in circle order (you first).
+// v474: pace-based awards retired per the product brief ("Playful, never
+// pressuring"). Fastest Finisher (avg days per book) and Page Devourer
+// (most output this month) are gone. Replacements are character-flavored,
+// never pace comparisons: Deep Diver (longest book braved), Author Devotee
+// (loyalty to one author). Fearless Quitter is the model — playful, not
+// pressuring — and stays, with Genre Explorer and Spiciest Shelf.
+function longestFinishedBook(stats) {
+  let best = null;
+  (stats.books || []).forEach(b => {
+    if (b.status === 'read' || b.dateFinished) {
+      const pc = Number(b.pageCount) || Number(b.pages) || 0;
+      if (pc > 0 && (!best || pc > best.pages)) best = { title: b.title || 'Untitled', pages: pc };
+    }
+  });
+  return best;
+}
+function mostReadAuthor(stats) {
+  let top = null;
+  Object.keys(stats.authorCounts || {}).forEach(k => {
+    const n = stats.authorCounts[k];
+    if (n >= 2 && (!top || n > top.n)) top = { author: k, n: n };
+  });
+  return top;
+}
 function covenAwards(people) {
   const awards = [];
   const push = (p, label, detailFn) => { if (p) awards.push({ label: label, person: p, detail: detailFn(p) }); };
-  push(people.filter(p => (p.stats.avgDaysN || 0) >= 3).sort((a, b) => a.stats.avgDays - b.stats.avgDays)[0],
-    'Fastest Finisher', p => 'avg ' + p.stats.avgDays.toFixed(1) + ' days a book');
   push(people.slice().sort((a, b) => Object.keys(b.stats.genreCounts).length - Object.keys(a.stats.genreCounts).length)
     .find(p => Object.keys(p.stats.genreCounts).length > 0),
     'Genre Explorer', p => { const n = Object.keys(p.stats.genreCounts).length; return (n > 40 ? '40+' : n) + ' genres and counting'; });
   push(people.filter(p => (p.stats.spiceN || 0) >= 3).sort((a, b) => b.stats.spiceAvg - a.stats.spiceAvg)[0],
     'Spiciest Shelf', p => 'averages ' + p.stats.spiceAvg.toFixed(1) + ' peppers');
-  const devourer = people.slice()
-    .sort((a, b) => b.stats.monthBooks - a.stats.monthBooks || b.stats.monthPages - a.stats.monthPages)[0];
-  if (devourer && devourer.stats.monthBooks > 0) awards.push({ label: 'Page Devourer', person: devourer,
-    detail: devourer.stats.monthBooks + ' finished · ' + devourer.stats.monthPages.toLocaleString() + ' pages this month' });
+  const diver = people.map(p => ({ p: p, lb: longestFinishedBook(p.stats) }))
+    .filter(x => x.lb).sort((a, b) => b.lb.pages - a.lb.pages)[0];
+  push(diver && diver.p, 'Deep Diver', p => {
+    const lb = longestFinishedBook(p.stats);
+    return 'braved ' + lb.title + ' (' + lb.pages.toLocaleString() + ' pages)';
+  });
+  const devotee = people.map(p => ({ p: p, ta: mostReadAuthor(p.stats) }))
+    .filter(x => x.ta).sort((a, b) => b.ta.n - a.ta.n)[0];
+  push(devotee && devotee.p, 'Author Devotee', p => {
+    const ta = mostReadAuthor(p.stats);
+    return ta.n + ' books by ' + ta.author;
+  });
   push(people.filter(p => p.stats.dnf >= 2).sort((a, b) => b.stats.dnf - a.stats.dnf)[0],
     'Fearless Quitter', p => p.stats.dnf + ' books abandoned, zero regrets');
   return awards;
