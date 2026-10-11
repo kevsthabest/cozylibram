@@ -40,8 +40,17 @@ const portraitScore = (p225.module.exports && p225.module.exports.portraitScore)
   (p225.window && p225.window.portraitScore);
 const localTropes = (p225.module.exports && p225.module.exports.localTropes) ||
   (p225.window && p225.window.portraitLocalTropes);
+const warningsState = (p225.module.exports && p225.module.exports.warningsState) ||
+  (p225.window && p225.window.warningsState);
 
 ok('portraitScore exported', typeof portraitScore === 'function');
+ok('warningsState exported', typeof warningsState === 'function');
+
+// v473: warningsState — three cases (Part 2, item 5)
+eq('warningsState: has warnings', warningsState(['violence'], {}), 'has-warnings');
+eq('warningsState: reviewed, none -> none-confirmed', warningsState([], { warningsReviewed: true }), 'none-confirmed');
+eq('warningsState: not reviewed', warningsState([], {}), 'unreviewed');
+eq('warningsState: null warns', warningsState(null, {}), 'unreviewed');
 
 // empty book → 0 (genre stub returns romantasy though; override via book without stub)
 const p225b = loadJS('/home/hatch/workspace/booktok/js/225-book-portrait.js', {
