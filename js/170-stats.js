@@ -1275,22 +1275,22 @@ function renderStats() {
     nowReading +
     dailyStatsHTML() +
     // v447: section navigation for the long detail view
-    '<div class="stat-nav">' +
+    '<div class="stat-nav sticky">' +
     ['Activity|st-sec-activity', 'Pace|st-sec-pace', 'Taste|st-sec-taste', 'Records|st-sec-records'].map(s => {
       const parts = s.split('|');
       return '<button class="chip" data-target="' + parts[1] + '">' + parts[0] + '</button>';
     }).join('') +
     '</div>' +
     '<div class="stat-sub">Explore</div>' +
-    '<div id="st-sec-activity">' + heatmapHTML() + readingCalHTML() + '</div>' +
+    '<div class="st-sec" id="st-sec-activity"><button class="st-sec-head" data-sec="st-sec-activity"><span>Activity</span><span class="chev">▾</span></button><div class="st-sec-body">' + heatmapHTML() + readingCalHTML() + '</div></div>' +
     '<div class="stat-detail-grid">' +
-    '<div id="st-sec-pace">' + paceHTML() + '</div>' +
-    '<div id="st-sec-taste">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
+    '<div class="st-sec" id="st-sec-pace"><button class="st-sec-head" data-sec="st-sec-pace"><span>Pace</span><span class="chev">▾</span></button><div class="st-sec-body">' + paceHTML() + '</div></div>' +
+    '<div class="st-sec" id="st-sec-taste"><button class="st-sec-head" data-sec="st-sec-taste"><span>Taste</span><span class="chev">▾</span></button><div class="st-sec-body">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
-    ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div>' +
+    ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div></div>' +
     '</div>' +
-    '<div id="st-sec-records">' + recordsHTML() + seriesHTML() + '</div>' +
+    '<div class="st-sec" id="st-sec-records"><button class="st-sec-head" data-sec="st-sec-records"><span>Records</span><span class="chev">▾</span></button><div class="st-sec-body">' + recordsHTML() + seriesHTML() + '</div></div>' +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>'
   );
 
@@ -1340,6 +1340,19 @@ function renderStats() {
     }, 50);
   });
   wireModeSeg();
+  // v454 Part 2: jump chips scroll to sections; section heads collapse/expand
+  document.querySelectorAll('.stat-nav .chip').forEach(ch =>
+    ch.addEventListener('click', () => {
+      const el = document.getElementById(ch.dataset.target);
+      if (el) {
+        el.classList.remove('collapsed');
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }));
+  document.querySelectorAll('.st-sec-head').forEach(h =>
+    h.addEventListener('click', () => {
+      document.getElementById(h.dataset.sec).classList.toggle('collapsed');
+    }));
   document.getElementById('st-yib').addEventListener('click', () => renderYearInBooks(new Date().getFullYear()));
   document.querySelectorAll('#evo-gran button').forEach(b2 =>
     b2.addEventListener('click', () => { genreGran = b2.dataset.g; renderStats(); }));

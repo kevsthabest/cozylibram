@@ -1150,7 +1150,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .milestone-row .mcheck { color: var(--gold); font-size: 18px; flex: none; }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+/* v454 Part 2: sticky jump chips */
+.stat-nav.sticky { position: sticky; top: 0; z-index: 20; background: var(--bg);
+  padding: 8px 0; margin: 0 -4px; padding-left: 4px; padding-right: 4px; }
 .stat-nav .chip { cursor: pointer; }
+/* v454 Part 2: collapsible detail sections */
+.st-sec-head { display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: 0; padding: 12px 0; cursor: pointer;
+  color: var(--ink); font-size: 15px; font-weight: 600; min-height: 44px; }
+.st-sec-head .chev { color: var(--muted); transition: transform 0.2s; }
+.st-sec.collapsed .st-sec-head .chev { transform: rotate(-90deg); }
+.st-sec.collapsed .st-sec-body { display: none; }
 /* v447: desktop detail view — two columns instead of one stretched column */
 @media (min-width: 900px) {
   #st-sec-activity, #st-sec-pace, #st-sec-taste, #st-sec-records { break-inside: avoid; }
