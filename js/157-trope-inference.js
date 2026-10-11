@@ -1249,11 +1249,29 @@ function ensureTropeQueueWired() {
   tropeQueueWiredForApp = true;
 }
 /* v153: trope-intelligence chips. Pure HTML builder (unit-tested). DB tropes
-   get a subtle ✦ source indicator + confidence tooltip; heuristics render
-   as plain chips. v154: signed-in users get ▲▼ vote buttons on DB chips;
+   get a subtle ✦ source indicator + provenance label (v473); heuristics
+   render as plain chips. v154: signed-in users got ▲▼ vote buttons on DB
+   chips — replaced in v473 by tap-to-confirm (no vote counts shown).
    `votes` is { tropeId: { up, down, mine } }. `esc` comes from
    js/050-helpers.js at runtime. */
-function dbTropeChipsHTML(tropes, origin, votes) {
+/* v473: trope provenance (Part 1, item 1). Pure function — unit-tested.
+   trope: {id, name, source} — source from book_tropes row, or
+     'you'/'auto'/'community' in portrait local tropes.
+   votes: {tropeId: {up, down, mine}} from TropeVotes.getVotes().
+   userTagSet: Set of lowercase user-entered tag names (Tropes tab), or null.
+   Returns {key, label} — 'yours' | 'confirmed' | 'text'. */
+function tropeProvenance(trope, votes, userTagSet) {
+  var name = String((trope && trope.name) || '').toLowerCase().trim();
+  var src = trope && trope.source;
+  if (src === 'user' || src === 'you' || (userTagSet && name && userTagSet.has(name))) {
+    return { key: 'yours', label: 'yours' };
+  }
+  var v = (votes && trope && trope.id && votes[trope.id]) || { up: 0, down: 0 };
+  var net = (v.up || 0) - (v.down || 0);
+  if (net >= 1 || src === 'community') return { key: 'confirmed', label: 'readers confirmed' };
+  return { key: 'text', label: 'from the text' };
+}
+function dbTropeChipsHTML(tropes, origin, votes, userTagSet) {
   if (!tropes || !tropes.length) {
     return '<p class="note">No trope data yet.</p>';
   }
@@ -1261,29 +1279,22 @@ function dbTropeChipsHTML(tropes, origin, votes) {
   votes = votes || {};
   const votable = ai && typeof TropeVotes !== 'undefined' && TropeVotes.canVote();
   return tropes.map(t => {
-    const v = votes[t.id] || { up: 0, down: 0, mine: 0 };
-    const net = v.up - v.down;
-    let title = '';
-    if (ai) {
-      title = 'AI-inferred · ' + Math.round(tropeDisplayConfidence(t.confidence, v) * 100) + '% confidence';
-      if (net !== 0) title += ' · community ' + (net > 0 ? '+' : '') + net;
-    }
+    // v473: provenance labels replace the ▲▼ vote buttons (item 4: never
+    // reveal vote counts). Heuristic chips have no id — plain, not votable.
+    const prov = ai && t.id ? tropeProvenance(t, votes, userTagSet) : null;
+    const tappable = votable && prov && prov.key === 'text' && t.id;
     let h = '<span class="chip dbtrope' + (ai ? ' ai' : '') + '"' +
-      (title ? ' title="' + title + '"' : '') + '>' +
-      (ai ? '✦ ' : '') + esc(t.name) + '</span>';
-    if (votable && t.id) {
-      h = '<span class="tgvote">' + h +
-        '<button class="tvbtn' + (v.mine === 1 ? ' on' : '') + '" data-tv="1" data-tid="' + esc(t.id) + '"' +
-        ' aria-label="This trope fits">▲</button>' +
-        '<button class="tvbtn' + (v.mine === -1 ? ' on' : '') + '" data-tv="-1" data-tid="' + esc(t.id) + '"' +
-        ' aria-label="This trope does not fit">▼</button>' +
-        (net ? '<span class="tvnet">' + (net > 0 ? '+' : '') + net + '</span>' : '') +
-        '</span>';
-    }
+      (prov ? ' data-tprov="' + prov.key + '"' : '') +
+      (t.id ? ' data-tid="' + esc(t.id) + '"' : '') +
+      (tappable ? ' tabindex="0" role="button" aria-label="' + esc(t.name) + ' — ' + esc(prov.label) + '. Tap to confirm or dispute."' : '') +
+      '>' +
+      (ai ? '✦ ' : '') + esc(t.name) +
+      (prov ? '<span class="tprov">' + esc(prov.label) + '</span>' : '') +
+      '</span>';
     return h;
   }).join('') +
     (ai ? '<p class="note">✦ inferred from the book\u2019s description' +
-      (votable ? ' — tap ▲▼ to agree or disagree' : '') + '</p>' : '');
+      (votable ? ' — tap an unconfirmed chip to confirm or dispute' : '') + '</p>' : '');
 }
 
 /* ---------------- Community voting (v154) ----------------
@@ -1373,6 +1384,109 @@ const TropeVotes = {
     const cur = (agg[tropeId] || { mine: 0 }).mine;
     return this.vote(bookKey, tropeId, cur === want ? 0 : want);
   },
+};
+
+/* ---------------- Confirm / dispute row (v473, Part 1 items 2-3) ----------------
+   Shared by the Tropes tab and the Book Portrait card. Tapping an unconfirmed
+   chip opens "Is this right? [Yes] [No] [Not sure]" below the chip container.
+   Votes go through TropeConfirmVote.cast (rate-limit respected, offline queued).
+   Never reveals vote counts or other users' names — only provenance labels. */
+var TropeConfirm = {
+  _row: null,
+
+  /* container: element the row is inserted after. opts: {bookKey, tropeId, onDone} */
+  open: function (container, opts) {
+    this.close();
+    if (!container || !container.parentNode || !opts || !opts.tropeId || !opts.bookKey) return;
+    var row = document.createElement('div');
+    row.className = 'tconfirm';
+    row.id = 'tconfirmRow';
+    row.innerHTML =
+      '<span>Is this right?</span> ' +
+      '<button class="btn sm" data-tc="1">Yes</button> ' +
+      '<button class="btn sm ghost" data-tc="-1">No</button> ' +
+      '<button class="taplink" data-tc="0">Not sure</button>' +
+      '<span class="note" data-tc-msg style="margin-left:4px"></span>';
+    container.parentNode.insertBefore(row, container.nextSibling);
+    this._row = row;
+    var self = this;
+    row.querySelectorAll('[data-tc]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        self._answer(opts, parseInt(btn.getAttribute('data-tc'), 10), row);
+      });
+    });
+    try { row.querySelector('[data-tc="1"]').focus(); } catch (e) {}
+  },
+
+  close: function () {
+    if (this._row && this._row.parentNode) this._row.parentNode.removeChild(this._row);
+    this._row = null;
+  },
+
+  _answer: async function (opts, want, row) {
+    var msg = row.querySelector('[data-tc-msg]');
+    if (want === 0) { this.close(); return; } // "Not sure" just closes
+    row.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    if (msg) msg.textContent = '…';
+    // Skip the write when the user's vote already matches (upsert is
+    // idempotent, but don't burn rate-limit quota on a no-op).
+    var cur = 0;
+    try {
+      var agg = await TropeVotes.getVotes(opts.bookKey);
+      cur = ((agg[opts.tropeId] || {}).mine) || 0;
+    } catch (e) {}
+    if (cur !== want) await TropeConfirmVote.cast(opts.bookKey, opts.tropeId, want);
+    if (msg) msg.textContent = 'Thanks, that helps other readers';
+    var self = this;
+    setTimeout(function () {
+      self.close();
+      try { if (typeof opts.onDone === 'function') opts.onDone(); } catch (e) {}
+    }, 2000);
+  }
+};
+
+/* Vote dispatch with rate-limit respect + offline queue (v473, Part 1 item 3).
+   Returns 'voted' | 'queued'. Never throws, never surfaces errors to the UI —
+   throttled or offline votes queue quietly to the community outbox. */
+var TropeConfirmVote = {
+  OUTBOX_KEY: 'cozylibram.cc.outbox.v1',
+
+  async cast(bookKey, tropeId, vote) {
+    // 1. client rate limit (js/222) — throttled votes queue quietly
+    try {
+      if (typeof CommunityCorpus !== 'undefined' && CommunityCorpus.rateLimitCheck) {
+        var rl = CommunityCorpus.rateLimitCheck();
+        if (rl && !rl.ok) { this._queue(bookKey, tropeId, vote); return 'queued'; }
+      }
+    } catch (e) {}
+    // 2. offline → queue
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        this._queue(bookKey, tropeId, vote); return 'queued';
+      }
+    } catch (e) {}
+    // 3. direct vote; any failure → queue quietly
+    try {
+      await TropeVotes.vote(bookKey, tropeId, vote);
+      return 'voted';
+    } catch (e) {
+      this._queue(bookKey, tropeId, vote);
+      return 'queued';
+    }
+  },
+
+  _queue(bookKey, tropeId, vote) {
+    try {
+      var o = JSON.parse(localStorage.getItem(this.OUTBOX_KEY) || '[]');
+      if (!Array.isArray(o)) o = [];
+      // dedupe: one pending vote per (book, trope) — changing a vote replaces it
+      o = o.filter(function (e) {
+        return !(e && e.kind === 'trope-vote' && e.bookKey === bookKey && e.tropeId === tropeId);
+      });
+      o.push({ kind: 'trope-vote', bookKey: bookKey, tropeId: tropeId, vote: vote, at: Date.now() });
+      localStorage.setItem(this.OUTBOX_KEY, JSON.stringify(o));
+    } catch (e) {}
+  }
 };
 
 /* ---------------- Claim moderation (v206) ----------------

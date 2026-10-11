@@ -137,22 +137,47 @@ async function communityTropes(b) {
 }
 
 /* ---------- card HTML (sync) ---------- */
-function tropeChipsHTML(tropes, bookId) {
+// v473: warnings area state (Part 2, item 5). Pure — unit-tested.
+// Returns 'unreviewed' | 'none-confirmed' | 'has-warnings'.
+function warningsState(warns, b) {
+  if (warns && warns.length) return 'has-warnings';
+  if (b && b.warningsReviewed) return 'none-confirmed';
+  return 'unreviewed';
+}
+function tropeChipsHTML(tropes, bookId, votes) {
   if (!tropes.length) {
     return '<span class="note">No tropes mapped yet — </span>' +
       '<button class="taplink" data-pt="suggest-tropes" data-book="' + escH(bookId) + '">what kind of story is this?</button>';
   }
+  // v473: provenance labels (Part 1, item 1). votes optional — without them
+  // every auto trope reads "from the text", which is correct pre-fetch.
+  var votable = (typeof TropeVotes !== 'undefined' && TropeVotes.canVote && TropeVotes.canVote());
   var shown = tropes.slice(0, 2).map(function (t) {
-    return '<span class="chip">' + escH(t.name) + '</span>';
+    var prov = (typeof tropeProvenance === 'function')
+      ? tropeProvenance(t, votes || {}, null)
+      : { key: 'text', label: 'from the text' };
+    var tappable = votable && t.id && prov.key === 'text';
+    return '<span class="chip" data-tprov="' + prov.key + '"' +
+      (t.id ? ' data-tid="' + escH(t.id) + '"' : '') +
+      (tappable ? ' tabindex="0" role="button" aria-label="' + escH(t.name) + ' — ' + escH(prov.label) + '. Tap to confirm or dispute."' : '') +
+      '>' + escH(t.name) + '<span class="tprov">' + escH(prov.label) + '</span></span>';
   }).join(' ');
   if (tropes.length > 2) shown += ' <button class="chip ghost" data-pt="gotab" data-tab="tropes">+' + (tropes.length - 2) + '</button>';
   return shown;
 }
 function warnChipsHTML(warns, b, bookId) {
   if (!warns.length) {
-    if (b.warningsReviewed) return '<span class="note">Reviewed — no warnings found ✓</span>';
-    return '<span class="note">No warnings reported yet. </span>' +
-      '<button class="taplink" data-pt="suggest-warn" data-book="' + escH(bookId) + '">Flag one?</button>';
+    // v473: two states (Part 2, item 5) — "Not reviewed yet" vs
+    // "Readers found nothing to flag". "Nothing to flag" only when Read (item 6).
+    if (warningsState(warns, b) === 'none-confirmed') {
+      return '<span class="note">✓ Readers found nothing to flag</span>';
+    }
+    var html = '<span class="note">Not reviewed yet. </span>' +
+      '<button class="taplink" data-pt="suggest-warn" data-book="' + escH(bookId) + '">Flag one</button>';
+    if (b && b.status === 'read') {
+      html += ' <button class="taplink" data-pt="warn-none" data-book="' + escH(bookId) + '">Nothing to flag</button>';
+    }
+    return html;
   }
   return warns.slice(0, 3).map(function (w) {
     return '<span class="warn-tag">' + escH(w) + '</span>';
@@ -208,13 +233,27 @@ async function portraitEnhance(b) {
     if (pctEl && card.isConnected) pctEl.textContent = portraitScore(fresh, cd.count) + '% mapped';
   } catch (e) {}
   // community tropes (prepend) + enriched warnings
+  // v473: resolve trope ids + fetch votes for provenance labels (Part 1)
   try {
     var ct = await communityTropes(fresh);
     var tEl = document.getElementById('ptTropes');
     if (tEl && card.isConnected) {
       var merged = ct.concat(localTropes(fresh));
-      tEl.innerHTML = tropeChipsHTML(merged, fresh.id || '');
+      merged.forEach(function (t) {
+        if (!t.id && typeof TropeTaxonomy !== 'undefined' && TropeTaxonomy.resolveId) {
+          try { t.id = TropeTaxonomy.resolveId(t.name); } catch (e) {}
+        }
+      });
+      var pvotes = {};
+      try {
+        if (typeof TropeVotes !== 'undefined' && TropeVotes.getVotes && typeof bookKeyFor === 'function') {
+          pvotes = await TropeVotes.getVotes(bookKeyFor(fresh));
+        }
+      } catch (e) {}
+      tEl.innerHTML = tropeChipsHTML(merged, fresh.id || '', pvotes);
       card._ptTropes = merged;
+      card._ptVotes = pvotes;
+      try { card._ptBookKey = (typeof bookKeyFor === 'function') ? bookKeyFor(fresh) : null; } catch (e) {}
     }
   } catch (e) {}
   try {
@@ -241,7 +280,7 @@ function portraitBreakdownHTML(b) {
   h += warns.length ? warns.map(function (w) {
     var comm = /\(community\)\s*$/.test(w);
     return '<div class="portrait-brow"><span class="warn-tag">' + escH(w) + '</span> <span class="note">' + (comm ? 'community ✓' : 'catalog') + '</span></div>';
-  }).join('') : '<p class="note">' + (b.warningsReviewed ? 'Reviewed — none found.' : 'None reported yet.') + '</p>';
+  }).join('') : '<p class="note">' + (warningsState(null, b) === 'none-confirmed' ? 'Readers found nothing to flag.' : 'Not reviewed yet.') + '</p>';
   h += '</div><div class="portrait-bsec"><div class="portrait-label">All characters</div>';
   h += chars.length ? chars.map(function (c) {
     return '<div class="portrait-brow"><b>' + escH(c.name) + '</b> <span class="note">' + escH(c.role || '') + '</span></div>';
@@ -270,6 +309,24 @@ function suggestVia(which, bookId) {
 }
 if (typeof document !== 'undefined') {
   document.addEventListener('click', function (e) {
+    // v473: trope confirm/dispute on portrait chips (Part 1, item 2)
+    var tc = e.target && e.target.closest ? e.target.closest('#ptTropes [data-tid][tabindex]') : null;
+    if (tc && typeof TropeConfirm !== 'undefined') {
+      var card0 = document.getElementById('portraitCard');
+      if (card0 && card0._ptBookKey) {
+        (function (chip, card) {
+          TropeConfirm.open(document.getElementById('ptTropes'), {
+            bookKey: card._ptBookKey,
+            tropeId: chip.getAttribute('data-tid'),
+            onDone: function () {
+              var b = findBook(card.dataset.book);
+              if (b) portraitEnhance(b);
+            }
+          });
+        })(tc, card0);
+      }
+      return;
+    }
     var el = e.target && e.target.closest ? e.target.closest('[data-pt]') : null;
     if (!el) return;
     var kind = el.getAttribute('data-pt');
@@ -291,6 +348,18 @@ if (typeof document !== 'undefined') {
     } else if (kind === 'suggest-tropes') suggestVia('tropes', el.getAttribute('data-book'));
     else if (kind === 'suggest-chars') suggestVia('chars', el.getAttribute('data-book'));
     else if (kind === 'suggest-warn') suggestVia('warn', el.getAttribute('data-book'));
+    // v473: "Nothing to flag" (Part 2, items 5-6) — Read books only; the
+    // book object + saveLibrary() is the offline story (rides library sync).
+    else if (kind === 'warn-none') {
+      var wb = findBook(el.getAttribute('data-book'));
+      if (wb && wb.status === 'read') {
+        wb.warningsReviewed = true;
+        try { if (typeof saveLibrary === 'function') saveLibrary(); } catch (e) {}
+        var wEl = document.getElementById('ptWarns');
+        if (wEl) wEl.innerHTML = warnChipsHTML(localWarnings(wb), wb, wb.id || '');
+        try { toast('Thanks — noted'); } catch (e) {}
+      }
+    }
   });
 }
 
@@ -302,6 +371,6 @@ if (typeof window !== 'undefined') {
   window.portraitLocalTropes = localTropes;
 }
 if (typeof module !== 'undefined') {
-  module.exports = { portraitScore: portraitScore, localTropes: localTropes };
+  module.exports = { portraitScore: portraitScore, localTropes: localTropes, warningsState: warningsState };
 }
 })();

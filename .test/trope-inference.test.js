@@ -318,6 +318,24 @@ async function main() {
     legacyRows[0].book_key === probe(`bookKeyFor(${JSON.stringify({ title: 'DW', authors: ['A'] })})`));
   window.eval(`resolveWork = window.__origResolveWork; TropeQueue.reset();`);
 
+  // v473: tropeProvenance — three cases (Part 1, item 1)
+  ok('provenance: user tag -> yours',
+    probe(`tropeProvenance({id:'enemies-to-lovers',name:'Enemies to Lovers',source:'auto'}, {}, new Set(['enemies to lovers'])).key`) === 'yours');
+  ok('provenance: source=user -> yours',
+    probe(`tropeProvenance({id:'x',name:'X',source:'user'}, {}, null).key`) === 'yours');
+  ok('provenance: net votes >= 1 -> readers confirmed',
+    probe(`tropeProvenance({id:'slow-burn',name:'Slow Burn',source:'auto'}, {'slow-burn':{up:2,down:1,mine:0}}, null).key`) === 'confirmed');
+  ok('provenance: community source -> readers confirmed',
+    probe(`tropeProvenance({id:'forced-proximity',name:'Forced Proximity',source:'community'}, {}, null).key`) === 'confirmed');
+  ok('provenance: LLM only, no votes -> from the text',
+    probe(`tropeProvenance({id:'dragons',name:'Dragons',source:'auto'}, {}, null).key`) === 'text');
+  ok('provenance: net votes 0 -> from the text',
+    probe(`tropeProvenance({id:'dragons',name:'Dragons',source:'auto'}, {'dragons':{up:1,down:1,mine:0}}, null).key`) === 'text');
+  ok('provenance: label strings',
+    probe(`tropeProvenance({id:'a',name:'A',source:'you'}, {}, null).label`) === 'yours' &&
+    probe(`tropeProvenance({id:'b',name:'B',source:'auto'}, {'b':{up:1,down:0,mine:0}}, null).label`) === 'readers confirmed' &&
+    probe(`tropeProvenance({id:'c',name:'C',source:'auto'}, {}, null).label`) === 'from the text');
+
   // index.html + sw.js wiring
   ok('index.html includes 157-trope-inference.js', html.includes('js/157-trope-inference.js'));
   ok('sw.js precaches 157-trope-inference.js',

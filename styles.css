@@ -523,6 +523,14 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 .cc-label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 2px; }
 .cc-merge-cards { display: flex; gap: 10px; align-items: stretch; margin: 12px 0; }
 .cc-merge-card { flex: 1; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px; text-align: center; }
+/* v473: trope provenance (Part 1, item 1) — unconfirmed chips are lighter:
+   dashed 1px border, muted text. Confirmed/yours use the normal chip style.
+   Only existing CSS tokens. */
+.chip[data-tprov="text"] { border-style: dashed; color: var(--muted); }
+.chip .tprov { font-size: 10px; line-height: 1.3; opacity: .75; margin-left: 6px; font-weight: 400; white-space: nowrap; }
+/* v473: confirm/dispute row (Part 1, item 2) — "Is this right?" */
+.tconfirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 4px; }
+.tconfirm > span:first-child { font-size: 13px; }
 .cc-merge-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--line); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; margin: 0 auto 8px; color: var(--text); }
 .cc-merge-name { font-size: 14px; line-height: 1.3; }
 .cc-merge-vs { display: flex; align-items: center; font-size: 12px; color: var(--muted); flex-shrink: 0; }

@@ -2147,6 +2147,8 @@ function renderQuotes() {
    suggestions otherwise. v154: vote buttons (tap again to retract).
    v212: high-confidence AI tropes also auto-add to her list via
    autoAddConfirmedTropes; onAutoAdd (optional) re-syncs the editor chips.
+   v473: provenance labels + tap-to-confirm replace the ▲▼ buttons
+   (Part 1: no vote counts shown; throttled/offline votes queue quietly).
    Async; leaves a fallback note on failure. */
 async function renderDbTropeChips(book, onAutoAdd) {
   const box = document.getElementById('m-tropedb');
@@ -2157,18 +2159,24 @@ async function renderDbTropeChips(book, onAutoAdd) {
       TropeStore.getBookTropes(book),
       TropeVotes.getVotes(key),
     ]);
-    box.innerHTML = dbTropeChipsHTML(tropes, origin, votes);
-    box.querySelectorAll('[data-tv]').forEach(btn => btn.addEventListener('click', async () => {
-      const tid = btn.dataset.tid;
-      const want = parseInt(btn.dataset.tv, 10);
-      try {
-        btn.disabled = true;
-        await TropeVotes.toggleVote(key, tid, want);
-        renderDbTropeChips(book, onAutoAdd); // re-render: counts, highlight, adjusted confidence
-      } catch (e) {
-        btn.disabled = false;
-      }
-    }));
+    const userTags = new Set((book.tropes || []).map(t => String(t).toLowerCase()));
+    box.innerHTML = dbTropeChipsHTML(tropes, origin, votes, userTags);
+    // v473: confirm/dispute — tapping an unconfirmed chip opens the row
+    if (typeof TropeConfirm !== 'undefined') {
+      box.querySelectorAll('[data-tid][tabindex]').forEach(chip => {
+        const openRow = () => {
+          TropeConfirm.open(box, {
+            bookKey: key,
+            tropeId: chip.getAttribute('data-tid'),
+            onDone: () => renderDbTropeChips(book, onAutoAdd)
+          });
+        };
+        chip.addEventListener('click', openRow);
+        chip.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openRow(); }
+        });
+      });
+    }
     try {
       if (typeof autoAddConfirmedTropes === 'function' &&
           autoAddConfirmedTropes(book, tropes) &&
