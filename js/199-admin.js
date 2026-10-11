@@ -1302,7 +1302,7 @@ async function renderTropeLab() {
   const propCard = document.createElement('div');
   propCard.innerHTML =
     '<div class="ob-card"><h3 class="serif">Trope proposals</h3>' +
-    '<p class="note">Social Hub members propose, vote, and you review. Approving writes the canonical row ' +
+    '<p class="note">The Hearth members propose, vote, and you review. Approving writes the canonical row ' +
     'to the shared taxonomy table and optionally tags the originating book — the new trope is live ' +
     'for inference immediately, no file edit needed.</p>' +
     '<div id="trope-proposals"><p class="note">Loading…</p></div></div>';

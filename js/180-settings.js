@@ -25,9 +25,9 @@ let tsPreviewTheme = null;
 let tsPreviewAccent = null; // null = theme's designed default
 
 /* Social section name shown on theme cards. Kevin's call (2026-10-11):
-   always "Social Hub" — the old per-theme names are retired. */
+   always "The Hearth" — the old per-theme names are retired. */
 function tsCovenDisplay() {
-  return 'the Social Hub';
+  return 'The Hearth';
 }
 function themeCardHTML(th) {
   const pv = themePreview(th.key);
@@ -400,7 +400,7 @@ function renderSettings() {
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
   const htmlPrivacy =
-    setSub('Social Hub sharing') +
+    setSub('The Hearth sharing') +
     '<div id="st-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
     '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
     setSub('Preferences') +
