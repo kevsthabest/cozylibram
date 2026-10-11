@@ -243,12 +243,14 @@ function covenStatsHTML(d) {
   // Monthly leaderboard
   if (d.board.some(r => r.books > 0)) {
     html += '<div class="circle-card"><h3 style="margin:0 0 10px">This month</h3>';
+    // v454: no rank numbers when it's just you + 1 friend
+    const showRank = d.people.length > 2;
     d.board.forEach((r, i) => {
       const est = r.p.stats.monthPagesEst ? ' <span style="color:var(--faint)">est.</span>' : '';
       html += '<div class="circle-row">' + statAvatar(r.p) +
         '<div class="circle-meta"><b>' + esc(r.p.name) + '</b>' +
         '<span class="note">' + r.books + ' finished · ' + r.pages.toLocaleString() + ' pages' + est + '</span></div>' +
-        '<div class="circle-actions"><b class="serif" style="font-size:20px">' + (i + 1) + '</b></div></div>';
+        (showRank ? '<div class="circle-actions"><b class="serif" style="font-size:20px">' + (i + 1) + '</b></div>' : '') + '</div>';
     });
     const streakers = d.board.filter(r => r.p.stats.streak > 0);
     if (streakers.length) {
