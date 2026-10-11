@@ -262,7 +262,7 @@ function dailyStatsHTML() {
             '<div><h4>' + esc(r.b.title) + '</h4><p>p. ' + from + ' → p. ' + to + '</p>' +
             '<p>+' + r.p + ' pages' + pct + '</p></div></div>';
         }).join('')
-      : '<p class="note">No pages logged yet today — open a book and tap those steppers! ' + icon('reading') + '</p>') +
+      : '<p class="note">Nothing logged today yet — the pages will be here when you are. ' + icon('reading') + '</p>') +
     '</div>';
 }
 
@@ -1226,8 +1226,8 @@ function renderStats() {
       (streak > 0 ? streak + '-day streak' : 'No active streak') + '</b>' +
       '<span class="streak-def">' +
       (streak > 0
-        ? 'Log pages or finish a book each day to keep it going.'
-        : 'Log pages today to start one — one day at a time.') +
+        ? 'Consecutive days with logged pages or a finished book.'
+        : 'Log pages today and the count begins — one day at a time.') +
       '</span></div>' +
       nowReading +
       '<div class="stat-sub">' + icon('covers') + ' Shelves</div><div class="dist">' + distRows + '</div>' +
