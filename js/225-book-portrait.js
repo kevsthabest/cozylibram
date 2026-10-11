@@ -168,7 +168,7 @@ function portraitCardHTML(b) {
   var pct = portraitScore(b, 0);
   var html =
     '<div class="portrait-card" id="portraitCard" data-book="' + escH(bookId) + '">' +
-    '<div class="portrait-head"><span aria-hidden="true">🖼️</span> ' +
+    '<div class="portrait-head"><span style="width:22px;height:22px;color:var(--accent);flex-shrink:0;vertical-align:middle;margin-right:10px;display:inline-flex;align-items:center">' + icon('portrait') + '</span>' +
     '<span class="serif portrait-title">Book Portrait</span> ' +
     '<span class="note" id="ptPct">' + pct + '% mapped</span></div>' +
     '<div class="portrait-sec"><div class="portrait-label">Tropes</div><div id="ptTropes">' +
