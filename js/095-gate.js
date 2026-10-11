@@ -271,6 +271,21 @@ async function enterApp(user) {
   });
   // Library is settled now — let the Hardcover auto-sweep backfill the rest.
   setTimeout(autoEnrichSweep, 5000);
+  // v476: metadata enrichment is automatic now (no user-facing section).
+  // Page counts and covers backfill quietly in the background — additive
+  // only, never overwriting existing data.
+  setTimeout(function () {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      if (typeof backfillPageCounts === 'function') backfillPageCounts(1200, { quiet: true });
+    } catch (e) {}
+  }, 12000);
+  setTimeout(function () {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      if (typeof downloadMissingCovers === 'function') downloadMissingCovers();
+    } catch (e) {}
+  }, 18000);
   updateReleaseBadge(); // v149: surface any unseen auto-found releases
   setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
 }

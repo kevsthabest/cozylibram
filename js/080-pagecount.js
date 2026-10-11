@@ -67,10 +67,15 @@ async function fillPageCount(book) {
 }
 
 // Backfill every book missing a page count (Settings → Library tools).
-async function backfillPageCounts(paceMs) {
+// Backfill every book missing a page count. v476: opts.quiet suppresses
+// toasts for the automatic boot sweep — the user never asked for this,
+// so it shouldn't announce itself.
+async function backfillPageCounts(paceMs, opts) {
+  var quiet = !!(opts && opts.quiet);
+  var say = function (m) { if (!quiet) toast(m); };
   paceMs = paceMs == null ? 1200 : paceMs;
   const targets = library.filter(b => !(b.pageCount > 0) && b.isbn);
-  if (!targets.length) { toast('All books already have page counts ✨'); return 0; }
+  if (!targets.length) { say('All books already have page counts ✨'); return 0; }
   let found = 0;
   const note = document.getElementById('pc-backfill-note');
   for (let i = 0; i < targets.length; i++) {
@@ -79,7 +84,7 @@ async function backfillPageCounts(paceMs) {
     if (paceMs && i < targets.length - 1) await new Promise(r => setTimeout(r, paceMs));
   }
   if (note) note.textContent = 'Done — found page counts for ' + found + ' of ' + targets.length + ' books.';
-  toast('📄 Found ' + found + ' page counts');
+  say('📄 Found ' + found + ' page counts');
   render();
   return found;
 }
