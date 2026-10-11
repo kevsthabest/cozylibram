@@ -1824,6 +1824,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ---- Circle recommendations (v97) ---- */
 .cover-wrap.reco-cover { flex-basis: 44px; width: 44px; height: 66px; border-radius: 6px; }
+/* v454: title-initial placeholder — never an empty dark square */
+.cover-initial { display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; font-size: 22px; font-weight: 700; color: var(--ink);
+  border-radius: inherit; }
 /* v110: "More like this" cover strip in the book detail modal */
 .sim-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .sim-cover { background: none; border: 0; padding: 0; width: 68px; flex: 0 0 auto; color: inherit; font: inherit; cursor: pointer; text-align: left; }
@@ -3426,3 +3430,40 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 }
 
 /* v432: first-run nudge for the Decorate button. */
+
+/* v454: Harvest Court friends strip */
+.friend-strip { display: flex; gap: 12px; overflow-x: auto; padding: 8px 4px 12px;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.friend-tile { flex: none; scroll-snap-align: start; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer;
+  min-width: 64px; min-height: 44px; }
+.friend-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--line); }
+.friend-avatar.letter { display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; background: var(--bg2); color: var(--ink); }
+.friend-tile.reading .friend-avatar { border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent); }
+.friend-name { font-size: 11px; color: var(--muted); max-width: 64px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.invite-tile .invite-plus { width: 56px; height: 56px; border-radius: 50%;
+  border: 2px dashed var(--line); display: flex; align-items: center;
+  justify-content: center; font-size: 28px; color: var(--muted); }
+/* v454: bottom sheets */
+.coven-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 90; }
+.coven-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91;
+  background: var(--bg); border-radius: 16px 16px 0 0; padding: 16px;
+  max-height: 85vh; overflow-y: auto; transform: translateY(100%);
+  transition: transform 0.25s ease; }
+.coven-sheet.open { transform: translateY(0); }
+.sheet-grabber { width: 40px; height: 4px; border-radius: 2px; background: var(--line);
+  margin: 0 auto 12px; }
+/* v454: three-option segmented control */
+.seg-3 { grid-template-columns: repeat(3, 1fr); }
+/* v454: friend actions — collapse to "..." on narrow widths */
+.friend-actions .friend-menu-btn { display: none; }
+@media (max-width: 480px) {
+  .friend-actions .btn:not(.friend-menu-btn) { display: none; }
+  .friend-actions .friend-menu-btn { display: inline-flex; }
+  .friend-actions.show-all .btn { display: inline-flex; }
+  .friend-actions.show-all .friend-menu-btn { display: none; }
+}
