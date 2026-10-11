@@ -370,6 +370,12 @@ function ccWatch() {
 }
 /* Called by the modal render (patched into 150-modal-discovery.js). */
 window.ccSetBook = function (b) { ccBook = b || null; };
+/* v468: Book Portrait card contribution invites reuse these flows. */
+window.ccSuggest = {
+  trope: function (b) { openTropePicker(b || ccBook); },
+  character: function (b) { openCharacterSuggest(b || ccBook); },
+  warning: function (b) { openTriggerPicker(b || ccBook); }
+};
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ccWatch);
 else ccWatch();

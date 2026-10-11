@@ -515,7 +515,10 @@ function shelfTilesHTML(counts) {
 }
 
 function libraryHomeHTML(counts) {
-  return homeGreetingHTML() + readingHeroHTML() + shelfTilesHTML(counts) +
+  return homeGreetingHTML() + readingHeroHTML() +
+    // v468: reading nudge slot (Book Portrait mid-read prompts)
+    ((typeof nudgeSlotHTML === 'function') ? nudgeSlotHTML() : '') +
+    shelfTilesHTML(counts) +
     recentlyAddedHTML() + upNextShelfHTML() + cantDecideHTML() + favShelfHTML();
 }
 
@@ -565,6 +568,8 @@ function renderLibrary() {
   setView(html);
   wireSeasonNudge(); // v257: one-tap seasonal theme offer
   tileGuard(); // v57: enforce uniform 2:3 cover boxes even if styles.css is stale
+  // v468: evaluate Book Portrait mid-read nudges (fills #nudgeSlot if one qualifies)
+  try { if (typeof nudgeEvaluate === 'function') nudgeEvaluate(); } catch (e) {}
 
   document.getElementById('q').addEventListener('input', e => {
     query = e.target.value;
