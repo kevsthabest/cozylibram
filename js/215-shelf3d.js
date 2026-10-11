@@ -6,7 +6,7 @@
    decorations (plant, candle, mug, book stack, fairy lights, clock, photo
    frame, succulent, lantern, globe, spiderweb, pumpkin, stems vase, crescent
    moon, star garland, gift boxes, painted eggs, snowflake, gold coins,
-   clover, apple bowl), per-theme presets with a "Dress shelf for <theme>"
+   clover, apple bowl), per-theme presets with a "Decorate for <theme>" button
    button, tilt + sound toggles, dust motes, candle flicker / fairy twinkle
    animations, confirm dialog and toasts. Tap a book to open it.
 
@@ -186,7 +186,7 @@
     '  <div class="btns">',
     '    <button class="pill" id="s3dTiltBtn">Tilt: off</button>',
     '    <button class="pill" id="s3dSndBtn">Sound: on</button>',
-    '    <button class="pill" id="s3dPresetBtn">Dress shelf</button>',
+    '    <button class="pill" id="s3dPresetBtn">Decorate</button>',
     '  </div>',
     '</div>',
     '<div id="s3dTiltDbg"></div>',
@@ -2316,7 +2316,7 @@
       } catch (e) {}
     }
 
-    /* ---- per-theme presets + "Dress shelf for <theme>" ----
+    /* ---- per-theme presets + "Decorate for <theme>" ----
        Each app theme has a preset arrangement (js/218-shelf3d-decor.js).
        - A fresh mount starts empty, so it auto-applies the current theme's
          preset immediately (decorations are session-only).
@@ -2329,7 +2329,7 @@
       return String(k || 'dark').replace(/^[a-z]/, function (c) { return c.toUpperCase(); });
     }
     function dressLabel() {
-      dressBtn.textContent = dressOn ? 'Default look' : 'Dress shelf for ' + themeDisplayName(appTheme);
+      dressBtn.textContent = dressOn ? 'Default look' : 'Decorate for ' + themeDisplayName(appTheme);
       dressBtn.classList.toggle('on', dressOn);
     }
     function snapshotDecos() {
@@ -2673,8 +2673,19 @@
 
     /* ----- go ----- */
     if (opts.initialBooks) setBooks(opts.initialBooks);
-    /* Phase 1: persist decoration layout to localStorage */
+    /* Phase 1: persist decoration layout to localStorage.
+       Save format is versioned ({v, decorations}) so future format changes
+       can migrate. v0 was the unversioned raw array; v1 wraps it. */
     var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';
+    var DECO_FORMAT_V = 1;
+    function migrateDecoFormat(parsed) {
+      // v0 -> v1: unversioned raw array becomes {v:1, decorations:[...]}.
+      if (Array.isArray(parsed)) return { v: 1, decorations: parsed };
+      if (parsed && typeof parsed === 'object' && parsed.v === 1 && Array.isArray(parsed.decorations))
+        return parsed;
+      // Unknown future version: refuse rather than misplace decorations.
+      return null;
+    }
     function saveDecoLayout() {
       try {
         var data = placed.map(function (p) {
@@ -2686,16 +2697,20 @@
             room: !!p.room
           };
         });
-        localStorage.setItem(DECO_STORE_KEY, JSON.stringify(data));
+        localStorage.setItem(DECO_STORE_KEY, JSON.stringify({ v: DECO_FORMAT_V, decorations: data }));
       } catch (_) {}
     }
     function loadDecoLayout() {
       try {
         var raw = localStorage.getItem(DECO_STORE_KEY);
         if (!raw) return false;
-        var data = JSON.parse(raw);
-        if (!Array.isArray(data) || !data.length) return false;
-        data.forEach(function (d) {
+        var doc = migrateDecoFormat(JSON.parse(raw));
+        if (!doc || !doc.decorations.length) {
+          // Re-save migrated docs so the store converges on the new format.
+          if (doc) { try { localStorage.setItem(DECO_STORE_KEY, JSON.stringify(doc)); } catch (_) {} }
+          return false;
+        }
+        doc.decorations.forEach(function (d) {
           try {
             if (d.room) {
               // Room decorations need anchor lookup; skip if not available
