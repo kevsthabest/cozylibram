@@ -1323,6 +1323,11 @@ function renderMilestones() {
     { id: 'rhythm', name: 'Rhythm', desc: 'The shape of your reading days.' },
     { id: 'discovery', name: 'Discovery', desc: 'Firsts and new horizons.' },
     { id: 'taste', name: 'Taste', desc: 'Your reading personality, in milestones.' },
+    { id: 'lore', name: 'Lorekeeper', desc: 'Notes, quotes, and the people in the margins.' },
+    { id: 'soul', name: 'Soul', desc: 'Books that rearranged your furniture.' },
+    { id: 'wander', name: 'Wandering', desc: 'New horizons, one genre at a time.' },
+    { id: 'ritual', name: 'Rituals', desc: 'Reading aligned with the turning year.' },
+    { id: 'hidden', name: 'Hidden', desc: 'Some milestones don\u2019t announce themselves.' },
   ];
   let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Stats</button>' +
     '<h2 class="section serif">Milestones</h2>' +
@@ -1330,11 +1335,16 @@ function renderMilestones() {
   cats.forEach(cat => {
     const items = MILESTONE_CATALOG.filter(m => m.cat === cat.id);
     const earned = items.filter(m => store[m.id]);
-    // Dynamic series milestones live under Discovery
+    // Dynamic milestones live under their categories (not in the static catalog)
+    const DYN_PREFIXES = {
+      discovery: ['series-finished-', 'series-complete-'],
+      wander: ['wander-genre-'],
+    };
     let dynHtml = '';
     let dynCount = 0;
-    if (cat.id === 'discovery' && typeof milestoneDef === 'function') {
-      Object.keys(store).filter(id => id.indexOf('series-finished-') === 0).forEach(id => {
+    const prefixes = DYN_PREFIXES[cat.id] || [];
+    if (prefixes.length && typeof milestoneDef === 'function') {
+      Object.keys(store).filter(id => prefixes.some(p => id.indexOf(p) === 0)).forEach(id => {
         const def = milestoneDef(id, store[id]);
         if (!def) return;
         dynCount++;
@@ -1345,6 +1355,7 @@ function renderMilestones() {
         dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<button class="ms-share" data-ms="' + esc(id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       });
     }
@@ -1364,11 +1375,16 @@ function renderMilestones() {
         html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<button class="ms-share" data-ms="' + esc(m.id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       } else {
+        // Hidden milestones: criteria concealed until earned
+        const isHidden = m.cat === 'hidden';
+        const lockTitle = isHidden ? '???' : m.title;
+        const lockHint = isHidden ? 'A hidden milestone. Keep reading\u2026' : m.hint;
         html += '<div class="milestone-row locked"><div class="micon">' + icon(m.icon || 'sparkles') + '</div>' +
-          '<div class="minfo"><div class="mname">' + esc(m.title) + '</div>' +
-          '<div class="mhint">' + esc(m.hint) + '</div></div></div>';
+          '<div class="minfo"><div class="mname">' + esc(lockTitle) + '</div>' +
+          '<div class="mhint">' + esc(lockHint) + '</div></div></div>';
       }
     });
   });
@@ -1377,5 +1393,6 @@ function renderMilestones() {
     statsMode = 'dash';
     renderStats();
   });
+  if (typeof wireMilestoneShare === 'function') wireMilestoneShare();
 }
 

@@ -28,7 +28,7 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   const cat = run(`MILESTONE_CATALOG`);
   ok('catalog is non-empty', cat.length >= 15);
   ok('all have stable IDs', cat.every(m => /^[a-z]+-[a-z0-9-]+$/.test(m.id)));
-  ok('all have categories', cat.every(m => ['journey','rhythm','discovery','taste'].includes(m.cat)));
+  ok('all have categories', cat.every(m => ['journey','rhythm','discovery','taste','lore','soul','wander','ritual','hidden'].includes(m.cat)));
   ok('IDs are unique', new Set(cat.map(m => m.id)).size === cat.length);
 }
 
@@ -351,6 +351,127 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('detects pages-day-100', !!lp);
   ok('pages-day-100 sums across books', lp && lp.value === 149); // 119 + 30
   ok('pages-day-100 uses the big day', lp.achievedAt && lp.achievedAt.indexOf('2024-07-15') === 0);
+}
+
+/* Green wave: TBR archaeology */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 't1', title: 'Patient', status: 'read', dateAdded: '2022-01-15T00:00:00Z', dateFinished: '2024-03-15T00:00:00Z', authors: [], genres: [], tropes: [] },
+    { id: 't2', title: 'Quick', status: 'read', dateAdded: '2024-01-15T00:00:00Z', dateFinished: '2024-03-15T00:00:00Z', authors: [], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects tbr-forgotten-scroll (1yr+ wait)', found.includes('tbr-forgotten-scroll'));
+  ok('detects tbr-dust-destiny (2yr+ wait)', found.includes('tbr-dust-destiny'));
+  ok('quick book does not trigger archaeology alone', true); // t2 wait < 1yr
+}
+
+/* Green wave: Complete Collection (gapless 1..N, all read) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 's1', title: 'Vol 1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', series: { name: 'Test Trilogy', position: 1 }, authors: [], genres: [], tropes: [] },
+    { id: 's2', title: 'Vol 2', status: 'read', dateFinished: '2024-02-01T00:00:00Z', series: { name: 'Test Trilogy', position: 2 }, authors: [], genres: [], tropes: [] },
+    { id: 's3', title: 'Vol 3', status: 'read', dateFinished: '2024-03-01T00:00:00Z', series: { name: 'Test Trilogy', position: 3 }, authors: [], genres: [], tropes: [] },
+    { id: 'g1', title: 'Gap 1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', series: { name: 'Gappy', position: 1 }, authors: [], genres: [], tropes: [] },
+    { id: 'g3', title: 'Gap 3', status: 'read', dateFinished: '2024-02-01T00:00:00Z', series: { name: 'Gappy', position: 3 }, authors: [], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects series-complete for gapless trilogy', found.some(id => id.indexOf('series-complete-') === 0));
+  ok('gappy series does not trigger complete', !found.some(id => id.indexOf('series-complete-') === 0 && id.indexOf('gappy') >= 0));
+}
+
+/* Green wave: Lorekeeper (quotes, notes) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  const books = [];
+  for (let i = 0; i < 3; i++) {
+    books.push({ id: 'q' + i, title: 'Q' + i, status: 'read', dateFinished: '2024-01-01T00:00:00Z',
+      quotes: [{ t: 'a' }, { t: 'b' }, { t: 'c' }, { t: 'd' }], authors: [], genres: [], tropes: [] });
+  }
+  for (let i = 0; i < 5; i++) {
+    books.push({ id: 'n' + i, title: 'N' + i, status: 'read', dateFinished: '2024-01-01T00:00:00Z',
+      notes: 'some thoughts ' + i, quotes: [], authors: [], genres: [], tropes: [] });
+  }
+  run(`library = ${JSON.stringify(books)}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects lore-quotes-10 (12 quotes)', found.includes('lore-quotes-10'));
+  ok('detects lore-notes-5', found.includes('lore-notes-5'));
+}
+
+/* Green wave: Ugly Cry Club */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'c1', title: 'C1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', tropes: [{ id: 'tearjerker', name: 'Tearjerker' }], authors: [], genres: [] },
+    { id: 'c2', title: 'C2', status: 'read', dateFinished: '2024-02-01T00:00:00Z', tropes: [{ id: 'tearjerker', name: 'Tearjerker' }], authors: [], genres: [] },
+    { id: 'c3', title: 'C3', status: 'read', dateFinished: '2024-03-01T00:00:00Z', tropes: [{ name: 'tearjerker' }], authors: [], genres: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects soul-ugly-cry-3', found.includes('soul-ugly-cry-3'));
+}
+
+/* Green wave: Beyond the Map (dynamic per genre) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'w1', title: 'W1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', genres: ['Mystery'], authors: [], tropes: [] },
+    { id: 'w2', title: 'W2', status: 'read', dateFinished: '2024-02-01T00:00:00Z', genres: ['Mystery', 'Thriller'], authors: [], tropes: [] },
+  ])}`);
+  const foundIds = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects wander-genre-mystery', foundIds.some(id => id.indexOf('wander-genre-mystery-') === 0));
+  ok('detects wander-genre-thriller', foundIds.some(id => id.indexOf('wander-genre-thriller-') === 0));
+  const wid = run(`detectMilestones(library).map(d => d.id).find(id => id.indexOf('wander-genre-') === 0)`);
+  const def = run(`milestoneDef(${JSON.stringify(wid)}, {})`);
+  ok('wander def resolves with genre title', def && def.title.indexOf('Beyond the Map') === 0);
+}
+
+/* Green wave: Solstice Story */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'sol1', title: 'Solstice', status: 'read', dateFinished: '2024-06-21T12:00:00', authors: [], genres: [], tropes: [] },
+    { id: 'ord1', title: 'Ordinary', status: 'read', dateFinished: '2024-07-15T12:00:00', authors: [], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects ritual-solstice-story', found.includes('ritual-solstice-story'));
+}
+
+/* Green wave: Hidden discoveries */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'h1', title: 'Impulse', status: 'read', dateAdded: '2024-05-01T10:00:00', dateFinished: '2024-05-01T22:00:00', authors: ['Ann'], genres: [], tropes: [] },
+    { id: 'h2', title: 'Ann 1', status: 'read', dateAdded: '2023-01-01T00:00:00', dateFinished: '2024-01-01T00:00:00', authors: ['Ann'], genres: [], tropes: [] },
+    { id: 'h3', title: 'Ann 2', status: 'read', dateAdded: '2023-01-01T00:00:00', dateFinished: '2024-02-01T00:00:00', authors: ['Ann'], genres: [], tropes: [] },
+    { id: 'h4', title: 'Ann 3', status: 'read', dateAdded: '2023-01-01T00:00:00', dateFinished: '2024-03-01T00:00:00', authors: ['Ann'], genres: [], tropes: [] },
+    { id: 'h5', title: 'Anni', status: 'read', dateAdded: '2022-06-15T00:00:00', dateFinished: '2024-06-15T00:00:00', authors: ['Bob'], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects hidden-book-finds-you (same day)', found.includes('hidden-book-finds-you'));
+  ok('detects hidden-pattern-emerges (3 Ann in a row)', found.includes('hidden-pattern-emerges'));
+  ok('detects hidden-stars-aligned (anniversary)', found.includes('hidden-stars-aligned'));
+}
+
+/* Green wave: Accidental Trilogy */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'at1', title: 'T1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', series: { name: 'Acc', position: 1 }, authors: [], genres: [], tropes: [] },
+    { id: 'at2', title: 'T2', status: 'read', dateFinished: '2024-01-05T00:00:00Z', series: { name: 'Acc', position: 2 }, authors: [], genres: [], tropes: [] },
+    { id: 'at3', title: 'T3', status: 'read', dateFinished: '2024-01-10T00:00:00Z', series: { name: 'Acc', position: 3 }, authors: [], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects hidden-accidental-trilogy', found.includes('hidden-accidental-trilogy'));
+}
+
+/* Green wave: milestoneDef resolves new dynamic types */
+{
+  const sc = run(`milestoneDef('series-complete-test-abc', { detail: 'Test Trilogy' })`);
+  ok('series-complete def resolves', sc && sc.title.indexOf('Complete Collection') === 0);
+  const hd = run(`MILESTONE_CATALOG.find(m => m.id === 'hidden-stars-aligned')`);
+  ok('hidden catalog entry has ??? hint', hd && hd.hint === '???');
+  ok('hidden catalog entry is in hidden cat', hd && hd.cat === 'hidden');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

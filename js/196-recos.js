@@ -10,6 +10,17 @@
 // Candidates for the "+ TBR" buttons, rebuilt by loadRecos().
 let recoCache = [];
 
+// v454: cover fallback chain — stored cover -> coverColor placeholder with
+// title initial -> line-art icon. Never an empty dark square.
+function recoCoverHTML(b) {
+  if (b.cover) {
+    return '<div class="cover-wrap reco-cover"><img src="' + esc(b.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()"></div>';
+  }
+  const initial = esc(String(b.title || '?').trim().charAt(0).toUpperCase() || '?');
+  const bg = b.coverColor ? ' style="background:' + esc(b.coverColor) + '"' : '';
+  return '<div class="cover-wrap reco-cover"' + bg + '><span class="cover-initial">' + initial + '</span></div>';
+}
+
 // Stable dedupe key: ISBN when we have one, else normalized title + author.
 function recoKey(b) {
   const isbn = String(b.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
@@ -62,7 +73,7 @@ function recoSectionHTML(recos) {
   recos.slice(0, 15).forEach((r, i) => {
     const b = r.book;
     const names = r.ratings.map(x => esc(String(x.name).split(' ')[0])).join(', ');
-    html += '<div class="circle-row">' + coverHTML(b, 'reco-cover') +
+    html += '<div class="circle-row">' + recoCoverHTML(b) +
       '<div class="circle-meta"><b>' + esc(b.title) + '</b>' +
       '<span class="note">' + stars(r.avg) + ' \u00b7 loved by ' + names + '</span></div>' +
       '<div class="circle-actions"><button class="btn sm" data-reco-add="' + i + '">\uFF0B TBR</button></div></div>';

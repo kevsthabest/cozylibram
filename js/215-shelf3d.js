@@ -2366,8 +2366,9 @@
     }
     dressBtn.addEventListener('click', function () {
       if (dressOn) {   // toggle back to the user's own arrangement
-        restoreDecos(preDress);
-        preDress = null; dressOn = false;
+        restoreDecos(preDress || []);
+        preDress = null; dressOn = false; dressedTheme = null;
+        try { localStorage.removeItem(DRESS_STORE_KEY); } catch (_) {}
         dressLabel();
         sfx('preset');
         toast('Back to your decorations');
@@ -2378,6 +2379,7 @@
         clearDecos();
         applyPreset(appTheme);
         dressOn = true;
+        try { localStorage.setItem(DRESS_STORE_KEY, appTheme); } catch (_) {}
         dressLabel();
         sfx('preset');
       };
@@ -2686,6 +2688,9 @@
       // Unknown future version: refuse rather than misplace decorations.
       return null;
     }
+    // v453: persist the dressed-theme state so the "Default look" toggle
+    // survives reload (decorations restore, but dressOn was resetting).
+    var DRESS_STORE_KEY = 'cozylibram.s3d.dressed.v1';
     function saveDecoLayout() {
       try {
         var data = placed.map(function (p) {
@@ -2732,8 +2737,19 @@
     /* Fresh mount: try to restore saved decorations, else dress for theme.
        Decorations are now persistent, not session-only. */
     appTheme = (opts && opts.appTheme) || 'dark';
-    dressLabel();
     var restored = loadDecoLayout();
+    // v453: restore the dressed state — if the user had dressed the shelf,
+    // the button should show "Default look", not "Dress shelf for X".
+    // preDress is lost on reload, so toggling off clears to empty.
+    try {
+      var savedDress = localStorage.getItem(DRESS_STORE_KEY);
+      if (savedDress && restored) {
+        dressOn = true;
+        dressedTheme = savedDress;
+        preDress = [];  // pre-dress snapshot lost; "Default look" clears to empty
+      }
+    } catch (_) {}
+    dressLabel();
     if (!restored && !placed.length) applyPreset(appTheme);
     // Save on changes: hook into placeDeco and removeDeco via wrappers
     var _origPlaceDeco = placeDeco;
@@ -2757,8 +2773,18 @@
     }, 900);
     animate();
 
+    /* v455: synchronous snapshot for shelfies. Forces a render then reads the
+       drawing buffer in the same task — no preserveDrawingBuffer cost. */
+    function capture() {
+      if (dead) return null;
+      try {
+        renderer.render(scene, camera);
+        return canvas.toDataURL('image/png');
+      } catch (e) { return null; }
+    }
+
     return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams,
-      setAppTheme: setAppTheme, unmount: unmount };
+      setAppTheme: setAppTheme, unmount: unmount, capture: capture };
   }
 
   /* ============================== public API ============================== */
@@ -2779,7 +2805,7 @@
       }
       active = inst;
       return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams,
-        setAppTheme: inst.setAppTheme, unmount: unmount };
+        setAppTheme: inst.setAppTheme, unmount: unmount, capture: inst.capture };
     });
   }
   function unmount() {
@@ -2797,8 +2823,15 @@
   function setAppTheme(key) {
     if (active) active.setAppTheme(key);
   }
+  /* v455: shelfie snapshot — null when not mounted. */
+  function capture() {
+    if (active && typeof active.capture === 'function') {
+      try { return active.capture(); } catch (e) { return null; }
+    }
+    return null;
+  }
 
   window.Shelf3D = { mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
-    setThemeParams: setThemeParams, setAppTheme: setAppTheme };
+    setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture };
 
 })();

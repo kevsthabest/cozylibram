@@ -11,7 +11,7 @@
 
 
 
-const APP_VERSION = 'v453';
+const APP_VERSION = 'v459';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
@@ -102,9 +102,9 @@ function _showUpdateBanner() {
   if (document.getElementById('app-update-banner')) return;
   const b = document.createElement('div');
   b.id = 'app-update-banner';
-  b.innerHTML = '<span>Update available \u2014 refresh to get the latest.</span>' +
+  b.innerHTML = '<span>✨ A new version is available.</span>' +
     '<button id="app-update-go">Refresh</button>' +
-    '<button id="app-update-x" aria-label="Dismiss">\u00d7</button>';
+    '<button id="app-update-x" aria-label="Dismiss">×</button>';
   b.querySelector('#app-update-go').addEventListener('click', () => location.reload());
   b.querySelector('#app-update-x').addEventListener('click', () => b.remove());
   document.body.appendChild(b);

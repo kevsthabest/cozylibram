@@ -51,7 +51,7 @@ ok('month books counted', agg.monthBooks === 2 && agg.monthPages === 700);
 ok('avg days per book', Math.abs(agg.avgDays - 5) < 0.01 && agg.avgDaysN === 1);
 ok('dnf counted', agg.dnf === 1);
 ok('tbr tracked', agg.tbrKeys.size === 1 && agg.tbrBooks.length === 1);
-ok('genre counts', agg.genreCounts['Romance'] === 2 && agg.genreCounts['Fantasy'] === 1);
+ok('genre counts', agg.genreCounts['romance'] === 2 && agg.genreCounts['fantasy'] === 1);
 ok('spice average', agg.spiceAvg === 4 && agg.spiceN === 1);
 
 // soulmateScore: needs 3+ shared rated books
@@ -66,7 +66,7 @@ const smFoe = window.soulmateScore(myS, foeS);
 ok('identical taste scores near 100', smTwin && smTwin.score >= 95);
 ok('opposite taste scores lower', smFoe && smFoe.score < smTwin.score);
 ok('shared count reported', smTwin.shared === 4);
-ok('shared genres surfaced', smTwin.genres.indexOf('Romance') !== -1);
+ok('shared genres surfaced', smTwin.genres.indexOf('romance') !== -1);
 ok('needs 3 shared books', window.soulmateScore(myS, window.statPersonBooks(ratedBooks([5, 5]))) === null);
 
 // buddyReads: shared TBR keys
@@ -101,16 +101,29 @@ const d = {
 const out = window.covenStatsHTML(d);
 ok('soulmates block renders', out.indexOf('Book soulmates') !== -1 && out.indexOf('%') !== -1);
 ok('leaderboard renders', out.indexOf('This month') !== -1);
-ok('superlatives render', out.indexOf('Fastest Finisher') !== -1);
+ok('superlatives hidden with 2 people', out.indexOf('Fastest Finisher') === -1);
+const d3 = Object.assign({}, d, { people: [pMe, pFr, mkPerson('f2', 'Bob')] });
+const out3 = window.covenStatsHTML(d3);
+ok('superlatives render with 3+ people', out3.indexOf('Fastest Finisher') !== -1);
+ok('Fearless Quitter rename', window.covenStatsHTML(Object.assign({}, d3, {
+  awards: [{ label: 'Fearless Quitter', person: pFr, detail: '2 books' }]
+})).indexOf('Fearless Quitter') !== -1);
 ok('buddy reads render', out.indexOf('Buddy reads') !== -1 && out.indexOf('Dragon Heist') !== -1);
 ok('now reading renders', out.indexOf('Ann Book') !== -1);
 ok('trending renders', out.indexOf('Trending:') !== -1);
-ok('theme name in headings', out.indexOf('stats</h2>') !== -1);
+ok('tabbed layout renders', out.indexOf('coven-tabs') !== -1);
 
-// covenName integration: Night Court theme flows into the stats heading
-window.localStorage.setItem('theme', 'twilight');
-ok('stats heading uses theme name', window.covenStatsHTML(d).indexOf('Night Court stats') !== -1);
-window.localStorage.setItem('theme', 'dark');
+// v454: genre normaliser tests
+ok('normGenre lowercases', window.normGenre('Dark Romance') === 'dark romance');
+ok('normGenre trims', window.normGenre('  Fantasy  ') === 'fantasy');
+ok('normGenre dedupes case variants', window.normGenre('DARK ROMANCE') === window.normGenre('dark romance'));
+const genreBooks = [
+  bk({ categories: ['Dark Romance'] }),
+  bk({ categories: ['dark romance '] }),
+  bk({ categories: ['DARK ROMANCE'] }),
+];
+const gStats = window.statPersonBooks(genreBooks);
+ok('genre counts merged', Object.keys(gStats.genreCounts).length === 1 && gStats.genreCounts['dark romance'] === 3);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

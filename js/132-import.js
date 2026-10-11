@@ -246,13 +246,20 @@ function importForeignBooks(books, label, source, mountId) {
 // v224 (UX-13): the import hub is shared between Settings and the Add screen.
 // pfx prefixes the element ids so both can exist without colliding.
 function importHubHTML(pfx) {
-  return '<p class="note"><b>Import from other apps.</b> Goodreads, StoryGraph, Bookmory, or a plain list of ISBNs ' +
+  return '<div class="ic-hub-hero"><button class="btn block" id="' + pfx + '-concierge">' + icon('sparkles') +
+    ' Guided import — bring a whole library over</button>' +
+    '<p class="note">New here? The concierge walks you through it step by step, with a match report at the end.</p></div>' +
+    '<p class="note"><b>Import from other apps.</b> Goodreads, StoryGraph, Bookmory, or a plain list of ISBNs ' +
     '\u2014 pick the export file and the app figures out the rest. Import merges by ISBN, so books you already have are skipped, never duplicated.</p>' +
     '<input type="file" id="' + pfx + '-file" accept=".csv,.txt,.json,.bookmory" style="display:none">' +
     '<button class="btn ghost block" id="' + pfx + '-pick">' + icon('download') + ' Choose an export file</button>' +
     '<div id="' + pfx + '-result"></div>';
 }
 function wireImportHub(pfx) {
+  const concierge = document.getElementById(pfx + '-concierge');
+  if (concierge) concierge.addEventListener('click', () => {
+    try { openImportConcierge(); } catch (e) {}
+  });
   const pick = document.getElementById(pfx + '-pick');
   const file = document.getElementById(pfx + '-file');
   if (!pick || !file) return;
