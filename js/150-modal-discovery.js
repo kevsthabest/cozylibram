@@ -1264,12 +1264,20 @@ function renderDetailModal(b, viaBook) {
 
     // v312: purchase ledger — what you paid, where, when
     // v396: collapsible (IA rework)
-    '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('tobuy') + ' Purchase' +
+    // v476: no manual price entry — the value is an automated estimate.
+    // purchasePrice is shown read-only when the user previously entered one.
+    '<details class="m-collapsible"><summary><span>' + icon('tobuy') + ' Purchase' +
     (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? ' <span class="note-inline">· $' + esc(Number(draft.purchasePrice).toFixed(2)) + '</span>' : '') +
     '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
+    (function() {
+      var est = (typeof estimateBookValue === 'function') ? estimateBookValue(draft) : null;
+      if (draft.purchasePrice != null && !isNaN(draft.purchasePrice))
+        return '<div class="note-inline">You paid $' + esc(Number(draft.purchasePrice).toFixed(2)) + '</div>';
+      if (est) return '<div class="note-inline">Est. value: $' + esc(est.value.toFixed(2)) + ' (estimate)</div>';
+      return '';
+    })() +
     '<div class="purchase-row">' +
-    '<input type="number" id="f-purchase-price" min="0" step="0.01" placeholder="Price paid" value="' + (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? esc(Number(draft.purchasePrice).toFixed(2)) : '') + '" />' +
     '<select id="f-purchase-source">' +
     '<option value="">Source…</option>' +
     ['Amazon','Indigo','Walmart'].map(function(nm) {
@@ -1280,12 +1288,6 @@ function renderDetailModal(b, viaBook) {
     '<input type="date" id="f-purchase-date" value="' + (draft.purchaseDate ? esc(draft.purchaseDate) : '') + '" />' +
     '</div>' +
     '<input type="text" id="f-purchase-source-custom" placeholder="Store name (e.g. Blue Heron Books)" value="' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? esc(draft.purchaseSource) : '') + '" style="display:' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? '' : 'none') + ';margin-top:6px;" />' +
-    (draft.listPrice != null && !isNaN(draft.listPrice) ? '<div class="note-inline" style="margin-top:6px;">List price: ' + esc(draft.listPriceCurrency || 'CAD') + ' ' + esc(Number(draft.listPrice).toFixed(2)) + ' (estimate)</div>' : '') +
-    (draft.purchasePrice == null ? (function() {
-      var dp = 24.99;
-      try { var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(v) && v >= 0) dp = v; } catch (e) {}
-      return '<div class="note-inline" style="margin-top:6px;">Est. value: CAD ' + dp.toFixed(2) + ' (default — add actual price above)</div>';
-    })() : '') +
     '</div></details>' +
 
     '<details class="m-collapsible"><summary><span>' + icon('sparkles') + ' Mood</span></summary>' +
@@ -1615,13 +1617,8 @@ function renderDetailModal(b, viaBook) {
       paintPrimary(); // v123: primary action follows the shelf
     }));
 
-  // v312: purchase ledger fields
-  var pp = document.getElementById('f-purchase-price');
-  if (pp) pp.addEventListener('input', e => {
-    var v = parseFloat(e.target.value);
-    // v453: round to cents on save — kills float artifacts (e.g. 9.989999771118164)
-    draft.purchasePrice = isNaN(v) ? null : Math.round(v * 100) / 100;
-  });
+  // v476: no manual price entry — f-purchase-price input removed.
+  // draft.purchasePrice is preserved when previously set (read-only display).
   var ps = document.getElementById('f-purchase-source');
   var psc = document.getElementById('f-purchase-source-custom');
   if (ps) ps.addEventListener('change', e => {

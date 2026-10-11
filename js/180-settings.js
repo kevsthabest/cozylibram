@@ -411,12 +411,8 @@ function renderSettings() {
     (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Usage analytics' +
     '<span class="chk-hint">Helps improve the app. Counts how features are used — never what books you own.</span></label>' +
     '<p class="note" style="margin-top:6px"><a href="#" id="st-analytics-what">What exactly is collected?</a></p>' +
-    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>' +
-    // v454: library value opt-in (default OFF)
-    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-showvalue" ' +
-    (function() { try { return localStorage.getItem('cozylibram.showLibraryValue') === '1' ? 'checked' : ''; } catch (e) { return ''; } })() + '> ' +
-    icon('chart') + ' Show library value' +
-    '<span class="chk-hint">Estimates your collection\u2019s value from book prices in Stats.</span></label>';
+    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
+    // v476: library value is automatic now — no opt-in needed.
 
   /* ---- About ---- */
   const htmlAbout =
@@ -436,68 +432,35 @@ function renderSettings() {
     if (Array.isArray(saved)) openIdx = saved;
   } catch (e) {}
 
-  // v312: purchase ledger totals; v323: default price fallback
-  var defaultPrice = 24.99;
-  try {
-    // v359: unconditional heal — remove key and rewrite clean (kills any float artifact)
-    var dpRaw = localStorage.getItem('cozylibram.defaultPrice');
-    var dp = parseFloat(dpRaw);
-    if (!isNaN(dp) && dp >= 0) {
-      defaultPrice = Math.round(dp * 100) / 100;
-    }
-    try {
-      localStorage.removeItem('cozylibram.defaultPrice');
-      localStorage.setItem('cozylibram.defaultPrice', defaultPrice.toFixed(2));
-    } catch (e2) {}
-  } catch (e) {}
+  // v476: ledger uses the shared estimateBookValue() (defined in 170-stats.js),
+  // so Settings and Stats always agree. No manual price entry — estimates are
+  // automatic; purchasePrice is preferred when the user previously entered one.
   var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
-  var defaultCount = 0, pricedCount = 0;
   try {
     (typeof library !== 'undefined' ? library : []).forEach(function(b) {
       var hasPurchase = (b.purchasePrice != null && !isNaN(b.purchasePrice));
-      var hasList = (b.listPrice != null && !isNaN(b.listPrice));
       if (hasPurchase) {
         ledgerTotal += b.purchasePrice;
         ledgerCount++;
         var src = b.purchaseSource || 'Unknown';
         ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
-        // v453: actual price counts toward Est. value (was excluded entirely)
-        listTotal += b.purchasePrice;
-        pricedCount++;
-      } else if (hasList) {
-        listTotal += b.listPrice;
-        pricedCount++;
-      } else {
-        // v323: books without a price AND without a list price use the default
-        listTotal += defaultPrice;
-        defaultCount++;
+      }
+      if (typeof estimateBookValue === 'function') {
+        listTotal += estimateBookValue(b).value;
       }
     });
   } catch (e) {}
   var ledgerSources = Object.keys(ledgerBySource).sort(function(a, b) { return ledgerBySource[b] - ledgerBySource[a]; });
-  // v453: with no priced books the Est. value is pure invention ($24.99 x N) —
-  // show a prompt instead of a made-up number (mirrors Stats page guard).
-  var estStat = pricedCount === 0
-    ? '<div class="stat"><div class="n">—</div><div class="l">Est. value</div></div>'
-    : '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>';
-  var estNote = pricedCount === 0
-    ? '<p class="note">Add prices to see your collection&rsquo;s estimated value. Tap a book &rarr; Details &rarr; Price.</p>'
-    : '';
   var htmlLedger =
     '<div class="stat-row">' +
-    '<div class="stat"><div class="n">$' + ledgerTotal.toFixed(2) + '</div><div class="l">Total spent</div></div>' +
-    '<div class="stat"><div class="n">' + ledgerCount + '</div><div class="l">With price</div></div>' +
-    estStat +
+    '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
+    (ledgerCount ? '<div class="stat"><div class="n">$' + ledgerTotal.toFixed(2) + '</div><div class="l">Total spent</div></div>' : '') +
     '</div>' +
-    estNote +
-    '<div class="field"><label>Default price (for books without one)</label>' +
-    // v364: text input (not number) — avoids browser float precision quirks in number inputs
-    '<input type="text" inputmode="decimal" id="f-default-price" class="text-input" value="' + defaultPrice.toFixed(2) + '" />' +
-    '<p class="note">' + defaultCount + ' books using default estimate.</p></div>' +
+    '<p class="note">A rough estimate — actual prices vary.</p>' +
     (ledgerSources.length ? '<div class="field"><label>By source</label>' +
       ledgerSources.map(function(src) {
         return '<div class="ledger-row"><span>' + esc(src) + '</span><span>$' + ledgerBySource[src].toFixed(2) + '</span></div>';
-      }).join('') + '</div>' : '<p class="note">Add purchase info in any book&apos;s Details tab to start tracking.</p>');
+      }).join('') + '</div>' : '');
 
   const groups = [
     ['user', 'Account', 'Sign in, profile & sync',
@@ -551,18 +514,6 @@ function renderSettings() {
       const th = THEMES.find(t => t.key === card.dataset.th);
       if (th) tsOpenSheet(th);
     }));
-  // v323: default price for books without a recorded cost
-  var dpInput = document.getElementById('f-default-price');
-  if (dpInput) dpInput.addEventListener('change', e => {
-    // v358: store the exact decimal string — never via float (kills float32 artifacts)
-    var raw = String(e.target.value || '').trim();
-    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return;
-    var v = Math.round(parseFloat(raw) * 100) / 100;
-    if (!isNaN(v) && v >= 0) {
-      try { localStorage.setItem('cozylibram.defaultPrice', v.toFixed(2)); } catch (err) {}
-      renderSettings(); // refresh totals
-    }
-  });
   document.querySelectorAll('#th-accent .sw').forEach(btn =>
     btn.addEventListener('click', () => {
       localStorage.setItem('accent', btn.dataset.a);
@@ -678,12 +629,7 @@ function renderSettings() {
     setAnalyticsEnabled(e.target.checked);
     toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');
   });
-  // v454: library value opt-in
-  var valTgl = document.getElementById('st-showvalue');
-  if (valTgl) valTgl.addEventListener('change', e => {
-    try { localStorage.setItem('cozylibram.showLibraryValue', e.target.checked ? '1' : '0'); } catch (err) {}
-    toast(e.target.checked ? 'Library value on — see it in Stats' : 'Library value off');
-  });
+  // v476: library value is automatic — no opt-in toggle needed.
   // v468: Book Portrait toggles + warning preferences
   var dnaSv = document.getElementById('st-dnasurvey');
   if (dnaSv) dnaSv.addEventListener('change', e => {

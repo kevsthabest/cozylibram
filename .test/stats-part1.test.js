@@ -52,29 +52,40 @@ ok('pagesInYear delegates to pagesInRange',
 // We test the value accumulation by checking renderStats output.
 // bookValue is scoped inside renderStats, so we verify via the DOM.
 
+// ---- Library value: automated estimates (v476) ----
+// estimateBookValue() is global: purchasePrice wins when present, otherwise
+// the flat estimate default. No opt-in gate — always shown, labeled estimate.
+
+ok('estimateBookValue prefers purchasePrice',
+  run(`estimateBookValue({ purchasePrice: 15.99 }).value`) === 15.99 &&
+  run(`estimateBookValue({ purchasePrice: 15.99 }).actual`) === true);
+
+ok('estimateBookValue falls back to default estimate',
+  run(`estimateBookValue({}).value`) === 24.99 &&
+  run(`estimateBookValue({}).actual`) === false);
+
+ok('estimateBookValue respects stored defaultPrice',
+  run(`try { localStorage.setItem('cozylibram.defaultPrice', '19.99'); } catch (e) {};
+        estimateBookValue({}).value`) === 19.99);
+run(`try { localStorage.removeItem('cozylibram.defaultPrice'); } catch (e) {}`);
+
 run(`library = [
-  { id: 'b1', title: 'Both prices', status: 'read', purchasePrice: 15.99, listPrice: 29.99 },
-  { id: 'b2', title: 'List only', status: 'read', listPrice: 24.99 },
-  { id: 'b3', title: 'No price', status: 'read' },
+  { id: 'b1', title: 'Priced', status: 'read', purchasePrice: 15.99 },
+  { id: 'b2', title: 'Unpriced', status: 'read' },
+  { id: 'b3', title: 'Unpriced 2', status: 'read' },
 ];`);
-run(`try { localStorage.setItem('cozylibram.showLibraryValue', '1'); } catch (e) {}`);
 run(`statsMode = 'dash'; renderStats();`);
 const dashHTML = window.document.querySelector('#view').innerHTML;
 
-// Both prices: 15.99 (purchase wins). List only: 24.99. No price: 0.
-// Total est = 15.99 + 24.99 = 40.98 → ≈ $41
-ok('value uses purchasePrice when both set (not double-counted)',
-  dashHTML.includes('≈ $41') || dashHTML.includes('$40.98'));
+// 15.99 + 24.99 + 24.99 = 65.97 → ≈ $66
+ok('stats shows estimate total (purchase + defaults)',
+  dashHTML.includes('≈ $66'));
 
-ok('no invented default inflates the total',
-  !dashHTML.includes('≈ $116') && !dashHTML.includes('≈ $91')); // would be 40.98 + 24.99*3 or *2
+ok('stats labels it an estimate',
+  dashHTML.includes('Estimated collection value'));
 
-// Opt-in: toggle off hides the section
-run(`try { localStorage.setItem('cozylibram.showLibraryValue', '0'); } catch (e) {}`);
-run(`renderStats();`);
-const hiddenHTML = window.document.querySelector('#view').innerHTML;
-ok('library value hidden when opt-in is off',
-  !hiddenHTML.includes('Library value'));
+ok('stats shows value without opt-in (no gate)',
+  dashHTML.includes('Library value'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
