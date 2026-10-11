@@ -1123,6 +1123,29 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .yib-card .yib-title { font-weight: 600; font-size: 16px; }
 .yib-card .yib-go { margin-left: auto; font-size: 22px; color: var(--muted); flex: none; }
 .yib-card:hover .yib-go { color: var(--ink); }
+/* v448: milestone celebration — quiet inline card */
+.milestone-celebration { display: flex; gap: 12px; align-items: flex-start;
+  background: linear-gradient(135deg, var(--card2), var(--card));
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px;
+  margin-bottom: 14px; animation: milestone-in 0.6s ease-out; }
+@keyframes milestone-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.milestone-celebration .micon { flex: none; }
+.milestone-celebration .micon svg { width: 28px; height: 28px; color: var(--gold); }
+.milestone-celebration .mtitle { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gold); margin-bottom: 4px; }
+.milestone-celebration h3 { font-size: 16px; margin: 0 0 4px; font-family: Georgia, serif; }
+.milestone-celebration p { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.milestone-celebration a { color: var(--accent); font-size: 13px; text-decoration: none; }
+/* v448: milestones page */
+.milestone-row { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  display: flex; gap: 12px; align-items: center; }
+.milestone-row.locked { opacity: 0.45; }
+.milestone-row .micon { flex: none; }
+.milestone-row .micon svg { width: 24px; height: 24px; color: var(--gold); }
+.milestone-row .minfo { flex: 1; }
+.milestone-row .mname { font-weight: 600; font-size: 14px; }
+.milestone-row .mdate { color: var(--faint); font-size: 12px; }
+.milestone-row .mhint { color: var(--muted); font-size: 12px; font-style: italic; }
+.milestone-row .mcheck { color: var(--gold); font-size: 18px; flex: none; }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .stat-nav .chip { cursor: pointer; }

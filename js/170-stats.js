@@ -1030,6 +1030,8 @@ function fallbackCopy(t, done) {
 }
 
 function renderStats() {
+  // v448: backfill milestones once (idempotent — no-op after first run)
+  try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
@@ -1125,8 +1127,25 @@ function renderStats() {
     const insightCard = insights.length
       ? '<div class="insight-card"><span class="pi">' + icon('bulb') + '</span><p>' + insights[0] + '</p></div>'
       : '';
+    // v448: milestone celebration — quiet inline card for the newest unseen milestone
+    let milestoneCard = '';
+    try {
+      if (typeof checkMilestones === 'function') checkMilestones();
+      if (typeof newestUnseenMilestone === 'function') {
+        const nm = newestUnseenMilestone();
+        if (nm) {
+          milestoneCard = '<div class="milestone-celebration" data-mid="' + esc(nm.def.id) + '">' +
+            '<div class="micon">' + icon(nm.def.icon || 'sparkles') + '</div><div style="flex:1">' +
+            '<div class="mtitle">A little reading milestone</div>' +
+            '<h3>' + esc(nm.def.title) + '</h3><p>' + esc(nm.def.copy) + '</p>' +
+            '<a href="#" data-act="milestones">View milestones \u2192</a></div>' +
+            '<button class="btn ghost sm" data-act="dismiss-milestone" aria-label="Dismiss" style="flex:none">\u2715</button></div>';
+        }
+      }
+    } catch (e) {}
     setView(
       '<h2 class="section serif">Reading stats</h2>' +
+      milestoneCard +
       insightCard +
       '<div class="stat-sub">' + icon('calendar') + ' ' + esc(monthName) + '</div>' +
       '<div class="stat-row">' +
@@ -1175,6 +1194,25 @@ function renderStats() {
       statsMode = 'detail';
       renderStats();
     });
+    // v448: milestone celebration — "seen" means the reader engaged:
+    // clicking "View milestones" or explicitly dismissing the card.
+    // Merely rendering the card does not consume the celebration.
+    document.querySelectorAll('[data-act="milestones"]').forEach(a =>
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const card = a.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
+        if (typeof renderMilestones === 'function') renderMilestones();
+      }));
+    document.querySelectorAll('[data-act="dismiss-milestone"]').forEach(b =>
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const card = b.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
+        if (card) card.style.display = 'none';
+      }));
     return;
   }
 
@@ -1275,5 +1313,69 @@ function renderStats() {
       if (read.length) openDetail(read[0].id);
       else go('library');
     }));
+}
+
+/* ---- Milestones page (v448) ---- */
+function renderMilestones() {
+  const store = typeof loadMilestones === 'function' ? loadMilestones() : {};
+  const cats = [
+    { id: 'journey', name: 'Journey', desc: 'The road so far \u2014 books finished, pages turned.' },
+    { id: 'rhythm', name: 'Rhythm', desc: 'The shape of your reading days.' },
+    { id: 'discovery', name: 'Discovery', desc: 'Firsts and new horizons.' },
+    { id: 'taste', name: 'Taste', desc: 'Your reading personality, in milestones.' },
+  ];
+  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Stats</button>' +
+    '<h2 class="section serif">Milestones</h2>' +
+    '<p class="note" style="margin-bottom:16px">Moments from your reading life, kept quietly.</p>';
+  cats.forEach(cat => {
+    const items = MILESTONE_CATALOG.filter(m => m.cat === cat.id);
+    const earned = items.filter(m => store[m.id]);
+    // Dynamic series milestones live under Discovery
+    let dynHtml = '';
+    let dynCount = 0;
+    if (cat.id === 'discovery' && typeof milestoneDef === 'function') {
+      Object.keys(store).filter(id => id.indexOf('series-finished-') === 0).forEach(id => {
+        const def = milestoneDef(id, store[id]);
+        if (!def) return;
+        dynCount++;
+        const st = store[id];
+        const dateStr = st.achievedAt
+          ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+          : 'Earned before milestones launched';
+        dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
+          '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<div class="mcheck">\u2713</div></div>';
+      });
+    }
+    const earnedCount = earned.length + dynCount;
+    const totalLabel = dynCount ? items.length + '+' : items.length;
+    html += '<div class="cat-header" style="display:flex;align-items:baseline;gap:8px;margin:20px 0 4px">' +
+      '<h3 style="font-size:15px">' + cat.name + '</h3>' +
+      '<span class="note">' + earnedCount + ' of ' + totalLabel + '</span></div>' +
+      '<p class="note" style="margin-bottom:10px">' + cat.desc + '</p>' + dynHtml;
+    items.forEach(m => {
+      const st = store[m.id];
+      const def = (typeof milestoneDef === 'function' && st) ? milestoneDef(m.id, st) : m;
+      if (st) {
+        const dateStr = st.achievedAt
+          ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+          : 'Earned before milestones launched';
+        html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
+          '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<div class="mcheck">\u2713</div></div>';
+      } else {
+        html += '<div class="milestone-row locked"><div class="micon">' + icon(m.icon || 'sparkles') + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(m.title) + '</div>' +
+          '<div class="mhint">' + esc(m.hint) + '</div></div></div>';
+      }
+    });
+  });
+  setView(html);
+  document.getElementById('ms-back').addEventListener('click', () => {
+    statsMode = 'dash';
+    renderStats();
+  });
 }
 
