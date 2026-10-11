@@ -76,7 +76,7 @@ runInWindow(`favExpanded = false;
   for (let i = 0; i < 6; i++) { const nb = ${mk('fxbase', true, 300)}; nb.id = 'fx' + i; nb.title = 'Extra ' + i; library.push(nb); }
   renderLibrary();`);
 ok('collapsed shows 6 spines', qa('.fav-shelf .spine').length === 6);
-ok('toggle offers show-all', q('#fav-toggle').textContent.includes('Show all 8'));
+ok('toggle offers view-all', q('#fav-toggle').textContent.includes('View all 8'));
 q('#fav-toggle').click();
 ok('expanded shows all 8', qa('.fav-shelf .spine').length === 8);
 ok('toggle offers show-less', q('#fav-toggle').textContent.includes('Show less'));

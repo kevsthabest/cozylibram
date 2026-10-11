@@ -147,6 +147,65 @@ const MILESTONE_CATALOG = [
     title: 'Brave heart',
     copy: 'A 5-star rating on a book with 5+ warnings. Bold taste.',
     hint: 'Give 5 stars to a book with 5+ trigger warnings' },
+
+  // ---- Green wave: TBR archaeology ----
+  { id: 'tbr-forgotten-scroll', cat: 'journey', icon: 'scroll',
+    title: 'Forgotten Scroll',
+    copy: 'A book that waited a year on your shelf finally got its moment. Patience, rewarded.',
+    hint: 'Finish a book that sat on your TBR for a year' },
+  { id: 'tbr-dust-destiny', cat: 'journey', icon: 'hourglass',
+    title: 'Dust and Destiny',
+    copy: 'Two years on the shelf. Some stories are worth the wait.',
+    hint: 'Finish a book that sat on your TBR for two years' },
+
+  // ---- Green wave: Lorekeeper ----
+  { id: 'lore-quotes-10', cat: 'lore', icon: 'quotes',
+    title: 'Words Worth Keeping',
+    copy: 'Ten passages saved. You collect sentences the way others collect stamps.',
+    hint: 'Save 10 quotes' },
+  { id: 'lore-notes-5', cat: 'lore', icon: 'quill',
+    title: 'Marginalia Society',
+    copy: 'Notes in five books. Future you says thanks.',
+    hint: 'Write notes in 5 different books' },
+  { id: 'lore-characters-3', cat: 'lore', icon: 'friends',
+    title: 'Names in the Margins',
+    copy: 'Characters tracked across three books. You remember everyone.',
+    hint: 'Track characters across 3 books' },
+  { id: 'lore-relationships-10', cat: 'lore', icon: 'heart',
+    title: 'Web of Fate',
+    copy: 'Ten verified connections mapped. Nobody\u2019s just a stranger to you.',
+    hint: 'Map 10 character relationships' },
+
+  // ---- Green wave: Soul ----
+  { id: 'soul-ugly-cry-3', cat: 'soul', icon: 'heart',
+    title: 'Ugly Cry Club',
+    copy: 'Three tearjerkers. You feel things deeply, and you\u2019re not embarrassed about it.',
+    hint: 'Read 3 tearjerker books' },
+
+  // ---- Green wave: Rituals ----
+  { id: 'ritual-solstice-story', cat: 'ritual', icon: 'sun',
+    title: 'Solstice Story',
+    copy: 'Finished as the light turned. The year\u2019s hinge, and a story to mark it.',
+    hint: 'Finish a book near a solstice or equinox' },
+
+  // ---- Green wave: Hidden discoveries ----
+  // Criteria hidden until earned — UI shows ??? for locked hidden milestones.
+  { id: 'hidden-stars-aligned', cat: 'hidden', icon: 'star',
+    title: 'Stars Aligned',
+    copy: 'Finished on the anniversary of the day you shelved it. Some books wait for their moment.',
+    hint: '???' },
+  { id: 'hidden-pattern-emerges', cat: 'hidden', icon: 'sparkles',
+    title: 'A Pattern Emerges',
+    copy: 'Three books in a row by the same author. Someone has a new favorite.',
+    hint: '???' },
+  { id: 'hidden-accidental-trilogy', cat: 'hidden', icon: 'covers',
+    title: 'Accidental Trilogy',
+    copy: 'Three books of one series, finished back to back. That wasn\u2019t planned \u2014 or was it?',
+    hint: '???' },
+  { id: 'hidden-book-finds-you', cat: 'hidden', icon: 'compass',
+    title: 'The Book Finds You',
+    copy: 'Shelved and finished on the same day. Some books refuse to wait.',
+    hint: '???' },
 ];
 
 /* Simple string hash for collision-safe IDs (djb2). */
@@ -436,6 +495,206 @@ function detectMilestones(lib) {
     }
   } catch (e) {}
 
+  // ---- Green wave: TBR archaeology ----
+  // Finish a book that waited on the shelf (dateAdded -> dateFinished).
+  try {
+    const DAY = 864e5;
+    let firstYear = null, firstTwoYear = null;
+    read.forEach(b => {
+      const added = safeDate(b.dateAdded);
+      const fin = safeDate(b.dateFinished);
+      if (!added || !fin) return;
+      const wait = fin.getTime() - added.getTime();
+      if (wait >= 2 * 365 * DAY && (!firstTwoYear || fin < firstTwoYear)) firstTwoYear = fin;
+      if (wait >= 365 * DAY && (!firstYear || fin < firstYear)) firstYear = fin;
+    });
+    if (firstYear) found.push({ id: 'tbr-forgotten-scroll', achievedAt: firstYear.toISOString() });
+    if (firstTwoYear) found.push({ id: 'tbr-dust-destiny', achievedAt: firstTwoYear.toISOString() });
+  } catch (e) {}
+
+  // ---- Green wave: Complete Collection (stricter than series-finished) ----
+  // Own every known volume AND read them all. Completeness is verifiable only
+  // when series positions form a gapless 1..N sequence — otherwise we can't
+  // know volumes are missing, so the milestone stays locked (honest).
+  try {
+    const bySeries = {};
+    lib.forEach(b => {
+      const sname = b.series && b.series.name;
+      if (!sname) return;
+      (bySeries[sname] = bySeries[sname] || []).push(b);
+    });
+    Object.keys(bySeries).forEach(sname => {
+      const books = bySeries[sname];
+      if (books.length < 2) return;
+      const positions = books
+        .map(b => parseInt(b.series && b.series.position, 10))
+        .filter(n => !isNaN(n) && n > 0)
+        .sort((a, b) => a - b);
+      // gapless 1..N check
+      if (positions.length !== books.length) return;
+      for (let i = 0; i < positions.length; i++) {
+        if (positions[i] !== i + 1) return;
+      }
+      if (!books.every(b => b.status === 'read')) return;
+      const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
+      const id = 'series-complete-' + slug + '-' + hashStr(sname);
+      const dates = books.map(b => { const d = safeDate(b.dateFinished); return d ? d.getTime() : 0; }).filter(t => t > 0);
+      const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
+      found.push({ id, achievedAt: latest, detail: sname });
+    });
+  } catch (e) {}
+
+  // ---- Green wave: Lorekeeper ----
+  // Words Worth Keeping: 10 quotes saved (local b.quotes)
+  try {
+    let total = 0;
+    let tenthDate = null;
+    const withQuotes = [];
+    lib.forEach(b => {
+      const qs = b.quotes || [];
+      if (qs.length) withQuotes.push(b);
+      total += qs.length;
+    });
+    if (total >= 10) {
+      // achievedAt: when the 10th quote was saved (best effort via quote `at`)
+      const allQuotes = [];
+      withQuotes.forEach(b => {
+        (b.quotes || []).forEach(q => {
+          const at = safeDate(q.at || b.dateFinished);
+          if (at) allQuotes.push(at);
+        });
+      });
+      allQuotes.sort((a, b) => a - b);
+      tenthDate = allQuotes[9] || null;
+      found.push({ id: 'lore-quotes-10', achievedAt: tenthDate ? tenthDate.toISOString() : null, value: total });
+    }
+  } catch (e) {}
+  // Marginalia Society: notes on 5 different books (local b.notes)
+  try {
+    const noted = lib.filter(b => b.notes && String(b.notes).trim().length > 0);
+    if (noted.length >= 5) {
+      const dates = noted.map(b => safeDate(b.dateFinished) || safeDate(b._mtime)).filter(Boolean).sort((a, b) => a - b);
+      found.push({ id: 'lore-notes-5', achievedAt: dates[4] ? dates[4].toISOString() : null, value: noted.length });
+    }
+  } catch (e) {}
+
+  // ---- Green wave: Soul ----
+  // Ugly Cry Club: 3 books with the tearjerker trope
+  try {
+    const criers = read.filter(b =>
+      (b.tropes || []).some(t => String(t.id || t.name || t).toLowerCase() === 'tearjerker')
+    );
+    if (criers.length >= 3) {
+      const dates = criers.map(b => safeDate(b.dateFinished)).filter(Boolean).sort((a, b) => a - b);
+      found.push({ id: 'soul-ugly-cry-3', achievedAt: dates[2] ? dates[2].toISOString() : null });
+    }
+  } catch (e) {}
+
+  // ---- Green wave: Wandering ----
+  // Beyond the Map: first finish in a new genre (dynamic per genre).
+  // Each genre's first finished book is a discovery.
+  try {
+    const genreFirst = {};
+    read.forEach(b => {
+      const t = safeDate(b.dateFinished);
+      if (!t) return;
+      (b.genres || []).forEach(g => {
+        const gg = String(g).toLowerCase().trim();
+        if (!gg) return;
+        if (!genreFirst[gg] || t < genreFirst[gg]) genreFirst[gg] = t;
+      });
+    });
+    Object.keys(genreFirst).forEach(gg => {
+      const slug = gg.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
+      const id = 'wander-genre-' + slug + '-' + hashStr(gg);
+      found.push({ id, achievedAt: genreFirst[gg].toISOString(), detail: gg });
+    });
+  } catch (e) {}
+
+  // ---- Green wave: Rituals ----
+  // Solstice Story: finish within a day of a solstice/equinox.
+  // Nominal dates (can vary ±1 day year to year); 36h window covers the drift.
+  // Locale-aware: uses the date in the user's timezone via local date parts.
+  try {
+    const anchors = [[3, 20], [6, 21], [9, 22], [12, 21]]; // [month, day]
+    const nearAnchor = (d) => {
+      const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+      return anchors.some(([am, ad]) => {
+        // compare within same year; Dec solstice also checks Jan spillover implicitly via day diff
+        const aThis = new Date(y, am - 1, ad);
+        const diff = Math.abs(d.getTime() - aThis.getTime());
+        return diff <= 36 * 36e5;
+      });
+    };
+    const solsticeBook = byFinish.find(b => {
+      const d = safeDate(b.dateFinished);
+      return d && nearAnchor(d);
+    });
+    if (solsticeBook) {
+      found.push({ id: 'ritual-solstice-story', achievedAt: new Date(solsticeBook.dateFinished).toISOString(), detail: solsticeBook.title });
+    }
+  } catch (e) {}
+
+  // ---- Green wave: Hidden discoveries ----
+  // Criteria hidden in UI until earned.
+  const dayKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // Stars Aligned: finished on the anniversary (same month/day) of being added, later year
+  try {
+    const aligned = read.find(b => {
+      const added = safeDate(b.dateAdded);
+      const fin = safeDate(b.dateFinished);
+      if (!added || !fin) return false;
+      return fin.getFullYear() > added.getFullYear() &&
+        fin.getMonth() === added.getMonth() && fin.getDate() === added.getDate();
+    });
+    if (aligned) {
+      found.push({ id: 'hidden-stars-aligned', achievedAt: new Date(aligned.dateFinished).toISOString(), detail: aligned.title });
+    }
+  } catch (e) {}
+  // A Pattern Emerges: 3 books by the same author finished consecutively
+  try {
+    const ordered = byFinish.slice(); // already sorted by dateFinished
+    for (let i = 0; i + 2 < ordered.length; i++) {
+      const trio = [ordered[i], ordered[i + 1], ordered[i + 2]];
+      const authors = trio.map(b => (b.authors || [])[0]).filter(Boolean);
+      if (authors.length === 3 && authors[0] === authors[1] && authors[1] === authors[2]) {
+        found.push({
+          id: 'hidden-pattern-emerges',
+          achievedAt: new Date(trio[2].dateFinished).toISOString(),
+          detail: authors[0],
+        });
+        break;
+      }
+    }
+  } catch (e) {}
+  // Accidental Trilogy: 3 consecutive finishes, all in the same series
+  try {
+    const ordered = byFinish.slice();
+    for (let i = 0; i + 2 < ordered.length; i++) {
+      const trio = [ordered[i], ordered[i + 1], ordered[i + 2]];
+      const snames = trio.map(b => b.series && b.series.name).filter(Boolean);
+      if (snames.length === 3 && snames[0] === snames[1] && snames[1] === snames[2]) {
+        found.push({
+          id: 'hidden-accidental-trilogy',
+          achievedAt: new Date(trio[2].dateFinished).toISOString(),
+          detail: snames[0],
+        });
+        break;
+      }
+    }
+  } catch (e) {}
+  // The Book Finds You: added and finished on the same calendar day
+  try {
+    const impulse = read.find(b => {
+      const added = safeDate(b.dateAdded);
+      const fin = safeDate(b.dateFinished);
+      return added && fin && dayKey(added) === dayKey(fin);
+    });
+    if (impulse) {
+      found.push({ id: 'hidden-book-finds-you', achievedAt: new Date(impulse.dateFinished).toISOString(), detail: impulse.title });
+    }
+  } catch (e) {}
+
   return found;
 }
 
@@ -480,6 +739,13 @@ function checkMilestones() {
     }
   });
   saveMilestones(store);
+  // Fire-and-forget async social detectors (Supabase-backed characters/
+  // relationships). Never blocks the synchronous path.
+  try {
+    if (typeof checkSocialMilestones === 'function') {
+      checkSocialMilestones().catch(function () {});
+    }
+  } catch (e) {}
   return fresh;
 }
 /* Backfill: same as check, but marks everything seen (no celebration flood). */
@@ -492,6 +758,61 @@ function backfillMilestones() {
     store[d.id] = { achievedAt: d.achievedAt || null, seen: true };
   });
   saveMilestones(store);
+}
+
+/* ---- Async social detectors (Supabase-backed) ----
+   Characters and relationships live in Supabase (book_characters table),
+   not on the local book objects — so these can't run in the synchronous
+   detectMilestones(). This is fire-and-forget: called from checkMilestones(),
+   never blocks, never throws. If Supabase is unavailable, the milestones
+   simply don't trigger (safe default, no false positives).
+
+   "Names in the Margins": characters tracked across 3+ distinct works.
+   "Web of Fate": 10+ relationship entries with non-empty type+target
+   (unverified/empty AI connections don't count). */
+async function checkSocialMilestones() {
+  try {
+    if (typeof CharacterWiki === 'undefined' || !CharacterWiki._sb) return;
+    const sb = await CharacterWiki._sb();
+    if (!sb) return;
+    // Distinct works with tracked characters
+    let works = new Set();
+    let relCount = 0;
+    // Paginate defensively (1000-row pages)
+    for (let page = 0; page < 10; page++) {
+      const { data, error } = await sb.from('book_characters')
+        .select('work_id, relationships')
+        .range(page * 1000, page * 1000 + 999);
+      if (error || !data || !data.length) break;
+      data.forEach(c => {
+        if (c.work_id) works.add(c.work_id);
+        (c.relationships || []).forEach(r => {
+          if (r && r.to && r.type) relCount++;
+        });
+      });
+      if (data.length < 1000) break;
+    }
+    const store = loadMilestones();
+    let changed = false;
+    const fresh = [];
+    if (works.size >= 3 && !store['lore-characters-3']) {
+      store['lore-characters-3'] = { achievedAt: null, seen: false, value: works.size };
+      fresh.push('lore-characters-3');
+      changed = true;
+    }
+    if (relCount >= 10 && !store['lore-relationships-10']) {
+      store['lore-relationships-10'] = { achievedAt: null, seen: false, value: relCount };
+      fresh.push('lore-relationships-10');
+      changed = true;
+    }
+    if (changed) {
+      saveMilestones(store);
+      // Surface through the same quiet-celebration path if available
+      if (typeof onMilestonesEarned === 'function') {
+        try { onMilestonesEarned(fresh); } catch (e) {}
+      }
+    }
+  } catch (e) { /* silent: social milestones are best-effort */ }
 }
 function markMilestoneSeen(id) {
   const store = loadMilestones();
@@ -525,6 +846,26 @@ function milestoneDef(id, state) {
       title: 'Finished your ' + sname + ' collection',
       copy: 'Every book you own in this series, read. That\u2019s commitment.',
       hint: 'Read all owned books in a series',
+    };
+  }
+  // Dynamic: series-complete-{slug} (stricter — gapless 1..N, all read)
+  if (id.indexOf('series-complete-') === 0) {
+    const sname = (state && state.detail) || 'a series';
+    return {
+      id, cat: 'discovery', icon: 'trophy',
+      title: 'Complete Collection: ' + sname,
+      copy: 'Every volume that exists, on your shelf and read. The whole story, cover to cover.',
+      hint: 'Own and read every volume of a series',
+    };
+  }
+  // Dynamic: wander-genre-{slug} (first finish in a genre)
+  if (id.indexOf('wander-genre-') === 0) {
+    const gname = (state && state.detail) || 'a new genre';
+    return {
+      id, cat: 'wander', icon: 'compass',
+      title: 'Beyond the Map: ' + gname,
+      copy: 'Your first finished book in ' + gname + '. New territory.',
+      hint: 'Finish a book in a new genre',
     };
   }
   return null;

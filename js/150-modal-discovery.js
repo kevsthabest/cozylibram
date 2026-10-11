@@ -1374,6 +1374,12 @@ function renderDetailModal(b, viaBook) {
   const primarySetStatus = (s) => {
     const from = b.status;
     if (from === s) return;
+    // v455: trigger check — one-time gentle heads-up before starting a TBR
+    // book that has content warnings. Never a gate: "Not now" just dismisses.
+    if (s === 'reading' && typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
+      openTriggerCheckSheet(b, () => primarySetStatus(s));
+      return;
+    }
     b.status = s; draft.status = s;
     if (['reading', 'read', 'dnf'].includes(s)) upNextRemove(id);
     if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;

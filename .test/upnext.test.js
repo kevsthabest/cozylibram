@@ -58,7 +58,7 @@ window.upNextAdd('b');
 runInWindow('go("library");');
 const badges = qa('#view .un-num').map(el => el.textContent);
 ok('shelf shows numbered queue badges', badges.join(',') === '1,2');
-ok('shelf has a Manage button', !!q('#un-manage'));
+ok('shelf has a View-all button', !!q('#un-manage') && q('#un-manage').textContent.includes('View all'));
 
 // 4. manage view reorders and removes
 q('#un-manage').click();

@@ -54,6 +54,9 @@ const EVENT_DEFS = {
   import_started:   { c: 'import', p: ['source'] },
   import_completed: { c: 'import', p: ['source', 'book_count'] },
   import_failed:    { c: 'import', p: ['source'] },
+  import_concierge_opened: { c: 'import', p: [] },
+  import_concierge_retry:  { c: 'import', p: ['source', 'book_count'] },
+  import_concierge_matched:{ c: 'import', p: ['source'] },
   // rating axes
   rating_axis_used: { c: 'rating', p: ['axis'] },
   // coven / social

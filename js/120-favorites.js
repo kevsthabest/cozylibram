@@ -68,7 +68,7 @@ function favShelfHTML() {
   let html = '<div class="fav-shelf"><div class="fav-head"><h3 class="serif">' + icon('heart') + ' Favorites</h3>' +
     '<span class="fav-btns">' + styleSeg +
     (rows.length > 1 && favStyle === 'spines'
-      ? '<button class="btn ghost sm" id="fav-toggle">' + (favExpanded ? 'Show less ↑' : 'Show all ' + favs.length + ' ↓') + '</button>'
+      ? '<button class="btn ghost sm" id="fav-toggle">' + (favExpanded ? 'Show less \u2191' : 'View all ' + favs.length + ' \u2192') + '</button>'
       : '') + '</span></div>';
   if (!favs.length) {
     html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">Tap ' + icon('heart') + ' on any book to pin it to this shelf.</p></div>' +
@@ -106,7 +106,7 @@ function upNextMove(id, dir) {
 function upNextShelfHTML() {
   const books = upNextBooks();
   let html = '<div class="un-strip"><div class="recent-head"><h3 class="serif">' + icon('upnext') + ' Up Next</h3>' +
-    (books.length ? '<button class="btn ghost sm" id="un-manage">Manage</button>' : '') + '</div>';
+    (books.length ? '<button class="btn ghost sm" id="un-manage">View all ' + books.length + ' \u2192</button>' : '') + '</div>';
   if (!books.length) {
     html += '<div class="shelf-row"><p class="note" style="padding:6px 12px">' +
       'Queue up what to read next \u2014 open any book and tap <b>' + icon('upnext') + ' Up Next</b>.</p></div>';

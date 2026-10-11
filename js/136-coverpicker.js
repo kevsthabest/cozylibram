@@ -277,7 +277,9 @@ function coverURLLoads(url) {
 async function downloadMissingCovers(onProgress, fns) {
   const getCands = (fns && fns.candidates) || fetchCoverCandidates;
   const verify = (fns && fns.verify) || coverURLLoads;
-  const targets = library.filter(b => !b.cover);
+  // v455 (import concierge): fns.targets scopes the run to a given book list
+  // instead of the whole library. Default behavior is unchanged.
+  const targets = (fns && fns.targets) || library.filter(b => !b.cover);
   let done = 0;
   for (let i = 0; i < targets.length; i++) {
     const b = targets[i];
