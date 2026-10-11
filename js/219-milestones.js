@@ -13,12 +13,15 @@
    Store: localStorage 'cozylibram.milestones' = { id: { achievedAt: ISO|null, seen: bool } }
    achievedAt null = "earned before we could date it". Never invent dates.
 
-   STORAGE NOTE (v448): Milestones are local-only (localStorage). They do not
-   sync across devices via the existing Supabase sync. This is intentional for
-   v1 — the achievement model (detectMilestones + store shape) is independent
-   of the storage adapter, so a future sync adapter can be added without
-   changing detectors or the catalog. If this changes, the store functions
-   (loadMilestones/saveMilestones) are the seam.
+   STORAGE NOTE (v474): Milestones sync across devices via the Supabase
+   `milestones` table (see supabase/migrations/v474_milestones_sync.sql).
+   localStorage remains the synchronous store and offline fallback; the
+   Supabase table is the shared source of truth when signed in. The
+   achievement model (detectMilestones + store shape) is still independent
+   of the storage adapter — the store functions (loadMilestones /
+   saveMilestones) are the seam. Merge rule: union of achieved milestones,
+   earliest achievedAt wins, seen is OR. Milestones are never un-earned,
+   so the sync is upsert-only (no tombstones).
 */
 
 /* Catalog: id, category, title, copy (warm, playful-never-mocking), hint for locked */
@@ -709,15 +712,166 @@ function detectMilestones(lib) {
   return found;
 }
 
-/* ---- Store: localStorage, idempotent, backfill-safe ---- */
+/* ---- Store: localStorage (sync) + Supabase (shared) ----
+   loadMilestones()/saveMilestones() stay synchronous with the exact old
+   contract — localStorage is read fresh on every load, so it remains the
+   durable offline copy and the single sync-path store. The Supabase
+   `milestones` table is the cross-device truth when signed in: writes push
+   on a 2.5s debounce (same cadence as the library sync); reads merge remote
+   rows on sign-in and on first sync load (fire-and-forget — the sync path
+   never blocks on network). Milestones are never un-earned, so the sync is
+   upsert-only. */
 const MILESTONE_KEY = 'cozylibram.milestones';
+const MILESTONE_OWNER_KEY = 'cozylibram.milestones.owner';
+var __msMergedUid = null;    // uid we last merged remote milestones for
+var __msMergeRetryAt = 0;    // backoff: don't hammer a failing pull
+var __msPushTimer = null;
+
+function msLocalLoad() {
+  try { return JSON.parse(localStorage.getItem(MILESTONE_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+function msLocalSave(store) {
+  try { localStorage.setItem(MILESTONE_KEY, JSON.stringify(store)); } catch (e) {}
+}
+function msOwner() {
+  try { return localStorage.getItem(MILESTONE_OWNER_KEY); } catch (e) { return null; }
+}
+function msSignedUid() {
+  try { return (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) || null; }
+  catch (e) { return null; }
+}
 function loadMilestones() {
-  try {
-    return JSON.parse(localStorage.getItem(MILESTONE_KEY) || '{}');
-  } catch (e) { return {}; }
+  var store = msLocalLoad();
+  // Lazy first-merge: once per signed-in user, pull remote milestones and
+  // union them in. Fire-and-forget; a failed pull backs off for 60s.
+  var uid = msSignedUid();
+  if (uid && __msMergedUid !== uid && Date.now() >= __msMergeRetryAt) {
+    __msMergedUid = uid;
+    try { syncMilestonesFromCloud().catch(function () {}); } catch (e) {}
+  }
+  return store;
 }
 function saveMilestones(store) {
-  try { localStorage.setItem(MILESTONE_KEY, JSON.stringify(store)); } catch (e) {}
+  msLocalSave(store);
+  scheduleMilestonePush();
+}
+/* Reset the sync state on sign-out so the next sign-in re-merges. A pending
+   push is flushed first (fire-and-forget): clearing the timer without pushing
+   would drop achievements earned <2.5s before sign-out, and the next sign-in
+   would overwrite localStorage before they ever reached the cloud. At this
+   point in leaveApp the auth session is still valid, so the push lands. */
+function resetMilestoneSync() {
+  __msMergedUid = null;
+  __msMergeRetryAt = 0;
+  if (__msPushTimer) {
+    clearTimeout(__msPushTimer); __msPushTimer = null;
+    try { pushMilestonesToCloud().catch(function () {}); } catch (e) {}
+  }
+}
+
+/* Pure merge for milestone stores. Union of achieved milestones:
+   earliest achievedAt wins, seen is OR, detail prefers the richer copy,
+   value (personal-best style) takes the max. No side effects. */
+function mergeMilestoneStores(local, remote) {
+  var out = {};
+  var ids = {};
+  Object.keys(local || {}).forEach(function (id) { ids[id] = 1; });
+  Object.keys(remote || {}).forEach(function (id) { ids[id] = 1; });
+  Object.keys(ids).forEach(function (id) {
+    var l = (local || {})[id], r = (remote || {})[id];
+    if (l && r) {
+      var m = { achievedAt: earliestAchievedAt(l.achievedAt, r.achievedAt), seen: !!(l.seen || r.seen) };
+      var detail = (l.detail !== undefined && l.detail !== null) ? l.detail : r.detail;
+      if (detail !== undefined && detail !== null) m.detail = detail;
+      var lv = (typeof l.value === 'number') ? l.value : null;
+      var rv = (typeof r.value === 'number') ? r.value : null;
+      if (lv !== null || rv !== null) m.value = Math.max(lv === null ? -Infinity : lv, rv === null ? -Infinity : rv);
+      out[id] = m;
+    } else {
+      out[id] = l || r;
+    }
+  });
+  return out;
+}
+/* Earliest of two achievedAt values. Compared as Date objects, not ISO
+   strings: Supabase returns timestamptz with +00:00 offsets while the client
+   writes .000Z, and string comparison would be wrong if formats ever mixed
+   (e.g. a local date-only string). Null means "earned before we could date
+   it" and loses to any real date. */
+function earliestAchievedAt(a, b) {
+  if (a && b) {
+    var ta = new Date(a).getTime(), tb = new Date(b).getTime();
+    if (!isNaN(ta) && !isNaN(tb)) return ta <= tb ? a : b;
+  }
+  return a || b || null;
+}
+
+/* Pull this user's milestone rows, merge with local, write back to both.
+   Local-only achievements (earned offline, or pre-sync legacy data) are
+   pushed up afterwards — nothing is ever lost in the merge. Silent: the
+   merge never triggers celebrations for milestones earned on another device. */
+async function syncMilestonesFromCloud() {
+  try {
+    if (typeof cloudClient !== 'function') return;
+    var sb = await cloudClient().catch(function () { return null; });
+    var uid = msSignedUid();
+    if (!sb || !uid) return;
+    var res = await sb.from('milestones').select('milestone_id, achieved_at, seen').eq('user_id', uid);
+    if (res.error) throw res.error;
+    var remote = {};
+    (res.data || []).forEach(function (r) {
+      remote[r.milestone_id] = { achievedAt: r.achieved_at || null, seen: !!r.seen };
+    });
+    var owner = msOwner();
+    var local = msLocalLoad();
+    var base = (owner && owner !== uid) ? {} : local;
+    var merged = mergeMilestoneStores(base, remote);
+    msLocalSave(merged);
+    try { localStorage.setItem(MILESTONE_OWNER_KEY, uid); } catch (e) {}
+    __msMergeRetryAt = 0;
+    scheduleMilestonePush();
+  } catch (e) {
+    __msMergedUid = null;
+    __msMergeRetryAt = Date.now() + 60000;
+    try { if (typeof AppLog !== 'undefined') AppLog.error('sync', 'milestone pull failed: ' + ((e && e.message) || e)); } catch (_) {}
+  }
+}
+
+/* Debounced upsert of the whole store. Signed-in only; offline or signed-out
+   is a silent no-op (localStorage already has the data). The next save
+   re-schedules, so nothing is lost. */
+function scheduleMilestonePush() {
+  if (__msPushTimer) clearTimeout(__msPushTimer);
+  __msPushTimer = setTimeout(function () {
+    __msPushTimer = null;
+    try { pushMilestonesToCloud().catch(function () {}); } catch (e) {}
+  }, 2500);
+}
+async function pushMilestonesToCloud() {
+  try {
+    if (typeof cloudClient !== 'function') return;
+    var sb = await cloudClient().catch(function () { return null; });
+    var uid = msSignedUid();
+    if (!sb || !uid) return;
+    var store = msLocalLoad();
+    var ids = Object.keys(store);
+    if (!ids.length) return;
+    var now = new Date().toISOString();
+    var rows = ids.map(function (id) {
+      return {
+        user_id: uid,
+        milestone_id: id,
+        achieved_at: store[id].achievedAt || null,
+        seen: !!store[id].seen,
+        updated_at: now
+      };
+    });
+    var res = await sb.from('milestones').upsert(rows, { onConflict: 'user_id,milestone_id' });
+    if (res.error) throw res.error;
+  } catch (e) {
+    try { if (typeof AppLog !== 'undefined') AppLog.info('sync', 'milestone push deferred (offline?)'); } catch (_) {}
+  }
 }
 /* Check for new milestones. Idempotent: never recomputes achievedAt once set,
    EXCEPT for re-earnable series milestones (updates achievedAt when extended). */

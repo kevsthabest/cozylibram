@@ -474,5 +474,109 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('hidden catalog entry is in hidden cat', hd && hd.cat === 'hidden');
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+/* v474: mergeMilestoneStores — pure merge logic (no network) */
+{
+  run(`resetMilestoneSync(); localStorage.removeItem('cozylibram.milestones'); localStorage.removeItem('cozylibram.milestones.owner');`);
+  const m = run(`mergeMilestoneStores(
+    { a: { achievedAt: '2024-05-01T00:00:00.000Z', seen: false } },
+    { a: { achievedAt: '2024-03-01T00:00:00.000Z', seen: true }, b: { achievedAt: null, seen: false } }
+  )`);
+  ok('merge: union keeps local-only and remote-only ids', !!(m.a && m.b));
+  ok('merge: earliest achievedAt wins', m.a.achievedAt === '2024-03-01T00:00:00.000Z');
+  ok('merge: seen is OR', m.a.seen === true);
+  ok('merge: null achievedAt survives when only one side has the row', m.b.achievedAt === null);
+}
+{
+  const m = run(`mergeMilestoneStores({}, {})`);
+  ok('merge: empty + empty = empty', Object.keys(m).length === 0);
+  const m2 = run(`mergeMilestoneStores(null, { x: { achievedAt: null, seen: true } })`);
+  ok('merge: null-safe', !!(m2.x && m2.x.seen === true));
+}
+{
+  const m = run(`mergeMilestoneStores(
+    { s: { achievedAt: '2024-01-01T00:00:00.000Z', seen: false, detail: 'Local Series', value: 5 } },
+    { s: { achievedAt: '2024-02-01T00:00:00.000Z', seen: false, detail: 'Remote Series', value: 9 } }
+  )`);
+  ok('merge: value takes max', m.s.value === 9);
+  ok('merge: detail prefers the local copy', m.s.detail === 'Local Series');
+  const m3 = run(`mergeMilestoneStores(
+    { s: { achievedAt: '2024-01-01T00:00:00.000Z', seen: false } },
+    { s: { achievedAt: '2024-02-01T00:00:00.000Z', seen: true, detail: 'Remote Series' } }
+  )`);
+  ok('merge: falls back to remote detail when local has none', m3.s.detail === 'Remote Series');
+}
+{
+  ok('earliest: null loses to a real date', run(`earliestAchievedAt(null, '2024-01-01T00:00:00.000Z')`) === '2024-01-01T00:00:00.000Z');
+  ok('earliest: both null → null', run(`earliestAchievedAt(null, null)`) === null);
+  ok('earliest: earlier ISO string wins', run(`earliestAchievedAt('2024-05-01T00:00:00.000Z', '2024-03-01T00:00:00.000Z')`) === '2024-03-01T00:00:00.000Z');
+  ok('earliest: mixed +00:00 / .000Z offsets compare as dates', run(`earliestAchievedAt('2024-05-01T00:00:00+00:00', '2024-03-01T00:00:00.000Z')`) === '2024-03-01T00:00:00.000Z');
+  ok('earliest: mixed offsets, earlier side is +00:00', run(`earliestAchievedAt('2024-03-01T00:00:00+00:00', '2024-05-01T00:00:00.000Z')`) === '2024-03-01T00:00:00+00:00');
+}
+
+/* v474: offline achievement → sign-in → union (fake Supabase, no network) */
+(async () => {
+  await run(`(async () => {
+    resetMilestoneSync();
+    localStorage.removeItem('cozylibram.milestones');
+    localStorage.removeItem('cozylibram.milestones.owner');
+    // achievement earned offline while signed out
+    saveMilestones({ 'books-finished-1': { achievedAt: '2024-06-01T00:00:00.000Z', seen: false } });
+    // "sign in": fake Supabase holds a different achievement for this user
+    window.__fakeRows = [{ milestone_id: 'streak-7', achieved_at: '2024-02-01T00:00:00.000Z', seen: true }];
+    window.__upserted = null;
+    window.__origCloudClient = cloudClient;
+    cloudClient = async () => ({
+      from: (table) => ({
+        select: () => ({ eq: () => Promise.resolve({ data: window.__fakeRows, error: null }) }),
+        upsert: (rows, opts) => { window.__upserted = { table: table, rows: rows, opts: opts }; return Promise.resolve({ error: null }); }
+      })
+    });
+    cloudUser = { id: 'u1' };
+    await syncMilestonesFromCloud();
+    await pushMilestonesToCloud();
+    return 'done';
+  })()`);
+
+  const store = run(`loadMilestones()`);
+  ok('sync: union has the offline local row and the remote row', !!(store['books-finished-1'] && store['streak-7']));
+  ok('sync: remote seen=true preserved through merge', store['streak-7'].seen === true);
+  ok('sync: local seen=false preserved through merge', store['books-finished-1'].seen === false);
+  ok('sync: merged store persisted to localStorage', run(`JSON.parse(localStorage.getItem('cozylibram.milestones'))['streak-7'] !== undefined`));
+  ok('sync: owner key set to the signed-in uid', run(`localStorage.getItem('cozylibram.milestones.owner')`) === 'u1');
+  const up = run(`window.__upserted`);
+  ok('sync: push upserted into the milestones table', !!(up && up.table === 'milestones'));
+  ok('sync: push used onConflict user_id,milestone_id', !!(up && up.opts && up.opts.onConflict === 'user_id,milestone_id'));
+  ok('sync: push carried the offline-earned row up', !!(up && up.rows.some(function (r) { return r.milestone_id === 'books-finished-1' && r.user_id === 'u1'; })));
+  ok('sync: push row shape has achieved_at/seen', !!(up && up.rows.some(function (r) { return r.milestone_id === 'streak-7' && r.achieved_at === '2024-02-01T00:00:00.000Z' && r.seen === true; })));
+
+  // restore the real client, drop the fake user
+  run(`cloudClient = window.__origCloudClient; cloudUser = null; resetMilestoneSync(); localStorage.removeItem('cozylibram.milestones'); localStorage.removeItem('cozylibram.milestones.owner');`);
+
+  /* v474 fix: resetMilestoneSync flushes a pending push instead of dropping
+     it — earn → sign out within the 2.5s debounce must not lose the row. */
+  await run(`(async () => {
+    resetMilestoneSync();
+    localStorage.removeItem('cozylibram.milestones');
+    localStorage.removeItem('cozylibram.milestones.owner');
+    // achievement earned (schedules the 2.5s debounced push)
+    saveMilestones({ 'books-finished-1': { achievedAt: '2024-06-01T00:00:00.000Z', seen: false } });
+    window.__upsertedFlush = null;
+    window.__origCloudClientFlush = cloudClient;
+    cloudClient = async () => ({
+      from: (table) => ({
+        upsert: (rows, opts) => { window.__upsertedFlush = { table: table, rows: rows, opts: opts }; return Promise.resolve({ error: null }); }
+      })
+    });
+    cloudUser = { id: 'u1' }; // session still valid at leaveApp time
+    resetMilestoneSync();     // the sign-out path: must flush the pending push
+    await new Promise(function (r) { setTimeout(r, 50); }); // let the fire-and-forget push land
+    return 'done';
+  })()`);
+  const flush = run(`window.__upsertedFlush`);
+  ok('reset: pending push flushed on resetMilestoneSync (not dropped)', !!(flush && flush.table === 'milestones'));
+  ok('reset: flushed push carried the earned row', !!(flush && flush.rows.some(function (r) { return r.milestone_id === 'books-finished-1' && r.user_id === 'u1'; })));
+  run(`cloudClient = window.__origCloudClientFlush; cloudUser = null; resetMilestoneSync(); localStorage.removeItem('cozylibram.milestones'); localStorage.removeItem('cozylibram.milestones.owner');`);
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.log('FATAL - async milestone sync test: ' + ((e && e.message) || e)); process.exit(1); });

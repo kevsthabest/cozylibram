@@ -277,6 +277,7 @@ async function enterApp(user) {
 
 async function leaveApp() {
   gateEnteredUid = null;
+  try { if (typeof resetMilestoneSync === 'function') resetMilestoneSync(); } catch (e) {} // v474: drop milestone sync state
   cloudRealtimeStop(); // v143
   // v202: async in the IndexedDB backend. Logged, not thrown: leaveApp is fire-and-forget.
   try { await setLocalUser(null); }
