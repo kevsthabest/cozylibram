@@ -441,8 +441,9 @@ function renderSettings() {
     // v476: Metadata group removed — Hardcover auto-enrich, page-count
     // backfill, and cover download now run automatically on boot (see
     // 095-gate.js). The bulk-action UI is gone; the functions remain for
-    // the automatic path. Manual metadata correction review (runMetadataCheck)
-    // is dormant — auto-applying corrections could overwrite user edits.
+    // the automatic path. Metadata corrections: blanks auto-fill in the
+    // compare sweep (134-verify.js); conflicts get a per-field compare
+    // sheet from the quiet badge in the book modal.
     ['download', 'Offline', 'On this device',
       setSub('Cover cache') + htmlOffline],
     ['eyeoff', 'Privacy', 'Sharing',
@@ -727,8 +728,8 @@ function renderSettings() {
   // (see 095-gate.js). The bulk-action buttons (hc-test, hc-bulk,
   // hc-autoseg, pc-backfill, meta-verify, cover-bulk) no longer exist in
   // the UI; their handlers are removed. The underlying functions
-  // (enrichHardcover, backfillPageCounts, downloadMissingCovers,
-  // runMetadataCheck) remain for the automatic path.
+  // (enrichHardcover, backfillPageCounts, downloadMissingCovers) remain
+  // for the automatic path; corrections use the compare sheet (134-verify.js).
   // v109: pre-cache every remote cover through an <img> load so the service
   // worker's image cache picks it up (destination === 'image').
   let coverOfflineBusy = false;

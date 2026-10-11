@@ -286,6 +286,13 @@ async function enterApp(user) {
       if (typeof downloadMissingCovers === 'function') downloadMissingCovers();
     } catch (e) {}
   }, 18000);
+  // v476: quiet metadata compare sweep — blanks auto-fill, conflicts get a
+  // badge in the book modal (see 134-verify.js). Hardcover-first priority.
+  setTimeout(function () {
+    try {
+      if (typeof runMetaCompareSweep === 'function') runMetaCompareSweep();
+    } catch (e) {}
+  }, 25000);
   updateReleaseBadge(); // v149: surface any unseen auto-found releases
   setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
 }

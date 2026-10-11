@@ -18,7 +18,7 @@ function render() {
   else if (view === 'upnext') renderUpNext();
   else if (view === 'quotes') renderQuotes();
   else if (view === 'series') renderSeries();
-  else if (view === 'verify') renderVerify();
+  // v476: the 'verify' view is gone — metadata conflicts live in the compare sheet
   else if (view === 'coven') renderCoven();
   else if (view === 'coven-friend') renderCovenFriend();
   else if (view === 'discover') renderDiscover();
