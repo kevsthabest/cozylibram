@@ -82,15 +82,16 @@ const seed = () => runInWindow(`(function(){
   const off = window.__snap;
   ok('disabled sweep does nothing', !off.b1);
 
-  // 7. settings toggle UI
+  // 7. no toggle UI: enrichment is automatic, not a settings step.
+  // The 'spicyshelves.hc_auto' preference still gates the sweep (tests 1
+  // and 6 cover the behavior); the UI is gone per the metadata-autosync
+  // spec (enrichment runs on boot, nothing to trigger by hand).
   seed();
   runInWindow(`view = 'settings'; renderSettings();`);
-  ok('settings has the auto-enrich toggle', !!q('#hc-autoseg'));
-  const offBtn = Array.from(window.document.querySelectorAll('#hc-autoseg button'))
-    .find(b => b.dataset.t === 'off');
-  offBtn.click();
-  ok('toggle writes the preference',
-    window.localStorage.getItem('spicyshelves.hc_auto') === '0' && offBtn.classList.contains('active'));
+  ok('settings has no auto-enrich toggle (automatic)', !q('#hc-autoseg'));
+  ok('preference key still gates the sweep', window.hcAutoEnabled() === true);
+  runInWindow(`localStorage.setItem('spicyshelves.hc_auto', '0');`);
+  ok('preference key can still disable it', window.hcAutoEnabled() === false);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

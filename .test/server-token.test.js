@@ -33,13 +33,15 @@ window.SPICY_CONFIG = { hardcoverToken: 'srv_token_123', googleBooksKey: 'AIzaOL
 ok('legacy token field does not enable calls', window.hcReady() === false);
 ok('legacy gbooks field does not enable calls', window.gbReady() === false);
 
-// 4. Settings UI: no manual entry fields anymore
+// 4. Settings UI: no manual entry fields anymore; bulk actions removed too
+// (v476: enrichment runs automatically on boot — test/enrich buttons gone
+// along with the token input and save button)
 window.SPICY_CONFIG = { hardcover: true };
 window.renderSettings();
 const view = window.document.getElementById('view');
 ok('no token input in settings', !q('#hc-token'));
 ok('no save button in settings', !q('#hc-save'));
-ok('test + enrich buttons still present', !!q('#hc-test') && !!q('#hc-bulk'));
+ok('test + enrich buttons removed (automatic now)', !q('#hc-test') && !q('#hc-bulk'));
 
 // 5. Empty server payload behaves like no server
 window.SPICY_CONFIG = {};
