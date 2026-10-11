@@ -1146,6 +1146,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .milestone-row .mdate { color: var(--faint); font-size: 12px; }
 .milestone-row .mhint { color: var(--muted); font-size: 12px; font-style: italic; }
 .milestone-row .mcheck { color: var(--gold); font-size: 18px; flex: none; }
+/* v455: share button on earned milestone rows */
+.milestone-row .ms-share { flex: none; background: none; border: none; cursor: pointer;
+  color: var(--faint); padding: 8px; border-radius: 10px; line-height: 0; }
+.milestone-row .ms-share:hover { color: var(--accent); background: rgba(255,255,255,.06); }
+.milestone-row .ms-share svg { width: 18px; height: 18px; }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .stat-nav .chip { cursor: pointer; }
