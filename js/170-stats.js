@@ -1345,6 +1345,7 @@ function renderMilestones() {
         dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<button class="ms-share" data-ms="' + esc(id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       });
     }
@@ -1364,6 +1365,7 @@ function renderMilestones() {
         html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<button class="ms-share" data-ms="' + esc(m.id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       } else {
         html += '<div class="milestone-row locked"><div class="micon">' + icon(m.icon || 'sparkles') + '</div>' +
@@ -1377,5 +1379,6 @@ function renderMilestones() {
     statsMode = 'dash';
     renderStats();
   });
+  if (typeof wireMilestoneShare === 'function') wireMilestoneShare();
 }
 
