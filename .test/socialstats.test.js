@@ -1,5 +1,6 @@
-// Social stats (v100): soulmate scores, superlatives, leaderboards, buddy reads.
-// Pure-function tests — no cloud needed.
+// Social stats (v100): soulmate scores, superlatives, circle digest, buddy reads.
+// v474: leaderboard retired (no ranks, no sorted-by-output); pace-based
+// superlatives retired. Pure-function tests — no cloud needed.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -91,8 +92,7 @@ const pFr = mkPerson('f1', 'Ann', ratedBooks([5, 4, 4, 3]).concat([
 pMe.stats = window.statPersonBooks(pMe.stats.books.concat([bk({ status: 'tbr', title: 'Dragon Heist', authors: ['Zed'], isbn: '222' })]));
 const d = {
   people: [pMe, pFr],
-  board: [{ p: pFr, books: 1, pages: 350 }, { p: pMe, books: 0, pages: 0 }],
-  awards: [{ label: 'Fastest Finisher', person: pFr, detail: 'avg 7.0 days a book' }],
+  awards: [{ label: 'Fearless Quitter', person: pFr, detail: '2 books abandoned, zero regrets' }],
   soulmates: [{ p: pFr, sm: window.soulmateScore(pMe.stats, pFr.stats) }],
   buddies: [{ p: pFr, books: window.buddyReads(pMe.stats, pFr.stats) }],
   nowReading: [{ p: pFr, book: pFr.stats.reading[0] }],
@@ -100,11 +100,11 @@ const d = {
 };
 const out = window.covenStatsHTML(d);
 ok('soulmates block renders', out.indexOf('Book soulmates') !== -1 && out.indexOf('%') !== -1);
-ok('leaderboard renders', out.indexOf('This month') !== -1);
-ok('superlatives hidden with 2 people', out.indexOf('Fastest Finisher') === -1);
+ok('circle digest renders', out.indexOf('This month') !== -1);
+ok('superlatives hidden with 2 people', out.indexOf('Fearless Quitter') === -1);
 const d3 = Object.assign({}, d, { people: [pMe, pFr, mkPerson('f2', 'Bob')] });
 const out3 = window.covenStatsHTML(d3);
-ok('superlatives render with 3+ people', out3.indexOf('Fastest Finisher') !== -1);
+ok('superlatives render with 3+ people', out3.indexOf('Fearless Quitter') !== -1);
 ok('Fearless Quitter rename', window.covenStatsHTML(Object.assign({}, d3, {
   awards: [{ label: 'Fearless Quitter', person: pFr, detail: '2 books' }]
 })).indexOf('Fearless Quitter') !== -1);
@@ -112,6 +112,55 @@ ok('buddy reads render', out.indexOf('Buddy reads') !== -1 && out.indexOf('Drago
 ok('now reading renders', out.indexOf('Ann Book') !== -1);
 ok('trending renders', out.indexOf('Trending:') !== -1);
 ok('tabbed layout renders', out.indexOf('coven-tabs') !== -1);
+
+// v474: digest has no rank numbers and follows circle order, not output.
+// Zara finished 3 books this month vs your 1 — the old leaderboard would
+// have ranked her first.
+const pA = mkPerson('me', 'You', [bk({ status: 'read', dateFinished: new Date().toISOString(), pages: 200 })]);
+const pB = mkPerson('f1', 'Zara', [
+  bk({ status: 'read', dateFinished: new Date().toISOString(), pages: 400 }),
+  bk({ status: 'read', dateFinished: new Date().toISOString(), pages: 400 }),
+  bk({ status: 'read', dateFinished: new Date().toISOString(), pages: 400 }),
+]);
+const dRank = { people: [pA, pB, mkPerson('f2', 'Moe')], awards: [], soulmates: [], buddies: [], nowReading: [], trending: [] };
+const outRank = window.covenStatsHTML(dRank);
+ok('digest has no rank numbers', outRank.indexOf('circle-actions') === -1);
+const monthCard = outRank.split('This month')[1].split('circle-card')[0];
+ok('digest follows circle order, not output', monthCard.indexOf('You') !== -1 && monthCard.indexOf('You') < monthCard.indexOf('Zara'));
+
+// v474: superlative audit — pace-based awards retired, character ones added
+const fastReader = mkPerson('me', 'You', [
+  bk({ status: 'read', dateStarted: start2.toISOString(), dateFinished: fin2.toISOString(), pages: 300 }),
+  bk({ status: 'read', dateStarted: start2.toISOString(), dateFinished: fin2.toISOString(), pages: 300 }),
+  bk({ status: 'read', dateStarted: start2.toISOString(), dateFinished: fin2.toISOString(), pages: 300 }),
+]);
+const slowReader = mkPerson('f1', 'Zed', [bk({ status: 'read', pages: 250 })]);
+const auditLabels = window.covenAwards([fastReader, slowReader]).map(a => a.label);
+ok('Fastest Finisher retired', auditLabels.indexOf('Fastest Finisher') === -1);
+ok('Page Devourer retired', auditLabels.indexOf('Page Devourer') === -1);
+const epicReader = mkPerson('f1', 'Ann', [
+  bk({ status: 'read', title: 'The Long Epic', pages: 1200 }),
+  bk({ status: 'read', title: 'Short Story', pages: 150 }),
+]);
+const diver = window.covenAwards([mkPerson('me', 'You', [bk({ status: 'read', pages: 300 })]), epicReader])
+  .filter(a => a.label === 'Deep Diver')[0];
+ok('Deep Diver awarded for longest book',
+  !!diver && diver.person.name === 'Ann' && diver.detail.indexOf('The Long Epic') !== -1 && diver.detail.indexOf('1,200') !== -1);
+const loyal = mkPerson('f1', 'Bo', [
+  bk({ status: 'read', title: 'B1', authors: ['Devoted Author'] }),
+  bk({ status: 'read', title: 'B2', authors: ['Devoted Author'] }),
+  bk({ status: 'read', title: 'B3', authors: ['Devoted Author'] }),
+  bk({ status: 'read', title: 'Other', authors: ['Someone Else'] }),
+]);
+const devotee = window.covenAwards([mkPerson('me', 'You', [bk({ status: 'read', authors: ['Lone'] })]), loyal])
+  .filter(a => a.label === 'Author Devotee')[0];
+ok('Author Devotee awarded', !!devotee && devotee.person.name === 'Bo' && devotee.detail === '3 books by Devoted Author');
+ok('Author Devotee needs a repeat author',
+  window.covenAwards([mkPerson('me', 'You', [bk({ status: 'read', authors: ['Lone'] })])]
+    ).filter(a => a.label === 'Author Devotee').length === 0);
+const quitter = mkPerson('f1', 'Quinn', [bk({ status: 'dnf' }), bk({ status: 'dnf' })]);
+ok('Fearless Quitter kept',
+  window.covenAwards([mkPerson('me', 'You', []), quitter]).some(a => a.label === 'Fearless Quitter'));
 
 // v454: genre normaliser tests
 ok('normGenre lowercases', window.normGenre('Dark Romance') === 'dark romance');
