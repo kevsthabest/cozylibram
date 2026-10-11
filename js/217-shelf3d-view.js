@@ -21,10 +21,22 @@ let _shelf3dMounted = false;
 let _shelf3dWebGLFailed = false;
 // v427: guard for the document-level menu-close listener (added once, not per render).
 let _shelf3dMenuDocWired = false;
+// v430 (#56, re-applied v453): robust toggle — set both hidden property and
+// inline display. Belt-and-suspenders against CSS specificity issues.
+function _shelf3dSetMenuVisible(visible) {
+  var dd = document.getElementById('svMenuDropdown3D');
+  if (!dd) return;
+  dd.hidden = !visible;
+  dd.style.display = visible ? '' : 'none';
+}
+function _shelf3dIsMenuVisible() {
+  var dd = document.getElementById('svMenuDropdown3D');
+  return !!(dd && !dd.hidden && dd.style.display !== 'none');
+}
 function _shelf3dCloseMenu(e) {
   const dd = document.getElementById('svMenuDropdown3D');
   const btn = document.getElementById('svMenu3D');
-  if (dd && btn && !dd.hidden && !dd.contains(e.target) && e.target !== btn) dd.hidden = true;
+  if (dd && btn && _shelf3dIsMenuVisible() && !dd.contains(e.target) && e.target !== btn) _shelf3dSetMenuVisible(false);
 }
 
 function shelfViewMode() {
@@ -170,7 +182,8 @@ function renderShelf3D() {
   if (menuBtn3D && menuDropdown3D) {
     menuBtn3D.addEventListener('click', function (e) {
       e.stopPropagation();
-      menuDropdown3D.hidden = !menuDropdown3D.hidden;
+      e.preventDefault();
+      _shelf3dSetMenuVisible(!_shelf3dIsMenuVisible());
     });
     // v427: wired once (was leaking a listener per render).
     if (!_shelf3dMenuDocWired) {
@@ -180,14 +193,14 @@ function renderShelf3D() {
     const menuView3DBtn = document.getElementById('svMenuView3D');
     if (menuView3DBtn) menuView3DBtn.addEventListener('click', function () {
       shelfSetViewMode('2d');
-      menuDropdown3D.hidden = true;
+      _shelf3dSetMenuVisible(false);
       renderShelf();
     });
     // v417: Decorations inventory in menu (Kevin: wasn't findable in 3D).
     // Triggers the existing s3dInvBtn; the ▦ button itself is hidden via CSS.
     const menuDecor3DBtn = document.getElementById('svMenuDecor3D');
     if (menuDecor3DBtn) menuDecor3DBtn.addEventListener('click', function () {
-      menuDropdown3D.hidden = true;
+      _shelf3dSetMenuVisible(false);
       var invBtn = document.getElementById('s3dInvBtn');
       if (invBtn) invBtn.click();
     });

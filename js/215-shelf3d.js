@@ -2366,8 +2366,9 @@
     }
     dressBtn.addEventListener('click', function () {
       if (dressOn) {   // toggle back to the user's own arrangement
-        restoreDecos(preDress);
-        preDress = null; dressOn = false;
+        restoreDecos(preDress || []);
+        preDress = null; dressOn = false; dressedTheme = null;
+        try { localStorage.removeItem(DRESS_STORE_KEY); } catch (_) {}
         dressLabel();
         sfx('preset');
         toast('Back to your decorations');
@@ -2378,6 +2379,7 @@
         clearDecos();
         applyPreset(appTheme);
         dressOn = true;
+        try { localStorage.setItem(DRESS_STORE_KEY, appTheme); } catch (_) {}
         dressLabel();
         sfx('preset');
       };
@@ -2675,6 +2677,9 @@
     if (opts.initialBooks) setBooks(opts.initialBooks);
     /* Phase 1: persist decoration layout to localStorage */
     var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';
+    // v453: persist the dressed-theme state so the "Default look" toggle
+    // survives reload (decorations restore, but dressOn was resetting).
+    var DRESS_STORE_KEY = 'cozylibram.s3d.dressed.v1';
     function saveDecoLayout() {
       try {
         var data = placed.map(function (p) {
@@ -2717,8 +2722,19 @@
     /* Fresh mount: try to restore saved decorations, else dress for theme.
        Decorations are now persistent, not session-only. */
     appTheme = (opts && opts.appTheme) || 'dark';
-    dressLabel();
     var restored = loadDecoLayout();
+    // v453: restore the dressed state — if the user had dressed the shelf,
+    // the button should show "Default look", not "Dress shelf for X".
+    // preDress is lost on reload, so toggling off clears to empty.
+    try {
+      var savedDress = localStorage.getItem(DRESS_STORE_KEY);
+      if (savedDress && restored) {
+        dressOn = true;
+        dressedTheme = savedDress;
+        preDress = [];  // pre-dress snapshot lost; "Default look" clears to empty
+      }
+    } catch (_) {}
+    dressLabel();
     if (!restored && !placed.length) applyPreset(appTheme);
     // Save on changes: hook into placeDeco and removeDeco via wrappers
     var _origPlaceDeco = placeDeco;
