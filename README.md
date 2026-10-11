@@ -6,9 +6,6 @@ library. The library lives on-device in IndexedDB (fully offline-capable);
 sign-in syncs it to Supabase for cloud backup, multi-device sync, and
 social shelves.
 
-![Library (desktop)](docs/screenshots/library.png) ![Library (mobile)](docs/screenshots/library-mobile.png)
-*The Library tab — your shelves at a glance. Screenshots taken with a demo account, shown on desktop and mobile.*
-
 ## What it does
 
 **Add books, three taps or less**
@@ -46,9 +43,6 @@ social shelves.
 - Spine-photo capture (`js/206-editioncapture.js`) feeds the shared
   spine-image pool (`edition_images`).
 
-![Book detail (desktop)](docs/screenshots/book-modal.png) ![Book detail (mobile)](docs/screenshots/book-modal-mobile.png)
-*Book detail — ratings, series info, tropes, and notes. Screenshots taken with a demo account.*
-
 **Discovery**
 - **Discover tab**: new releases from your authors (checked automatically
   weekly via a silent sweep), "More like this" strips, series collections
@@ -63,12 +57,6 @@ social shelves.
   distribution, top tropes, current-read progress — plus a detailed
   stats explorer, a shareable Year in Books / Reading Wrapped
   (`js/214-wrapped.js`), and a Reading DNA card (`js/212-dna.js`)
-
-![Discover (desktop)](docs/screenshots/discover.png) ![Discover (mobile)](docs/screenshots/discover-mobile.png)
-*The Discover tab — recommendations, new releases, and TBR Roulette. Screenshots taken with a demo account.*
-
-![Stats (desktop)](docs/screenshots/stats.png) ![Stats (mobile)](docs/screenshots/stats-mobile.png)
-*Reading stats — the dashboard and detailed explorer. Screenshots taken with a demo account.*
 
 **Coven (private social)**
 - Invite-code friends, read-only shelf browsing, per-shelf privacy
