@@ -1211,6 +1211,8 @@ function renderDetailModal(b, viaBook) {
     '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button></div>' +
     descHTML('m-desc-hero', 'd-hero-desc') +
     '</div>' +
+    // v468: Book Portrait card — pinned under the hero, above the tabs.
+    (typeof portraitCardHTML === 'function' ? portraitCardHTML(b) : '') +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
     // collapsible sections; every control keeps its id). v182: mockup tab icons.
     '<div class="d-tabs" role="tablist">' +
@@ -1404,6 +1406,8 @@ function renderDetailModal(b, viaBook) {
     saveLibrary();
     track('book_status_changed', { from: from, to: s });
     if (s === 'read') track('book_completed');
+    // v468: post-completion portrait survey — fires on completion (Kevin's call).
+    if (s === 'read') { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
     // v449: cozy phrasing — returning to a finished book is a "revisit"
     const isRevisit = s === 'reading' && (b.readCount || 0) >= 1;
     toast(s === 'reading' ? (isRevisit ? 'Happy revisiting ✨' : 'Happy reading ✨') : 'Back on the TBR');
@@ -2067,9 +2071,12 @@ function renderDetailModal(b, viaBook) {
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
     if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
+    var _becameRead = draft.status === 'read' && _aBefore.status !== 'read';
     saveLibrary(); close(); render();
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events
     toast('Saved ✨');
+    // v468: post-completion portrait survey (save-flow path to 'read').
+    if (_becameRead) { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
   });
 
   document.getElementById('m-del').addEventListener('click', async () => {
@@ -2083,6 +2090,8 @@ function renderDetailModal(b, viaBook) {
 
   // v418: theme-matched modal flairs (vine/corners/divider/garland/watermark).
   try { if (typeof ModalFlairs !== 'undefined') ModalFlairs.apply(); } catch (e) {}
+  // v468: fill portrait async sections (characters, community tropes/warnings).
+  try { if (typeof portraitEnhance === 'function') portraitEnhance(b); } catch (e) {}
 }
 
 

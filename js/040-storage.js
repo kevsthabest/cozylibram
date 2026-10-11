@@ -272,7 +272,11 @@ function logPages(b, oldP, newP) {
   if (!Array.isArray(b.log)) b.log = [];
   const k = dayKey(new Date());
   let e = b.log.find(x => x.d === k);
-  if (!e) { e = { d: k, from: Math.min(oldP, newP), to: Math.max(oldP, newP) }; b.log.push(e); }
+  if (!e) {
+    e = { d: k, from: Math.min(oldP, newP), to: Math.max(oldP, newP) }; b.log.push(e);
+    // v468: reading session counter for portrait nudges (a day with a page log).
+    b.readSessions = (b.readSessions || 0) + 1;
+  }
   else { e.from = Math.min(e.from, newP); e.to = Math.max(e.to, newP); }
   if (b.log.length > 730) b.log = b.log.slice(-730); // ~2 years cap
   b.lastPagedAt = new Date().toISOString(); // v59: exact touch time, so the

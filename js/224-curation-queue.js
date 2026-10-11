@@ -65,6 +65,45 @@ async function bumpCounters(sb, userId, accepted) {
   } catch (e) {}
 }
 
+/* v468: find the local library book for a corpus book_key
+   (isbn:<digits> or t:<title-norm>:<author-norm>). */
+function cqFindBook(bookKey) {
+  try {
+    var lib = (typeof library !== 'undefined') ? library : [];
+    if (!bookKey) return null;
+    var i, b;
+    if (bookKey.indexOf('isbn:') === 0) {
+      var digits = bookKey.slice(5).replace(/[^0-9]/g, '');
+      for (i = 0; i < lib.length; i++) {
+        b = lib[i];
+        if (b && String(b.isbn || '').replace(/[^0-9]/g, '') === digits) return b;
+      }
+      return null;
+    }
+    var rest = bookKey.slice(2), ti = rest.indexOf(':');
+    var tnorm = (ti >= 0 ? rest.slice(0, ti) : rest).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    var norm = function (t) { return String(t || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); };
+    for (i = 0; i < lib.length; i++) {
+      b = lib[i];
+      if (b && norm(b.title) === tnorm) return b;
+    }
+  } catch (e) {}
+  return null;
+}
+/* v468: mark a book's warnings as reviewed (explicit "none found" state).
+   Called on trigger accept (auto) and via the per-row button (manual). */
+function cqMarkWarningsReviewed(bookKey) {
+  try {
+    var b = cqFindBook(bookKey);
+    if (b && !b.warningsReviewed) {
+      b.warningsReviewed = true;
+      if (typeof saveLibrary === 'function') saveLibrary();
+      return true;
+    }
+    return !!b;
+  } catch (e) { return false; }
+}
+
 /* ---------- queue data ---------- */
 async function loadQueue(sb) {
   var items = [];
@@ -164,6 +203,8 @@ async function setStatus(sb, item, accepted) {
     /* Accepted warnings flow into the Start Reading trigger check via
        ccEnrichWarnings (reads status='accepted' live). Safety bias: the
        bar for applying is Kevin's one click. */
+    /* v468: an accepted warning means the book's warnings were reviewed. */
+    if (accepted) { try { cqMarkWarningsReviewed(item.bookKey); } catch (e) {} }
     await bumpCounters(sb, item.by, accepted);
     return;
   }
@@ -232,7 +273,8 @@ async function renderCqList(sb) {
       '<span class="note">' + escHtml(it.bookKey || '') + ' · by ' + escHtml(who) + ' · ' + escHtml(when) + '</span><br>' + con +
       '</span></label>' +
       '<p style="margin:6px 0 0"><button class="btn sm" data-cq-ok="' + it.id + '">Approve</button> ' +
-      '<button class="btn sm ghost" data-cq-no="' + it.id + '">Reject</button></p>' +
+      '<button class="btn sm ghost" data-cq-no="' + it.id + '">Reject</button>' +
+      (it.ptype === 'trigger' ? ' <button class="taplink" data-cq-reviewed="' + it.id + '" title="Mark this book reviewed with no warnings">✓ no warnings</button>' : '') + '</p>' +
       '</div>';
   }).join('');
   listEl.querySelectorAll('.cq-check').forEach(function (cb) {
@@ -245,6 +287,14 @@ async function renderCqList(sb) {
   });
   listEl.querySelectorAll('[data-cq-no]').forEach(function (b) {
     b.addEventListener('click', function () { cqDecide(sb, [b.dataset.cqNo], false); });
+  });
+  listEl.querySelectorAll('[data-cq-reviewed]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var it = cqItems.find(function (x) { return x.id === b.dataset.cqReviewed; });
+      if (it && cqMarkWarningsReviewed(it.bookKey)) {
+        try { toast('Marked reviewed — no warnings'); } catch (e) {}
+      } else { try { toast('Book not in your library'); } catch (e) {} }
+    });
   });
   document.getElementById('cq-approve-sel').addEventListener('click', function () {
     cqDecide(sb, Object.keys(cqSelected), true);

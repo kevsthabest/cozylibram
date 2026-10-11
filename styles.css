@@ -3601,3 +3601,35 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #ic-overlay { align-items: center; padding: 20px; }
   .ic-sheet { border-radius: 20px; }
 }
+
+/* ---- Book Portrait v468 ---- */
+.portrait-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 14px; margin: 10px 0 14px; }
+.portrait-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.portrait-title { font-size: 16px; }
+.portrait-head .note { margin-left: auto; }
+.portrait-sec { margin: 8px 0; }
+.portrait-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-bottom: 4px; }
+.portrait-flavor { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.portrait-more { margin-top: 6px; font-size: 13px; }
+.portrait-full { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.portrait-bsec { margin-bottom: 10px; }
+.portrait-brow { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
+
+/* ---- Reading nudge card v468 ---- */
+.nudge-card { position: relative; background: var(--card); border: 1px solid var(--accent, #8b7cf6);
+  border-radius: 14px; padding: 12px 14px; margin: 10px 0; }
+.nudge-card p { margin: 6px 0; font-size: 14px; }
+.nudge-x { position: absolute; top: 6px; right: 10px; background: none; border: none;
+  font-size: 20px; color: var(--muted); cursor: pointer; line-height: 1; }
+.nudge-foot { margin-top: 8px; font-size: 13px; }
+
+/* ---- DNA survey sheet v468 ---- */
+.survey-sheet .survey-inner { padding: 4px 2px; }
+.survey-title { font-family: Georgia, 'Times New Roman', serif; font-size: 19px; margin: 0 0 4px; }
+.survey-sec { margin: 12px 0; }
+.survey-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.survey-chip.on { background: var(--accent, #8b7cf6); color: #fff; border-color: transparent; }
+.survey-actions { display: flex; gap: 8px; margin-top: 12px; }
+.survey-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
