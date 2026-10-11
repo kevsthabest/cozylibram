@@ -14,6 +14,11 @@ function statDayKey(d) {
 function statMonthKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
+// v454: normalise genre names — lowercase, trimmed, so "Dark Romance",
+// "dark romance " and "DARK ROMANCE" count as one.
+function normGenre(g) {
+  return String(g || '').trim().toLowerCase();
+}
 // v454: shared log-based page sum. Sums (to - from) from reading logs within
 // [start, end] (YYYY-MM-DD). Returns { pages, estimated } — estimated is true
 // when falling back to finished books' pageCounts (no logs).
@@ -73,7 +78,7 @@ function statPersonBooks(books) {
   const mk = statMonthKey(new Date());
   let daySum = 0, dayN = 0;
   s.books.forEach(b => {
-    (bookGenres(b)).forEach(g => { s.genreCounts[g] = (s.genreCounts[g] || 0) + 1; });
+    (bookGenres(b)).forEach(g => { const ng = normGenre(g); if (ng) s.genreCounts[ng] = (s.genreCounts[ng] || 0) + 1; });
     (b.authors || []).forEach(a => {
       const k = String(a).trim(); if (k) s.authorCounts[k] = (s.authorCounts[k] || 0) + 1;
     });
@@ -174,7 +179,7 @@ async function loadCovenStats() {
     'Fastest Finisher', p => 'avg ' + p.stats.avgDays.toFixed(1) + ' days a book');
   push(people.slice().sort((a, b) => Object.keys(b.stats.genreCounts).length - Object.keys(a.stats.genreCounts).length)
     .find(p => Object.keys(p.stats.genreCounts).length > 0),
-    'Genre Explorer', p => Object.keys(p.stats.genreCounts).length + ' genres and counting');
+    'Genre Explorer', p => { const n = Object.keys(p.stats.genreCounts).length; return (n > 40 ? '40+' : n) + ' genres and counting'; });
   push(people.filter(p => (p.stats.spiceN || 0) >= 3).sort((a, b) => b.stats.spiceAvg - a.stats.spiceAvg)[0],
     'Spiciest Shelf', p => 'averages ' + p.stats.spiceAvg.toFixed(1) + ' peppers');
   const devourer = board[0];
