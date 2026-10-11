@@ -119,6 +119,10 @@ const MILESTONE_CATALOG = [
     title: 'The Book Alchemist',
     copy: 'A book enriched with your rating, your favorite mark, and its tropes. You make the library richer.',
     hint: 'Fully enrich a book entry' },
+  { id: 'pages-day-100', cat: 'rhythm', icon: 'scroll',
+    title: 'Lost in the Pages',
+    copy: 'One hundred pages in a single day. You were well and truly gone.',
+    hint: 'Read 100 pages in one day' },
 
   // ---- Taste: personalized patterns ----
   { id: 'taste-trope-5', cat: 'taste', icon: 'sparkles',
@@ -299,6 +303,25 @@ function detectMilestones(lib) {
     const discoveries = threshold ? authorFirsts.filter(t => t > threshold) : [];
     if (discoveries.length >= 5) {
       found.push({ id: 'authors-new-5', achievedAt: discoveries[4].toISOString() });
+    }
+  } catch (e) {}
+
+  // Phase 1: Lost in the Pages — 100+ pages in a single day
+  // (Kevin's preference over timer-based sessions: pages-per-day from logs)
+  try {
+    const pagesByDay = {};
+    lib.forEach(b => {
+      (b.log || []).forEach(e => {
+        if (!e.d || typeof e.to !== 'number' || typeof e.from !== 'number') return;
+        const pages = e.to - e.from;
+        if (pages <= 0) return;
+        pagesByDay[e.d] = (pagesByDay[e.d] || 0) + pages;
+      });
+    });
+    const bigDay = Object.keys(pagesByDay).find(d => pagesByDay[d] >= 100);
+    if (bigDay) {
+      const dt = safeDate(bigDay);
+      found.push({ id: 'pages-day-100', achievedAt: dt ? dt.toISOString() : null, value: pagesByDay[bigDay] });
     }
   } catch (e) {}
 

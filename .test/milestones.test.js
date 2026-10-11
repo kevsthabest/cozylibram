@@ -337,5 +337,21 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('detects alchemist-1', found.includes('alchemist-1'));
 }
 
+/* Phase 1: Lost in the Pages (100+ pages in a day) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'p1', title: 'Marathon', status: 'reading', authors: [], genres: [], tropes: [],
+      log: [{ d: '2024-07-15', from: 1, to: 120 }] },
+    { id: 'p2', title: 'Steady', status: 'reading', authors: [], genres: [], tropes: [],
+      log: [{ d: '2024-07-15', from: 50, to: 80 }, { d: '2024-07-16', from: 80, to: 90 }] },
+  ])}`);
+  const found = run(`detectMilestones(library)`);
+  const lp = found.find(d => d.id === 'pages-day-100');
+  ok('detects pages-day-100', !!lp);
+  ok('pages-day-100 sums across books', lp && lp.value === 149); // 119 + 30
+  ok('pages-day-100 uses the big day', lp.achievedAt && lp.achievedAt.indexOf('2024-07-15') === 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
