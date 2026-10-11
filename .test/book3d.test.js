@@ -1,5 +1,5 @@
 // 3D edition viewer (v279): proportions math, appearance picking, pool
-// merge, and the file/index.html/sw.js wiring (three.min.js is lazy-loaded,
+// merge, and the file/index.html/sw.js wiring (three.module.js is lazy-loaded,
 // so it is NOT in index.html — but it must be in the sw precache).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
@@ -66,12 +66,14 @@ ok('207 loads after 206 (scan flow)',
   html.indexOf('js/206-editioncapture.js') < html.indexOf('js/207-book3d.js'));
 const swText = fs.readFileSync(ROOT + '/sw.js', 'utf8');
 ok('sw.js precaches js/207-book3d.js', swText.includes("'207-book3d.js'"));
-ok('sw.js precaches vendored three.min.js (lazy-loaded, offline-safe)',
-  swText.includes("'three.min.js'"));
-ok('three.min.js is NOT a render-blocking script tag (lazy load)',
-  !html.includes('three.min.js'));
-ok('three.min.js UMD vendor file exists',
-  fs.existsSync(ROOT + '/js/vendor/three.min.js'));
+ok('sw.js precaches vendored three.module.js (lazy-loaded, offline-safe)',
+  swText.includes("'three.module.js'"));
+ok('three.module.js is NOT a render-blocking script tag (lazy load)',
+  !html.includes('<script src=') || !html.match(/<script src="[^"]*three\.module\.js"/));
+ok('three.module.js ES module vendor file exists',
+  fs.existsSync(ROOT + '/js/vendor/three.module.js'));
+ok('importmap maps three to the vendored ES module',
+  html.includes('"three"') && html.includes('three.module.js'));
 ok('modal has a View in 3D button wired to b3dOpenViewer',
   run(`typeof b3dOpenViewer`) === 'function' &&
   fs.readFileSync(ROOT + '/js/150-modal-discovery.js', 'utf8').includes('m-view3d'));

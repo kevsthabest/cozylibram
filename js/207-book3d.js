@@ -3,8 +3,8 @@
    the scanned edition faces (js/206), with graceful fallbacks so EVERY book
    renders — scanned faces upgrade it, generated art fills the gaps.
 
-   Three.js (r159 UMD, vendored at js/vendor/three.min.js) is LAZY-loaded on
-   first viewer open so the 668 KB never touches initial page load; it IS in
+   Three.js (r159 ES module, vendored at js/vendor/three.module.js) is LAZY-loaded on
+   first viewer open so the ~1.2 MB never touches initial page load; it IS in
    the service-worker precache list so the viewer works offline once seen.
    (Deliberate exception to the index.html touchpoint convention.)
 
@@ -68,15 +68,16 @@ var b3dThreePromise = null;
 function b3dEnsureThree() {
   if (typeof window !== 'undefined' && window.THREE) return Promise.resolve(window.THREE);
   if (b3dThreePromise) return b3dThreePromise;
-  b3dThreePromise = new Promise(function (resolve, reject) {
-    var s = document.createElement('script');
-    s.src = 'js/vendor/three.min.js';
-    s.onload = function () {
-      if (window.THREE) resolve(window.THREE);
-      else { b3dThreePromise = null; reject(new Error('three failed to define THREE')); }
-    };
-    s.onerror = function () { b3dThreePromise = null; reject(new Error('three failed to load')); };
-    document.head.appendChild(s);
+  // Three.js r150+ deprecates the UMD build; r160 removes it. Load the
+  // vendored ES module via dynamic import() — 'three' resolves through the
+  // importmap in index.html. The module namespace is assigned to window.THREE
+  // so the rest of this classic script keeps working unchanged.
+  b3dThreePromise = import('three').then(function (THREE) {
+    if (typeof window !== 'undefined') window.THREE = THREE;
+    return THREE;
+  }).catch(function (e) {
+    b3dThreePromise = null;
+    throw new Error('three failed to load: ' + (e && e.message || e));
   });
   return b3dThreePromise;
 }
