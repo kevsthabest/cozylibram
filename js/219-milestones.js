@@ -82,6 +82,44 @@ const MILESTONE_CATALOG = [
     copy: 'You returned to a story you\u2019d already finished. Some books deserve a second visit.',
     hint: 'Finish a book you\u2019ve read before' },
 
+  // ---- Phase 1: cozy dark-academia additions ----
+  { id: 'stacks-25', cat: 'journey', icon: 'library',
+    title: 'The Stacks Are Growing',
+    copy: 'Twenty-five books on your shelves. A proper little library.',
+    hint: 'Own 25 books' },
+  { id: 'stacks-50', cat: 'journey', icon: 'library',
+    title: 'The Stacks Are Growing',
+    copy: 'Fifty books. Your shelves are becoming a world of their own.',
+    hint: 'Own 50 books' },
+  { id: 'stacks-100', cat: 'journey', icon: 'library',
+    title: 'The Stacks Are Growing',
+    copy: 'One hundred books. Keeper of the stacks, indeed.',
+    hint: 'Own 100 books' },
+  { id: 'stacks-250', cat: 'journey', icon: 'library',
+    title: 'The Stacks Are Growing',
+    copy: 'Two hundred and fifty books. This is a sanctuary.',
+    hint: 'Own 250 books' },
+  { id: 'down-bad-5', cat: 'taste', icon: 'heart',
+    title: 'Down Bad for Fiction',
+    copy: 'Five books rated five stars. You fall hard, and you\u2019re not sorry.',
+    hint: 'Give 5 stars to 5 books' },
+  { id: 'series-devotee-3', cat: 'discovery', icon: 'covers',
+    title: 'Series Devotee',
+    copy: 'Three series completed. You commit \u2014 that\u2019s rare and wonderful.',
+    hint: 'Finish 3 separate series' },
+  { id: 'genres-5', cat: 'taste', icon: 'compass',
+    title: 'A Little Bit of Everything',
+    copy: 'Five distinct genres explored. Curiosity looks good on you.',
+    hint: 'Finish books in 5 different genres' },
+  { id: 'authors-new-5', cat: 'discovery', icon: 'quill',
+    title: 'Beyond the Familiar',
+    copy: 'Five new authors discovered. Your reading world keeps expanding.',
+    hint: 'Finish books by 5 new authors' },
+  { id: 'alchemist-1', cat: 'taste', icon: 'flask',
+    title: 'The Book Alchemist',
+    copy: 'A book enriched with your rating, your favorite mark, and its tropes. You make the library richer.',
+    hint: 'Fully enrich a book entry' },
+
   // ---- Taste: personalized patterns ----
   { id: 'taste-trope-5', cat: 'taste', icon: 'sparkles',
     title: 'You have a type',
@@ -217,6 +255,67 @@ function detectMilestones(lib) {
     found.push({ id: 'revisit-first', achievedAt: dt ? dt.toISOString() : null, detail: revisited.title });
   }
 
+  // Phase 1: The Stacks Are Growing — library size (owned, not just finished)
+  [25, 50, 100, 250].forEach(n => {
+    if (lib.length >= n) found.push({ id: 'stacks-' + n, achievedAt: null });
+  });
+
+  // Phase 1: Down Bad for Fiction — five 5-star ratings
+  try {
+    const fiveStars = read.filter(b => (b.myRating || 0) >= 5);
+    if (fiveStars.length >= 5) {
+      const fifth = fiveStars
+        .map(b => ({ b, t: safeDate(b.dateFinished) }))
+        .filter(x => x.t).sort((a, b) => a.t - b.t)[4];
+      found.push({ id: 'down-bad-5', achievedAt: fifth ? fifth.t.toISOString() : null });
+    }
+  } catch (e) {}
+
+  // Phase 1: A Little Bit of Everything — 5 distinct genres among finished books
+  try {
+    const genres = new Set();
+    read.forEach(b => {
+      (b.genres || []).forEach(g => {
+        const gg = String(g).toLowerCase().trim();
+        if (gg) genres.add(gg);
+      });
+    });
+    if (genres.size >= 5) found.push({ id: 'genres-5', achievedAt: null });
+  } catch (e) {}
+
+  // Phase 1: Beyond the Familiar — 5 authors new to the reader
+  try {
+    const byAuthor = {};
+    read.forEach(b => {
+      (b.authors || []).forEach(a => {
+        const t = safeDate(b.dateFinished);
+        if (!t) return;
+        if (!byAuthor[a] || t < byAuthor[a]) byAuthor[a] = t;
+      });
+    });
+    const authorFirsts = Object.values(byAuthor).sort((a, b) => a - b);
+    const readDates = read.map(b => safeDate(b.dateFinished)).filter(Boolean).sort((a, b) => a - b);
+    const threshold = readDates[2] || null;
+    const discoveries = threshold ? authorFirsts.filter(t => t > threshold) : [];
+    if (discoveries.length >= 5) {
+      found.push({ id: 'authors-new-5', achievedAt: discoveries[4].toISOString() });
+    }
+  } catch (e) {}
+
+  // Phase 1: The Book Alchemist — a finished book enriched with rating +
+  // favorite + tropes/characters
+  try {
+    const enriched = read.find(b =>
+      (b.myRating || 0) > 0 &&
+      !!b.favorite &&
+      ((b.tropes || []).length > 0 || (b.characters || []).length > 0)
+    );
+    if (enriched) {
+      const dt = safeDate(enriched.dateFinished);
+      found.push({ id: 'alchemist-1', achievedAt: dt ? dt.toISOString() : null, detail: enriched.title });
+    }
+  } catch (e) {}
+
   // Discovery: returning to an author after 6+ month gap
   // (renamed from "new author" — the detector finds a reader coming back
   // to an author they hadn't touched in half a year)
@@ -302,6 +401,16 @@ function detectMilestones(lib) {
       const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
       found.push({ id, achievedAt: latest, detail: sname });
     });
+  } catch (e) {}
+
+  // Phase 1: Series Devotee — 3 separate series completed
+  // (runs after per-series detection above)
+  try {
+    const seriesDone = found.filter(d => d.id.indexOf('series-finished-') === 0);
+    if (seriesDone.length >= 3) {
+      const dates = seriesDone.map(d => safeDate(d.achievedAt)).filter(Boolean).sort((a, b) => a - b);
+      found.push({ id: 'series-devotee-3', achievedAt: dates[2] ? dates[2].toISOString() : null });
+    }
   } catch (e) {}
 
   return found;

@@ -250,5 +250,92 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('revisit uses cozy phrasing', def.title === 'Revisited');
 }
 
+/* Phase 1: Stacks Are Growing */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  const books = [];
+  for (let i = 0; i < 30; i++) {
+    books.push({ id: 's' + i, title: 'Book ' + i, status: i < 5 ? 'read' : 'tbr', authors: [], genres: [], tropes: [] });
+  }
+  run(`library = ${JSON.stringify(books)}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects stacks-25', found.includes('stacks-25'));
+  ok('not stacks-50', !found.includes('stacks-50'));
+}
+
+/* Phase 1: Down Bad for Fiction */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  const books = [];
+  for (let i = 0; i < 5; i++) {
+    books.push({ id: 'db' + i, title: 'Loved ' + i, status: 'read',
+      dateFinished: '2024-0' + (i + 1) + '-15T00:00:00Z', myRating: 5, authors: [], genres: [], tropes: [] });
+  }
+  run(`library = ${JSON.stringify(books)}`);
+  const found = run(`detectMilestones(library)`);
+  const db = found.find(d => d.id === 'down-bad-5');
+  ok('detects down-bad-5', !!db);
+  ok('down-bad-5 date is 5th rating', db.achievedAt && db.achievedAt.indexOf('2024-05-15') === 0);
+}
+
+/* Phase 1: Series Devotee (3 series) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'a1', title: 'A1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', series: { name: 'Alpha', position: 1 } },
+    { id: 'a2', title: 'A2', status: 'read', dateFinished: '2024-02-01T00:00:00Z', series: { name: 'Alpha', position: 2 } },
+    { id: 'b1', title: 'B1', status: 'read', dateFinished: '2024-03-01T00:00:00Z', series: { name: 'Beta', position: 1 } },
+    { id: 'b2', title: 'B2', status: 'read', dateFinished: '2024-04-01T00:00:00Z', series: { name: 'Beta', position: 2 } },
+    { id: 'c1', title: 'C1', status: 'read', dateFinished: '2024-05-01T00:00:00Z', series: { name: 'Gamma', position: 1 } },
+    { id: 'c2', title: 'C2', status: 'read', dateFinished: '2024-06-01T00:00:00Z', series: { name: 'Gamma', position: 2 } },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects series-devotee-3', found.includes('series-devotee-3'));
+}
+
+/* Phase 1: A Little Bit of Everything (5 genres) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'g1', title: 'G1', status: 'read', genres: ['Fantasy'] },
+    { id: 'g2', title: 'G2', status: 'read', genres: ['Science Fiction'] },
+    { id: 'g3', title: 'G3', status: 'read', genres: ['Mystery'] },
+    { id: 'g4', title: 'G4', status: 'read', genres: ['Romance'] },
+    { id: 'g5', title: 'G5', status: 'read', genres: ['Horror'] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects genres-5', found.includes('genres-5'));
+}
+
+/* Phase 1: Beyond the Familiar (5 new authors after established) */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  const books = [
+    { id: 'f1', title: 'First', status: 'read', dateFinished: '2024-01-01T00:00:00Z', authors: ['Author A'] },
+    { id: 'f2', title: 'Second', status: 'read', dateFinished: '2024-02-01T00:00:00Z', authors: ['Author B'] },
+    { id: 'f3', title: 'Third', status: 'read', dateFinished: '2024-03-01T00:00:00Z', authors: ['Author C'] },
+  ];
+  for (let i = 0; i < 5; i++) {
+    books.push({ id: 'n' + i, title: 'New ' + i, status: 'read',
+      dateFinished: '2024-0' + (4 + i) + '-01T00:00:00Z', authors: ['New Author ' + i] });
+  }
+  run(`library = ${JSON.stringify(books)}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects authors-new-5', found.includes('authors-new-5'));
+}
+
+/* Phase 1: The Book Alchemist */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'al1', title: 'Enriched', status: 'read', dateFinished: '2024-05-01T00:00:00Z',
+      myRating: 4, favorite: true, tropes: [{ id: 'x', name: 'X' }], authors: [], genres: [] },
+    { id: 'al2', title: 'Plain', status: 'read', dateFinished: '2024-06-01T00:00:00Z',
+      myRating: 0, favorite: false, tropes: [], authors: [], genres: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects alchemist-1', found.includes('alchemist-1'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
