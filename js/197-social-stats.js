@@ -263,11 +263,6 @@ function covenStatsHTML(d) {
         '<div class="circle-meta"><b>' + esc(p.name) + '</b>' +
         '<span class="note">' + st.monthBooks + ' finished · ' + st.monthPages.toLocaleString() + ' pages' + est + '</span></div></div>';
     });
-    const streakers = d.people.filter(p => p.stats.streak > 0);
-    if (streakers.length) {
-      activityHTML += '<p class="note" style="margin:10px 0 0">' + icon('flame') + ' streaks: ' +
-        streakers.map(p => esc(p.name) + ' ' + p.stats.streak + 'd').join(' · ') + '</p>';
-    }
     activityHTML += '</div>';
   }
 
@@ -310,7 +305,6 @@ function covenStatsHTML(d) {
     activityHTML += '</div>';
   }
 
-  // Streaks live inside the leaderboard card footer — compact, no extra card.
   // v454: assemble tabs
   let lastTab = "activity";
   try { lastTab = localStorage.getItem("cozylibram.covenTab") || "activity"; } catch (e) {}
