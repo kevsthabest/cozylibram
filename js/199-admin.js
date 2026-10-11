@@ -19,7 +19,7 @@ let adminCustomFrom = '';
 let adminCustomTo = '';
 let adminRowsCache = {}; // rangeKey -> rows
 let adminAggCache = {}; // rangeKey -> aggregate
-let adminTab = 'analytics'; // analytics | tropes | logs | spine | assets
+let adminTab = 'analytics'; // analytics | tropes | curation | logs | spine | assets | characters
 
 async function refreshAdminStatus() {
   isAppAdmin = false;
@@ -228,6 +228,7 @@ function renderAdmin() {
     '<div class="ob-ranges">' +
     '<button class="btn sm' + (adminTab === 'analytics' ? '' : ' ghost') + '" data-atab="analytics">Analytics</button>' +
     '<button class="btn sm' + (adminTab === 'tropes' ? '' : ' ghost') + '" data-atab="tropes">' + icon('bulb') + ' Trope Lab</button>' +
+    '<button class="btn sm' + (adminTab === 'curation' ? '' : ' ghost') + '" data-atab="curation">' + icon('inbox') + ' Curation</button>' +
     '<button class="btn sm' + (adminTab === 'spine' ? '' : ' ghost') + '" data-atab="spine">' + icon('camera') + ' Spine Lab</button>' +
     '<button class="btn sm' + (adminTab === 'characters' ? '' : ' ghost') + '" data-atab="characters">' + icon('friends') + ' Characters</button>' +
     '<button class="btn sm' + (adminTab === 'assets' ? '' : ' ghost') + '" data-atab="assets">Edition Assets</button>' +
@@ -252,6 +253,7 @@ function renderAdmin() {
     renderAdminBody();
   });
   if (adminTab === 'tropes') renderTropeLab();
+  else if (adminTab === 'curation' && typeof renderCurationQueue === 'function') renderCurationQueue();
   else if (adminTab === 'characters') renderCharacterLab();
   else if (adminTab === 'spine') renderSpineLab();
   else if (adminTab === 'assets') renderEditionAssetLab();
