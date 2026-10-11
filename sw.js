@@ -3,7 +3,7 @@
 
 
 
-const CACHE = 'cozy-libram-v479';
+const CACHE = 'cozy-libram-v480';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
