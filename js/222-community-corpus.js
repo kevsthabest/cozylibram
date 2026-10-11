@@ -308,6 +308,13 @@ var CommunityCorpus = {
     for (var i = 0; i < o.length; i++) {
       var e = o[i];
       try {
+        // v473: queued trope confirm/dispute votes (Part 1, item 3)
+        if (e && e.kind === 'trope-vote') {
+          if (typeof TropeVotes !== 'undefined' && TropeVotes.vote) {
+            await TropeVotes.vote(e.bookKey, e.tropeId, e.vote);
+          } else { rest.push(e); }
+          continue;
+        }
         var p = Object.assign({}, e.payload);
         if (e.table === 'trope_proposals') p.proposed_by = p.proposed_by || uid;
         else p.suggested_by = p.suggested_by || uid;
