@@ -1,5 +1,8 @@
 'use strict';
-/* v100 — Coven stats: soulmate scores, superlatives, leaderboards, buddy reads.
+/* v100 — Hearth stats: soulmate scores, superlatives, circle digest, buddy reads.
+ * v474: the monthly "leaderboard" is now a circle digest — per-friend activity
+ * in circle order (you first), no ordinal ranks, no sorted-by-output ordering.
+ * Playful, never pressuring: nobody wins the month; everyone's just visible.
  *
  * Everything here is computed from books the friend already shares with us —
  * hidden shelves and the share-library toggle are enforced by Supabase RLS
@@ -154,6 +157,28 @@ function buddyReads(myS, frS) {
   return out;
 }
 
+// --- superlatives: who in the circle gets which playful award ----------------
+// Extracted as a pure function for testability. people = [{ id, name,
+// profile, stats }] in circle order (you first).
+function covenAwards(people) {
+  const awards = [];
+  const push = (p, label, detailFn) => { if (p) awards.push({ label: label, person: p, detail: detailFn(p) }); };
+  push(people.filter(p => (p.stats.avgDaysN || 0) >= 3).sort((a, b) => a.stats.avgDays - b.stats.avgDays)[0],
+    'Fastest Finisher', p => 'avg ' + p.stats.avgDays.toFixed(1) + ' days a book');
+  push(people.slice().sort((a, b) => Object.keys(b.stats.genreCounts).length - Object.keys(a.stats.genreCounts).length)
+    .find(p => Object.keys(p.stats.genreCounts).length > 0),
+    'Genre Explorer', p => { const n = Object.keys(p.stats.genreCounts).length; return (n > 40 ? '40+' : n) + ' genres and counting'; });
+  push(people.filter(p => (p.stats.spiceN || 0) >= 3).sort((a, b) => b.stats.spiceAvg - a.stats.spiceAvg)[0],
+    'Spiciest Shelf', p => 'averages ' + p.stats.spiceAvg.toFixed(1) + ' peppers');
+  const devourer = people.slice()
+    .sort((a, b) => b.stats.monthBooks - a.stats.monthBooks || b.stats.monthPages - a.stats.monthPages)[0];
+  if (devourer && devourer.stats.monthBooks > 0) awards.push({ label: 'Page Devourer', person: devourer,
+    detail: devourer.stats.monthBooks + ' finished · ' + devourer.stats.monthPages.toLocaleString() + ' pages this month' });
+  push(people.filter(p => p.stats.dnf >= 2).sort((a, b) => b.stats.dnf - a.stats.dnf)[0],
+    'Fearless Quitter', p => p.stats.dnf + ' books abandoned, zero regrets');
+  return awards;
+}
+
 // --- load + shape everything for the UI ------------------------------------
 async function loadCovenStats() {
   const friends = ((await circleLists()).friends) || [];
@@ -168,25 +193,8 @@ async function loadCovenStats() {
   const me = people[0].stats;
   const others = people.slice(1);
 
-  // Monthly leaderboard: books finished, then pages.
-  const board = people.map(p => ({ p: p, books: p.stats.monthBooks, pages: p.stats.monthPages }))
-    .sort((a, b) => b.books - a.books || b.pages - a.pages);
-
-  // Superlatives across the coven (you included).
-  const awards = [];
-  const push = (p, label, detailFn) => { if (p) awards.push({ label: label, person: p, detail: detailFn(p) }); };
-  push(people.filter(p => (p.stats.avgDaysN || 0) >= 3).sort((a, b) => a.stats.avgDays - b.stats.avgDays)[0],
-    'Fastest Finisher', p => 'avg ' + p.stats.avgDays.toFixed(1) + ' days a book');
-  push(people.slice().sort((a, b) => Object.keys(b.stats.genreCounts).length - Object.keys(a.stats.genreCounts).length)
-    .find(p => Object.keys(p.stats.genreCounts).length > 0),
-    'Genre Explorer', p => { const n = Object.keys(p.stats.genreCounts).length; return (n > 40 ? '40+' : n) + ' genres and counting'; });
-  push(people.filter(p => (p.stats.spiceN || 0) >= 3).sort((a, b) => b.stats.spiceAvg - a.stats.spiceAvg)[0],
-    'Spiciest Shelf', p => 'averages ' + p.stats.spiceAvg.toFixed(1) + ' peppers');
-  const devourer = board[0];
-  if (devourer && devourer.books > 0) awards.push({ label: 'Page Devourer', person: devourer.p,
-    detail: devourer.books + ' finished · ' + devourer.pages.toLocaleString() + ' pages this month' });
-  push(people.filter(p => p.stats.dnf >= 2).sort((a, b) => b.stats.dnf - a.stats.dnf)[0],
-    'Fearless Quitter', p => p.stats.dnf + ' books abandoned, zero regrets');
+  // Superlatives across the circle (you included).
+  const awards = covenAwards(people);
 
   // Soulmate scores + taste overlap per friend.
   const soulmates = others.map(p => ({ p: p, sm: soulmateScore(me, p.stats) }))
@@ -212,7 +220,7 @@ async function loadCovenStats() {
   });
   const trending = topKeys(gCounts, 5);
 
-  return { people: people, board: board, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending };
+  return { people: people, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending };
 }
 
 // --- UI --------------------------------------------------------------------
@@ -243,22 +251,22 @@ function covenStatsHTML(d) {
     discoverHTML += '</div>';
   }
 
-  // Monthly leaderboard
-  if (d.board.some(r => r.books > 0)) {
+  // Circle digest: this month's activity in circle order (you first, then
+  // friends). Deliberately unsorted — nobody wins the month; everyone's
+  // just visible. No ordinal ranks.
+  if (d.people.some(p => p.stats.monthBooks > 0)) {
     activityHTML += '<div class="circle-card"><h3 style="margin:0 0 10px">This month</h3>';
-    // v454: no rank numbers when it's just you + 1 friend
-    const showRank = d.people.length > 2;
-    d.board.forEach((r, i) => {
-      const est = r.p.stats.monthPagesEst ? ' <span style="color:var(--faint)">est.</span>' : '';
-      activityHTML += '<div class="circle-row">' + statAvatar(r.p) +
-        '<div class="circle-meta"><b>' + esc(r.p.name) + '</b>' +
-        '<span class="note">' + r.books + ' finished · ' + r.pages.toLocaleString() + ' pages' + est + '</span></div>' +
-        (showRank ? '<div class="circle-actions"><b class="serif" style="font-size:20px">' + (i + 1) + '</b></div>' : '') + '</div>';
+    d.people.forEach(p => {
+      const st = p.stats;
+      const est = st.monthPagesEst ? ' <span style="color:var(--faint)">est.</span>' : '';
+      activityHTML += '<div class="circle-row">' + statAvatar(p) +
+        '<div class="circle-meta"><b>' + esc(p.name) + '</b>' +
+        '<span class="note">' + st.monthBooks + ' finished · ' + st.monthPages.toLocaleString() + ' pages' + est + '</span></div></div>';
     });
-    const streakers = d.board.filter(r => r.p.stats.streak > 0);
+    const streakers = d.people.filter(p => p.stats.streak > 0);
     if (streakers.length) {
       activityHTML += '<p class="note" style="margin:10px 0 0">' + icon('flame') + ' streaks: ' +
-        streakers.map(r => esc(r.p.name) + ' ' + r.p.stats.streak + 'd').join(' · ') + '</p>';
+        streakers.map(p => esc(p.name) + ' ' + p.stats.streak + 'd').join(' · ') + '</p>';
     }
     activityHTML += '</div>';
   }
