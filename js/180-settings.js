@@ -320,12 +320,12 @@ function renderSettings() {
 
   /* ---- Reading ---- */
   const htmlReadLog =
-    '<div class="field"><label>“Remove today’s entry” button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
+    '<div class="field"><label>Log cleanup button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
     ['off', 'on'].map(t =>
       '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
       (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
     '</div></div>' +
-    '<p class="note">When shown, a book’s detail sheet gets a “Remove today’s entry” button on days with logged pages — handy for cleaning up mistaken entries.</p>';
+    '<p class="note">When shown, a book&rsquo;s detail sheet gets a &ldquo;Remove today&rsquo;s entry&rdquo; button on days with logged pages &mdash; handy for cleaning up mistaken entries.</p>';
 
   /* ---- Metadata ---- */
   const htmlHardcover =
@@ -434,29 +434,45 @@ function renderSettings() {
     } catch (e2) {}
   } catch (e) {}
   var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
-  var defaultCount = 0;
+  var defaultCount = 0, pricedCount = 0;
   try {
     (typeof library !== 'undefined' ? library : []).forEach(function(b) {
-      if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
+      var hasPurchase = (b.purchasePrice != null && !isNaN(b.purchasePrice));
+      var hasList = (b.listPrice != null && !isNaN(b.listPrice));
+      if (hasPurchase) {
         ledgerTotal += b.purchasePrice;
         ledgerCount++;
         var src = b.purchaseSource || 'Unknown';
         ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
-      } else if (b.listPrice == null || isNaN(b.listPrice)) {
+        // v453: actual price counts toward Est. value (was excluded entirely)
+        listTotal += b.purchasePrice;
+        pricedCount++;
+      } else if (hasList) {
+        listTotal += b.listPrice;
+        pricedCount++;
+      } else {
         // v323: books without a price AND without a list price use the default
         listTotal += defaultPrice;
         defaultCount++;
       }
-      if (b.listPrice != null && !isNaN(b.listPrice)) listTotal += b.listPrice;
     });
   } catch (e) {}
   var ledgerSources = Object.keys(ledgerBySource).sort(function(a, b) { return ledgerBySource[b] - ledgerBySource[a]; });
+  // v453: with no priced books the Est. value is pure invention ($24.99 x N) —
+  // show a prompt instead of a made-up number (mirrors Stats page guard).
+  var estStat = pricedCount === 0
+    ? '<div class="stat"><div class="n">—</div><div class="l">Est. value</div></div>'
+    : '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>';
+  var estNote = pricedCount === 0
+    ? '<p class="note">Add prices to see your collection&rsquo;s estimated value. Tap a book &rarr; Details &rarr; Price.</p>'
+    : '';
   var htmlLedger =
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">$' + ledgerTotal.toFixed(2) + '</div><div class="l">Total spent</div></div>' +
     '<div class="stat"><div class="n">' + ledgerCount + '</div><div class="l">With price</div></div>' +
-    '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
+    estStat +
     '</div>' +
+    estNote +
     '<div class="field"><label>Default price (for books without one)</label>' +
     // v364: text input (not number) — avoids browser float precision quirks in number inputs
     '<input type="text" inputmode="decimal" id="f-default-price" class="text-input" value="' + defaultPrice.toFixed(2) + '" />' +

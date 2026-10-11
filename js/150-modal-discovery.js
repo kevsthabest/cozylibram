@@ -1018,6 +1018,9 @@ function renderDetailModal(b, viaBook) {
   });
   if (draft.owned === true) draft.owned = 'owned'; // v148: tolerate legacy booleans
   else if (draft.owned === false) draft.owned = 'tobuy';
+  // v453: ensure a valid ownership value — undefined/null would render with
+  // no active option and could clobber b.owned on save.
+  if (!['owned', 'tobuy', 'borrowed'].includes(draft.owned)) draft.owned = 'tobuy';
   // v182: option buttons for the tappable shelf/ownership rows (needs the draft).
   const statusOpts = Object.keys(STATUS_META).map(s =>
     '<button data-s="' + s + '" class="' + (draft.status === s ? 'active' : '') + '">' +
@@ -1258,11 +1261,11 @@ function renderDetailModal(b, viaBook) {
     // v312: purchase ledger — what you paid, where, when
     // v396: collapsible (IA rework)
     '<details class="m-collapsible"' + (draft.purchasePrice != null ? ' open' : '') + '><summary><span>' + icon('tobuy') + ' Purchase' +
-    (draft.purchasePrice != null ? ' <span class="note-inline">· $' + esc(String(draft.purchasePrice)) + '</span>' : '') +
+    (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? ' <span class="note-inline">· $' + esc(Number(draft.purchasePrice).toFixed(2)) + '</span>' : '') +
     '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
     '<div class="purchase-row">' +
-    '<input type="number" id="f-purchase-price" min="0" step="0.01" placeholder="Price paid" value="' + (draft.purchasePrice != null ? esc(String(draft.purchasePrice)) : '') + '" />' +
+    '<input type="number" id="f-purchase-price" min="0" step="0.01" placeholder="Price paid" value="' + (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? esc(Number(draft.purchasePrice).toFixed(2)) : '') + '" />' +
     '<select id="f-purchase-source">' +
     '<option value="">Source…</option>' +
     ['Amazon','Indigo','Walmart'].map(function(nm) {
@@ -1273,7 +1276,7 @@ function renderDetailModal(b, viaBook) {
     '<input type="date" id="f-purchase-date" value="' + (draft.purchaseDate ? esc(draft.purchaseDate) : '') + '" />' +
     '</div>' +
     '<input type="text" id="f-purchase-source-custom" placeholder="Store name (e.g. Blue Heron Books)" value="' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? esc(draft.purchaseSource) : '') + '" style="display:' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? '' : 'none') + ';margin-top:6px;" />' +
-    (draft.listPrice != null ? '<div class="note-inline" style="margin-top:6px;">List price: ' + esc(draft.listPriceCurrency || 'CAD') + ' ' + esc(String(draft.listPrice)) + ' (estimate)</div>' : '') +
+    (draft.listPrice != null && !isNaN(draft.listPrice) ? '<div class="note-inline" style="margin-top:6px;">List price: ' + esc(draft.listPriceCurrency || 'CAD') + ' ' + esc(Number(draft.listPrice).toFixed(2)) + ' (estimate)</div>' : '') +
     (draft.purchasePrice == null ? (function() {
       var dp = 24.99;
       try { var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(v) && v >= 0) dp = v; } catch (e) {}
@@ -1596,7 +1599,8 @@ function renderDetailModal(b, viaBook) {
   var pp = document.getElementById('f-purchase-price');
   if (pp) pp.addEventListener('input', e => {
     var v = parseFloat(e.target.value);
-    draft.purchasePrice = isNaN(v) ? null : v;
+    // v453: round to cents on save — kills float artifacts (e.g. 9.989999771118164)
+    draft.purchasePrice = isNaN(v) ? null : Math.round(v * 100) / 100;
   });
   var ps = document.getElementById('f-purchase-source');
   var psc = document.getElementById('f-purchase-source-custom');
@@ -2032,6 +2036,12 @@ function renderDetailModal(b, viaBook) {
     draft._mtime = b._mtime; // P0 fix: the draft copied a stale _mtime at open; live edits
     // may have stamped b._mtime fresh since. Never overwrite it with the stale copy —
     // stampMtimes() in saveLibrary() will stamp fresh if content actually changed.
+    // v453: same for owned — if the draft's value is missing/invalid (e.g. the
+    // ownership row never rendered its options before Save), keep the book's
+    // live value instead of clobbering it with undefined.
+    if (!['owned', 'tobuy', 'borrowed'].includes(draft.owned)) {
+      draft.owned = ['owned', 'tobuy', 'borrowed'].includes(b.owned) ? b.owned : 'tobuy';
+    }
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
