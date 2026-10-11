@@ -23,6 +23,12 @@ Cozy: pick it up and feel at home. It celebrates what has happened and never
 pressures what comes next. There are no reading goals, challenges or timers.
 It's private by default; social features are opt-in.
 
+Play is welcome between friends: seeing what your circle is reading,
+celebrating each other's months, playful superlatives. It stays cozy under
+three conditions — opt-in, unranked, and celebrating rather than pressuring.
+No ordinal ranks, no sorted-by-output boards, no one reader's pace held up
+against another's. Awareness of friends is warmth; ranking them is pressure.
+
 ## Tests for any new feature
 1. Does it make reading feel like a chore?
 2. Would a reader feel watched, scored or compared?
@@ -30,5 +36,5 @@ It's private by default; social features are opt-in.
 4. Does it ask the reader to do work the app could do itself?
 
 ## Voice
-Warm, brief and kind. Never guilt, never gamified, never "software" language.
-Places, not features: The Library, The Hearth, My Shelves.
+Warm, brief and kind. Playful, never pressuring. Never guilt, never "software"
+language. Places, not features: The Library, The Hearth, My Shelves.
