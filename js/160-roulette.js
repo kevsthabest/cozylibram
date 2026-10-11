@@ -276,13 +276,21 @@ function showWinner(b) {
     '<button class="btn ghost" id="w-detail">' + icon('search') + ' Details</button>' +
     '</div></div>';
 
-  document.getElementById('w-start').addEventListener('click', () => {
+  const rouletteStartReading = () => {
     b.status = 'reading';
     saveLibrary();
     track('roulette_book_started');
     toast('Happy reading! 📖');
     filter = 'reading';
     go('library');
+  };
+  document.getElementById('w-start').addEventListener('click', () => {
+    // v455: trigger check — same one-time heads-up as the modal's Start Reading
+    if (typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
+      openTriggerCheckSheet(b, rouletteStartReading);
+      return;
+    }
+    rouletteStartReading();
   });
   document.getElementById('w-again').addEventListener('click', runRoulette);
   document.getElementById('w-detail').addEventListener('click', e => {

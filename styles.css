@@ -1146,6 +1146,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .milestone-row .mdate { color: var(--faint); font-size: 12px; }
 .milestone-row .mhint { color: var(--muted); font-size: 12px; font-style: italic; }
 .milestone-row .mcheck { color: var(--gold); font-size: 18px; flex: none; }
+/* v455: share button on earned milestone rows */
+.milestone-row .ms-share { flex: none; background: none; border: none; cursor: pointer;
+  color: var(--faint); padding: 8px; border-radius: 10px; line-height: 0; }
+.milestone-row .ms-share:hover { color: var(--accent); background: rgba(255,255,255,.06); }
+.milestone-row .ms-share svg { width: 18px; height: 18px; }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .stat-nav .chip { cursor: pointer; }
@@ -3262,6 +3267,18 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v398: DNF Autopsy bottom sheet */
 .dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }
 .dnf-sheet { padding: 8px 4px 16px; text-align: center; }
+
+/* v455: Trigger check bottom sheet — gentle heads-up, never a gate */
+.tc-sheet { max-height: 75vh; overflow-y: auto; }
+.tc-inner { padding: 6px 4px 8px; text-align: center; }
+.tc-emoji { font-size: 30px; margin-bottom: 6px; }
+.tc-title { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; margin: 0 0 6px; }
+.tc-sub { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+.tc-sub b { color: var(--ink); }
+.tc-tags { justify-content: center; margin: 0 0 12px; }
+.tc-note { color: var(--faint); font-size: 13px; margin: 0 0 16px; line-height: 1.5; }
+.tc-start { width: 100%; margin-bottom: 8px; }
+.tc-later { width: 100%; }
 .dnf-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
 .dnf-sub { color: var(--faint); font-size: 14px; margin: 0 0 16px; }
 .dnf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
