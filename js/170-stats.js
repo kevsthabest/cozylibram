@@ -1135,10 +1135,11 @@ function renderStats() {
         const nm = newestUnseenMilestone();
         if (nm) {
           milestoneCard = '<div class="milestone-celebration" data-mid="' + esc(nm.def.id) + '">' +
-            '<div class="micon">' + icon(nm.def.icon || 'sparkles') + '</div><div>' +
+            '<div class="micon">' + icon(nm.def.icon || 'sparkles') + '</div><div style="flex:1">' +
             '<div class="mtitle">A little reading milestone</div>' +
             '<h3>' + esc(nm.def.title) + '</h3><p>' + esc(nm.def.copy) + '</p>' +
-            '<a href="#" data-act="milestones">View milestones \u2192</a></div></div>';
+            '<a href="#" data-act="milestones">View milestones \u2192</a></div>' +
+            '<button class="btn ghost sm" data-act="dismiss-milestone" aria-label="Dismiss" style="flex:none">\u2715</button></div>';
         }
       }
     } catch (e) {}
@@ -1193,15 +1194,24 @@ function renderStats() {
       statsMode = 'detail';
       renderStats();
     });
-    // v448: milestone celebration — mark seen on view, link to milestones page
-    document.querySelectorAll('.milestone-celebration').forEach(el => {
-      const mid = el.dataset.mid;
-      if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
-    });
+    // v448: milestone celebration — "seen" means the reader engaged:
+    // clicking "View milestones" or explicitly dismissing the card.
+    // Merely rendering the card does not consume the celebration.
     document.querySelectorAll('[data-act="milestones"]').forEach(a =>
       a.addEventListener('click', (e) => {
         e.preventDefault();
+        const card = a.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
         if (typeof renderMilestones === 'function') renderMilestones();
+      }));
+    document.querySelectorAll('[data-act="dismiss-milestone"]').forEach(b =>
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const card = b.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
+        if (card) card.style.display = 'none';
       }));
     return;
   }

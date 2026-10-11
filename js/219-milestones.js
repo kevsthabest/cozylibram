@@ -12,6 +12,13 @@
 
    Store: localStorage 'cozylibram.milestones' = { id: { achievedAt: ISO|null, seen: bool } }
    achievedAt null = "earned before we could date it". Never invent dates.
+
+   STORAGE NOTE (v448): Milestones are local-only (localStorage). They do not
+   sync across devices via the existing Supabase sync. This is intentional for
+   v1 — the achievement model (detectMilestones + store shape) is independent
+   of the storage adapter, so a future sync adapter can be added without
+   changing detectors or the catalog. If this changes, the store functions
+   (loadMilestones/saveMilestones) are the seam.
 */
 
 /* Catalog: id, category, title, copy (warm, playful-never-mocking), hint for locked */
@@ -66,17 +73,17 @@ const MILESTONE_CATALOG = [
     title: 'First DNF \u2014 and that\u2019s okay',
     copy: 'Knowing what you don\u2019t like is also reading. Trust your gut.',
     hint: 'Mark a book as did-not-finish' },
-  { id: 'new-author-6mo', cat: 'discovery', icon: 'compass',
-    title: 'New author after 6+ months',
-    copy: 'A fresh voice after half a year. Good exploring.',
-    hint: 'Read an author you haven\u2019t touched in 6 months' },
+  { id: 'returning-author-6mo', cat: 'discovery', icon: 'compass',
+    title: 'Reunited with an old favorite',
+    copy: 'Back to an author you hadn\u2019t touched in half a year. Good to see them again.',
+    hint: 'Return to an author after 6+ months away' },
 
   // ---- Taste: personalized patterns ----
   { id: 'taste-trope-5', cat: 'taste', icon: 'sparkles',
     title: 'You have a type',
-    copy: 'Five books with the enemies-to-lovers trope. We see you.',
+    copy: 'Five books sharing a favorite trope. We see you.',
     hint: 'Read 5 books sharing a favorite trope',
-    trope: 'enemies to lovers' },
+    dynamic: true },
   { id: 'taste-dark-romance-10', cat: 'taste', icon: 'moon',
     title: 'You like it dangerous',
     copy: 'Ten dark romances. No judgment \u2014 only admiration.',
@@ -96,6 +103,47 @@ const MILESTONE_CATALOG = [
     hint: 'Give 5 stars to a book with 5+ trigger warnings' },
 ];
 
+/* Simple string hash for collision-safe IDs (djb2). */
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+/* Safe date parsing: returns a valid Date or null. Never throws. */
+function safeDate(v) {
+  if (!v) return null;
+  try {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  } catch (e) { return null; }
+}
+
+/* Pure streak calculator: takes a library, returns longest consecutive-day run.
+   Mirrors longestStreak() in 040-storage.js but without the global dependency. */
+function longestStreakFor(lib) {
+  const days = new Set();
+  const dk = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+  (lib || []).forEach(b => {
+    (b.log || []).forEach(e => { if (e.to > e.from) days.add(e.d); });
+    if (b.status === 'read' && b.dateFinished) {
+      const dt = new Date(b.dateFinished);
+      if (!isNaN(dt.getTime())) days.add(dk(dt));
+    }
+  });
+  const sorted = Array.from(days).sort();
+  let best = 0, run = 0, prev = null;
+  sorted.forEach(k => {
+    const t = new Date(k + 'T12:00:00').getTime(); // local noon dodges DST edges
+    if (isNaN(t)) return;
+    run = (prev != null && t - prev === 864e5) ? run + 1 : 1;
+    if (run > best) best = run;
+    prev = t;
+  });
+  return best;
+}
+
 /* ---- Pure detectors: library -> [{ id, achievedAt }] ----
    achievedAt is an ISO date string when determinable, null when the
    milestone is earned but the date can't be established. Never invent. */
@@ -103,20 +151,21 @@ function detectMilestones(lib) {
   const found = [];
   const read = lib.filter(b => b.status === 'read');
   const byFinish = read
-    .filter(b => b.dateFinished)
-    .sort((a, b) => new Date(a.dateFinished) - new Date(b.dateFinished));
+    .filter(b => safeDate(b.dateFinished))
+    .sort((a, b) => safeDate(a.dateFinished) - safeDate(b.dateFinished));
 
   // Journey: Nth finished book — date from the Nth book's dateFinished
   [1, 10, 25, 50, 100].forEach(n => {
     if (read.length >= n) {
       const nth = byFinish[n - 1];
-      found.push({ id: 'books-finished-' + n, achievedAt: nth ? new Date(nth.dateFinished).toISOString() : null });
+      const dt = nth ? safeDate(nth.dateFinished) : null;
+      found.push({ id: 'books-finished-' + n, achievedAt: dt ? dt.toISOString() : null });
     }
   });
 
-  // Rhythm: streaks
+  // Rhythm: streaks (pure — calculated from the supplied library)
   try {
-    const best = typeof longestStreak === 'function' ? longestStreak() : 0;
+    const best = longestStreakFor(lib);
     if (best >= 7) found.push({ id: 'streak-days-7', achievedAt: null });
     if (best >= 30) found.push({ id: 'streak-days-30', achievedAt: null });
     // Kevin's refinement: personal best streak (replaces longest session)
@@ -137,23 +186,31 @@ function detectMilestones(lib) {
   } catch (e) {}
 
   // Discovery: firsts
-  const fiveStar = read.find(b => (b.myRating || 0) >= 5);
-  if (fiveStar) found.push({ id: 'first-five-star', achievedAt: fiveStar.dateFinished ? new Date(fiveStar.dateFinished).toISOString() : null });
+  // First 5-star: use the earliest dateFinished among 5-star books.
+  // Note: this is the finish date, not necessarily when the rating was given —
+  // CozyLibram doesn't store a separate rating timestamp. We document this
+  // fallback rather than presenting an arbitrary date.
+  const fiveStars = read.filter(b => (b.myRating || 0) >= 5);
+  if (fiveStars.length) {
+    const dated = fiveStars
+      .map(b => ({ b, t: b.dateFinished ? new Date(b.dateFinished).getTime() : 0 }))
+      .filter(x => x.t > 0 && !isNaN(x.t))
+      .sort((a, b) => a.t - b.t);
+    const earliest = dated.length ? dated[0].b : fiveStars[0];
+    const dt = earliest.dateFinished ? new Date(earliest.dateFinished) : null;
+    found.push({
+      id: 'first-five-star',
+      achievedAt: dt && !isNaN(dt.getTime()) ? dt.toISOString() : null,
+    });
+  }
   const dnf = lib.find(b => b.status === 'dnf');
   if (dnf) found.push({ id: 'first-dnf', achievedAt: null });
 
-  // Discovery: new author after 6+ month gap
+  // Discovery: returning to an author after 6+ month gap
+  // (renamed from "new author" — the detector finds a reader coming back
+  // to an author they hadn't touched in half a year)
   try {
     const SIX_MO = 6 * 30.44 * 864e5;
-    const now = Date.now();
-    const authorLast = {};
-    lib.forEach(b => {
-      (b.authors || []).forEach(a => {
-        const t = b.dateFinished ? new Date(b.dateFinished).getTime() : 0;
-        if (t > (authorLast[a] || 0)) authorLast[a] = t;
-      });
-    });
-    // find an author read recently whose previous book was 6+ months earlier
     const authorBooks = {};
     lib.forEach(b => {
       (b.authors || []).forEach(a => {
@@ -163,14 +220,14 @@ function detectMilestones(lib) {
     for (const a of Object.keys(authorBooks)) {
       const dates = authorBooks[a]
         .map(b => b.dateFinished ? new Date(b.dateFinished).getTime() : 0)
-        .filter(t => t > 0).sort((x, y) => x - y);
+        .filter(t => t > 0 && !isNaN(t)).sort((x, y) => x - y);
       for (let i = 1; i < dates.length; i++) {
         if (dates[i] - dates[i - 1] >= SIX_MO) {
-          found.push({ id: 'new-author-6mo', achievedAt: new Date(dates[i]).toISOString() });
+          found.push({ id: 'returning-author-6mo', achievedAt: new Date(dates[i]).toISOString(), detail: a });
           break;
         }
       }
-      if (found.some(f => f.id === 'new-author-6mo')) break;
+      if (found.some(f => f.id === 'returning-author-6mo')) break;
     }
   } catch (e) {}
 
@@ -226,10 +283,11 @@ function detectMilestones(lib) {
       if (books.length < 2) return; // single book never counts
       const allRead = books.every(b => b.status === 'read');
       if (!allRead) return;
-      const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'unknown';
-      const id = 'series-finished-' + slug;
+      // Collision-safe ID: slug + hash of the full name. Display name kept in detail.
+      const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
+      const id = 'series-finished-' + slug + '-' + hashStr(sname);
       // achievedAt = most recent dateFinished among the series books
-      const dates = books.map(b => b.dateFinished ? new Date(b.dateFinished).getTime() : 0).filter(t => t > 0);
+      const dates = books.map(b => { const d = safeDate(b.dateFinished); return d ? d.getTime() : 0; }).filter(t => t > 0);
       const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
       found.push({ id, achievedAt: latest, detail: sname });
     });
@@ -305,6 +363,13 @@ function milestoneDef(id, state) {
       return Object.assign({}, def, {
         title: 'Personal best: ' + state.value + '-day streak',
         copy: 'Your longest reading run ever: ' + state.value + ' days. Can you beat it?',
+      });
+    }
+    // Trope affinity: generate copy from the actual detected trope
+    if (id === 'taste-trope-5' && state && state.detail) {
+      const tropeName = state.detail;
+      return Object.assign({}, def, {
+        copy: 'Five books with the ' + tropeName + ' trope. We see you.',
       });
     }
     return def;

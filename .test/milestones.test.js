@@ -87,14 +87,18 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
 /* Personal best streak */
 {
   run(`localStorage.removeItem('cozylibram.milestones')`);
-  run(`library = []`);
-  // mock longestStreak
-  run(`window.longestStreak = () => 23`);
+  // 10-day streak via log entries in the supplied library
+  const logs = [];
+  for (let i = 0; i < 10; i++) {
+    const d = '2024-06-' + String(i + 1).padStart(2, '0');
+    logs.push({ id: 'pb' + i, title: 'PB' + i, status: 'tbr', authors: [], genres: [], tropes: [],
+      log: [{ d, from: 0, to: 50 }] });
+  }
+  run(`library = ${JSON.stringify(logs)}`);
   const found = run(`detectMilestones(library)`);
   const pb = found.find(d => d.id === 'streak-personal-best');
   ok('detects personal best streak', !!pb);
-  ok('personal best carries value', pb && pb.value === 23);
-  run(`delete window.longestStreak`);
+  ok('personal best carries value', pb && pb.value === 10);
 }
 
 /* Per-series completionist */
@@ -106,9 +110,9 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
     { id: 's3', title: 'Solo', status: 'read', dateFinished: '2024-03-01T00:00:00Z', series: { name: 'Lone Book', position: 1 } },
   ])}`);
   const found = run(`detectMilestones(library).map(d => d.id)`);
-  ok('detects series completion', found.includes('series-finished-the-test-saga'));
+  ok('detects series completion', found.some(id => id.indexOf('series-finished-the-test-saga') === 0));
   ok('single-book series does not count', !found.some(id => id.indexOf('lone-book') >= 0));
-  const d = run(`detectMilestones(library).find(d => d.id === 'series-finished-the-test-saga')`);
+  const d = run(`detectMilestones(library).find(d => d.id.indexOf('series-finished-the-test-saga') === 0)`);
   ok('series achievedAt uses latest book', d.achievedAt && d.achievedAt.indexOf('2024-02-20') === 0);
 }
 
@@ -120,12 +124,117 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
     { id: 's2', title: 'Book 2', status: 'read', dateFinished: '2024-02-20T00:00:00Z', series: { name: 'The Test Saga', position: 2 } },
   ])}`);
   run(`checkMilestones()`);
-  const before = run(`loadMilestones()['series-finished-the-test-saga'].achievedAt`);
+  const before = run(`loadMilestones()[Object.keys(loadMilestones()).find(k => k.indexOf('series-finished-the-test-saga') === 0)].achievedAt`);
   run(`library.push({ id: 's3', title: 'Book 3', status: 'read', dateFinished: '2024-06-10T00:00:00Z', series: { name: 'The Test Saga', position: 3 } })`);
   const fresh = run(`checkMilestones()`);
-  const after = run(`loadMilestones()['series-finished-the-test-saga'].achievedAt`);
-  ok('series re-earns on extension', fresh.includes('series-finished-the-test-saga'));
+  const after = run(`loadMilestones()[Object.keys(loadMilestones()).find(k => k.indexOf('series-finished-the-test-saga') === 0)].achievedAt`);
+  ok('series re-earns on extension', fresh.some(id => id.indexOf('series-finished-the-test-saga') === 0));
   ok('series achievedAt updates', after && after.indexOf('2024-06-10') === 0 && after !== before);
+}
+
+/* REGRESSION: detector purity — supplied lib differs from global */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  // global library is empty, supplied lib has a 10-day streak
+  run(`library = []`);
+  const logs = [];
+  for (let i = 0; i < 10; i++) {
+    const d = '2024-05-' + String(i + 1).padStart(2, '0');
+    logs.push({ id: 'streak' + i, title: 'S' + i, status: 'read', authors: [], genres: [], tropes: [],
+      log: [{ d, from: 0, to: 100 }] });
+  }
+  const found = run(`detectMilestones(${JSON.stringify(logs)}).map(d => d.id)`);
+  ok('pure detector finds streak in supplied lib', found.includes('streak-days-7'));
+  ok('pure detector does not use global lib', run(`detectMilestones([]).map(d => d.id)`).length === 0);
+}
+
+/* REGRESSION: dominant trope other than enemies-to-lovers */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  const books = [];
+  for (let i = 0; i < 5; i++) {
+    books.push({ id: 'ft' + i, title: 'FT' + i, status: 'read', authors: [], genres: [],
+      tropes: [{ id: 'found family', name: 'Found Family' }] });
+  }
+  run(`library = ${JSON.stringify(books)}`);
+  run(`checkMilestones()`);
+  const def = run(`milestoneDef('taste-trope-5', loadMilestones()['taste-trope-5'])`);
+  ok('trope copy uses detected trope', def.copy.indexOf('found family') >= 0);
+  ok('trope copy not hardcoded to enemies-to-lovers', def.copy.indexOf('enemies-to-lovers') < 0);
+}
+
+/* REGRESSION: returning author vs first encounter */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  // Author with 6+ month gap between books → should trigger
+  run(`library = ${JSON.stringify([
+    { id: 'a1', title: 'Early', status: 'read', dateFinished: '2023-01-15T00:00:00Z', authors: ['Gap Author'] },
+    { id: 'a2', title: 'Late', status: 'read', dateFinished: '2024-09-20T00:00:00Z', authors: ['Gap Author'] },
+    { id: 'b1', title: 'Only', status: 'read', dateFinished: '2024-03-01T00:00:00Z', authors: ['Single Author'] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects returning author after gap', found.includes('returning-author-6mo'));
+  const d = run(`detectMilestones(library).find(d => d.id === 'returning-author-6mo')`);
+  ok('returning author stores author name', d.detail === 'Gap Author');
+}
+
+/* REGRESSION: multiple 5-star books — earliest date wins regardless of array order */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'late', title: 'Later 5-star', status: 'read', dateFinished: '2024-08-01T00:00:00Z', myRating: 5 },
+    { id: 'early', title: 'Earlier 5-star', status: 'read', dateFinished: '2024-02-15T00:00:00Z', myRating: 5 },
+  ])}`);
+  const d = run(`detectMilestones(library).find(d => d.id === 'first-five-star')`);
+  ok('first 5-star uses earliest date', d.achievedAt && d.achievedAt.indexOf('2024-02-15') === 0);
+}
+
+/* REGRESSION: invalid dates don't throw */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'bad', title: 'Bad Date', status: 'read', dateFinished: 'not-a-date', authors: [], genres: [], tropes: [] },
+    { id: 'good', title: 'Good Date', status: 'read', dateFinished: '2024-05-01T00:00:00Z', authors: [], genres: [], tropes: [] },
+  ])}`);
+  let threw = false;
+  try { run(`detectMilestones(library)`); } catch (e) { threw = true; }
+  ok('invalid dates do not throw', !threw);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('valid books still detected with bad dates present', found.includes('books-finished-1'));
+}
+
+/* REGRESSION: series slug collision — different names, same slug base */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'c1', title: 'C1', status: 'read', dateFinished: '2024-01-01T00:00:00Z', series: { name: 'Test Series!', position: 1 } },
+    { id: 'c2', title: 'C2', status: 'read', dateFinished: '2024-02-01T00:00:00Z', series: { name: 'Test Series!', position: 2 } },
+    { id: 'd1', title: 'D1', status: 'read', dateFinished: '2024-03-01T00:00:00Z', series: { name: 'Test Series?', position: 1 } },
+    { id: 'd2', title: 'D2', status: 'read', dateFinished: '2024-04-01T00:00:00Z', series: { name: 'Test Series?', position: 2 } },
+  ])}`);
+  const found = run(`detectMilestones(library).filter(d => d.id.indexOf('series-finished-') === 0).map(d => d.id)`);
+  ok('colliding slugs get distinct IDs', found.length === 2 && found[0] !== found[1]);
+}
+
+/* REGRESSION: backfill then genuinely new milestone still surfaces */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'e1', title: 'One', status: 'read', dateFinished: '2024-01-01T00:00:00Z', authors: [], genres: [], tropes: [] },
+  ])}`);
+  run(`backfillMilestones()`);
+  const unseen1 = run(`newestUnseenMilestone()`);
+  ok('backfill leaves nothing unseen', unseen1 === null);
+  // Add 9 more books → books-finished-10 should be new and unseen
+  const more = [];
+  for (let i = 2; i <= 10; i++) {
+    more.push({ id: 'e' + i, title: 'Book ' + i, status: 'read', dateFinished: '2024-02-' + String(i).padStart(2, '0') + 'T00:00:00Z', authors: [], genres: [], tropes: [] });
+  }
+  run(`library = library.concat(${JSON.stringify(more)})`);
+  const fresh = run(`checkMilestones()`);
+  ok('new milestone surfaces after backfill', fresh.includes('books-finished-10'));
+  const unseen2 = run(`newestUnseenMilestone()`);
+  ok('new milestone is unseen', unseen2 && unseen2.def.id === 'books-finished-10');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
