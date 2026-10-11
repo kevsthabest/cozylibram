@@ -359,6 +359,41 @@ stub.rpc = (fn, args) => {
     window.__wiredSheets.length === 1 && window.__wiredSheets[0] === q('#rf-back .modal'));
   q('#rf-cancel').click();
 
+  // ---- v476: shelf-share consent on first Hearth accept (private by default) ----
+  useAs(A);
+  window.localStorage.removeItem('cozylibram.shelfShareAsked');
+  stub.db.profiles[A] = { user_id: A, share_library: true, hidden_shelves: [] }; // silent default
+  await probe('maybeAskShelfShare("Zoe")'); await tick(5);
+  const ssSheet = q('#covenSheet');
+  ok('consent sheet appears on first accept', !!ssSheet && ssSheet.textContent.indexOf('Share your shelves?') !== -1);
+  ok('consent sheet names the new friend', ssSheet.textContent.indexOf('Zoe') !== -1);
+  ok('consent offers equally prominent Yes/No', !!q('#cc-ss-yes') && !!q('#cc-ss-no'));
+  q('#cc-ss-yes').click(); await tick(5);
+  ok('Yes shares shelves', stub.db.profiles[A].share_library === true);
+  ok('Yes records the choice', window.localStorage.getItem('cozylibram.shelfShareAsked') === '1');
+  ok('sheet closes after choosing', !q('#covenSheet'));
+
+  // "Not now" keeps shelves private
+  window.localStorage.removeItem('cozylibram.shelfShareAsked');
+  stub.db.profiles[A].share_library = true;
+  await probe('maybeAskShelfShare("Zoe")'); await tick(5);
+  q('#cc-ss-no').click(); await tick(5);
+  ok('Not now turns sharing off', stub.db.profiles[A].share_library === false);
+  ok('Not now records the choice', window.localStorage.getItem('cozylibram.shelfShareAsked') === '1');
+
+  // already asked: no sheet on later accepts
+  await probe('maybeAskShelfShare("Zoe")'); await tick(5);
+  ok('no repeat prompt once asked', !q('#covenSheet'));
+
+  // dismiss (Escape) counts as "not now": private by default
+  window.localStorage.removeItem('cozylibram.shelfShareAsked');
+  stub.db.profiles[A].share_library = true;
+  await probe('maybeAskShelfShare("Zoe")'); await tick(5);
+  await probe("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))"); await tick(5);
+  ok('Escape dismisses the sheet', !q('#covenSheet'));
+  ok('dismiss keeps shelves private', stub.db.profiles[A].share_library === false);
+  ok('dismiss records the choice', window.localStorage.getItem('cozylibram.shelfShareAsked') === '1');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });
