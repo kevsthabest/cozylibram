@@ -201,16 +201,10 @@ async function renderCqList(sb) {
     '<button class="btn sm" id="cq-approve-sel">Approve selected</button> ' +
     '<button class="btn sm ghost" id="cq-reject-sel">Reject selected</button> ' +
     '<span class="note" id="cq-msg"></span>';
-  /* consensus per item (votes are dormant in v1, but the display is live) */
+  /* consensus per item — v1: votes are dormant, skip the per-item DB
+     round-trips (107 items × 2 queries was hanging the render). The display
+     defaults to "no votes yet"; re-enable when voting goes live. */
   var consens = {};
-  for (var i = 0; i < cqItems.length; i++) {
-    var it = cqItems[i];
-    try {
-      consens[it.id] = (window.CommunityCorpus && window.CommunityCorpus.consensus)
-        ? await window.CommunityCorpus.consensus(it.ptype, it.id)
-        : { up: 0, down: 0, weighted: 0 };
-    } catch (e) { consens[it.id] = { up: 0, down: 0, weighted: 0 }; }
-  }
   /* suggester names (best-effort from profiles) */
   var names = {};
   try {
