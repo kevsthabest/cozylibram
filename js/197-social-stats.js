@@ -14,6 +14,32 @@ function statDayKey(d) {
 function statMonthKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
+// v454: shared log-based page sum. Sums (to - from) from reading logs within
+// [start, end] (YYYY-MM-DD). Returns { pages, estimated } — estimated is true
+// when falling back to finished books' pageCounts (no logs).
+function pagesInRangeFor(books, start, end) {
+  let pages = 0, hasLogs = false;
+  (books || []).forEach(b => {
+    (b.log || []).forEach(e => {
+      const d = String(e.d || '');
+      if (d >= start && d <= end && e.to > e.from) {
+        pages += Math.max(0, e.to - e.from);
+        hasLogs = true;
+      }
+    });
+  });
+  if (!hasLogs) {
+    // Fallback: sum pageCounts of books finished in range, labelled estimated
+    (books || []).forEach(b => {
+      const f = b.dateFinished ? String(b.dateFinished).slice(0, 10) : '';
+      if ((b.status === 'read' || f) && f >= start && f <= end) {
+        pages += Number(b.pageCount) || 0;
+      }
+    });
+    return { pages: pages, estimated: true };
+  }
+  return { pages: pages, estimated: false };
+}
 // Same reading-day logic as readingStreak(), but over any book list so it
 // works for friends too (their logs ride along inside shared book data).
 function statStreak(books) {
@@ -68,7 +94,6 @@ function statPersonBooks(books) {
           s.finishedDates.push(d);
           if (statMonthKey(d) === mk) {
             s.monthBooks++;
-            s.monthPages += Number(b.pages) || 0;
           }
         }
       }
@@ -82,6 +107,13 @@ function statPersonBooks(books) {
   s.avgDaysN = dayN;
   s.spiceAvg = s.spiceN ? s.spiceSum / s.spiceN : null;
   s.streak = statStreak(s.books);
+  // v454: month pages from logs (not b.pages which doesn't exist)
+  const now = new Date();
+  const mPfx = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const mLast = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const mp = pagesInRangeFor(s.books, mPfx + '-01', mPfx + '-' + String(mLast).padStart(2, '0'));
+  s.monthPages = mp.pages;
+  s.monthPagesEst = mp.estimated;
   return s;
 }
 
@@ -207,9 +239,10 @@ function covenStatsHTML(d) {
   if (d.board.some(r => r.books > 0)) {
     html += '<div class="circle-card"><h3 style="margin:0 0 10px">This month</h3>';
     d.board.forEach((r, i) => {
+      const est = r.p.stats.monthPagesEst ? ' <span style="color:var(--faint)">est.</span>' : '';
       html += '<div class="circle-row">' + statAvatar(r.p) +
         '<div class="circle-meta"><b>' + esc(r.p.name) + '</b>' +
-        '<span class="note">' + r.books + ' finished · ' + r.pages.toLocaleString() + ' pages</span></div>' +
+        '<span class="note">' + r.books + ' finished · ' + r.pages.toLocaleString() + ' pages' + est + '</span></div>' +
         '<div class="circle-actions"><b class="serif" style="font-size:20px">' + (i + 1) + '</b></div></div>';
     });
     const streakers = d.board.filter(r => r.p.stats.streak > 0);
