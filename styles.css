@@ -2157,6 +2157,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .home-greet h2 { font-size: 25px; margin: 0; display: flex; align-items: center; gap: 8px; }
 .home-greet h2 svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
 .home-greet p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+/* v446: tappable contextual subline */
+.home-greet .home-sub { background: none; border: 0; padding: 8px 0; margin: -6px 0 -4px; font: inherit; color: var(--muted); text-align: left; cursor: pointer; }
+.home-greet .home-sub::after { content: "\203A"; margin-left: 6px; opacity: .7; }
+.home-greet .home-sub:hover, .home-greet .home-sub:focus-visible { color: var(--ink); text-decoration: underline; }
 
 .cr-hero { display: flex; gap: 16px; align-items: center; background: var(--card);
   border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
