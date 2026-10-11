@@ -281,9 +281,10 @@ stub.rpc = (fn, args) => {
   useAs(A);
   await probe('renderCoven()'); await tick(5);
   const viewText = q('#view').textContent;
-  ok('coven shows the share-link button', !!q('#cc-share'));
-  ok('coven shows the add-friend input', !!q('#cc-input'));
-  ok('coven shows the privacy section', viewText.indexOf('Privacy') !== -1);
+  ok('coven shows the friends strip', !!q('#friendStrip'));
+  ok('coven shows the invite tile', !!q('#cc-invite-open'));
+  ok('coven shows the privacy gear', !!q('#cc-privacy-gear'));
+  // tabs render async via refreshCovenStats — covered in socialstats.test.js
   ok('nav has a coven tab', !!window.document.querySelector('.bottom-nav [data-nav="coven"]'));
 
   // ---- v240: deep-link token renders the accept card ----
@@ -293,8 +294,8 @@ stub.rpc = (fn, args) => {
   useAs(J);
   window.sessionStorage.setItem('cozylibram.invite', codeI);
   await probe('renderCoven()'); await tick(5);
-  ok('invite accept card appears for a deep link',
-    !!q('#cc-accept') && (q('#view') || {}).textContent.indexOf('Ivy Novel') !== -1);
+  ok('invite accept card appears for a deep link (in sheet)',
+    !!q('#cc-accept') && window.document.body.textContent.indexOf('Ivy Novel') !== -1);
   q('#cc-accept').click(); await tick(5);
   ok('accepting the deep-link invite befriends immediately', stub.db.circle_links.some(
     r => r.requester_id === J && r.addressee_id === I && r.status === 'accepted'));
@@ -349,10 +350,11 @@ stub.rpc = (fn, args) => {
     data: { id: 'bk5', title: 'Buddy Tome', authors: ['C. Pal'], isbn: '9780000000004', status: 'tbr' } });
   await probe('renderCoven()'); await tick(30);
   const slotHTML = (q('#stats-slot') || {}).innerHTML || '';
-  ok('stats slot fills with the section', slotHTML.indexOf('stats</h2>') !== -1);
+  ok('stats slot fills with tabs', slotHTML.indexOf('coven-tabs') !== -1);
   ok('soulmate block renders for 3+ shared ratings', slotHTML.indexOf('Book soulmates') !== -1);
   ok('leaderboard renders the monthly finish', slotHTML.indexOf('This month') !== -1);
-  ok('superlatives are awarded', slotHTML.indexOf('Superlatives') !== -1);
+  // superlatives need 3+ people — this fixture has 2, so hidden (v454)
+  ok('superlatives hidden with 2 people', slotHTML.indexOf('Superlatives') === -1);
   ok('buddy read surfaces the shared TBR', slotHTML.indexOf('Buddy Tome') !== -1);
 
   // v227: remove-friend sheet gets swipe-down-to-close like the other sheets
