@@ -309,18 +309,18 @@ stub.rpc = (fn, args) => {
   ok('friend shelf shows their books', fvText.indexOf('Shared Tome') !== -1);
   ok('friend shelf does not leak my books', fvText.indexOf('Mine') === -1);
 
-  // ---- social section is always "Social Hub" (Kevin's call, 2026-10-11) ----
+  // ---- social section is always "The Hearth" (Kevin's call, 2026-10-11) ----
   // Theme-specific names (Night Court, Harvest Court, ...) are retired.
-  ok('covenName() is always Social Hub', probe('covenName()') === 'Social Hub');
+  ok('covenName() is always The Hearth', probe('covenName()') === 'The Hearth');
 
   window.localStorage.setItem('theme', 'twilight');
   useAs(A);
   await probe('renderCoven()'); await tick(5);
-  ok('heading is Social Hub regardless of theme', q('#view').textContent.indexOf('Social Hub') !== -1);
-  ok('nav label is Social Hub regardless of theme', window.document.querySelector('.bottom-nav [data-nav="coven"] span').textContent === 'Social Hub');
+  ok('heading is The Hearth regardless of theme', q('#view').textContent.indexOf('The Hearth') !== -1);
+  ok('nav label is The Hearth regardless of theme', window.document.querySelector('.bottom-nav [data-nav="coven"] span').textContent === 'The Hearth');
   window.localStorage.setItem('theme', 'dark');
   await probe('renderCoven()'); await tick(5);
-  ok('heading stays Social Hub on dark', q('#view h2').textContent.indexOf('Social Hub') !== -1);
+  ok('heading stays The Hearth on dark', q('#view h2').textContent.indexOf('The Hearth') !== -1);
 
   // ---- v100: stats slot integration (real refresh path, stub cloud) ----
   useAs(A);
