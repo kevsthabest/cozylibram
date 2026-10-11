@@ -286,11 +286,15 @@ function showWinner(b) {
   };
   document.getElementById('w-start').addEventListener('click', () => {
     // v455: trigger check — same one-time heads-up as the modal's Start Reading
-    if (typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
-      openTriggerCheckSheet(b, rouletteStartReading);
-      return;
-    }
-    rouletteStartReading();
+    // v459: enrich with accepted community trigger warnings first (flywheel).
+    (async () => {
+      try { if (typeof window.ccEnrichWarnings === 'function') await window.ccEnrichWarnings(b); } catch (e) {}
+      if (typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
+        openTriggerCheckSheet(b, rouletteStartReading);
+        return;
+      }
+      rouletteStartReading();
+    })();
   });
   document.getElementById('w-again').addEventListener('click', runRoulette);
   document.getElementById('w-detail').addEventListener('click', e => {

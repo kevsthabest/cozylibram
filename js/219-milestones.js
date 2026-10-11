@@ -176,6 +176,22 @@ const MILESTONE_CATALOG = [
     copy: 'Ten verified connections mapped. Nobody\u2019s just a stranger to you.',
     hint: 'Map 10 character relationships' },
 
+  // ---- Community corpus (v459): Lorekeeper milestones for ACCEPTED
+  // contributions only. Never reward raw submissions. Credit is
+  // obscurity-weighted (obscure books count more) and capped per book.
+  { id: 'lore-trope-archivist', cat: 'lore', icon: 'archive',
+    title: 'Trope Archivist',
+    copy: 'Your trope suggestions made it into the corpus. The library remembers who helped build it.',
+    hint: 'Get 3 trope suggestions accepted by the curator' },
+  { id: 'lore-dramatis-personae', cat: 'lore', icon: 'masks',
+    title: 'Dramatis Personae',
+    copy: 'Characters you suggested joined the wiki. Every cast needs its keeper.',
+    hint: 'Get 3 character suggestions accepted by the curator' },
+  { id: 'lore-lookout', cat: 'lore', icon: 'lantern',
+    title: 'Lookout',
+    copy: 'Warnings you suggested now protect fellow readers. That\u2019s looking out for people.',
+    hint: 'Get 3 trigger warnings accepted by the curator' },
+
   // ---- Green wave: Soul ----
   { id: 'soul-ugly-cry-3', cat: 'soul', icon: 'heart',
     title: 'Ugly Cry Club',
@@ -746,6 +762,12 @@ function checkMilestones() {
       checkSocialMilestones().catch(function () {});
     }
   } catch (e) {}
+  // v459: community corpus milestones (async, Supabase-backed accepted counts)
+  try {
+    if (typeof checkCommunityMilestones === 'function') {
+      checkCommunityMilestones().catch(function () {});
+    }
+  } catch (e) {}
   return fresh;
 }
 /* Backfill: same as check, but marks everything seen (no celebration flood). */
@@ -813,6 +835,41 @@ async function checkSocialMilestones() {
       }
     }
   } catch (e) { /* silent: social milestones are best-effort */ }
+}
+
+/* ---- Async community-corpus detectors (v459, Supabase-backed) ----
+   Lorekeeper milestones for ACCEPTED contributions only — never raw
+   submissions. Credit uses the obscurity-weighted sum (cached by
+   CommunityCorpus.acceptedCounts, refreshed here). Threshold 3. */
+async function checkCommunityMilestones() {
+  try {
+    if (typeof CommunityCorpus === 'undefined' || !CommunityCorpus.acceptedCounts) return;
+    var counts = await CommunityCorpus.acceptedCounts();
+    var store = loadMilestones();
+    var changed = false;
+    var fresh = [];
+    /* Weighted threshold 3 per pillar: obscurity-weighted credit, so
+       obscure-book contributions count more. Per-book caps enforced
+       in the query. Never rewards raw submissions — accepted only. */
+    var defs = [
+      ['lore-trope-archivist', counts.tropeW || 0, counts.trope || 0],
+      ['lore-dramatis-personae', counts.characterW || 0, counts.character || 0],
+      ['lore-lookout', counts.triggerW || 0, counts.trigger || 0]
+    ];
+    defs.forEach(function (d) {
+      if (d[1] >= 3 && !store[d[0]]) {
+        store[d[0]] = { achievedAt: new Date().toISOString(), seen: false, value: d[2] };
+        fresh.push(d[0]);
+        changed = true;
+      }
+    });
+    if (changed) {
+      saveMilestones(store);
+      if (typeof onMilestonesEarned === 'function') {
+        try { onMilestonesEarned(fresh); } catch (e) {}
+      }
+    }
+  } catch (e) { /* silent: best-effort */ }
 }
 function markMilestoneSeen(id) {
   const store = loadMilestones();

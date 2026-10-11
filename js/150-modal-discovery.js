@@ -979,6 +979,8 @@ function wireSheetDrag(sheet, onDismiss) {
 function renderDetailModal(b, viaBook) {
   const id = b.id;
   editingId = id;
+  // v459: community corpus — stash the open book for suggestion flows
+  try { if (typeof window.ccSetBook === 'function') window.ccSetBook(b); } catch (e) {}
   lockBodyScroll(); // v215: the library behind must not scroll while open
   const root = document.getElementById('modal-root');
 
@@ -1376,10 +1378,18 @@ function renderDetailModal(b, viaBook) {
     if (from === s) return;
     // v455: trigger check — one-time gentle heads-up before starting a TBR
     // book that has content warnings. Never a gate: "Not now" just dismisses.
-    if (s === 'reading' && typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
-      openTriggerCheckSheet(b, () => primarySetStatus(s));
+    // v459: enrich with accepted community trigger warnings first (flywheel).
+    if (s === 'reading' && typeof triggerCheckNeeded === 'function') {
+      (async () => {
+        try { if (typeof window.ccEnrichWarnings === 'function') await window.ccEnrichWarnings(b); } catch (e) {}
+        if (triggerCheckNeeded(b)) { openTriggerCheckSheet(b, () => primarySetStatus(s)); return; }
+        primarySetStatusGo(s, from);
+      })();
       return;
     }
+    primarySetStatusGo(s, from);
+  };
+  const primarySetStatusGo = (s, from) => {
     b.status = s; draft.status = s;
     if (['reading', 'read', 'dnf'].includes(s)) upNextRemove(id);
     if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;
