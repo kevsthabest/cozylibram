@@ -2152,6 +2152,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 [data-theme="light"] .empty-div { background-image: url("Asset/themes/divider-light.svg"); }
 [data-theme="hearthside"] .empty-div { background-image: url("Asset/themes/divider-hearthside.svg"); }
 [data-theme="candlelight"] .empty-div { background-image: url("Asset/themes/divider-candlelight.svg"); }
+[data-theme="stormrider"] .disc-moon { background-image: url("Asset/themes/moon-stormrider.svg"); }
+[data-theme="briarthrone"] .disc-moon { background-image: url("Asset/themes/moon-briarthrone.svg"); }
+[data-theme="voidsignal"] .disc-moon { background-image: url("Asset/themes/moon-voidsignal.svg"); }
+[data-theme="wisp"] .disc-moon { background-image: url("Asset/themes/moon-wisp.svg"); }
+[data-theme="wisp-night"] .disc-moon { background-image: url("Asset/themes/moon-wisp-night.svg"); }
+[data-theme="stormrider"] .empty-div { background-image: url("Asset/themes/divider-stormrider.svg"); }
+[data-theme="briarthrone"] .empty-div { background-image: url("Asset/themes/divider-briarthrone.svg"); }
+[data-theme="voidsignal"] .empty-div { background-image: url("Asset/themes/divider-voidsignal.svg"); }
+[data-theme="wisp"] .empty-div { background-image: url("Asset/themes/divider-wisp.svg"); }
+[data-theme="wisp-night"] .empty-div { background-image: url("Asset/themes/divider-wisp-night.svg"); }
 
 /* ================= v127: onboarding ================= */
 #onb-overlay {
