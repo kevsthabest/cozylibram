@@ -45,34 +45,40 @@ for (const k of ['stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'
 
 /* ---- 3. modal flairs ---- */
 const packFlairs = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.premium && /^(stormrider|briarthrone|voidsignal|wisp)-/.test(e.id)}).map(function(e){return e.id}))`));
-ok('6 pack flairs in catalog', packFlairCount() === 6);
+ok('7 pack flairs in catalog', packFlairCount() === 7);
 function packFlairCount() { return packFlairs.length; }
 const expectedFlairs = ['stormrider-vine','stormrider-garland',
   'briarthrone-vine',
   'voidsignal-vine',
-  'wisp-vine','wisp-garland'];
-ok('all 6 expected flair ids present',
+  'wisp-vine','wisp-night-vine','wisp-garland'];
+ok('all 7 expected flair ids present',
   expectedFlairs.every(id => packFlairs.indexOf(id) >= 0));
 // theme mapping: pack vines resolve for pack themes
-for (const [theme, vine] of [['stormrider','stormrider-vine'],['briarthrone','briarthrone-vine'],['voidsignal','voidsignal-vine'],['wisp','wisp-vine'],['wisp-night','wisp-vine']]) {
+for (const [theme, vine] of [['stormrider','stormrider-vine'],['briarthrone','briarthrone-vine'],['voidsignal','voidsignal-vine'],['wisp','wisp-vine'],['wisp-night','wisp-night-vine']]) {
   const got = run(`(ModalFlairs.flairFor('vine','${theme}')||{}).id || null`);
   ok(`vine resolves for ${theme}`, got === vine);
 }
-// all pack flair SVGs are currentColor-only
+// all pack flair SVGs are currentColor-only (stormrider-vine is SVG now — raster exemption removed)
 let flairSvgOk = true;
 for (const id of expectedFlairs) {
   const e = JSON.parse(run(`JSON.stringify(ModalFlairs.byId('${id}'))`));
-  if (id === 'stormrider-vine') {
-    // Kevin's own raster emblem (his explicit direction): PNG file, <image> wrapper
-    if (!e || typeof e.svg !== 'string' || e.svg.indexOf('<image') < 0) flairSvgOk = false;
-    if (e.file !== 'Asset/packs/stormrider-vine.png') flairSvgOk = false;
-    continue;
-  }
   if (!e || typeof e.svg !== 'string' || e.svg.indexOf('currentColor') < 0) flairSvgOk = false;
   if (/#[0-9a-fA-F]{3,8}\b/.test(e.svg)) flairSvgOk = false;
   if (e.file !== 'Asset/packs/' + id + '.svg') flairSvgOk = false;
 }
 ok('pack flair SVGs currentColor-only, correct file paths', flairSvgOk);
+
+/* ---- 3b. premium theme moon/divider assets ---- */
+let themeArtOk = true;
+for (const k of ['stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night']) {
+  for (const kind of ['moon', 'divider']) {
+    const fp = ROOT + '/Asset/themes/' + kind + '-' + k + '.svg';
+    if (!fs.existsSync(fp)) { themeArtOk = false; console.log('FAIL - missing: ' + fp); continue; }
+    const body = fs.readFileSync(fp, 'utf8');
+    if (/#000\b|#000000\b|#fff\b|#ffffff\b/i.test(body)) { themeArtOk = false; console.log('FAIL - hard fill in: ' + fp); }
+  }
+}
+ok('5 premium themes: moon/divider SVGs exist, no #000/#fff fills', themeArtOk);
 
 /* ---- 4. shelf decorations ---- */
 const packDecos = ['dragon-egg','storm-lantern','rider-blade','thorn-crown','moon-goblet','night-bloom',
