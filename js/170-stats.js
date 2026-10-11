@@ -268,7 +268,26 @@ function dailyStatsHTML() {
 
 /* ---- reading profile (v65): per-axis intensity meters + one plain-spoken
    line about what she reaches for. Descriptive, not judgmental. ---- */
+/* v454: single taste gate — replaces three separate empty-state cards.
+   Shows once when fewer than 3 books are rated. */
+function tasteRatedCount() {
+  return library.filter(b => (b.myRating || 0) > 0).length;
+}
+function tasteGateNeeded() {
+  return tasteRatedCount() < 3;
+}
+function tasteGateHTML() {
+  const n = Math.min(tasteRatedCount(), 3);
+  const pct = Math.round(n / 3 * 100);
+  return '<div class="stat-sub">Reading profile</div>' +
+    '<div class="valcard"><div class="big">Unlock your reading profile</div>' +
+    '<p class="note">Rate 3 books to reveal your mood, spice and reading DNA.</p>' +
+    '<div class="progress-line" style="margin:8px 0"><span class="fill" style="width:' + pct + '%"></span></div>' +
+    '<div class="note">' + n + ' of 3 rated</div>' +
+    '<div style="margin-top:10px"><button class="btn" data-act="rate-book">Rate a book</button></div></div>';
+}
 function spiceProfileHTML() {
+  if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const rows = RATING_AXES.map(a => {
     const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
@@ -299,6 +318,7 @@ function spiceProfileHTML() {
    profile shows the average pull per axis; this shows the spread — how
    many books sit in the high / medium / low band of each axis. ---- */
 function moodProfileHTML() {
+  if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const axes = RATING_AXES.map(a => {
     const vals = read.map(b => (b.ratings || {})[a.key] || 0).filter(v => v > 0);
@@ -465,6 +485,7 @@ function patternObservations() {
   return obs;
 }
 function patternsHTML() {
+  if (tasteGateNeeded()) return '';
   const obs = patternObservations();
   if (!obs.length)
     return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div>' +
@@ -1260,7 +1281,7 @@ function renderStats() {
     '<div id="st-sec-activity">' + heatmapHTML() + readingCalHTML() + '</div>' +
     '<div class="stat-detail-grid">' +
     '<div id="st-sec-pace">' + paceHTML() + '</div>' +
-    '<div id="st-sec-taste">' + spiceProfileHTML() + moodProfileHTML() +
+    '<div id="st-sec-taste">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div>' +
