@@ -1824,6 +1824,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ---- Circle recommendations (v97) ---- */
 .cover-wrap.reco-cover { flex-basis: 44px; width: 44px; height: 66px; border-radius: 6px; }
+/* v454: title-initial placeholder — never an empty dark square */
+.cover-initial { display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; font-size: 22px; font-weight: 700; color: var(--ink);
+  border-radius: inherit; }
 /* v110: "More like this" cover strip in the book detail modal */
 .sim-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .sim-cover { background: none; border: 0; padding: 0; width: 68px; flex: 0 0 auto; color: inherit; font: inherit; cursor: pointer; text-align: left; }
