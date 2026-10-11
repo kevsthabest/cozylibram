@@ -3,8 +3,8 @@
    always decides. The seen flag lives on the book object (b.triggerCheckSeen)
    so it's local-first and syncs via the existing book sync, like dnfReason.
 
-   Pairs with the trigger-bravery milestones (219-milestones.js): readers who
-   start warned books anyway build bravery over time. ---- */
+   Milestones celebrate agency (checking, choosing, pausing) — see
+   js/219-milestones.js aware-* (v467 replaced the old bravery framing). ---- */
 
 /* True when the sheet should be shown for this book: it has warnings and
    the reader hasn't seen the heads-up yet. Status-agnostic on purpose —
@@ -65,6 +65,11 @@ function openTriggerCheckSheet(b, onStart) {
     close();
     if (typeof onStart === 'function') onStart();
   });
-  document.getElementById('tcLater').addEventListener('click', close);
+  document.getElementById('tcLater').addEventListener('click', function () {
+    // v468: self-reported deferral — feeds "The Right Time" portrait milestone
+    // (never inferred from inactivity).
+    try { b.triggerCheckDeferred = true; if (typeof saveLibrary === 'function') saveLibrary(); } catch (e) {}
+    close();
+  });
   scrim.addEventListener('click', close);
 }

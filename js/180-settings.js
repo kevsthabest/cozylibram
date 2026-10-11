@@ -325,7 +325,18 @@ function renderSettings() {
       '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
       (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
     '</div></div>' +
-    '<p class="note">When shown, a book&rsquo;s detail sheet gets a &ldquo;Remove today&rsquo;s entry&rdquo; button on days with logged pages &mdash; handy for cleaning up mistaken entries.</p>';
+    '<p class="note">When shown, a book&rsquo;s detail sheet gets a &ldquo;Remove today&rsquo;s entry&rdquo; button on days with logged pages &mdash; handy for cleaning up mistaken entries.</p>' +
+    // v468: Book Portrait — survey + nudge toggles, warning preferences
+    setSub('Book Portrait') +
+    '<label class="checkline"><input type="checkbox" id="st-dnasurvey" ' +
+    ((function () { try { return localStorage.getItem('cozylibram.dnaSurveyOff') !== '1'; } catch (e) { return true; } })() ? 'checked' : '') + '> ' +
+    'Post-read surveys<span class="chk-hint">After finishing a book, a gentle optional survey helps map its portrait for the next reader.</span></label>' +
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-dnanudges" ' +
+    ((function () { try { return localStorage.getItem('cozylibram.dnaNudgesOff') !== '1'; } catch (e) { return true; } })() ? 'checked' : '') + '> ' +
+    'Reading nudges<span class="chk-hint">Occasional one-question prompts while reading (max 2 per book). Never for content warnings.</span></label>' +
+    '<div class="field" style="margin-top:10px"><label>Content warning preferences</label>' +
+    '<button class="btn ghost block" id="st-warnprefs">' + icon('eye') + ' Set warning preferences</button>' +
+    '<p class="note">Choose warnings to surface prominently and how much detail you want. Private to this device.</p></div>';
 
   /* ---- Metadata ---- */
   const htmlHardcover =
@@ -671,6 +682,21 @@ function renderSettings() {
   if (valTgl) valTgl.addEventListener('change', e => {
     try { localStorage.setItem('cozylibram.showLibraryValue', e.target.checked ? '1' : '0'); } catch (err) {}
     toast(e.target.checked ? 'Library value on — see it in Stats' : 'Library value off');
+  });
+  // v468: Book Portrait toggles + warning preferences
+  var dnaSv = document.getElementById('st-dnasurvey');
+  if (dnaSv) dnaSv.addEventListener('change', e => {
+    try { localStorage.setItem('cozylibram.dnaSurveyOff', e.target.checked ? '0' : '1'); } catch (err) {}
+    toast(e.target.checked ? 'Post-read surveys on' : 'Post-read surveys off');
+  });
+  var dnaNu = document.getElementById('st-dnanudges');
+  if (dnaNu) dnaNu.addEventListener('change', e => {
+    try { localStorage.setItem('cozylibram.dnaNudgesOff', e.target.checked ? '0' : '1'); } catch (err) {}
+    toast(e.target.checked ? 'Reading nudges on' : 'Reading nudges off');
+  });
+  var wpBtn = document.getElementById('st-warnprefs');
+  if (wpBtn) wpBtn.addEventListener('click', function () {
+    try { if (typeof openWarningPrefs === 'function') openWarningPrefs(); } catch (e) {}
   });
   var yoloTgl = document.getElementById('st-yolo');
   if (yoloTgl) yoloTgl.addEventListener('change', e => {

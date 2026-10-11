@@ -116,25 +116,27 @@ function rateLimitToast() {
 var CommunityCorpus = {
 
   /* Suggest an existing catalog trope for a book (89 IDs only). */
-  suggestTrope: async function (book, tropeId) {
+  suggestTrope: async function (book, tropeId, opts){
+    opts = opts || {};
+    var say = function (m) { if (!opts.quiet) toast(m); };
     if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     var sb = await ccClient();
     var key = (typeof bookKeyFor === 'function') ? bookKeyFor(book) : null;
-    if (!key) { toast('Could not identify this book'); return { ok: false }; }
+    if (!key) { say('Could not identify this book'); return { ok: false }; }
     var payload = { kind: 'catalog', trope_id: tropeId, book_key: key, status: 'pending' };
-    if (!sb) { outboxPush({ table: 'trope_proposals', payload: payload, at: Date.now() }); toast('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
+    if (!sb) { outboxPush({ table: 'trope_proposals', payload: payload, at: Date.now() }); say('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
     var uid = ccUserId();
-    if (!uid) { toast('Sign in to suggest'); return { ok: false, reason: 'auth' }; }
-    if (!(await underBookCap(sb, 'trope_proposals', key, 'proposed_by'))) { toast('You already have 5 pending suggestions for this book'); return { ok: false, reason: 'cap' }; }
+    if (!uid) { say('Sign in to suggest'); return { ok: false, reason: 'auth' }; }
+    if (!(await underBookCap(sb, 'trope_proposals', key, 'proposed_by'))) { say('You already have 5 pending suggestions for this book'); return { ok: false, reason: 'cap' }; }
     payload.proposed_by = uid;
     payload.obscurity_weight = await obscurityWeight(sb, 'trope_proposals', key);
     var r = await sb.from('trope_proposals').insert(payload).select('id').single();
     if (r.error) {
-      if (String(r.error.message || '').match(/duplicate|unique/i)) toast('Already suggested — thank you');
-      else toast('Could not send suggestion');
+      if (String(r.error.message || '').match(/duplicate|unique/i)) say('Already suggested — thank you');
+      else say('Could not send suggestion');
       return { ok: false, reason: 'db' };
     }
-    toast('Suggestion sent — thank you');
+    say('Suggestion sent — thank you');
     return { ok: true, id: r.data && r.data.id };
   },
 
@@ -161,14 +163,16 @@ var CommunityCorpus = {
   },
 
   /* Suggest a character for a book. */
-  suggestCharacter: async function (book, fields) {
+  suggestCharacter: async function (book, fields, opts){
+    opts = opts || {};
+    var say = function (m) { if (!opts.quiet) toast(m); };
     if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     fields = fields || {};
     var name = String(fields.name || '').trim();
-    if (!name) { toast('Give the character a name'); return { ok: false }; }
+    if (!name) { say('Give the character a name'); return { ok: false }; }
     var sb = await ccClient();
     var key = (typeof bookKeyFor === 'function') ? bookKeyFor(book) : null;
-    if (!key) { toast('Could not identify this book'); return { ok: false }; }
+    if (!key) { say('Could not identify this book'); return { ok: false }; }
     var uid = ccUserId();
     var w = sb ? await obscurityWeight(sb, 'character_suggestions', key) : 1;
     var payload = {
@@ -177,14 +181,14 @@ var CommunityCorpus = {
       evidence: '', status: 'pending', obscurity_weight: w
     };
     if (!sb || !uid) {
-      if (!sb) { outboxPush({ table: 'character_suggestions', payload: payload, at: Date.now() }); toast('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
-      toast('Sign in to suggest'); return { ok: false, reason: 'auth' };
+      if (!sb) { outboxPush({ table: 'character_suggestions', payload: payload, at: Date.now() }); say('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
+      say('Sign in to suggest'); return { ok: false, reason: 'auth' };
     }
-    if (!(await underBookCap(sb, 'character_suggestions', key, 'suggested_by'))) { toast('You already have 5 pending suggestions for this book'); return { ok: false, reason: 'cap' }; }
+    if (!(await underBookCap(sb, 'character_suggestions', key, 'suggested_by'))) { say('You already have 5 pending suggestions for this book'); return { ok: false, reason: 'cap' }; }
     payload.suggested_by = uid;
     var r = await sb.from('character_suggestions').insert(payload).select('id').single();
-    if (r.error) { toast('Could not send suggestion'); return { ok: false, reason: 'db' }; }
-    toast('Character suggested — thank you');
+    if (r.error) { say('Could not send suggestion'); return { ok: false, reason: 'db' }; }
+    say('Character suggested — thank you');
     return { ok: true, id: r.data && r.data.id };
   },
 
@@ -212,26 +216,28 @@ var CommunityCorpus = {
   },
 
   /* Suggest a trigger warning from the controlled taxonomy. */
-  suggestTrigger: async function (book, triggerId) {
+  suggestTrigger: async function (book, triggerId, opts){
+    opts = opts || {};
+    var say = function (m) { if (!opts.quiet) toast(m); };
     if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     var sb = await ccClient();
     var key = (typeof bookKeyFor === 'function') ? bookKeyFor(book) : null;
-    if (!key) { toast('Could not identify this book'); return { ok: false }; }
+    if (!key) { say('Could not identify this book'); return { ok: false }; }
     var uid = ccUserId();
     var w = sb ? await obscurityWeight(sb, 'trigger_suggestions', key) : 1;
     var payload = { book_key: key, trigger_id: triggerId, status: 'pending', obscurity_weight: w };
     if (!sb || !uid) {
-      if (!sb) { outboxPush({ table: 'trigger_suggestions', payload: payload, at: Date.now() }); toast('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
-      toast('Sign in to suggest'); return { ok: false, reason: 'auth' };
+      if (!sb) { outboxPush({ table: 'trigger_suggestions', payload: payload, at: Date.now() }); say('Saved — will send when you\'re back online'); return { ok: true, queued: true }; }
+      say('Sign in to suggest'); return { ok: false, reason: 'auth' };
     }
     payload.suggested_by = uid;
     var r = await sb.from('trigger_suggestions').insert(payload).select('id').single();
     if (r.error) {
-      if (String(r.error.message || '').match(/duplicate|unique/i)) toast('Already suggested — thank you');
-      else toast('Could not send suggestion');
+      if (String(r.error.message || '').match(/duplicate|unique/i)) say('Already suggested — thank you');
+      else say('Could not send suggestion');
       return { ok: false, reason: 'db' };
     }
-    toast('Warning suggested — thank you for looking out for readers');
+    say('Warning suggested — thank you for looking out for readers');
     return { ok: true, id: r.data && r.data.id };
   },
 
