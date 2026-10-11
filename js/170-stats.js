@@ -1087,28 +1087,34 @@ function renderStats() {
     '<div class="stat hero"><div class="n">' + icon(ic) + ' ' + n + '</div><div class="l">' + l + '</div></div>';
 
   // v324: library value — actual spent vs estimated value
+  // v454: ONE value per book — purchasePrice if present, otherwise listPrice,
+  // never both, never an invented default.
   var libActual = 0, libEst = 0, libPriced = 0;
-  var libDefault = 24.99;
-  try { var dpv = parseFloat(localStorage.getItem('cozylibram.defaultPrice')); if (!isNaN(dpv) && dpv >= 0) libDefault = dpv; } catch (e) {}
+  function bookValue(b) {
+    if (b.purchasePrice != null && !isNaN(b.purchasePrice)) return b.purchasePrice;
+    if (b.listPrice != null && !isNaN(b.listPrice)) return b.listPrice;
+    return null;
+  }
   try {
     library.forEach(function(b) {
+      const v = bookValue(b);
       if (b.purchasePrice != null && !isNaN(b.purchasePrice)) {
         libActual += b.purchasePrice;
         libPriced++;
-        libEst += b.purchasePrice; // actual price counts toward value too
-      } else if (b.listPrice != null && !isNaN(b.listPrice)) {
-        libEst += b.listPrice;
-      } else {
-        libEst += libDefault;
       }
+      if (v != null) libEst += v;
     });
   } catch (e) {}
   // v405 (T2): estimate-only until >50% of books are priced. A $0.00-vs-estimate
   // comparison reads as broken; the comparison is the problem, not the data.
   // v447: with no priced books the estimate is pure invention ($24.99 x N) —
   // show a prompt instead of a made-up number.
+  // v454: library value is opt-in — hidden unless the user enables it.
+  // No invented defaults; without price data show the prompt.
+  let showValue = false;
+  try { showValue = localStorage.getItem('cozylibram.showLibraryValue') === '1'; } catch (e) {}
   const pricedRatio = library.length ? libPriced / library.length : 0;
-  const valueSection =
+  const valueSection = !showValue ? '' :
     libPriced === 0
       ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
         '<div class="valcard"><div>Add prices to see your collection&rsquo;s value.</div>' +
