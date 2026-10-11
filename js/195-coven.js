@@ -1,15 +1,15 @@
 'use strict';
 
-/* ---------------- Social Hub (v96): friends + shared shelves ---------------- */
+/* ---------------- The Hearth (v96): friends + shared shelves ---------------- */
 // Your private reading circle: invite friends with a shareable link, answer
 // requests, browse each other's shelves (read-only). All sharing is enforced
-// by Supabase RLS — see supabase/schema.sql. The hub needs the cloud; the
+// by Supabase RLS — see supabase/schema.sql. The hearth needs the cloud; the
 // section prompts for sign-in when offline or signed out.
 
-/* Kevin's call (2026-10-11): the social section is called "Social Hub" in
+/* Kevin's call (2026-10-11): the social section is called "The Hearth" in
    every theme. The old theme-specific names (Night Court, Harvest Court,
    Book Club, ...) are retired. */
-function covenName() { return 'Social Hub'; }
+function covenName() { return 'The Hearth'; }
 function refreshCovenNav() {
   const btn = document.querySelector('.bottom-nav [data-nav="coven"]');
   if (!btn) return;
