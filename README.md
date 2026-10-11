@@ -14,7 +14,9 @@ social shelves.
 - 🔍 Title/author search across Google Books, Open Library, and Hardcover
 - ⌨️ Bulk ISBN import — paste a stack, paced lookup, one-tap add
 - 📥 Import hub: Goodreads CSV, StoryGraph CSV, Hardcover CSV, ISBN
-  lists, Bookmory backups (parsed in-browser, no server)
+  lists, Bookmory backups (parsed in-browser, no server) — plus a guided
+  **Import Concierge** (`js/139-import-concierge.js`) that walks through
+  the import with a match report and retry for misses
 
 **Shelves & personal layer**
 - Shelves: To Be Read · Currently Reading · Read · Did Not Finish, plus
@@ -28,7 +30,11 @@ social shelves.
   calendar, streaks, notes, and saved quotes
 - Character wiki (`js/159-characters.js`): principal characters with
   cross-book identity, relationships between them, and a per-book cast —
-  plus per-user character notes
+  plus per-user character notes. Character add/correct/merge suggestions
+  feed the community corpus (`docs/community-corpus.md`)
+- Gentle trigger check (`js/221-trigger-check.js`): a one-time heads-up
+  before starting a TBR book that has content warnings — a heads-up, never
+  a gate; the reader always decides
 - Hardcover enrichment in the background: series name + position,
   content warnings, mood chips, extra genres, and a blended community
   rating (ISBN-verified)
@@ -38,8 +44,9 @@ social shelves.
   and geometry, TBR/Reading/Read chips, tap-to-open, device-local drag
   reordering, layouts (My order / By series / By genre), four display
   formats, and a 3D book view. A decorations tray (plant, candle, mug,
-  fairy lights) dresses the shelf up, and seasonal shelf themes swap in
-  for the holidays.
+  fairy lights) dresses the shelf up via the **Decorate** button, and
+  seasonal shelf themes swap in for the holidays. Decoration layouts save
+  in a versioned format that migrates old saves forward.
 - Spine-photo capture (`js/206-editioncapture.js`) feeds the shared
   spine-image pool (`edition_images`).
 
@@ -57,6 +64,17 @@ social shelves.
   distribution, top tropes, current-read progress — plus a detailed
   stats explorer, a shareable Year in Books / Reading Wrapped
   (`js/214-wrapped.js`), and a Reading DNA card (`js/212-dna.js`)
+- **Shareable moments** (`js/220-share-moments.js`): one-tap share cards
+  for milestones, Reading DNA, and 3D shelf "shelfies"
+
+**Milestones** (`js/219-milestones.js`)
+- Quiet celebrations for reading life: TBR archaeology (books that waited
+  years), series completion (all owned books in a series read — re-earns
+  when the collection grows), Lorekeeper (quotes, notes, characters,
+  relationships), the Ugly Cry Club, firsts in new genres, solstice
+  stories — plus hidden discoveries that stay secret until unlocked.
+  Accepted community-corpus contributions earn their own Lorekeeper
+  milestones. No timers, no pace pressure, no reading goals.
 
 **Coven (private social)**
 - Invite-code friends, read-only shelf browsing, per-shelf privacy
@@ -76,6 +94,10 @@ social shelves.
   line-art icon set, 3-step
   onboarding, thoughtful empty states, full PWA (installable, offline
   covers via a size-capped cache)
+- Startup validates the saved theme before applying it (a corrupt theme
+  falls back to default instead of breaking the UI); custom SVG uploads
+  pass a safety gate; the Home tab's Up Next and Favorites strips have
+  "View all" links; a quiet banner appears when an update is available
 
 ## Run it locally
 
@@ -133,12 +155,15 @@ creates each:
 - `migrations/` — `spine_photos` (v259, shared spine-image pool),
   `edition_images` (v273), `edition_assets` + `edition_asset_slots`
   (v284), `edition_measurements` (v287), `user_reports` + `banned_users`
-  (v246, moderation), `dnf_reasons` (v398)
+  (v246, moderation), `dnf_reasons` (v398),
+  `v399_community_corpus_v1.sql` — `character_suggestions`,
+  `trigger_taxonomy` (30-entry seed), `trigger_suggestions`,
+  `community_votes`, `community_tiers` (see `docs/community-corpus.md`)
 
 ## Tech notes
 
-- Single-page vanilla JS — 61 numbered classic scripts (`js/000-core.js`
-  … `js/214-wrapped.js`), zero runtime dependencies, no build step.
+- Single-page vanilla JS — 73 numbered scripts (`js/000-core.js`
+  … `js/224-curation-queue.js`), zero runtime dependencies, no build step.
 - Book schema: `id, isbn, title, authors[], cover, description,
   pageCount, publishedDate, categories[], publicRating, ratingsCount,
   status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],
@@ -148,13 +173,15 @@ creates each:
 - Service worker precaches the app; bump `APP_VERSION`
   (`js/181-appversion.js`) **and** the `sw.js` cache name together to
   force a full asset refetch (paired by `appversion.test.js`).
-- Test suite in `.test/` (136 files, jsdom — run with
-  `node .test/<name>.test.js`; `package.json` has no test script) —
+- Test suite in `.test/` (153 files — 152 jsdom tests + `server_test.py`,
+  run with `node .test/<name>.test.js`; `package.json` has no test script) —
   one feature per version, tests green + committed + pushed is the
   definition of done.
 
 ## Direction
 
-Two ongoing pillars: a **trope intelligence** layer (curated taxonomy,
-LLM-seeded per-book tropes, discovery) and **sustained quality**
+Three ongoing pillars: a **trope intelligence** layer (curated taxonomy,
+LLM-seeded per-book tropes, discovery), a **community corpus** (users
+refine characters, tropes, and trigger warnings through suggestion flows;
+Kevin curates — see `docs/community-corpus.md`), and **sustained quality**
 (one feature per version, tests green, data-safety invariants hold).

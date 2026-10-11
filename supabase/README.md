@@ -32,7 +32,11 @@ storage of the library, synced across devices.
    These add `works`, `editions`, `book_trope_claims`, `edition_works`
    (anthologies), `trope_proposals`, `book_characters`, `book_trigger_claims`,
    `edition_images`, `edition_assets`, `edition_measurements`, `spine_photos`,
-   `user_reports`, and `dnf_reasons`. Re-running the files later is safe —
+   `user_reports`, and `dnf_reasons`. Then run
+   `migrations/v399_community_corpus_v1.sql`, which adds
+   `character_suggestions`, `trigger_taxonomy`, `trigger_suggestions`,
+   `community_votes`, and `community_tiers` (see
+   `docs/community-corpus.md`). Re-running the files later is safe —
    each only adds what's missing, so run them again after updating the app to
    pick up new tables.
 
@@ -77,6 +81,25 @@ with one tap. No file edit, no snippet, no redeploy. Tagged books are marked
 stale when the rev bumps, so the next backfill can pick up the new trope.
 `js/156-trope-taxonomy.js` remains the offline fallback and the initial seed
 (re-run `node supabase/gen-trope-seed.js` only if you change the file itself).
+
+## 2d. Community corpus v1 (suggestion flows + curation queue)
+
+Beyond trope proposals, users can now suggest characters (add/correct/merge
+with evidence) and trigger warnings (from a 30-entry controlled taxonomy),
+all with provenance. Run `supabase/migrations/v399_community_corpus_v1.sql`
+(re-run safe, additive only). This creates `character_suggestions`,
+`trigger_taxonomy` (the 30-entry seed), `trigger_suggestions`,
+`community_votes` (one vote per user, no self-votes), and `community_tiers`
+(accepted/rejected counters; tier weights dormant in v1). It also extends
+`trope_proposals` with `kind` (`catalog`/`new-idea`), `trope_id`, and
+`obscurity_weight`.
+
+Kevin reviews everything in the curation queue (Observatory → Curation tab):
+bulk approve/reject across all three pillars, full provenance visible to
+the curator. Approving a catalog trope writes a `book_tropes` row with
+`source='community'`; character merges are never auto-applied. Accepted
+contributions earn Lorekeeper milestones. Full model:
+`docs/community-corpus.md`.
 
 ## 3. Get your API credentials
 
