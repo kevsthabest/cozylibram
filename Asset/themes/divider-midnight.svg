@@ -1,15 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 80" role="img" aria-labelledby="t d">
-<title id="t">Midnight constellation divider</title>
-<desc id="d">A horizontal gold divider: fine rules ending in a central star flanked by tiny constellations.</desc>
-<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#f0c46c">
-<path d="M18 40 H310 M590 40 H882" stroke-width="1.5"/>
-<path d="M392 30 L406 42 L420 32" stroke-width="1.2"/>
-<path d="M480 48 L494 36 L508 46" stroke-width="1.2"/>
-</g>
-<g fill="#f0c46c" stroke="none">
-<path d="M450 24 l4.5 11.5 11.5 4.5-11.5 4.5-4.5 11.5-4.5-11.5-11.5-4.5 11.5-4.5z"/>
-<circle cx="392" cy="30" r="2.2"/><circle cx="406" cy="42" r="2.2"/><circle cx="420" cy="32" r="2.2"/>
-<circle cx="480" cy="48" r="2.2"/><circle cx="494" cy="36" r="2.2"/><circle cx="508" cy="46" r="2.2"/>
-<path d="M330 36 l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1z"/>
-<path d="M570 36 l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1z"/>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 80" role="img" aria-labelledby="t d"><title id="t">Midnight moon-phase divider</title><desc id="d">A row of moon phases flanking a crescent.</desc><path d="M30,40 H170 M730,40 H870" stroke="#b79cff" stroke-width="3.2" stroke-linecap="round" fill="none" stroke-opacity=".55"/><circle cx="380" cy="40" r="11" fill="#b79cff" fill-opacity=".22"/><path d="M380,29 A11,11 0 0 1 380,51 A10.9,11 0 0 0 380,29Z" fill="#f0c46c"/><circle cx="320" cy="40" r="9.8" fill="#b79cff" fill-opacity=".22"/><path d="M320,30.2 A9.8,9.8 0 0 1 320,49.8 A5.8,9.8 0 0 0 320,30.2Z" fill="#f0c46c"/><circle cx="260" cy="40" r="8.6" fill="#b79cff" fill-opacity=".22"/><path d="M260,31.4 A8.6,8.6 0 0 1 260,48.6 A0,8.6 0 0 0 260,31.4Z" fill="#b79cff"/><circle cx="200" cy="40" r="7.4" fill="#b79cff" fill-opacity=".22"/><path d="M200,32.6 A7.4,7.4 0 0 1 200,47.4 A4.3,7.4 0 0 1 200,32.6Z" fill="#b79cff"/><path d="M0,-8 Q0,0 8,0 Q0,0 0,8 Q0,0 -8,0 Q0,0 0,-8Z" transform="translate(150,26)" fill="#e5488f"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(110,48)" fill="#b79cff"/><g transform="translate(900,0) scale(-1,1)"><circle cx="380" cy="40" r="11" fill="#b79cff" fill-opacity=".22"/><path d="M380,29 A11,11 0 0 1 380,51 A10.9,11 0 0 0 380,29Z" fill="#f0c46c"/><circle cx="320" cy="40" r="9.8" fill="#b79cff" fill-opacity=".22"/><path d="M320,30.2 A9.8,9.8 0 0 1 320,49.8 A5.8,9.8 0 0 0 320,30.2Z" fill="#f0c46c"/><circle cx="260" cy="40" r="8.6" fill="#b79cff" fill-opacity=".22"/><path d="M260,31.4 A8.6,8.6 0 0 1 260,48.6 A0,8.6 0 0 0 260,31.4Z" fill="#b79cff"/><circle cx="200" cy="40" r="7.4" fill="#b79cff" fill-opacity=".22"/><path d="M200,32.6 A7.4,7.4 0 0 1 200,47.4 A4.3,7.4 0 0 1 200,32.6Z" fill="#b79cff"/><path d="M0,-8 Q0,0 8,0 Q0,0 0,8 Q0,0 -8,0 Q0,0 0,-8Z" transform="translate(150,26)" fill="#e5488f"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(110,48)" fill="#b79cff"/></g><path d="M12.7,-20.4 A24,24 0 1 0 12.7,20.4 A22,22 0 1 1 12.7,-20.4Z" transform="translate(450,40) rotate(-90)" fill="#f0c46c"/><path d="M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6Z" transform="translate(450,10)" fill="#e5488f"/></svg>

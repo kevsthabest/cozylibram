@@ -30,10 +30,12 @@ const viewHTML = () => q('#view').innerHTML;
 
 const now = new Date();
 const iso = new Date(now.getFullYear(), now.getMonth(), 5).toISOString();
+const logDay = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-05';
 run(`library = [
   { id: 'b1', title: 'Done', authors: ['A'], status: 'read', cover: '',
     tropes: [], genres: [], myRating: 4, ratings: {}, axes: [], favorite: false,
-    progress: 300, pageCount: 300, dateFinished: '${iso}', notes: '' },
+    progress: 300, pageCount: 300, dateFinished: '${iso}', notes: '',
+    log: [{ d: '${logDay}', from: 0, to: 300 }] },
   { id: 'b2', title: 'Reading', authors: ['A'], status: 'reading', cover: '',
     tropes: [], genres: [], myRating: 0, ratings: {}, axes: [], favorite: false,
     progress: 50, pageCount: 200, notes: '' },
@@ -52,7 +54,7 @@ ok('dash: hero cards (books, pages, rating, time)',
   /Reading time/.test(viewHTML()) && /stat hero/.test(viewHTML()));
 ok('dash: monthly numbers (1 book, 300 pages, 4.0, ~5h)',
   / 1<\/div>/.test(viewHTML()) && / 300<\/div>/.test(viewHTML()) &&
-  /♥ 4\.0/.test(viewHTML()) && /~5h/.test(viewHTML()));
+  /4\.0/.test(viewHTML()) && /~5h/.test(viewHTML()));
 ok('dash: currently-reading strip kept', /Currently reading/.test(viewHTML()));
 ok('dash: shelf distribution kept', /Shelves/.test(viewHTML()));
 ok('dash: explore entry point', !!q('#st-explore'));

@@ -116,9 +116,9 @@ function dnaSectionHTML() {
     '<span class="chip">' + esc(t) + ' <b>' + c + '</b></span>').join('');
   const genreChips = d.topGenres.map(([g, c]) =>
     '<span class="chip">' + esc(g) + '</span>').join('');
-  return '<div class="stat-sub">🧬 Reading DNA</div>' +
+  return '<div class="stat-sub">' + icon('crystal') + ' Reading DNA</div>' +
     '<div class="dna-preview">' +
-    '<p><b>' + d.spiceLabel + '</b>' + (d.avgSpice > 0 ? ' · avg ' + d.avgSpice.toFixed(1) + '/5' : '') + '</p>' +
+    (d.avgSpice > 0 ? '<p><b>' + d.spiceLabel + '</b> · avg ' + d.avgSpice.toFixed(1) + '/5</p>' : '') +
     '<div class="chip-row">' + tropeChips + '</div>' +
     '<div class="chip-row" style="margin-top:8px">' + genreChips + '</div>' +
     '<p class="note">' + d.n + ' books · ' + d.totalPages.toLocaleString() + ' pages' +

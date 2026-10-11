@@ -108,16 +108,13 @@ ok('all theme blocks exist', allThemes.every(t => css.includes('[data-theme="' +
 ok('solstice block exists (T6)', css.includes('[data-theme="solstice"]'));
 ok('dark accent is violet (T4)', /\[data-theme="dark"\][^}]*--accent:\s*#8b5cf6/.test(css));
 ok('hearthside accent is ember (T2)', /\[data-theme="hearthside"\][^}]*--accent:\s*#e0722a/.test(css));
-ok('hearthside floral tint burns orange (T2)', /\[data-theme="hearthside"\][^}]*--floral-tint:\s*#e0722a/.test(css));
+ok('floral tint follows accent via :root (T2)', /:root[^}]*--floral-tint:\s*var\(--accent\)/.test(css));
 ok('candlelight accent is gold (T3)', /\[data-theme="candlelight"\][^}]*--accent:\s*#c08a24/.test(css));
 ok('amour bg lifted pinker (T1)', /\[data-theme="amour"\][^}]*--bg:\s*#2a1420/.test(css));
 ok('amour accent is blush (T1)', /\[data-theme="amour"\][^}]*--accent:\s*#f2a3c0/.test(css));
 ok('all accent blocks exist', ['violet', 'gold', 'teal', 'crimson', 'ember', 'ocean', 'sage', 'blush', 'copper', 'mint', 'lilac'].every(a => css.includes('[data-accent="' + a + '"]')));
 ok('no var(--rose) references remain', !css.includes('var(--rose'));
-ok('every theme defines --floral-tint', allThemes.every(t => {
-  const m = css.match(new RegExp('\\[data-theme="' + t + '"\\][^}]*--floral-tint:\\s*(#[0-9a-f]{6})'));
-  return !!m;
-}));
+ok('floral tint defined once in :root (follows accent)', /:root[^}]*--floral-tint:\s*var\(--accent\)/.test(css));
 
 // 7. Nav uses custom SVG icons, not emoji (v37: Settings moved to the account menu)
 const navBtns = qa('.bottom-nav button');

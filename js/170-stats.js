@@ -356,7 +356,7 @@ function ratingDistHTML() {
 
 /* ---- reading patterns (v65): calculated observations, each gated on enough
    data to mean something. No AI — just her library talking back. ---- */
-function patternsHTML() {
+function patternObservations() {
   const obs = [];
   const read = library.filter(b => b.status === 'read');
   const rated = read.filter(b => (b.myRating || 0) > 0);
@@ -455,6 +455,11 @@ function patternsHTML() {
     }
   }
 
+  if (!obs.length) return [];
+  return obs;
+}
+function patternsHTML() {
+  const obs = patternObservations();
   if (!obs.length)
     return '<div class="stat-sub">' + icon('crystal') + ' Reading patterns</div>' +
       '<p class="note">Finish and rate a few more books and your patterns will start showing here.</p>' +
@@ -573,8 +578,8 @@ function recordsHTML() {
   const card = (icon, label, b, stat) => {
     if (!b) return;
     cards.push('<div class="record-card" data-id="' + esc(b.id) + '"><div class="rlbl">' + icon + ' ' + label + '</div>' +
-      coverHTML(b) + '<div class="rtitle">' + esc(b.title) + '</div>' +
-      '<div class="rstat">' + stat + '</div></div>');
+      '<div class="rcard-body">' + coverHTML(b) + '<div><div class="rtitle">' + esc(b.title) + '</div>' +
+      '<div class="rstat">' + stat + '</div></div></div></div>');
   };
   if (withPages.length) {
     const s = withPages.slice().sort((a, b) => b.pageCount - a.pageCount);
@@ -1025,6 +1030,8 @@ function fallbackCopy(t, done) {
 }
 
 function renderStats() {
+  // v448: backfill milestones once (idempotent — no-op after first run)
+  try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
   const yr = new Date().getFullYear();
   const read = library.filter(b => b.status === 'read');
   const readYr = read.filter(b => b.dateFinished && new Date(b.dateFinished).getFullYear() === yr);
@@ -1038,7 +1045,13 @@ function renderStats() {
   const nowD = new Date();
   const mStart = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
   const readMo = read.filter(b => { const d = b.dateFinished && new Date(b.dateFinished); return d && d >= mStart; });
-  const pagesMo = readMo.reduce((s, b) => s + (b.pageCount || 0), 0);
+  // v447: dashboard pages use logged session pages (not finished books' page
+  // counts) so in-progress reading counts and the number matches the detail view.
+  const pagesByDay = pagesByDayMap();
+  const monthPrefix = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0');
+  const pagesMo = Object.keys(pagesByDay)
+    .filter(k => k.indexOf(monthPrefix) === 0)
+    .reduce((s, k) => s + pagesByDay[k].pages, 0);
   const avgMo = avgOf(readMo.filter(b => b.myRating > 0).map(b => b.myRating));
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -1078,17 +1091,24 @@ function renderStats() {
         libActual += b.purchasePrice;
         libPriced++;
         libEst += b.purchasePrice; // actual price counts toward value too
-      } else if (b.listPrice == null || isNaN(b.listPrice)) {
+      } else if (b.listPrice != null && !isNaN(b.listPrice)) {
+        libEst += b.listPrice;
+      } else {
         libEst += libDefault;
       }
-      if (b.listPrice != null && !isNaN(b.listPrice)) libEst += b.listPrice;
     });
   } catch (e) {}
   // v405 (T2): estimate-only until >50% of books are priced. A $0.00-vs-estimate
   // comparison reads as broken; the comparison is the problem, not the data.
+  // v447: with no priced books the estimate is pure invention ($24.99 x N) —
+  // show a prompt instead of a made-up number.
   const pricedRatio = library.length ? libPriced / library.length : 0;
   const valueSection =
-    pricedRatio < 0.5
+    libPriced === 0
+      ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
+        '<div class="valcard"><div>Add prices to see your collection&rsquo;s value.</div>' +
+        '<div class="note">Tap a book → Details → Price. The estimate sharpens as you add more.</div></div>'
+      : pricedRatio < 0.5
       ? '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
         '<div class="valcard"><div class="big">≈ $' + Math.round(libEst) + '</div>' +
         '<div>Estimated collection value</div>' +
@@ -1102,15 +1122,56 @@ function renderStats() {
   // v128: dashboard first — this month at a glance. The full explorer lives
   // one tap behind "Explore detailed stats".
   if (statsMode === 'dash') {
+    // v447: insight of the week — the most engaging pattern, pulled to the top
+    const insights = patternObservations();
+    const insightCard = insights.length
+      ? '<div class="insight-card"><span class="pi">' + icon('bulb') + '</span><p>' + insights[0] + '</p></div>'
+      : '';
+    // v448: milestone celebration — quiet inline card for the newest unseen milestone
+    let milestoneCard = '';
+    try {
+      if (typeof checkMilestones === 'function') checkMilestones();
+      if (typeof newestUnseenMilestone === 'function') {
+        const nm = newestUnseenMilestone();
+        if (nm) {
+          milestoneCard = '<div class="milestone-celebration" data-mid="' + esc(nm.def.id) + '">' +
+            '<div class="micon">' + icon(nm.def.icon || 'sparkles') + '</div><div style="flex:1">' +
+            '<div class="mtitle">A little reading milestone</div>' +
+            '<h3>' + esc(nm.def.title) + '</h3><p>' + esc(nm.def.copy) + '</p>' +
+            '<a href="#" data-act="milestones">View milestones \u2192</a></div>' +
+            '<button class="btn ghost sm" data-act="dismiss-milestone" aria-label="Dismiss" style="flex:none">\u2715</button></div>';
+        }
+      }
+    } catch (e) {}
     setView(
       '<h2 class="section serif">Reading stats</h2>' +
+      milestoneCard +
+      insightCard +
       '<div class="stat-sub">' + icon('calendar') + ' ' + esc(monthName) + '</div>' +
       '<div class="stat-row">' +
       heroCard('covers', readMo.length, 'Books finished') +
       heroCard('doc', pagesMo > 999 ? (pagesMo / 1000).toFixed(1) + 'k' : pagesMo, 'Pages') +
-      heroCard('heart', avgMo != null ? '♥ ' + avgMo.toFixed(1) : '–', 'Avg rating') +
-      heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time') +
+      heroCard('heart', avgMo != null ? avgMo.toFixed(1) : '–', 'Avg rating') +
+      heroCard('history', hrsMo > 0 ? '~' + hrsMo + 'h' : '–', 'Reading time (est.)') +
       '</div>' +
+      // v447: gentle month-over-month note — cozy framing, not KPI deltas
+      (() => {
+        const lastMo = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+        const lastPrefix = lastMo.getFullYear() + '-' + String(lastMo.getMonth() + 1).padStart(2, '0');
+        const pagesLast = Object.keys(pagesByDay)
+          .filter(k => k.indexOf(lastPrefix) === 0)
+          .reduce((s, k) => s + pagesByDay[k].pages, 0);
+        if (pagesLast < 20 || pagesMo < 20) return '';
+        const ratio = pagesMo / pagesLast;
+        const lastName = lastMo.toLocaleDateString(undefined, { month: 'long' });
+        let note;
+        if (ratio >= 1.25) note = 'A lively month — well ahead of ' + esc(lastName) + '.';
+        else if (ratio >= 1.05) note = 'A little more reading than ' + esc(lastName) + '.';
+        else if (ratio >= 0.95) note = 'Keeping a steady pace with ' + esc(lastName) + '.';
+        else if (ratio >= 0.75) note = 'A quieter month than ' + esc(lastName) + ' — cozy counts too.';
+        else note = 'A restful month after ' + esc(lastName) + '.';
+        return '<p class="note" style="margin-top:8px">' + note + '</p>';
+      })() +
       // v405 (T1): one full-width streak banner with the definition inline —
       // not a separate stat card + orphaned detail. Always visible; the copy
       // adapts when there's no active streak.
@@ -1133,6 +1194,25 @@ function renderStats() {
       statsMode = 'detail';
       renderStats();
     });
+    // v448: milestone celebration — "seen" means the reader engaged:
+    // clicking "View milestones" or explicitly dismissing the card.
+    // Merely rendering the card does not consume the celebration.
+    document.querySelectorAll('[data-act="milestones"]').forEach(a =>
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const card = a.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
+        if (typeof renderMilestones === 'function') renderMilestones();
+      }));
+    document.querySelectorAll('[data-act="dismiss-milestone"]').forEach(b =>
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const card = b.closest('.milestone-celebration');
+        const mid = card && card.dataset.mid;
+        if (mid && typeof markMilestoneSeen === 'function') markMilestoneSeen(mid);
+        if (card) card.style.display = 'none';
+      }));
     return;
   }
 
@@ -1143,27 +1223,41 @@ function renderStats() {
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + readYr.length + '</div><div class="l">Read in ' + yr + '</div></div>' +
     '<div class="stat"><div class="n">' + (pagesYr > 999 ? (pagesYr / 1000).toFixed(1) + 'k' : pagesYr) + '</div><div class="l">Pages</div></div>' +
-    '<div class="stat"><div class="n">' + (avgMine != null ? '♥ ' + avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
-    '<div class="stat"><div class="n">' + (streak > 0 ? '🔥 ' + streak : '0') + '</div><div class="l">Day streak</div></div>' +
+    '<div class="stat"><div class="n">' + icon('heart') + ' ' + (avgMine != null ? avgMine.toFixed(1) : '–') + '</div><div class="l">Avg rating</div></div>' +
+    '<div class="stat"><div class="n">' + icon('flame') + ' ' + (streak > 0 ? streak : '0') + '</div><div class="l">Day streak</div></div>' +
     '</div>' +
-    '<div class="search-row" style="margin:10px 0 2px"><button class="btn ghost" id="st-yib">' + icon('sparkles') + ' My ' + yr + ' in Books</button></div>' +
+    '<button class="yib-card" id="st-yib">' + icon('sparkles') +
+    '<div><div class="yib-title">My ' + yr + ' in Books</div>' +
+    '<div class="note">Your year, beautifully summarized — ready to share.</div></div>' +
+    '<span class="yib-go">›</span></button>' +
     nowReading +
     dailyStatsHTML() +
+    // v447: section navigation for the long detail view
+    '<div class="stat-nav">' +
+    ['Activity|st-sec-activity', 'Pace|st-sec-pace', 'Taste|st-sec-taste', 'Records|st-sec-records'].map(s => {
+      const parts = s.split('|');
+      return '<button class="chip" data-target="' + parts[1] + '">' + parts[0] + '</button>';
+    }).join('') +
+    '</div>' +
     '<div class="stat-sub">Explore</div>' +
-    heatmapHTML() +
-    readingCalHTML() +
-    paceHTML() +
-    spiceProfileHTML() +
-    moodProfileHTML() +
+    '<div id="st-sec-activity">' + heatmapHTML() + readingCalHTML() + '</div>' +
+    '<div class="stat-detail-grid">' +
+    '<div id="st-sec-pace">' + paceHTML() + '</div>' +
+    '<div id="st-sec-taste">' + spiceProfileHTML() + moodProfileHTML() +
     (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
-    ratingDistHTML() +
-    patternsHTML() +
-    genreEvoHTML() +
-    recordsHTML() +
-    seriesHTML() +
+    ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div>' +
+    '</div>' +
+    '<div id="st-sec-records">' + recordsHTML() + seriesHTML() + '</div>' +
     '<div class="stat-sub">Shelves</div><div class="dist">' + distRows + '</div>'
   );
+
+  // v447: section nav chips scroll to anchors
+  document.querySelectorAll('.stat-nav .chip').forEach(c =>
+    c.addEventListener('click', () => {
+      const t = document.getElementById(c.dataset.target);
+      if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
 
   document.querySelectorAll('.now-reading .book-card').forEach(c =>
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
@@ -1219,5 +1313,69 @@ function renderStats() {
       if (read.length) openDetail(read[0].id);
       else go('library');
     }));
+}
+
+/* ---- Milestones page (v448) ---- */
+function renderMilestones() {
+  const store = typeof loadMilestones === 'function' ? loadMilestones() : {};
+  const cats = [
+    { id: 'journey', name: 'Journey', desc: 'The road so far \u2014 books finished, pages turned.' },
+    { id: 'rhythm', name: 'Rhythm', desc: 'The shape of your reading days.' },
+    { id: 'discovery', name: 'Discovery', desc: 'Firsts and new horizons.' },
+    { id: 'taste', name: 'Taste', desc: 'Your reading personality, in milestones.' },
+  ];
+  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Stats</button>' +
+    '<h2 class="section serif">Milestones</h2>' +
+    '<p class="note" style="margin-bottom:16px">Moments from your reading life, kept quietly.</p>';
+  cats.forEach(cat => {
+    const items = MILESTONE_CATALOG.filter(m => m.cat === cat.id);
+    const earned = items.filter(m => store[m.id]);
+    // Dynamic series milestones live under Discovery
+    let dynHtml = '';
+    let dynCount = 0;
+    if (cat.id === 'discovery' && typeof milestoneDef === 'function') {
+      Object.keys(store).filter(id => id.indexOf('series-finished-') === 0).forEach(id => {
+        const def = milestoneDef(id, store[id]);
+        if (!def) return;
+        dynCount++;
+        const st = store[id];
+        const dateStr = st.achievedAt
+          ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+          : 'Earned before milestones launched';
+        dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
+          '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<div class="mcheck">\u2713</div></div>';
+      });
+    }
+    const earnedCount = earned.length + dynCount;
+    const totalLabel = dynCount ? items.length + '+' : items.length;
+    html += '<div class="cat-header" style="display:flex;align-items:baseline;gap:8px;margin:20px 0 4px">' +
+      '<h3 style="font-size:15px">' + cat.name + '</h3>' +
+      '<span class="note">' + earnedCount + ' of ' + totalLabel + '</span></div>' +
+      '<p class="note" style="margin-bottom:10px">' + cat.desc + '</p>' + dynHtml;
+    items.forEach(m => {
+      const st = store[m.id];
+      const def = (typeof milestoneDef === 'function' && st) ? milestoneDef(m.id, st) : m;
+      if (st) {
+        const dateStr = st.achievedAt
+          ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+          : 'Earned before milestones launched';
+        html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
+          '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<div class="mcheck">\u2713</div></div>';
+      } else {
+        html += '<div class="milestone-row locked"><div class="micon">' + icon(m.icon || 'sparkles') + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(m.title) + '</div>' +
+          '<div class="mhint">' + esc(m.hint) + '</div></div></div>';
+      }
+    });
+  });
+  setView(html);
+  document.getElementById('ms-back').addEventListener('click', () => {
+    statsMode = 'dash';
+    renderStats();
+  });
 }
 

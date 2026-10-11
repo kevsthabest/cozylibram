@@ -1,14 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d">
-<title id="t">Candlelight flame moon</title>
-<desc id="d">A candle-flame moon with a dripping wax candle below and sparks rising into the dark.</desc>
-<g fill="none" stroke-linecap="round" stroke-linejoin="round">
-<path d="M150 60 C180 105 192 142 150 180 C108 142 120 105 150 60 Z" stroke="#c08a24" stroke-width="4"/>
-<path d="M150 98 C163 122 167 142 150 160 C133 142 137 122 150 98 Z" stroke="#a87b24" stroke-width="1.8"/>
-<path d="M150 180 L150 196" stroke="#a87b24" stroke-width="1.8"/>
-<path d="M130 196 L130 256 Q130 263 137 263 L163 263 Q170 263 170 256 L170 196" stroke="#c08a24" stroke-width="1.8"/>
-<path d="M142 196 C142 208 145 214 149 214 C153 214 156 208 156 196" stroke="#a87b24" stroke-width="1.8"/>
-<path d="M105 40 l2.6 6.8 6.8 2.6-6.8 2.6-2.6 6.8-2.6-6.8-6.8-2.6 6.8-2.6z" stroke="#c08a24" stroke-width="1.8"/>
-<path d="M200 52 l2 5.4 5.4 2-5.4 2-2 5.4-2-5.4-5.4-2 5.4-2z" stroke="#c08a24" stroke-width="1.8"/>
-<path d="M150 22 l1.7 4.4 4.4 1.7-4.4 1.7-1.7 4.4-1.7-4.4-4.4-1.7 4.4-1.7z" stroke="#c08a24" stroke-width="1.8"/>
-<g fill="#a87b24" stroke="none"><circle cx="125" cy="72" r="2"/><circle cx="182" cy="86" r="2"/><circle cx="88" cy="120" r="2"/></g>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-labelledby="t d"><title id="t">Candlelight taper</title><desc id="d">A lit taper in a brass holder with a warm halo.</desc><path d="M72.4,99.8 L52.5,97.8" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M82.5,69 L65.1,59" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M104.2,44.9 L92.4,28.7" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M133.8,31.7 L129.6,12.1" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M166.2,31.7 L170.4,12.1" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M195.8,44.9 L207.6,28.7" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M217.5,69 L234.9,59" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><path d="M227.6,99.8 L247.5,97.8" stroke="#c08a24" stroke-width="9" stroke-linecap="round" stroke-opacity=".75"/><rect x="119" y="120" width="62" height="112" rx="11.2" fill="#f3e2b3" stroke="#96690f" stroke-width="8" stroke-linejoin="round"/><path d="M150,120 L150,108.8" stroke="#96690f" stroke-width="4.8" stroke-linecap="round"/><path d="M0,0 C-32.4,-8.3 -29,-38.2 -4.1,-69.4 C1.7,-47.2 32.4,-36.1 27.3,-18.1 C23.9,-5.6 10.2,0 0,0Z" transform="translate(150,111)" fill="#e8a82c"/><path d="M0,0 C-16.5,-4.6 -14.8,-20.9 -2.1,-38.1 C0.9,-25.9 16.5,-19.8 13.9,-9.9 C12.2,-3 5.2,0 0,0Z" transform="translate(150,108.8)" fill="#fff0b8"/><path d="M92,236 C92,256 208,256 208,236 L196,246 L104,246Z" fill="#96690f"/><path d="M80,262 C120,248 180,248 220,262 L212,276 L88,276Z" fill="#c08a24" stroke="#96690f" stroke-width="6" stroke-linejoin="round"/></svg>

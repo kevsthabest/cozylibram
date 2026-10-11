@@ -86,7 +86,7 @@
     '.s3d-root{position:absolute;inset:0;overflow:hidden;background:#14101c;',
     '  font-family:Georgia,\'Times New Roman\',serif;color:#f6eff8;}',
     '.s3d-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}',
-    '.s3d-root #s3dScene{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}',
+    '.s3d-root #s3dScene{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;}',
     '.s3d-root #s3dVignette{position:absolute;inset:0;pointer-events:none;',
     '  background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(8,5,12,.55) 100%);}',
     '.s3d-root #s3dHud{position:absolute;top:0;left:0;right:0;',
@@ -137,9 +137,10 @@
     '.s3d-root #s3dInvPanel.open{transform:translateY(0);}',
     '.s3d-root #s3dInvPanel h3{margin:0 0 4px;font-size:15px;color:#f6eff8;font-family:system-ui,sans-serif;}',
     '.s3d-root #s3dInvPanel .sub{font-size:11px;color:#b9a8c6;font-family:system-ui,sans-serif;margin-bottom:10px;}',
-    '.s3d-root #s3dInvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}',
-    '.s3d-root .inv-item{background:rgba(40,30,52,.9);border:1px solid rgba(229,184,106,.25);border-radius:12px;',
-    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:pan-y;',  // v420: allow vertical scroll; press-hold for drag
+    '.s3d-root #s3dInvGrid{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 10px;',
+    '  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;}',
+    '.s3d-root .inv-item{flex:0 0 auto;width:70px;background:rgba(40,30,52,.9);border:1px solid rgba(229,184,106,.25);border-radius:12px;',
+    '  padding:10px 4px 8px;text-align:center;cursor:pointer;touch-action:pan-x;',  // v442: horizontal row; swipe scrolls, vertical drag picks up
     '  font-family:system-ui,sans-serif;font-size:10px;color:#f6eff8;',
     '  user-select:none;-webkit-user-select:none;position:relative;}',
     '.s3d-root .inv-item:active{transform:scale(.94);border-color:#e5b86a;}',
@@ -162,7 +163,18 @@
     '.s3d-root #s3dInvTabs{display:flex;gap:6px;margin:8px 0 2px;}',
     '.s3d-root #s3dInvTabs button{flex:1;border:1px solid rgba(229,184,106,.35);background:transparent;',
     '  color:#b9a8c6;border-radius:8px;padding:6px;font-size:12px;}',
-    '.s3d-root #s3dInvTabs button.on{background:rgba(229,184,106,.2);color:#f6eff8;}'
+    '.s3d-root #s3dInvTabs button.on{background:rgba(229,184,106,.2);color:#f6eff8;}',
+    '.s3d-root #s3dPlaceBar{position:absolute;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9;',
+    '  display:none;align-items:center;gap:10px;background:rgba(24,17,32,.96);',
+    '  border:1px solid rgba(229,184,106,.5);border-radius:14px;padding:10px 12px;',
+    '  font-family:system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.5);}',
+    '.s3d-root #s3dPlaceBar.show{display:flex;}',
+    '.s3d-root #s3dPlaceMsg{flex:1;font-size:13px;color:#f6eff8;}',
+    '.s3d-root #s3dPlaceMsg b{color:#e5b86a;}',
+    '.s3d-root #s3dPlaceBar button{font-family:system-ui,sans-serif;font-size:12px;font-weight:600;border:none;',
+    '  border-radius:8px;padding:8px 12px;cursor:pointer;white-space:nowrap;}',
+    '.s3d-root #s3dPlaceUndo{background:#e5b86a;color:#241a10;}',
+    '.s3d-root #s3dPlaceCancel{background:transparent;color:#b9a8c6;border:1px solid rgba(185,168,198,.4);}'
   ].join('\n');
 
   /* ---------- DOM markup (built inside the mount container) ---------- */
@@ -186,6 +198,9 @@
     '  <div id="s3dInvTabs"><button data-tab="shelf" class="on">Shelf</button><button data-tab="room">Room</button></div>',
     '  <div id="s3dInvGrid"></div>',
     '</div>',
+    '<div id="s3dPlaceBar"><span id="s3dPlaceMsg"></span>',
+    '  <button id="s3dPlaceUndo" style="display:none">Put back</button>',
+    '  <button id="s3dPlaceCancel">Cancel</button></div>',
     '<div id="s3dSelmenu">',
     '  <button class="mv" id="s3dSelMove">Move</button>',
     '  <button class="del" id="s3dSelDelete">Delete</button>',
@@ -271,7 +286,8 @@
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;  // Phase 1: cheaper than PCFSoft
+    renderer.shadowMap.autoUpdate = false;  // Phase 1: bake shadows, update on demand
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -311,7 +327,7 @@
     downLight.position.set(0, 9.5, 2.5);
     scene.add(downLight);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);  // Phase 1: 1024 instead of 2048 (4x cheaper)
     sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
     sun.shadow.camera.top = 11; sun.shadow.camera.bottom = -2;
     sun.shadow.camera.near = 1; sun.shadow.camera.far = 32;
@@ -324,22 +340,28 @@
 
     /* ----- shelf ----- */
     /* procedural wood grain — flat brown reads cheap, satin sheen reads expensive */
+    /* Phase 1: seeded RNG so wood is stable across mounts */
+    var woodSeed = 1234567;
+    function srand() {
+      woodSeed = (woodSeed * 1103515245 + 12345) & 0x7fffffff;
+      return woodSeed / 0x7fffffff;
+    }
     function woodTexture(base, streakDark, streakLight) {
       var c = document.createElement('canvas'); c.width = c.height = 256;
       var g = c.getContext('2d');
       g.fillStyle = base; g.fillRect(0, 0, 256, 256);
       var i, y, h, w, x;
       for (i = 0; i < 80; i++) {           // long grain streaks
-        y = Math.random() * 256; h = 1 + Math.random() * 3;
-        w = 120 + Math.random() * 136; x = Math.random() * 256 - 60;
-        g.fillStyle = Math.random() < 0.55 ? streakDark : streakLight;
-        g.globalAlpha = 0.05 + Math.random() * 0.11;
+        y = srand() * 256; h = 1 + srand() * 3;
+        w = 120 + srand() * 136; x = srand() * 256 - 60;
+        g.fillStyle = srand() < 0.55 ? streakDark : streakLight;
+        g.globalAlpha = 0.05 + srand() * 0.11;
         g.fillRect(x, y, w, h);
       }
       g.globalAlpha = 0.05;                    // fine speckle
       for (i = 0; i < 420; i++) {
-        g.fillStyle = Math.random() < 0.5 ? '#000' : '#fff';
-        g.fillRect(Math.random() * 256, Math.random() * 256, 1.6, 1.6);
+        g.fillStyle = srand() < 0.5 ? '#000' : '#fff';
+        g.fillRect(srand() * 256, srand() * 256, 1.6, 1.6);
       }
       g.globalAlpha = 1;
       var t = new THREE.CanvasTexture(c);
@@ -361,10 +383,10 @@
       return m;
     }
     LEVELS.forEach(function (topY) {
-      box(SHELF_W + SIDE_T * 2, PLANK_T, PLANK_D, woodMat, 0, topY - PLANK_T / 2, 0);
+      box(SHELF_W, PLANK_T, PLANK_D, woodMat, 0, topY - PLANK_T / 2, 0);   // v442: planks sit between the side panels (was SHELF_W + SIDE_T * 2) — fixes z-fighting where planks met sides
     });
-    box(SIDE_T, TOP_Y, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
-    box(SIDE_T, TOP_Y, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), TOP_Y / 2, 0);
+    box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
+    box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark,  (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
     box(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);          // crown
     var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y),
       new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 }));
@@ -475,7 +497,7 @@
     }
     function setBooks(books) {
       clearBooks();
-      if (!books || !books.length) return;
+      if (!books || !books.length) { renderer.shadowMap.needsUpdate = true; markDirty(); return; }
       var list = books.slice(0, MAX_BOOKS);
       var order = [2, 1, 0];   // fill the top shelf first, like the prototype
       var li = 0;
@@ -496,6 +518,8 @@
         shelfBooks.push({ mesh: mesh, li: order[li], rec: rec });
         x += w + 0.025;
       });
+      renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake shadows after books change
+      markDirty();
     }
     var ray = new THREE.Raycaster();
     var ptr = new THREE.Vector2();
@@ -670,7 +694,7 @@
        still glow when the budget is exhausted, so the scene never looks
        broken — it just stops adding new real lights. Ghost groups (drag
        previews) also draw from the budget and release it on discard. */
-    var DECO_LIGHT_CAP = 12;
+    var DECO_LIGHT_CAP = 2;  // Phase 1: max 2 decoration point lights (was 12)
     var decoLightCount = 0;
     function decoLight(g, light) {
       g.userData.decoLights = g.userData.decoLights || 0;
@@ -1388,6 +1412,18 @@
       holoCube: makeHoloCube, signalDish: makeSignalDish, dataCore: makeDataCore,
       mushroomCottage: makeMushroomCottage, fireflyJar: makeFireflyJar, wispLantern: makeWispLantern };
 
+    /* v439: catalog id -> maker function. The v424 pack decorations have
+       hyphenated catalog ids but camelCase DECO_MAKERS keys, linked by the
+       catalog `build` field (which nothing consumed until now). Falls back
+       to the raw id so un-catalogued types keep working. */
+    function decoMakerFor(type) {
+      var key = type;
+      var D = (typeof window.Shelf3DDecor !== 'undefined') ? window.Shelf3DDecor : null;
+      var def = D ? D.get(type) : null;
+      if (def && def.build) key = def.build;
+      return DECO_MAKERS[key] || null;
+    }
+
     /* ============================== placement ============================== */
     var placed = [];   // {group, pi, rec, type} or {group, room:true, anchor, type}
 
@@ -1403,6 +1439,21 @@
     var snapGuide = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 1),
       new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.38, depthWrite: false }));
     snapGuide.visible = false; scene.add(snapGuide);
+    /* v442: shelf drop-target highlights — shown while an item is picked up or dragged */
+    var zoneHL = LEVELS.map(function (topY) {
+      var m = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W, 0.6),
+        new THREE.MeshBasicMaterial({ color: 0xe5b86a, transparent: true, opacity: 0.22,
+          depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, topY + 0.05, 0);
+      m.visible = false;
+      scene.add(m);
+      return m;
+    });
+    function highlightZones(on) {
+      zoneHL.forEach(function (m) { m.visible = !!on; });
+      markDirty();
+    }
     /* blob shadow under the dragged item — tightens as it lands */
     var blobShadow = (function () {
       var c = document.createElement('canvas'); c.width = c.height = 64;
@@ -1448,7 +1499,13 @@
       buildInventory();
     }
     function placeDeco(type, pi, x, free, opts) {
-      var g = DECO_MAKERS[type](opts || {});
+      /* v439: resolve the catalog build key — v424 pack decorations use
+         hyphenated ids ('holo-cube') while DECO_MAKERS is keyed by the
+         catalog `build` name ('holoCube'). Without this, placing any of
+         the 12 pack decorations throws "DECO_MAKERS[type] is not a function". */
+      var maker = decoMakerFor(type);
+      if (!maker) throw new Error('Unknown decoration: ' + type);
+      var g = maker(opts || {});
       var fw = g.userData.fw;
       x = findFreeSpot(pi, x, fw);
       if (g.userData.edge) {
@@ -1611,39 +1668,125 @@
     }
 
     /* ============================== inventory ============================== */
-    /* v420: press-and-hold to drag (Kevin: scroll vs drag fought on mobile).
-       Quick swipe scrolls the list; holding ~280ms grabs the item for dragging.
-       If the finger moves beyond slop before the timer, it's a scroll. */
-    var HOLD_MS = 280, HOLD_SLOP = 10;
-    function pressHoldToDrag(el, startFn) {
-      var timer = null, sx = 0, sy = 0;
+    /* v442: gesture disambiguation (replaces pressHoldToDrag — no hold timer).
+       Tiles live in a single horizontal row with touch-action:pan-x, so
+       horizontal swipes scroll the row natively (the browser takes the
+       gesture and we get pointercancel). A vertical drag picks the item up
+       instantly and starts a 3D drag. Tap/click = pick up for tap-to-place.
+       Mouse: drag starts after ~6px of movement; a plain click = pick up. */
+    function bindTileGestures(el, item) {
+      var sx = 0, sy = 0, live = false, decided = false, pid = null;
+      function reset() { live = false; decided = false; pid = null; }
       el.addEventListener('pointerdown', function (e) {
-        // Only for touch — mouse can drag immediately.
-        if (e.pointerType !== 'touch') { startFn(e); return; }
-        sx = e.clientX; sy = e.clientY;
-        timer = setTimeout(function () {
-          timer = null;
-          startFn(e);
-        }, HOLD_MS);
-        var onMove = function (me) {
-          if (Math.hypot(me.clientX - sx, me.clientY - sy) > HOLD_SLOP) {
-            // Moved — it's a scroll, cancel the hold.
-            if (timer) { clearTimeout(timer); timer = null; }
-            el.removeEventListener('pointermove', onMove);
-            el.removeEventListener('pointerup', onUp);
-            el.removeEventListener('pointercancel', onUp);
-          }
-        };
-        var onUp = function () {
-          if (timer) { clearTimeout(timer); timer = null; }
-          el.removeEventListener('pointermove', onMove);
-          el.removeEventListener('pointerup', onUp);
-          el.removeEventListener('pointercancel', onUp);
-        };
-        el.addEventListener('pointermove', onMove);
-        el.addEventListener('pointerup', onUp);
-        el.addEventListener('pointercancel', onUp);
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        sx = e.clientX; sy = e.clientY; live = true; decided = false; pid = e.pointerId;
       });
+      el.addEventListener('pointermove', function (e) {
+        if (!live || decided || e.pointerId !== pid) return;
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        var ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax > 12 && ax > ay * 1.4) { decided = true; return; }  // horizontal: let it scroll
+        var thresh = (e.pointerType === 'mouse') ? 6 : 10;
+        if (ay > thresh && ay > ax) {
+          decided = true;
+          try { el.setPointerCapture(e.pointerId); } catch (err) {}
+          if (item.room) startRoomDrag(e, item, el); else startInvDrag(e, item, el);
+          return;
+        }
+        if (Math.hypot(dx, dy) > 16) decided = true;  // diagonal drift: treat as scroll
+      });
+      el.addEventListener('pointerup', function (e) {
+        if (!live || e.pointerId !== pid) return;
+        var wasTap = !decided;
+        reset();
+        if (wasTap) pickUp(item);
+      });
+      el.addEventListener('pointercancel', function () { reset(); });
+      el.addEventListener('lostpointercapture', function () { cancelActiveDrag(); });
+    }
+    /* inventory lookup by catalog id */
+    function invByType(type) {
+      var found = null;
+      INVENTORY.forEach(function (i) { if (i.type === type) found = i; });
+      return found;
+    }
+    function firstFreeAnchor(type) {
+      var a = null;
+      ROOM_ANCHORS.forEach(function (x) {
+        if (!a && x.types.indexOf(type) >= 0 && !x.usedBy) a = x;
+      });
+      return a;
+    }
+    function restoreInventory(type) {
+      var inv = invByType(type);
+      if (inv) inv.owned++;
+      buildInventory();
+    }
+    /* slim placing bar: "Placing: X. Tap a shelf" + Cancel, or "Placed X." + Put back */
+    var pendingUndo = null;   // {type, name, group}
+    function showPlacingBar(item) {
+      $('s3dPlaceMsg').innerHTML = 'Placing: <b>' + esc(item.name) + '</b> &middot; tap a shelf to place';
+      $('s3dPlaceUndo').style.display = 'none';
+      $('s3dPlaceCancel').style.display = '';
+      $('s3dPlaceBar').classList.add('show');
+      highlightZones(true);
+    }
+    function showUndoBar(item, group) {
+      pendingUndo = { type: item.type, name: item.name, group: group };
+      $('s3dPlaceMsg').innerHTML = 'Placed <b>' + esc(item.name) + '</b>';
+      $('s3dPlaceCancel').style.display = 'none';
+      $('s3dPlaceUndo').style.display = '';
+      $('s3dPlaceBar').classList.add('show');
+      highlightZones(false);
+    }
+    function hidePlaceBar() {
+      $('s3dPlaceBar').classList.remove('show');
+      highlightZones(false);
+      pendingUndo = null;
+    }
+    function clearUndo() { if (pendingUndo) hidePlaceBar(); }
+    /* tap on a tile = pick up for tap-to-place (panel closes, shelves stay visible) */
+    function pickUp(item) {
+      clearUndo();
+      deselect();
+      pickedType = item.type;
+      closeInventory();
+      showPlacingBar(item);
+      setHint(item.room ? 'Tap the room to place the ' + item.name.toLowerCase()
+                        : 'Tap a shelf to place the ' + item.name.toLowerCase());
+    }
+    /* shared post-placement: select + undo bar so a mistake costs one tap */
+    function afterPlace(item, group) {
+      if (!item || !group) return;
+      pickedType = null;
+      select(group);
+      showUndoBar(item, group);
+      setHint(DEFAULT_HINT);
+    }
+    /* cancel any in-flight drag: discard ghost, clear state (inventory is only
+       consumed on drop, so no stock to restore) */
+    function cancelActiveDrag() {
+      var had = false;
+      if (trayDrag) { discardGhost(trayDrag.group); trayDrag = null; had = true; }
+      if (roomDrag) { discardGhost(roomDrag.group); roomDrag = null; had = true; }
+      if (moveDrag) {
+        var m = moveDrag; moveDrag = null; had = true;
+        if (m.orig && m.orig.rec) {
+          var rec = null;
+          placed.forEach(function (p) { if (p.group === m.group) rec = p; });
+          if (rec) {
+            var oi = occupied[rec.pi].indexOf(rec.rec);
+            if (oi >= 0) occupied[rec.pi].splice(oi, 1);
+            rec.pi = m.orig.pi;
+            rec.rec[0] = m.orig.rec[0]; rec.rec[1] = m.orig.rec[1];
+            occupied[rec.pi].push(rec.rec);
+            m.group.position.set((rec.rec[0] + rec.rec[1]) / 2, m.orig.y, m.group.position.z);
+          }
+          m.group.scale.setScalar(1);
+          select(m.group);
+        }
+      }
+      if (had) { snapGuide.visible = false; highlightZones(false); markDirty(); }
     }
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
@@ -1672,39 +1815,13 @@
           d.dataset.deco = item.type;
           d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
             '<span class="cnt">\u00d7' + item.owned + '</span>';
-          if (item.owned > 0) {
-            if (item.room) {
-              // room decos: press-and-hold to drag (v420), tap = auto-place
-              pressHoldToDrag(d, function (e) { startRoomDrag(e, item, d); });
-              d.addEventListener('click', function () {
-                // tap (not drag): auto-place at first free default spot
-                if (d.dataset.dragged) { delete d.dataset.dragged; return; }
-                var a = null;
-                ROOM_ANCHORS.forEach(function (x) {
-                  if (!a && x.types.indexOf(item.type) >= 0 && !x.usedBy) a = x;
-                });
-                if (a) placeRoomDeco(item.type, a.pos, a);
-              });
-            } else {
-              // v420: press-and-hold to drag; tap = pick up for tap-to-place
-              pressHoldToDrag(d, function (e) { startInvDrag(e, item, d); });
-              d.addEventListener('click', function () {
-                // tap (not drag): pick up for tap-to-place
-                if (d.dataset.dragged) { delete d.dataset.dragged; return; }
-                pickedType = pickedType === item.type ? null : item.type;
-                buildInventory();
-                setHint(pickedType
-                  ? 'Tap a shelf to place the ' + item.name.toLowerCase() + ' \u00b7 tap again to cancel'
-                  : DEFAULT_HINT);
-              });
-            }
-          }
+          if (item.owned > 0) bindTileGestures(d, item);   // v442: swipe scrolls, vertical drag picks up, tap picks up
           grid.appendChild(d);
         });
       var sub = root.querySelector('#s3dInvPanel .sub');
       if (sub) sub.textContent = invTab === 'room'
-        ? 'Drag anywhere in the room to place \u00b7 or tap to auto-place'
-        : 'Tap to pick up, then tap a shelf to place \u00b7 or drag straight onto a shelf';
+        ? 'Swipe to browse \u00b7 drag up to place \u00b7 tap to pick up, then tap the room'
+        : 'Swipe to browse \u00b7 drag up to place \u00b7 tap to pick up, then tap a shelf';
     }
     var invTabBtns = root.querySelectorAll('#s3dInvTabs button');
     for (var ibi = 0; ibi < invTabBtns.length; ibi++) {
@@ -1714,27 +1831,29 @@
     }
     function startInvDrag(e, item, el) {
       e.preventDefault();
+      clearUndo();
       deselect();
       closeInventory();
-      var g = DECO_MAKERS[item.type]();
+      var maker = decoMakerFor(item.type);
+      if (!maker) { toast('Could not load ' + item.name, 2200); return; }
+      var g = maker();
       g.visible = false; scene.add(g);
       trayDrag = { type: item.type, group: g, pi: -1, x: 0, moved: false,
         sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
-      el.dataset.dragged = '1';
+      highlightZones(true);
       // position the ghost under the pointer immediately (1:1 on grab)
       queueRaycast(e);
-      // if this becomes a drag (not tap), the pointermove handler takes over
     }
     /* free placement — drag anywhere in the room, drop where the finger lets go */
     function startRoomDrag(e, item, el) {
       e.preventDefault();
+      clearUndo();
       deselect();
       closeInventory();
       var g = ROOM_MAKERS[item.type]();
       g.visible = false; scene.add(g);
       roomDrag = { type: item.type, group: g, moved: false,
         sx: e.clientX, sy: e.clientY, targetX: 0, targetY: 0, targetZ: 0, hasTarget: false };
-      el.dataset.dragged = '1';
       // position the ghost under the pointer immediately (1:1 on grab)
       queueRaycast(e);
     }
@@ -1745,11 +1864,20 @@
     $('s3dInvBtn').addEventListener('click', function () {
       var p = $('s3dInvPanel');
       if (p.classList.contains('open')) closeInventory();
-      else { buildInventory(); openInventory(); }
+      else { clearUndo(); buildInventory(); openInventory(); }
+    });
+    /* v442: placing-bar buttons */
+    $('s3dPlaceCancel').addEventListener('click', function () {
+      pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);
+    });
+    $('s3dPlaceUndo').addEventListener('click', function () {
+      var u = pendingUndo; pendingUndo = null;
+      if (u) { removeDeco(u.group); restoreInventory(u.type); }
+      hidePlaceBar(); setHint(DEFAULT_HINT); buildInventory();
     });
     /* Escape reliably dismisses the panel and clears selection */
     on(window, 'keydown', function (e) {
-      if (e.key === 'Escape') { closeInventory(); deselect(); }
+      if (e.key === 'Escape') { closeInventory(); deselect(); pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT); }
     });
     buildInventory();
 
@@ -1758,14 +1886,21 @@
     canvas.addEventListener('pointerdown', function (e) {
       downX = e.clientX; downY = e.clientY;
       if (pickedType && !trayDrag && !roomDrag) {
-        var hit = zoneHit(e);
-        if (hit) {
-          var g = placeDeco(pickedType, hit.pi, hit.point.x);  // decrements inventory
-          closeInventory();   // dismiss the panel after tap-to-place
-          select(g);
-          pickedType = null;
-          setHint(DEFAULT_HINT);
+        var item = invByType(pickedType);
+        if (item && item.room) {
+          // room deco picked up: tap = auto-place at first free anchor
+          var a = firstFreeAnchor(item.type);
+          pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);
+          if (a) { var g2 = placeRoomDeco(item.type, a.pos, a); afterPlace(item, g2); }
+          else toast('No free spot for the ' + item.name.toLowerCase(), 2200);
           tapPlacedDeco = true;   // suppress book-tap on the matching pointerup
+        } else if (item) {
+          var hit = zoneHit(e);
+          if (hit) {
+            var g = placeDeco(pickedType, hit.pi, hit.point.x);  // decrements inventory
+            afterPlace(item, g);
+            tapPlacedDeco = true;   // suppress book-tap on the matching pointerup
+          }
         }
       }
     });
@@ -1843,6 +1978,7 @@
         selRing.position.set(g.position.x, baseY + 0.03, g.position.z);
       }
       selRing.visible = true;
+      markDirty();
       // room decos can't be moved (Delete only)
       $('s3dSelMove').style.display = (p && p.room) ? 'none' : '';
       var s = toScreen(new THREE.Vector3(g.position.x, baseY + 1.15, g.position.z));
@@ -1853,6 +1989,7 @@
     }
     function deselect() {
       selected = null; selRing.visible = false; selmenu.classList.remove('show');
+      markDirty();
     }
     $('s3dSelDelete').addEventListener('click', function () {
       if (!selected) return;
@@ -1985,21 +2122,16 @@
       snapGuide.visible = false;
       if (roomDrag) {
         /* free placement — the item lands exactly where the finger drops it
-           (pumpkins clamped into FLOOR_BOUNDS, never under the bookcase) */
+           (pumpkins clamped into FLOOR_BOUNDS, never under the bookcase).
+           v442: tap no longer starts a drag (tap = pick up instead), so a
+           release without a target cancels instead of auto-placing. */
         var r = roomDrag; roomDrag = null;
         r.group.scale.setScalar(1);
-        if (!r.moved) {
-          // tap = auto-place at first free default spot
-          discardGhost(r.group);
-          var a = null;
-          ROOM_ANCHORS.forEach(function (x) {
-            if (!a && x.types.indexOf(r.type) >= 0 && !x.usedBy) a = x;
-          });
-          if (a) placeRoomDeco(r.type, a.pos, a);
-        } else if (r.hasTarget) {
+        highlightZones(false);
+        if (r.moved && r.hasTarget) {
           discardGhost(r.group);
           var g = placeRoomDeco(r.type, roomDropPos(r.type, r.targetX, r.targetY, r.targetZ), null);
-          select(g);
+          afterPlace(invByType(r.type), g);
         } else {
           discardGhost(r.group); // dropped outside: cancel
         }
@@ -2008,15 +2140,11 @@
       if (trayDrag) {
         var t = trayDrag; trayDrag = null;
         t.group.scale.setScalar(1); // restore scale on drop
-        if (!t.moved) {
-          // tap = auto-place at a sensible default
-          discardGhost(t.group);
-          if (t.type === 'lights') placeDeco('lights', 2, 0);
-          else placeDeco(t.type, 1, 2.6 + Math.random() * 1.2);
-        } else if (t.pi >= 0) {
+        highlightZones(false);
+        if (t.pi >= 0) {
           discardGhost(t.group);
           var g2 = placeDeco(t.type, t.pi, t.x);
-          select(g2);
+          afterPlace(invByType(t.type), g2);
         } else {
           discardGhost(t.group); // dropped outside: cancel
         }
@@ -2024,6 +2152,7 @@
       }
       if (moveDrag) {
         var m = moveDrag; moveDrag = null;
+        highlightZones(false);
         if (m.group) {
           var g3 = m.group;
           // soft settle on drop instead of an instant scale snap
@@ -2043,14 +2172,25 @@
       }
     });
 
+    // v442: pointercancel (browser claimed the gesture mid-drag, interruption, …)
+    // discards the ghost and clears drag state instead of leaving it stuck.
+    on(window, 'pointercancel', function (e) { cancelActiveDrag(); });
+
     /* drag placed decorations + tap select (canvas); tap a book -> onBookTap */
     canvas.addEventListener('pointerdown', function (e) {
       var g = decoAt(e);
       if (g && g.userData.room) { select(g); return; } // room decos tap-select (no drag)
-      if (g) moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
-        targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
-        // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
-        restY: g.position.y };
+      if (g) {
+        var rec0 = null, pi0 = -1;
+        placed.forEach(function (pp) { if (pp.group === g) { rec0 = pp.rec.slice(); pi0 = pp.pi; } });
+        moveDrag = { group: g, moved: false, sx: e.clientX, sy: e.clientY,
+          targetX: 0, targetY: 0, targetZ: 0, hasTarget: false,
+          // v413: capture rest Y to fix floating-decor bug (lift not reset on drop)
+          restY: g.position.y,
+          // v442: snapshot for pointercancel restore
+          orig: { pi: pi0, rec: rec0, y: g.position.y } };
+        highlightZones(true);
+      }
     });
     canvas.addEventListener('pointerup', function (e) {
       // handled in window pointerup via moveDrag; tap-empty deselects here,
@@ -2341,12 +2481,70 @@
 
     var clockT = new THREE.Clock();
     var rafId = 0;
+    /* Phase 1: render on demand + adaptive resolution */
+    var needsRender = true;  // true when camera moving, tween active, pointer down, etc.
+    var frameTimes = [];     // rolling window for adaptive resolution
+    var curPixelRatio = 1.5; // Phase 1: start at 1.5, adapt 1.0–2.0 from frame time
+    var lastFrameT = performance.now();
+    renderer.setPixelRatio(curPixelRatio);
+    /* Phase 1: WebGL context loss/restore handling */
+    canvas.addEventListener('webglcontextlost', function (e) {
+      e.preventDefault();  // allow restore
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      // Show calm retry message
+      try {
+        var msg = root.querySelector('#s3dCtxMsg');
+        if (!msg) {
+          msg = document.createElement('div');
+          msg.id = 's3dCtxMsg';
+          msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,14,26,.92);color:#f6eff8;font-family:system-ui,sans-serif;font-size:14px;text-align:center;padding:24px;z-index:20;';
+          msg.innerHTML = '<div><p style="margin:0 0 12px;">The 3D shelf paused to save memory.</p><button id="s3dCtxRetry" style="background:#e5b86a;color:#241a10;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">Tap to reload</button></div>';
+          root.appendChild(msg);
+          msg.querySelector('#s3dCtxRetry').addEventListener('click', function () {
+            try { window.location.reload(); } catch (_) {}
+          });
+        }
+        msg.style.display = 'flex';
+      } catch (_) {}
+    }, false);
+    canvas.addEventListener('webglcontextrestored', function () {
+      try {
+        var msg = root.querySelector('#s3dCtxMsg');
+        if (msg) msg.style.display = 'none';
+      } catch (_) {}
+      // Rebuild GPU resources by re-rendering; shadows need rebake
+      renderer.shadowMap.needsUpdate = true;
+      markDirty();
+      if (!rafId && !dead) animate();
+    }, false);
+    function markDirty() { needsRender = true; }
+    // Pause when tab hidden; resume when visible
+    var wasHidden = false;
+    function onVisChange() {
+      if (document.hidden) {
+        wasHidden = true;
+      } else if (wasHidden) {
+        wasHidden = false;
+        markDirty();  // re-render on return
+      }
+    }
+    on(document, 'visibilitychange', onVisChange);
+    // Check if book modal is open (pause rendering when it covers the canvas)
+    function isModalOpen() {
+      return !!(document.querySelector('.book-modal.open, #bookModal.open, .modal.open'));
+    }
     function animate() {
       if (dead) return;
       rafId = requestAnimationFrame(animate);
+      // Phase 1: skip entirely when tab hidden or modal open
+      if (document.hidden || isModalOpen()) return;
       var t = clockT.getElapsedTime();
       var now = performance.now();
+      var dt = Math.min(0.1, (now - lastFrameT) / 1000);  // seconds, clamped
+      lastFrameT = now;
       stepTweens(now);   // all UI tweens (place pop, delete shrink, mood crossfade)
+      var tweensActive = tweens.length > 0;
       processDragFrame();
       // 1:1 drag follow — ghost tracks the pointer with no easing lag, so the
       // item feels held, not chased. (Drop still snaps to the guide/rules.)
@@ -2411,19 +2609,49 @@
       var dollyK = 1 - Math.pow(1 - lk, 3);
       // v412: apply user zoom (pinch/wheel) to the target distance.
       var targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK) * zoomFactor;
-      // slow idle drift after 6s without interaction
-      var idle = (now - lastInteract) > 6000;
-      driftAmt += ((idle ? 1 : 0) - driftAmt) * 0.008;
+      // slow idle drift after 6s without interaction (Phase 1: time-based, stops after 30s)
+      var idle = (now - lastInteract) > 6000 && (now - lastInteract) < 36000;
+      var driftTarget = idle ? 1 : 0;
+      driftAmt += (driftTarget - driftAmt) * (1 - Math.exp(-dt * 2));
       var driftX = Math.sin(t * 0.24) * 0.4 * driftAmt;
       var driftY = Math.cos(t * 0.19) * 0.22 * driftAmt;
-      // camera parallax
+      // camera parallax (Phase 1: time-based damping, frame-rate independent)
+      var dampK = 1 - Math.exp(-dt * 7);  // ~0.045 at 60fps, scales with dt
       var px = tiltOn ? tilt.x : pointerPX * 0.55;
       var py = tiltOn ? tilt.y : pointerPY * 0.4;
-      camera.position.x += ((camBase.x + px * 0.9 + driftX) - camera.position.x) * 0.045;
-      camera.position.y += ((camBase.y - py * 0.55 + driftY) - camera.position.y) * 0.045;
-      camera.position.z += (targetZ - camera.position.z) * 0.045;
+      var camTX = camBase.x + px * 0.9 + driftX;
+      var camTY = camBase.y - py * 0.55 + driftY;
+      var dx = camTX - camera.position.x;
+      var dy = camTY - camera.position.y;
+      var dz = targetZ - camera.position.z;
+      var camMoved = Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001 || Math.abs(dz) > 0.001;
+      camera.position.x += dx * dampK;
+      camera.position.y += dy * dampK;
+      camera.position.z += dz * dampK;
       camera.lookAt(camTarget);
-      renderer.render(scene, camera);
+      // Phase 1: render on demand — only when something changed
+      var animating = tweensActive || camMoved || driftAmt > 0.01 ||
+        (trayDrag && trayDrag.hasTarget) || (moveDrag && moveDrag.hasTarget && moveDrag.moved) ||
+        (roomDrag && roomDrag.hasTarget) || candleFlames.length > 0 || fairyBulbs.length > 0;
+      if (animating || needsRender) {
+        renderer.render(scene, camera);
+        needsRender = false;
+        // Phase 1: adaptive resolution — track frame time, adjust pixel ratio 1.0–2.0
+        var frameMs = performance.now() - now;
+        frameTimes.push(frameMs);
+        if (frameTimes.length > 60) frameTimes.shift();
+        if (frameTimes.length === 60) {
+          var avg = frameTimes.reduce(function (a, b) { return a + b; }, 0) / 60;
+          var target = curPixelRatio;
+          if (avg > 24 && curPixelRatio > 1.0) target = Math.max(1.0, curPixelRatio - 0.25);
+          else if (avg < 12 && curPixelRatio < 2.0) target = Math.min(2.0, curPixelRatio + 0.25);
+          if (target !== curPixelRatio) {
+            curPixelRatio = target;
+            renderer.setPixelRatio(curPixelRatio);
+          }
+          frameTimes.length = 0;  // reset window after adjustment
+        }
+      }
     }
 
     /* ----- teardown: leak-free unmount ----- */
@@ -2445,12 +2673,70 @@
 
     /* ----- go ----- */
     if (opts.initialBooks) setBooks(opts.initialBooks);
-    /* Fresh mount starts empty: dress for the current app theme immediately.
-       Decorations are session-only, so this is always the "new shelf" case —
-       never a rearrangement of existing decorations. */
+    /* Phase 1: persist decoration layout to localStorage */
+    var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';
+    function saveDecoLayout() {
+      try {
+        var data = placed.map(function (p) {
+          return {
+            type: p.type,
+            pi: p.pi,
+            x: p.group.position.x,
+            z: p.group.position.z,
+            room: !!p.room
+          };
+        });
+        localStorage.setItem(DECO_STORE_KEY, JSON.stringify(data));
+      } catch (_) {}
+    }
+    function loadDecoLayout() {
+      try {
+        var raw = localStorage.getItem(DECO_STORE_KEY);
+        if (!raw) return false;
+        var data = JSON.parse(raw);
+        if (!Array.isArray(data) || !data.length) return false;
+        data.forEach(function (d) {
+          try {
+            if (d.room) {
+              // Room decorations need anchor lookup; skip if not available
+              return;
+            }
+            // placeDeco signature: (type, pi, x, free, opts) — free=true so
+            // restoring a saved layout never consumes inventory counts.
+            if (typeof placeDeco === 'function') {
+              placeDeco(d.type, d.pi, d.x, true);
+              // Adjust z if needed
+              var p = placed[placed.length - 1];
+              if (p && d.z != null) p.group.position.z = d.z;
+            }
+          } catch (_) {}
+        });
+        return placed.length > 0;
+      } catch (_) { return false; }
+    }
+    /* Fresh mount: try to restore saved decorations, else dress for theme.
+       Decorations are now persistent, not session-only. */
     appTheme = (opts && opts.appTheme) || 'dark';
     dressLabel();
-    if (!placed.length) applyPreset(appTheme);
+    var restored = loadDecoLayout();
+    if (!restored && !placed.length) applyPreset(appTheme);
+    // Save on changes: hook into placeDeco and removeDeco via wrappers
+    var _origPlaceDeco = placeDeco;
+    placeDeco = function () {
+      var r = _origPlaceDeco.apply(this, arguments);
+      saveDecoLayout();
+      renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake after deco change
+      markDirty();
+      return r;
+    };
+    var _origRemoveDeco = removeDeco;
+    removeDeco = function () {
+      var r = _origRemoveDeco.apply(this, arguments);
+      saveDecoLayout();
+      renderer.shadowMap.needsUpdate = true;
+      markDirty();
+      return r;
+    };
     onboardTimer = setTimeout(function () {
       if (!dead) toast(DEFAULT_HINT, 4200);   // brief onboarding, then it gets out of the way
     }, 900);

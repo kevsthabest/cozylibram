@@ -1337,7 +1337,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="f-tropesugg" class="chips"></div>' +
     '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
     '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
-    '<div class="tcard"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
+    '<div class="tropedb-card"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-characters" role="tabpanel" hidden>' +
@@ -1374,10 +1374,20 @@ function renderDetailModal(b, viaBook) {
     b.status = s; draft.status = s;
     if (['reading', 'read', 'dnf'].includes(s)) upNextRemove(id);
     if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;
+    // v449: track rereads — completing a book that was already finished
+    // increments readCount (enables the "An Old Friend" milestone).
+    // dateFinished is set by the draft save flow, not here.
+    if (s === 'read') {
+      const wasRead = from === 'read' || (b.readCount || 0) > 0;
+      b.readCount = wasRead ? (b.readCount || 1) + 1 : 1;
+      draft.readCount = b.readCount;
+    }
     saveLibrary();
     track('book_status_changed', { from: from, to: s });
     if (s === 'read') track('book_completed');
-    toast(s === 'reading' ? 'Happy reading ✨' : 'Back on the TBR');
+    // v449: cozy phrasing — returning to a finished book is a "revisit"
+    const isRevisit = s === 'reading' && (b.readCount || 0) >= 1;
+    toast(s === 'reading' ? (isRevisit ? 'Happy revisiting ✨' : 'Happy reading ✨') : 'Back on the TBR');
     root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x.dataset.s === s));
     paintShelfRow(); // v182: keep the tappable shelf row in sync
     paintPrimary();

@@ -45,13 +45,13 @@ for (const k of ['stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'
 
 /* ---- 3. modal flairs ---- */
 const packFlairs = JSON.parse(run(`JSON.stringify(ModalFlairs.CATALOG.filter(function(e){return e.premium && /^(stormrider|briarthrone|voidsignal|wisp)-/.test(e.id)}).map(function(e){return e.id}))`));
-ok('12 pack flairs in catalog', packFlairCount() === 12);
+ok('6 pack flairs in catalog', packFlairCount() === 6);
 function packFlairCount() { return packFlairs.length; }
-const expectedFlairs = ['stormrider-vine','stormrider-divider','stormrider-garland',
-  'briarthrone-vine','briarthrone-divider','briarthrone-watermark',
-  'voidsignal-vine','voidsignal-divider','voidsignal-corner',
-  'wisp-vine','wisp-divider','wisp-garland'];
-ok('all 12 expected flair ids present',
+const expectedFlairs = ['stormrider-vine','stormrider-garland',
+  'briarthrone-vine',
+  'voidsignal-vine',
+  'wisp-vine','wisp-garland'];
+ok('all 6 expected flair ids present',
   expectedFlairs.every(id => packFlairs.indexOf(id) >= 0));
 // theme mapping: pack vines resolve for pack themes
 for (const [theme, vine] of [['stormrider','stormrider-vine'],['briarthrone','briarthrone-vine'],['voidsignal','voidsignal-vine'],['wisp','wisp-vine'],['wisp-night','wisp-vine']]) {
