@@ -1267,14 +1267,14 @@ function renderDetailModal(b, viaBook) {
     // v476: no manual price entry — the value is an automated estimate.
     // purchasePrice is shown read-only when the user previously entered one.
     '<details class="m-collapsible"><summary><span>' + icon('tobuy') + ' Purchase' +
-    (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? ' <span class="note-inline">· $' + esc(Number(draft.purchasePrice).toFixed(2)) + '</span>' : '') +
+    (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? ' <span class="note-inline">· ' + esc(formatMoney(Number(draft.purchasePrice))) + '</span>' : '') +
     '</span></summary>' +
     '<div class="field"><label>Purchase</label>' +
     (function() {
       var est = (typeof estimateBookValue === 'function') ? estimateBookValue(draft) : null;
       if (draft.purchasePrice != null && !isNaN(draft.purchasePrice))
-        return '<div class="note-inline">You paid $' + esc(Number(draft.purchasePrice).toFixed(2)) + '</div>';
-      if (est) return '<div class="note-inline">Est. value: $' + esc(est.value.toFixed(2)) + ' (estimate)</div>';
+        return '<div class="note-inline">You paid ' + esc(formatMoney(Number(draft.purchasePrice))) + '</div>';
+      if (est) return '<div class="note-inline">Est. value: ' + esc(formatMoney(est.value)) + ' (estimate)</div>';
       return '';
     })() +
     '<div class="purchase-row">' +

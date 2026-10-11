@@ -453,13 +453,13 @@ function renderSettings() {
   var ledgerSources = Object.keys(ledgerBySource).sort(function(a, b) { return ledgerBySource[b] - ledgerBySource[a]; });
   var htmlLedger =
     '<div class="stat-row">' +
-    '<div class="stat"><div class="n">$' + listTotal.toFixed(2) + '</div><div class="l">Est. value</div></div>' +
-    (ledgerCount ? '<div class="stat"><div class="n">$' + ledgerTotal.toFixed(2) + '</div><div class="l">Total spent</div></div>' : '') +
+    '<div class="stat"><div class="n">' + esc(formatMoney(listTotal)) + '</div><div class="l">Est. value</div></div>' +
+    (ledgerCount ? '<div class="stat"><div class="n">' + esc(formatMoney(ledgerTotal)) + '</div><div class="l">Total spent</div></div>' : '') +
     '</div>' +
     '<p class="note">A rough estimate — actual prices vary.</p>' +
     (ledgerSources.length ? '<div class="field"><label>By source</label>' +
       ledgerSources.map(function(src) {
-        return '<div class="ledger-row"><span>' + esc(src) + '</span><span>$' + ledgerBySource[src].toFixed(2) + '</span></div>';
+        return '<div class="ledger-row"><span>' + esc(src) + '</span><span>' + esc(formatMoney(ledgerBySource[src])) + '</span></div>';
       }).join('') + '</div>' : '');
 
   const groups = [

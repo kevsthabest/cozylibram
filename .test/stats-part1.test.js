@@ -56,6 +56,12 @@ ok('pagesInYear delegates to pagesInRange',
 // estimateBookValue() is global: purchasePrice wins when present, otherwise
 // the flat estimate default. No opt-in gate — always shown, labeled estimate.
 
+// v480: regional currency. Pin the test locale to en-CA so the CAD default
+// (24.99) holds for the estimates below; the mapping tests further down
+// exercise other locales explicitly.
+const setLang = (l) => window.eval(`Object.defineProperty(navigator, 'language', { value: '${l}', configurable: true });`);
+setLang('en-CA');
+
 ok('estimateBookValue prefers purchasePrice',
   run(`estimateBookValue({ purchasePrice: 15.99 }).value`) === 15.99 &&
   run(`estimateBookValue({ purchasePrice: 15.99 }).actual`) === true);
@@ -68,6 +74,35 @@ ok('estimateBookValue respects stored defaultPrice',
   run(`try { localStorage.setItem('cozylibram.defaultPrice', '19.99'); } catch (e) {};
         estimateBookValue({}).value`) === 19.99);
 run(`try { localStorage.removeItem('cozylibram.defaultPrice'); } catch (e) {}`);
+
+// ---- Regional currency (v480) ----
+// locale -> currency mapping; per-market defaults; formatting.
+ok('userCurrency maps en-US to USD', (setLang('en-US'), run(`userCurrency()`)) === 'USD');
+ok('userCurrency maps en-CA to CAD', (setLang('en-CA'), run(`userCurrency()`)) === 'CAD');
+ok('userCurrency maps fr-CA to CAD', (setLang('fr-CA'), run(`userCurrency()`)) === 'CAD');
+ok('userCurrency maps en-GB to GBP', (setLang('en-GB'), run(`userCurrency()`)) === 'GBP');
+ok('userCurrency maps de-DE to EUR', (setLang('de-DE'), run(`userCurrency()`)) === 'EUR');
+ok('userCurrency maps bare fr to EUR', (setLang('fr'), run(`userCurrency()`)) === 'EUR');
+ok('userCurrency maps es-MX to MXN', (setLang('es-MX'), run(`userCurrency()`)) === 'MXN');
+ok('userCurrency maps ja-JP to JPY', (setLang('ja-JP'), run(`userCurrency()`)) === 'JPY');
+ok('userCurrency maps en-AU to AUD', (setLang('en-AU'), run(`userCurrency()`)) === 'AUD');
+ok('userCurrency defaults unknown locales to CAD', (setLang('xx-YY'), run(`userCurrency()`)) === 'CAD');
+
+ok('estimateBookValue uses the USD default for en-US',
+  (setLang('en-US'), run(`estimateBookValue({}).value`)) === 19.99);
+ok('estimateBookValue uses the EUR default for de-DE',
+  (setLang('de-DE'), run(`estimateBookValue({}).value`)) === 17.99);
+ok('purchasePrice is never converted, only the default is regional',
+  (setLang('de-DE'), run(`estimateBookValue({ purchasePrice: 15.99 }).value`)) === 15.99);
+
+ok('formatMoney formats USD with $', (setLang('en-US'), run(`formatMoney(19.99)`)) === '$19.99');
+ok('formatMoney formats EUR with €', (setLang('de-DE'), run(`formatMoney(19.99)`)).includes('€'));
+ok('formatMoney formats GBP with £', (setLang('en-GB'), run(`formatMoney(14.99)`)) === '£14.99');
+ok('formatMoney honors digits: 0', (setLang('en-US'), run(`formatMoney(65.97, { digits: 0 })`)) === '$66');
+ok('formatMoney handles zero safely', (setLang('en-US'), run(`formatMoney(0)`)) === '$0.00');
+
+// restore the pinned locale for the render test below
+setLang('en-CA');
 
 run(`library = [
   { id: 'b1', title: 'Priced', status: 'read', purchasePrice: 15.99 },
