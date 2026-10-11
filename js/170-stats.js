@@ -1209,7 +1209,7 @@ function renderStats() {
   } catch (e) {}
   const valueSection =
     '<div class="stat-sub">' + icon('chart') + ' Library value</div>' +
-    '<div class="valcard"><div class="big">≈ $' + Math.round(libEst) + '</div>' +
+    '<div class="valcard"><div class="big">≈ ' + esc(formatMoney(libEst, { digits: 0 })) + '</div>' +
     '<div>Estimated collection value</div>' +
     '<div class="note">A rough estimate — actual prices vary.</div></div>';
 
