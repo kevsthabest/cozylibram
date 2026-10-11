@@ -306,6 +306,99 @@ function pullSpine(el, id) {
    greeting hero → Currently Reading hero card → stat tiles → Recently
    Added → the rest. Shown only on the unfiltered view; filtering drops
    into the plain browser. */
+
+/* v446: contextual home subline. PURE — no globals, no DOM, no Date.
+   s = { reading: {id,title,progress,pageCount}|null, streak, tbr, libSize,
+         justFinished: {title}|null, hour: 0-23, theme, dayNumber }
+   Returns { text, action: 'book'|'discover'|'add', bookId }. Deterministic
+   per day: same inputs → same line all day, rotates at midnight. */
+function simpleStringHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+function homeSublineFor(s) {
+  const cutTitle = (t) => {
+    t = String(t || 'your book');
+    return t.length > 28 ? t.slice(0, 28) + '…' : t;
+  };
+  const fill = (line, reading) => {
+    let out = line;
+    if (out.indexOf('{title}') >= 0) out = out.split('{title}').join(cutTitle(reading && reading.title));
+    if (out.indexOf('{pct}') >= 0) {
+      const pc = reading && reading.pageCount > 0 ? Math.round(reading.progress / reading.pageCount * 100) : null;
+      if (pc === null) return null; // skip pct lines when pageCount is 0
+      out = out.split('{pct}').join(String(pc));
+    }
+    if (out.indexOf('{n}') >= 0) out = out.split('{n}').join(String(s.tbr));
+    if (out.indexOf('{streak}') >= 0) out = out.split('{streak}').join(String(s.streak));
+    return out;
+  };
+  const timeLine = () => {
+    const h = s.hour;
+    if (h >= 5 && h < 12) return 'A few pages before the day begins?';
+    if (h >= 12 && h < 17) return 'A little reading break?';
+    if (h >= 17 && h < 22) return 'Tea and a chapter?';
+    return 'The house is quiet. Perfect for reading.';
+  };
+  const THEME_LINES = {
+    dark: ['The night is young. So is the next chapter.', 'Quiet hours, good books.'],
+    light: ['A bright page for a bright day.', 'Open a book, open a window.'],
+    hearthside: ['Pull up a chair by the fire.', 'Warm light, slow pages.'],
+    candlelight: ['Light a candle and turn the page.', 'Soft light, long stories.'],
+    twilight: ['Dusk is the best time to read.', 'The stars are out. So are the books.'],
+    verdant: ['Find a mossy corner and read.', 'Something green, something good.'],
+    midnight: ['Midnight and a good book.', 'The moon is up. So is your TBR.'],
+    velvet: ['Something dark and delicious tonight?', 'Indulge yourself with a good book.'],
+    abyss: ['Dive in. The shelves run deep.', 'Quiet depths, deep stories.'],
+    frost: ['A good book for a cold evening.', 'Frost on the glass, story in hand.'],
+  };
+
+  let stateKey, pool, action, bookId = null, titleSrc = null;
+  if (s.reading) {
+    stateKey = 'a'; action = 'book'; bookId = s.reading.id; titleSrc = s.reading;
+    pool = [
+      'Pick up {title} where you left off?',
+      '{pct}% through {title}. Keep going?',
+      '{title} is waiting for you.',
+      'Just a few pages of {title}?',
+    ];
+    if (s.streak >= 3) pool.push('Keep the {streak}-day streak alive?');
+  } else if (s.justFinished) {
+    stateKey = 'b'; action = 'discover'; titleSrc = { title: s.justFinished.title };
+    pool = [
+      'You finished {title}. What\u2019s next?',
+      '{title} is done. Ready for something new?',
+    ];
+  } else if (s.tbr > 0) {
+    stateKey = 'c'; action = 'discover';
+    pool = s.tbr === 1
+      ? ['1 book is waiting on your TBR. Ready for it?']
+      : ['{n} books are waiting. Which one\u2019s calling?',
+         'Your TBR has {n} books. Feeling lucky?'];
+  } else if (s.libSize === 0) {
+    // state d: ONLY this line, no time/theme extras
+    return { text: 'Add your first book to begin the story.', action: 'add', bookId: null };
+  } else {
+    stateKey = 'e'; action = 'discover';
+    pool = ['What are you in the mood for?'];
+  }
+  // extras for states a, b, c, e (never d)
+  pool.push(timeLine());
+  const tl = THEME_LINES[s.theme];
+  if (tl) pool.push(tl[0], tl[1]);
+
+  // fill placeholders, dropping pct-less lines
+  const filled = [];
+  for (const line of pool) {
+    const t = fill(line, titleSrc);
+    if (t !== null) filled.push(t);
+  }
+  const idx = (s.dayNumber + simpleStringHash(stateKey)) % filled.length;
+  return { text: filled[idx], action, bookId };
+}
 function homeGreetingHTML() {
   const h = new Date().getHours();
   const tod = h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : 'evening';
@@ -331,8 +424,32 @@ function homeGreetingHTML() {
   } else {
     greet = 'Good ' + tod + (name ? ', ' + name : '');
   }
+  // v446: contextual subline — build state from real globals
+  let sub = { text: 'What are you in the mood for?', action: 'discover', bookId: null };
+  try {
+    const now = Date.now();
+    const threeDaysAgo = now - 3 * 86400000;
+    const justFinished = !reading && typeof library !== 'undefined'
+      ? library.filter(b => b.status === 'read' && b.dateFinished && new Date(b.dateFinished).getTime() >= threeDaysAgo)
+          .sort((a, b) => new Date(b.dateFinished) - new Date(a.dateFinished))[0] || null
+      : null;
+    const s = {
+      reading: reading ? { id: reading.id, title: reading.title, progress: reading.progress || 0, pageCount: reading.pageCount || 0 } : null,
+      streak: typeof readingStreak === 'function' ? readingStreak() : 0,
+      tbr: typeof library !== 'undefined' ? library.filter(b => b.status === 'tbr').length : 0,
+      libSize: typeof library !== 'undefined' ? library.length : 0,
+      justFinished: justFinished ? { title: justFinished.title } : null,
+      hour: h,
+      theme: typeof getTheme === 'function' ? getTheme() : 'dark',
+      dayNumber: Math.floor((now - new Date().getTimezoneOffset() * 60000) / 86400000),
+    };
+    sub = homeSublineFor(s);
+  } catch (e) {}
+  const subBtn = '<button type="button" class="home-sub" data-home-sub="' + sub.action + '"' +
+    (sub.action === 'book' && sub.bookId ? ' data-book-id="' + esc(String(sub.bookId)) + '"' : '') +
+    '>' + esc(sub.text) + '</button>';
   return '<section class="home-sec home-greet"><h2 class="serif">' + esc(greet) + ' ' + icon('covers') + '</h2>' +
-    '<p>What are you in the mood for?</p></section>';
+    '<p>' + subBtn + '</p></section>';
 }
 
 function readingHeroHTML() {
@@ -496,6 +613,17 @@ function renderLibrary() {
     }));
   const het = document.getElementById('he-tbr');
   if (het) het.addEventListener('click', () => { filter = 'tbr'; animateIn = true; render(); });
+  // v446: contextual subline tap
+  document.querySelectorAll('.home-sub').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const a = btn.dataset.homeSub;
+      if (a === 'book' && btn.dataset.bookId) { openDetail(btn.dataset.bookId); return; }
+      if (a === 'discover' || a === 'add') {
+        const nav = document.querySelector('.bottom-nav button[data-nav="' + a + '"]');
+        if (nav) nav.click();
+        else go(a);
+      }
+    }));
   const hed = document.getElementById('he-disc');
   if (hed) hed.addEventListener('click', () => go('discover'));
   const cdp = document.getElementById('cd-pick');
