@@ -215,16 +215,12 @@ async function hcSearchBooks(q) {
 // aren't re-hammered every boot (retried after 7 days); the manual button
 // always retries everything.
 let hcEnrichBusy = false;
-const HC_AUTO_KEY = 'spicyshelves.hc_auto';
-function hcAutoEnabled() {
-  try { return localStorage.getItem(HC_AUTO_KEY) !== '0'; } catch (e) { return true; }
-}
 function hcSweepTargets() {
   const weekAgo = Date.now() - 7 * 86400000;
   return library.filter(b => !b.hcEnriched && !(b.hcCheckedAt > weekAgo));
 }
 async function autoEnrichSweep() {
-  if (hcEnrichBusy || !hcReady() || !hcAutoEnabled()) return;
+  if (hcEnrichBusy || !hcReady()) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const targets = hcSweepTargets();
   if (!targets.length) return;
