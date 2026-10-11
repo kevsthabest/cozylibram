@@ -1,40 +1,15 @@
 'use strict';
 
-/* ---------------- Coven (v96): friends + shared shelves ---------------- */
-// Your private reading coven: invite friends with a shareable link, answer
+/* ---------------- Social Hub (v96): friends + shared shelves ---------------- */
+// Your private reading circle: invite friends with a shareable link, answer
 // requests, browse each other's shelves (read-only). All sharing is enforced
-// by Supabase RLS — see supabase/schema.sql. The coven needs the cloud; the
+// by Supabase RLS — see supabase/schema.sql. The hub needs the cloud; the
 // section prompts for sign-in when offline or signed out.
 
-/* v99: the social section takes its name from the active theme. */
-const COVEN_NAMES = {
-  dark:        'Coven',       // dark romance default
-  light:       'Book Club',
-  hearthside:  'Fireside',
-  candlelight: 'Salon',
-  twilight:    'Night Court',
-  verdant:     'Grove',
-  midnight:    'Moon Court',
-  velvet:      'Rose Court',
-  abyss:       'The Deep',
-  frost:       'Winter Court',
-  haunt:       'Haunt Coven', // v416 (T8): was 'Coven' — collided with Dark in the picker
-  yuletide:    'Yule Court',
-  fete:        'Gala',
-  amour:       "Lovers' Court",
-  shamrock:    'Emerald Court',
-  pastel:      'Spring Court',
-  harvest:     'Harvest Court',
-  solstice:    'Sun Court', // v416 (T6)
-  // v423: premium packs
-  stormrider:  'Storm Court',
-  briarthrone: 'Thorn Court',
-  voidsignal:  'Void Court',
-  wisp:        'Firefly Court',
-  'wisp-night':'Firefly Court',
-};
-function covenNameFor(key) { return COVEN_NAMES[key] || 'Coven'; }
-function covenName() { return covenNameFor(typeof getTheme === 'function' ? getTheme() : 'dark'); }
+/* Kevin's call (2026-10-11): the social section is called "Social Hub" in
+   every theme. The old theme-specific names (Night Court, Harvest Court,
+   Book Club, ...) are retired. */
+function covenName() { return 'Social Hub'; }
 function refreshCovenNav() {
   const btn = document.querySelector('.bottom-nav [data-nav="coven"]');
   if (!btn) return;
