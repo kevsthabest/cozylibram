@@ -54,12 +54,8 @@ ok('core cards first', cards.slice(0, 10).map(c => c.dataset.th).join(',') === '
 ok('seasonal cards follow', cards.slice(10, 18).map(c => c.dataset.th).join(',') === 'haunt,yuletide,fete,amour,shamrock,pastel,harvest,solstice');
 ok('premium cards last (v423)', cards.slice(18).map(c => c.dataset.th).join(',') === 'stormrider,briarthrone,voidsignal,wisp');
 ok('no blind dropdown remains', !q('#th-theme'));
-const darkCard = cards.find(c => c.dataset.th === 'dark');
-ok('cards show the per-theme social name', cards.every(c => c.querySelector('.tmeta span').textContent.length > 0));
-ok('dark card names the coven', darkCard.querySelector('.tmeta span').textContent.includes('Coven'));
-ok('twilight card names the night court', cards.find(c => c.dataset.th === 'twilight').querySelector('.tmeta span').textContent.includes('Night Court'));
-ok('haunt card names the haunt coven (T8)', cards.find(c => c.dataset.th === 'haunt').querySelector('.tmeta span').textContent.includes('Haunt Coven'));
-ok('solstice card names the sun court (T6)', cards.find(c => c.dataset.th === 'solstice').querySelector('.tmeta span').textContent.includes('Sun Court'));
+ok('cards show the social name', cards.every(c => c.querySelector('.tmeta span').textContent.length > 0));
+ok('every card names the Social Hub', cards.every(c => c.querySelector('.tmeta span').textContent.includes('Social Hub')));
 ok('active theme card is marked', cards.find(c => c.dataset.th === 'light').classList.contains('sel'));
 ok('active card shows checkmark', !!cards.find(c => c.dataset.th === 'light').querySelector('.check'));
 ok('mini previews carry inline theme colors', cards.every(c => {
@@ -75,7 +71,7 @@ velvetCard.click();
 ok('sheet opens on card tap', !!q('#tsSheetWrap'));
 ok('tap live-previews the theme app-wide', window.document.documentElement.dataset.theme === 'velvet');
 ok('preview uses theme default accent (no data-accent)', !window.document.documentElement.hasAttribute('data-accent'));
-ok('sheet shows coven identity', q('.tsheet .cov').textContent.includes('Rose Court'));
+ok('sheet shows the social hub', q('.tsheet .cov').textContent.includes('Social Hub'));
 ok('sheet accent label names theme default', q('#tsAccentName').textContent.includes('Rose') && q('#tsAccentName').textContent.includes('theme default'));
 ok('pairing buttons rendered', qa('#tsPairs .pair').length === 3);
 ok('theme default pairing marked suggested', qa('#tsPairs .pair.sug').length >= 1);
@@ -128,24 +124,24 @@ window.localStorage.setItem('theme', 'hearthside');
 window.applyTheme();
 ok('hearthside applied', window.document.documentElement.dataset.theme === 'hearthside');
 ok('meta theme-color hearthside', q('meta[name="theme-color"]').getAttribute('content') === '#1e0e0a');
-ok('hearthside names the fireside', q('.bottom-nav [data-nav="coven"] span').textContent === 'Fireside');
+ok('nav label is Social Hub regardless of theme', q('.bottom-nav [data-nav="coven"] span').textContent === 'Social Hub');
 window.localStorage.setItem('theme', 'nope');
 ok('unknown theme falls back to dark', window.getTheme() === 'dark');
 window.applyTheme();
 ok('fallback applies dataset dark', window.document.documentElement.dataset.theme === 'dark');
 
-// 9. Seasonal coven names incl. solstice
+// 9. Nav label stays Social Hub across themes
 window.localStorage.setItem('theme', 'solstice');
 window.applyTheme();
 ok('solstice applied', window.document.documentElement.dataset.theme === 'solstice');
 ok('meta theme-color solstice', q('meta[name="theme-color"]').getAttribute('content') === '#fdf1d7');
-ok('solstice names the sun court', q('.bottom-nav [data-nav="coven"] span').textContent === 'Sun Court');
+ok('solstice keeps Social Hub nav label', q('.bottom-nav [data-nav="coven"] span').textContent === 'Social Hub');
 window.localStorage.setItem('theme', 'midnight');
 window.applyTheme();
-for (const [th, name] of [['velvet', 'Rose Court'], ['abyss', 'The Deep'], ['frost', 'Winter Court']]) {
+for (const th of ['velvet', 'abyss', 'frost']) {
   window.localStorage.setItem('theme', th);
   window.applyTheme();
-  ok(th + ' names ' + name, q('.bottom-nav [data-nav="coven"] span').textContent === name);
+  ok(th + ' keeps Social Hub nav label', q('.bottom-nav [data-nav="coven"] span').textContent === 'Social Hub');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
