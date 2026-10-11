@@ -118,6 +118,27 @@ const CC = moduleObj.exports;
   ok('ui: trigger picker', ui.indexOf('openTriggerPicker') >= 0);
   ok('ui: flywheel enrichment', ui.indexOf('ccEnrichWarnings') >= 0);
   ok('ui: exposes ccSetBook', ui.indexOf('ccSetBook') >= 0);
+  ok('ui: conversation flow (Who did we miss?)', ui.indexOf('Who did we miss?') >= 0);
+  ok('ui: merge side-by-side cards', ui.indexOf('cc-merge-cards') >= 0);
+  ok('ui: trust notes quiet (cc-trust)', ui.indexOf('cc-trust') >= 0);
+  ok('ui: quiet entry badges', ui.indexOf('cc-entry') >= 0);
+}
+
+/* ---------- wiki provenance pills (Variant A quiet badges) ---------- */
+{
+  const ch = fs.readFileSync(path.join(ROOT, 'js/159-characters.js'), 'utf8');
+  ok('wiki: provPill helper', ch.indexOf('function provPill') >= 0);
+  ok('wiki: pill pairs color with text', /provPill\('(community|pending)'\)/.test(ch) || ch.indexOf("provPill('pending')") >= 0);
+  ok('wiki: aliases quiet row (no pill)', ch.indexOf('ch-aliases') >= 0);
+  ok('wiki: description pill', ch.indexOf('provPill(d.source)') >= 0);
+  ok('wiki: instance pills', ch.indexOf('provPill(inst.sourceType)') >= 0);
+  ok('wiki: pending count (no unreviewed content)', ch.indexOf('pendingCount') >= 0);
+  ok('wiki: voting surface parked (comment)', /voting surface.*parked/i.test(ch));
+  const admin = fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
+  ok('wiki: source_type in canonical detail query', admin.indexOf('source_type') >= 0);
+  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  ok('css: prov-pill styles', css.indexOf('.prov-pill') >= 0);
+  ok('css: cc-trust 11px', /\.cc-trust\s*\{[^}]*font-size:\s*11px/.test(css));
 }
 
 /* ---------- curation queue ---------- */
@@ -144,7 +165,7 @@ const CC = moduleObj.exports;
     ok('sw.js precaches ' + f, sw.indexOf(f) >= 0);
   });
   const av = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
-  ok('version bumped to v463', av.indexOf("v463") >= 0);
+  ok('version bumped to v469', av.indexOf("v469") >= 0);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

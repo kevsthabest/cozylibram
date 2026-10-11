@@ -1779,7 +1779,7 @@ const CharacterStore = {
       if (error || !c) return null;
       // v320: links via character_links (audit trail)
       const { data: links, error: lerr } = await sb.from('character_links')
-        .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, works(title, series))')
+        .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, source_type, works(title, series))')
         .eq('character_id', charId);
       if (lerr) throw lerr;
       return {
@@ -1803,6 +1803,7 @@ const CharacterStore = {
             aliases: Array.isArray(r.aliases) ? r.aliases : [],
             appearance: r.appearance || '',
             firstAppearance: r.first_appearance_chapter || null,
+            sourceType: r.source_type || 'ai',
             linkedAt: l.linked_at,
             linkNote: l.note,
           };

@@ -275,9 +275,19 @@ function spoilersHidden() {
 function setSpoilersHidden(hide) {
   try { localStorage.setItem('cl_hide_spoilers', hide ? '1' : '0'); } catch (e) {}
 }
+/* v469: provenance pills — wiki rework Variant A (quiet badges).
+   Color is always paired with text, never color alone (a11y).
+   States: pipeline ("from the books"), community, pending. */
+function provPill(source) {
+  var s = String(source || '').toLowerCase();
+  var cls, label;
+  if (s === 'community') { cls = 'prov-community'; label = 'community'; }
+  else if (s === 'pending') { cls = 'prov-pending'; label = 'pending review'; }
+  else { cls = 'prov-pipeline'; label = 'from the books'; }
+  return '<span class="prov-pill ' + cls + '">' + esc(label) + '</span>';
+}
 /* Wrap spoilerish HTML. When hidden, shows a blur + tap-to-reveal. */
-function spoilerWrap(html, label) {
-  if (!spoilersHidden()) return html;
+function spoilerWrap(html, label) {  if (!spoilersHidden()) return html;
   // v347: aria-hidden on blur so screen readers don't announce spoilers (Advisor MEDIUM)
   // v357: hint is eye icon + "Tap to reveal" (aria-label carries the context)
   return '<span class="spoiler" tabindex="0" role="button" aria-label="' + esc(label || 'Spoiler') + ' (hidden)">' +
@@ -1077,6 +1087,18 @@ async function renderCharacterPage() {
     if (t) targetCounts[t] = (targetCounts[t] || 0) + 1;
   }));
   const closest = Object.entries(targetCounts).sort((a, b) => b[1] - a[1])[0];
+  // v469: pending community suggestions for this character — quiet count only.
+  // Unreviewed content is never rendered; the curator handles it in the queue.
+  let pendingCount = 0;
+  try {
+    const psb = await CharacterWiki._sb();
+    if (psb) {
+      const refs = [d.id].concat(d.instances.map(i => i.id).filter(Boolean));
+      const { data } = await psb.from('character_suggestions')
+        .select('id').eq('status', 'pending').in('character_ref', refs).limit(50);
+      pendingCount = (data || []).length;
+    }
+  } catch (e) {}
   // v340: fetch all work characters once (shared by closest-to, graph, timeline).
   // Parallel via Promise.all, deduped by workId.
   let allWorkChars = [];
@@ -1094,11 +1116,14 @@ async function renderCharacterPage() {
     charAvatar(d.name, primaryRole, 84) +
     '<div class="ch-hero-info"><h2 class="serif">' + esc(d.name) + '</h2>' +
     '<span class="chip dbtrope ch-role-' + esc(primaryRole) + '">' + esc(CHAR_ROLE_LABELS[primaryRole] || primaryRole) + '</span>' +
-    (d.aliases && d.aliases.length ? '<p class="note">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
+    // v469: aliases stay a quiet detail row below the role badge — never inline with a pill
+    (d.aliases && d.aliases.length ? '<p class="ch-aliases">Also known as: ' + esc(d.aliases.join(', ')) + '</p>' : '') +
     (() => {
       // v348: appearance description from pipeline (first non-empty across instances)
-      const app = d.instances.map(i => i.appearance).find(a => a && a.trim());
-      return app ? '<p class="ch-appearance">' + esc(app) + '</p>' : '';
+      // v469: provenance pill from the contributing instance
+      const inst = d.instances.find(i => i.appearance && i.appearance.trim());
+      if (!inst) return '';
+      return '<p class="ch-appearance">' + esc(inst.appearance) + provPill(inst.sourceType) + '</p>';
     })() +
     (() => {
       // v348: first appearance — earliest book by seriesPos (Advisor MEDIUM).
@@ -1134,13 +1159,16 @@ async function renderCharacterPage() {
       const cls = latest === 'dead' ? 'ch-status-dead' : latest === 'alive' ? 'ch-status-alive' : '';
       return '<p>' + spoilerWrap('<span class="chip dbtrope sm ' + cls + '">' + esc(label) + '</span>', 'Character status') + '</p>';
     })() +
+    // v469: quiet pending indicator — count only, unreviewed content never shown
+    (pendingCount ? '<p class="note">' + pendingCount + ' suggestion' + (pendingCount === 1 ? '' : 's') + ' ' + provPill('pending') + '</p>' : '') +
     '</div></div>' +
     '<div class="stat-row ch-stats">' +
     '<div class="stat"><div class="n">' + d.instances.length + '</div><div class="l">' + (d.instances.length === 1 ? 'Book' : 'Books') + '</div></div>' +
     '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div>' +
     (closest ? '<div class="stat"><div class="n" style="font-size:0.9em;line-height:1.2">' + charRelLink(closest[0], allWorkChars) + '</div><div class="l">Closest to</div></div>' : '') +
     '</div>';
-  if (d.description) html += '<p class="ch-desc">' + esc(d.description) + '</p>';
+  // v469: provenance pill on the canonical description
+  if (d.description) html += '<p class="ch-desc">' + esc(d.description) + provPill(d.source) + '</p>';
 
   // Appears in — cover cards. v335: exact normalized title lookup
   // (Security Advisor: fuzzy includes() caused wrong covers)
@@ -1171,7 +1199,7 @@ async function renderCharacterPage() {
     html += '<div class="ch-book-card">' +
       (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy">' : '<div class="ch-book-nocover"><span>' + esc(inst.workTitle || '?') + '</span></div>') +
       '<div class="ch-book-meta"><b>' + esc(inst.workTitle) + '</b><br>' +
-      '<span class="chip dbtrope sm">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span>' +
+      '<span class="chip dbtrope sm">' + esc(CHAR_ROLE_LABELS[inst.role] || inst.role || '?') + '</span>' + provPill(inst.sourceType) +
       (inst.name !== d.name ? '<br><span class="note">as "' + esc(inst.name) + '"</span>' : '') +
       '</div></div>';
   }
@@ -1185,6 +1213,9 @@ async function renderCharacterPage() {
   } catch (e) {}
 
   // Relationships: v339 Phase C graph + text lists below
+  // v469: public "tend the library" voting surface is parked — future vote
+  // controls mount per-relationship here; the curation queue stays the
+  // only moderation path in v1.
   html += '<h3 class="serif">Relationships</h3>';
   try {
     // v379: merge edge table over JSON (Advisor HIGH)
@@ -1215,7 +1246,7 @@ async function renderCharacterPage() {
     // Fetch work characters for link resolution
     let wChars = [];
     try { wChars = await CharacterStore.listForWork(inst.workId); } catch (e) {}
-    html += '<h4 class="serif">' + esc(inst.workTitle) + '</h4><p>';
+    html += '<h4 class="serif">' + esc(inst.workTitle) + ' ' + provPill(inst.sourceType) + '</h4><p>';
     const byType = {};
     // v338: dedupe parent/child contradictions
     const seenParents = new Set();

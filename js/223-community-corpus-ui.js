@@ -61,7 +61,7 @@ function openTropePicker(book) {
   if (!list.length) { toast('Trope catalog not loaded'); return; }
   var items = list.map(function (t) { return { id: t.id, name: t.name || t.id }; });
   ccSheet('Suggest a trope', 
-    '<p class="note">Pick from the curated catalog — suggestions go to the curator for review.</p>' +
+    '<p class="cc-trust" style="text-align:left;margin:0 0 4px">Pick from the curated catalog — suggestions go to the curator for review.</p>' +
     '<input id="ccTropeSearch" class="text-input" placeholder="Search tropes…" style="width:100%;margin:8px 0">' +
     '<div id="ccTropeList" class="cc-picklist" style="max-height:40vh;overflow:auto"></div>' +
     '<p style="margin-top:10px"><button class="taplink" id="ccNewTropeIdea">Have a trope idea that isn\'t listed? Propose it →</button></p>',
@@ -97,6 +97,7 @@ function openNewTropeIdea(book) {
     '<p class="note">Ideas outside the catalog go to the curator — they\'re never added automatically.</p>' +
     '<input id="ccNtName" class="text-input" placeholder="Trope name" style="width:100%;margin:6px 0">' +
     '<textarea id="ccNtDesc" class="text-input" rows="3" placeholder="What happens in this trope? (a sentence or two)" style="width:100%"></textarea>' +
+    '<p class="cc-trust" style="text-align:left">Ideas outside the catalog go to the curator — they\'re never added automatically.</p>' +
     '<p style="margin-top:10px"><button class="btn" id="ccNtSend">Send idea</button> ' +
     '<button class="btn ghost" id="ccNtCancel">Cancel</button></p>',
     function (sheet, close) {
@@ -109,27 +110,50 @@ function openNewTropeIdea(book) {
     });
 }
 
-/* ---------- character suggestion ---------- */
+/* ---------- character suggestion: Variant A (Conversation) ----------
+   One question at a time in a bottom sheet — feels like chatting, not
+   form-filling. Step 1: name ("Who did we miss?"). Step 2: role + description. */
 function openCharacterSuggest(book) {
   var mod = cc();
   if (!mod) return;
-  ccSheet('Suggest a character',
-    '<p class="note">Who\'s missing from this book\'s cast?</p>' +
-    '<input id="ccChName" class="text-input" placeholder="Character name" style="width:100%;margin:6px 0">' +
+  ccSheet('Who did we miss?',
+    '<p class="note" style="margin-bottom:12px">Just the name for now — you can add more if you like.</p>' +
+    '<input id="ccChName" class="text-input" placeholder="Character name" style="width:100%" autocomplete="off">' +
+    '<p style="margin-top:14px"><button class="btn" id="ccChNext" style="width:100%">Continue &rarr;</button></p>' +
+    '<p class="cc-trust">Goes to the curator for review. Never auto-added.</p>',
+    function (sheet, close) {
+      var inp = sheet.querySelector('#ccChName');
+      var next = function () {
+        var name = inp.value.trim();
+        if (!name) { toast('Give them a name first'); inp.focus(); return; }
+        openCharacterSuggestStep2(book, name);
+      };
+      sheet.querySelector('#ccChNext').addEventListener('click', next);
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') next(); });
+      if (inp) inp.focus();
+    });
+}
+
+function openCharacterSuggestStep2(book, name) {
+  var mod = cc();
+  if (!mod) return;
+  ccSheet('Who did we miss?',
+    '<p class="note" style="margin-bottom:12px">Adding <b>' + escHtml(name) + '</b> — anything more? <button class="taplink" id="ccChBack">&larr; edit name</button></p>' +
+    '<label class="cc-label">What kind of role? (optional)</label>' +
     '<select id="ccChRole" class="text-input" style="width:100%;margin:6px 0">' +
-    '<option value="">Role (optional)</option>' +
+    '<option value="">Pick a role&hellip;</option>' +
     '<option value="protagonist">Protagonist</option>' +
     '<option value="antagonist">Antagonist</option>' +
     '<option value="supporting">Supporting</option>' +
     '<option value="minor">Minor</option></select>' +
     '<textarea id="ccChDesc" class="text-input" rows="3" placeholder="Who are they? (a sentence or two)" style="width:100%"></textarea>' +
-    '<p style="margin-top:10px"><button class="btn" id="ccChSend">Send suggestion</button> ' +
-    '<button class="btn ghost" id="ccChCancel">Cancel</button></p>',
+    '<p style="margin-top:12px"><button class="btn" id="ccChSend" style="width:100%">Suggest ' + escHtml(name) + ' &rarr;</button></p>' +
+    '<p class="cc-trust">Goes to the curator for review. Never auto-added.</p>',
     function (sheet, close) {
-      sheet.querySelector('#ccChCancel').addEventListener('click', close);
+      sheet.querySelector('#ccChBack').addEventListener('click', function () { openCharacterSuggest(book); });
       sheet.querySelector('#ccChSend').addEventListener('click', function () {
         mod.suggestCharacter(book, {
-          name: sheet.querySelector('#ccChName').value,
+          name: name,
           role: sheet.querySelector('#ccChRole').value || null,
           description: sheet.querySelector('#ccChDesc').value
         }).then(function (r) { if (r && r.ok) close(); });
@@ -137,27 +161,54 @@ function openCharacterSuggest(book) {
     });
 }
 
-/* Merge proposal: pick character B from the visible cast, evidence required. */
+/* Merge proposal: Variant A — side-by-side cards + required evidence.
+   Evidence is enforced client-side (toast + focus); the curator still
+   reviews every proposal. Merges are never automatic. */
 function openMergeProposal(book, charAName, charARef, candidates) {
   var mod = cc();
   if (!mod) return;
   candidates = (candidates || []).filter(function (c) { return c.ref !== charARef && c.name !== charAName; });
   if (!candidates.length) { toast('Need at least two characters to propose a merge'); return; }
-  ccSheet('Same person?',
-    '<p class="note"><b>' + escHtml(charAName) + '</b> is the same person as…</p>' +
+  var avatarFor = function (name) {
+    var ch = String(name || '?').trim().charAt(0).toUpperCase() || '?';
+    return '<div class="cc-merge-avatar">' + escHtml(ch) + '</div>';
+  };
+  var cardsHTML = function (bName) {
+    return '<div class="cc-merge-cards">' +
+      '<div class="cc-merge-card">' + avatarFor(charAName) +
+      '<div class="cc-merge-name">' + escHtml(charAName) + '</div></div>' +
+      '<div class="cc-merge-vs">is</div>' +
+      '<div class="cc-merge-card">' + avatarFor(bName) +
+      '<div class="cc-merge-name">' + escHtml(bName) + '</div></div>' +
+      '</div>';
+  };
+  ccSheet('Are these the same person?',
+    '<div id="ccMgCards">' + cardsHTML(candidates[0].name) + '</div>' +
+    '<label class="cc-label">The same person as&hellip;</label>' +
     '<select id="ccMgB" class="text-input" style="width:100%;margin:6px 0">' +
     candidates.map(function (c) { return '<option value="' + escHtml(c.ref) + '">' + escHtml(c.name) + '</option>'; }).join('') +
     '</select>' +
-    '<textarea id="ccMgEv" class="text-input" rows="3" placeholder="Evidence (required) — e.g. "both appear in Chapter 12"" style="width:100%"></textarea>' +
-    '<p class="note">Merges are never automatic — the curator reviews your evidence.</p>' +
-    '<p style="margin-top:10px"><button class="btn" id="ccMgSend">Propose merge</button> ' +
+    '<label class="cc-label">Evidence (required)</label>' +
+    '<textarea id="ccMgEv" class="text-input" rows="3" placeholder="Where did you see this? e.g. both appear in Chapter 12" style="width:100%"></textarea>' +
+    '<p class="cc-trust">Merges are never automatic — the curator reviews your evidence.</p>' +
+    '<p style="margin-top:10px"><button class="btn" id="ccMgSend" style="width:100%">Propose merge</button> ' +
     '<button class="btn ghost" id="ccMgCancel">Cancel</button></p>',
     function (sheet, close) {
+      var sel = sheet.querySelector('#ccMgB');
+      var cards = sheet.querySelector('#ccMgCards');
+      sel.addEventListener('change', function () {
+        var opt = sel.options[sel.selectedIndex];
+        cards.innerHTML = cardsHTML(opt ? opt.text : '');
+      });
       sheet.querySelector('#ccMgCancel').addEventListener('click', close);
       sheet.querySelector('#ccMgSend').addEventListener('click', function () {
-        var b = sheet.querySelector('#ccMgB').value;
-        var ev = sheet.querySelector('#ccMgEv').value;
-        mod.proposeMerge(book, charARef, b, ev).then(function (r) { if (r && r.ok) close(); });
+        var ev = sheet.querySelector('#ccMgEv').value.trim();
+        if (!ev) {
+          toast('Evidence is required — where did you see this?');
+          sheet.querySelector('#ccMgEv').focus();
+          return;
+        }
+        mod.proposeMerge(book, charARef, sel.value, ev).then(function (r) { if (r && r.ok) close(); });
       });
     });
 }
@@ -170,7 +221,7 @@ function openTriggerPicker(book) {
     if (!tax.length) { toast('Warning catalog not loaded — try again shortly'); return; }
     var cats = {};
     tax.forEach(function (t) { (cats[t.category] = cats[t.category] || []).push(t); });
-    var body = '<p class="note">Pick from the curated list — suggestions go to the curator. Applying a warning is deliberately easy; a missing one matters more than a wrong one.</p>' +
+    var body = '<p class="cc-trust" style="text-align:left;margin:0 0 4px">Pick from the curated list — suggestions go to the curator. Applying a warning is deliberately easy; a missing one matters more than a wrong one.</p>' +
       '<input id="ccTgSearch" class="text-input" placeholder="Search warnings…" style="width:100%;margin:8px 0">' +
       '<div id="ccTgList" style="max-height:40vh;overflow:auto"></div>';
     ccSheet('Suggest a content warning', body, function (sheet, close) {
@@ -248,7 +299,7 @@ function injectTropeSuggest(box) {
   if (!ccBook) return;
   var btn = document.createElement('p');
   btn.style.marginTop = '10px';
-  btn.innerHTML = '<button class="btn sm ghost" id="ccTropeSuggest">Suggest a trope</button> ' +
+  btn.innerHTML = '<button class="btn sm ghost cc-entry" id="ccTropeSuggest">Suggest a trope</button> ' +
     '<span class="note">from the curated catalog — reviewed by the curator</span>';
   box.appendChild(btn);
   btn.querySelector('#ccTropeSuggest').addEventListener('click', function () { openTropePicker(ccBook); });
@@ -259,8 +310,8 @@ function injectCharsSuggest(box) {
   if (!ccBook) return;
   var book = ccBook;
   var wrap = document.createElement('div');
-  wrap.innerHTML = '<p><button class="btn sm ghost" id="ccCharSuggest">Suggest a character</button> ' +
-    '<span class="note">missing someone? reviewed by the curator</span></p>';
+  wrap.innerHTML = '<p><button class="btn sm ghost cc-entry" id="ccCharSuggest">Who did we miss?</button> ' +
+    '<span class="note">reviewed by the curator</span></p>';
   box.insertBefore(wrap, box.firstChild);
   wrap.querySelector('#ccCharSuggest').addEventListener('click', function () { openCharacterSuggest(book); });
   /* merge affordance on each character card */
@@ -296,7 +347,7 @@ function injectTriggerSuggest(details) {
   var book = ccBook;
   var p = document.createElement('p');
   p.style.marginTop = '8px';
-  p.innerHTML = '<button class="taplink" id="ccTriggerSuggest" style="font-size:12px">Suggest a warning</button> ' +
+  p.innerHTML = '<button class="taplink cc-entry" id="ccTriggerSuggest" style="font-size:12px">Suggest a warning</button> ' +
     '<span class="note">spotted one that\'s missing?</span>';
   details.appendChild(p);
   p.querySelector('#ccTriggerSuggest').addEventListener('click', function () { openTriggerPicker(book); });
