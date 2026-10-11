@@ -77,6 +77,10 @@ const MILESTONE_CATALOG = [
     title: 'Reunited with an old favorite',
     copy: 'Back to an author you hadn\u2019t touched in half a year. Good to see them again.',
     hint: 'Return to an author after 6+ months away' },
+  { id: 'revisit-first', cat: 'discovery', icon: 'bookmark',
+    title: 'Revisited',
+    copy: 'You returned to a story you\u2019d already finished. Some books deserve a second visit.',
+    hint: 'Finish a book you\u2019ve read before' },
 
   // ---- Taste: personalized patterns ----
   { id: 'taste-trope-5', cat: 'taste', icon: 'sparkles',
@@ -205,6 +209,13 @@ function detectMilestones(lib) {
   }
   const dnf = lib.find(b => b.status === 'dnf');
   if (dnf) found.push({ id: 'first-dnf', achievedAt: null });
+
+  // Discovery: revisit — finished a book that was already read before
+  const revisited = read.find(b => (b.readCount || 0) >= 2);
+  if (revisited) {
+    const dt = safeDate(revisited.dateFinished);
+    found.push({ id: 'revisit-first', achievedAt: dt ? dt.toISOString() : null, detail: revisited.title });
+  }
 
   // Discovery: returning to an author after 6+ month gap
   // (renamed from "new author" — the detector finds a reader coming back

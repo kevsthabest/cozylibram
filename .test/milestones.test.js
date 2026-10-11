@@ -237,5 +237,18 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('new milestone is unseen', unseen2 && unseen2.def.id === 'books-finished-10');
 }
 
+/* Revisit milestone */
+{
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`library = ${JSON.stringify([
+    { id: 'r1', title: 'Beloved', status: 'read', dateFinished: '2024-05-01T00:00:00Z', readCount: 2, authors: [], genres: [], tropes: [] },
+    { id: 'r2', title: 'Once', status: 'read', dateFinished: '2024-06-01T00:00:00Z', readCount: 1, authors: [], genres: [], tropes: [] },
+  ])}`);
+  const found = run(`detectMilestones(library).map(d => d.id)`);
+  ok('detects revisit', found.includes('revisit-first'));
+  const def = run(`milestoneDef('revisit-first', loadMilestones()['revisit-first'] || { detail: 'Beloved' })`);
+  ok('revisit uses cozy phrasing', def.title === 'Revisited');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -113,6 +113,8 @@ function migrateBook(b) {
   if (typeof b.id !== 'string' || !b.id) b.id = uid();
   else { const clean = b.id.replace(/[^A-Za-z0-9_-]/g, ''); b.id = clean || uid(); }
   if (!Object.prototype.hasOwnProperty.call(STATUS, b.status)) b.status = 'tbr';
+  // v449: backfill readCount for books finished before reread tracking existed
+  if (b.status === 'read' && (b.readCount == null || b.readCount < 1)) b.readCount = 1;
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
   if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81
