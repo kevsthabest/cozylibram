@@ -47,6 +47,11 @@ const MILESTONE_CATALOG = [
     title: '30-day streak',
     copy: 'A month of daily reading. That\u2019s devotion.',
     hint: 'Read 30 days in a row' },
+  { id: 'streak-personal-best', cat: 'rhythm', icon: 'crown',
+    title: 'Personal best streak',
+    copy: 'Your longest reading run ever. Can you beat it?',
+    hint: 'Set a personal reading streak record',
+    dynamic: true },
   { id: 'seasons-all-four', cat: 'rhythm', icon: 'leaf',
     title: 'Read in all four seasons',
     copy: 'Spring pages, summer chapters, autumn verses, winter tales.',
@@ -114,6 +119,8 @@ function detectMilestones(lib) {
     const best = typeof longestStreak === 'function' ? longestStreak() : 0;
     if (best >= 7) found.push({ id: 'streak-days-7', achievedAt: null });
     if (best >= 30) found.push({ id: 'streak-days-30', achievedAt: null });
+    // Kevin's refinement: personal best streak (replaces longest session)
+    if (best > 0) found.push({ id: 'streak-personal-best', achievedAt: null, value: best });
   } catch (e) {}
 
   // Rhythm: all four seasons (from dateFinished or log dates)
@@ -204,6 +211,30 @@ function detectMilestones(lib) {
     if (top && authorCount[top] >= 3) found.push({ id: 'taste-devoted-3', achievedAt: null, detail: top });
   } catch (e) {}
 
+  // Discovery: per-series completionist (Kevin's refinement)
+  // 2+ books owned in a series, all read. One milestone per series.
+  // Re-earnable: reading a newly-added book updates achievedAt.
+  try {
+    const bySeries = {};
+    lib.forEach(b => {
+      const sname = b.series && b.series.name;
+      if (!sname) return;
+      (bySeries[sname] = bySeries[sname] || []).push(b);
+    });
+    Object.keys(bySeries).forEach(sname => {
+      const books = bySeries[sname];
+      if (books.length < 2) return; // single book never counts
+      const allRead = books.every(b => b.status === 'read');
+      if (!allRead) return;
+      const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'unknown';
+      const id = 'series-finished-' + slug;
+      // achievedAt = most recent dateFinished among the series books
+      const dates = books.map(b => b.dateFinished ? new Date(b.dateFinished).getTime() : 0).filter(t => t > 0);
+      const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
+      found.push({ id, achievedAt: latest, detail: sname });
+    });
+  } catch (e) {}
+
   return found;
 }
 
@@ -217,8 +248,8 @@ function loadMilestones() {
 function saveMilestones(store) {
   try { localStorage.setItem(MILESTONE_KEY, JSON.stringify(store)); } catch (e) {}
 }
-/* Check for new milestones. Idempotent: never recomputes achievedAt once set.
-   Returns array of newly-achieved IDs (for celebration). */
+/* Check for new milestones. Idempotent: never recomputes achievedAt once set,
+   EXCEPT for re-earnable series milestones (updates achievedAt when extended). */
 function checkMilestones() {
   if (typeof library === 'undefined' || !library) return [];
   const store = loadMilestones();
@@ -227,7 +258,24 @@ function checkMilestones() {
   detected.forEach(d => {
     if (!store[d.id]) {
       store[d.id] = { achievedAt: d.achievedAt || null, seen: false };
+      if (d.detail) store[d.id].detail = d.detail;
+      if (d.value != null) store[d.id].value = d.value;
       fresh.push(d.id);
+    } else if (d.id.indexOf('series-finished-') === 0 && d.achievedAt) {
+      // Re-earnable: series extended with a newly-read book — update the date
+      const prev = store[d.id].achievedAt;
+      if (!prev || d.achievedAt > prev) {
+        store[d.id].achievedAt = d.achievedAt;
+        store[d.id].seen = false; // celebrate the extension
+        fresh.push(d.id);
+      }
+    } else if (d.id === 'streak-personal-best' && d.value != null) {
+      // Personal best: update the record value when beaten
+      if ((store[d.id].value || 0) < d.value) {
+        store[d.id].value = d.value;
+        store[d.id].seen = false;
+        fresh.push(d.id);
+      }
     }
   });
   saveMilestones(store);
@@ -248,6 +296,31 @@ function markMilestoneSeen(id) {
   const store = loadMilestones();
   if (store[id]) { store[id].seen = true; saveMilestones(store); }
 }
+/* Resolve a milestone ID to its definition, including dynamic series ones. */
+function milestoneDef(id, state) {
+  const def = MILESTONE_CATALOG.find(m => m.id === id);
+  if (def) {
+    // Personal best: inject the record value into the copy
+    if (id === 'streak-personal-best' && state && state.value) {
+      return Object.assign({}, def, {
+        title: 'Personal best: ' + state.value + '-day streak',
+        copy: 'Your longest reading run ever: ' + state.value + ' days. Can you beat it?',
+      });
+    }
+    return def;
+  }
+  // Dynamic: series-finished-{slug}
+  if (id.indexOf('series-finished-') === 0) {
+    const sname = (state && state.detail) || 'a series';
+    return {
+      id, cat: 'discovery', icon: 'covers',
+      title: 'Finished your ' + sname + ' collection',
+      copy: 'Every book you own in this series, read. That\u2019s commitment.',
+      hint: 'Read all owned books in a series',
+    };
+  }
+  return null;
+}
 function newestUnseenMilestone() {
   const store = loadMilestones();
   const ids = Object.keys(store).filter(id => !store[id].seen);
@@ -261,6 +334,6 @@ function newestUnseenMilestone() {
     return db.localeCompare(da);
   });
   const id = ids[0];
-  const def = MILESTONE_CATALOG.find(m => m.id === id);
+  const def = typeof milestoneDef === 'function' ? milestoneDef(id, store[id]) : MILESTONE_CATALOG.find(m => m.id === id);
   return def ? { def, state: store[id] } : null;
 }

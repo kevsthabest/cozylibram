@@ -1320,18 +1320,39 @@ function renderMilestones() {
   cats.forEach(cat => {
     const items = MILESTONE_CATALOG.filter(m => m.cat === cat.id);
     const earned = items.filter(m => store[m.id]);
+    // Dynamic series milestones live under Discovery
+    let dynHtml = '';
+    let dynCount = 0;
+    if (cat.id === 'discovery' && typeof milestoneDef === 'function') {
+      Object.keys(store).filter(id => id.indexOf('series-finished-') === 0).forEach(id => {
+        const def = milestoneDef(id, store[id]);
+        if (!def) return;
+        dynCount++;
+        const st = store[id];
+        const dateStr = st.achievedAt
+          ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+          : 'Earned before milestones launched';
+        dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
+          '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          '<div class="mcheck">\u2713</div></div>';
+      });
+    }
+    const earnedCount = earned.length + dynCount;
+    const totalLabel = dynCount ? items.length + '+' : items.length;
     html += '<div class="cat-header" style="display:flex;align-items:baseline;gap:8px;margin:20px 0 4px">' +
       '<h3 style="font-size:15px">' + cat.name + '</h3>' +
-      '<span class="note">' + earned.length + ' of ' + items.length + '</span></div>' +
-      '<p class="note" style="margin-bottom:10px">' + cat.desc + '</p>';
+      '<span class="note">' + earnedCount + ' of ' + totalLabel + '</span></div>' +
+      '<p class="note" style="margin-bottom:10px">' + cat.desc + '</p>' + dynHtml;
     items.forEach(m => {
       const st = store[m.id];
+      const def = (typeof milestoneDef === 'function' && st) ? milestoneDef(m.id, st) : m;
       if (st) {
         const dateStr = st.achievedAt
           ? 'Earned ' + new Date(st.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
           : 'Earned before milestones launched';
-        html += '<div class="milestone-row"><div class="micon">' + icon(m.icon || 'sparkles') + '</div>' +
-          '<div class="minfo"><div class="mname">' + esc(m.title) + '</div>' +
+        html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
+          '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
           '<div class="mcheck">\u2713</div></div>';
       } else {
