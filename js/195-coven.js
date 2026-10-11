@@ -220,6 +220,47 @@ async function circleSavePrivacy(share, hidden) {
   if (up.error) throw up.error;
 }
 
+/* ---------- shelf-share consent (v476) ----------
+   Private by default: the first time the reader accepts someone into their
+   Hearth, ask whether their shelves should be shared. The profiles.share_library
+   toggle is global, so this prompt runs once per device (localStorage flag) —
+   answering sets the standing preference; later acceptances respect it.
+   Dismissing the sheet counts as "not now": sharing stays off. */
+var SHELF_SHARE_ASKED_KEY = 'cozylibram.shelfShareAsked';
+function shelfShareAsked() {
+  try { return localStorage.getItem(SHELF_SHARE_ASKED_KEY) === '1'; } catch (e) { return true; }
+}
+function markShelfShareAsked() {
+  try { localStorage.setItem(SHELF_SHARE_ASKED_KEY, '1'); } catch (e) {}
+}
+async function maybeAskShelfShare(friendName) {
+  if (shelfShareAsked()) return;
+  let hidden = [];
+  try { hidden = (await circlePrivacy()).hidden || []; } catch (e) {}
+  let decided = false;
+  const finish = async (share) => {
+    if (decided) return; decided = true;
+    try {
+      await circleSavePrivacy(share, hidden);
+      markShelfShareAsked();
+    } catch (e) { /* save failed: flag stays unset, prompt returns next time */ }
+    covenCloseSheet();
+    toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase()
+                : 'Your shelves stay private — change this anytime in Privacy settings');
+  };
+  const nm = esc(friendName || 'your new friend');
+  const body =
+    '<p><b>' + nm + '</b> is now in your ' + esc(covenName().toLowerCase()) + '.</p>' +
+    '<p class="note">Let them browse your shelves? You can change this anytime in Privacy settings.</p>' +
+    '<div class="modal-actions" style="margin-top:16px">' +
+    '<button class="btn" id="cc-ss-yes" style="flex:1;min-height:44px">Yes, share</button>' +
+    '<button class="btn ghost" id="cc-ss-no" style="flex:1;min-height:44px">Not now</button>' +
+    '</div>';
+  covenOpenSheet('Share your shelves?', body, null, () => { if (!decided) finish(false); });
+  document.getElementById('cc-ss-yes').addEventListener('click', () => finish(true));
+  document.getElementById('cc-ss-no').addEventListener('click', () => finish(false));
+}
+
 /* ---------- friend shelves (read-only) ---------- */
 async function circleFriendProfile(friendId) {
   const sb = await cloudClient();
@@ -328,6 +369,7 @@ function renderInviteAccept(slot, inv) {
       toast('You’re in each other’s ' + covenName().toLowerCase() + ' now');
       clearPendingInvite();
       renderCoven();
+      maybeAskShelfShare(inv.name); // v476: private-by-default consent, once
     } catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   });
   slot.querySelector('#cc-dismiss').addEventListener('click', () => {
@@ -384,7 +426,7 @@ function renderCovenMain(code, lists, priv) {
     html += '<h2 class="section serif">Requests</h2><div class="circle-list">';
     lists.received.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
-        '<button class="btn sm" data-accept="' + esc(r.id) + '">Accept</button>' +
+        '<button class="btn sm" data-accept="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Accept</button>' +
         '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>' +
         '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>', 'wants to join your ' + covenName().toLowerCase());
     });
@@ -410,7 +452,7 @@ function renderCovenMain(code, lists, priv) {
       go('coven-friend');
     }));
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {
-    try { await circleAnswer(b.dataset.accept, true); track('friend_request_accepted'); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); }
+    try { await circleAnswer(b.dataset.accept, true); track('friend_request_accepted'); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); maybeAskShelfShare(b.dataset.name); }
     catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
@@ -612,7 +654,7 @@ function openInviteSheet(code, opener, friends) {
   }));
   return ref;
 }
-function covenOpenSheet(title, bodyHTML, opener) {
+function covenOpenSheet(title, bodyHTML, opener, onDismiss) {
   covenCloseSheet();
   const scrim = document.createElement('div');
   scrim.className = 'coven-scrim'; scrim.id = 'covenScrim';
@@ -628,6 +670,7 @@ function covenOpenSheet(title, bodyHTML, opener) {
   const close = () => {
     covenCloseSheet();
     if (opener && opener.focus) { try { opener.focus(); } catch (e) {} }
+    if (onDismiss) { try { onDismiss(); } catch (e) {} }
   };
   scrim.addEventListener('click', close);
   const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
