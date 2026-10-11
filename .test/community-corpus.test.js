@@ -165,7 +165,7 @@ const CC = moduleObj.exports;
     ok('sw.js precaches ' + f, sw.indexOf(f) >= 0);
   });
   const av = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
-  ok('version bumped to v473', av.indexOf("v473") >= 0);
+  ok('version bumped to v474', av.indexOf("v474") >= 0);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
