@@ -64,11 +64,11 @@ ok('distribution take line', window.document.body.textContent.includes('5-star r
 
 // 3. reading patterns
 const pats = qa('.pattern p').map(p => p.textContent);
-ok('5 patterns found', pats.length === 5);
+ok('5 patterns found (v400 trope-rating removed, v405 pace-shift added)', pats.length === 5);
 ok('genre rating gap', pats.some(t => t.includes('Romance') && t.includes('Horror') && t.includes('2.1')));
 ok('top-rated length', pats.some(t => t.includes('highest-rated') && t.includes('400 pages')));
 ok('finish likelihood bucket', pats.some(t => t.includes('most likely to finish') && t.includes('250–450 pages')));
-ok('trope rating', pats.some(t => t.includes('Enemies to Lovers') && t.includes('4.8')));
+// v400: trope-rating observation removed from Reading patterns
 ok('rating trend', pats.some(t => t.includes('risen') && t.includes('3.0') && t.includes('4.1')));
 
 // 4. empty states stay graceful
