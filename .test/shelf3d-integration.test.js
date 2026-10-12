@@ -193,5 +193,22 @@ ok('218 loads before 215 in index.html',
     /if\s*\(\s*reduce\s*\)\s*\{\s*markDirty\(\);\s*return true;/.test(hlBody));
 }
 
+/* ---- 10. v475 room shells: every theme dresses the room ---- */
+{
+  ok('shell table covers all 23 app themes',
+    run(`THEMES.every(t => !!SHELF3D_SHELLS[t.key])`) && run(`Object.keys(SHELF3D_SHELLS).length`) === 23);
+  const tw = JSON.parse(run(`JSON.stringify(shelf3dShellFor('twilight', SHELF3D_THEMES.dark))`));
+  ok('twilight shell is starry', tw.pattern === 'starry' && tw.light === false);
+  const fb = JSON.parse(run(`JSON.stringify(shelf3dShellFor('nope', { mood: 'bright', floorTint: '#aaaaaa', woodDark: '#bbbbbb' }))`));
+  ok('unknown theme falls back to its own floor/wood colours',
+    fb.wall === '#aaaaaa' && fb.pattern === 'plain' && fb.floor === '#bbbbbb' && fb.light === true);
+  ok('theme palette carries its shell',
+    run(`Shelf3DTheme.forTheme('frost').shell.floorKind`) === 'tile' &&
+    run(`Shelf3DTheme.forTheme('frost').shell.light`) === true);
+  const src215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
+  ok('215 applies the shell from the palette', src215.includes('if (p.shell) applyShell(p.shell);'));
+  ok('neighbour cases share the shell back panel', src215.includes('backMat);'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
