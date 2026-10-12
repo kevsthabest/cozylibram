@@ -516,8 +516,6 @@ function discTile(ic, title, blurb, target) {
 // Filters the recommendation pool by seed's author/genres.
 function showSimilarToSeed(seed) {
   const seedAuthors = (seed.authors || []).map(a => String(a).trim().toLowerCase());
-  const seedGenres = (typeof bookGenres === 'function' ? bookGenres(seed) : [])
-    .map(g => String(g).trim().toLowerCase());
   const seedTropes = (seed.tropes || []).map(t => String(t).trim().toLowerCase());
 
   // Score recommendations by overlap with seed
@@ -526,12 +524,9 @@ function showSimilarToSeed(seed) {
     let score = 0;
     const cAuthors = (c.authors || []).map(a => String(a).trim().toLowerCase());
     if (seedAuthors.some(a => cAuthors.includes(a))) score += 3;
-    // Batch 4 (issue #147): candidates are hcBookToCandidate-shaped — they
-    // carry no `genres` field, so (c.genres || []) was always [] and the +2
-    // genre term never scored. bookGenres(c) reads `categories` instead.
-    const cGenres = (typeof bookGenres === 'function' ? bookGenres(c) : [])
-      .map(g => String(g).trim().toLowerCase());
-    if (seedGenres.some(g => cGenres.includes(g))) score += 2;
+    // Batch 4 (issue #147): the genre-overlap term was dead — candidates are
+    // hcBookToCandidate-shaped and carry no genres/categories in production,
+    // so the +2 term never scored. Removed rather than faked.
     const cTropes = (c.tropes || []).map(t => String(t).trim().toLowerCase());
     const tropeOverlap = seedTropes.filter(t => cTropes.includes(t)).length;
     score += Math.min(tropeOverlap, 3);
