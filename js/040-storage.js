@@ -396,9 +396,18 @@ async function setLocalUserIdb(uid) {
   catch (e) { try { AppLog.error('storage', 'slot flush failed: ' + (e && e.message)); } catch (_) {} }
   localUid = uid || null;
   bookSnapshots.clear();
-  currentDb = await idbOpenSlot(localUid);
-  await migrateSlotFromLegacy(currentDb);
-  await loadSlotState(currentDb);
+  // v494 (#130): flip currentDb only AFTER the new slot's state is loaded.
+  // Assigning first left a window where currentDb pointed at the new slot's
+  // database while `library` still held the old slot's books — a
+  // saveLibrary() in that window persisted the wrong books into the new
+  // slot (self-healed on the next save, but a reload inside the window
+  // loaded the wrong library). With the flip deferred, an in-window save
+  // targets the old slot's database with the old slot's books — a harmless
+  // no-op, since the outgoing slot was already flushed above.
+  const db = await idbOpenSlot(localUid);
+  await migrateSlotFromLegacy(db);
+  await loadSlotState(db);
+  currentDb = db;
   // v204: signed-out mode is deprecated — the only offline shelf left is a
   // pre-v204 library, which the first sign-in adopts into the new account's
   // slot. (The v136 sign-out hand-back is gone: signing out leaves the

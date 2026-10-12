@@ -147,7 +147,10 @@ async function metaCacheGet(isbn) {
     const { data, error } = await sb.from('book_meta')
       .select('data,fetched_at').eq('isbn', clean).maybeSingle();
     if (error || !data || !data.data) return null;
-    if (Date.now() - new Date(data.fetched_at).getTime() > META_TTL_MS) return null; // stale
+    // v494 (#134): an unparseable fetched_at used to read as fresh forever
+    // (NaN > TTL is false). Treat it as stale instead.
+    const fetchedMs = new Date(data.fetched_at).getTime();
+    if (!Number.isFinite(fetchedMs) || Date.now() - fetchedMs > META_TTL_MS) return null; // stale
     return data.data;
   } catch (e) { return null; }
 }

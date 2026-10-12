@@ -271,8 +271,16 @@ async function enrichRatings(book) {
   try {
     const q = book.isbn ? book.isbn : (book.title + ' ' + (book.authors[0] || '')).trim();
     if (!q) return book;
-    const r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
-      '&fields=title,ratings_average,ratings_count&limit=1');
+    // v494 (#126): bound the lookup — a hung Open Library request used to
+    // hang enrichment forever. The outer try/catch already treats any
+    // failure as "keep the Google Books data".
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, NET_TIMEOUT_MS);
+    let r;
+    try {
+      r = await fetch('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) +
+        '&fields=title,ratings_average,ratings_count&limit=1', { signal: ctrl.signal });
+    } finally { clearTimeout(timer); }
     const d = await r.json();
     const doc = (d.docs || [])[0];
     if (!doc || !doc.ratings_average || !doc.ratings_count) return book;

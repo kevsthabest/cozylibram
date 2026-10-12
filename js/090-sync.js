@@ -45,6 +45,16 @@ async function cloudClient() {
 function bookToRow(b, userId) {
   return { user_id: userId, book_id: b.id, isbn: b.isbn || null, data: b };
 }
+// v494 (#129): canonical JSON for conflict tiebreaks — object keys sorted
+// recursively, so two devices holding the same record content produce the
+// same string regardless of key insertion order.
+function stableJson(v) {
+  if (Array.isArray(v)) return '[' + v.map(stableJson).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableJson(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v);
+}
 // Merge cloud rows into the local library. Newer _mtime wins conflicts.
 // Rows for tombstoned books are skipped — that's the deletion propagating
 // instead of the book resurrecting.
@@ -58,6 +68,16 @@ function mergeCloudBooks(local, remoteRows) {
     const rd = migrateBook(Object.assign({}, r.data || {}));
     if (!lb) { local.push(rd); byId.set(r.book_id, rd); changed = true; }
     else if ((rd._mtime || 0) > (lb._mtime || 0)) { Object.assign(lb, rd); changed = true; }
+    else if ((rd._mtime || 0) === (lb._mtime || 0) && (rd._mtime || 0) > 0) {
+      // v494 (#129): same-ms tie — stampMtimes stamps a whole save with one Date.now(),
+      // so cross-device ties are real. Strictly-greater silently dropped the
+      // remote version. Break the tie deterministically: both devices
+      // canonicalize the same two records, so the lexicographic pick is
+      // identical on both sides and the conflict converges instead of
+      // flapping. The pick is arbitrary, not meaningful — determinism is the
+      // point. Identical records keep the local copy (no-op).
+      if (stableJson(rd) > stableJson(lb)) { Object.assign(lb, rd); changed = true; }
+    }
   }
   return changed;
 }
@@ -82,23 +102,33 @@ async function cloudPushNow() {
   if (cloudSyncing) { AppLog.warn('sync', 'push deferred: sync in flight, rescheduled'); scheduleCloudPush(); return false; }
   cloudSyncing = true;
   syncBegin(); // v144: the dot covers push activity too
+  // v494 (#126): the whole push races one abort budget. A hung upsert used
+  // to leave cloudSyncing true forever — every later save hit the "in
+  // flight" guard and re-armed the 2.5s timer, an infinite futile retry
+  // loop. The abort guarantees the awaits settle, so the finally below
+  // always runs and cloudSyncing resets. The vendored supabase client
+  // supports .abortSignal(); the guard keeps test fakes (plain promises)
+  // working.
+  const abort = new AbortController();
+  const abortTimer = setTimeout(() => { try { abort.abort(); } catch (e) {} }, NET_TIMEOUT_MS);
+  const abortable = (q) => (q && typeof q.abortSignal === 'function') ? q.abortSignal(abort.signal) : q;
   try {
     const rows = library.map(b => bookToRow(b, cloudUser.id));
     if (rows.length) {
-      const { error } = await sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' });
+      const { error } = await abortable(sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' }));
       if (error) throw error;
     }
     if (tombstones.length) {
       const trows = tombstones.map(t => ({ user_id: cloudUser.id, book_id: t.id,
         deleted_at: new Date(t.at).toISOString() }));
-      const { error } = await sb.from('deleted_books').upsert(trows, { onConflict: 'user_id,book_id' });
+      const { error } = await abortable(sb.from('deleted_books').upsert(trows, { onConflict: 'user_id,book_id' }));
       if (error) throw error;
       // v147: a tombstoned book is gone for good — drop its row from the cloud
       // library too, so no pull/merge on any device can ever resurrect it.
       // Only an explicit manual re-add (which untombstones the id) brings it back.
       const deadIds = tombstones.map(t => t.id);
-      const { error: delError } = await sb.from('books').delete()
-        .eq('user_id', cloudUser.id).in('book_id', deadIds);
+      const { error: delError } = await abortable(sb.from('books').delete()
+        .eq('user_id', cloudUser.id).in('book_id', deadIds));
       if (delError) throw delError;
     }
     cloudLastSync = Date.now();
@@ -109,6 +139,7 @@ async function cloudPushNow() {
     toast(cloudErrMsg(e));
     return false;
   } finally {
+    clearTimeout(abortTimer);
     cloudSyncing = false;
     syncEnd(false); // v144
     refreshAccountUI();
