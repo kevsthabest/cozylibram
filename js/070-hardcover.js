@@ -369,6 +369,11 @@ function addBook(book, openEditor, source) {
     metaCachePut(book._cacheKey || book.isbn, metaSnapshot(book));
     enrichTropesFor(book).then(() => saveLibrary());
   }
+  // Cover-storage closure: adopt the cover into the bucket in the
+  // background — the add never waits on it, and any failure keeps the
+  // cover exactly as added. One hook here covers search, scan, shelf,
+  // coven, reco, and discovery adds (all pass through addBook).
+  if (typeof adoptBookCoverInBackground === 'function') adoptBookCoverInBackground(book);
   return book;
 }
 

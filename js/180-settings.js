@@ -550,13 +550,17 @@ function renderSettings() {
         const books = Array.isArray(data) ? data : data.books;
         if (!Array.isArray(books)) throw new Error('bad file');
         let added = 0, skipped = 0;
+        const imported = [];
         books.forEach(b => {
           if (!b || !b.title) { skipped++; return; }
           const nb = migrateBook(Object.assign(normalizeVolume({ volumeInfo: {} }), b, { id: uid() }));
           if (alreadyHave(nb)) { skipped++; return; }
-          library.push(nb); added++;
+          library.push(nb); imported.push(nb); added++;
         });
         saveLibrary(); render();
+        // Cover-storage closure: enqueue adoption for the imported
+        // covers in the background — the import never waits on it.
+        if (typeof adoptBookCoverInBackground === 'function') imported.forEach(adoptBookCoverInBackground);
         toast('Imported ' + added + ' books' + (skipped ? ' (' + skipped + ' skipped)' : ''));
       } catch (err) { toast('Could not read that file'); }
     };

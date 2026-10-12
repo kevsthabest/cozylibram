@@ -239,6 +239,9 @@ function importForeignBooks(books, label, source, mountId) {
     wireImportDoneBanner(imMount);
   }
   track('import_completed', { source: source || 'manual', book_count: added });
+  // Cover-storage closure: enqueue adoption for the imported covers in
+  // the background — the import never waits on it.
+  if (typeof adoptBookCoverInBackground === 'function') fresh.forEach(adoptBookCoverInBackground);
   return { added: added, skipped: skipped };
 }
 
