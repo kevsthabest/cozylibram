@@ -137,10 +137,10 @@ const GR_CSV = 'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,M
       verify: async () => true,
     };
     // stub the canonicalizer round-trip (no network in tests)
-    const realCanon = canonicalizeCoverUrl;
-    canonicalizeCoverUrl = async (u) => u;
+    const realCanon = adoptCoverWebP;
+    adoptCoverWebP = async (u) => u;
     const res = await downloadMissingCovers(null, fns);
-    canonicalizeCoverUrl = realCanon;
+    adoptCoverWebP = realCanon;
     return { done: res.done, total: res.total,
              covered: library.filter(b => b.cover).map(b => b.title) };
   })()`);
@@ -163,10 +163,10 @@ const GR_CSV = 'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,M
     fetchCoverCandidates = async (b) => [{ url: 'https://example.com/c2.jpg', label: 'Test' }];
     const realVerify = coverURLLoads;
     coverURLLoads = async () => true;
-    const realCanon = canonicalizeCoverUrl;
-    canonicalizeCoverUrl = async (u) => u;
+    const realCanon = adoptCoverWebP;
+    adoptCoverWebP = async (u) => u;
     await icRetryCovers();
-    fetchCoverCandidates = realFetch; coverURLLoads = realVerify; canonicalizeCoverUrl = realCanon;
+    fetchCoverCandidates = realFetch; coverURLLoads = realVerify; adoptCoverWebP = realCanon;
   })()`);
   await tick(200);
   ok('retry-all clears the miss list', window.eval(`IC.coverMissIds.length`) === 0);

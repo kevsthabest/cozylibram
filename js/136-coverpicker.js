@@ -134,39 +134,207 @@ function closeCoverPicker() {
   closeCoverPickerDom();
 }
 
-// v216: canonical cover cache. Returns the shared Supabase Storage URL for a
-// remote cover, or the ORIGINAL url on ANY failure (server not configured,
-// rate-limited, network down, unexpected shape, timeout). data: URLs (user
-// uploads) and already-canonical bucket URLs pass through untouched —
-// uploads never leave the device, and canonical URLs are never
-// re-canonicalized. Never throws to the caller: a cover is never lost here.
-async function canonicalizeCoverUrl(url) {
+// v507: WebP cover adopter (replaces the v216 canonicalizeCoverUrl, whose
+// server-side adoption stored provider ORIGINALS in the shared bucket).
+// Stored images default to WebP (Decision, 2026-10-12): the device loads
+// the cover's pixels, transcodes them itself, and uploads the WebP bytes
+// to the shared Supabase `covers` bucket under their SHA-256 name — one
+// object per distinct image, whoever adopts it first. User uploads
+// (data: URLs) convert and bucket too (same Decision) — that also keeps
+// image bytes out of book records and sync payloads entirely.
+//
+// Contract, identical in spirit to v216's: returns the URL the book
+// should carry — the bucket WebP URL on success, the ORIGINAL source on
+// ANY failure (proxy down, dead provider, non-WebP encode, upload
+// denied, signed out, offline, kill-switch). Never throws, never
+// returns empty, and choosing/adding a cover never blocks on it
+// beyond the await the call sites already had. Already-canonical
+// bucket URLs pass through untouched.
+const COVER_WEBP_MAX_W = 600; // px wide cap, never upscale (v218 size class)
+const COVER_WEBP_MAX_PX = 2000000; // total decoded-pixel cap (Advisor follow-up: width-only caps let a tall sliver allocate a huge canvas)
+const COVER_WEBP_MAX_DATA_LEN = 7 * 1024 * 1024; // data: source length cap (~5 MB binary; legit producers are ≤512px)
+const coverAdoptInflight = new Map(); // source URL -> Promise<{url, hex}|null>
+const coverAdoptWaiters = [];         // queued {url, resolve}
+let coverAdoptActive = 0;
+let coverAdoptLastStart = 0;
+let coverAdoptDenyLogged = false;     // upload-denial AppLog: once per session
+
+function coverWebpDisabled() {
+  try { return localStorage.getItem('cozylibram.coverWebp') === 'off'; } catch (e) { return false; }
+}
+function isCanonicalCoverUrl(url) {
+  return typeof url === 'string' &&
+    url.indexOf('/storage/v1/object/public/covers/') !== -1;
+}
+
+// The signed-in Supabase client, or null when adoption cannot run at all
+// (cloud not configured, signed out, storage unavailable). Checked before
+// any pixel work so a signed-out device pays nothing.
+async function coverWebpClient() {
+  try {
+    if (typeof cloudClient !== 'function') return null;
+    const sb = await cloudClient();
+    if (!sb || !sb.storage || typeof sb.storage.from !== 'function') return null;
+    if (sb.auth && typeof sb.auth.getSession === 'function') {
+      const s = await sb.auth.getSession().catch(() => null);
+      if (!s || !s.data || !s.data.session) return null; // signed out
+    }
+    return sb;
+  } catch (e) { return null; }
+}
+
+// Load one pixel source into an Image element; resolves the element, or
+// null on error/timeout. (coverImageHex in js/120 is the same shape, but
+// resolves only the sampled hex — the adopter needs the image itself.)
+function coverLoadImage(src, useCors) {
+  return new Promise(resolve => {
+    let settled = false;
+    const done = (img) => { if (!settled) { settled = true; resolve(img); } };
+    try {
+      const img = new Image();
+      if (useCors) img.crossOrigin = 'anonymous';
+      img.onload = () => done(img);
+      img.onerror = () => done(null);
+      setTimeout(() => done(null), 15000);
+      img.src = src;
+    } catch (e) { done(null); }
+  });
+}
+
+// The cover's pixels as a loaded image. Remote URLs try the sampler's
+// ordered sources (same-origin proxy first, then direct-with-CORS where
+// the host allows it); data: URLs are already local and load directly.
+async function coverPixelsImage(url) {
+  if (url.indexOf('data:') === 0) return coverLoadImage(url, false);
+  const sources = (typeof coverColorSources === 'function')
+    ? coverColorSources(url) : [[url, false]];
+  for (let i = 0; i < sources.length; i++) {
+    const img = await coverLoadImage(sources[i][0], sources[i][1]);
+    if (img) return img;
+  }
+  return null;
+}
+
+function coverUploadIsDup(err) {
+  if (!err) return false;
+  const sc = err.statusCode != null ? err.statusCode : err.status;
+  if (sc === 409 || sc === '409') return true;
+  return /already exists|duplicate/i.test(String(err.message || ''));
+}
+function coverHexOf(buf) {
+  return Array.from(new Uint8Array(buf),
+    b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// One adoption job: pixels → WebP → bucket. Resolves {url, hex} (hex =
+// the cover's dominant colour sampled from the same pixels, may be
+// null), or null on any failure — the caller keeps the original source.
+async function coverWebpConvert(url) {
+  try {
+    if (url.indexOf('data:') === 0 && url.length > COVER_WEBP_MAX_DATA_LEN) return null;
+    const sb = await coverWebpClient();
+    if (!sb) return null;
+    const img = await coverPixelsImage(url);
+    if (!img) return null;
+    const nw = img.naturalWidth || img.width || 0;
+    const nh = img.naturalHeight || img.height || 0;
+    if (!nw || !nh) return null;
+    // Spine colour from the pixels already in hand (js/120's sampler);
+    // a tainted read just means no seed — the painters retry later.
+    let hex = null;
+    try { hex = (typeof dominantHex === 'function') ? dominantHex(img) : null; }
+    catch (e) { hex = null; }
+    const scale = Math.min(1, COVER_WEBP_MAX_W / nw,
+      Math.sqrt(COVER_WEBP_MAX_PX / (nw * nh)));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(nw * scale));
+    c.height = Math.max(1, Math.round(nh * scale));
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    // A browser that cannot encode WebP silently substitutes another
+    // format in toBlob — anything that is not WebP is a failure, never
+    // a mislabelled object (the throw here also catches tainted pixels).
+    const blob = await new Promise(res => {
+      let settled = false;
+      const fin = (b) => { if (!settled) { settled = true; res(b); } };
+      try { c.toBlob(fin, 'image/webp', 0.85); } catch (e) { fin(null); }
+      setTimeout(() => fin(null), 10000);
+    });
+    if (!blob || blob.type !== 'image/webp') return null;
+    const bytes = await blob.arrayBuffer();
+    if (!bytes || !bytes.byteLength) return null;
+    const name = coverHexOf(await crypto.subtle.digest('SHA-256', bytes)) + '.webp';
+    const up = await sb.storage.from('covers').upload(name, blob,
+      { contentType: 'image/webp', upsert: false });
+    if (up && up.error && !coverUploadIsDup(up.error)) {
+      // Policy not migrated yet / denied: diagnosable, not silent-looped.
+      if (!coverAdoptDenyLogged) {
+        coverAdoptDenyLogged = true;
+        AppLog.error('cover', 'WebP adoption upload denied: ' +
+          ((up.error && up.error.message) || 'unknown error'));
+      }
+      return null;
+    }
+    const pub = sb.storage.from('covers').getPublicUrl(name);
+    const publicUrl = pub && pub.data && pub.data.publicUrl;
+    if (typeof publicUrl !== 'string' || publicUrl.indexOf('https://') !== 0) return null;
+    AppLog.info('cover', 'cover adopted as WebP to the shared bucket');
+    return { url: publicUrl, hex: hex };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Modest queue: max 2 adoptions at once, ~350 ms between starts (the
+// bulk filler's politeness, shared by every adoption caller).
+function coverAdoptPump() {
+  while (coverAdoptActive < 2 && coverAdoptWaiters.length) {
+    const job = coverAdoptWaiters.shift();
+    coverAdoptActive++;
+    const wait = Math.max(0, 350 - (Date.now() - coverAdoptLastStart));
+    setTimeout(() => {
+      coverAdoptLastStart = Date.now();
+      coverWebpConvert(job.url)
+        .then(r => job.resolve(r), () => job.resolve(null))
+        .then(() => { coverAdoptActive--; coverAdoptPump(); });
+    }, wait);
+  }
+}
+function coverAdoptSchedule(url) {
+  const hit = coverAdoptInflight.get(url);
+  if (hit) return hit;
+  const p = new Promise(resolve => {
+    coverAdoptWaiters.push({ url: url, resolve: resolve });
+    coverAdoptPump();
+  });
+  coverAdoptInflight.set(url, p);
+  p.then(() => { if (coverAdoptInflight.get(url) === p) coverAdoptInflight.delete(url); });
+  return p;
+}
+
+// adoptCoverWebP(url, book?) → the URL the book should carry. When a
+// book is attached and the cover was sampled during ingest, its spine
+// colour is seeded against the NEW bucket URL, so adopted covers never
+// need the network sampler (the exact cache write the painters make).
+async function adoptCoverWebP(url, book) {
   try {
     if (!url || typeof url !== 'string') return url;
-    if (url.indexOf('data:') === 0) return url;
-    if (url.indexOf('/storage/v1/object/public/covers/') !== -1) return url;
-    const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timer = ctl ? setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 20000) : null;
-    let res;
-    try {
-      res = await apiFetch('/api/cache-cover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url }),
-        signal: ctl ? ctl.signal : undefined,
-      });
-    } finally {
-      if (timer) clearTimeout(timer);
+    if (isCanonicalCoverUrl(url)) return url;
+    if (url.indexOf('data:') !== 0 && !/^https?:\/\//i.test(url)) return url;
+    if (coverWebpDisabled()) return url; // kill-switch: app behaves as v506
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return url;
+    const r = await coverAdoptSchedule(url);
+    if (!r || !r.url) return url;
+    if (book && book.id && r.hex &&
+        typeof spineColorCache !== 'undefined' &&
+        typeof saveSpineColorCache === 'function') {
+      try {
+        spineColorCache[book.id] = { hex: r.hex, cover: r.url };
+        saveSpineColorCache();
+      } catch (e) { /* cache seed is a bonus, never a blocker */ }
     }
-    if (!res.ok) return url; // 403/429/502/503 — keep the remote cover
-    const data = await res.json();
-    const canon = data && data.coverUrl;
-    if (typeof canon !== 'string' || canon.indexOf('https://') !== 0) {
-      AppLog.error('cover', 'cache-cover returned an unexpected shape');
-      return url;
-    }
-    AppLog.info('cover', 'cover canonicalized to the shared bucket');
-    return canon;
+    return r.url;
   } catch (e) {
     return url;
   }
@@ -175,7 +343,7 @@ async function canonicalizeCoverUrl(url) {
 async function chooseCover(bookId, url) {
   const b = library.find(x => x.id === bookId);
   if (!b || !url) return;
-  b.cover = await canonicalizeCoverUrl(url);
+  b.cover = await adoptCoverWebP(url, b);
   b._mtime = Date.now();
   saveLibrary();
   /* v167: trace the cover change end to end — the log shows whether the
@@ -289,11 +457,11 @@ async function downloadMissingCovers(onProgress, fns) {
       const list = Array.isArray(cands) ? cands.slice(0, 4) : [];
       for (const c of list) {
         const url = c && c.url;
-        // v216: adopted covers go through the canonical bucket (falls back
+        // v507: adopted covers go through the WebP adopter (falls back
         // to the remote URL on any failure — the 400 ms politeness pacing
-        // below also paces the function calls; 429s are picked up by the
-        // backfill script).
-        if (url && await verify(url)) { b.cover = await canonicalizeCoverUrl(url); done++; break; }
+        // below also paces adoptions; failures are picked up by the
+        // straggler sweep).
+        if (url && await verify(url)) { b.cover = await adoptCoverWebP(url, b); done++; break; }
       }
     } catch (e) { /* skip this book */ }
     await new Promise(r => setTimeout(r, 400)); // be polite to the cover sources

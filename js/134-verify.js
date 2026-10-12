@@ -129,9 +129,9 @@ async function applyMetaField(book, meta, field) {
   else if (field === 'authors') book.authors = (meta.authors || []).slice();
   else if (field === 'pageCount') book.pageCount = meta.pageCount;
   else if (field === 'year') book.publishedDate = String(meta.year);
-  // v216: adopted remote covers go through the canonical bucket (falls
+  // v507: adopted remote covers go through the WebP adopter (falls
   // back to the remote URL on any failure — never a lost cover).
-  else if (field === 'cover') book.cover = await canonicalizeCoverUrl(meta.cover);
+  else if (field === 'cover') book.cover = await adoptCoverWebP(meta.cover, book);
 }
 
 async function applyVerifyFix(book, meta, flags) {
