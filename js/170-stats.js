@@ -823,7 +823,7 @@ function renderYearInBooks(yr) {
   const years = yearInBooksYears();
   yibYear = (yr != null && years.includes(yr)) ? yr : (years.includes(yibYear) ? yibYear : years[0]);
   const d = yearInBooksData();
-  const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Stats</button>';
+  const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Chronicles</button>';
   const pills = '<div class="chips" id="yib-years" style="margin:8px 0">' +
     years.map(y => '<button class="chip' + (y === yibYear ? ' active' : '') + '" data-yr="' + y + '">' + y + '</button>').join('') +
     '</div>';
@@ -1309,7 +1309,7 @@ function renderStats() {
   }
 
   setView(
-    '<h2 class="section serif">Reading stats</h2>' +
+    '<h2 class="section serif">Chronicles</h2>' +
     modeSeg +
     '<div class="stat-sub">Overview</div>' +
     '<div class="stat-row">' +
