@@ -418,6 +418,11 @@ function drawDnaImage(d) {
 }
 
 function shareDnaImage() {
+  // v500: v2 share sheet is the default. The v1 card stays reachable behind
+  // a flag (localStorage portraitShareV1 = '1') until v2 verifies live.
+  let v1 = false;
+  try { v1 = localStorage.getItem('portraitShareV1') === '1'; } catch (e) {}
+  if (!v1 && typeof openPortraitShareSheet === 'function') { openPortraitShareSheet(); return; }
   const d = readingDnaData();
   if (!d) { toast('Read some books first! 📚'); return; }
   const cv = drawDnaImage(d);
@@ -457,4 +462,292 @@ function dnaHeroHTML() {
   if (typeof dnaSectionHTML !== 'function') return '';
   const h = dnaSectionHTML();
   return h ? '<div class="dna-hero">' + h + '</div>' : '';
+}
+
+/* =====================================================================
+   Reader Portrait v2 (v500) — the honesty layer.
+   Spec: docs/reader-portrait-share-v2-spec.md. One portrait object feeds
+   three canvas renderers in js/228-portrait-share.js. Copy banks below
+   are the spec's, verbatim. Archetype titles are variant pools (spec
+   amendment 7c5044b): selection uses the same seeded reader+month
+   rotation as stickers/quotes. Dark Romance ships the full five-title
+   pool; other clusters are single-entry pools for now. One flagged
+   exception remains:
+   - Genre-axis appetite lines exist in the bank for only four clusters;
+     the remaining lines are draft extensions in the bank's voice, marked
+     DRAFT-EXT, awaiting veto.
+   ===================================================================== */
+
+/* FNV-1a string hash — the deterministic per-reader seed. */
+function portraitHash(str) {
+  let h = 0x811c9dc5;
+  const s = String(str == null ? '' : str);
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+/* mulberry32 PRNG from a numeric seed. */
+function portraitRng(seed) {
+  let a = (seed >>> 0) || 1;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function portraitReaderKey() {
+  try { if (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) return 'u:' + cloudUser.id; } catch (e) {}
+  try { if (typeof localUid !== 'undefined' && localUid) return 'l:' + localUid; } catch (e) {}
+  return 'local-reader';
+}
+/* Distinct-work key: duplicate editions of the same work count once. */
+function portraitWorkKey(b) {
+  try {
+    if (typeof workKeysFor === 'function') {
+      const k = workKeysFor(b);
+      if (k) return 'w:' + k.titleNorm + '|' + k.authorNorm;
+    }
+  } catch (e) {}
+  const t = String((b && b.title) || '').trim().toLowerCase();
+  const a = ((b && b.authors) || []).join(' ').trim().toLowerCase();
+  return 'w:' + t + '|' + a;
+}
+function portraitFinishedAt(b) {
+  if (b && b.dateFinished) { const d = new Date(b.dateFinished); if (!isNaN(d)) return d; }
+  let best = null;
+  ((b && b.log) || []).forEach(e => {
+    if (e && e.d) { const d = new Date(e.d); if (!isNaN(d) && (!best || d > best)) best = d; }
+  });
+  return best;
+}
+
+
+/* Variant pools (spec amendment): copy with tasteful variants stays a
+   pool; selection is seeded by reader id + month, matching the sticker
+   rotation — stable for a reader's share, fresh across months. */
+function portraitMonthKey(d) {
+  const dt = d || new Date();
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+}
+function portraitPickFromPool(pool, readerKey, salt) {
+  if (!pool || !pool.length) return null;
+  if (pool.length === 1) return pool[0];
+  const rng = portraitRng(portraitHash(String(readerKey || '') + ':' + portraitMonthKey() + ':' + String(salt || '')));
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+/* Genre clusters: each book votes for the FIRST cluster it matches, so one
+   book = one vote and dominance is honest. Genre tests are substring checks
+   against the book's normalized genre list; dark romance also accepts the
+   trope signal (it is often shelved as plain "Romance"). */
+const PORTRAIT_CLUSTERS = [
+  { key: 'romantasy',   titles: ['Romantasy Royalty'],    tagline: 'here for the courts and the chaos',
+    test: (g) => g('romantasy') || (g('romance') && g('fantasy')) },
+  { key: 'darkromance', titles: ['Dark Romance Darling', 'Dark Romance Devotee', 'Dark Romance Romantic', 'Dark Romance Shadow Romantic', 'Dark Romance Midnight Romantic'], tagline: 'here for the darkness and the devotion', // DRAFT-EXT tagline
+    test: (g, t) => g('dark romance') || (g('romance') && t('dark romance')) },
+  { key: 'cozymystery', titles: ['Cozy Detective'],       tagline: 'here for the clues and the cocoa', // DRAFT-EXT
+    test: (g) => g('cozy mystery') || (g('cozy') && g('mystery')) },
+  { key: 'litrpg',      titles: ['Dungeon Delver'],       tagline: 'here for the grind and the loot',
+    test: (g) => g('litrpg') || g('gamelit') || g('game lit') },
+  { key: 'scifi',       titles: ['Star Voyager'],         tagline: 'here for the stars and the strange',
+    test: (g) => g('science fiction') || g('sci-fi') || g('scifi') || g('science-fiction') },
+  { key: 'horror',      titles: ['Horror Devotee'],       tagline: 'here for the chills after dark', // DRAFT-EXT
+    test: (g) => g('horror') },
+  { key: 'mystery',     titles: ['Plot Twist Hunter'],    tagline: 'here for the twist, every time',
+    test: (g) => g('mystery') || g('thriller') || g('suspense') || g('crime') || g('detective') },
+  { key: 'historical',  titles: ['Time Traveller'],       tagline: 'here for the centuries and the secrets', // DRAFT-EXT
+    test: (g) => g('historical') },
+  { key: 'paranormal',  titles: ['Paranormal Devotee'],   tagline: 'here for the ghosts and the glamour', // DRAFT-EXT
+    test: (g) => g('paranormal') },
+  { key: 'fantasy',     titles: ['Fantasy Worldwalker'],  tagline: 'here for the quests and the magic', // DRAFT-EXT
+    test: (g) => g('fantasy') },
+  { key: 'romance',     titles: ['Hopeless Romantic'],    tagline: 'here for the happily-ever-after', // DRAFT-EXT
+    test: (g) => g('romance') },
+  { key: 'literary',    titles: ['Literary Wanderer'],    tagline: 'here for the sentences that stay with you', // DRAFT-EXT
+    test: (g) => g('literary fiction') || g('literature') },
+  { key: 'memoir',      titles: ['Life Story Collector'], tagline: 'here for the lives behind the stories', // DRAFT-EXT
+    test: (g) => g('memoir') || g('biography') || g('autobiography') },
+];
+const PORTRAIT_GENRE_HOPPER = { key: 'hopper', titles: ['Genre Hopper'], tagline: null };
+
+/* Trope praise-quotes (spec bank, verbatim). Keys are normalized trope
+   names: lowercase, alphanumerics only. */
+const PORTRAIT_TROPE_QUOTES = {
+  enemiestolovers: 'Devastating taste in enemies-to-lovers.',
+  forcedproximity: 'One bed? Say less.',
+  morallygrey: 'Here for the morally grey, every time.',
+  grumpysunshine: 'Grumpy meets sunshine? Already seated.',
+  foundfamily: 'Found family finds them, every time.',
+  slowburn: 'Patience of a saint, payoff of a sinner.',
+  fatedmates: 'Fate keeps setting them up.',
+  touchheranddie: 'Protective to a fault — theirs.',
+  whohurtyou: 'Who hurt you? Wrong answers only.',
+  secondchance: 'Believes in the second chance.',
+  friendstolovers: 'It was never just friendship.',
+  forbiddenlove: 'Rules were made to be broken.',
+  secretidentity: 'Loves a double life.',
+  possessive: 'Mine, said the book boyfriend.',
+  billionaire: 'Old money, new problems.'
+};
+function portraitTropeKey(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+function portraitTropeQuote(name) {
+  const q = PORTRAIT_TROPE_QUOTES[portraitTropeKey(name)];
+  if (q) return q;
+  // Fallback in the bank's voice for tropes outside the bank.
+  return 'Here for the ' + String(name || '').toLowerCase() + ', every time.';
+}
+
+/* Attribution patterns. "and counting" is reserved for tropes whose history
+   is actively growing (rule 3); the two static forms rotate by seed+rank. */
+function portraitAttribution(n, growing, seed, rank) {
+  if (growing) return '— ' + n + ' books and counting';
+  const forms = ['— ' + n + " books' worth of evidence", '— ' + n + ' books deep'];
+  return forms[Math.abs((seed || 0) + (rank || 0)) % forms.length];
+}
+
+/* Appetite ladder (rule 4): first axis with evidence wins; never guessed.
+   Spice needs 10+ spice-rated read books. "a slow burn with teeth" fires
+   ONLY when Slow Burn is itself a qualifying trope. */
+function portraitAppetite(spiceRated, avgSpice, qualifyingTropes, cluster) {
+  if (spiceRated >= 10 && avgSpice > 0) {
+    if (avgSpice >= 4.0) return { axis: 'spice', text: 'a dragonfire palate — no regrets' };
+    if (avgSpice >= 3.0) {
+      const slow = (qualifyingTropes || []).some(t => portraitTropeKey(t.name) === 'slowburn');
+      return { axis: 'spice', text: slow ? 'a slow burn with teeth' : 'brings the heat, keeps the heart' };
+    }
+    if (avgSpice >= 2.0) return { axis: 'spice', text: 'soft spot for the sweeter side' };
+    return { axis: 'spice', text: 'a sweet tooth, proudly' };
+  }
+  if (qualifyingTropes && qualifyingTropes.length) {
+    const top = qualifyingTropes[0];
+    return { axis: 'trope', text: portraitTropeQuote(top.name), trope: top.name };
+  }
+  if (cluster && cluster.tagline) return { axis: 'genre', text: cluster.tagline };
+  return null;
+}
+
+function buildReaderPortrait() {
+  const read = library.filter(b => b.status === 'read');
+  if (!read.length) return null;
+
+  /* Distinct works (duplicate editions collapse to one). The representative
+     record per work is the one with a finish date, else the first seen. */
+  const workMap = new Map();
+  read.forEach(b => {
+    const k = portraitWorkKey(b);
+    const prev = workMap.get(k);
+    if (!prev || (!portraitFinishedAt(prev) && portraitFinishedAt(b))) workMap.set(k, b);
+  });
+  const works = [...workMap.values()];
+
+  /* Tropes: distinct read books per trope (rule 3), v487 name dedupe,
+     floor of 2, "growing" = present in a book finished within 90 days. */
+  const tropeBooks = {}; // display name -> Set of work keys
+  const tropeFresh = {}; // display name -> true when a containing work is recent
+  const cutoff = Date.now() - 90 * 864e5;
+  works.forEach(b => {
+    const wk = portraitWorkKey(b);
+    const fin = portraitFinishedAt(b);
+    const recent = !!(fin && fin.getTime() >= cutoff);
+    (b.tropes || []).forEach(t => {
+      const name = String(t || '').trim();
+      if (!name) return;
+      (tropeBooks[name] = tropeBooks[name] || new Set()).add(wk);
+      if (recent) tropeFresh[name] = true;
+    });
+  });
+  const tropeCounts = {};
+  Object.keys(tropeBooks).forEach(n => { tropeCounts[n] = tropeBooks[n].size; });
+  const deduped = dedupeTropes(tropeCounts);
+  const readerKey = portraitReaderKey();
+  const seed = portraitHash(readerKey);
+  const qualifying = Object.keys(deduped)
+    .filter(n => deduped[n] >= 2)
+    .sort((a, b) => (deduped[b] - deduped[a]) || (portraitHash(a) - portraitHash(b)))
+    .slice(0, 4)
+    .map((n, i) => ({
+      name: n, count: deduped[n], growing: !!tropeFresh[n],
+      quote: portraitTropeQuote(n),
+      attribution: portraitAttribution(deduped[n], !!tropeFresh[n], seed, i)
+    }));
+  const softMode = qualifying.length < 3;
+  // Non-qualifying tropes, gently presented in soft mode only.
+  const gentleTropes = softMode
+    ? topEntries(deduped, 3).map(([name, count]) => ({ name, count }))
+    : [];
+
+  /* Genre clusters over distinct works (one vote per work). */
+  const votes = {};
+  works.forEach(b => {
+    const genres = (typeof bookGenres === 'function' ? bookGenres(b) : []).map(s => String(s).toLowerCase());
+    const g = (sub) => genres.some(x => x.indexOf(sub) >= 0);
+    const t = (sub) => (b.tropes || []).some(x => String(x).toLowerCase().indexOf(sub) >= 0);
+    for (const c of PORTRAIT_CLUSTERS) { if (c.test(g, t)) { votes[c.key] = (votes[c.key] || 0) + 1; break; } }
+  });
+  let cluster = null, clusterVotes = 0;
+  PORTRAIT_CLUSTERS.forEach(c => { if ((votes[c.key] || 0) > clusterVotes) { cluster = c; clusterVotes = votes[c.key]; } });
+  if (!cluster || clusterVotes < 2) cluster = PORTRAIT_GENRE_HOPPER;
+  const clusterTitle = portraitPickFromPool(cluster.titles, readerKey, 'archetype:' + cluster.key);
+
+  /* Display genres: primary genre per book (same basis as the v1 card). */
+  const genreCount = {};
+  read.forEach(b => { const g = (typeof bookGenres === 'function' ? bookGenres(b) : [])[0]; if (g) genreCount[g] = (genreCount[g] || 0) + 1; });
+  const topGenres = topEntries(genreCount, 3).map(([name, count]) => ({ name, count }));
+
+  /* Spice: read-list basis (matches the v1 card and the in-app preview). */
+  const sVals = spiceVals(read);
+  const avgSpice = sVals.length ? sVals.reduce((s, v) => s + v, 0) / sVals.length : 0;
+
+  const appetite = portraitAppetite(sVals.length, avgSpice, qualifying, cluster);
+
+  /* Celebration stats (rule 6). */
+  const totalPages = read.reduce((s, b) => s + (b.pageCount || 0), 0);
+  const streak = typeof longestStreak === 'function' ? longestStreak() : 0;
+  const authorCount = {};
+  read.forEach(b => (b.authors || []).forEach(a => { authorCount[a] = (authorCount[a] || 0) + 1; }));
+  const ta = Object.entries(authorCount).sort((a, b) => b[1] - a[1])[0];
+  const topAuthor = ta ? { name: ta[0], count: ta[1] } : null;
+
+  /* Covers (rule 7): most recently finished first; favourites fill the rest. */
+  const withCover = works.filter(b => b.cover);
+  const recent = withCover.slice().sort((a, b) => {
+    const da = portraitFinishedAt(a), db = portraitFinishedAt(b);
+    if (da && db) return db - da;
+    if (db) return 1;
+    if (da) return -1;
+    return 0;
+  });
+  const isFav = (b) => !!b.favorite || (b.myRating || 0) >= 4.5;
+  const favs = withCover.filter(isFav).sort((a, b) =>
+    ((b.myRating || 0) - (a.myRating || 0)) || String(a.title || '').localeCompare(String(b.title || '')));
+  const ref = (b) => ({ cover: b.cover, title: b.title || '', author: (b.authors || [])[0] || '' });
+  const strip = [];
+  const inStrip = new Set();
+  recent.concat(favs).forEach(b => {
+    const k = portraitWorkKey(b);
+    if (strip.length < 4 && !inStrip.has(k)) { inStrip.add(k); strip.push(ref(b)); }
+  });
+  const polaroidRef = recent.length ? ref(recent[0]) : (favs.length ? ref(favs[0]) : null);
+
+  return {
+    v: 2,
+    n: read.length,
+    headline: softMode ? 'A story still being written' : clusterTitle,
+    archetype: softMode ? null : clusterTitle,
+    clusterKey: cluster.key,
+    softMode: softMode,
+    genres: topGenres,
+    dominantGenre: topGenres.length ? topGenres[0].name : null,
+    tropes: qualifying,
+    gentleTropes: gentleTropes,
+    appetite: appetite,
+    spice: { avg: avgSpice, rated: sVals.length },
+    pages: totalPages,
+    streak: streak,
+    topAuthor: topAuthor,
+    coverStrip: strip,
+    polaroid: polaroidRef,
+    seed: seed,
+    readerKey: readerKey
+  };
 }
