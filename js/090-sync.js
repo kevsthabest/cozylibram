@@ -55,6 +55,18 @@ function stableJson(v) {
   }
   return JSON.stringify(v);
 }
+// Assign the newer remote record into the local book during a cloud merge.
+// v495 (#125): unmark the book afterwards. The proxy set-traps fire on every
+// assigned value, but a merge must not dirty the book: the content already
+// lives in the cloud, and dirtying here would bump _mtime and re-push on
+// every cross-device merge — an _mtime ping-pong that never converges. The
+// newer _mtime rides along with the assign so both sides agree on the winner.
+// (New books take the push path in mergeCloudBooks, which marks them dirty
+// explicitly — they're new to this device and must persist.)
+function mergeAssign(lb, rd) {
+  Object.assign(lb, rd);
+  unmarkDirty(lb);
+}
 // Merge cloud rows into the local library. Newer _mtime wins conflicts.
 // Rows for tombstoned books are skipped — that's the deletion propagating
 // instead of the book resurrecting.
@@ -66,8 +78,8 @@ function mergeCloudBooks(local, remoteRows) {
     if (!r || !r.book_id || dead.has(r.book_id)) continue;
     const lb = byId.get(r.book_id);
     const rd = migrateBook(Object.assign({}, r.data || {}));
-    if (!lb) { local.push(rd); byId.set(r.book_id, rd); changed = true; }
-    else if ((rd._mtime || 0) > (lb._mtime || 0)) { Object.assign(lb, rd); changed = true; }
+    if (!lb) { local.push(rd); markDirty(rd); byId.set(r.book_id, rd); changed = true; }
+    else if ((rd._mtime || 0) > (lb._mtime || 0)) { mergeAssign(lb, rd); changed = true; }
     else if ((rd._mtime || 0) === (lb._mtime || 0) && (rd._mtime || 0) > 0) {
       // v494 (#129): same-ms tie — stampMtimes stamps a whole save with one Date.now(),
       // so cross-device ties are real. Strictly-greater silently dropped the
@@ -76,7 +88,7 @@ function mergeCloudBooks(local, remoteRows) {
       // identical on both sides and the conflict converges instead of
       // flapping. The pick is arbitrary, not meaningful — determinism is the
       // point. Identical records keep the local copy (no-op).
-      if (stableJson(rd) > stableJson(lb)) { Object.assign(lb, rd); changed = true; }
+      if (stableJson(rd) > stableJson(lb)) { mergeAssign(lb, rd); changed = true; }
     }
   }
   return changed;
@@ -90,6 +102,46 @@ function cloudErrMsg(e) {
     return "Cloud sync failed: the '" + missing[1] + "' table doesn't exist in your Supabase " +
       "project yet — run supabase/schema.sql in the Supabase SQL editor, then tap Sync now.";
   return 'Cloud sync failed: ' + m;
+}
+
+/* v495 (#128): differential push support.
+   pushHighWater is the max _mtime successfully pushed; only books newer than
+   it are upserted. Stored per slot (IDB kv) or per user (localStorage
+   fallback) — it's sync state, partitioned exactly like the library. */
+function pushHighWaterKey() {
+  return localUid ? 'spicyshelves.pushhighwater.v2.' + localUid : 'spicyshelves.pushhighwater.v1';
+}
+async function readPushHighWater() {
+  try {
+    if (!idbDisabled && currentDb) return Number(await idbKvGet(currentDb, 'pushHighWater')) || 0;
+    return Number(localStorage.getItem(pushHighWaterKey())) || 0;
+  } catch (e) { return 0; }
+}
+async function writePushHighWater(v) {
+  try {
+    if (!idbDisabled && currentDb) await idbKvPut(currentDb, 'pushHighWater', v);
+    else { try { localStorage.setItem(pushHighWaterKey(), String(v)); } catch (_) {} }
+  } catch (e) {}
+}
+// Pure selection for the differential push (unit-tested): the books changed
+// since the last successful push, plus the ceiling to advance the high-water
+// mark to. Bootstrap (since === 0): push everything, exactly like before.
+// Untracked books are always included (fail-safe — see #125).
+function selectPushBatch(books, since) {
+  const batch = since > 0
+    ? books.filter(b => b && ((b._mtime || 0) > since || !proxyRootOf.has(b)))
+    : books.slice();
+  const sendCeil = batch.reduce((m, b) => Math.max(m, (b && b._mtime) || 0), since);
+  return { batch: batch, sendCeil: sendCeil };
+}
+// Pure tombstone pruning (unit-tested): deletions older than 90 days have
+// propagated to every device by now, so drop them instead of upserting and
+// .in()-deleting an ever-growing list. Trade-off, documented: a device
+// offline >90 days could resurrect a book by pushing its stale copy; the next
+// delete re-propagates normally. Call only after a successful push.
+function pruneTombstones(rows, nowMs) {
+  const PRUNE_AFTER_MS = 90 * 864e5;
+  return (rows || []).filter(t => (nowMs - ((t && t.at) || 0)) < PRUNE_AFTER_MS);
 }
 
 async function cloudPushNow() {
@@ -113,7 +165,24 @@ async function cloudPushNow() {
   const abortTimer = setTimeout(() => { try { abort.abort(); } catch (e) {} }, NET_TIMEOUT_MS);
   const abortable = (q) => (q && typeof q.abortSignal === 'function') ? q.abortSignal(abort.signal) : q;
   try {
-    const rows = library.map(b => bookToRow(b, cloudUser.id));
+    // v495 (#128): pin the slot for this push. If the user switches slots
+    // mid-push, the high-water write is skipped (next push re-pushes —
+    // redundant but convergent) instead of recording one slot's ceiling
+    // against another slot's library, which could skip books.
+    const pushDb = currentDb;
+    const since = await readPushHighWater();
+    // v495 (#128): differential push — upsert only books changed since the
+    // last successful push. Bootstrap (no high-water yet) pushes everything,
+    // exactly like before. Tombstones always go up whole (they're tiny) and
+    // are pruned below once the push succeeds.
+    const pushSel = selectPushBatch(library, since);
+    const rows = pushSel.batch.map(b => bookToRow(b, cloudUser.id));
+    // sendCeil bounds the high-water advance: it covers every _mtime in the
+    // batch, so a book edited DURING the upsert (stamped after batch
+    // selection) lands strictly above it and is caught by the re-scan below
+    // instead of being skipped. A same-ms edit is narrower than the #129
+    // tiebreak window and self-heals on the next change.
+    const sendCeil = pushSel.sendCeil;
     if (rows.length) {
       const { error } = await abortable(sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' }));
       if (error) throw error;
@@ -131,8 +200,15 @@ async function cloudPushNow() {
         .eq('user_id', cloudUser.id).in('book_id', deadIds));
       if (delError) throw delError;
     }
+    const pruned = pruneTombstones(tombstones, Date.now());
+    if (pruned.length !== tombstones.length) { tombstones = pruned; saveTombstones(); }
+    if (currentDb === pushDb) await writePushHighWater(sendCeil);
     cloudLastSync = Date.now();
-    AppLog.info('sync', 'push ok: ' + rows.length + ' books, ' + tombstones.length + ' tombstones');
+    AppLog.info('sync', 'push ok: ' + rows.length + ' books (' + library.length + ' total), ' + tombstones.length + ' tombstones');
+    // v495 (#128): convergence — re-scan after advancing the high-water mark;
+    // anything edited mid-push is now strictly above it and gets its own round
+    // instead of waiting for the next user save.
+    if (library.some(b => b && (b._mtime || 0) > sendCeil)) scheduleCloudPush();
     return true;
   } catch (e) {
     AppLog.error('sync', 'push failed: ' + ((e && e.message) || e));
@@ -208,7 +284,6 @@ function applyTombstones(rows) {
   for (const id of ids) {
     if (library.some(b => b.id === id)) {
       library = library.filter(b => b.id !== id);
-      bookSnapshots.delete(id);
       changed = true;
     }
     if (!dead.has(id)) { tombstones.push({ id: id, at: Date.now() }); dead.add(id); changed = true; }

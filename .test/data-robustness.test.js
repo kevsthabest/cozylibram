@@ -186,7 +186,6 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     window.idbOpenSlot = async (uid) => { calls.push('open:' + uid); return fakeDb; };
     window.migrateSlotFromLegacy = async () => { calls.push('migrate'); };
     window.idbPersistSlot = async () => { calls.push('persistSlot'); };
-    window.snapshotBooks = () => {};
     let seenDuringLoad = 'unset';
     window.loadSlotState = async () => {
       calls.push('load');

@@ -142,7 +142,7 @@ function migrateBook(b) {
   if (b.owned === undefined || b.owned === true) b.owned = 'owned'; // v148: ownership is now
   else if (b.owned === false) b.owned = 'tobuy'; // 'owned' | 'tobuy' | 'borrowed' (legacy booleans migrate)
   if (b._mtime == null) b._mtime = 0; // last-modified stamp, used for cloud conflict resolution
-  return b;
+  return trackBook(b); // v495 (#125): wrap for dirty-flag change tracking (idempotent)
 }
 
 // Ownership badge: line-art home vs cart vs lent-out book (v84, v148)

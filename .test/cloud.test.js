@@ -122,8 +122,8 @@ function makeFake() {
 
   // 4. _mtime stamping: only changed books get stamped
   runInWindow(`
-    library = []; bookSnapshots.clear();
-    library.push({ id: 'm1', title: 'A' });
+    library = [];
+    library.push(migrateBook({ id: 'm1', title: 'A' }));
     saveLibrary({ noCloud: true });
     window.__m1 = library[0]._mtime;
     var __before = library[0]._mtime;
@@ -132,7 +132,7 @@ function makeFake() {
     library[0].title = 'B';
     saveLibrary({ noCloud: true });
     window.__mBumped = (library[0]._mtime >= __before);
-    library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true });
+    library = []; saveLibrary({ noCloud: true });
   `);
   await waitFor('__mBumped');
   ok('new book gets _mtime', window.__m1 > 0);
@@ -145,7 +145,7 @@ function makeFake() {
     var results = {};
     try {
       cloudUser = window.__sbStub.user;
-      library = []; bookSnapshots.clear();
+      library = [];
       library.push({ id: 'l1', title: 'Local One', isbn: '111', _mtime: 100 });
       results.pushOk = await cloudPushNow();
       results.storeAfterPush = window.__sbStub.store.length;
@@ -155,14 +155,14 @@ function makeFake() {
         data: { id: 'r1', title: 'Remote One', _mtime: 200 } });
       var lrow = window.__sbStub.store.find(function(r){ return r.book_id === 'l1'; });
       lrow.data = Object.assign({}, lrow.data, { title: 'REMOTE EDIT', _mtime: 999 });
-      library = []; bookSnapshots.clear();
+      library = [];
       await cloudFirstSync();
       results.afterSyncLen = library.length;
       results.conflictTitle = (library.find(function(b){ return b.id === 'l1'; }) || {}).title;
       results.remoteAdded = !!library.find(function(b){ return b.id === 'r1'; });
       await cloudWipe();
       results.storeAfterWipe = window.__sbStub.store.length;
-      library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true });
+      library = []; saveLibrary({ noCloud: true });
     } catch (e) { results.error = String((e && e.stack) || e); }
     window.__cloudResults = results;
   })();`);
@@ -202,7 +202,7 @@ function makeFake() {
         { id: 'mine1', title: 'My Only Book', _mtime: 50 },
         { id: 'mine2', title: 'Friend Book', _mtime: 60 },
       ];
-      bookSnapshots.clear(); tombstones = [];
+      tombstones = [];
       await repairFriendPollution();
       window.__repairLib = library.map(b => b.id);
       window.__repairTomb = tombstones.map(t => t.id);
@@ -213,7 +213,7 @@ function makeFake() {
       window.__repairLib2 = library.map(b => b.id);
       circleLists = window.__origCircleLists;
       circleFriendBooks = window.__origCircleFriendBooks;
-      library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true });
+      library = []; saveLibrary({ noCloud: true });
     } catch (e) { window.__repairErr = String((e && e.stack) || e); }
   })();`);
   await waitFor('__repairLib2');

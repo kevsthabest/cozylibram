@@ -58,7 +58,7 @@ if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
 const parseAv = window.parseAppVersion;
 ok('parseAppVersion is defined', typeof parseAv === 'function');
 ok('parseAppVersion reads the real file',
-  parseAv(fs.readFileSync('/home/hatch/workspace/booktok/js/181-appversion.js', 'utf8')) === window.eval('APP_VERSION'));
+  parseAv(fs.readFileSync((process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok') + '/js/181-appversion.js', 'utf8')) === window.eval('APP_VERSION'));
 ok('parseAppVersion handles whitespace variants',
   parseAv("const APP_VERSION  =  'v123';") === 'v123');
 ok('parseAppVersion returns null when absent',

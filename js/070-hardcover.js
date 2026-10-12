@@ -231,10 +231,14 @@ async function autoEnrichSweep() {
       let hit = false;
       try { hit = await enrichHardcover(b); } catch (e) { hit = false; }
       if (hit) ok++; else b.hcCheckedAt = Date.now();
-      saveLibrary();
       await new Promise(r => setTimeout(r, 1100));
     }
   } finally { hcEnrichBusy = false; }
+  // v495 (#127): one save for the whole sweep. Was N full-library rewrites;
+  // with dirty flags each touched book is marked during the loop above, so a
+  // single saveLibrary() persists exactly what changed (including hcCheckedAt
+  // on misses, which keeps the next sweep from re-checking them).
+  saveLibrary();
   if (ok > 0) {
     if (!editingId) render();
     toast('✨ Auto-enriched ' + ok + ' book' + (ok === 1 ? '' : 's') + ' from Hardcover');
@@ -310,6 +314,10 @@ function alreadyHave(book) {
 }
 
 function addBook(book, openEditor, source) {
+  // v495 (#125): normalize the shape AND wrap for dirty-flag tracking — every
+  // book entering the library is tracked (migrateBook is idempotent, and this
+  // is also the C1 invariant: no hand-built book shapes).
+  book = trackBook(migrateBook(book));
   if (alreadyHave(book)) { toast('Already on your shelves'); return null; }
   untombstone(book.id); // re-adding the same id is an un-delete
   library.unshift(book);
