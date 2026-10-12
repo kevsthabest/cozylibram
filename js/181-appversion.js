@@ -11,7 +11,7 @@
 
 
 
-const APP_VERSION = 'v484';
+const APP_VERSION = 'v485';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
