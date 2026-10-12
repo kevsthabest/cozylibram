@@ -2072,6 +2072,10 @@ function renderDetailModal(b, viaBook) {
       pageCount: b.pageCount, ratings: ratingBefore.ratings, // v224 (UX-11): live taps predate Save
     };
     Object.assign(b, draft);
+    // Batch 4 (issue #148): title/author edits must bust the WorkStore cache —
+    // without this, the spice baseline, trope intelligence, and chapter
+    // metadata keep attaching to the OLD work for the rest of the session.
+    try { if (typeof WorkStore !== 'undefined' && WorkStore.invalidate) WorkStore.invalidate(b); } catch (e) {}
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
     if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);

@@ -269,14 +269,15 @@ function fmtBig(n) {
   return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(n));
 }
 function paceHTML() {
+  // Batch 4 (issue #145): was 30 days × every book × pagesOnDay — a single
+  // pagesInRange() pass sums the same log entries: it counts e.to > e.from
+  // entries with d in [start, end], exactly what the loop accumulated
+  // (pagesOnDay's Math.max(0, …) terms are zero for the entries pagesInRange
+  // skips, and both ignore entries with blank dates).
   const today = new Date();
-  let p30 = 0;
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const k = dayKey(d);
-    library.forEach(b => { p30 += pagesOnDay(b, k); });
-  }
+  const start30 = new Date(today);
+  start30.setDate(today.getDate() - 29);
+  const p30 = pagesInRange(dayKey(start30), dayKey(today));
   const perDay = p30 / 30;
   const read = library.filter(b => b.status === 'read');
   const withPages = read.filter(b => (b.pageCount || 0) > 0);
@@ -460,6 +461,13 @@ function ratingDistHTML() {
 
 /* ---- reading patterns (v65): calculated observations, each gated on enough
    data to mean something. No AI — just her library talking back. ---- */
+// Batch 4 (issue #146): the genre-gap bar was 0.15★ — below display precision
+// (a 0.15 gap renders as "0.1–0.2 ⭐ higher"), so it presented noise as a
+// calculated observation. Raised to 0.5 (User's call, 2026-10-12: raise
+// slightly, verify against real data, iterate upward until it's signal).
+// If real-data review shows this still fires on noise, raise GENRE_GAP_MIN
+// further — it's the one knob.
+const GENRE_GAP_MIN = 0.5;
 function patternObservations() {
   const obs = [];
   const read = library.filter(b => b.status === 'read');
@@ -474,7 +482,7 @@ function patternObservations() {
   if (gk.length === 2) {
     const a1 = avgOf(byGenre[gk[0]]), a2 = avgOf(byGenre[gk[1]]);
     const gap = Math.abs(a1 - a2);
-    if (gap >= 0.15) {
+    if (gap >= GENRE_GAP_MIN) {
       const hi = a1 >= a2 ? gk[0] : gk[1], lo = a1 >= a2 ? gk[1] : gk[0];
       obs.push('You rate <b>' + esc(hi) + '</b> books ' + gap.toFixed(1) + ' ⭐ higher than <b>' + esc(lo) + '</b> books.');
     }
@@ -511,17 +519,16 @@ function patternObservations() {
   }
 
   // v405: pace shift — trailing 30 days vs the 30 before that
+  // Batch 4 (issue #145): was 60 days × every book × pagesOnDay — two
+  // pagesInRange() passes over the same windows (cur = today-29..today,
+  // prev = today-59..today-30, matching the old i<30 / i>=30 split).
   {
     const today = new Date();
-    let cur = 0, prev = 0;
-    for (let i = 0; i < 60; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const k = dayKey(d);
-      let day = 0;
-      library.forEach(b => { day += pagesOnDay(b, k); });
-      if (i < 30) cur += day; else prev += day;
-    }
+    const curStart = new Date(today); curStart.setDate(today.getDate() - 29);
+    const prevStart = new Date(today); prevStart.setDate(today.getDate() - 59);
+    const prevEnd = new Date(today); prevEnd.setDate(today.getDate() - 30);
+    const cur = pagesInRange(dayKey(curStart), dayKey(today));
+    const prev = pagesInRange(dayKey(prevStart), dayKey(prevEnd));
     if (cur >= 50 && prev >= 50) {
       const ratio = cur / prev;
       const prevMonth = new Date(today);

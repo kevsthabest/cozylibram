@@ -1,9 +1,11 @@
-// Tests for v183/v184 — bespoke per-theme modal artwork.
+// Tests for v183/v184 — bespoke per-theme modal artwork, as revised by
+// review batch 4 (issue #144).
 //
-// Covered: the art files exist on disk (Asset/floral-right.svg for
-// midnight + vine/divider/moon for the other nine themes); styles.css maps
-// each theme's .modal::after to its vine; sw.js precaches the art and the
-// cache name matches APP_VERSION.
+// Covered: the art files styles.css actually references exist on disk
+// (divider/moon × 15 themes); sw.js precaches exactly those (the 9
+// vine-*.svg entries and Asset/floral-right.svg were dead — the v170
+// full-height strip was retired in v418 and nothing references them);
+// the cache name matches APP_VERSION.
 
 const fs = require('fs');
 const path = require('path');
@@ -16,9 +18,10 @@ function ok(name, cond) {
   else { fail++; console.log('FAIL - ' + name); }
 }
 
-// v228: all ten themes have bespoke art (midnight got its own moon/divider/vine)
-const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'midnight', 'dark', 'light', 'hearthside', 'candlelight'];
-const KINDS = ['vine', 'divider', 'moon'];
+// Batch 4 (issue #144): 15 themes × divider/moon are what styles.css
+// references (the 5 premium-pack themes were missing from the precache).
+const THEMES = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'midnight', 'dark', 'light', 'hearthside', 'candlelight', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'];
+const KINDS = ['divider', 'moon'];
 
 // 1. art files exist on disk
 for (const t of THEMES) {
@@ -49,7 +52,13 @@ ok('styles.css: flairs tint via --floral-tint', css.includes('color: var(--flora
 // 3. sw.js precaches the art and matches the app version
 const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js precaches THEME_ART', sw.includes('THEME_ART'));
-ok('sw.js precaches Asset/floral-right.svg', sw.includes('./Asset/floral-right.svg'));
+// Batch 4 (issue #144): the vine-*.svg entries and Asset/floral-right.svg
+// were precached but referenced nowhere (v170 strip retired in v418) —
+// they must stay out of the precache.
+const themeArt = eval(sw.match(/const THEME_ART = (.*?);/s)[1]);
+ok('precache has no vine-*.svg dead entries', !themeArt.some(e => /vine-/.test(e)));
+ok('precache has no floral-right.svg dead entry', !themeArt.some(e => /floral-right/.test(e)));
+ok('precache covers all 30 theme files', themeArt.length === 30);
 const appversion = fs.readFileSync(path.join(ROOT, 'js', '181-appversion.js'), 'utf8');
 const m = appversion.match(/APP_VERSION = '(v\d+)'/);
 ok('APP_VERSION parsed', !!m);

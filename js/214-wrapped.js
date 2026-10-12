@@ -46,6 +46,16 @@ function drawWrappedImage(d) {
   let y = 340;
   x.textAlign = 'left';
 
+  // Batch 4 (issue #150): the canvas is fixed 1080×1920 and cardFooter draws
+  // at y=1845 — a maxed-out card (3 hero stats + 5 wrapped tropes + spice +
+  // genres + 4 fun lines) ran to ~y=1847 and collided with the footer, with
+  // wrapped trope names pushing content off-canvas entirely. Track y against
+  // a bottom margin: lower-priority sections yield first (fun stats, then
+  // genres/spice, then tropes), and long sections stop mid-list rather than
+  // overflowing.
+  const CONTENT_MAX_Y = 1730;
+  const roomFor = need => (y + need) <= CONTENT_MAX_Y;
+
   // Hero numbers
   const hero = (label, val, color) => {
     x.fillStyle = color; x.font = '700 88px system-ui, sans-serif';
@@ -60,41 +70,45 @@ function drawWrappedImage(d) {
   y += 20;
 
   // Top tropes
-  if (d.yearTropes.length) {
+  if (d.yearTropes.length && roomFor(70 + 56)) { // header + at least one line
     x.fillStyle = acc; x.font = '700 48px system-ui, sans-serif';
     x.fillText('📚 Your year in tropes', 80, y); y += 70;
     x.font = '42px system-ui, sans-serif';
     d.yearTropes.forEach(([t, c], i) => {
       x.fillStyle = i === 0 ? gold : ink;
       const lines = cvWrap(x, (i + 1) + '. ' + t + '  (' + c + ')', W - 200);
-      lines.forEach(ln => { x.fillText(ln, 100, y); y += 56; });
+      lines.forEach(ln => { if (!roomFor(56)) return; x.fillText(ln, 100, y); y += 56; });
     });
     y += 30;
   }
 
   // Spice + genres
-  if (d.avgSpice > 0) {
+  if (d.avgSpice > 0 && roomFor(65 + 80)) {
     x.fillStyle = gold; x.font = '700 48px system-ui, sans-serif';
     x.fillText('🌶️ Spice level', 80, y); y += 65;
     x.fillStyle = ink; x.font = '42px system-ui, sans-serif';
     x.fillText('Average: ' + d.avgSpice.toFixed(1) + '/5', 100, y); y += 80;
   }
-  if (d.topGenres.length) {
+  if (d.topGenres.length && roomFor(65 + 56)) { // header + at least one genre
     x.fillStyle = grn; x.font = '700 48px system-ui, sans-serif';
     x.fillText('🎭 Top genres', 80, y); y += 65;
     x.fillStyle = ink; x.font = '42px system-ui, sans-serif';
-    d.topGenres.forEach(([g, c]) => { x.fillText('• ' + g, 100, y); y += 56; });
+    d.topGenres.forEach(([g, c]) => { if (!roomFor(56)) return; x.fillText('• ' + g, 100, y); y += 56; });
     y += 20;
   }
 
-  // Fun stats
-  x.fillStyle = mut; x.font = '700 44px system-ui, sans-serif';
-  x.fillText('📊 Fun stats', 80, y); y += 65;
-  x.fillStyle = ink; x.font = '40px system-ui, sans-serif';
-  if (d.streak > 1) { x.fillText('🔥 Longest streak: ' + d.streak + ' days', 100, y); y += 56; }
-  if (d.five > 0) { x.fillText('⭐ 5-star books: ' + d.five, 100, y); y += 56; }
-  if (d.topAuthor) { x.fillText('✍️ Top author: ' + d.topAuthor[0], 100, y); y += 56; }
-  if (d.dnfs > 0) { x.fillText('📕 DNFs: ' + d.dnfs + ' (no shame)', 100, y); y += 56; }
+  // Fun stats — lowest priority: skipped entirely when space is tight.
+  const funLines = [];
+  if (d.streak > 1) funLines.push('🔥 Longest streak: ' + d.streak + ' days');
+  if (d.five > 0) funLines.push('⭐ 5-star books: ' + d.five);
+  if (d.topAuthor) funLines.push('✍️ Top author: ' + d.topAuthor[0]);
+  if (d.dnfs > 0) funLines.push('📕 DNFs: ' + d.dnfs + ' (no shame)');
+  if (funLines.length && roomFor(65 + 56)) { // header + at least one line
+    x.fillStyle = mut; x.font = '700 44px system-ui, sans-serif';
+    x.fillText('📊 Fun stats', 80, y); y += 65;
+    x.fillStyle = ink; x.font = '40px system-ui, sans-serif';
+    funLines.forEach(ln => { if (!roomFor(56)) return; x.fillText(ln, 100, y); y += 56; });
+  }
 
   cardFooter(x, W);
   return cv;

@@ -63,6 +63,32 @@ function topReleaseAuthors() {
   return releaseAuthorStats().map(e => e.name);
 }
 
+// Batch 4 (issue #142): the silent weekly auto sweep is capped — the manual
+// "Check for new releases" keeps full coverage (User's call, 2026-10-12).
+// Priority: favorited authors first, then most-read, then highest-ranked;
+// authors of recently finished books get an extra boost on top.
+const AUTO_RELEASE_AUTHOR_CAP = 40;
+const AUTO_RELEASE_RECENT_DAYS = 120;
+function priorityReleaseAuthors() {
+  const fav = {}, recent = {};
+  const cutoff = Date.now() - AUTO_RELEASE_RECENT_DAYS * 864e5;
+  library.forEach(b => {
+    const names = (b.authors || []).map(a => String(a || '').trim().toLowerCase()).filter(Boolean);
+    if (!names.length) return;
+    if (b.favorite) names.forEach(n => { fav[n] = 1; });
+    if (b.status === 'read' && b.dateFinished) {
+      const t = new Date(b.dateFinished).getTime();
+      if (!isNaN(t) && t >= cutoff) names.forEach(n => { recent[n] = 1; });
+    }
+  });
+  const avg = e => (e.sn ? e.stars / e.sn : 0);
+  return releaseAuthorStats()
+    .map(e => ({ e: e, boost: (fav[e.name.toLowerCase()] ? 2 : 0) + (recent[e.name.toLowerCase()] ? 1 : 0) }))
+    .sort((a, b) => (b.boost - a.boost) || (b.e.n - a.e.n) || (avg(b.e) - avg(a.e)))
+    .slice(0, AUTO_RELEASE_AUTHOR_CAP)
+    .map(x => x.e.name);
+}
+
 // Already on her shelves? Matches by ISBN first, then title + first author.
 function releaseInLibrary(c) {
   const isbns = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
@@ -89,8 +115,11 @@ function hcBookToCandidate(b) {
   };
 }
 
-async function checkNewReleases(onTick, onFound) {
-  const authors = topReleaseAuthors();
+async function checkNewReleases(onTick, onFound, authorList) {
+  // authorList: the auto sweep passes a capped, priority-ordered list
+  // (batch 4, issue #142); the manual check passes nothing and keeps the
+  // full topReleaseAuthors() coverage.
+  const authors = authorList || topReleaseAuthors();
   const out = [];
   const seen = new Set();
   const d = new Date();
@@ -455,7 +484,7 @@ async function maybeAutoReleaseCheck() {
     if (!hcReady() || !library.length) return;
     const c = autoReleases();
     if (c && Date.now() - c.at < AUTO_REL_DAYS * 864e5) return;
-    const res = await checkNewReleases(); // no onTick: no progress UI
+    const res = await checkNewReleases(null, null, priorityReleaseAuthors()); // no onTick: no progress UI; capped priority list (batch 4, issue #142)
     if (res.total > 0 && res.failed >= res.total) return;
     saveAutoReleases(res.list);
     updateReleaseBadge();
@@ -497,7 +526,11 @@ function showSimilarToSeed(seed) {
     let score = 0;
     const cAuthors = (c.authors || []).map(a => String(a).trim().toLowerCase());
     if (seedAuthors.some(a => cAuthors.includes(a))) score += 3;
-    const cGenres = (c.genres || []).map(g => String(g).trim().toLowerCase());
+    // Batch 4 (issue #147): candidates are hcBookToCandidate-shaped — they
+    // carry no `genres` field, so (c.genres || []) was always [] and the +2
+    // genre term never scored. bookGenres(c) reads `categories` instead.
+    const cGenres = (typeof bookGenres === 'function' ? bookGenres(c) : [])
+      .map(g => String(g).trim().toLowerCase());
     if (seedGenres.some(g => cGenres.includes(g))) score += 2;
     const cTropes = (c.tropes || []).map(t => String(t).trim().toLowerCase());
     const tropeOverlap = seedTropes.filter(t => cTropes.includes(t)).length;
