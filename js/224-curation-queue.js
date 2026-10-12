@@ -1,21 +1,21 @@
-/* ---- Curation queue v1 (Observatory): Kevin's review inbox for community
+/* ---- Curation queue v1 (Observatory): User's review inbox for community
    corpus suggestions (tropes, characters, trigger warnings).
 
    - Lists pending suggestions across all three pillars with provenance
-     (Kevin sees WHO suggested — full provenance for the curator).
+     (User sees WHO suggested — full provenance for the curator).
    - Consensus state per suggestion: votes for/against, tier-weighted
      (all weights 1 in v1 — tiers dormant).
    - Bulk approve/reject — fast, not one-by-one clicks.
-   - Kevin's decision is final; his curation always overrides.
+   - User's decision is final; his curation always overrides.
    - Merge proposals are never auto-applied: approve records the decision;
-     Kevin applies the merge in the Character Lab.
+     User applies the merge in the Character Lab.
 
    Approve effects:
    - catalog trope  → upsert book_tropes (book_key, trope_id, source='community')
    - catalog trope reject → mark rejected + admin downvote in trope_votes
-   - new-trope idea → mark approved/rejected (Kevin adds to taxonomy manually)
+   - new-trope idea → mark approved/rejected (User adds to taxonomy manually)
    - character add  → resolve work_id → insert book_characters (source_type='community')
-   - character merge/correct → mark accepted/rejected (Kevin applies manually)
+   - character merge/correct → mark accepted/rejected (User applies manually)
    - trigger        → mark accepted/rejected (accepted flows into the
                       Start Reading trigger check via ccEnrichWarnings)
    All decisions bump community_tiers accepted/rejected counters (tiers
@@ -193,7 +193,7 @@ async function setStatus(sb, item, accepted) {
       });
       if (ins.error) throw new Error(ins.error.message);
     }
-    /* merge/correct: decision recorded; Kevin applies manually in Character Lab. */
+    /* merge/correct: decision recorded; User applies manually in Character Lab. */
     await bumpCounters(sb, item.by, accepted);
     return;
   }
@@ -202,7 +202,7 @@ async function setStatus(sb, item, accepted) {
     if (r3.error) throw new Error(r3.error.message);
     /* Accepted warnings flow into the Start Reading trigger check via
        ccEnrichWarnings (reads status='accepted' live). Safety bias: the
-       bar for applying is Kevin's one click. */
+       bar for applying is User's one click. */
     /* v468: an accepted warning means the book's warnings were reviewed. */
     if (accepted) { try { cqMarkWarningsReviewed(item.bookKey); } catch (e) {} }
     await bumpCounters(sb, item.by, accepted);

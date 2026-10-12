@@ -147,7 +147,7 @@ function dnaEllipsize(x, text, maxW) {
 var SERIF = "Georgia, 'Times New Roman', serif";
 var SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 
-/* v487: ember dots for the spice level. No glow (Kevin's critique: the italic
+/* v487: ember dots for the spice level. No glow (User's critique: the italic
    title + ghost numerals are decoration enough). */
 function dnaSpiceDots(x, d, t, x0, cy) {
   const r = 29, gap = 24;

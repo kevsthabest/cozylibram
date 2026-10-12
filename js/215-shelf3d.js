@@ -306,7 +306,7 @@
     var loadT0 = performance.now();
     var lastInteract = performance.now(), driftAmt = 0;
     on(window, 'pointerdown', function () { lastInteract = performance.now(); }, true);
-    // v412: pinch/wheel zoom (Kevin: spines too small on mobile).
+    // v412: pinch/wheel zoom (User: spines too small on mobile).
     // zoomFactor 1.0 = default, <1 = closer, >1 = farther. Clamped 0.5–2.0.
     var zoomFactor = 1.0;
     function setZoom(f) {
@@ -321,7 +321,7 @@
     scene.add(hemi);
     var sun = new THREE.DirectionalLight(0xffe2b8, 2.3);
     sun.position.set(6, 11, 8);
-    // v409: warm downlight above the bookcase by default (Kevin: spines hard to read on mobile).
+    // v409: warm downlight above the bookcase by default (User: spines hard to read on mobile).
     // Makes book titles legible without washing out the mood.
     var downLight = new THREE.PointLight(0xffd9a0, 12, 18, 1.8);
     downLight.position.set(0, 9.5, 2.5);
@@ -1792,7 +1792,7 @@
     /* Inventory sourced from the decoration catalog (js/218-shelf3d-decor.js).
        `owned` is session state; everything else (name, icon, room tab,
        premium flag) comes from the catalog. Lantern + globe are unlocked
-       per Kevin's approval — no locks, no paywall during alpha. */
+       per User's approval — no locks, no paywall during alpha. */
     var INVENTORY = (function () {
       var D = (typeof window.Shelf3DDecor !== 'undefined' && window.Shelf3DDecor)
         ? window.Shelf3DDecor.CATALOG : [];
@@ -2471,7 +2471,7 @@
       var w = Math.max(1, r.width), h = Math.max(1, r.height), a = w / h;
       camera.aspect = a; camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
-      // v409: tighter mobile framing (Kevin: shelf too small on Pixel).
+      // v409: tighter mobile framing (User: shelf too small on Pixel).
       // Portrait phones get closer instead of the old 2.1x pullback.
       camBase.set(0, 4.8, a >= 1 ? 13.4 : 13.4 * Math.min(1.45, 1.05 / a));
     }

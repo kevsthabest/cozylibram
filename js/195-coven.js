@@ -6,7 +6,7 @@
 // by Supabase RLS — see supabase/schema.sql. The hearth needs the cloud; the
 // section prompts for sign-in when offline or signed out.
 
-/* Kevin's call (2026-10-11): the social section is called "The Hearth" in
+/* User's call (2026-10-11): the social section is called "The Hearth" in
    every theme. The old theme-specific names (Night Court, Harvest Court,
    Book Club, ...) are retired. */
 function covenName() { return 'The Hearth'; }

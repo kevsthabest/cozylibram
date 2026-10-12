@@ -249,7 +249,7 @@ function renderShelf3D() {
     shelfSetViewMode('2d');
     renderShelf();
   });
-  // v411: overflow menu with 2D toggle (Kevin: discoverable home for view switch).
+  // v411: overflow menu with 2D toggle (User: discoverable home for view switch).
   const menuBtn3D = document.getElementById('svMenu3D');
   const menuDropdown3D = document.getElementById('svMenuDropdown3D');
   if (menuBtn3D && menuDropdown3D) {
@@ -269,7 +269,7 @@ function renderShelf3D() {
       _shelf3dSetMenuVisible(false);
       renderShelf();
     });
-    // v417: Decorations inventory in menu (Kevin: wasn't findable in 3D).
+    // v417: Decorations inventory in menu (User: wasn't findable in 3D).
     // Triggers the existing s3dInvBtn; the ▦ button itself is hidden via CSS.
     const menuDecor3DBtn = document.getElementById('svMenuDecor3D');
     if (menuDecor3DBtn) menuDecor3DBtn.addEventListener('click', function () {

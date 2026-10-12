@@ -2,7 +2,7 @@
 
 /* ---------------- backup view ---------------- */
 /* ---------------- settings groups (v117) ---------------- */
-// Kevin's IA: Account / Library / Appearance / Reading / Offline /
+// User's IA: Account / Library / Appearance / Reading / Offline /
 // Privacy / About. (Metadata group removed v476 — enrichment now runs
 // automatically in the background; see autoEnrichSweep + boot sequence.). Groups render directly as <details> cards (no post-hoc DOM
 // wrapping); open/closed state persists per device in spicyshelves.setgroups.
@@ -25,7 +25,7 @@ let tsSnapshot = null;   // { theme, accent } captured before previewing
 let tsPreviewTheme = null;
 let tsPreviewAccent = null; // null = theme's designed default
 
-/* Social section name shown on theme cards. Kevin's call (2026-10-11):
+/* Social section name shown on theme cards. User's call (2026-10-11):
    always "The Hearth" — the old per-theme names are retired. */
 function tsCovenDisplay() {
   return 'The Hearth';

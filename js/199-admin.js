@@ -727,7 +727,7 @@ function tropeLabProgressHTML() {
    Approve inferred tropes without opening each book. Lists every book
    with inferred rows in book_tropes, reusing the book modal's chip +
    ▲▼ vote UI (TropeVotes) — an upvote here is exactly the "approval"
-   Kevin used to do one book at a time. "Approve all" upvotes every
+   User used to do one book at a time. "Approve all" upvotes every
    inferred trope for the book in one tap. Unreviewed books sort first
    so the list reads as a work queue. */
 
