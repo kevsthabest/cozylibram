@@ -1238,7 +1238,7 @@ function renderStats() {
       }
     } catch (e) {}
     setView(
-      '<h2 class="section serif">Reading stats</h2>' +
+      '<h2 class="section serif">Chronicles</h2>' +
       modeSeg +
       milestoneCard +
       insightCard +
@@ -1433,7 +1433,7 @@ function renderMilestones() {
     { id: 'ritual', name: 'Rituals', desc: 'Reading aligned with the turning year.' },
     { id: 'hidden', name: 'Hidden', desc: 'Some milestones don\u2019t announce themselves.' },
   ];
-  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Stats</button>' +
+  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Chronicles</button>' +
     '<h2 class="section serif">Milestones</h2>' +
     '<p class="note" style="margin-bottom:16px">Moments from your reading life, kept quietly.</p>';
   cats.forEach(cat => {
