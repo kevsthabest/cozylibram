@@ -258,6 +258,25 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   ok('no sign-in form without backend config', !q('#gate-signin'));
   ok('no account initial without a signed-in user', !!q('#menu-btn .ticon'));
 
+  // v204 (restored): pre-v204 offline library adoption on first sign-in.
+  // A user with books in the legacy v1 slot gets them adopted into their
+  // per-user v2 slot; the legacy key is removed.
+  runInWindow(`localStorage.setItem('spicyshelves.library.v1', JSON.stringify([
+    { id: 'legacy1', title: 'Legacy Book', authors: ['Old Author'], status: 'read' }
+  ]));`);
+  runInWindow(`localUid = null; library = [];`);
+  // Simulate boot loading the legacy library, then first sign-in
+  runInWindow(`library = loadLegacyLibrary();`);
+  ok('legacy books load from v1 slot', probe(`library.length`) === 1);
+  runInWindow(`setLocalUserLegacy('adopter-1');`);
+  ok('offline books adopted to user library', probe(`library.length`) === 1 &&
+    probe(`library[0].id`) === 'legacy1');
+  ok('legacy key removed after adoption', lsGet('spicyshelves.library.v1') === null);
+  ok('books persisted under per-user key',
+    JSON.parse(lsGet('spicyshelves.library.v2.adopter-1') || '[]').length === 1);
+  // Clean up: sign out to restore state
+  runInWindow(`setLocalUserLegacy(null);`);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
