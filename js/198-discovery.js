@@ -33,7 +33,10 @@ function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId)
 // v176: every unique nonblank author in the library, ranked by shelf count
 // then average rating so her favorites scan first. No truncation — the
 // release sweep covers the whole library, not just the top 8.
-function topReleaseAuthors() {
+// v483: split into releaseAuthorStats() (ranked {name,n,stars,sn}) so the
+// Library home card can show per-author counts; topReleaseAuthors() keeps
+// its names-only contract for the sweep.
+function releaseAuthorStats() {
   const map = {};
   library.forEach(b => {
     // v402: skip "Full Cast" and dramatized-audiobook cast members — they're
@@ -53,8 +56,10 @@ function topReleaseAuthors() {
     });
   });
   return Object.values(map)
-    .sort((x, y) => (y.n - x.n) || ((y.sn ? y.stars / y.sn : 0) - (x.sn ? x.stars / x.sn : 0)))
-    .map(e => e.name);
+    .sort((x, y) => (y.n - x.n) || ((y.sn ? y.stars / y.sn : 0) - (x.sn ? x.stars / x.sn : 0)));
+}
+function topReleaseAuthors() {
+  return releaseAuthorStats().map(e => e.name);
 }
 
 // Already on her shelves? Matches by ISBN first, then title + first author.
