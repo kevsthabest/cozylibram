@@ -107,8 +107,10 @@ function refreshRecos() {
 // v219: clean-copy builder shared by the +TBR button and the preview modal.
 // The friend's personal data (their rating, progress, dates) never comes
 // along — just the book, per the v97 rule.
+// v492: run through migrateBook() so the copy has the full book shape
+// (tropes, ratings, log, etc.) like every other ingestion path.
 function covenCleanCopy(src) {
-  return {
+  return migrateBook({
     id: uid(),
     title: src.title || 'Untitled',
     authors: (src.authors || []).slice(),
@@ -116,14 +118,15 @@ function covenCleanCopy(src) {
     cover: src.cover || '',
     coverColor: src.coverColor || '',
     status: 'tbr',
-    series: src.series || '',
+    series: (src.series && typeof src.series === 'object') ? src.series : null,
     seriesPos: src.seriesPos || '',
     genres: (src.genres || []).slice(),
+    categories: (src.categories || []).slice(),
     description: src.description || '',
     pageCount: src.pageCount || 0,
     publishedDate: src.publishedDate || '',
     _mtime: Date.now(),
-  };
+  });
 }
 
 // Add a recommendation to the TBR shelf. Returns the new book's id (v219),

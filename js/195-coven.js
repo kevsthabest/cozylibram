@@ -719,7 +719,7 @@ function openRemoveFriendSheet(friendId, friendName) {
   ov.querySelector('#rf-x').addEventListener('click', close);
   ov.querySelector('#rf-cancel').addEventListener('click', close);
   ov.querySelector('#rf-yes').addEventListener('click', async () => {
-    try { await circleRemove(friendId); close(); rerender(); }
+    try { await circleRemove(friendId); close(); renderCoven(); }
     catch (e) { toast('Couldn\u2019t remove: ' + ((e && e.message) || e)); }
   });
 }
