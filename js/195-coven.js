@@ -10,6 +10,8 @@
    every theme. The old theme-specific names (Night Court, Harvest Court,
    Book Club, ...) are retired. */
 function covenName() { return 'The Hearth'; }
+// Possessive-safe form: "your hearth", not "your the hearth".
+function covenNameBare() { return covenName().replace(/^the\s+/i, ''); }
 function refreshCovenNav() {
   const btn = document.querySelector('.bottom-nav [data-nav="coven"]');
   if (!btn) return;
@@ -82,7 +84,7 @@ async function rotateInviteCode() {
 }
 async function shareInviteLink(code) {
   const url = inviteLinkFor(code);
-  const text = 'Join my ' + covenName() + ' on Cozy Libram — tap the link and we’re connected.';
+  const text = 'Join me in ' + covenName() + ' on Cozy Libram — tap the link and we’re connected.';
   track('invite_link_shared');
   if (navigator.share) {
     try { await navigator.share({ title: 'Cozy Libram', text: text, url: url }); }
@@ -119,7 +121,7 @@ async function resolveInviteToken(raw) {
   if (them === cloudUser.id) throw new Error('That’s your own invite link — share it with a friend instead.');
   const existing = await circleLinkBetween(cloudUser.id, them);
   if (existing) {
-    if (existing.status === 'accepted') throw new Error('You’re already in each other’s ' + covenName().toLowerCase() + '.');
+    if (existing.status === 'accepted') throw new Error('You’re already in each other’s ' + covenNameBare().toLowerCase() + '.');
     if (existing.status === 'pending') throw new Error('A request between you is already pending.');
   }
   let prof = null, nm = 'A reader';
@@ -253,12 +255,12 @@ async function maybeAskShelfShare(friendName) {
       markShelfShareAsked();
     }
     covenCloseSheet();
-    toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase()
+    toast(share ? 'Your shelves are shared with your ' + covenNameBare().toLowerCase()
                 : 'No changes — manage sharing anytime in Privacy settings');
   };
   const nm = esc(friendName || 'your new friend');
   const body =
-    '<p><b>' + nm + '</b> is now in your ' + esc(covenName().toLowerCase()) + '.</p>' +
+    '<p><b>' + nm + '</b> is now in your ' + esc(covenNameBare().toLowerCase()) + '.</p>' +
     '<p class="note">Let them browse your shelves? You can change this anytime in Privacy settings.</p>' +
     '<div class="modal-actions" style="margin-top:16px">' +
     '<button class="btn ghost" id="cc-ss-yes" style="flex:1;min-height:44px">Yes, share</button>' +
@@ -328,14 +330,14 @@ function renderCoven() {
   if (!cloudUser) {
     setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
       '<div class="empty"><div class="big">' + icon('friends') + '</div>' +
-      '<h2 class="serif">Your ' + covenName().toLowerCase() + ' lives in the cloud</h2>' +
+      '<h2 class="serif">Your ' + covenNameBare().toLowerCase() + ' lives in the cloud</h2>' +
       '<p>Sign in to add friends and browse each other’s shelves.</p>' +
       '<button class="btn" id="cc-signin">Sign in</button></div>');
     document.getElementById('cc-signin').addEventListener('click', () => go('settings'));
     return;
   }
   setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
-    '<p class="note" style="text-align:center">Loading your ' + covenName().toLowerCase() + '…</p>');
+    '<p class="note" style="text-align:center">Loading your ' + covenNameBare().toLowerCase() + '…</p>');
   // v240: an invite deep link stashed at boot (or tapped while signed in)
   // waits here until the tab renders its accept card.
   if (!pendingInviteToken) {
@@ -351,7 +353,7 @@ function renderCoven() {
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
-        '<div class="empty"><h2 class="serif">Couldn’t load your ' + covenName().toLowerCase() + '</h2>' +
+        '<div class="empty"><h2 class="serif">Couldn’t load your ' + covenNameBare().toLowerCase() + '</h2>' +
         '<p>' + esc((e && e.message) || e) + '</p>' +
         '<button class="btn" id="cc-retry">Try again</button></div>');
       document.getElementById('cc-retry').addEventListener('click', renderCoven);
@@ -367,14 +369,14 @@ function renderInviteAccept(slot, inv) {
     '<div class="circle-row invite-accept">' +
     (inv.profile ? circAvatarHTML(inv.profile, 'c-avatar') : '<span class="c-avatar"></span>') +
     '<div class="circle-meta"><b>' + esc(inv.name) + '</b>' +
-    '<span class="note">invited you to their ' + esc(covenName().toLowerCase()) + '</span></div>' +
+    '<span class="note">invited you to their ' + esc(covenNameBare().toLowerCase()) + '</span></div>' +
     '<div class="circle-actions"><button class="btn sm" id="cc-accept">Accept</button>' +
     '<button class="btn ghost sm" id="cc-dismiss">Dismiss</button></div></div>';
   slot.querySelector('#cc-accept').addEventListener('click', async () => {
     try {
       await acceptInviteToken(inv.token);
       track('friend_request_accepted');
-      toast('You’re in each other’s ' + covenName().toLowerCase() + ' now');
+      toast('You’re in each other’s ' + covenNameBare().toLowerCase() + ' now');
       clearPendingInvite();
       renderCoven();
       maybeAskShelfShare(inv.name); // v476: private-by-default consent, once
@@ -415,7 +417,7 @@ function renderCovenMain(code, lists, priv) {
   const shelves = ['tbr', 'reading', 'read', 'dnf'];
   let html = '<div class="view-head" style="position:relative"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2>' +
     '<button id="cc-privacy-gear" aria-label="Privacy settings" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)">' + icon('gear') + '</button></div>' +
-    '<p class="note" style="text-align:center">Your private reading ' + covenName().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
+    '<p class="note" style="text-align:center">Your private reading ' + covenNameBare().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
     // v454: friends strip — horizontal scroll row under the title
     '<div class="friend-strip" id="friendStrip">' +
     '<button class="friend-tile invite-tile" id="cc-invite-open" aria-label="Invite a friend"><span class="invite-plus">+</span><span class="friend-name">Invite</span></button>' +
@@ -436,7 +438,7 @@ function renderCovenMain(code, lists, priv) {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Accept</button>' +
         '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>' +
-        '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>', 'wants to join your ' + covenName().toLowerCase());
+        '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>', 'wants to join your ' + covenNameBare().toLowerCase());
     });
     lists.sent.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
@@ -460,7 +462,7 @@ function renderCovenMain(code, lists, priv) {
       go('coven-friend');
     }));
   document.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', async () => {
-    try { await circleAnswer(b.dataset.accept, true); track('friend_request_accepted'); toast('You’re in each other’s ' + covenName().toLowerCase() + ' now'); rerender(); maybeAskShelfShare(b.dataset.name); }
+    try { await circleAnswer(b.dataset.accept, true); track('friend_request_accepted'); toast('You’re in each other’s ' + covenNameBare().toLowerCase() + ' now'); rerender(); maybeAskShelfShare(b.dataset.name); }
     catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
@@ -564,12 +566,12 @@ function openCovenBook(b) {
 /* v454: privacy sheet — same controls as the old Privacy section, in a bottom sheet. */
 function openPrivacySheet(priv, shelves, opener) {
   const body =
-    '<div class="field"><label>Share my shelves with my ' + covenName().toLowerCase() + '</label>' +
+    '<div class="field"><label>Share my shelves with my ' + covenNameBare().toLowerCase() + '</label>' +
     '<div class="seg" id="cc-share">' +
       '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
       '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
-    '<p class="note">When off, friends still see you in their ' + covenName().toLowerCase() + ', but none of your books.</p></div>' +
-    '<div class="field"><label>Hide these shelves from my ' + covenName().toLowerCase() + '</label>' +
+    '<p class="note">When off, friends still see you in their ' + covenNameBare().toLowerCase() + ', but none of your books.</p></div>' +
+    '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
     '<div class="chips" id="cc-hide">' +
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
         STATUS[s] + '</button>').join('') +
@@ -581,7 +583,7 @@ function openPrivacySheet(priv, shelves, opener) {
     try {
       await circleSavePrivacy(share, priv.hidden);
       document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
-      toast(share ? 'Your shelves are shared with your ' + covenName().toLowerCase() : 'Your shelves are hidden from your ' + covenName().toLowerCase());
+      toast(share ? 'Your shelves are shared with your ' + covenNameBare().toLowerCase() : 'Your shelves are hidden from your ' + covenNameBare().toLowerCase());
     } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
   }));
   document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {

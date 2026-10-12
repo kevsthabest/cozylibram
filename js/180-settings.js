@@ -375,10 +375,10 @@ function renderSettings() {
     // v118: usage-analytics opt-out. Default ON for signed-in users; never
     // tracks guests, never collects book content — see docs/ANALYTICS.md.
     '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-analytics" ' +
-    (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Usage analytics' +
+    (analyticsEnabled() ? 'checked' : '') + '> ' + icon('chart') + ' Anonymous usage statistics' +
     '<span class="chk-hint">Helps improve the app. Counts how features are used — never what books you own.</span></label>' +
     '<p class="note" style="margin-top:6px"><a href="#" id="st-analytics-what">What exactly is collected?</a></p>' +
-    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
+    '<p class="note" id="st-analytics-detail" hidden>Usage data is linked to your account so we can understand which features are used — e.g. “book added from search”, “roulette spun”, “import completed (12 books)”. We never collect book titles, authors, ISBNs, ratings, notes, shelf contents, or private messages as part of product analytics. Events are batched, queued offline, and readable only by the app admin. Diagnostic/error logs never leave your device. Full list: <b>docs/ANALYTICS.md</b> in the repo.</p>';
     // v476: library value is automatic now — no opt-in needed.
 
   /* ---- About ---- */
@@ -596,7 +596,7 @@ function renderSettings() {
   });
   document.getElementById('st-analytics').addEventListener('change', e => {
     setAnalyticsEnabled(e.target.checked);
-    toast(e.target.checked ? 'Usage analytics on' : 'Usage analytics off — nothing further will be recorded');
+    toast(e.target.checked ? 'Anonymous usage statistics on' : 'Anonymous usage statistics off — nothing further will be recorded');
   });
   // v476: library value is automatic — no opt-in toggle needed.
   // v468: Book Portrait toggles + warning preferences

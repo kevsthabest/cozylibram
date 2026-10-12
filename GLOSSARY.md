@@ -19,8 +19,8 @@ The 3D shelf view of the reader's books. "Shelves," never "collections" — a sh
 ## The Hearth
 The social section: friends, reading circles, recommendations, buddy reads. People gather around a hearth. Replaces the old theme-specific names (Harvest Court, Night Court) and the internal "coven" — one name, every theme, matching the private-by-default / social-by-choice direction.
 
-## Reading Journey *(proposed)*
-The stats section, renamed from the language of dashboards. It's the story of the reader's reading life — pages, streaks, milestones — not a report. Not yet implemented; "Stats" is the current label.
+## Chronicles
+The stats section: the story of the reader's reading life — pages, streaks, milestones — told like a chronicle, not a report. Renamed from "Stats" (too clinical) in v486. Never "dashboard."
 
 ## Wander the Stacks *(proposed)*
 The discover section. Browsing a library's stacks is wandering with intent; "discover" is what an algorithm does to you. Not yet implemented; "Discover" is the current label.
