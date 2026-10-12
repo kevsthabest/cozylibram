@@ -608,11 +608,19 @@ async function main() {
     if (url === 'https://covers.openlibrary.org/b/id/1-M.jpg') {
       return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
     }
+    if (url === 'https://img.hardcover.app/abc123.jpg') {
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
+    }
     throw new Error('network down');
   };
   const prox = (u) => proxyFn.onRequest({ request: new Request('https://app.test/cover-proxy?url=' + encodeURIComponent(u)) });
   const good = await prox('https://covers.openlibrary.org/b/id/1-M.jpg');
   ok('proxy: 200 for allowed host', good.status === 200);
+  const hc = await prox('https://img.hardcover.app/abc123.jpg');
+  ok('proxy: 200 for img.hardcover.app (Hardcover cover CDN)', hc.status === 200);
+  ok('proxy: img.hardcover.app returns the image', (hc.headers.get('Content-Type') || '').startsWith('image/'));
+  const hcSub = await prox('https://evil.hardcover.app/abc123.jpg');
+  ok('proxy: other hardcover.app subdomains still rejected (exact-match allowlist)', hcSub.status === 403);
   const evil = await prox('https://169.254.169.254/latest/meta-data');
   ok('proxy: unlisted host rejected (SSRF)', evil.status === 403);
   globalThis.fetch = realFetch;
