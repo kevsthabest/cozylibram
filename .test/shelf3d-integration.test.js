@@ -223,5 +223,51 @@ ok('218 loads before 215 in index.html',
   ok('neighbour cases share the shell back panel', src215.includes('backMat);'));
 }
 
+/* ---- 11. camera fit + pan-while-zoomed (fit framing / pan clamps) ---- */
+{
+  const APP_DIR = require('./harness').APP_DIR;
+  const srcFix = fs.readFileSync(APP_DIR + '/js/215-shelf3d.js', 'utf8');
+  // section 4 deleted window.Shelf3D, so lift the pure helpers from source
+  const f0 = srcFix.indexOf('function shelf3dFitDistance');
+  const f1 = srcFix.indexOf('function shelf3dClampPan');
+  const f2 = srcFix.indexOf('\n  }', f1) + 4;
+  run(srcFix.slice(f0, f2) + '\n;window.__fit = shelf3dFitDistance; window.__clampPan = shelf3dClampPan;');
+  const fit = window.__fit, clampPan = window.__clampPan;
+  ok('fit + clamp helpers exposed on Shelf3D',
+    srcFix.includes('fitDistance: shelf3dFitDistance') && srcFix.includes('clampPan: shelf3dClampPan'));
+  ok('fit + clamp helpers defined', typeof fit === 'function' && typeof clampPan === 'function');
+  const TAN21 = Math.tan(21 * Math.PI / 180);
+  const FIT_W = (10 + 0.3 * 2) * 1.08, FIT_H = 2 * Math.max(8.04 - 3.6, 3.6) * 1.08;
+  // portrait phone: distance must grow until the whole case width fits
+  const dPortrait = fit(0.46, 42, FIT_W, FIT_H);
+  ok('portrait aspect pulls back past 30', dPortrait > 30 && dPortrait < 35);
+  ok('portrait fit actually frames the case width',
+    2 * dPortrait * TAN21 * 0.46 >= FIT_W - 1e-9);
+  // landscape: the height binds and stays under the historic 13.4 framing,
+  // so layout's max(13.4, fit) leaves desktop framing exactly as before
+  const dLand = fit(1.78, 42, FIT_W, FIT_H);
+  ok('landscape fit is height-bound (≈12.5)', dLand > 12 && dLand < 13);
+  ok('landscape fit does not exceed the historic 13.4', dLand <= 13.4);
+  // square: width-bound and beyond 13.4 (the old framing cropped the case)
+  const dSquare = fit(1.0, 42, FIT_W, FIT_H);
+  ok('square aspect is width-bound past 13.4', dSquare > 13.4 && dSquare < 16);
+  // degenerate aspect never divides by zero
+  ok('zero aspect stays finite', isFinite(fit(0, 42, FIT_W, FIT_H)));
+  // pan clamps: x within ±case half-width, target y within [1.2, TOP_Y-1.2]
+  const cp = (x, y) => clampPan(x, y, 5.3, 3.6, 8.04);
+  ok('pan centre unchanged', JSON.stringify(cp(0, 0)) === '[0,0]');
+  ok('pan inside bounds unchanged', JSON.stringify(cp(2, 1)) === '[2,1]');
+  ok('pan x clamps to ±half width', cp(99, 0)[0] === 5.3 && cp(-99, 0)[0] === -5.3);
+  ok('pan y clamps target to TOP_Y-1.2', Math.abs(cp(0, 99)[1] - 3.24) < 1e-9);
+  ok('pan y clamps target to 1.2', Math.abs(cp(0, -99)[1] - -2.4) < 1e-9);
+  // wiring: layout frames via the fit, the frame loop applies the pan
+  ok('layout fits via shelf3dFitDistance', srcFix.includes('shelf3dFitDistance(a, 42, fitW, fitH)'));
+  ok('layout keeps the 13.4 floor', srcFix.includes('Math.max(13.4, shelf3dFitDistance'));
+  ok('frame loop pans camera and target together',
+    srcFix.includes('camBase.x + panX +') && srcFix.includes('camTarget.x + panX'));
+  ok('pan only starts zoomed-in on empty space',
+    srcFix.includes('zoomFactor < 0.99') && srcFix.includes('!bookAt(e)'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
