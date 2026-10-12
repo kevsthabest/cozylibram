@@ -57,6 +57,19 @@ ok('arrange mine keeps order', run(`shelf3dArrange([{title:'b'},{title:'a'}],'mi
 ok('empty input -> empty', run(`shelfBooks3D([]).length`) === 0);
 ok('null input -> empty', run(`shelfBooks3D(null).length`) === 0);
 
+/* ---- 2c. spine colours from covers (v476) ---- */
+ok('light cover colours are toned down for legibility', run(`shelf3dSpineTone('#f1c40f')`) !== '#f1c40f' && run(`shelf3dSpineTone('#203040')`) === '#203040');
+ok('accent is lighter than spine', parseInt(run(`shelf3dSpineAccent('#2e86c1')`).slice(1,3),16) > 0x2e);
+ok('hue: green ~145, grey -1', Math.round(run(`shelf3dHue('#27ae60')`)) === 145 && run(`shelf3dHue('#888888')`) === -1);
+run(`localStorage.removeItem('cozylibram.s3d.spines')`);
+ok('spines default to cover colours', run(`shelf3dSpinesMode()`) === 'cover');
+run(`spineColorCache['k1'] = { hex: '#2e86c1', cover: 'u1' }`);
+ok('cached cover colour is used', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u1'}])[0].spineC1`) === run(`shelf3dSpineTone('#2e86c1')`));
+ok('stale cache (cover changed) falls back to palette', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u2'}])[0].spineC1`) !== run(`shelf3dSpineTone('#2e86c1')`));
+run(`shelf3dSetSpinesMode('classic')`);
+ok('classic mode ignores covers', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u1'}])[0].spineC1`) !== run(`shelf3dSpineTone('#2e86c1')`));
+run(`localStorage.removeItem('cozylibram.s3d.spines'); delete spineColorCache['k1']`);
+
 /* ---- 3. theme application (mocked Shelf3D) ---- */
 run(`
   window.__themeApplied = null;
@@ -191,6 +204,23 @@ ok('218 loads before 215 in index.html',
     hlBody.includes('prefers-reduced-motion') && hlBody.includes('markDirty'));
   ok('highlightBook returns true without the tween when reduced',
     /if\s*\(\s*reduce\s*\)\s*\{\s*markDirty\(\);\s*return true;/.test(hlBody));
+}
+
+/* ---- 10. v475 room shells: every theme dresses the room ---- */
+{
+  ok('shell table covers all 23 app themes',
+    run(`THEMES.every(t => !!SHELF3D_SHELLS[t.key])`) && run(`Object.keys(SHELF3D_SHELLS).length`) === 23);
+  const tw = JSON.parse(run(`JSON.stringify(shelf3dShellFor('twilight', SHELF3D_THEMES.dark))`));
+  ok('twilight shell is starry', tw.pattern === 'starry' && tw.light === false);
+  const fb = JSON.parse(run(`JSON.stringify(shelf3dShellFor('nope', { mood: 'bright', floorTint: '#aaaaaa', woodDark: '#bbbbbb' }))`));
+  ok('unknown theme falls back to its own floor/wood colours',
+    fb.wall === '#aaaaaa' && fb.pattern === 'plain' && fb.floor === '#bbbbbb' && fb.light === true);
+  ok('theme palette carries its shell',
+    run(`Shelf3DTheme.forTheme('frost').shell.floorKind`) === 'tile' &&
+    run(`Shelf3DTheme.forTheme('frost').shell.light`) === true);
+  const src215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
+  ok('215 applies the shell from the palette', src215.includes('if (p.shell) applyShell(p.shell);'));
+  ok('neighbour cases share the shell back panel', src215.includes('backMat);'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
