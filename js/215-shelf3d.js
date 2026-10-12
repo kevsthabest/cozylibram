@@ -88,7 +88,9 @@
     '.s3d-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}',
     '.s3d-root #s3dScene{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;}',
     '.s3d-root #s3dVignette{position:absolute;inset:0;pointer-events:none;',
-    '  background:radial-gradient(ellipse at 50% 42%,transparent 55%,rgba(8,5,12,.55) 100%);}',
+    '  background:radial-gradient(ellipse at 50% 42%,transparent 55%,var(--s3d-vig,rgba(8,5,12,.55)) 100%);}',
+    '.s3d-root.s3d-light #s3dHud .title{color:#3a2a1c;text-shadow:0 1px 4px rgba(255,255,255,.5);}',
+    '.s3d-root.s3d-light #s3dHud .title small{color:#8a5a14;}',
     '.s3d-root #s3dHud{position:absolute;top:0;left:0;right:0;',
     '  padding:calc(10px + env(safe-area-inset-top)) 14px 8px;',
     '  display:flex;align-items:center;justify-content:space-between;pointer-events:none;z-index:5;}',
@@ -388,8 +390,8 @@
     box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
     box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark,  (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
     box(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);          // crown
-    var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y),
-      new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 }));
+    var backMat = new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 });
+    var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), backMat);
     back.position.set(0, TOP_Y / 2, WALL_Z);
     back.receiveShadow = true;
     scene.add(back);
@@ -406,10 +408,11 @@
       var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
       return t;
     }
-    var floor = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
-      new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.95 }));
+    var floorMat = new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.95 });
+    var floor = new THREE.Mesh(new THREE.CircleGeometry(26, 40), floorMat);
     floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true;
     scene.add(floor);
+    var wallMesh = null, baseboard = null, floorGlow = null;
     (function wallHint() {   // faint warm wall far behind the bookcase
       var c = document.createElement('canvas'); c.width = 4; c.height = 128;
       var g = c.getContext('2d');
@@ -420,7 +423,141 @@
       var wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 18),
         new THREE.MeshBasicMaterial({ map: t, fog: true }));
       wall.position.set(0, 8, -9); scene.add(wall);
+      wallMesh = wall;
+      baseboard = new THREE.Mesh(new THREE.BoxGeometry(60, 0.55, 0.22),
+        new THREE.MeshStandardMaterial({ color: 0x1b1220, roughness: 0.7 }));
+      baseboard.position.set(0, 0.27, -8.9); scene.add(baseboard);
+      /* soft pool of dark under the room edge so the floor fades out */
+      var gc = document.createElement('canvas'); gc.width = gc.height = 256;
+      var gg = gc.getContext('2d');
+      var gr2 = gg.createRadialGradient(128, 128, 60, 128, 128, 128);
+      gr2.addColorStop(0, 'rgba(0,0,0,0)'); gr2.addColorStop(1, 'rgba(0,0,0,0.85)');
+      gg.fillStyle = gr2; gg.fillRect(0, 0, 256, 256);
+      floorGlow = new THREE.Mesh(new THREE.CircleGeometry(26, 40),
+        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false, fog: false }));
+      floorGlow.rotation.x = -Math.PI / 2; floorGlow.position.y = 0.004; scene.add(floorGlow);
     })();
+
+    /* ---- room shell (v475): wall / floor / trim per app theme ---- */
+    function hexToRgb(h) {
+      var n = parseInt(String(h).replace('#', ''), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function mixHex(a, b, t) {
+      var A = hexToRgb(a), B = hexToRgb(b);
+      return '#' + [0, 1, 2].map(function (i) {
+        return Math.round(A[i] + (B[i] - A[i]) * t).toString(16).padStart(2, '0');
+      }).join('');
+    }
+    function wallShellTexture(sh) {
+      var W = sh.pattern === 'starry' ? 1024 : 256, H = 1024;
+      var c = document.createElement('canvas'); c.width = W; c.height = H;
+      var g = c.getContext('2d');
+      var top = mixHex(sh.wall, '#000000', sh.light ? 0.08 : 0.35);
+      var gr = g.createLinearGradient(0, 0, 0, H);
+      gr.addColorStop(0, top); gr.addColorStop(0.45, sh.wall); gr.addColorStop(1, mixHex(sh.wall, '#000000', sh.light ? 0.12 : 0.3));
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      function row(y) { return (17 - y) / 18 * H; }          // world y -> canvas row
+      var hi = mixHex(sh.wall, sh.light ? '#ffffff' : '#ffffff', sh.light ? 0.4 : 0.1);
+      var lo = mixHex(sh.wall, '#000000', sh.light ? 0.1 : 0.3);
+      if (sh.pattern === 'stripe') {
+        g.fillStyle = hi; g.globalAlpha = 0.5;
+        for (var x = 0; x < W; x += W / 2) g.fillRect(x, 0, W / 4, H);
+        g.globalAlpha = 1;
+      } else if (sh.pattern === 'panel' || sh.pattern === 'wainscot') {
+        var rail = row(3.4);
+        g.fillStyle = lo; g.globalAlpha = 0.55; g.fillRect(0, rail, W, H - rail); g.globalAlpha = 1;
+        g.fillStyle = sh.trim; g.fillRect(0, rail - 6, W, 12);
+        g.strokeStyle = hi; g.globalAlpha = 0.35; g.lineWidth = 3;
+        if (sh.pattern === 'panel') {
+          for (var px = 0; px < 2; px++) { var x0 = px * W / 2 + 18; g.strokeRect(x0, rail + 28, W / 2 - 36, H - rail - 56); }
+          var top2 = row(11);
+          for (var qx = 0; qx < 2; qx++) { var x1 = qx * W / 2 + 18; g.strokeRect(x1, top2, W / 2 - 36, rail - top2 - 40); }
+        } else {
+          for (var wx = 0; wx < W; wx += W / 4) { g.beginPath(); g.moveTo(wx, rail + 6); g.lineTo(wx, H); g.stroke(); }
+        }
+        g.globalAlpha = 1;
+      } else if (sh.pattern === 'grid') {
+        g.strokeStyle = '#38e1ff'; g.globalAlpha = 0.12; g.lineWidth = 2;
+        for (var gx = 0; gx <= W; gx += W / 4) { g.beginPath(); g.moveTo(gx, 0); g.lineTo(gx, H); g.stroke(); }
+        for (var gy = 0; gy <= H; gy += H / 9) { g.beginPath(); g.moveTo(0, gy); g.lineTo(W, gy); g.stroke(); }
+        g.globalAlpha = 1;
+      } else if (sh.pattern === 'starry') {
+        for (var i = 0; i < 160; i++) {
+          var sx = Math.random() * W, sy = Math.random() * row(3), sr = Math.random() < 0.12 ? 2.4 : 1.2;
+          g.fillStyle = 'rgba(255,248,225,' + (0.35 + Math.random() * 0.5).toFixed(2) + ')';
+          g.beginPath(); g.arc(sx, sy, sr, 0, 7); g.fill();
+        }
+        var rail2 = row(3.4);
+        g.fillStyle = sh.trim; g.fillRect(0, rail2 - 6, W, 12);
+      }
+      var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      if (sh.pattern !== 'starry') { t.wrapS = THREE.RepeatWrapping; t.repeat.set(12, 1); }
+      return t;
+    }
+    function floorShellTexture(sh) {
+      var c = document.createElement('canvas'); c.width = c.height = 512;
+      var g = c.getContext('2d');
+      var base = sh.floor;
+      g.fillStyle = base; g.fillRect(0, 0, 512, 512);
+      var seam = mixHex(base, '#000000', sh.light ? 0.28 : 0.55);
+      if (sh.floorKind === 'tile') {
+        for (var ty = 0; ty < 4; ty++) for (var tx = 0; tx < 4; tx++) {
+          g.fillStyle = ((tx + ty) % 2) ? mixHex(base, '#ffffff', sh.light ? 0.25 : 0.07) : mixHex(base, '#000000', 0.12);
+          g.fillRect(tx * 128, ty * 128, 128, 128);
+        }
+        g.strokeStyle = seam; g.lineWidth = 3;
+        for (var k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * 128, 0); g.lineTo(k * 128, 512); g.stroke(); g.beginPath(); g.moveTo(0, k * 128); g.lineTo(512, k * 128); g.stroke(); }
+      } else if (sh.floorKind === 'stone') {
+        for (var sy = 0; sy < 4; sy++) {
+          var off = (sy % 2) * 64;
+          for (var sx = -1; sx < 4; sx++) {
+            var shade = (Math.random() - 0.5) * 0.18;
+            g.fillStyle = shade > 0 ? mixHex(base, '#ffffff', shade) : mixHex(base, '#000000', -shade);
+            g.fillRect(sx * 128 + off, sy * 128, 128, 128);
+          }
+        }
+        g.strokeStyle = seam; g.lineWidth = 4;
+        for (var ky = 0; ky <= 4; ky++) { g.beginPath(); g.moveTo(0, ky * 128); g.lineTo(512, ky * 128); g.stroke(); }
+        for (var ry = 0; ry < 4; ry++) for (var rx = -1; rx < 5; rx++) {
+          var xx = rx * 128 + (ry % 2) * 64; g.beginPath(); g.moveTo(xx, ry * 128); g.lineTo(xx, ry * 128 + 128); g.stroke();
+        }
+      } else {   // boards: planks running along x
+        var ph = 64;
+        for (var by = 0; by < 512 / ph; by++) {
+          var bs = (Math.random() - 0.5) * 0.2;
+          g.fillStyle = bs > 0 ? mixHex(base, '#ffffff', bs * 0.7) : mixHex(base, '#000000', -bs);
+          g.fillRect(0, by * ph, 512, ph);
+          g.strokeStyle = 'rgba(0,0,0,0.13)'; g.lineWidth = 1;
+          for (var gl = 0; gl < 5; gl++) { var yy = by * ph + 8 + Math.random() * (ph - 16); g.beginPath(); g.moveTo(0, yy); g.lineTo(512, yy + (Math.random() - 0.5) * 4); g.stroke(); }
+          g.strokeStyle = seam; g.lineWidth = 3; g.beginPath(); g.moveTo(0, by * ph); g.lineTo(512, by * ph); g.stroke();
+          var jx = (by * 197) % 512; g.beginPath(); g.moveTo(jx, by * ph); g.lineTo(jx, by * ph + ph); g.stroke();
+        }
+      }
+      var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6); t.anisotropy = 4;
+      return t;
+    }
+    function applyShell(sh) {
+      if (!sh || !wallMesh) return;
+      try {
+        var oldW = wallMesh.material.map, oldF = floorMat.map;
+        wallMesh.material.map = wallShellTexture(sh); wallMesh.material.needsUpdate = true;
+        floorMat.map = floorShellTexture(sh); floorMat.needsUpdate = true;
+        if (oldW) oldW.dispose(); if (oldF) oldF.dispose();
+        baseboard.material.color.set(sh.trim);
+        backMat.color.set(mixHex(sh.wall, '#000000', sh.light ? 0.42 : 0.55));
+        var bgc = mixHex(sh.wall, '#000000', sh.light ? 0.1 : 0.45);
+        scene.background.set(bgc); scene.fog.color.set(bgc);
+        floorGlow.material.color.set(sh.light ? '#8a7560' : '#000000');
+        floorGlow.material.opacity = sh.light ? 0.55 : 1;
+        root.classList.toggle('s3d-light', !!sh.light);
+        root.style.background = bgc;
+        root.style.setProperty('--s3d-vig', sh.light ? 'rgba(90,70,50,.32)' : 'rgba(8,5,12,.55)');
+        renderer.shadowMap.needsUpdate = true;
+        markDirty();
+      } catch (e) {}
+    }
 
     /* dust motes drifting in the light — cheap Points, ~130 particles */
     var MOTES = 130;
@@ -2307,6 +2444,7 @@
           var wd = woodTexture(p.woodDark, shadeHex(p.woodDark, -28), shadeHex(p.woodDark, 30));
           woodDark.map = wd; woodDark.needsUpdate = true;
         }
+        if (p.shell) applyShell(p.shell);
         // Fairy bulbs: accent glow.
         if (p.accentGlow) {
           var ac = new THREE.Color(p.accentGlow);
@@ -2834,7 +2972,7 @@
       lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
       lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
       lb(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);
-      var bk = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), liteMat('#241a20'));
+      var bk = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), backMat);
       bk.position.set(0, TOP_Y / 2, WALL_Z); g.add(bk);
       var order = [2, 1, 0], li = 0, startX = -SHELF_W / 2 + 0.35, x = startX;
       (books || []).slice(0, MAX_BOOKS).forEach(function (b) {

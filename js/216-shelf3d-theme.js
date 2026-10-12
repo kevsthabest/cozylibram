@@ -47,6 +47,42 @@ const SHELF3D_THEMES = {
   'wisp-night':{ woodBase: '#3a2a55', woodDark: '#1e1430', lightWarm: '#ffe9a0', lightCool: '#4a3a7a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#ffd76a', floorTint: '#0e0a1a', mood: 'moody' },
 };
 
+/* v475: room shells — the walls, floor and trim around the bookcases.
+   [wall colour, wall pattern, floor colour, floor kind, trim colour]
+   wall patterns: plain | wainscot | panel | stripe | starry | grid
+   floor kinds:   boards | tile | stone                                    */
+const SHELF3D_SHELLS = {
+  dark:        ['#2e2338', 'wainscot', '#33231b', 'boards', '#1f1527'],
+  light:       ['#efe2cc', 'wainscot', '#c9a579', 'boards', '#fbf3e4'],
+  hearthside:  ['#4a2c1a', 'panel',    '#2f1c10', 'boards', '#2a190e'],
+  candlelight: ['#f0dcb4', 'stripe',   '#b98f58', 'boards', '#fff1d0'],
+  twilight:    ['#2d2758', 'starry',   '#1f1938', 'boards', '#171230'],
+  verdant:     ['#2f4d34', 'stripe',   '#2c2c1b', 'boards', '#1d2d1f'],
+  midnight:    ['#1f2850', 'starry',   '#161c38', 'tile',   '#10162e'],
+  velvet:      ['#52243a', 'stripe',   '#2e141c', 'boards', '#2f1220'],
+  abyss:       ['#173a41', 'plain',    '#10252a', 'stone',  '#0c1d21'],
+  frost:       ['#dce7f2', 'panel',    '#b4c2d2', 'tile',   '#f3f8ff'],
+  haunt:       ['#2f1d3f', 'stripe',   '#1e1415', 'boards', '#1a0f24'],
+  yuletide:    ['#27513a', 'panel',    '#3d261a', 'boards', '#6a1f2a'],
+  fete:        ['#2d2468', 'stripe',   '#271c3e', 'tile',   '#d9a93a'],
+  amour:       ['#612a40', 'panel',    '#3d1c25', 'boards', '#2d121c'],
+  shamrock:    ['#225f3b', 'stripe',   '#273d1c', 'boards', '#143a22'],
+  pastel:      ['#f7dde8', 'stripe',   '#e2c6b0', 'boards', '#fff6fa'],
+  harvest:     ['#74482a', 'panel',    '#3d2614', 'boards', '#3a2412'],
+  solstice:    ['#f5dfa0', 'stripe',   '#d7b06a', 'boards', '#fff4cf'],
+  stormrider:  ['#2c3250', 'panel',    '#1f2334', 'stone',  '#161a28'],
+  briarthrone: ['#35233f', 'stripe',   '#20152a', 'stone',  '#1a1024'],
+  voidsignal:  ['#102232', 'grid',     '#0d1822', 'tile',   '#0a141c'],
+  wisp:        ['#fbe6ef', 'stripe',   '#e8c9a8', 'boards', '#fffaf4'],
+  'wisp-night':['#2d2150', 'starry',   '#1c1334', 'boards', '#150e28'],
+};
+function shelf3dShellFor(themeKey, base) {
+  const r = SHELF3D_SHELLS[themeKey];
+  const light = base.mood === 'bright';
+  const a = r || [base.floorTint, 'plain', base.woodDark, 'boards', base.woodDark];
+  return { wall: a[0], pattern: a[1], floor: a[2], floorKind: a[3], trim: a[4], light: light };
+}
+
 function shelf3dThemeFor(themeKey, accentKey) {
   const base = SHELF3D_THEMES[themeKey] || SHELF3D_THEMES.dark;
   const accent = SHELF3D_ACCENTS[accentKey] || base.accentGlow;
@@ -61,6 +97,7 @@ function shelf3dThemeFor(themeKey, accentKey) {
     accentGlow: accent,
     floorTint: base.floorTint,
     mood: base.mood,
+    shell: shelf3dShellFor(themeKey, base),
   };
 }
 
