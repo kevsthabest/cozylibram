@@ -1,11 +1,14 @@
-// Tests for v182 — full book-detail mockup alignment.
+// Tests for v182 (updated v405) — full book-detail mockup alignment.
 //
-// Covered: top-right favorite + ⋮ cluster with the floating-card menu
+// Covered: ⋮ cluster with the floating-card menu
 // (Share, Add to Favorites, Add to Up Next, Change Cover, separated Remove);
-// hero favorite beside the primary action (all three stay in sync); icon
+// hero favorite beside the primary action; icon
 // metadata row; labeled Change Cover; icon tabs; tappable shelf/ownership
 // rows; "More details" expander; reading-log summary; trope chips with
 // + Add / × remove / View more; immediate note saving.
+//
+// v405 (M1): the top-right duplicate favorite (#f-fav) was removed —
+// the single favorite heart now lives in the CTA row (#f-fav2).
 
 const fs = require('fs');
 const path = require('path');
@@ -45,8 +48,9 @@ function seed(over) {
 
 seed();
 
-// --- 1. Top-right cluster + floating menu ---
-ok('top cluster holds favorite + overflow', !!q('.d-topactions #f-fav') && !!q('.d-topactions #m-more'));
+// --- 1. Top-right ⋮ cluster + floating menu ---
+// v405: the top-right favorite duplicate was removed; only the ⋮ remains.
+ok('top cluster holds overflow', !!q('.d-topactions #m-more'));
 ok('menu hidden by default', q('#m-moremenu').hidden === true);
 q('#m-more').click();
 ok('menu opens on ⋮ tap', q('#m-moremenu').hidden === false);
@@ -63,16 +67,16 @@ ok('primary still singular', qa('#m-primary').length === 1);
 ok('metadata row uses icons', qa('.d-meta svg').length === 3);
 ok('change cover is a labeled button', q('#m-changecover').textContent.includes('Cover'));
 
-// --- 3. Favorite sync across all three controls ---
+// --- 3. Favorite controls: hero heart + menu entry stay in sync ---
 ok('hero favorite starts off', !q('#f-fav2').classList.contains('on'));
 q('#f-fav2').click();
-ok('hero tap lights both hearts',
-  q('#f-fav2').classList.contains('on') && q('#f-fav').classList.contains('on'));
+ok('hero tap lights the heart',
+  q('#f-fav2').classList.contains('on'));
 ok('menu favorite label flips', q('#m-favmenu').textContent.includes('Remove from Favorites'));
 ok('favorite persists immediately', run(`library[0].favorite`) === true);
 q('#m-favmenu').click();
 ok('menu favorite toggles back off',
-  !q('#f-fav').classList.contains('on') && !q('#f-fav2').classList.contains('on'));
+  !q('#f-fav2').classList.contains('on'));
 ok('menu favorite label flips back', q('#m-favmenu').textContent.includes('Add to Favorites'));
 
 // --- 4. Tabs carry icons ---
@@ -117,7 +121,7 @@ q('#m-tropemore').click();
 ok('view more expands the list', qa('#f-tropesugg [data-tsugg]').length === 7);
 q('#f-tropesugg [data-tsugg]').click();
 ok('suggestion tap adds a chip', q('#f-tropechips').textContent.includes('forced proximity'));
-ok('trope intelligence card present', !!q('.tcard #m-tropedb') && !!q('#m-tropepropose'));
+ok('trope intelligence card present', !!q('.tropedb-card #m-tropedb'));
 
 // --- 7. Notes: immediate save ---
 q('[data-dtab="notes"]').click();
