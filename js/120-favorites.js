@@ -218,7 +218,13 @@ function coverImageHex(src, useCors) {
 }
 // Ordered pixel sources for a cover: same-origin proxy first (reads pixels
 // from any host), then the direct URL (CORS only where the host allows it).
+// Canonical bucket covers are the exception: Supabase serves
+// Access-Control-Allow-Origin: * on them, so a direct CORS load reads the
+// pixels — and the proxy must not wrap them (supabase.co is not on its
+// provider allowlist, so it 403s, the load errors, and the fallback direct
+// read then happens without CORS and taints the canvas).
 function coverColorSources(url) {
+  if (url && url.indexOf('/storage/v1/object/public/covers/') !== -1) return [[url, true]];
   const sources = [];
   const proxy = coverProxyURL(url);
   if (proxy !== url) sources.push([proxy, false]); // same-origin: no CORS needed
