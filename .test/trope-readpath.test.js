@@ -121,8 +121,8 @@ function ok(name, cond) {
     ], 'db')`);
     ok('db chips carry the ✦ marker', db.includes('✦ Dragons') && db.includes('✦ Quests'));
     ok('db chips get the ai class', db.includes('chip dbtrope ai'));
-    ok('db chips show confidence tooltip',
-      db.includes('title="AI-inferred · 95% confidence"'));
+    ok('db chips show provenance (v473: tooltips replaced by labels)',
+      db.includes('data-tprov=') && db.includes('class="tprov"'));
     ok('db chips carry the source note', db.includes('inferred from the book'));
 
     const heur = probe(`dbTropeChipsHTML([{ id: null, name: 'slow burn' }], 'heuristics')`);
