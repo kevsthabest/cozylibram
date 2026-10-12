@@ -926,22 +926,48 @@ function unlockBodyScroll() {
   bodyScrollLocked = false;
   document.body.style.overflow = bodyScrollPrev;
 }
+/* v511: a drag that starts inside a horizontally scrollable descendant
+   (a chip row, a similar-books rail) belongs to that scroller, not to
+   the sheet — walk from the touch target up to the sheet and refuse
+   the dismiss gesture for such starts. Generic: any descendant whose
+   content overflows horizontally with overflow-x auto/scroll. */
+function sheetDragStartsInHScroller(sheet, el) {
+  try {
+    while (el && el.nodeType === 1) {
+      if (el.scrollWidth > el.clientWidth + 1 &&
+          typeof window !== 'undefined' && window.getComputedStyle) {
+        const ox = window.getComputedStyle(el).overflowX;
+        if (ox === 'auto' || ox === 'scroll') return true;
+      }
+      if (el === sheet) break;
+      el = el.parentElement;
+    }
+  } catch (e) { /* detection failure must never break dismiss */ }
+  return false;
+}
 function wireSheetDrag(sheet, onDismiss) {
   if (!sheet || typeof window === 'undefined' || !('ontouchstart' in window)) return;
-  let y0 = null, t0 = 0, dragging = false, dy = 0;
+  let y0 = null, x0 = null, t0 = 0, dragging = false, dy = 0, refused = false;
   const cancel = () => {
-    y0 = null; dragging = false; dy = 0;
+    y0 = null; x0 = null; dragging = false; dy = 0; refused = false;
     sheet.style.transition = ''; sheet.style.transform = '';
   };
   sheet.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) { y0 = null; return; }
-    y0 = e.touches[0].clientY; t0 = e.timeStamp; dragging = false; dy = 0;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; t0 = e.timeStamp;
+    dragging = false; dy = 0;
+    refused = sheetDragStartsInHScroller(sheet, e.target);
   }, { passive: true });
   sheet.addEventListener('touchmove', e => {
     if (y0 == null || e.touches.length !== 1) { if (e.touches.length !== 1) cancel(); return; }
+    if (refused) return; // gesture belongs to a nested horizontal scroller
     const d = e.touches[0].clientY - y0;
     if (!dragging) {
       if (d < 10 || sheet.scrollTop > 0) return; // not a top-of-sheet downward swipe
+      /* v511: a predominantly horizontal gesture is a swipe at content,
+         not a dismiss — refuse it for the rest of this touch, exactly
+         as the browser hands it to the horizontal scroller. */
+      if (x0 != null && Math.abs(e.touches[0].clientX - x0) > Math.abs(d)) { refused = true; return; }
       dragging = true;
       // Re-anchor: the sheet starts following from this finger position so it
       // can't jump if the gesture reached the top mid-swipe.
@@ -964,7 +990,7 @@ function wireSheetDrag(sheet, onDismiss) {
     if (y0 == null) return;
     const dt = Math.max(1, (e.timeStamp || 0) - t0);
     const dist = dy, v = dist / dt, wasDragging = dragging;
-    y0 = null; dragging = false; dy = 0;
+    y0 = null; x0 = null; dragging = false; dy = 0; refused = false;
     if (!wasDragging) return;
     if (shouldDismissDrag(dist, v, sheet.scrollTop)) {
       sheet.style.transition = 'transform .18s ease-in';

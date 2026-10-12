@@ -3753,15 +3753,20 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ---- Reader Portrait share sheet (v500): swipeable style carousel.
    v502: dots are real buttons, prev/next arrows on desktop, centered
-   dialog via the sheet pattern above. ---- */
+   dialog via the sheet pattern above.
+   v511: touch-action: pan-x on track/slides/cards/canvas claims
+   horizontal gestures for the carousel — without it the sheet's own
+   vertical scroller wins diagonal swipes on Android and the track
+   never moves. Vertical sheet scroll still works from outside the
+   track area. ---- */
 .pshare-sheet { max-height: 92vh; overflow-y: auto; }
 .pshare-title { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 22px; text-align: center; margin: 4px 0 14px; color: var(--ink); }
 .pshare-stage { position: relative; }
-.pshare-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -4px; }
+.pshare-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -4px; touch-action: pan-x; }
 .pshare-track::-webkit-scrollbar { display: none; }
-.pshare-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; justify-content: center; padding: 2px 4px; }
-.pshare-card { display: flex; align-items: center; justify-content: center; min-height: 200px; }
-.pshare-card canvas { width: min(74vw, 324px); height: auto; display: block; border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); }
+.pshare-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; justify-content: center; padding: 2px 4px; touch-action: pan-x; }
+.pshare-card { display: flex; align-items: center; justify-content: center; min-height: 200px; touch-action: pan-x; }
+.pshare-card canvas { width: min(74vw, 324px); height: auto; display: block; border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); touch-action: pan-x; }
 .pshare-loading { color: var(--muted); font-size: 14px; padding: 60px 10px; text-align: center; }
 .pshare-nav { display: none; }
 @media (min-width: 768px) {
