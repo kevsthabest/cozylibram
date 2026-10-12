@@ -2093,6 +2093,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .rh-tx small { font-size: 12px; opacity: 0.65; }
 .home-empty { background: var(--card); border: 1px dashed var(--line); border-radius: 14px; padding: 16px; text-align: center; }
 .home-empty p { margin: 0 0 10px; }
+
+/* v483: author releases card (Library home) — compact, below Currently Reading */
+.author-rel-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+.ar-name { font-size: 16px; font-weight: 700; }
+.ar-meta { font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
+.ar-rel { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.ar-main { flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; background: none; border: 0; padding: 12px 4px; min-height: 44px; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
+.ar-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-date { font-size: 12px; color: var(--gold); white-space: nowrap; flex: none; }
+.ar-dis { min-width: 44px; }
+.ar-more { display: block; width: 100%; background: none; border: 0; padding: 12px; min-height: 44px; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .home-empty-btns { display: flex; gap: 8px; justify-content: center; }
 .cant-decide {
   display: flex; align-items: center; gap: 14px; width: 100%;

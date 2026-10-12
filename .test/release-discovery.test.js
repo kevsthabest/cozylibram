@@ -58,7 +58,7 @@ runInWindow(`
   dismissRelease(5);
 `);
 
-ok('authors ranked by shelf count then rating',
+ok('authors ranked by read count then rating',
   JSON.stringify(window.topReleaseAuthors()) === JSON.stringify(['Ann Author', 'Zed']));
 
 (async () => {

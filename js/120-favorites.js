@@ -518,6 +518,9 @@ function libraryHomeHTML(counts) {
   return homeGreetingHTML() + readingHeroHTML() +
     // v468: reading nudge slot (Book Portrait mid-read prompts)
     ((typeof nudgeSlotHTML === 'function') ? nudgeSlotHTML() : '') +
+    // v483: author releases card — below Currently Reading, only when there
+    // are unseen finds in the weekly auto-sweep cache (no empty state)
+    ((typeof authorReleasesCard === 'function') ? authorReleasesCard() : '') +
     shelfTilesHTML(counts) +
     recentlyAddedHTML() + upNextShelfHTML() + cantDecideHTML() + favShelfHTML();
 }
@@ -658,6 +661,8 @@ function renderLibrary() {
   if (lw) lw.addEventListener('click', () => go('wishlist'));
   const ls = document.getElementById('lib-series');
   if (ls) ls.addEventListener('click', () => { seriesReturn = 'library'; go('series'); });
+  // v483: author releases card wiring (preview / add / dismiss / see-all)
+  if (typeof wireAuthorReleases === 'function') wireAuthorReleases();
   const srt = document.getElementById('lib-sort');
   if (srt) srt.addEventListener('change', () => {
     sortBy = srt.value;
