@@ -57,6 +57,19 @@ ok('arrange mine keeps order', run(`shelf3dArrange([{title:'b'},{title:'a'}],'mi
 ok('empty input -> empty', run(`shelfBooks3D([]).length`) === 0);
 ok('null input -> empty', run(`shelfBooks3D(null).length`) === 0);
 
+/* ---- 2c. spine colours from covers (v476) ---- */
+ok('light cover colours are toned down for legibility', run(`shelf3dSpineTone('#f1c40f')`) !== '#f1c40f' && run(`shelf3dSpineTone('#203040')`) === '#203040');
+ok('accent is lighter than spine', parseInt(run(`shelf3dSpineAccent('#2e86c1')`).slice(1,3),16) > 0x2e);
+ok('hue: green ~145, grey -1', Math.round(run(`shelf3dHue('#27ae60')`)) === 145 && run(`shelf3dHue('#888888')`) === -1);
+run(`localStorage.removeItem('cozylibram.s3d.spines')`);
+ok('spines default to cover colours', run(`shelf3dSpinesMode()`) === 'cover');
+run(`spineColorCache['k1'] = { hex: '#2e86c1', cover: 'u1' }`);
+ok('cached cover colour is used', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u1'}])[0].spineC1`) === run(`shelf3dSpineTone('#2e86c1')`));
+ok('stale cache (cover changed) falls back to palette', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u2'}])[0].spineC1`) !== run(`shelf3dSpineTone('#2e86c1')`));
+run(`shelf3dSetSpinesMode('classic')`);
+ok('classic mode ignores covers', run(`shelfBooks3D([{id:'k1',title:'x',cover:'u1'}])[0].spineC1`) !== run(`shelf3dSpineTone('#2e86c1')`));
+run(`localStorage.removeItem('cozylibram.s3d.spines'); delete spineColorCache['k1']`);
+
 /* ---- 3. theme application (mocked Shelf3D) ---- */
 run(`
   window.__themeApplied = null;

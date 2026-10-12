@@ -18,8 +18,60 @@
 const SHELF3D_MAX_BOOKS = 60;   // books per bookcase
 const SHELF3D_ARRANGE_KEY = 'cozylibram.s3d.arrange';
 const SHELF3D_ARRANGE_MODES = [
-  ['mine', 'As I placed them'], ['title', 'Title'], ['author', 'Author'], ['series', 'Series']
+  ['mine', 'As I placed them'], ['title', 'Title'], ['author', 'Author'], ['series', 'Series'],
+  ['colour', 'Colour (a rainbow shelf)']
 ];
+const SHELF3D_SPINES_KEY = 'cozylibram.s3d.spines';   // 'cover' (default) | 'classic'
+let _shelf3dPaintBusy = false, _shelf3dPaintTimer = null;
+
+function shelf3dSpinesMode() {
+  try { return localStorage.getItem(SHELF3D_SPINES_KEY) === 'classic' ? 'classic' : 'cover'; }
+  catch (e) { return 'cover'; }
+}
+function shelf3dSetSpinesMode(m) {
+  try { localStorage.setItem(SHELF3D_SPINES_KEY, m === 'classic' ? 'classic' : 'cover'); } catch (e) {}
+}
+// Cover colour for a book, or null (no cover, not read yet, or cover changed since).
+function shelf3dCoverHex(b) {
+  try {
+    if (typeof spineColorCache === 'undefined' || !b || !b.cover) return null;
+    const c = spineColorCache[b.id];
+    return (c && c.cover === b.cover && /^#[0-9a-f]{6}$/i.test(c.hex || '')) ? c.hex : null;
+  } catch (e) { return null; }
+}
+function _s3dRgb(hex) {
+  return [1, 3, 5].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
+}
+function _s3dHex(rgb) {
+  return '#' + rgb.map(function (v) { return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'); }).join('');
+}
+// Keep spine titles readable: pull very light covers down to a mid-dark tone.
+function shelf3dSpineTone(hex) {
+  const rgb = _s3dRgb(hex);
+  const lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+  const k = lum > 0.42 ? 0.42 / lum : 1;
+  return _s3dHex(rgb.map(function (v) { return v * k; }));
+}
+// Accent band colour: a soft light tint of the spine colour.
+function shelf3dSpineAccent(hex) {
+  return _s3dHex(_s3dRgb(hex).map(function (v) { return v + (255 - v) * 0.62; }));
+}
+function shelf3dHue(hex) {
+  const c = _s3dRgb(hex).map(function (v) { return v / 255; });
+  const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), d = mx - mn;
+  if (d < 0.04) return -1;   // greys/blacks gather at the start
+  let h = mx === c[0] ? ((c[1] - c[2]) / d) % 6 : mx === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4;
+  h *= 60; return h < 0 ? h + 360 : h;
+}
+// The colour a book's spine will show in the room.
+function shelf3dSpineColors(b) {
+  const spec = (typeof shelfSpineSpec === 'function')
+    ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e' };
+  const hex = shelf3dSpinesMode() === 'cover' ? shelf3dCoverHex(b) : null;
+  if (!hex) return { c1: spec.c1, c2: spec.c2, fromCover: false };
+  const c1 = shelf3dSpineTone(hex);
+  return { c1: c1, c2: shelf3dSpineAccent(c1), fromCover: true };
+}
 let _shelf3dCaseIdx = { tbr: 0, reading: 0, read: 0 };
 let _shelf3dKeysWired = false;
 
@@ -51,6 +103,12 @@ function shelf3dArrange(books, mode) {
       return cmp(_s3dAuthor(a).toLowerCase(), _s3dAuthor(b).toLowerCase()) ||
         cmp(_s3dSortKey(a.title), _s3dSortKey(b.title));
     });
+  } else if (mode === 'colour') {
+    const hue = function (b) {
+      const h = shelf3dHue(shelf3dSpineColors(b).c1);
+      return h < 0 ? -1 : h;
+    };
+    list.sort(function (a, b) { return (hue(a) - hue(b)) || cmp(_s3dSortKey(a.title), _s3dSortKey(b.title)); });
   } else if (mode === 'series') {
     list.sort(function (a, b) {
       const sa = a.series && a.series.name ? String(a.series.name).toLowerCase() : '';
@@ -176,11 +234,12 @@ function shelfBooks3D(books) {
   return (books || []).map(function (b) {
     const spec = (typeof shelfSpineSpec === 'function')
       ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e', w: 36, h: 190 };
+    const col = shelf3dSpineColors(b);
     return {
       id: b.id,
       title: b.title || 'Untitled',
-      spineC1: spec.c1,
-      spineC2: spec.c2,
+      spineC1: col.c1,
+      spineC2: col.c2,
       // Normalize 2.5D px geometry to 3D world units (prototype scale).
       spineW: Math.max(0.3, Math.min(0.7, spec.w / 70)),
       spineH: Math.max(1.5, Math.min(2.6, spec.h / 100)),
@@ -293,6 +352,7 @@ function renderShelf3D() {
         c.classList.toggle('active', c === ch);
       });
       shelf3dGoCase(_shelf3dCaseIdx[shelfGroup] || 0, 0);
+      shelf3dPaintCovers();
     });
   });
   wireCaseBar();
@@ -318,6 +378,7 @@ function renderShelf3D() {
     _shelf3dMounted = true;
     shelf3DApplyTheme();
     shelf3dUpdateBar();
+    shelf3dPaintCovers();
     // v414: remove the loading overlay — it was covering the canvas and intercepting taps.
     var loading = container.querySelector('.s3d-loading');
     if (loading) loading.remove();
@@ -387,8 +448,19 @@ function shelf3dRenderSheet(kind) {
       SHELF3D_ARRANGE_MODES.map(function (m) {
         return '<button class="sh-opt' + (m[0] === cur ? ' on' : '') + '" data-m="' + m[0] + '">' + m[1] + '</button>';
       }).join('') +
+      '<p class="sh-title" style="margin-top:10px">Spines</p>' +
+      '<button class="sh-opt sh-spine' + (shelf3dSpinesMode() === 'cover' ? ' on' : '') + '" data-s="cover">Colours from the covers</button>' +
+      '<button class="sh-opt sh-spine' + (shelf3dSpinesMode() === 'classic' ? ' on' : '') + '" data-s="classic">Classic cloth</button>' +
       '<p class="sh-note">Only changes how the room looks. Your own shelf order is kept.</p>';
-    sheet.querySelectorAll('.sh-opt').forEach(function (b) {
+    sheet.querySelectorAll('.sh-spine').forEach(function (b) {
+      b.addEventListener('click', function () {
+        shelf3dSetSpinesMode(b.dataset.s);
+        shelf3dRenderSheet(null);
+        shelf3dGoCase(_shelf3dCaseIdx[shelfGroup] || 0, 0);
+        if (b.dataset.s === 'cover') shelf3dPaintCovers();
+      });
+    });
+    sheet.querySelectorAll('.sh-opt:not(.sh-spine)').forEach(function (b) {
       b.addEventListener('click', function () {
         shelf3dSetArrangeMode(b.dataset.m);
         _shelf3dCaseIdx[shelfGroup] = 0;
@@ -465,4 +537,43 @@ function wireCaseBar() {
     });
   }
   shelf3dUpdateBar();
+}
+
+/* Read cover colours in the background (the cache is shared with the favourites
+   shelf and persists). Current case first; a quiet batch per visit; the room
+   refreshes once colours land. Covers that can't be read keep the classic cloth. */
+function shelf3dPaintCovers() {
+  if (_shelf3dPaintBusy || shelf3dSpinesMode() !== 'cover') return;
+  if (typeof coverDominantColor !== 'function' || typeof spineColorCache === 'undefined') return;
+  const room = shelf3dRoom();
+  const cur = Math.min(_shelf3dCaseIdx[shelfGroup] || 0, room.cases.length - 1);
+  const order = room.cases[cur].concat(room.all.filter(function (b) { return room.cases[cur].indexOf(b) < 0; }));
+  const todo = order.filter(function (b) {
+    return b.cover && !shelf3dCoverHex(b) && !(typeof spinePaintInflight !== 'undefined' && spinePaintInflight.has(b.id));
+  }).slice(0, 60);
+  if (!todo.length) return;
+  _shelf3dPaintBusy = true;
+  let i = 0, done = 0;
+  const refresh = function () {
+    clearTimeout(_shelf3dPaintTimer);
+    _shelf3dPaintTimer = setTimeout(function () {
+      if (_shelf3dMounted && document.getElementById('s3dCaseBar')) shelf3dGoCase(_shelf3dCaseIdx[shelfGroup] || 0, 0);
+    }, 900);
+  };
+  const worker = function () {
+    if (i >= todo.length || !_shelf3dMounted) return Promise.resolve();
+    const b = todo[i++];
+    return coverDominantColor(b.cover).then(function (hex) {
+      if (hex) {
+        spineColorCache[b.id] = { hex: hex, cover: b.cover };
+        done++;
+        if (done % 6 === 0) refresh();
+      }
+    }, function () {}).then(worker);
+  };
+  Promise.all([worker(), worker()]).then(function () {
+    _shelf3dPaintBusy = false;
+    if (typeof saveSpineColorCache === 'function') saveSpineColorCache();
+    if (done) refresh();
+  });
 }
