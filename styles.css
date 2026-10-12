@@ -3764,6 +3764,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .pshare-stage { position: relative; }
 .pshare-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -4px; touch-action: pan-x; }
 .pshare-track::-webkit-scrollbar { display: none; }
+.pshare-track.pshare-drag { scroll-snap-type: none; } /* v512: snap off while the JS gesture driver drives a drag */
 .pshare-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; justify-content: center; padding: 2px 4px; touch-action: pan-x; }
 .pshare-card { display: flex; align-items: center; justify-content: center; min-height: 200px; touch-action: pan-x; }
 .pshare-card canvas { width: min(74vw, 324px); height: auto; display: block; border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); touch-action: pan-x; }
