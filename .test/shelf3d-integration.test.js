@@ -182,5 +182,16 @@ ok('index.html loads 218-shelf3d-decor.js', html.includes('js/218-shelf3d-decor.
 ok('218 loads before 215 in index.html',
   html.indexOf('js/218-shelf3d-decor.js') < html.indexOf('js/215-shelf3d.js'));
 
+/* ---- 9. reduced-motion: highlightBook skips the lift tween ---- */
+{
+  const src215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
+  const hl = src215.slice(src215.indexOf('function highlightBook(id)'));
+  const hlBody = hl.slice(0, hl.indexOf('\n    }\n') + 5);
+  ok('highlightBook honors prefers-reduced-motion',
+    hlBody.includes('prefers-reduced-motion') && hlBody.includes('markDirty'));
+  ok('highlightBook returns true without the tween when reduced',
+    /if\s*\(\s*reduce\s*\)\s*\{\s*markDirty\(\);\s*return true;/.test(hlBody));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

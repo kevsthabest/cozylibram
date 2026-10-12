@@ -2894,12 +2894,15 @@
         }, function () { cv.style.transform = ''; cv.style.opacity = ''; });
       });
     }
-    /* Find on shelf: lift the book and let it settle. */
+    /* Find on shelf: lift the book and let it settle. Reduced-motion: instant (no lift tween). */
     function highlightBook(id) {
       var hit = null;
       shelfBooks.forEach(function (sb) { if (sb.mesh.userData.bookId === id) hit = sb; });
       if (!hit) return false;
       var m = hit.mesh, y0 = m.position.y;
+      var reduce = false;
+      try { reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
+      if (reduce) { markDirty(); return true; }
       tween(900, function (k) { m.position.y = y0 + Math.sin(Math.PI * k) * 0.55; },
         function () { m.position.y = y0; markDirty(); });
       return true;
