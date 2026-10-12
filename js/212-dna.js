@@ -44,7 +44,7 @@ function drawDnaImage(d) {
   // Header
   x.textAlign = 'center'; x.fillStyle = ink;
   x.font = '700 72px system-ui, sans-serif';
-  x.fillText('🧬 My Reading DNA', W / 2, 180);
+  x.fillText('📖 My Reader Portrait', W / 2, 180);
   x.fillStyle = mut; x.font = '40px system-ui, sans-serif';
   x.fillText(d.n + ' books analyzed', W / 2, 245);
 
@@ -103,7 +103,7 @@ function shareDnaImage() {
   if (!d) { toast('Read some books first! 📚'); return; }
   const cv = drawDnaImage(d);
   if (cv) {
-    shareCanvasFile(cv, 'my-reading-dna.png', 'My Reading DNA');
+    shareCanvasFile(cv, 'my-reader-portrait.png', 'My Reader Portrait');
     track('dna_shared', { books: d.n });
   }
 }
@@ -116,14 +116,14 @@ function dnaSectionHTML() {
     '<span class="chip">' + esc(t) + ' <b>' + c + '</b></span>').join('');
   const genreChips = d.topGenres.map(([g, c]) =>
     '<span class="chip">' + esc(g) + '</span>').join('');
-  return '<div class="stat-sub">' + icon('crystal') + ' Reading DNA</div>' +
+  return '<div class="stat-sub">' + icon('crystal') + ' Reader Portrait</div>' +
     '<div class="dna-preview">' +
     (d.avgSpice > 0 ? '<p><b>' + d.spiceLabel + '</b> · avg ' + d.avgSpice.toFixed(1) + '/5</p>' : '') +
     '<div class="chip-row">' + tropeChips + '</div>' +
     '<div class="chip-row" style="margin-top:8px">' + genreChips + '</div>' +
     '<p class="note">' + d.n + ' books · ' + d.totalPages.toLocaleString() + ' pages' +
     (d.topAuthor ? ' · top author: ' + esc(d.topAuthor[0]) : '') + '</p>' +
-    '<button class="btn" id="dna-share-btn" style="margin-top:12px">Share my DNA 🧬</button>' +
+    '<button class="btn" id="dna-share-btn" style="margin-top:12px">Share my portrait 📖</button>' +
     '</div>';
 }
 

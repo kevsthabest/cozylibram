@@ -359,7 +359,7 @@ function tasteGateHTML() {
   const pct = Math.round(n / 3 * 100);
   return '<div class="stat-sub">Reading profile</div>' +
     '<div class="valcard"><div class="big">Your reading profile</div>' +
-    '<p class="note">Your mood, spice and reading DNA appear after 3 ratings.</p>' +
+    '<p class="note">Your mood, spice and reader portrait appear after 3 ratings.</p>' +
     '<div class="progress-line" style="margin:8px 0"><span class="fill" style="width:' + pct + '%"></span></div>' +
     '<div class="note">' + n + ' of 3 rated</div>' +
     '<div style="margin-top:10px"><button class="btn" data-act="rate-book">Rate a book</button></div></div>';
