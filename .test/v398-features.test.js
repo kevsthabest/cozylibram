@@ -51,6 +51,22 @@ ok('dna avg spice is 3.0', Math.abs(dna.avgSpice - 3.0) < 0.01);
 ok('dna total pages', dna.totalPages === 550);
 ok('dna top author', dna.topAuthor[0] === 'Author A');
 
+/* ---- Reader Portrait hero (v486: dnaHeroHTML wraps dnaSectionHTML) ---- */
+const heroHtml = run(`dnaHeroHTML()`);
+ok('dnaHeroHTML wraps portrait in .dna-hero', heroHtml.includes('class="dna-hero"'));
+ok('dnaHeroHTML contains Reader Portrait header', heroHtml.includes('Reader Portrait'));
+ok('dnaHeroHTML contains share button', heroHtml.includes('dna-share-btn'));
+run(`library = [];`); // gated: no read books -> dnaSectionHTML returns ''
+ok('dnaHeroHTML returns empty when gated', run(`dnaHeroHTML()`) === '');
+run(`library = [
+  { id: 'b1', title: 'Book One', authors: ['Author A'], status: 'read', pageCount: 300,
+    tropes: ['enemies-to-lovers', 'forced proximity'], ratings: { spice: 4 }, myRating: 5,
+    dateFinished: '2026-06-15T00:00:00Z', log: [] },
+  { id: 'b2', title: 'Book Two', authors: ['Author A'], status: 'read', pageCount: 250,
+    tropes: ['enemies-to-lovers', 'secret baby'], ratings: { spice: 2 }, myRating: 4,
+    dateFinished: '2026-07-20T00:00:00Z', log: [] },
+];`); // restore for downstream wrapped tests
+
 /* ---- DNF Autopsy (213-dnf.js) ---- */
 ok('DNF_REASONS has 6 options', run(`DNF_REASONS.length`) === 6);
 ok('DNF_REASONS keys are valid', 
