@@ -151,6 +151,8 @@ function closeCoverPicker() {
 // beyond the await the call sites already had. Already-canonical
 // bucket URLs pass through untouched.
 const COVER_WEBP_MAX_W = 600; // px wide cap, never upscale (v218 size class)
+const COVER_WEBP_MAX_PX = 2000000; // total decoded-pixel cap (Advisor follow-up: width-only caps let a tall sliver allocate a huge canvas)
+const COVER_WEBP_MAX_DATA_LEN = 7 * 1024 * 1024; // data: source length cap (~5 MB binary; legit producers are ≤512px)
 const coverAdoptInflight = new Map(); // source URL -> Promise<{url, hex}|null>
 const coverAdoptWaiters = [];         // queued {url, resolve}
 let coverAdoptActive = 0;
@@ -229,6 +231,7 @@ function coverHexOf(buf) {
 // null), or null on any failure — the caller keeps the original source.
 async function coverWebpConvert(url) {
   try {
+    if (url.indexOf('data:') === 0 && url.length > COVER_WEBP_MAX_DATA_LEN) return null;
     const sb = await coverWebpClient();
     if (!sb) return null;
     const img = await coverPixelsImage(url);
@@ -241,7 +244,8 @@ async function coverWebpConvert(url) {
     let hex = null;
     try { hex = (typeof dominantHex === 'function') ? dominantHex(img) : null; }
     catch (e) { hex = null; }
-    const scale = Math.min(1, COVER_WEBP_MAX_W / nw);
+    const scale = Math.min(1, COVER_WEBP_MAX_W / nw,
+      Math.sqrt(COVER_WEBP_MAX_PX / (nw * nh)));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(nw * scale));
     c.height = Math.max(1, Math.round(nh * scale));
