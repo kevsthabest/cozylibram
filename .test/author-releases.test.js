@@ -31,7 +31,9 @@ const seedLibrary = () => run(`localStorage.clear(); library = [
   { id: 'b2', title: 'R2', authors: ['Rebecca Yarros'], status: 'read', myRating: 4, tropes: [], genres: [] },
   { id: 'b3', title: 'S1', authors: ['Sarah J. Maas'], status: 'read', myRating: 5, tropes: [], genres: [] },
   { id: 'b4', title: 'N1', authors: ['No Rating'], status: 'read', myRating: 0, tropes: [], genres: [] },
-  { id: 'b5', title: 'C1', authors: ['reading', 'x'], status: 'reading', myRating: 0, progress: 10, pageCount: 100, tropes: [], genres: [] }
+  { id: 'b5', title: 'C1', authors: ['reading', 'x'], status: 'reading', myRating: 0, progress: 10, pageCount: 100, tropes: [], genres: [] },
+  { id: 'b6', title: 'T1', authors: ['Rebecca Yarros'], status: 'tbr', myRating: 0, tropes: [], genres: [] },
+  { id: 'b7', title: 'T2', authors: ['TBR Only'], status: 'tbr', myRating: 0, tropes: [], genres: [] }
 ]; filter = 'all'; ownFilter = 'all'; query = ''; view = 'library';`);
 
 const cand = (hcId, title, authors, date) =>
@@ -41,8 +43,10 @@ const seedCache = (cands) => run(`saveAutoReleases([${cands.join(',')}]);`);
 // --- 1. releaseAuthorStats: counts, averages, ranking ---
 seedLibrary();
 const stats = run(`releaseAuthorStats()`);
-ok('stats ranked by book count', stats[0].name === 'Rebecca Yarros' && stats[0].n === 2);
+ok('stats ranked by read count', stats[0].name === 'Rebecca Yarros' && stats[0].n === 2);
 ok('stats carry rating sums', stats[0].stars === 9 && stats[0].sn === 2);
+ok('TBR books do not inflate the read count (b6 is tbr)', stats[0].n === 2);
+ok('TBR-only authors excluded from stats', !stats.some(s => s.name === 'TBR Only'));
 
 // --- 2. authorReleaseGroups: grouping, case-insensitivity, dedupe, caps ---
 const groups = run(`authorReleaseGroups([

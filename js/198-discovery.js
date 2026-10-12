@@ -39,6 +39,7 @@ function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId)
 function releaseAuthorStats() {
   const map = {};
   library.forEach(b => {
+    if (b.status !== 'read') return; // v484: read books only — the card labels n "books read"
     // v402: skip "Full Cast" and dramatized-audiobook cast members — they're
     // not authors, and scanning them produces actor-credited junk releases.
     const isDramatized = (b.authors || []).some(a =>
