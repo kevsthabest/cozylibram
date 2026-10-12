@@ -3700,3 +3700,25 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .mcmp-opt.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .mcmp-who { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
 .mcmp-val { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+
+/* v488: the room — case bar, find and arrange sheet for the 3D shelf */
+.s3d-casebar { display: flex; align-items: center; gap: 6px; padding: 8px 18px 6px; }
+.s3d-casebar .cb-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.s3d-casebar .cb-label { font-size: 12px; color: var(--muted, var(--faint)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.s3d-casebar .cb-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
+.s3d-casebar .cb-dot { width: 22px; height: 22px; padding: 0; border: 0; background: none; position: relative; cursor: pointer; }
+.s3d-casebar .cb-dot::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: var(--faint); opacity: .5; }
+.s3d-casebar .cb-dot.on::after { background: var(--accent, currentColor); opacity: 1; }
+.s3d-casebar .cb-nav { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line, rgba(128,128,128,.35)); background: transparent; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.s3d-casebar .cb-nav:disabled { opacity: .3; cursor: default; }
+.s3d-casebar .cb-nav[hidden] { display: none; }
+.s3d-casebar .cb-tool { height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line, rgba(128,128,128,.35)); background: transparent; color: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.s3d-sheet { margin: 0 18px 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--line, rgba(128,128,128,.3)); background: var(--surface, rgba(128,128,128,.08)); }
+.s3d-sheet[hidden] { display: none; }
+.s3d-sheet .sh-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.s3d-sheet .sh-opt, .s3d-sheet .sh-hit { display: block; width: 100%; text-align: left; padding: 10px 12px; margin: 0 0 6px; border-radius: 10px; border: 1px solid var(--line, rgba(128,128,128,.3)); background: transparent; color: inherit; font-size: 14px; cursor: pointer; }
+.s3d-sheet .sh-opt.on { border-color: var(--accent, currentColor); font-weight: 600; }
+.s3d-sheet .sh-hit small { display: block; opacity: .65; font-size: 12px; margin-top: 2px; }
+.s3d-sheet .sh-find { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line, rgba(128,128,128,.4)); background: transparent; color: inherit; font-size: 16px; margin-bottom: 8px; }
+.s3d-sheet .sh-note { margin: 4px 0 0; font-size: 12px; opacity: .65; }
+#shelf3d #s3dScene { will-change: transform, opacity; }

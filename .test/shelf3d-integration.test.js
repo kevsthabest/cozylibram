@@ -45,7 +45,15 @@ const mapped = run(`JSON.stringify(shelfBooks3D([
   ok('palette is deterministic', again[0].spineC1 === m[0].spineC1);
 }
 const many = run(`shelfBooks3D(Array.from({length: 200}, (_, i) => ({ id: 'x' + i, title: 'T' + i }))).length`);
-ok('caps at 60 books', many === 60);
+ok('mapping no longer caps (the room pages instead)', many === 200);
+/* ---- 2b. the room: cases, arrange ---- */
+ok('200 books -> 4 cases of 60/60/60/20', run(`shelf3dCases(Array.from({length:200},(_, i)=>i), 60).map(c=>c.length).join()`) === '60,60,60,20');
+ok('no books -> one empty case', run(`shelf3dCases([], 60).length`) === 1);
+ok('case key', run(`shelf3dCaseKey('read', 2)`) === 'read:2');
+ok('arrange by title ignores leading The', run(`shelf3dArrange([{title:'The Zed'},{title:'Apple'},{title:'A Banana'}],'title').map(b=>b.title).join('|')`) === 'Apple|A Banana|The Zed');
+ok('arrange by series groups series first, in order', run(`shelf3dArrange([{title:'Solo'},{title:'B2',series:{name:'B',position:2}},{title:'B1',series:{name:'B',position:1}}],'series').map(b=>b.title).join()`) === 'B1,B2,Solo');
+ok('arrange does not mutate input', run(`(function(){var a=[{title:'b'},{title:'a'}];shelf3dArrange(a,'title');return a[0].title;})()`) === 'b');
+ok('arrange mine keeps order', run(`shelf3dArrange([{title:'b'},{title:'a'}],'mine').map(b=>b.title).join()`) === 'b,a');
 ok('empty input -> empty', run(`shelfBooks3D([]).length`) === 0);
 ok('null input -> empty', run(`shelfBooks3D(null).length`) === 0);
 
@@ -173,6 +181,17 @@ ok('sw.js precaches 218-shelf3d-decor.js', swJs.includes('218-shelf3d-decor.js')
 ok('index.html loads 218-shelf3d-decor.js', html.includes('js/218-shelf3d-decor.js'));
 ok('218 loads before 215 in index.html',
   html.indexOf('js/218-shelf3d-decor.js') < html.indexOf('js/215-shelf3d.js'));
+
+/* ---- 9. reduced-motion: highlightBook skips the lift tween ---- */
+{
+  const src215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
+  const hl = src215.slice(src215.indexOf('function highlightBook(id)'));
+  const hlBody = hl.slice(0, hl.indexOf('\n    }\n') + 5);
+  ok('highlightBook honors prefers-reduced-motion',
+    hlBody.includes('prefers-reduced-motion') && hlBody.includes('markDirty'));
+  ok('highlightBook returns true without the tween when reduced',
+    /if\s*\(\s*reduce\s*\)\s*\{\s*markDirty\(\);\s*return true;/.test(hlBody));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
