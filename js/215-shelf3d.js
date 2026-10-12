@@ -71,6 +71,25 @@
   var WALL_Z = -PLANK_D / 2 - 0.16;          // bookcase back panel plane
   var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
 
+  /* ---------- camera fit / pan math (pure — unit tested) ---------- */
+  /* Distance at which a `fitW` x `fitH` frame (world units, centred on the
+     view target) exactly fills a PerspectiveCamera with vertical fov
+     `fovDeg` at the given aspect. The binding axis wins. */
+  function shelf3dFitDistance(aspect, fovDeg, fitW, fitH) {
+    var t = Math.tan((fovDeg * Math.PI / 180) / 2);
+    var dH = (fitH / 2) / t;
+    var dW = (fitW / 2) / (t * Math.max(0.05, aspect || 1));
+    return Math.max(dH, dW);
+  }
+  /* Clamp a pan offset so the panned view target stays in the room:
+     x within +/- halfW of the case centre, target y within
+     [1.2, topY - 1.2] given the unpanned target height baseY. */
+  function shelf3dClampPan(px, py, halfW, baseY, topY) {
+    var cx = Math.max(-halfW, Math.min(halfW, px));
+    var cy = Math.max(1.2 - baseY, Math.min(topY - 1.2 - baseY, py));
+    return [cx, cy];
+  }
+
   /* Pumpkin-under-shelf fix: floor-placed decorations live inside FLOOR_BOUNDS
      (the visible floor area) and are pushed out of SHELF_FOOTPRINT (the
      rectangle under the bookcase), so they can never end up hidden beneath
@@ -314,6 +333,16 @@
     function setZoom(f) {
       zoomFactor = Math.max(0.5, Math.min(2.0, f));
       lastInteract = performance.now();
+      if (zoomFactor >= 0.99) resetPan();   // back at the fitted view: recenter
+    }
+    /* Pan-while-zoomed offsets (world units) added to BOTH camBase and
+       camTarget in the frame loop, so panning is a pure translation.
+       Zero unless the user has dragged on empty space while zoomed in. */
+    var panX = 0, panY = 0, panDrag = null;
+    var lookV = new THREE.Vector3();   // scratch: panned lookAt target
+    function resetPan() {
+      panDrag = null;
+      if (panX !== 0 || panY !== 0) { panX = 0; panY = 0; markDirty(); }
     }
 
     /* lights — soft warm key + cool rim fill, lifted ambient so wood grain reads */
@@ -1906,6 +1935,7 @@
        consumed on drop, so no stock to restore) */
     function cancelActiveDrag() {
       var had = false;
+      panDrag = null;
       if (trayDrag) { discardGhost(trayDrag.group); trayDrag = null; had = true; }
       if (roomDrag) { discardGhost(roomDrag.group); roomDrag = null; had = true; }
       if (moveDrag) {
@@ -2151,12 +2181,36 @@
     // throttle raycasts to once per animation frame for smooth 60fps drag
     function queueRaycast(e) { lastRayEvent = e; raycastQueued = true; }
     on(window, 'pointermove', function (e) {
+      if (panDrag && e.pointerId === panDrag.id) { applyPanMove(e); return; }
       if (trayDrag || moveDrag || roomDrag) { queueRaycast(e); return; }
       // hover parallax (desktop)
       var r = canvas.getBoundingClientRect();
       pointerPX = ((e.clientX - r.left) / r.width) * 2 - 1;
       pointerPY = ((e.clientY - r.top) / r.height) * 2 - 1;
     });
+    /* pan-while-zoomed: a drag that began on empty space (no book, no
+       decoration, no other drag) while zoomFactor < 0.99. Grab-the-world:
+       content follows the pointer, so the view target moves opposite the
+       drag in x and with it in y. Offsets are clamped so the view can't
+       wander off the room. */
+    function applyPanMove(e) {
+      if (!panDrag.moved) {
+        if (Math.hypot(e.clientX - panDrag.sx, e.clientY - panDrag.sy) < 6) return;
+        panDrag.moved = true;
+      }
+      var dx = e.clientX - panDrag.lx, dy = e.clientY - panDrag.ly;
+      panDrag.lx = e.clientX; panDrag.ly = e.clientY;
+      var r = canvas.getBoundingClientRect();
+      if (r.height < 1) return;
+      lookV.set(camTarget.x + panX, camTarget.y + panY, camTarget.z);
+      var dist = camera.position.distanceTo(lookV);
+      var wpp = 2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / r.height;
+      var c = shelf3dClampPan(panX - dx * wpp, panY + dy * wpp,
+        (SHELF_W + SIDE_T * 2) / 2, camTarget.y, TOP_Y);
+      panX = c[0]; panY = c[1];
+      lastInteract = performance.now();
+      markDirty();
+    }
     /* per-frame drag processing — raycast once per frame, lerp ghost to target */
     function processDragFrame() {
       if (!raycastQueued) return;
@@ -2259,6 +2313,7 @@
 
     on(window, 'pointerup', function (e) {
       snapGuide.visible = false;
+      if (panDrag && e.pointerId === panDrag.id) panDrag = null;
       if (roomDrag) {
         /* free placement — the item lands exactly where the finger drops it
            (pumpkins clamped into FLOOR_BOUNDS, never under the bookcase).
@@ -2329,6 +2384,12 @@
           // v442: snapshot for pointercancel restore
           orig: { pi: pi0, rec: rec0, y: g.position.y } };
         highlightZones(true);
+      } else if (!panDrag && zoomFactor < 0.99 && !gliding && !pickedType &&
+                 !trayDrag && !roomDrag && (e.button == null || e.button === 0) && !bookAt(e)) {
+        // empty space while zoomed in: candidate pan (claims the gesture
+        // once it moves past the tap threshold; see applyPanMove)
+        panDrag = { id: e.pointerId, sx: e.clientX, sy: e.clientY,
+          lx: e.clientX, ly: e.clientY, moved: false };
       }
     });
     canvas.addEventListener('pointerup', function (e) {
@@ -2362,6 +2423,7 @@
     var pinchStartDist = 0, pinchStartZoom = 1.0;
     canvas.addEventListener('touchstart', function (e) {
       if (e.touches.length === 2) {
+        panDrag = null;   // pinch takes the gesture over from any pan
         var dx = e.touches[0].clientX - e.touches[1].clientX;
         var dy = e.touches[0].clientY - e.touches[1].clientY;
         pinchStartDist = Math.hypot(dx, dy);
@@ -2610,9 +2672,21 @@
       var w = Math.max(1, r.width), h = Math.max(1, r.height), a = w / h;
       camera.aspect = a; camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
-      // v409: tighter mobile framing (User: shelf too small on Pixel).
-      // Portrait phones get closer instead of the old 2.1x pullback.
-      camBase.set(0, 4.8, a >= 1 ? 13.4 : 13.4 * Math.min(1.45, 1.05 / a));
+      // Fit-to-view framing: never sit closer than the distance that frames
+      // the whole case (width incl. side panels, height about the target),
+      // so portrait phones see the full bookcase instead of its cropped
+      // middle. Wide screens already fit at the historic 13.4, so their
+      // framing is unchanged. (Replaces the v409 capped pullback, which
+      // still cropped the case on portrait phones.)
+      var fitW = (SHELF_W + SIDE_T * 2) * 1.08;
+      var fitH = 2 * Math.max(TOP_Y - camTarget.y, camTarget.y) * 1.08;
+      var baseZ = Math.max(13.4, shelf3dFitDistance(a, 42, fitW, fitH));
+      camBase.set(0, 4.8, baseZ);
+      // Fog was tuned for the 13.4 camera; scale it by the pullback so a
+      // fitted portrait view keeps the same depth falloff (and zooming out
+      // from it doesn't fog the case away entirely).
+      scene.fog.near = 20 * (baseZ / 13.4);
+      scene.fog.far = 38 * (baseZ / 13.4);
     }
     var resizeObs = null;
     if (typeof ResizeObserver !== 'undefined') {
@@ -2761,8 +2835,8 @@
       var dampK = 1 - Math.exp(-dt * 7);  // ~0.045 at 60fps, scales with dt
       var px = tiltOn ? tilt.x : pointerPX * 0.55;
       var py = tiltOn ? tilt.y : pointerPY * 0.4;
-      var camTX = camBase.x + px * 0.9 + driftX;
-      var camTY = camBase.y - py * 0.55 + driftY;
+      var camTX = camBase.x + panX + px * 0.9 + driftX;
+      var camTY = camBase.y + panY - py * 0.55 + driftY;
       var dx = camTX - camera.position.x;
       var dy = camTY - camera.position.y;
       var dz = targetZ - camera.position.z;
@@ -2770,7 +2844,8 @@
       camera.position.x += dx * dampK;
       camera.position.y += dy * dampK;
       camera.position.z += dz * dampK;
-      camera.lookAt(camTarget);
+      lookV.set(camTarget.x + panX, camTarget.y + panY, camTarget.z);
+      camera.lookAt(lookV);
       // Phase 1: render on demand — only when something changed
       var animating = tweensActive || camMoved || driftAmt > 0.01 ||
         (trayDrag && trayDrag.hasTarget) || (moveDrag && moveDrag.hasTarget && moveDrag.moved) ||
@@ -2806,7 +2881,7 @@
       clearTimeout(toastTimer); toastTimer = null;
       clearTimeout(onboardTimer); onboardTimer = null;
       tweens.length = 0;
-      trayDrag = null; roomDrag = null; moveDrag = null;
+      trayDrag = null; roomDrag = null; moveDrag = null; panDrag = null;
       if (audioCtx) { try { audioCtx.close(); } catch (e) {} audioCtx = null; }
       try { disposeDeep(scene); } catch (e) {}
       try { renderer.dispose(); } catch (e) {}
@@ -2994,6 +3069,7 @@
     }
     function showCase(key, books, dir, nbrs) {
       if (dead) return;
+      resetPan();   // a case switch always starts from the centred view
       if (gliding) { pendingShow = { key: key, books: books, nbrs: nbrs }; return; }
       var cv = canvas;
       var reduce = false;
@@ -3113,6 +3189,7 @@
   function currentCase() { return active ? active.currentCase() : null; }
 
   window.Shelf3D = { showCase: showCase, highlightBook: highlightBook, currentCase: currentCase, mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
-    setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture };
+    setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture,
+    fitDistance: shelf3dFitDistance, clampPan: shelf3dClampPan };
 
 })();
