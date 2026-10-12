@@ -634,8 +634,8 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
     layout.coverSticker = psBox(842, coverCy, COVER_W + COVER_B * 2, COVER_H + COVER_B * 2, COVER_ROT);
     layout.coverArt = psBox(842, coverCy, COVER_W, COVER_H, COVER_ROT);
     layout.protectedZones.push({
-      x0: layout.coverArt.x0 - 8, y0: layout.coverArt.y0 - 8,
-      x1: layout.coverArt.x1 + 8, y1: layout.coverArt.y1 + 8
+      x0: layout.coverArt.x0 - 10, y0: layout.coverArt.y0 - 10,
+      x1: layout.coverArt.x1 + 10, y1: layout.coverArt.y1 + 10
     });
   }
 
