@@ -61,5 +61,107 @@ runInWindow('unlockBodyScroll();');
 ok('unlock restores the pre-existing value', bodyOverflow() === 'auto');
 runInWindow('document.body.style.overflow = "";');
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+// ---- wireSheetDrag gesture behavior (v511) ----
+// jsdom has no touch pipeline; dispatch synthetic touch events (touches +
+// timeStamp attached) and assert the sheet transform / dismiss calls.
+window.ontouchstart = null; // wireSheetDrag gates on touch support
+ok('wireSheetDrag is defined', get('typeof wireSheetDrag') === 'function');
+ok('sheetDragStartsInHScroller is defined', get('typeof sheetDragStartsInHScroller') === 'function');
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const tev = (type, x, y, ts) => {
+  const ev = new window.Event(type, { bubbles: true, cancelable: true });
+  const t = { clientX: x, clientY: y };
+  ev.touches = (type === 'touchend' || type === 'touchcancel') ? [] : [t];
+  ev.changedTouches = [t];
+  Object.defineProperty(ev, 'timeStamp', { value: ts });
+  return ev;
+};
+const fire = (target, type, x, y, ts) => target.dispatchEvent(tev(type, x, y, ts));
+const mkSheet = (inner) => {
+  const host = window.document.createElement('div');
+  host.innerHTML = '<div class="fx-sheet">' + inner + '</div>';
+  window.document.body.appendChild(host);
+  return host.firstChild;
+};
+const PLAIN = '<div class="fx-plain"><span class="fx-t">content</span></div>';
+const RAIL = '<div class="fx-rail" style="overflow-x:auto"><span class="fx-t">chip</span></div>';
+const wire = (sheet) => {
+  const state = { dismissed: 0 };
+  window.wireSheetDrag(sheet, () => { state.dismissed++; });
+  return state;
+};
+// a rail whose content overflows horizontally (jsdom has no layout)
+const railSheet = mkSheet(RAIL);
+const railEl = railSheet.querySelector('.fx-rail');
+Object.defineProperty(railEl, 'scrollWidth', { value: 480, configurable: true });
+Object.defineProperty(railEl, 'clientWidth', { value: 140, configurable: true });
+
+// ---- the h-scroller detector itself ----
+ok('detector: touch inside an overflowing rail is detected',
+  window.sheetDragStartsInHScroller(railSheet, railSheet.querySelector('.fx-t')) === true);
+const plainSheet0 = mkSheet(PLAIN);
+ok('detector: touch on plain content is not',
+  window.sheetDragStartsInHScroller(plainSheet0, plainSheet0.querySelector('.fx-t')) === false);
+const snugSheet = mkSheet(RAIL);
+const snugRail = snugSheet.querySelector('.fx-rail');
+Object.defineProperty(snugRail, 'scrollWidth', { value: 100, configurable: true });
+Object.defineProperty(snugRail, 'clientWidth', { value: 140, configurable: true });
+ok('detector: a non-overflowing rail is not a scroller',
+  window.sheetDragStartsInHScroller(snugSheet, snugSheet.querySelector('.fx-t')) === false);
+
+(async () => {
+  // ---- genuine downward drag at the top: claims, tracks, dismisses ----
+  const sA = mkSheet(PLAIN); const dA = wire(sA); const tA = sA.querySelector('.fx-t');
+  fire(tA, 'touchstart', 100, 100, 0);
+  fire(tA, 'touchmove', 100, 112, 16); // crosses the 10px gate -> claim + re-anchor
+  ok('downward drag claims the sheet (transition off)', sA.style.transition === 'none');
+  fire(tA, 'touchmove', 100, 200, 32);
+  ok('claimed sheet tracks the finger', sA.style.transform === 'translateY(88px)');
+  fire(tA, 'touchend', 100, 200, 48); // fast + far enough
+  await sleep(280);
+  ok('downward drag dismisses', dA.dismissed === 1);
+
+  // ---- short slow drag springs back ----
+  const sB = mkSheet(PLAIN); const dB = wire(sB); const tB = sB.querySelector('.fx-t');
+  fire(tB, 'touchstart', 100, 100, 0);
+  fire(tB, 'touchmove', 100, 112, 100);
+  fire(tB, 'touchmove', 100, 150, 400); // dy = 38
+  fire(tB, 'touchend', 100, 150, 700);  // too slow, too short
+  ok('short slow drag springs back', dB.dismissed === 0 && sB.style.transform === '');
+
+  // ---- sheet scrolled: no claim ----
+  const sC = mkSheet(PLAIN); const dC = wire(sC); const tC = sC.querySelector('.fx-t');
+  Object.defineProperty(sC, 'scrollTop', { value: 40, configurable: true });
+  fire(tC, 'touchstart', 100, 100, 0);
+  fire(tC, 'touchmove', 100, 180, 16);
+  ok('drag while content is scrolled never claims', sC.style.transform === '' && dC.dismissed === 0);
+
+  // ---- gesture starting inside a horizontal rail: refused outright ----
+  const dD = wire(railSheet); const tD = railSheet.querySelector('.fx-t');
+  fire(tD, 'touchstart', 60, 100, 0);
+  fire(tD, 'touchmove', 120, 114, 16); // d = 14 would have claimed before v511
+  fire(tD, 'touchmove', 120, 300, 32);
+  fire(tD, 'touchend', 120, 300, 48);
+  ok('gesture starting in a horizontal rail never drags the sheet',
+    railSheet.style.transform === '' && dD.dismissed === 0);
+
+  // ---- mostly-horizontal diagonal: refused for this touch only ----
+  const sE = mkSheet(PLAIN); const dE = wire(sE); const tE = sE.querySelector('.fx-t');
+  fire(tE, 'touchstart', 100, 100, 0);
+  fire(tE, 'touchmove', 150, 114, 16); // d = 14 but dx = 50: horizontal-born
+  fire(tE, 'touchmove', 150, 300, 32); // even a later downward arc stays refused
+  ok('mostly-horizontal diagonal does not drag the sheet', sE.style.transform === '');
+  fire(tE, 'touchend', 150, 300, 48);
+  fire(tE, 'touchstart', 100, 100, 1000);
+  fire(tE, 'touchmove', 104, 114, 1016); // d = 14, dx = 4: vertical-born -> claims
+  fire(tE, 'touchmove', 104, 260, 1032);
+  ok('refusal is per-gesture: a later vertical drag still tracks',
+    sE.style.transform === 'translateY(146px)');
+  fire(tE, 'touchend', 104, 260, 1048); // dy = 146 >= 120
+  await sleep(280);
+  ok('... and still dismisses', dE.dismissed === 1);
+
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  process.exit(fail ? 1 : 0);
+})();

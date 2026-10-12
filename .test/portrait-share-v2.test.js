@@ -328,6 +328,24 @@ ok('ArrowRight switches style while the sheet is open', !!scrollArg && scrollArg
   window.document.querySelector('.pshare-name').textContent === 'Sticker Pack');
 window.document.querySelector('.pshare-close').click();
 
+/* ---------- v511: carousel gesture contract ----------
+   The track lives inside the sheet's vertical scroller; without
+   touch-action: pan-x on the track/slides/cards/canvas, Android hands
+   diagonal swipes to the sheet and the carousel never moves. jsdom
+   can't perform the gesture — assert the CSS contract it relies on. */
+const pshareCss = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+const cssRule = (sel) => {
+  const m = pshareCss.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}'));
+  return m ? m[1] : '';
+};
+for (const sel of ['.pshare-track', '.pshare-slide', '.pshare-card', '.pshare-card canvas']) {
+  ok(sel + ' claims horizontal gestures (touch-action: pan-x)',
+    /touch-action:\s*pan-x/.test(cssRule(sel)));
+}
+ok('track keeps native scroll-snap (the swipe is still native scrolling)',
+  /overflow-x:\s*auto/.test(cssRule('.pshare-track')) &&
+  /scroll-snap-type:\s*x mandatory/.test(cssRule('.pshare-track')));
+
 /* ---------- v502 batch 1: sticker-pack geometry + density ----------
    A measuring context with realistic text widths (the shared fakeCtx
    measures everything as 10px, which proves nothing about layout). */
