@@ -131,3 +131,11 @@ function wireDnaShare() {
   const btn = document.getElementById('dna-share-btn');
   if (btn) btn.addEventListener('click', shareDnaImage);
 }
+
+/* ---- Reader Portrait hero card (v486): prominent placement at the top of
+   the Details view. Wraps dnaSectionHTML(); returns '' when gated/empty. ---- */
+function dnaHeroHTML() {
+  if (typeof dnaSectionHTML !== 'function') return '';
+  const h = dnaSectionHTML();
+  return h ? '<div class="dna-hero">' + h + '</div>' : '';
+}

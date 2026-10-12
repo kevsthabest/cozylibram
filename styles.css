@@ -3346,6 +3346,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .dna-preview .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .dna-preview .chip { background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; font-size: 13px; }
 .dna-preview .chip b { color: var(--gold); margin-left: 4px; }
+/* v486: Reader Portrait hero card — featured placement above the Details section nav */
+.dna-hero { margin: 16px 0 20px; }
+.dna-hero .stat-sub { font-size: 17px; margin-bottom: 10px; }
+.dna-hero .dna-preview { border: 1px solid var(--gold); padding: 18px; margin: 0;
+  background: linear-gradient(160deg, var(--card2), var(--card));
+  box-shadow: 0 4px 18px var(--shadow-c); }
 
 /* v398: DNF Autopsy bottom sheet */
 .dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }

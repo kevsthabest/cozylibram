@@ -823,7 +823,7 @@ function renderYearInBooks(yr) {
   const years = yearInBooksYears();
   yibYear = (yr != null && years.includes(yr)) ? yr : (years.includes(yibYear) ? yibYear : years[0]);
   const d = yearInBooksData();
-  const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Stats</button>';
+  const back = '<button class="btn ghost" id="yib-back" style="margin-bottom:4px">← Chronicles</button>';
   const pills = '<div class="chips" id="yib-years" style="margin:8px 0">' +
     years.map(y => '<button class="chip' + (y === yibYear ? ' active' : '') + '" data-yr="' + y + '">' + y + '</button>').join('') +
     '</div>';
@@ -1238,7 +1238,7 @@ function renderStats() {
       }
     } catch (e) {}
     setView(
-      '<h2 class="section serif">Reading stats</h2>' +
+      '<h2 class="section serif">Chronicles</h2>' +
       modeSeg +
       milestoneCard +
       insightCard +
@@ -1309,7 +1309,7 @@ function renderStats() {
   }
 
   setView(
-    '<h2 class="section serif">Reading stats</h2>' +
+    '<h2 class="section serif">Chronicles</h2>' +
     modeSeg +
     '<div class="stat-sub">Overview</div>' +
     '<div class="stat-row">' +
@@ -1326,6 +1326,7 @@ function renderStats() {
     '<span class="yib-go">›</span></button>' +
     nowReading +
     dailyStatsHTML() +
+    (typeof dnaHeroHTML === 'function' ? dnaHeroHTML() : '') +
     // v447: section navigation for the long detail view
     '<div class="stat-nav sticky">' +
     ['Activity|st-sec-activity', 'Pace|st-sec-pace', 'Taste|st-sec-taste', 'Records|st-sec-records'].map(s => {
@@ -1338,7 +1339,6 @@ function renderStats() {
     '<div class="stat-detail-grid">' +
     '<div class="st-sec" id="st-sec-pace"><button class="st-sec-head" data-sec="st-sec-pace"><span>Pace</span><span class="chev">▾</span></button><div class="st-sec-body">' + paceHTML() + '</div></div>' +
     '<div class="st-sec" id="st-sec-taste"><button class="st-sec-head" data-sec="st-sec-taste"><span>Taste</span><span class="chev">▾</span></button><div class="st-sec-body">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
-    (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div></div>' +
     '</div>' +
@@ -1433,7 +1433,7 @@ function renderMilestones() {
     { id: 'ritual', name: 'Rituals', desc: 'Reading aligned with the turning year.' },
     { id: 'hidden', name: 'Hidden', desc: 'Some milestones don\u2019t announce themselves.' },
   ];
-  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Stats</button>' +
+  let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Chronicles</button>' +
     '<h2 class="section serif">Milestones</h2>' +
     '<p class="note" style="margin-bottom:16px">Moments from your reading life, kept quietly.</p>';
   cats.forEach(cat => {
