@@ -7,6 +7,14 @@
 let favExpanded = false;
 // v61: shelf display style — 'spines' (default) or 'covers'.
 let favStyle = 'spines';
+
+// Batch 4 (issue #149): the search input re-rendered the whole library view
+// per keystroke (greeting, hero, shelves, spine-color DOM scan). Debounce the
+// re-render ~150ms; the query var updates immediately so filtering never lags
+// the typed text. Cleared at the top of renderLibrary() so a pending timer
+// never steals focus after a chip/filter tap re-renders first.
+let libSearchTimer = null;
+const LIB_SEARCH_DEBOUNCE_MS = 150;
 try { favStyle = localStorage.getItem('spicyshelves.favstyle') === 'covers' ? 'covers' : 'spines'; } catch (e) {}
 const SPINE_COLORS = ['#7b2d43', '#2d4a7b', '#3f6b4f', '#8a5a2b', '#5b2d7b', '#a03a2e',
   '#2e6b6b', '#6b3f2a', '#4a4a6b', '#7b5a2d', '#94425f', '#365a8a'];
@@ -526,6 +534,7 @@ function libraryHomeHTML(counts) {
 }
 
 function renderLibrary() {
+  clearTimeout(libSearchTimer); libSearchTimer = null; // batch 4, issue #149
   const books = filteredBooks();
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
@@ -578,7 +587,10 @@ function renderLibrary() {
     query = e.target.value;
     animateIn = false; // don't replay entrance while typing
     const pos = e.target.selectionStart;
-    renderLibraryKeepFocus(pos);
+    // Batch 4 (issue #149): debounce the full re-render; pos is captured now
+    // so the caret restores correctly when the timer fires.
+    clearTimeout(libSearchTimer);
+    libSearchTimer = setTimeout(() => renderLibraryKeepFocus(pos), LIB_SEARCH_DEBOUNCE_MS);
   });
   document.querySelectorAll('.view-toggle button').forEach(t =>
     t.addEventListener('click', () => {

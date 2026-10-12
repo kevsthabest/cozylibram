@@ -3,7 +3,7 @@
 
 
 
-const CACHE = 'cozy-libram-v496';
+const CACHE = 'cozy-libram-v497';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
@@ -18,8 +18,11 @@ const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => '
 // v194 (security): vendored third-party libs, precached like first-party code.
 const VENDOR = ['supabase.min.js', 'quagga.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
 // v184: bespoke per-theme modal artwork, complete set (all ten themes)
-const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight'].flatMap(t => ['vine', 'divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
-const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png', './Asset/floral-right.svg'].concat(JS, VENDOR, AVATARS, THEME_ART);
+// Batch 4 (issue #144): precache exactly the theme SVGs styles.css references
+// (15 themes × divider/moon = 30). The 9 vine-*.svg entries and
+// Asset/floral-right.svg were precached but referenced nowhere — dropped.
+const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight', 'midnight', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'].flatMap(t => ['divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
+const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png'].concat(JS, VENDOR, AVATARS, THEME_ART);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

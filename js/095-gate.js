@@ -50,6 +50,20 @@ async function isBannedUser(uid) {
   } catch (e) { return false; }
 }
 
+// Batch 4 (issue #143): keyboard users hit Enter after typing — route it to
+// the form's primary button. The buttons read field values at click time, so
+// btn.click() reuses the exact same validation path as a tap. (No <form>
+// wrapper: these are plain buttons, so there is no implicit submit to
+// double-fire against.)
+function gateSubmitOnEnter(inputIds, btnId) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  inputIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+  });
+}
+
 function renderGate() {
   const nav = document.querySelector('.bottom-nav');
   if (nav) nav.style.display = 'none';
@@ -111,6 +125,7 @@ function renderGate() {
   const g = document.getElementById('gate-google');
   if (g) g.addEventListener('click', () => { busy('Redirecting to Google…'); cloudGoogle(); });
   document.getElementById('gate-forgot').addEventListener('click', renderGateReset);
+  gateSubmitOnEnter(['gate-email', 'gate-pass'], 'gate-signin');
 }
 
 // "Create account" view (v90): the gate itself is sign-in only; tapping the
@@ -148,6 +163,7 @@ function renderGateSignup() {
     busy('Creating account…');
     cloudSignUp(em, pw, first, last);
   });
+  gateSubmitOnEnter(['gs-first', 'gs-last', 'gs-email', 'gs-pass', 'gs-pass2'], 'gs-create');
 }
 
 // "Forgot password?" view: sends a Supabase reset email. The link returns to
@@ -175,6 +191,7 @@ function renderGateReset() {
     const ok = await cloudResetPassword(em);
     busy(ok ? 'Reset link sent — check your email.' : 'Could not send the link. Try again.');
   });
+  gateSubmitOnEnter(['gr-email'], 'gr-send');
 }
 
 // New-password form shown after a reset link is exchanged.
@@ -203,6 +220,7 @@ function renderNewPassword() {
     if (cloudUser) enterApp(cloudUser);
     else renderGate();
   });
+  gateSubmitOnEnter(['np-pass'], 'np-save');
 }
 
 function hideGate() {
