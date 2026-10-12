@@ -216,7 +216,7 @@ run(`library = [];`);
 /* ---- 20. v255 seasons ---- */
 ok('october defaults to halloween', run(`shelfDefaultSeason(new Date(2026, 9, 15))`) === 'halloween');
 ok('december defaults to christmas', run(`shelfDefaultSeason(new Date(2026, 11, 25))`) === 'christmas');
-ok('june defaults to none', run(`shelfDefaultSeason(new Date(2026, 5, 1))`) === 'none');
+ok('june defaults to summer (v416)', run(`shelfDefaultSeason(new Date(2026, 5, 1))`) === 'summer');
 run(`shelfOrderCache = null; localStorage.removeItem('spicyshelves.shelforder.v1');`);
 ok('season auto-detects until overridden', run(`shelfSeason()`).length > 0);
 run(`shelfSetSeason('halloween');`);
@@ -243,7 +243,7 @@ shelfGroup='tbr'; shelfOrderCache=null; renderShelf();`);
 ok('shelf carries season class', q('#svShelves').className.indexOf('season-halloween') !== -1);
 ok('no falling fx (removed v257)', qa('#svShelves .sv-fx').length === 0);
 run(`shelfOpenDecorSheet();`);
-ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 8);
+ok('tray shows season chips', qa('#svSeasonRow [data-s]').length === 9); // v416: +summer
 run(`shelfCloseSheet(); library = []; shelfOrderCache=null;
 localStorage.removeItem('spicyshelves.shelforder.v1');`);
 
@@ -265,7 +265,7 @@ ok('easter sunday -> easter', ds(2027, 2, 28) === 'easter');
 ok('oct 8 2026 -> thanksgiving', ds(2026, 9, 8) === 'thanksgiving');
 ok('oct 20 -> halloween', ds(2026, 9, 20) === 'halloween');
 ok('dec 15 -> christmas', ds(2026, 11, 15) === 'christmas');
-ok('jun 1 -> none', ds(2026, 5, 1) === 'none');
+ok('jun 1 -> summer (v416)', ds(2026, 5, 1) === 'summer');
 run(`shelfSetSeason('newyear');`);
 ok('tray offers new year set', (() => {
   const t = run(`shelfTrayDecor()`);
@@ -351,9 +351,9 @@ const secs = run(`shelfLayoutSections([
   {id:'c', title:'Solo'},
   {id:'d', title:'C', series:{name:'Alpha', position:'1'}}
 ], 'series')`);
-ok('series groups alphabetically, standalone last',
-  secs.map(s => s.label).join(',') === 'Alpha,Zeta,Standalone');
-ok('series ordered by position', secs[1].books.map(b => b.id).join(',') === 'b,a');
+ok('series groups alphabetically, standalone last (v400: small series cluster)',
+  secs.map(s => s.label).join(',') === 'More series,Standalone');
+ok('series ordered by position within cluster', secs[0].books.map(b => b.id).join(',') === 'd,b,a');
 const gsecs = run(`shelfLayoutSections([
   {id:'a', title:'B', categories:['Fantasy']},
   {id:'b', title:'A', categories:['fantasy']},

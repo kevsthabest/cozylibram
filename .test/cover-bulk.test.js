@@ -51,12 +51,9 @@ const tick = (ms) => new Promise(r => setTimeout(r, ms || 50));
   ok('progress reported per book',
     JSON.stringify(window.__progress) === JSON.stringify([[1, 2], [2, 2]]));
 
-  // settings page exposes the button + live missing-cover count
-  runInWindow(`view = 'settings'; renderSettings();`);
-  const btn = window.document.getElementById('cover-bulk');
-  ok('settings has the Download missing covers button', !!btn);
-  const note = window.document.getElementById('cover-bulk-note');
-  ok('note shows the missing-cover count', !!note && /1 of 3 books are missing covers/.test(note.textContent));
+  // v476: The Settings UI button was removed (metadata section gone —
+  // enrichment runs automatically). The downloadMissingCovers() function
+  // itself remains for the automatic path, tested above.
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

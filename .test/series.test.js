@@ -61,15 +61,16 @@ ok('started flag (read+reading, not all read)', acotar.started === true && acota
 const tog = data.find(s => s.name === 'Throne of Glass');
 ok('completed flag (all read)', tog.started === false && tog.completed === true);
 
-// 2. single-book hiding: finished solo hidden, upcoming solo shown
+// 2. single-book hiding: v404 hides ALL single-book "series" (even upcoming)
+// — phantom single-book rows confused users (UX Tester L9).
 const vis = window.visibleSeries().map(s => s.name);
 ok('single finished book hidden', !vis.includes('Solo Finished'));
-ok('single upcoming book shown', vis.includes('Solo Upcoming'));
-ok('visible count', vis.length === 4);
+ok('single upcoming book hidden (v404)', !vis.includes('Solo Upcoming'));
+ok('visible count', vis.length === 3);
 
 // 3. render + states
 runInWindow(`seriesReturn = 'library'; seriesFilter = 'all'; go('series');`);
-ok('four series cards', qa('#view .sr-card').length === 4);
+ok('three series cards (v404: no single-book rows)', qa('#view .sr-card').length === 3);
 const cards = qa('#view .sr-card');
 const byName = {};
 cards.forEach(c => { byName[c.querySelector('.sr-name').textContent] = c; });
@@ -78,7 +79,7 @@ ok('next-unread button present', !!byName['ACOTAR'].querySelector('.sr-next') &&
   byName['ACOTAR'].querySelector('.sr-next').textContent.includes('Book a2'));
 ok('all-read series celebrates honestly', byName['Throne of Glass'].textContent.includes('Everything you own is read'));
 ok('dnf-only remainder is honest', byName['From Blood and Ash'].textContent.includes('The rest are DNF'));
-ok('upcoming solo shows its next book', byName['Solo Upcoming'].querySelector('.sr-next').textContent.includes('Book u1'));
+// v404: Solo Upcoming no longer renders (single-book series hidden)
 
 // 4. tappable covers open the book like the grid
 ok('covers are buttons', qa('#view .sr-cover').length > 0);
@@ -97,7 +98,7 @@ chipFor('Completed').click();
 ok('completed filter shows only finished series', qa('#view .sr-card').length === 1 &&
   q('#view .sr-name').textContent === 'Throne of Glass');
 chipFor('All').click();
-ok('all filter restores every visible series', qa('#view .sr-card').length === 4);
+ok('all filter restores every visible series', qa('#view .sr-card').length === 3);
 
 // 6. entry points + back navigation
 runInWindow(`(function(){ go('library'); })();`);

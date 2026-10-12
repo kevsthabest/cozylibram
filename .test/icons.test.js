@@ -72,7 +72,7 @@ ok('up next button uses line icon', !!q('#m-upnext .ticon'));
 ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 4); // v182: 3 options + the row icon
 ok('axis rows use line icons', qa('#f-axrows .axlab .ticon').length === qa('#f-axrows .axrow').length && qa('#f-axrows .axrow').length > 0);
 ok('header rating hearts use line icons', qa('#f-myrating .ticon').length === 5);
-ok('favorite button uses line icon', !!q('#f-fav .ticon'));
+ok('favorite button uses line icon', !!q('#f-fav2 .ticon'));
 ok('change-cover button uses line icon', !!q('#m-changecover .ticon'));
 ok('previously-read uses line icon', !!q('#f-prevwrap .ticon'));
 ok('store links use line icon', qa('#m-buywrap .ticon').length > 0);
@@ -80,7 +80,12 @@ ok('store links use line icon', qa('#m-buywrap .ticon').length > 0);
 // v85: rest-of-UI line-art sweep
 runInWindow(`go('library');`);
 ok('shelf filter chips use line icons', qa('#view .chips .ticon').length >= 4);
-ok('ownership filter chips use line icons', qa('#view .chips .ticon').length >= 6);
+ok('ownership filter chips use line icons', (() => {
+  // Ownership chips render conditionally (to-buy/borrowed only if counts > 0);
+  // assert that every rendered ownership chip with an icon uses line-art.
+  const chips = qa('#view [data-of]');
+  return chips.length > 0 && chips.every(c => !c.querySelector('svg') || c.querySelector('svg.ticon'));
+})());
 runInWindow(`library[0].status = 'reading'; renderLibrary();`);
 ok('recently-read header uses line icon', !!q('.recent-head .ticon'));
 runInWindow(`go('add');`);

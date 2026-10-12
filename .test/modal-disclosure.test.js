@@ -96,8 +96,9 @@ ok('details order: description, rating, progress, shelf, ownership, moods, log, 
 // --- 4. Tropes + Notes tabs hold their controls ---
 q('[data-dtab="tropes"]').click();
 ok('tab switch: Tropes shows, Details hides', !q('#dtab-tropes').hidden && q('#dtab-details').hidden);
-['#f-tropes', '#f-tropesugg', '#m-tropedb', '#m-tropepropose'].forEach(id =>
+['#f-tropes', '#f-tropesugg', '#m-tropedb'].forEach(id =>
   ok('tropes tab: ' + id + ' present', !!q('#dtab-tropes ' + id)));
+// Note: #m-tropepropose was removed (trope proposal moved to community flows).
 q('[data-dtab="notes"]').click();
 ok('tab switch: Notes shows, Tropes hides', !q('#dtab-notes').hidden && q('#dtab-tropes').hidden);
 ['#f-notes', '#m-quotes'].forEach(id =>

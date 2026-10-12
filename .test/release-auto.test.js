@@ -7,7 +7,7 @@ const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'danger
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });
 
-const FUTURE = '2099-06-01';
+const FUTURE = (() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().slice(0, 10); })(); // v402: within 2-year filter
 const hcPayload = { data: { books: [
   { id: 42, title: 'Future Book One', description: '', release_date: FUTURE, pages: 300,
     image: { url: '' }, contributions: [{ author: { name: 'Jane Doe' } }],
@@ -38,9 +38,11 @@ const mk = (id, title) =>
   `status: 'read', owned: 'owned', ratings: {}, axes: ['spice'], myRating: 5, tropes: [], progress: 0, ` +
   `dateAdded: new Date().toISOString(), dateFinished: null, notes: '', favorite: false, ` +
   `series: null, log: [], _mtime: 0 })`;
-const cand = (hcId, title) =>
-  `({ hcId: ${hcId}, title: '${title}', authors: ['Jane Doe'], releaseDate: '2099-01-01', ` +
+const cand = (hcId, title) => {
+  const d = new Date(); d.setMonth(d.getMonth() + 6);
+  return `({ hcId: ${hcId}, title: '${title}', authors: ['Jane Doe'], releaseDate: '${d.toISOString().slice(0, 10)}', ` +
   `cover: '', description: '', pages: 300, isbns: [] })`;
+};
 
 (async () => {
   runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcover: true };

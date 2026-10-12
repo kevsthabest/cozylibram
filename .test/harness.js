@@ -13,6 +13,12 @@ function jsFiles() {
 }
 
 function loadApp(window) {
+  // jsdom doesn't provide requestAnimationFrame; the app uses it for
+  // animations. Polyfill with setTimeout so tests don't crash.
+  if (typeof window.requestAnimationFrame === 'undefined') {
+    window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16);
+    window.cancelAnimationFrame = (id) => clearTimeout(id);
+  }
   for (const file of jsFiles()) {
     const el = window.document.createElement('script');
     el.textContent = fs.readFileSync(file, 'utf8');
