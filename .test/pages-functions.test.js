@@ -187,6 +187,9 @@ async function main() {
     if (u === 'https://covers.openlibrary.org/b/id/1-L.jpg') {
       return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
     }
+    if (u === 'https://img.hardcover.app/abc123.jpg') {
+      return new Response(IMG, { headers: { 'Content-Type': 'image/jpeg' } });
+    }
     if (u.startsWith('https://books.google.com/')) {
       fetchedUpstream.push(u);
       return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
@@ -300,6 +303,17 @@ async function main() {
   ok('cc: non-image content-type -> 502', ccNotImg.status === 502);
   const ccBig = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/big.jpg' })));
   ok('cc: over-4MB image -> 502', ccBig.status === 502);
+
+  // Cover-storage PR A: img.hardcover.app parity with cover-proxy (v504) —
+  // Hardcover cover URLs (doc.image.url) point at this CDN, so the picker
+  // path must pass cache-cover's host gate too.
+  const ccHcImg = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://img.hardcover.app/abc123.jpg' })));
+  const ccHcImgBody = await ccHcImg.json();
+  ok('cc: img.hardcover.app passes the host gate (200)', ccHcImg.status === 200);
+  ok('cc: img.hardcover.app returns the canonical bucket URL',
+    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.jpg$/.test(ccHcImgBody.coverUrl || ''));
+  const ccHcSub = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://evil.hardcover.app/x.jpg' })));
+  ok('cc: other hardcover.app subdomains still rejected (exact-match allowlist)', ccHcSub.status === 403);
   // ---- functions/_lib/require-user (v225) ----
   // Reuse the hardcover fetch mock shape: auth URL answers from the token.
   globalThis.fetch = async (url, init) => {

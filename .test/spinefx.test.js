@@ -121,6 +121,21 @@ ok('toggle switches to off', window.localStorage.getItem('spicyshelves.animation
 q('#th-anim button[data-t="on"]').click();
 ok('toggle switches back to on', window.localStorage.getItem('spicyshelves.animation') === 'on');
 
+// 11. canonical bucket cover: sampled via a single direct CORS load — the
+// proxy 403s supabase.co, so a proxied or non-CORS load could never read its
+// pixels before the cover-storage PR A fix
+const StubImage = window.Image;
+const bucketLoads = [];
+window.Image = class extends StubImage {
+  set src(v) { bucketLoads.push({ src: v, cors: this.crossOrigin }); super.src = v; }
+};
+fakePixels = solid(200, 30, 30);
+const bucketUrl = 'https://x.supabase.co/storage/v1/object/public/covers/abc123.jpg';
+ok('bucket cover sampled to a hex', await window.coverDominantColor(bucketUrl) === '#ab0d0d');
+ok('bucket cover: single direct CORS load, no proxy wrap',
+  bucketLoads.length === 1 && bucketLoads[0].src === bucketUrl && bucketLoads[0].cors === 'anonymous');
+window.Image = StubImage;
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

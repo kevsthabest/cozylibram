@@ -123,6 +123,21 @@ ok('google sources: proxy first, then direct without CORS',
 ok('data: sources: direct with CORS ok',
   window.__proxy[4].length === 1 && window.__proxy[4][0][1] === true);
 
+// 8b. canonical bucket covers: Supabase serves ACAO *, so the sampler must
+// load them directly with CORS — the proxy 403s supabase.co (not a provider
+// host), and a non-CORS direct load would taint the canvas (cover-storage PR A)
+runInWindow(`window.__bucket = [
+  coverColorSources('https://x.supabase.co/storage/v1/object/public/covers/abc123.jpg'),
+  coverColorSources('https://x.supabase.co/storage/v1/object/public/edition-images/abc123.jpg')
+];`);
+ok('bucket cover sources: single direct CORS source, no proxy wrap',
+  window.__bucket[0].length === 1 &&
+  window.__bucket[0][0][0] === 'https://x.supabase.co/storage/v1/object/public/covers/abc123.jpg' &&
+  window.__bucket[0][0][1] === true);
+ok('non-covers bucket sources unchanged: proxy first, then direct without CORS',
+  window.__bucket[1].length === 2 && window.__bucket[1][0][0].indexOf('/cover-proxy') === 0 &&
+  window.__bucket[1][1][1] === false);
+
 // 9. shelf style toggle: spines or covers (v61, v190 segmented)
 runInWindow(`localStorage.setItem('spicyshelves.animation', 'off');
   favExpanded = false; favStyle = 'spines';
