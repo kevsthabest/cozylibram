@@ -24,6 +24,10 @@ function escHtml(s) {
 }
 
 /* ---------- generic bottom sheet ---------- */
+// v496 (#136): module-scoped overlay token — closeCcSheet passes it to
+// overlayClosed so programmatic closes (scrim tap, successful send,
+// step-1→step-2 handoffs) don't leak phantom history entries.
+var ccSheetToken = null;
 function ccSheet(title, bodyHTML, onMount) {
   closeCcSheet();
   var scrim = document.createElement('div');
@@ -34,7 +38,7 @@ function ccSheet(title, bodyHTML, onMount) {
   document.body.appendChild(scrim);
   document.body.appendChild(sheet);
   requestAnimationFrame(function () { sheet.classList.add('open'); });
-  var token = (typeof overlayOpened === 'function') ? overlayOpened('cc-sheet', closeCcSheet) : null;
+  ccSheetToken = (typeof overlayOpened === 'function') ? overlayOpened('cc-sheet', closeCcSheet) : null;
   scrim.addEventListener('click', closeCcSheet);
   if (typeof onMount === 'function') onMount(sheet, closeCcSheet);
   return closeCcSheet;
@@ -44,7 +48,10 @@ function closeCcSheet() {
     var el = document.getElementById(id);
     if (el && el.parentNode) el.parentNode.removeChild(el);
   });
-  if (typeof overlayClosed === 'function') { try { overlayClosed(); } catch (e) {} }
+  // Consume the token first: a back-gesture close already popped the entry
+  // (overlayClosed then no-ops), and a second closeCcSheet() finds null.
+  var t = ccSheetToken; ccSheetToken = null;
+  if (t && typeof overlayClosed === 'function') { try { overlayClosed(t); } catch (e) {} }
 }
 
 /* The book currently open in the detail modal (stashed by observer). */
@@ -254,8 +261,13 @@ function openTriggerPicker(book) {
 /* ---------- flywheel: merge accepted community warnings into the
    Start Reading trigger-check data source (PR #87) ---------- */
 async function ccEnrichWarnings(b) {
-  if (!b || b._ccWarnEnriched) return b;
-  b._ccWarnEnriched = true;
+  if (!b) return b;
+  // v496 (#135): no _ccWarnEnriched flag on the book. The flag used to be
+  // stamped on the live object, shipped cross-device inside bookToRow's data
+  // payload, and never reset — newly accepted community warnings then stayed
+  // invisible for that book forever. The merge below is idempotent (dedups
+  // against both the raw and ' (community)' suffixed forms), so re-running on
+  // every modal open is safe; it's one indexed query.
   try {
     var mod = cc();
     if (!mod) return b;
@@ -275,7 +287,13 @@ async function ccEnrichWarnings(b) {
       var have = {};
       b.contentWarnings.forEach(function (w) { have[String(w).toLowerCase()] = true; });
       labels.forEach(function (l) {
-        if (!have[String(l).toLowerCase()]) { b.contentWarnings.push(l + ' (community)'); have[String(l).toLowerCase()] = true; }
+        var k = String(l).toLowerCase();
+        // v496 (#135): idempotent merge — a second run must not re-append.
+        // Check both the raw label and the suffixed form we store.
+        if (!have[k] && !have[k + ' (community)']) {
+          b.contentWarnings.push(l + ' (community)');
+          have[k] = true; have[k + ' (community)'] = true;
+        }
       });
     }
   } catch (e) {}
@@ -387,5 +405,8 @@ try {
   });
   setTimeout(function () { if (cc() && cc().flushOutbox) cc().flushOutbox(); }, 8000);
 } catch (e) {}
+
+// v496 (#136): exposed for tests — overlay token round-trip.
+if (typeof window !== 'undefined') { window.ccSheet = ccSheet; window.closeCcSheet = closeCcSheet; }
 
 })();

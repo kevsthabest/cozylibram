@@ -45,6 +45,10 @@ function maybeShowDnaSurvey(b) {
 
 /* ---------- sheet ---------- */
 var surveySel = { tropes: {}, warns: {} };
+// v496 (#139): overlay-manager tokens for the two sheets in this file —
+// the Android back gesture dismisses instead of exiting the app.
+var dnaSurveyToken = null;
+var warnPrefToken = null;
 
 function tropeOptions() {
   var out = [];
@@ -109,12 +113,21 @@ function openDnaSurvey(b) {
   requestAnimationFrame(function () { sheet.classList.add('open'); });
 
   var close = function () {
+    // v496 (#139): consume the overlay entry so the Android back gesture
+    // dismisses the sheet instead of exiting the app. A back-gesture close
+    // already popped the entry (overlayClosed then no-ops); null the token
+    // so a second close() is harmless.
+    var t = dnaSurveyToken; dnaSurveyToken = null;
+    if (t && typeof overlayClosed === 'function') { try { overlayClosed(t); } catch (e) {} }
     sheet.classList.remove('open');
     setTimeout(function () {
       if (scrim.parentNode) scrim.parentNode.removeChild(scrim);
       if (sheet.parentNode) sheet.parentNode.removeChild(sheet);
     }, 250);
   };
+  // v496 (#139): register with the overlay manager so the Android back
+  // gesture dismisses the sheet instead of exiting the app.
+  dnaSurveyToken = (typeof overlayOpened === 'function') ? overlayOpened('dna-survey', close) : null;
 
   // trope chips with search
   var renderTropes = function (q) {
@@ -245,12 +258,17 @@ function openWarningPrefs() {
   document.body.appendChild(sheet);
   requestAnimationFrame(function () { sheet.classList.add('open'); });
   var close = function () {
+    // v496 (#139): consume the overlay entry (see openDnaSurvey's close).
+    var t = warnPrefToken; warnPrefToken = null;
+    if (t && typeof overlayClosed === 'function') { try { overlayClosed(t); } catch (e) {} }
     sheet.classList.remove('open');
     setTimeout(function () {
       if (scrim.parentNode) scrim.parentNode.removeChild(scrim);
       if (sheet.parentNode) sheet.parentNode.removeChild(sheet);
     }, 250);
   };
+  // v496 (#139): register with the overlay manager (Android back dismisses).
+  warnPrefToken = (typeof overlayOpened === 'function') ? overlayOpened('warn-prefs', close) : null;
 
   sheet.querySelectorAll('#wpDetail button').forEach(function (b) {
     b.addEventListener('click', function () {
