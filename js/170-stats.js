@@ -1326,6 +1326,7 @@ function renderStats() {
     '<span class="yib-go">›</span></button>' +
     nowReading +
     dailyStatsHTML() +
+    (typeof dnaHeroHTML === 'function' ? dnaHeroHTML() : '') +
     // v447: section navigation for the long detail view
     '<div class="stat-nav sticky">' +
     ['Activity|st-sec-activity', 'Pace|st-sec-pace', 'Taste|st-sec-taste', 'Records|st-sec-records'].map(s => {
@@ -1338,7 +1339,6 @@ function renderStats() {
     '<div class="stat-detail-grid">' +
     '<div class="st-sec" id="st-sec-pace"><button class="st-sec-head" data-sec="st-sec-pace"><span>Pace</span><span class="chev">▾</span></button><div class="st-sec-body">' + paceHTML() + '</div></div>' +
     '<div class="st-sec" id="st-sec-taste"><button class="st-sec-head" data-sec="st-sec-taste"><span>Taste</span><span class="chev">▾</span></button><div class="st-sec-body">' + (tasteGateNeeded() ? tasteGateHTML() : spiceProfileHTML() + moodProfileHTML()) +
-    (typeof dnaSectionHTML === 'function' ? dnaSectionHTML() : '') +
     (typeof dnfInsightsHTML === 'function' ? dnfInsightsHTML() : '') +
     ratingDistHTML() + patternsHTML() + genreEvoHTML() + '</div></div>' +
     '</div>' +
