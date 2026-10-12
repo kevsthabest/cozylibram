@@ -287,6 +287,15 @@ function unseenReleaseList() {
   if (!c || !c.list.length || c.at <= autoReleasesSeenAt()) return [];
   return c.list.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
 }
+// v484: the full cached find list, minus dismissed/shelved — ignoring the
+// seen timestamp. The Library "new from authors you love" card is a
+// persistent coming-soon reminder, not a notification; seen/unseen is for
+// the Discover badge only.
+function cachedReleaseList() {
+  const c = autoReleases();
+  if (!c || !c.list.length) return [];
+  return c.list.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
+}
 function updateReleaseBadge() {
   const n = unseenReleaseList().length;
   const el = document.getElementById('nav-rel-badge');
@@ -369,10 +378,12 @@ function authorReleaseGroups(list, stats) {
 var authorReleaseFlat = [];
 
 // Impure wrapper: reads the auto-sweep cache, returns '' when nothing to show.
+// v484: uses cachedReleaseList() (full cache, ignoring seen) so the card
+// persists after a manual "New Releases" check marks everything seen.
 function authorReleasesCard() {
   let groups = [], extra = 0;
   try {
-    const list = unseenReleaseList();
+    const list = cachedReleaseList();
     groups = list.length ? authorReleaseGroups(list, releaseAuthorStats()) : [];
     authorReleaseFlat = [];
     groups.forEach(g => g.releases.forEach(c => authorReleaseFlat.push(c)));

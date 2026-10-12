@@ -103,8 +103,19 @@ hcCalls = 0;
 const card = run(`authorReleasesCard()`);
 ok('card renders from cache', card.indexOf('Onyx Storm') >= 0 && card.indexOf('Rebecca Yarros') >= 0);
 ok('no Hardcover sweep on card render', hcCalls === 0);
+// --- 4b. seen-vs-cached: manual check marks seen, card persists ---
+seedLibrary();
+seedCache([cand(1, 'Onyx Storm', ['Rebecca Yarros'], '2027-01-21')]);
+run(`markReleasesSeen();`);
+ok('unseen list empty after seen (badge stays quiet)',
+  run(`unseenReleaseList()`).length === 0);
+ok('cached list survives the seen stamp',
+  run(`cachedReleaseList()`).length === 1);
+ok('card still renders after manual check marked seen',
+  run(`authorReleasesCard()`).indexOf('Onyx Storm') >= 0);
 run(`localStorage.clear();`);
 seedLibrary();
+ok('cached list empty when cache empty', run(`cachedReleaseList()`).length === 0);
 ok('no card when cache empty', run(`authorReleasesCard()`) === '');
 
 // --- 5. placement: below Currently Reading in libraryHomeHTML ---
