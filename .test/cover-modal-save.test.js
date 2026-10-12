@@ -37,7 +37,6 @@ function ok(cond, name) {
     library.push({ id: 'cb1', title: 'Kill Decision', authors: ['A'], cover: 'old.jpg',
       status: 'tbr', owned: 'owned', ratings: {}, tropes: [], tropesAuto: [], axes: [],
       log: [], quotes: [], contentWarnings: [], moods: [] });
-    bookSnapshots.set('cb1', bookSnap(library[0]));
     openDetail('cb1');
   `);
   await tick(6);

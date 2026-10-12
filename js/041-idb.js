@@ -42,9 +42,12 @@ function idbRequest(req) {
 
 /* Whole-library write, atomic: clear + re-put inside ONE transaction, then
    verify the count. Rejects on mismatch (or a book without an id) so the
-   caller can fall back to the legacy backend instead of half-saving. */
+   caller can fall back to the legacy backend instead of half-saving.
+   v495 (#125): books are cloned via cloneForStore first — library books are
+   tracking Proxies, and Proxies are not structured-cloneable (DataCloneError). */
 function idbPutAllBooks(db, books) {
-  for (const b of books) {
+  const raw = books.map(cloneForStore);
+  for (const b of raw) {
     if (!b || b.id == null || b.id === '') {
       return Promise.reject(new Error('idbPutAllBooks: refusing to write a book without an id'));
     }
@@ -56,7 +59,7 @@ function idbPutAllBooks(db, books) {
     const store = tx.objectStore('books');
     try {
       store.clear();
-      for (const b of books) store.put(b);
+      for (const b of raw) store.put(b);
     } catch (e) {
       try { tx.abort(); } catch (_) {}
       reject(e);
@@ -67,12 +70,52 @@ function idbPutAllBooks(db, books) {
       try { countReq = db.transaction('books', 'readonly').objectStore('books').count(); }
       catch (e) { reject(e); return; }
       idbRequest(countReq).then(n => {
-        if (n !== books.length) reject(new Error('idbPutAllBooks: count mismatch (' + n + ' != ' + books.length + ')'));
+        if (n !== raw.length) reject(new Error('idbPutAllBooks: count mismatch (' + n + ' != ' + raw.length + ')'));
         else resolve(n);
       }, reject);
     };
     tx.onerror = () => reject(tx.error || new Error('idbPutAllBooks: transaction error'));
     tx.onabort = () => reject(tx.error || new Error('idbPutAllBooks: transaction aborted'));
+  });
+}
+
+/* v495 (#125): differential write — upsert changed books + delete removed ids
+   in ONE transaction, then verify the count. Same atomicity contract as
+   idbPutAllBooks: the transaction either lands fully or rejects, and the
+   caller keeps its dirty flags so the next save retries. expectedCount is
+   computed by computePersistPlan (known - deleted + added). Books are cloned
+   via cloneForStore for the same Proxy reason as above. */
+function idbPutDirtyBooks(db, books, deletedIds, expectedCount) {
+  const raw = books.map(cloneForStore);
+  for (const b of raw) {
+    if (!b || b.id == null || b.id === '') {
+      return Promise.reject(new Error('idbPutDirtyBooks: refusing to write a book without an id'));
+    }
+  }
+  return new Promise((resolve, reject) => {
+    let tx;
+    try { tx = db.transaction('books', 'readwrite'); }
+    catch (e) { reject(e); return; }
+    const store = tx.objectStore('books');
+    try {
+      for (const id of (deletedIds || [])) store.delete(id);
+      for (const b of raw) store.put(b);
+    } catch (e) {
+      try { tx.abort(); } catch (_) {}
+      reject(e);
+      return;
+    }
+    tx.oncomplete = () => {
+      let countReq;
+      try { countReq = db.transaction('books', 'readonly').objectStore('books').count(); }
+      catch (e) { reject(e); return; }
+      idbRequest(countReq).then(n => {
+        if (n !== expectedCount) reject(new Error('idbPutDirtyBooks: count mismatch (' + n + ' != ' + expectedCount + ')'));
+        else resolve(n);
+      }, reject);
+    };
+    tx.onerror = () => reject(tx.error || new Error('idbPutDirtyBooks: transaction error'));
+    tx.onabort = () => reject(tx.error || new Error('idbPutDirtyBooks: transaction aborted'));
   });
 }
 

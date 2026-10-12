@@ -67,7 +67,7 @@ ok('partitionLabel: other sign-in labelled', run("partitionLabel({key:'spicyshel
 
 // --- 4. restorePartition restores a stranded partition ---
 run('setLocalUser(null)'); // signed out; simulate a stranded per-user partition:
-run('library = []; bookSnapshots.clear();');
+run('library = [];');
 ok('setup: library looks empty', run('library.length') === 0);
 const restored = run("restorePartition('spicyshelves.library.v2.user-1')");
 ok('restorePartition: returns book count', restored === 3);
@@ -77,7 +77,7 @@ ok('restorePartition: bad key returns 0', run("restorePartition('spicyshelves.li
 
 // --- 5. Sign-out with an empty library is a no-op ---
 window.localStorage.clear();
-run('library = []; bookSnapshots.clear(); setLocalUser("user-2");');
+run('library = []; setLocalUser("user-2");');
 run('setLocalUser(null)');
 ok('sign-out empty: nothing invented', ls('spicyshelves.library.v1') === null || ls('spicyshelves.library.v1') === '[]');
 

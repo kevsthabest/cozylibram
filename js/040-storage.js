@@ -23,23 +23,186 @@ let tombstones = [];
 let tombstoneFloor = 0;
 let upNext = [];
 
-// Snapshots (excluding _mtime) so saveLibrary() can stamp only books that changed.
-const bookSnapshots = new Map();
-function bookSnap(b) {
-  const c = {};
-  Object.keys(b).sort().forEach(k => { if (k !== '_mtime') c[k] = b[k]; });
-  return JSON.stringify(c);
+/* ---------------- dirty-flag change tracking (v495, #125) ----------------
+   Books are wrapped in a Proxy by trackBook(), hooked into migrateBook() (the
+   choke point every book entering the library passes through) plus addBook()
+   for the one path that skips migrateBook. Any set/deleteProperty — including
+   nested mutations like b.log.push() or b.characters[0].name, via deep
+   wrapping — marks the ROOT book dirty in the `dirtyBooks` WeakSet.
+   saveLibrary() then persists only dirty books (+ deletes) instead of
+   re-stringifying the whole library on every save (~190ms + ~12.6MB of
+   snapshot strings per save at 500 character-rich books, measured).
+
+   Bookkeeping lives in WeakSets/WeakMaps, never on the book objects: the
+   _ccWarnEnriched incident proved stray props leak into sync payloads.
+
+   Why a Proxy instead of explicit touchBook() at mutation sites: 65
+   saveLibrary() call sites across 27 files mutate books via direct property
+   sets — an explicit-marking audit would be a sprawling diff where any miss
+   is silent data loss. The Proxy is exact and centralized.
+
+   Two safety invariants make this fail-safe rather than fail-silent:
+   1. Untracked books (never wrapped — shouldn't happen in production, but
+      tests push raw objects) are treated as dirty everywhere: redundant
+      persist/push beats dropped data.
+   2. mergeCloudBooks UNMARKS after assigning the newer remote record: the
+      set-traps fire on every assigned value, but merged content already lives
+      in the cloud — dirtying here would bump _mtime and re-push on every
+      cross-device merge, an _mtime ping-pong that never converges. */
+const dirtyBooks = new WeakSet();    // root book proxies with unpersisted changes
+const proxyRootOf = new WeakMap();   // any tracked proxy -> root book proxy
+const proxyTargetOf = new WeakMap(); // tracked proxy -> raw target
+let knownBookIds = new Set();        // book ids currently in the IDB books store
+
+function markDirty(b) {
+  if (!b || typeof b !== 'object') return;
+  dirtyBooks.add(proxyRootOf.get(b) || b);
 }
+function unmarkDirty(b) {
+  if (!b || typeof b !== 'object') return;
+  dirtyBooks.delete(proxyRootOf.get(b) || b);
+}
+
+// Re-point a tracked proxy and all its tracked descendants at a new root.
+// Runs when a tracked value is assigned into a different book (merge and
+// re-import assigns): nested mutations must dirty the CONTAINING book.
+function rerootSubtree(p, newRoot) {
+  const seen = new Set();
+  const walk = (x) => {
+    if (!x || typeof x !== 'object' || seen.has(x)) return;
+    seen.add(x);
+    if (proxyRootOf.has(x)) proxyRootOf.set(x, newRoot);
+    const t = proxyTargetOf.get(x) || x;
+    if (Array.isArray(t)) { for (let i = 0; i < t.length; i++) walk(t[i]); }
+    else {
+      const proto = Object.getPrototypeOf(t);
+      if (proto === Object.prototype || proto === null) {
+        const ks = Object.keys(t);
+        for (let i = 0; i < ks.length; i++) walk(t[ks[i]]);
+      }
+    }
+  };
+  walk(p);
+}
+
+function makeProxy(value, root, created) {
+  // root: the root book proxy (non-null except during initial construction,
+  // when trackBook fixes up the placeholder below).
+  if (!value || typeof value !== 'object') return value;
+  if (proxyRootOf.has(value)) return value; // already tracked (re-rooted by the set trap if it moved books)
+  const p = new Proxy(value, {
+    set(t, k, v, recv) {
+      const old = t[k];
+      // Resolve the CURRENT root dynamically: a nested proxy may have been
+      // re-rooted into a different book since its traps were created.
+      const myRoot = proxyRootOf.get(p) || p;
+      let wv = v;
+      if (v && typeof v === 'object') {
+        if (proxyRootOf.has(v)) {
+          if (proxyRootOf.get(v) !== myRoot) rerootSubtree(v, myRoot);
+        } else {
+          wv = makeProxy(v, myRoot, null);
+        }
+      }
+      const ok = Reflect.set(t, k, wv);
+      if (old !== wv) dirtyBooks.add(myRoot);
+      return ok;
+    },
+    deleteProperty(t, k) {
+      const had = Object.prototype.hasOwnProperty.call(t, k);
+      const ok = Reflect.deleteProperty(t, k);
+      if (had) dirtyBooks.add(proxyRootOf.get(p) || p);
+      return ok;
+    }
+  });
+  proxyRootOf.set(p, root || p);
+  proxyTargetOf.set(p, value);
+  if (created) created.push(p);
+  // Deep-wrap existing children via RAW sets on the target (traps not active yet).
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const w = makeProxy(value[i], root || p, created);
+      if (w !== value[i]) value[i] = w;
+    }
+  } else {
+    const ks = Object.keys(value);
+    for (let i = 0; i < ks.length; i++) {
+      const w = makeProxy(value[ks[i]], root || p, created);
+      if (w !== value[ks[i]]) value[ks[i]] = w;
+    }
+  }
+  return p;
+}
+
+// Wrap a book (and its whole subtree) for dirty tracking. Idempotent.
+// Newly wrapped books are marked dirty: anything entering the library must be
+// persisted. Bulk-load paths (loadSlotState, loadLegacyLibrary) unmark right
+// after, since that content is already in the store.
+function trackBook(b) {
+  if (!b || typeof b !== 'object' || proxyRootOf.has(b)) return b;
+  const created = [];
+  const p = makeProxy(b, null, created);
+  for (const cp of created) proxyRootOf.set(cp, p);
+  dirtyBooks.add(p);
+  return p;
+}
+
+// Deep-clone a (possibly tracked) book into a raw object for IndexedDB.
+// Proxies are NOT structured-cloneable (DataCloneError in every engine), so
+// the proxy tree must be stripped — into a FRESH object, never in place
+// (an in-place unwrap would destroy dirty tracking on the live book).
+function cloneForStore(b) {
+  const seen = new Map();
+  const walk = (x) => {
+    if (x === null || x === undefined || typeof x !== 'object') return x;
+    const t = proxyTargetOf.get(x) || x;
+    if (seen.has(t)) return seen.get(t);
+    if (t instanceof Date) return new Date(t.getTime());
+    let out;
+    if (Array.isArray(t)) {
+      out = []; seen.set(t, out);
+      for (let i = 0; i < t.length; i++) out[i] = walk(t[i]);
+      return out;
+    }
+    const proto = Object.getPrototypeOf(t);
+    if (proto !== Object.prototype && proto !== null) return t; // class instances: pass through for structured clone
+    out = {}; seen.set(t, out);
+    const ks = Object.keys(t);
+    for (let i = 0; i < ks.length; i++) out[ks[i]] = walk(t[ks[i]]);
+    return out;
+  };
+  return walk(b);
+}
+
+// _mtime stamping for sync conflict resolution: only dirty books advance.
+// (Untracked books keep whatever _mtime they have; the persist/push paths
+// treat untracked as dirty via the fail-safe in computePersistPlan/selectPushBatch.)
 function stampMtimes() {
   const now = Date.now();
   for (const b of library) {
-    const s = bookSnap(b);
-    if (bookSnapshots.get(b.id) !== s) { b._mtime = now; bookSnapshots.set(b.id, bookSnap(b)); }
+    if (dirtyBooks.has(b)) b._mtime = now;
   }
 }
-function snapshotBooks() {
-  bookSnapshots.clear();
-  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
+
+// Pure diff for the differential persist: which books to upsert, which ids to
+// delete, and the expected post-write store count (for the atomicity check).
+// A book is written when it's dirty, untracked (fail-safe), or unknown to the
+// store (new). Everything else is computed from id sets, so wholesale
+// replaces (settings clear, partition restore) need no special-casing.
+function computePersistPlan(knownIds, books) {
+  const ids = new Set();
+  const dirty = [];
+  for (const b of books) {
+    if (!b || b.id == null || b.id === '') continue;
+    ids.add(b.id);
+    if (dirtyBooks.has(b) || !proxyRootOf.has(b) || !knownIds.has(b.id)) dirty.push(b);
+  }
+  const deleted = [];
+  knownIds.forEach(id => { if (!ids.has(id)) deleted.push(id); });
+  const seenNew = new Set(knownIds);
+  let added = 0;
+  for (const b of dirty) if (!seenNew.has(b.id)) { seenNew.add(b.id); added++; }
+  return { dirty: dirty, deleted: deleted, ids: ids, expectedCount: knownIds.size - deleted.length + added };
 }
 
 /* ---------------- legacy localStorage backend (v201) ----------------
@@ -153,6 +316,11 @@ async function migrateSlotFromLegacy(db) {
 
 async function loadSlotState(db) {
   library = (await idbGetAllBooks(db)).map(migrateBook);
+  // v495 (#125): freshly loaded books are already in the store — unmark the
+  // dirty flags trackBook() set, and record the store's id set so the
+  // differential persist below knows what's new vs. deleted.
+  for (const b of library) unmarkDirty(b);
+  knownBookIds = new Set(library.map(b => b.id));
   tombstones = (await idbKvGet(db, 'tombstones')) || [];
   tombstoneFloor = Number(await idbKvGet(db, 'tombFloor')) || 0;
   upNext = (await idbKvGet(db, 'upNext')) || [];
@@ -183,13 +351,11 @@ async function storageInit() {
     loadLegacyAll();
     try { AppLog.error('storage', 'IndexedDB init failed, using localStorage fallback: ' + (e && e.message)); } catch (_) {}
   }
-  snapshotBooks();
 }
 let storageReady;
 if (idbDisabled) {
   // No indexedDB (old browsers, jsdom): v201 behavior, synchronous.
   loadLegacyAll();
-  snapshotBooks();
   storageReady = Promise.resolve();
 } else {
   // The async init is kicked off at the end of js/041-idb.js (which loads
@@ -214,10 +380,41 @@ function storageWriteThrough(label, fn) {
 function storageDrain() { return storageWriteChain; }
 
 function persistBooks() {
-  if (idbDisabled) { saveLegacyLibrary(); return; }
-  const db = currentDb, snap = library.slice();
+  if (idbDisabled) {
+    saveLegacyLibrary();
+    // v495 (#125): the legacy backend rewrites the whole library, so a
+    // completed write means everything is persisted — clear the flags, or
+    // _mtime would bump on every save and the differential push would
+    // re-push the whole shelf each round. (saveLegacyLibrary never throws;
+    // on quota failure it toasts and the flags stay set for a retry.)
+    for (const b of library) unmarkDirty(b);
+    return;
+  }
+  const db = currentDb;
   if (!db) { try { AppLog.error('storage', 'persistBooks: no open database'); } catch (_) {} return; }
-  storageWriteThrough('library', () => idbPutAllBooks(db, snap));
+  storageWriteThrough('library', () => {
+    // v495 (#125): differential persist. The diff is computed at EXECUTION
+    // time (not enqueue) so a book edited between enqueue and execution can't
+    // be missed. Slot-switch safety comes from the db identity check instead
+    // of an enqueue-time array snapshot: setLocalUserIdb (v494 #130) flushes
+    // the outgoing slot before flipping currentDb, so a write queued for a
+    // superseded db is a no-op we can safely skip.
+    if (db !== currentDb) return Promise.resolve();
+    const plan = computePersistPlan(knownBookIds, library);
+    if (!plan.dirty.length && !plan.deleted.length) return Promise.resolve();
+    // Unmark BEFORE the async write (not after): a book edited while the
+    // write is in flight re-dirties via its set-trap, so the next plan picks
+    // it up. Unmarking after completion would clear that newer edit's flag
+    // and lose it. On failure the flags are restored so the next save retries.
+    const written = plan.dirty.slice();
+    for (const b of written) unmarkDirty(b);
+    return idbPutDirtyBooks(db, plan.dirty, plan.deleted, plan.expectedCount).then(() => {
+      knownBookIds = new Set(plan.ids);
+    }, (err) => {
+      for (const b of written) markDirty(b);
+      throw err;
+    });
+  });
 }
 function persistTombstones() {
   if (idbDisabled) { saveLegacyTombstones(); return; }
@@ -253,7 +450,6 @@ function removeBook(id) {
   library = library.filter(b => b.id !== id);
   upNext = upNext.filter(x => x !== id); // v74: a removed book leaves the queue too
   saveUpNext();
-  bookSnapshots.delete(id);
   if (!tombstones.some(t => t.id === id)) tombstones.push({ id: id, at: Date.now() });
   saveTombstones();
   saveLibrary();
@@ -344,7 +540,6 @@ function setLocalUserLegacy(uid) {
   const hadTombs = tombstones.length > 0;
   const hadFloor = tombstoneFloor > 0; // v142
   localUid = uid || null;
-  bookSnapshots.clear();
   let next = loadLegacyLibrary();
   // v204: signed-out mode is deprecated — the only offline shelf left is a
   // pre-v204 library, which the first sign-in adopts into the new account's
@@ -358,7 +553,6 @@ function setLocalUserLegacy(uid) {
     } catch (e) {}
   }
   library = next;
-  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
   let nextTombs = loadLegacyTombstones();
   if (uid && nextTombs.length === 0 && hadTombs) {
     nextTombs = tombstones;
@@ -395,7 +589,6 @@ async function setLocalUserIdb(uid) {
   try { await idbPersistSlot(prevUid, prev); }
   catch (e) { try { AppLog.error('storage', 'slot flush failed: ' + (e && e.message)); } catch (_) {} }
   localUid = uid || null;
-  bookSnapshots.clear();
   // v494 (#130): flip currentDb only AFTER the new slot's state is loaded.
   // Assigning first left a window where currentDb pointed at the new slot's
   // database while `library` still held the old slot's books — a
@@ -417,11 +610,11 @@ async function setLocalUserIdb(uid) {
     library = prev.library; tombstones = prev.tombstones;
     tombstoneFloor = prev.tombstoneFloor; upNext = prev.upNext;
     await idbPersistSlot(localUid, { library: library, tombstones: tombstones, tombstoneFloor: tombstoneFloor, upNext: upNext });
+    knownBookIds = new Set(library.map(b => b.id)); // v495 (#125): adopted wholesale — the store now holds exactly these
     await idbClearBooks(await idbOpenSlot(prevUid)).catch(() => {}); // moved, not copied
     // v202: legacy localStorage partition keys are read-only — kept as the
     // grace-period fallback, not deleted.
   }
-  snapshotBooks();
 }
 
 /* ---------------- library recovery ---------------- */
@@ -456,9 +649,7 @@ function restorePartition(key) {
   let arr = null;
   try { const a = JSON.parse(localStorage.getItem(key)); if (Array.isArray(a)) arr = a; } catch (e) {}
   if (!arr) return 0;
-  library = arr.map(migrateBook);
-  bookSnapshots.clear();
-  library.forEach(b => bookSnapshots.set(b.id, bookSnap(b)));
+  library = arr.map(migrateBook); // v495 (#125): migrateBook wraps+dirties — restored content may differ from the store, so it all persists
   saveLibrary();
   return library.length;
 }

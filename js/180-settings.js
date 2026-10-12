@@ -552,8 +552,7 @@ function renderSettings() {
         let added = 0, skipped = 0;
         books.forEach(b => {
           if (!b || !b.title) { skipped++; return; }
-          const nb = Object.assign(normalizeVolume({ volumeInfo: {} }), b, { id: uid() });
-          migrateBook(nb);
+          const nb = migrateBook(Object.assign(normalizeVolume({ volumeInfo: {} }), b, { id: uid() }));
           if (alreadyHave(nb)) { skipped++; return; }
           library.push(nb); added++;
         });
@@ -654,7 +653,7 @@ function renderSettings() {
       if (!tombstones.some(t => t.id === b.id)) tombstones.push({ id: b.id, at: Date.now() });
     });
     saveTombstones();
-    library = []; bookSnapshots.clear(); saveLibrary({ noCloud: true }); render();
+    library = []; saveLibrary({ noCloud: true }); render();
     await cloudWipe();
     toast('Shelves cleared');
   });
