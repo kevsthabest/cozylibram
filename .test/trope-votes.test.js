@@ -155,15 +155,17 @@ function ok(name, cond) {
     ]);
     const votes = await probe(`TropeVotes.getVotes('k5')`);
     const html = probe(`dbTropeChipsHTML(
-      [{ id: 'dragons', name: 'Dragons', confidence: 0.8 }], 'db',
+      [{ id: 'dragons', name: 'Dragons', confidence: 0.8 },
+       { id: 'quest', name: 'Quest', confidence: 0.6 }], 'db',
       ${JSON.stringify(votes)})`);
-    ok('vote buttons render for signed-in users',
-      html.includes('data-tv="1"') && html.includes('data-tv="-1"') &&
+    ok('provenance label renders for signed-in users (v473: labels replace vote buttons)',
+      html.includes('data-tprov="confirmed"') && html.includes('readers confirmed') &&
       html.includes('data-tid="dragons"'));
-    ok('own vote highlighted', html.includes('tvbtn on') && html.includes('data-tv="1"'));
-    ok('net score shown', html.includes('tvnet') && html.includes('+1'));
-    ok('tooltip shows adjusted confidence + community',
-      html.includes('84% confidence') && html.includes('community +1'));
+    ok('no raw vote buttons (v473: never reveal vote counts)', !html.includes('data-tv='));
+    ok('no net score shown (v473)', !html.includes('tvnet'));
+    ok('unconfirmed chip is tappable for confirm/dispute',
+      html.includes('data-tprov="text"') && html.includes('tabindex="0"') &&
+      html.includes('data-tid="quest"'));
 
     probe('localUid = null');
     const htmlOut = probe(`dbTropeChipsHTML(
