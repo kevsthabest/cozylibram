@@ -440,6 +440,7 @@ async function handleBookmoryFile(file, mount) {
 function importBookmoryBooks(books, skippedTitles, mountId) {
   let added = 0, updated = 0, skipped = 0;
   const fresh = [];
+  const touched = [];
   for (const raw of books) {
     const existing = library.find(b => b.id === raw.id);
     if (existing) {
@@ -453,6 +454,7 @@ function importBookmoryBooks(books, skippedTitles, mountId) {
       b._mtime = Date.now();
       Object.assign(existing, b);
       untombstone(existing.id);
+      touched.push(existing);
       updated++;
       continue;
     }
@@ -470,6 +472,13 @@ function importBookmoryBooks(books, skippedTitles, mountId) {
   for (let i = fresh.length - 1; i >= 0; i--) library.unshift(fresh[i]);
   saveLibrary();
   render();
+  // Cover adoption closure: Bookmory covers arrive as data: URLs and
+  // (on re-import) can overwrite an adopted bucket URL — enqueue both
+  // fresh and updated records; the helper no-ops on canonical covers.
+  if (typeof adoptBookCoverInBackground === 'function') {
+    fresh.forEach(adoptBookCoverInBackground);
+    touched.forEach(adoptBookCoverInBackground);
+  }
   const bits = [added + ' added'];
   if (updated) bits.push(updated + ' updated');
   if (skipped) bits.push(skipped + ' already on shelves');

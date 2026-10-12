@@ -146,6 +146,30 @@ const resetStubs = () => {
   await tick(700);
   ok('no loads or uploads for coverless/canonical adds', imgLoads.length === 0 && uploads.length === 0);
 
+  // ---- race guard: a mid-flight cover change wins over the repoint ----
+  resetStubs(); resetLib([]);
+  const raceSrc = 'https://img.hardcover.app/race1.jpg';
+  runInWindow(`addBook(${JSON.stringify(mk('race1', raceSrc))});`);
+  runInWindow(`(function(){ const b = library.find(x => x.id === 'race1');` +
+    ` if (b) { b.cover = 'https://img.hardcover.app/manual.jpg'; } })();`);
+  await tick(1800);
+  ok('mid-flight cover change is not overwritten by the adoption repoint',
+    coverOf('race1') === 'https://img.hardcover.app/manual.jpg');
+
+  // ---- race guard: a mid-flight delete is not resurrected ----
+  resetStubs(); resetLib([]);
+  runInWindow(`addBook(${JSON.stringify(mk('race2', 'https://img.hardcover.app/race2.jpg'))});`);
+  runInWindow(`library = library.filter(x => x.id !== 'race2');`);
+  await tick(1800);
+  ok('mid-flight delete is not resurrected by the adoption repoint',
+    ev(`library.some(x => x.id === 'race2')`) === false);
+
+  // ---- Bookmory import: fresh data: covers enqueue adoption too ----
+  resetStubs(); resetLib([]);
+  runInWindow(`importBookmoryBooks([${JSON.stringify(mk('bm1', 'data:image/jpeg;base64,BBBB'))}], [], null);`);
+  ok('Bookmory-imported data: cover adopts in the background',
+    await waitFor(() => BUCKET_RE.test(coverOf('bm1') || '')));
+
   // ---- bulkAddBooks: every new book enqueued, batch never waits ----
   resetStubs(); resetLib([mk('dupe', '')]);
   const bulkRes = ev(`bulkAddBooks([${JSON.stringify(mk('blk1', 'https://img.hardcover.app/blk1.jpg'))},` +

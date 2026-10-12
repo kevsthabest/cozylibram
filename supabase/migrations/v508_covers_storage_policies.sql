@@ -1,5 +1,6 @@
--- v507 (draft — number shifts to the app version it ships with):
--- covers bucket storage policies for the WebP adopter.
+-- v508: covers bucket storage policies for the WebP adopter.
+-- (Applied live 2026-10-12 ahead of the shipping PR; number follows
+-- the app version it ships with.)
 --
 -- Background: the `covers` bucket was created out-of-band in 2026-09
 -- (v216 canonical cover cache) and is written today only by the
