@@ -1,7 +1,9 @@
 # Reader Portrait share card v2 — build spec
 
 Status: SHIPPED as v500 (PR #159); composition/sheet amendments from the
-on-device review folded in as v502 (batch 1). Copy banks as vetoed/amended.
+on-device review folded in as v502 (batch 1); batch 2 (v504) replaces
+anchored, coverage-greedy placement with first-valid scatter and adds
+the no-clipped-stickers containment rule. Copy banks as vetoed/amended.
 Supersedes: v1 card (v487 Midnight/Hearthside) in js/212-dna.js.
 Prototypes: ~/workspace/prototypes/reader-portrait-v2-2026-10-12.html (A/B),
 reader-portrait-v2-merged-2026-10-12.html (merged takes),
@@ -86,11 +88,18 @@ The reference is a real sticker-bombed e-reader back: a COLLAGE, not a
 layout. (Supersedes the v1/v2 density mocks; target = mock v3.)
 
 - **Full bleed:** the canvas IS the device back — no inset frame
-  floating on a background, no outer margin. Stickers run to the edges
-  and are clipped by the frame. No camera dot: matte e-reader back,
-  never a phone front.
-- **Coverage ~85%+:** the shell peeks through only in slivers between
-  stickers.
+  floating on a background, no outer margin. No camera dot: matte
+  e-reader back, never a phone front. Stickers crowd the borders and
+  sit flush against the edges — but **no sticker is ever clipped**:
+  every decorative sticker's rotated bounding box lies fully inside
+  the canvas (batch-2 rule; candidate centers are sampled inside the
+  inset region for their size+rotation so placement doesn't starve).
+- **Coverage by count:** measured on the layout grid (data boxes +
+  sticker boxes), coverage lands around ~70–76% with a full two-sheet
+  theme set — the shell peeks through in slivers and clumps between
+  stickers, like a real pile. Coverage is reached by sticker COUNT,
+  never by placement steering (see placement rules below); it is a
+  floor, not a target the scatter optimizes for.
 - **One focal point:** the archetype headline pill is the anchor
   element. Everything else supports it.
 - **Data elements (all of them ship):** archetype (focal), appetite
@@ -111,12 +120,24 @@ layout. (Supersedes the v1/v2 density mocks; target = mock v3.)
   is derived from the appetite pill's drawn box: top edge ≥24px below
   the pill's bottom edge (geometry-tested).
 - **Illustrated layers:** 16+ distinct stickers from the theme's seeded
-  set, in three size classes — heroes ~300–350px at corners/edges
-  (partially clipped), mids ~170–230px, fillers ~105–140px — rotations
-  anywhere in ±22°, seeded per reader+month. Layering: heroes, mids,
-  fillers, then data elements on top, then 3–4 small kiss fillers.
-  Placement is seeded scatter with glyph-collision checks + retries,
-  preferring candidates that cover still-bare canvas.
+  set, in three size classes — heroes ~300–350px, mids ~195–265px,
+  fillers ~105–140px — rotations anywhere in ±22°, seeded per
+  reader+month. Layering: heroes, mids, fillers, then data elements
+  on top, then 3–4 small kiss fillers.
+- **Placement (batch 2 — scatter, not slots):** NO anchor points and
+  NO coverage-maximizing pick. Each sticker job samples a small pool
+  (~10) of candidate positions and takes the FIRST valid one, so the
+  pile clumps and gaps naturally instead of spreading evenly. A
+  placement is valid only if (a) its rotated box is fully on-canvas,
+  (b) it clears every protected glyph zone, and (c) it isn't almost
+  entirely buried — at least ~15–20% of its cells must land on
+  still-bare canvas (a floor, never a score to maximize). Heroes
+  scatter anywhere, with a soft bias toward sitting flush against a
+  random edge — a bias, never slots. Job counts outnumber the
+  stickers expected to land; placement stops when the theme's set is
+  used up, so data-dense portraits (whose wide glyph bands leave few
+  hero-sized windows) simply land fewer heroes and lean on mids and
+  fillers.
 - **Protected zones, precisely:** text GLYPHS and the cover art stay
   clear (≥10px margin) — nothing overlaps letters or the book cover.
   Pill borders/shadows and sticker-vs-sticker overlap are fair game.
