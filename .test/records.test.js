@@ -50,8 +50,8 @@ runInWindow(`localStorage.clear();
 
 const dk3 = window.__dk3;
 
-// 1. records
-const cards = qa('.record-card');
+// 1. records (v454: cards are .record-row, except Biggest day which stays .record-card)
+const cards = qa('.record-row, .record-card');
 const cardFor = (lbl) => cards.find(c => c.textContent.includes(lbl));
 ok('6 record cards', cards.length === 6);
 ok('longest record', !!cardFor('Longest') && cardFor('Longest').textContent.includes('Long Haul'));
@@ -70,9 +70,9 @@ runInWindow(`window.__calSel = calSel; window.__calYM = calY + '-' + calM;`);
 ok('big day sets calendar selection', window.__calSel === dk3);
 ok('calendar highlights that day', !!q('#readcal [data-day="' + dk3 + '"].sel'));
 
-// 3. series
+// 3. series (v400: single-book "series" are hidden — Otherworld has only 1 book)
 const srows = qa('.series-row');
-ok('2 series listed', srows.length === 2);
+ok('1 series listed (single-book series hidden)', srows.length === 1);
 ok('biggest series first', srows[0].textContent.includes('The Broken Saga'));
 const saga = srows.find(r => r.textContent.includes('The Broken Saga'));
 ok('saga shows 2 read', saga.textContent.includes('2 read'));
@@ -80,8 +80,6 @@ ok('saga next up from TBR', saga.textContent.includes('Saga Three'));
 saga.querySelector('[data-id]').click();
 ok('next-up tap opens modal', !!q('#m-back') && q('#m-back').textContent.includes('Saga Three'));
 window.document.getElementById('m-x').click();
-const other = srows.find(r => r.textContent.includes('Otherworld'));
-ok('otherworld: 1 read, no next up', other.textContent.includes('1 read') && !other.textContent.includes('Next up'));
 
 // 4. empty states stay graceful
 runInWindow(`library.length = 0; renderStats();`);
