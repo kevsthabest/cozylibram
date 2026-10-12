@@ -3,6 +3,14 @@
 # keep the old worker (and old cache name) after a deploy.
 /sw.js
   Cache-Control: no-store
+# v491: the HTML entry point must never sit in the browser's HTTP cache —
+# a stale index.html serves old markup/labels while the JS bundle (and the
+# version string in About) is already new. no-cache still lets the service
+# worker serve the page offline.
+/index.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
 # SEC-06 (2026-10-01): clickjacking + transport hardening. No full CSP yet —
 # inline classic scripts everywhere make that a bigger lift; these two are
 # safe on their own. X-Frame-Options covers older browsers, frame-ancestors

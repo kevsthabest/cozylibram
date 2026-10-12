@@ -295,6 +295,11 @@ async function enterApp(user) {
   }, 25000);
   updateReleaseBadge(); // v149: surface any unseen auto-found releases
   setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
+  // v491: stale-bundle probe — compare the running bundle against the server
+  // copy; a mismatch shows the tap-to-refresh banner (never auto-reloads).
+  setTimeout(function () {
+    try { if (typeof checkBootVersion === 'function') checkBootVersion(); } catch (e) {}
+  }, 15000);
 }
 
 async function leaveApp() {
