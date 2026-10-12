@@ -72,9 +72,8 @@ create policy "characters: admin write" on public.book_characters
 drop policy if exists "characters: read for signed-in" on public.book_characters;
 create policy "characters: read for signed-in" on public.book_characters
   for select to authenticated using (true);
-drop policy if exists "characters: user insert" on public.book_characters;
-create policy "characters: user insert" on public.book_characters
-  for insert to authenticated with check (true);
-drop policy if exists "characters: user update own" on public.book_characters;
-create policy "characters: user update own" on public.book_characters
-  for update to authenticated using (true);
+-- NOTE: the "characters: user insert" and "characters: user update own"
+-- policies that used to be defined here were rogue (WITH CHECK/USING
+-- (true) — any signed-in user could write any character row). v327
+-- removed them from live; they are deliberately NOT re-created here.
+-- See supabase/migrations/v509_repo_policy_reconciliation.sql.
