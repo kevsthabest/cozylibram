@@ -78,8 +78,8 @@ ok('discover: every tile has a plain-language explanation',
   qa('#view [data-dtile]').every(c => (c.querySelector('small') || { textContent: '' }).textContent.trim().length > 3));
 ok('discover: New Releases tile + inline results box present',
   !!q('[data-dtile="releases"]') && !!q('#release-results'));
-ok('discover: From Your Coven section with deep-link chips',
-  !!q('#disc-coven-all') && qa('#view [data-cj]').length === 3);
+ok('discover: From Your Coven section with View All',
+  !!q('#disc-coven-all'));
 
 // Tile routing — each target is a real feature, never a dead end.
 q('#view [data-dtile="pick"]').click(); // Surprise Me
@@ -104,11 +104,11 @@ q('#view [data-dtile="similar"]').click(); // Similar Books
 ok('discover: Similar Books expands the seed picker',
   q('#disc-sim').hidden === false && !!q('#disc-sim [data-seed]'));
 q('#disc-sim [data-seed]').click();
-ok('discover: seed opens the book detail sheet', !!q('#m-back'));
-q('#m-x').click();
+ok('discover: seed shows similar books in recommendations (v403)',
+  !!q('#disc-reco') && q('#disc-reco').hidden === false);
 run(`go('discover');`);
-q('#view [data-cj="#reco-slot"]').click(); // Coven chip
-ok('discover: Coven chip navigates to the coven tab', run("view") === 'coven');
+q('#disc-coven-all').click(); // Coven View All
+ok('discover: Coven View All navigates to the coven tab', run("view") === 'coven');
 
 // --- 5. Wishlist stays reachable via Library ---
 run("go('library')");
