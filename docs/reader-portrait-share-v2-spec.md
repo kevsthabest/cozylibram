@@ -1,6 +1,7 @@
 # Reader Portrait share card v2 — build spec
 
-Status: DRAFT — awaiting approval to build. Copy banks are drafts for veto.
+Status: SHIPPED as v500 (PR #159); composition/sheet amendments from the
+on-device review folded in as v502 (batch 1). Copy banks as vetoed/amended.
 Supersedes: v1 card (v487 Midnight/Hearthside) in js/212-dna.js.
 Prototypes: ~/workspace/prototypes/reader-portrait-v2-2026-10-12.html (A/B),
 reader-portrait-v2-merged-2026-10-12.html (merged takes),
@@ -24,8 +25,14 @@ All cards: 1080×1920 canvas, palette from the active theme's semantic tokens
 ## Share sheet UI
 
 - Opens from the existing Share action on the Reader Portrait.
-- Bottom sheet, three cards in a horizontal scroll-snap carousel, dot
-  indicator, style name under the active card.
+- Bottom sheet on mobile; on desktop (≥768px) the same sheet renders as a
+  centered modal dialog (max-width 560px, backdrop, full-radius card) —
+  the sheet pattern's desktop treatment, same as other app modals.
+- Three cards in a horizontal scroll-snap carousel. Switching works for
+  every input: swipe/scroll, clickable dot buttons, prev/next arrow
+  buttons (desktop), and ArrowLeft/ArrowRight keys while the sheet is
+  open. The active dot, style name, and Share target always follow the
+  visible slide.
 - Share button acts on the centered card: Web Share API (files) where
   supported, PNG download fallback.
 - Cards render on sheet open (client-side, no network).
@@ -70,23 +77,58 @@ All cards: 1080×1920 canvas, palette from the active theme's semantic tokens
 7. **Covers.** Recently read first: covers from the most recently finished
    books (newest first). Favourites (5★ or favourited) are the fallback —
    they fill any remaining slots when recent reads run short. B uses up to
-   4; C uses 1 polaroid (most recent read, else top favourite).
+   4; C uses 1 cover sticker (most recent read, else top favourite).
 8. **Spice section** hides entirely when no spice evidence exists.
 
-## Sticker Pack composition (C)
+## Sticker Pack composition (C) — collage v3
 
-- **One focal point:** the archetype sticker is the largest and most
-  distinctive element. Everything else supports it.
-- **3–5 data-backed elements:** archetype (focal), appetite pill, top-trope
-  quote bubble, pages starburst, finished-count strip, top-author fan-club
-  sticker, up to 2 milestone stickers, 1 recent-read cover polaroid,
-  genre sticker — choose the strongest 3–5 beyond the focal sticker.
-- **Flexible decorative layer:** phrase-bank stickers are added until the
-  composition feels complete — visual balance, not a fixed count.
-- **Protected text zones:** rotation and overlap must never reduce
-  legibility, cover data, or collide with the device frame.
-- **Theme-aware materials:** the theme palette influences the device shell,
-  sticker borders, paper textures, and accents — contrast always preserved.
+The reference is a real sticker-bombed e-reader back: a COLLAGE, not a
+layout. (Supersedes the v1/v2 density mocks; target = mock v3.)
+
+- **Full bleed:** the canvas IS the device back — no inset frame
+  floating on a background, no outer margin. Stickers run to the edges
+  and are clipped by the frame. No camera dot: matte e-reader back,
+  never a phone front.
+- **Coverage ~85%+:** the shell peeks through only in slivers between
+  stickers.
+- **One focal point:** the archetype headline pill is the anchor
+  element. Everything else supports it.
+- **Data elements (all of them ship):** archetype (focal), appetite
+  pill, top-trope quote bubble, pages starburst, finished-count strip,
+  top-author fan-club sticker, milestone (cocoon) sticker, phrase
+  fillers, genre sticker, and the recent-read **cover sticker**. (The
+  v500 ship decision: no priority cap; revisit only if a real render
+  feels crowded.) Data elements join the collage — varied scale/tilt
+  (genre small, fan-club large, tilts ≤8°) so they read as stickers in
+  the pile, not UI laid over it. The footer wordmark sits on a soft
+  dark backing pill so it stays legible over art.
+- **Cover sticker (replaces the polaroid):** the recent-read cover
+  (most recent read, else top favourite) renders AS a die-cut sticker —
+  thick white contour border (~16px at card scale, rounded corners),
+  the illustrated stickers' drop shadow, ~4° rotation, no frame, no
+  caption; the cover carries its own title. If the cover fails to
+  load, a title-text sticker with the same contour stands in. Its slot
+  is derived from the appetite pill's drawn box: top edge ≥24px below
+  the pill's bottom edge (geometry-tested).
+- **Illustrated layers:** 16+ distinct stickers from the theme's seeded
+  set, in three size classes — heroes ~300–350px at corners/edges
+  (partially clipped), mids ~170–230px, fillers ~105–140px — rotations
+  anywhere in ±22°, seeded per reader+month. Layering: heroes, mids,
+  fillers, then data elements on top, then 3–4 small kiss fillers.
+  Placement is seeded scatter with glyph-collision checks + retries,
+  preferring candidates that cover still-bare canvas.
+- **Protected zones, precisely:** text GLYPHS and the cover art stay
+  clear (≥10px margin) — nothing overlaps letters or the book cover.
+  Pill borders/shadows and sticker-vs-sticker overlap are fair game.
+  Edge pills (genre, phrases) shift inward so their text is never
+  clipped by the canvas edge.
+- **Headline legibility:** the focal headline and the appetite line
+  shrink-to-fit (floor 38px) before any truncation; if a line still
+  overflows at the floor, its pill takes two lines. Text is never
+  ellipsized mid-word.
+- **Theme-aware materials:** the theme palette influences the shell,
+  sticker borders, paper textures, and accents — contrast always
+  preserved.
 - Fillers must never contradict data (no spice sticker when spice is
   unknown, etc.). "BOOKS > PEOPLE" is an optional-tier filler, not a
   default.
