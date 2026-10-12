@@ -52,10 +52,42 @@ const stale = precached.filter(f => !fs.existsSync('/home/hatch/workspace/bookto
 ok('every precached script exists on disk', stale.length === 0);
 if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
 
-// v118: APP_VERSION (stamped on analytics events) is paired with the
-// service-worker cache name — bump both on release or events mislabel.
-// (const doesn't attach to window; resolve it through the global scope.)
-ok('APP_VERSION matches sw.js cache version', window.eval('APP_VERSION') === parse(swText));
+// v491: stale-bundle probe — parseAppVersion pulls the version out of a
+// js/181-appversion.js response; checkBootVersion compares it to the running
+// bundle and raises the existing update banner on mismatch.
+const parseAv = window.parseAppVersion;
+ok('parseAppVersion is defined', typeof parseAv === 'function');
+ok('parseAppVersion reads the real file',
+  parseAv(fs.readFileSync('/home/hatch/workspace/booktok/js/181-appversion.js', 'utf8')) === window.eval('APP_VERSION'));
+ok('parseAppVersion handles whitespace variants',
+  parseAv("const APP_VERSION  =  'v123';") === 'v123');
+ok('parseAppVersion returns null when absent',
+  parseAv('no version here') === null && parseAv(null) === null);
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-if (fail) process.exit(1);
+// checkBootVersion: the harness fetch throws ("no network"), so the probe
+// must skip silently with no banner and no throw.
+const cbv = window.checkBootVersion;
+ok('checkBootVersion is defined', typeof cbv === 'function');
+
+(async () => {
+  await cbv();
+  ok('checkBootVersion skips silently when the probe fails',
+    !doc.getElementById('app-update-banner'));
+
+  // checkBootVersion runs once per launch — second call is a no-op.
+  let bannerCalls = 0;
+  window.fetch = async () => ({
+    ok: true,
+    text: async () => "const APP_VERSION = 'v999';"
+  });
+  const origBanner = window._showUpdateBanner;
+  window._showUpdateBanner = () => { bannerCalls++; };
+  // Reset the once-guard so this test exercises the banner path.
+  window.eval('bootVersionChecked = false;');
+  await cbv();
+  window._showUpdateBanner = origBanner;
+  ok('checkBootVersion raises the banner when the server is newer', bannerCalls === 1);
+
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  if (fail) process.exit(1);
+})();

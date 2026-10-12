@@ -58,6 +58,33 @@ async function serverCssStatus() {
   } catch (e) { return 'unreadable'; }
 }
 
+/* Pure: pull 'vNNN' out of js/181-appversion.js text. Covered by appversion.test.js. */
+function parseAppVersion(text) {
+  const m = /APP_VERSION\s*=\s*'(v\d+)'/.exec(text || '');
+  return m ? m[1] : null;
+}
+
+/* v491: stale-bundle detector. The fetch goes to the server copy, not the
+   SW precache — the ?probe= query busts the cache-first match (same trick as
+   serverCssStatus), so a mismatch means the running bundle really is old.
+   Shows the existing tap-to-refresh banner; never auto-reloads (the user
+   might be mid-action). Runs once per app entry; a failed probe (offline)
+   skips silently. */
+let bootVersionChecked = false;
+async function checkBootVersion() {
+  if (bootVersionChecked) return;
+  bootVersionChecked = true;
+  try {
+    const res = await fetch('./js/181-appversion.js?probe=' + Date.now(), { cache: 'no-store' });
+    if (!res || !res.ok) return;
+    const serverVersion = parseAppVersion(await res.text());
+    if (serverVersion && typeof APP_VERSION === 'string' && serverVersion !== APP_VERSION) {
+      if (typeof _showUpdateBanner === 'function') _showUpdateBanner();
+      try { if (typeof AppLog === 'object' && AppLog) AppLog.log('app', 'stale bundle: running ' + APP_VERSION + ', server has ' + serverVersion); } catch (_) {}
+    }
+  } catch (e) { /* offline or probe blocked — skip silently */ }
+}
+
 /* Ask the service worker for an update; reload into it when one is ready. */
 async function checkForAppUpdate(statusEl) {
   const say = t => { if (statusEl) statusEl.textContent = t; };
