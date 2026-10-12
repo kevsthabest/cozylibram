@@ -27,11 +27,19 @@ function filteredBooks() {
   return out.sort(by);
 }
 
+/* v510: status -> [bookmark glyph, badge label] for the tile chip family. */
+const STATUS_BADGE = {
+  tbr: ['bmtbr', 'To read'],
+  reading: ['bmreading', 'Reading'],
+  read: ['bmread', 'Read'],
+  dnf: ['bmdnf', 'Did not finish']
+};
+
 /* v125: glanceable cards — favorite heart overlaid on the cover, status strip
    (+ progress for currently-reading) along the tile's bottom edge. */
 function coverFav(b) {
   return b.favorite
-    ? '<span class="card-fav" role="img" aria-label="Favorite">' + icon('heart') + '</span>'
+    ? '<span class="card-fav" role="img" aria-label="Favorite">' + icon('favbook') + '</span>'
     : '';
 }
 function tileStatusBar(b) {
@@ -70,22 +78,21 @@ function bookTile(b, i) {
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' /* v217: async decode off the main thread */
     : '<span class="bt-fallback">' + icon('covers') + '</span>';
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 35, 420) + 'ms' : '';
-  // v188: read badge — the same gold seal as the favorite spines, so a
-  // finished book is recognizable in grid view too.
-  const readSeal = b.status === 'read'
-    ? '<span class="tile-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
-  // v404: status/progress badge on grid tiles (TBR vs Reading vs progress)
-  let gridBadge = '';
+  // v510: status bookmark chip (Variant A) — one bookmark silhouette per
+  // state in the retired gold seal's corner, above the status strip. The
+  // TBR/DNF text badges retire; the reading % stays text as a pill tucked
+  // left of the chip (a number can't be an icon). The reading glyph's
+  // half-fill is a fixed state cue, never the real percentage.
+  const sb = STATUS_BADGE[b.status];
+  const stateBadge = sb
+    ? '<span class="tile-badge st-' + b.status + '" title="' + sb[1] + '" aria-label="' + sb[1] + '">' + icon(sb[0]) + '</span>' : '';
+  let pctPill = '';
   if (b.status === 'reading' && b.pageCount) {
     const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
-    gridBadge = '<span class="bt-badge">' + pct + '%</span>';
-  } else if (b.status === 'tbr') {
-    gridBadge = '<span class="bt-badge">TBR</span>';
-  } else if (b.status === 'dnf') {
-    gridBadge = '<span class="bt-badge">DNF</span>';
+    pctPill = '<span class="bt-pct">' + pct + '%</span>';
   }
   return '<div class="book-tile' + anim + '" data-id="' + esc(b.id) + '">' +
-    '<div class="bt-cover">' + inner + coverFav(b) + readSeal + gridBadge + tileStatusBar(b) + '</div>' +
+    '<div class="bt-cover">' + inner + coverFav(b) + stateBadge + pctPill + tileStatusBar(b) + '</div>' +
     '<div class="bt-title" title="' + esc(b.title) + '">' + esc(b.title) + '</div></div>';
 }
 

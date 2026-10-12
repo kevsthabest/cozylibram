@@ -113,6 +113,18 @@ const ICONS = {
   read: '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.4l2.6 2.6 4.8-5.4"/>',
   // v189: plain check mark (read seals — the seal itself is the circle)
   check: '<path d="M8.3 12.4l2.6 2.6 4.8-5.4"/>',
+  // v510: status bookmark family (Variant A) — one silhouette, told apart by
+  // fill. Silhouette from the approved design; the reading half-fill is drawn
+  // as the silhouette's own lower polygon (no clipPath — ids would collide
+  // across tiles). Check/slash take var(--ink) via .bm-ink; the DNF fill is a
+  // theme-neutral grey via .bm-grey. Callers set color = var(--accent).
+  bmtbr: '<path d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" stroke-width="1.9"/>',
+  bmreading: '<path d="M6.5 12.6h11v8l-5.5-3.2-5.5 3.2z" fill="currentColor" stroke="none"/>' +
+    '<path d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" stroke-width="1.9"/>',
+  bmread: '<path d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" fill="currentColor" stroke="none"/>' +
+    '<path class="bm-ink" d="M9.2 10.6l2.1 2.1 3.9-4.1" fill="none" stroke-width="1.9"/>',
+  bmdnf: '<path class="bm-grey" d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" stroke="none"/>' +
+    '<path class="bm-ink" d="M7.4 17.6L16.6 6" fill="none" stroke-width="2.1"/>',
   // DNF: x in circle
   dnf: '<circle cx="12" cy="12" r="8.5"/><line x1="9.2" y1="9.2" x2="14.8" y2="14.8"/><line x1="14.8" y1="9.2" x2="9.2" y2="14.8"/>',
   // up next: skip-forward
@@ -135,6 +147,13 @@ const ICONS = {
   image: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 16.8l4.8-3.8 3.7 2.8 3-2.3 4 3"/>',
   // heart (favorite)
   heart: '<path d="M12 20.3C7.2 16.6 3.8 13.4 3.8 9.7A4.4 4.4 0 0 1 8.2 5.3c1.6 0 3 .8 3.8 2.1a4.6 4.6 0 0 1 3.8-2.1 4.4 4.4 0 0 1 4.4 4.4c0 3.7-3.4 6.9-8.2 10.6z"/>',
+  // v510: Heart in a Book — the .card-fav chip mark. Open book in soft white
+  // (the chip behind it is dark in every theme), filled heart CENTRED on the
+  // fold. The heart carries no fill/stroke of its own: it inherits the
+  // .card-fav .ticon rule (fill + stroke var(--accent)). Drawn bold for ~17px.
+  favbook: '<path d="M3.4 6.2 Q7.7 4.2 12 7.4 Q16.3 4.2 20.6 6.2 V18.6 Q16.3 16.6 12 19.8 Q7.7 16.6 3.4 18.6 Z" fill="none" stroke="rgba(255,255,255,.78)" stroke-width="2"/>' +
+    '<path d="M12 7.4 V19.6" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.6"/>' +
+    '<path d="M12 15.1 C10.3 13 8.5 11.9 8.5 10.3 C8.5 9.1 9.5 8.3 10.6 8.3 C11.4 8.3 11.9 8.7 12 9.4 C12.1 8.7 12.6 8.3 13.4 8.3 C14.5 8.3 15.5 9.1 15.5 10.3 C15.5 11.9 13.7 13 12 15.1 Z"/>',
   // ---- axis rating glyphs (v84) ----
   // chili pepper (spice)
   pepper: '<path d="M14.6 5.2c.4-1.9 1.9-2.9 4-3.1"/><path d="M14.8 5.4c-4.2.9-7.4 4.3-8 8.8-.3 2.8 1 5.2 3.1 5.7 2.5.6 3.6-1 3.1-3.6-.7-3.6.3-7.8 1.8-10.9z"/>',
