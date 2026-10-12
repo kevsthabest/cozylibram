@@ -356,7 +356,7 @@ function geoCtx() {
 const geoImg = { width: 600, height: 900 };
 const geoAssets = () => ({
   covers: [], polaroid: geoImg, icon: null,
-  stickers: Array.from({ length: 24 }, () => geoImg)
+  stickers: Array.from({ length: 40 }, () => geoImg)
 });
 const boxesHit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 function checkGeo(label, P) {
@@ -370,8 +370,8 @@ function checkGeo(label, P) {
   const appPill = layout.pills.find(b => b.x0 < 540 && b.x1 > 540 && b.y0 < 512 && b.y1 > 512);
   ok(label + ': cover sticker top edge clears the appetite pill by >=24px',
     !!appPill && (layout.coverSticker.y0 - appPill.y1) >= 23.5);
-  ok(label + ': collage places 16+ distinct illustrated stickers (got ' + layout.stickersDrawn + ')',
-    layout.stickersDrawn >= 16 && layout.stickersDrawn <= 24);
+  ok(label + ': collage places stickers by count when the set allows (got ' + layout.stickersDrawn + ')',
+    layout.stickersDrawn >= 24 && layout.stickersDrawn <= 40);
   const maxDim = (b) => Math.max(b.x1 - b.x0, b.y1 - b.y0);
   ok(label + ': size variance — hero-class stickers present (>=300px boxes)',
     layout.stickerBoxes.some(b => maxDim(b) >= 300));
@@ -379,15 +379,21 @@ function checkGeo(label, P) {
     layout.stickerBoxes.filter(b => maxDim(b) <= 200).length >= 3);
   ok(label + ': stickers never cover a protected glyph zone',
     layout.stickerBoxes.every(sb => !layout.protectedZones.some(z => boxesHit(sb, z))));
-  ok(label + ': collage coverage >=60% of canvas (got ' + Math.round((layout.coverage || 0) * 100) + '%)',
-    layout.coverage >= 0.6);
-  ok(label + ': every sticker substantially on-canvas (full bleed, clipped at edges)',
-    layout.stickerBoxes.every(sb => {
-      const ix = Math.max(0, Math.min(sb.x1, 1080) - Math.max(sb.x0, 0));
-      const iy = Math.max(0, Math.min(sb.y1, 1920) - Math.max(sb.y0, 0));
-      const area = (sb.x1 - sb.x0) * (sb.y1 - sb.y0);
-      return area > 0 && (ix * iy) / area >= 0.35;
+  ok(label + ': collage coverage >=70% of canvas under full containment (got ' + Math.round((layout.coverage || 0) * 100) + '%)',
+    layout.coverage >= 0.7);
+  /* Batch 2: no fixed hero anchors — heroes scatter, so at least one
+     hero-class sticker must sit beyond the legacy system's reach
+     (anchor + max jitter displacement was ~134px). */
+  const legacyAnchors = [[36, 36], [1044, 36], [36, 1884], [1044, 1884], [24, 760],
+    [1056, 1180], [540, 16], [24, 1330], [1056, 560], [540, 1904]];
+  const heroBoxes = layout.stickerBoxes.filter(b => maxDim(b) >= 300);
+  ok(label + ': heroes are not anchor-slotted (one sits >150px from every legacy anchor)',
+    heroBoxes.some(b => {
+      const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+      return legacyAnchors.every(a => Math.hypot(cx - a[0], cy - a[1]) > 150);
     }));
+  ok(label + ': every sticker fully on-canvas (no clipped stickers, batch-2 amendment)',
+    layout.stickerBoxes.every(sb => sb.x0 >= -0.5 && sb.y0 >= -0.5 && sb.x1 <= 1080.5 && sb.y1 <= 1920.5));
   ok(label + ': no camera dot on the device back',
     !rec.arcs.some(a => Math.abs(a.x - 540) < 2 && Math.abs(a.y - 152) < 2));
   ok(label + ': headline + appetite drawn in full (never ellipsized)',
@@ -418,6 +424,34 @@ checkGeo('geo/soft', {
   polaroid: { title: 'Rules of Prey', cover: 'https://x/p.jpg' },
   seed: 7654321, readerKey: 'reader-geo'
 });
+
+/* Batch 2: seeded scatter is deterministic per reader+month, and a
+   different seed produces a genuinely different pile (no fixed layout). */
+{
+  const P = {
+    v: 2, n: 27, headline: 'Dark Romance Midnight Romantic',
+    archetype: 'Dark Romance Midnight Romantic', clusterKey: 'darkromance', softMode: false,
+    genres: [{ name: 'Dark Romance', count: 12 }], dominantGenre: 'Dark Romance',
+    tropes: [{ name: 'Morally Grey', quote: 'Here for the morally grey, every time.',
+               attribution: '— 12 books and counting', count: 12, growing: true }],
+    gentleTropes: [],
+    appetite: { axis: 'genre', text: 'here for the sentences that stay with you' },
+    spice: { avg: 0, rated: 0 }, pages: 9841, streak: 9,
+    topAuthor: { name: 'Penelope Douglas' }, coverStrip: [],
+    polaroid: { title: 'Credence', cover: 'https://x/c.jpg' },
+    seed: 1234567, readerKey: 'reader-geo'
+  };
+  const runLayout = (seed) => {
+    const { ctx } = geoCtx();
+    window.__geoCtx = ctx; window.__geoP = Object.assign({}, P, { seed }); window.__geoA = geoAssets();
+    themeVars = darkVars;
+    return run('drawPortraitStickerPack(window.__geoCtx, 1080, 1920, window.__geoP, portraitTheme(), window.__geoA)');
+  };
+  const boxesKey = (L) => L.stickerBoxes.map(b => [b.x0, b.y0, b.x1, b.y1].map(Math.round).join(',')).join('|');
+  const a1 = runLayout(1234567), a2 = runLayout(1234567), b = runLayout(7654321);
+  ok('scatter: same seed reproduces the identical pile', boxesKey(a1) === boxesKey(a2));
+  ok('scatter: a different seed scatters differently', boxesKey(a1) !== boxesKey(b));
+}
 
 /* density through the real render path (fake Image loads the full set) */
 setLibrary(richBooks);

@@ -546,7 +546,6 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
   x.fillRect(0, 0, W, H);
 
   const rng = portraitRng((p.seed ^ 0x51ab) >>> 0);
-  const jit = (n) => (rng() - 0.5) * 2 * n;
 
   const layout = { pills: [], coverSticker: null, coverArt: null, protectedZones: [], stickerBoxes: [], stickersDrawn: 0, coverage: 0 };
 
@@ -727,21 +726,24 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
   layout.protectedZones.push({ x0: footPill.x0 + 12, y0: footPill.y0 + 8, x1: footPill.x1 - 12, y1: footPill.y1 - 4 });
 
   /* ---- Phase 2: the collage. Seeded scatter in three size classes —
-     heroes ~300-350px at corners/edges (partially clipped on purpose),
-     mids ~170-230px, fillers ~105-140px — rotations anywhere in +-22deg.
-     Decorative stickers overlap EACH OTHER freely; a placement is valid
-     only if its box clears every protected glyph zone. Among valid
-     candidates the scatter picks the one that covers the most still-bare
-     canvas (coverage grid), so the pile spreads like a real collage
-     instead of clumping. Deterministic per reader+month (seeded rng). */
+     heroes ~300-350px, mids ~195-265px, fillers ~105-140px — rotations
+     anywhere in +-22deg. Decorative stickers overlap EACH OTHER
+     freely; a placement is valid only if its box clears every
+     protected glyph zone. Placement is FIRST-VALID-WINS from a small
+     candidate pool — no coverage-maximizing pick — so the pile clumps
+     and gaps the way a real sticker bomb does instead of spreading
+     evenly. Coverage survives only as a floor: a candidate landing
+     almost entirely on already-covered canvas is rejected, and the
+     coverage target is met by sticker COUNT, not placement steering.
+     Heroes scatter anywhere on the canvas; a soft bias toward
+     sitting flush against the edges is a bias, never anchor slots.
+     NOTHING IS CLIPPED: every sticker's rotated box must lie fully
+     inside the canvas — containment is a validity rule for every
+     class, and candidate centers are sampled inside the inset
+     region for their size+rotation so first-valid doesn't starve.
+     Deterministic per reader+month (seeded rng). */
   const zones = layout.protectedZones;
   const clearOfZones = (box) => !zones.some(z => psBoxesHit(box, z));
-  const canvasFrac = (box) => {
-    const ix = Math.max(0, Math.min(box.x1, W) - Math.max(box.x0, 0));
-    const iy = Math.max(0, Math.min(box.y1, H) - Math.max(box.y0, 0));
-    const area = (box.x1 - box.x0) * (box.y1 - box.y0);
-    return area > 0 ? (ix * iy) / area : 0;
-  };
   const CELL = 30, GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
   const grid = new Uint8Array(GW * GH);
   const eachCell = (box, fn) => {
@@ -755,7 +757,6 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
     }
   };
   const markBox = (box) => eachCell(box, (i) => { grid[i] = 1; });
-  const addedCells = (box) => { let n = 0; eachCell(box, (i) => { if (!grid[i]) n++; }); return n; };
   layout.pills.forEach(markBox);
   if (layout.coverSticker) markBox(layout.coverSticker);
   for (let gy = 0; gy < GH; gy++) {
@@ -768,66 +769,93 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
   const layers = { hero: [], mid: [], filler: [], kiss: [] };
   const imgs = A.stickers || [];
   let imgIdx = 0;
-  const pickBest = (layer, candidates, minFrac) => {
-    if (imgIdx >= imgs.length) return false;
-    let best = null, bestScore = -1;
-    for (const cand of candidates) {
-      const rot = (rng() * 2 - 1) * 22;
-      const box = psBox(cand.cx, cand.cy, cand.size, cand.size, rot);
-      if (canvasFrac(box) < minFrac) continue;
-      if (!clearOfZones(box)) continue;
-      const score = addedCells(box);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { img: imgs[imgIdx], cx: cand.cx, cy: cand.cy, size: cand.size, rot, box };
-      }
-    }
-    if (!best) return false;
-    layers[layer].push(best);
-    markBox(best.box);
-    imgIdx++;
-    return true;
+  /* Rotated half-extent of a square sticker — the same math psBox
+     uses — so candidate centers can be sampled inside the region
+     where the whole rotated box stays on-canvas. */
+  const halfExt = (size, rot) => {
+    const a = Math.abs(rot * Math.PI / 180);
+    return (size / 2) * (Math.cos(a) + Math.sin(a));
   };
+  const pickFirst = (layer, candidates, minNewFrac) => {
+    if (imgIdx >= imgs.length) return false;
+    for (const cand of candidates) {
+      const box = psBox(cand.cx, cand.cy, cand.size, cand.size, cand.rot);
+      if (box.x0 < 0 || box.y0 < 0 || box.x1 > W || box.y1 > H) continue;
+      if (!clearOfZones(box)) continue;
+      let cells = 0, added = 0;
+      eachCell(box, (i) => { cells++; if (!grid[i]) added++; });
+      if (cells > 0 && added / cells < minNewFrac) continue;
+      layers[layer].push({ img: imgs[imgIdx], cx: cand.cx, cy: cand.cy, size: cand.size, rot: cand.rot, box });
+      markBox(box);
+      imgIdx++;
+      return true;
+    }
+    return false;
+  };
+  /* Uniform scatter INSIDE the canvas: rotation drawn first, then the
+     center sampled in the inset region for that size+rotation — a
+     sticker can sit flush against an edge, never across it. */
   const randCands = (n, size) => {
     const arr = [];
-    for (let i = 0; i < n; i++) arr.push({ cx: rng() * (W + 80) - 40, cy: rng() * (H + 80) - 40, size });
+    for (let i = 0; i < n; i++) {
+      const rot = (rng() * 2 - 1) * 22;
+      const he = halfExt(size, rot);
+      arr.push({ cx: he + rng() * (W - 2 * he), cy: he + rng() * (H - 2 * he), size, rot });
+    }
+    return arr;
+  };
+  /* Hero candidates: anywhere in the inset region, with a soft bias
+     toward sitting FLUSH against a random edge (~75%): the biased
+     coordinate hugs its inset boundary (up to ~0.3 of a hero inward),
+     the other stays uniform. A bias, never slots. */
+  const heroCands = (n, size) => {
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      const rot = (rng() * 2 - 1) * 22;
+      const he = halfExt(size, rot);
+      let cx = he + rng() * (W - 2 * he), cy = he + rng() * (H - 2 * he);
+      if (rng() < 0.75) {
+        const side = Math.floor(rng() * 4), inset = rng() * size * 0.3;
+        if (side === 0) cx = he + inset;
+        else if (side === 1) cx = W - he - inset;
+        else if (side === 2) cy = he + inset;
+        else cy = H - he - inset;
+      }
+      arr.push({ cx, cy, size, rot });
+    }
     return arr;
   };
 
-  const heroAnchors = [
-    { cx: 36, cy: 36 }, { cx: W - 36, cy: 36 }, { cx: 36, cy: H - 36 }, { cx: W - 36, cy: H - 36 },
-    { cx: 24, cy: 760 }, { cx: W - 24, cy: 1180 }, { cx: W / 2, cy: 16 }, { cx: 24, cy: 1330 },
-    { cx: W - 24, cy: 560 }, { cx: W / 2, cy: H - 16 }
-  ];
-  for (let hJob = 0; hJob < 5; hJob++) {
-    const size = 300 + rng() * 50;
-    const start = Math.floor(rng() * heroAnchors.length);
-    const cands = [];
-    for (let k = 0; k < heroAnchors.length; k++) {
-      const a = heroAnchors[(start + k) % heroAnchors.length];
-      cands.push({ cx: a.cx + jit(46), cy: a.cy + jit(46), size });
-      cands.push({ cx: a.cx + jit(95), cy: a.cy + jit(95), size });
-    }
-    pickBest('hero', cands, 0.42);
-  }
-  for (let mJob = 0; mJob < 9; mJob++) pickBest('mid', randCands(42, 170 + rng() * 60), 0.55);
-  for (let fJob = 0; fJob < 8; fJob++) pickBest('filler', randCands(42, 105 + rng() * 35), 0.6);
+  /* Job counts carry the coverage: a first-valid pool of ~10 finds a
+     zone-clear spot only some of the time (big stickers especially),
+     so jobs outnumber the stickers expected to land — surplus jobs
+     just stop once the theme's set is used up. Kiss jobs run before
+     fillers so the small set aside for them isn't crowded out;
+     placement order is not draw order (layers draw heroes -> mids ->
+     fillers -> data -> kiss regardless). */
+  for (let hJob = 0; hJob < 32; hJob++) pickFirst('hero', heroCands(10, 300 + rng() * 50), 0.2);
+  for (let mJob = 0; mJob < 44; mJob++) pickFirst('mid', randCands(10, 195 + rng() * 70), 0.2);
 
   /* Kiss fillers (drawn last, over the data layer): sampled around data
-     pill borders — they may touch pill rects, never glyph zones. */
-  for (let kJob = 0; kJob < 3; kJob++) {
+     pill borders — they may touch pill rects, never glyph zones, and
+     containment applies to them too (a kiss that would cross the
+     canvas edge is simply not placed there). */
+  for (let kJob = 0; kJob < 4; kJob++) {
     if (imgIdx >= imgs.length || !els.length) break;
     const cands = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 10; i++) {
       const el = els[Math.floor(rng() * els.length)];
       const size = 95 + rng() * 30;
+      const rot = (rng() * 2 - 1) * 22;
       const ang = rng() * Math.PI * 2;
-      const rx = (el.box.x1 - el.box.x0) / 2 + size * 0.3;
-      const ry = (el.box.y1 - el.box.y0) / 2 + size * 0.3;
-      cands.push({ cx: (el.box.x0 + el.box.x1) / 2 + Math.cos(ang) * rx, cy: (el.box.y0 + el.box.y1) / 2 + Math.sin(ang) * ry, size });
+      const rx = (el.box.x1 - el.box.x0) / 2 + size * 0.55;
+      const ry = (el.box.y1 - el.box.y0) / 2 + size * 0.55;
+      cands.push({ cx: (el.box.x0 + el.box.x1) / 2 + Math.cos(ang) * rx, cy: (el.box.y0 + el.box.y1) / 2 + Math.sin(ang) * ry, size, rot });
     }
-    pickBest('kiss', cands, 0.7);
+    pickFirst('kiss', cands, 0.05);
   }
+
+  for (let fJob = 0; fJob < 36; fJob++) pickFirst('filler', randCands(10, 105 + rng() * 35), 0.15);
 
   /* ---- Phase 3: draw — decorative layers first, data on top, kiss
      fillers last. ---- */
