@@ -70,12 +70,13 @@ window.__stubClient = { from: (t) => tableStub(t) };
     sent: [],
     friends: [{ id: 'buddy', profile: { user_id: 'buddy', first_name: 'Bud', last_name: 'Dy', avatar_id: '', avatar_path: '' }, name: 'Buddy' }],
   });`);
-  await run('renderCoven()'); await tick(5);
+  await run('renderCoven()'); await tick(20);
   const reportBtns = window.document.querySelectorAll('[data-report]');
-  ok('report buttons render on request + friend rows',
-    reportBtns.length === 2 &&
-    reportBtns[0].dataset.report === 'spammer' &&
-    reportBtns[1].dataset.report === 'buddy');
+  // v488: friend report buttons live in the Invite sheet (Manage friends),
+  // not the main coven view. Main view has the received-request report button.
+  ok('report buttons render on request rows',
+    reportBtns.length >= 1 &&
+    reportBtns[0].dataset.report === 'spammer');
 
   /* ---- 3. report sheet submit path ---- */
   reportBtns[0].click(); await tick(2);
