@@ -142,9 +142,11 @@ var CommunityCorpus = {
 
   /* New-trope idea outside the catalog → User's curation queue. */
   proposeNewTrope: async function (name, description, book) {
-    if (!rateLimitToast()) return { ok: false, reason: 'rate' };
+    // v496 (#138): validate BEFORE the rate-limit check — ccRateLimitCheck
+    // increments the counters on every call, so an empty submit burned budget.
     name = String(name || '').trim();
     if (!name) { toast('Give your trope a name'); return { ok: false }; }
+    if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     var sb = await ccClient();
     var key = book && typeof bookKeyFor === 'function' ? bookKeyFor(book) : null;
     var uid = ccUserId();
@@ -166,10 +168,12 @@ var CommunityCorpus = {
   suggestCharacter: async function (book, fields, opts){
     opts = opts || {};
     var say = function (m) { if (!opts.quiet) toast(m); };
-    if (!rateLimitToast()) return { ok: false, reason: 'rate' };
+    // v496 (#138): validate BEFORE the rate-limit check — ccRateLimitCheck
+    // increments the counters on every call, so an empty submit burned budget.
     fields = fields || {};
     var name = String(fields.name || '').trim();
     if (!name) { say('Give the character a name'); return { ok: false }; }
+    if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     var sb = await ccClient();
     var key = (typeof bookKeyFor === 'function') ? bookKeyFor(book) : null;
     if (!key) { say('Could not identify this book'); return { ok: false }; }

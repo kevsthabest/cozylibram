@@ -214,10 +214,16 @@ async function loadCovenStats() {
   const friends = ((await circleLists()).friends) || [];
   const people = [{ id: 'me', name: 'You', profile: null, stats: statPersonBooks(typeof library !== 'undefined' ? library : []) }];
   for (const f of friends) {
-    let books = [];
-    try { books = await circleFriendBooks(f.id); } catch (e) { continue; }
-    let profile = f.profile || null;
-    try { profile = await circleFriendProfile(f.id); } catch (e) {}
+    // v496 (#140): fetch books + profile concurrently per friend instead of
+    // two sequential round-trips. Error semantics preserved: a books failure
+    // still skips the friend; a profile failure falls back to f.profile.
+    const [booksRes, profileRes] = await Promise.all([
+      circleFriendBooks(f.id).then(books => ({ ok: true, books }), () => ({ ok: false })),
+      circleFriendProfile(f.id).then(profile => ({ ok: true, profile }), () => ({ ok: false }))
+    ]);
+    if (!booksRes.ok) continue;
+    const books = booksRes.books;
+    const profile = profileRes.ok ? profileRes.profile : (f.profile || null);
     people.push({ id: f.id, name: f.name || 'A friend', profile: profile, stats: statPersonBooks(books) });
   }
   const me = people[0].stats;

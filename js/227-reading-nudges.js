@@ -27,6 +27,8 @@ function daysSince(ts) {
   return (Date.now() - ts) / 86400000;
 }
 function promptCount(b) { return b.dnaPromptCount || 0; }
+// v496 (#137): in-flight guard for nudgeEvaluate (see below).
+var nudgeEvaluating = false;
 
 function nudgeSlotHTML() { return '<div id="nudgeSlot"></div>'; }
 
@@ -44,6 +46,11 @@ function dnaPct(b) {
 async function nudgeEvaluate() {
   var slot = document.getElementById('nudgeSlot');
   if (!slot) return;
+  // v496 (#137): in-flight guard — two overlapping evaluations could both
+  // pass the promptCount < 2 filter before either increments, burning both
+  // lifetime prompts on one nudge.
+  if (nudgeEvaluating) return;
+  nudgeEvaluating = true;
   try {
     if (dnaNudgesOff()) return;
     var lib = (typeof library !== 'undefined') ? library : [];
@@ -59,6 +66,7 @@ async function nudgeEvaluate() {
       if (sig) { renderNudge(slot, candidates[i], sig); return; }
     }
   } catch (e) {}
+  finally { nudgeEvaluating = false; }
 }
 
 async function nudgeSignal(b) {
@@ -140,6 +148,11 @@ function renderNudge(slot, b, sig) {
   });
 
   slot.querySelector('#nudgeSend').addEventListener('click', async function () {
+    // v496 (#137): double-tap guard — the send is async and there is no
+    // server-side unique constraint on character suggestions.
+    var btn = slot.querySelector('#nudgeSend');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
     var mod = (typeof window.CommunityCorpus !== 'undefined') ? window.CommunityCorpus : null;
     var sent = 0;
     var quiet = { quiet: true };

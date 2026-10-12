@@ -1105,11 +1105,19 @@ async function refreshRecommendations() {
     }
     // Taste profile: weighted mean of her read books' and favorites'
     // work embeddings (v214: favorites included at top weight).
+    // v496 (#141): resolve work ids in bounded-concurrency chunks instead of
+    // one sequential lookup per book — the old loop dominated
+    // time-to-first-result on large libraries. Output order and semantics
+    // are identical to the sequential version.
     const withIds = [];
-    for (const b of profBooks) {
-      let wid = null;
-      try { wid = await resolveWork(b); } catch (e) {}
-      if (wid) withIds.push({ book: b, workId: wid });
+    const RESOLVE_CHUNK = 8;
+    for (let i = 0; i < profBooks.length; i += RESOLVE_CHUNK) {
+      const chunk = profBooks.slice(i, i + RESOLVE_CHUNK);
+      const resolved = await Promise.all(chunk.map(async (b) => {
+        try { const wid = await resolveWork(b); return wid ? { book: b, workId: wid } : null; }
+        catch (e) { return null; }
+      }));
+      for (const r of resolved) if (r) withIds.push(r);
     }
     const emb = await fetchWorkEmbeddings(withIds.map(x => x.workId));
     const profile = tasteProfileVector(withIds.map(x => ({

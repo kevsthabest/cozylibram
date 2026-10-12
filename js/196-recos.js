@@ -42,9 +42,16 @@ async function loadRecos() {
   const mine = new Set();
   (library || []).forEach(b => { const k = recoKey(b); if (k) mine.add(k); });
   const byKey = {};
-  for (const f of friends) {
-    let books = [];
-    try { books = await circleFriendBooks(f.id); } catch (e) { continue; }
+  // v496 (#140): fetch all friends' shelves concurrently instead of one
+  // sequential round-trip per friend. Aggregation is order-independent
+  // (keyed map + final sort), and a failed fetch still skips that friend.
+  const fetched = await Promise.all(friends.map(f =>
+    circleFriendBooks(f.id).then(books => ({ f: f, books: books }), () => null)
+  ));
+  for (const r of fetched) {
+    if (!r) continue;
+    const f = r.f;
+    const books = r.books;
     books.forEach(b => {
       const r = Number(b.myRating) || 0;
       if (r < 4) return; // v97: only 4★+ earns a recommendation
