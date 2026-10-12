@@ -27,6 +27,7 @@ require('./harness').loadApp(window);
 
 const run = (code) => window.eval(code);
 const q = (sel) => window.document.querySelector(sel);
+const tick = () => new Promise(r => setTimeout(r, 20));
 
 function seed(status) {
   run(`library = [
@@ -47,9 +48,11 @@ ok('read: primary is Rate & Review', primaryLabel().includes('Rate & Review'));
 seed('dnf');
 ok('dnf: primary is Give it another go', primaryLabel().includes('Give it another go'));
 
-// --- 2. Start Reading applies immediately ---
+// --- 2. Start Reading applies immediately (v455: async trigger check) ---
+(async () => {
 seed('tbr');
 q('#m-primary').click();
+await tick();
 ok('primary: tbr -> reading applied to the book', run(`library[0].status`) === 'reading');
 ok('primary: repainted to Log Pages', primaryLabel().includes('Log Pages'));
 ok('primary: shelf seg follows', q('#f-status [data-s="reading"]').classList.contains('active'));
@@ -57,6 +60,7 @@ ok('primary: shelf seg follows', q('#f-status [data-s="reading"]').classList.con
 // --- 3. Give it another go applies immediately ---
 seed('dnf');
 q('#m-primary').click();
+await tick();
 ok('primary: dnf -> tbr applied to the book', run(`library[0].status`) === 'tbr');
 ok('primary: repainted to Start Reading', primaryLabel().includes('Start Reading'));
 
@@ -84,3 +88,4 @@ ok('bar: save remains alone; ⋮ lives in the top-right cluster',
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
+})();
