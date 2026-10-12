@@ -422,6 +422,9 @@ async function icFindOne(id) {
         if (r.cover) b.cover = r.cover;
         if (r.isbn && !b.isbn) b.isbn = r.isbn;
         try { saveLibrary(); } catch (e) {}
+        // Cover-storage closure: adopt the matched cover into the
+        // bucket in the background (it was just assigned directly).
+        if (r.cover && typeof adoptBookCoverInBackground === 'function') adoptBookCoverInBackground(b);
         icTrack('import_concierge_matched', { source: IC.formatId });
       }
       icRender();

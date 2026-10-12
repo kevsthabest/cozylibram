@@ -311,6 +311,13 @@ async function enterApp(user) {
       if (typeof runMetaCompareSweep === 'function') runMetaCompareSweep();
     } catch (e) {}
   }, 25000);
+  // Cover-storage closure: backfill round 2 — quietly adopt any cover
+  // still pointing at a provider (or still a data: upload) into the
+  // bucket. Resumable by construction; the sweep checks the kill-switch
+  // and online state itself.
+  setTimeout(function () {
+    try { if (typeof sweepCoverAdoptions === 'function') sweepCoverAdoptions(); } catch (e) {}
+  }, 30000);
   updateReleaseBadge(); // v149: surface any unseen auto-found releases
   setTimeout(maybeAutoReleaseCheck, 9000); // v149: weekly silent new-release sweep
   // v491: stale-bundle probe — compare the running bundle against the server

@@ -479,15 +479,20 @@ async function bulkLookupISBNs(isbns, onStep) {
 // page counts, and Settings → Hardcover → "Enrich all" backfills the rest.
 function bulkAddBooks(books, source) {
   let n = 0;
+  const added = [];
   for (const book of books) {
     if (alreadyHave(book)) continue;
     untombstone(book.id);
     library.unshift(book);
+    added.push(book);
     n++;
   }
   saveLibrary();
   render();
   toast(n ? 'Added ' + n + ' book' + (n === 1 ? '' : 's') + ' ✨' : 'Nothing new to add');
+  // Cover-storage closure: enqueue adoption for the new covers — the
+  // batch never waits on it (the adopter's queue paces the work).
+  if (typeof adoptBookCoverInBackground === 'function') added.forEach(adoptBookCoverInBackground);
   return n;
 }
 

@@ -340,6 +340,62 @@ async function adoptCoverWebP(url, book) {
   }
 }
 
+// ---- adoption closure (cover-storage PR C) ----
+// Fire-and-forget adoption for the hook callers (addBook, bulk add, the
+// import bypasses, the concierge) and the boot sweep below: enqueues
+// adoption for the book's current cover; when it lands, the record is
+// repointed and saved through the normal path (saveLibrary → sync),
+// exactly like the v216 call sites. Never throws, never blocks the
+// caller; any failure leaves the cover exactly as it was.
+function adoptBookCoverInBackground(book) {
+  try {
+    if (!book || !book.id || typeof book.cover !== 'string' || !book.cover) return;
+    const src = book.cover;
+    if (isCanonicalCoverUrl(src)) return;
+    if (src.indexOf('data:') !== 0 && !/^https?:\/\//i.test(src)) return;
+    adoptCoverWebP(src, book).then(newUrl => {
+      try {
+        if (!newUrl || newUrl === src) return;
+        // The record may have been replaced by a sync merge, or the
+        // cover changed while adoption ran — only repoint the record
+        // still carrying the source we adopted.
+        const lib = (typeof library !== 'undefined' && library) || [];
+        const cur = lib.find(x => x && x.id === book.id);
+        if (!cur || cur.cover !== src) return;
+        cur.cover = newUrl;
+        cur._mtime = Date.now();
+        saveLibrary();
+      } catch (e) { /* a missed repoint is retried by the boot sweep */ }
+    }, () => {});
+  } catch (e) {}
+}
+
+// Backfill round 2 (boot-time straggler sweep): every book whose cover
+// is not a canonical bucket URL — a remote provider URL or a data:
+// upload; both convert (Decision, 2026-10-12) — is a straggler. Cheap
+// pre-check first (one short-circuit scan; an adopted library costs a
+// single pass and no allocations), then the target set goes through
+// the adopter queue, which paces itself (2 concurrent, ~350 ms
+// between starts). Quiet by design: no UI, no toasts — AppLog counts
+// only. Resumable by construction: an adopted book's cover points at
+// the bucket, so it leaves the target set the moment it lands, and a
+// killed session simply leaves the rest for the next boot. Called once
+// per sign-in from enterApp; the adopter itself no-ops signed out.
+function sweepCoverAdoptions() {
+  try {
+    if (coverWebpDisabled()) return; // kill-switch: the sweep stays home too
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (typeof library === 'undefined' || !library || !library.length) return;
+    const isStraggler = b => !!(b && typeof b.cover === 'string' && b.cover &&
+      !isCanonicalCoverUrl(b.cover) &&
+      (b.cover.indexOf('data:') === 0 || /^https?:\/\//i.test(b.cover)));
+    if (!library.some(isStraggler)) return; // adopted library: one cheap pass, done
+    const targets = library.filter(isStraggler);
+    AppLog.info('cover', 'cover straggler sweep: adopting ' + targets.length + ' cover(s)');
+    targets.forEach(adoptBookCoverInBackground);
+  } catch (e) {}
+}
+
 async function chooseCover(bookId, url) {
   const b = library.find(x => x.id === bookId);
   if (!b || !url) return;
