@@ -3,9 +3,16 @@
 
 
 
-const CACHE = 'cozy-libram-v499';
+const CACHE = 'cozy-libram-v500';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
+// v500: Reader Portrait sticker artwork (assets/stickers/cut-webp/) is
+// runtime-cached on first use, NEVER precached — the full library is
+// 13.1 MB and must not block app install. Survives version bumps like
+// the cover cache; count-capped (a theme's set is ~24 stickers).
+const STICKER_CACHE = 'cozy-libram-stickers';
+const STICKER_CACHE_MAX = 96;
+const STICKERS_PATH = '/assets/stickers/cut-webp/';
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
 // objects are CORS-clean with real Content-Length, so size-based eviction
 // finally works.
@@ -13,7 +20,7 @@ const IMG_CACHE_MAX_BYTES = 150 * 1024 * 1024;
 const COVERS_PATH = '/storage/v1/object/public/covers/';
 const EDITION_IMAGES_PATH = '/storage/v1/object/public/edition-images/';
 const EST_BYTES_PER_COVER = 300 * 1024; // fallback when Content-Length is absent
-const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '041-idb.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-inventaire.js', '062-tropes.js', '065-analytics.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '096-onboarding.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '135-vision.js', '136-coverpicker.js', '137-shelf.js', '138-editions.js', '139-import-concierge.js', '140-collections.js', '150-modal-discovery.js', '151-modal-flairs.js', '152-overlay-history.js', '155-authors.js', '156-trope-taxonomy.js', '157-trope-inference.js', '158-works.js', '159-characters.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '199-admin.js', '200-boot.js', '205-shelfview.js', '206-editioncapture.js', '207-book3d.js', '215-shelf3d.js', '216-shelf3d-theme.js', '217-shelf3d-view.js', '218-shelf3d-decor.js', '219-milestones.js', '220-share-moments.js', '221-trigger-check.js', '222-community-corpus.js', '223-community-corpus-ui.js', '224-curation-queue.js', '225-book-portrait.js', '226-dna-survey.js', '227-reading-nudges.js', '211-yolo.js', '212-dna.js', '213-dnf.js', '214-wrapped.js', '208-editionassets.js', '209-editionquality.js', '210-editionmeasure.js'].map(f => './js/' + f);
+const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '030-storefront.js', '040-storage.js', '041-idb.js', '050-helpers.js', '060-metadata.js', '061-gbooks-key.js', '062-inventaire.js', '062-tropes.js', '065-analytics.js', '070-hardcover.js', '080-pagecount.js', '090-sync.js', '092-metacache.js', '095-gate.js', '096-onboarding.js', '100-nav.js', '105-account.js', '110-library.js', '120-favorites.js', '130-add.js', '132-import.js', '133-bookmory.js', '134-verify.js', '135-vision.js', '136-coverpicker.js', '137-shelf.js', '138-editions.js', '139-import-concierge.js', '140-collections.js', '150-modal-discovery.js', '151-modal-flairs.js', '152-overlay-history.js', '155-authors.js', '156-trope-taxonomy.js', '157-trope-inference.js', '158-works.js', '159-characters.js', '160-roulette.js', '170-stats.js', '180-settings.js', '181-appversion.js', '182-tileguard.js', '190-wishlist.js', '195-coven.js', '196-recos.js', '197-social-stats.js', '198-discovery.js', '199-admin.js', '200-boot.js', '205-shelfview.js', '206-editioncapture.js', '207-book3d.js', '215-shelf3d.js', '216-shelf3d-theme.js', '217-shelf3d-view.js', '218-shelf3d-decor.js', '219-milestones.js', '220-share-moments.js', '221-trigger-check.js', '222-community-corpus.js', '223-community-corpus-ui.js', '224-curation-queue.js', '225-book-portrait.js', '226-dna-survey.js', '227-reading-nudges.js', '228-portrait-share.js', '211-yolo.js', '212-dna.js', '213-dnf.js', '214-wrapped.js', '208-editionassets.js', '209-editionquality.js', '210-editionmeasure.js'].map(f => './js/' + f);
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v194 (security): vendored third-party libs, precached like first-party code.
 const VENDOR = ['supabase.min.js', 'quagga.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
@@ -30,7 +37,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE && k !== STICKER_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -87,6 +94,30 @@ self.addEventListener('fetch', (e) => {
         if (res && res.ok) {
           await cache.put(e.request, res.clone());
           trimImageCache(cache).catch(() => {});
+        }
+        return res;
+      } catch (err) {
+        return Response.error();
+      }
+    })());
+    return;
+  }
+  // v500: portrait sticker artwork — cache-first with runtime fill, same
+  // pattern as covers. Only the active theme's ~24 stickers ever land on a
+  // device; the count cap evicts oldest-first if themes rotate heavily.
+  if (url.origin === location.origin && url.pathname.indexOf(STICKERS_PATH) === 0) {
+    e.respondWith((async () => {
+      const cache = await caches.open(STICKER_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && res.ok) {
+          await cache.put(e.request, res.clone());
+          const keys = await cache.keys();
+          if (keys.length > STICKER_CACHE_MAX) {
+            await Promise.all(keys.slice(0, keys.length - STICKER_CACHE_MAX).map(k => cache.delete(k)));
+          }
         }
         return res;
       } catch (err) {
