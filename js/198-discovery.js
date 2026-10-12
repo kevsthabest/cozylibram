@@ -323,6 +323,118 @@ function renderVisibleReleases() {
     if (box && list.length) renderReleaseResults(list);
   }
 }
+
+/* ---------------- library home: author releases card (v483) ---------------- */
+// Compact "new from authors you love" card on the Library home. Reads the
+// weekly auto-sweep cache only — never triggers a Hardcover sweep. Rendered
+// below Currently Reading, and only when there is something to show (no
+// empty state).
+var AUTHOR_REL_MAX_AUTHORS = 3;
+var AUTHOR_REL_MAX_PER_AUTHOR = 3;
+
+// Group unseen releases by author (case-insensitive name match), ranked by
+// the author's library stats. A co-authored release lands under the
+// highest-ranked matching author only. Pure — takes (list, stats).
+function authorReleaseGroups(list, stats) {
+  const seen = new Set();
+  const groups = [];
+  for (const s of stats) {
+    if (groups.length >= AUTHOR_REL_MAX_AUTHORS) break;
+    const key = String(s.name || '').trim().toLowerCase();
+    if (!key) continue;
+    const rels = [];
+    for (const c of list) {
+      if (!c || seen.has(c.hcId)) continue;
+      const authors = (c.authors || []).map(a => String(a || '').trim().toLowerCase());
+      if (authors.indexOf(key) < 0) continue;
+      seen.add(c.hcId);
+      rels.push(c);
+      if (rels.length >= AUTHOR_REL_MAX_PER_AUTHOR) break;
+    }
+    if (rels.length) {
+      groups.push({
+        name: s.name,
+        n: s.n,
+        avg: s.sn ? Math.round((s.stars / s.sn) * 10) / 10 : null,
+        releases: rels.slice().sort((a, b) =>
+          String(a.releaseDate || '').localeCompare(String(b.releaseDate || '')))
+      });
+    }
+  }
+  return groups;
+}
+
+// Flat candidate list in card render order, for index-based wiring.
+var authorReleaseFlat = [];
+
+// Impure wrapper: reads the auto-sweep cache, returns '' when nothing to show.
+function authorReleasesCard() {
+  let groups = [], extra = 0;
+  try {
+    const list = unseenReleaseList();
+    groups = list.length ? authorReleaseGroups(list, releaseAuthorStats()) : [];
+    authorReleaseFlat = [];
+    groups.forEach(g => g.releases.forEach(c => authorReleaseFlat.push(c)));
+    extra = list.length - authorReleaseFlat.length;
+  } catch (e) { groups = []; authorReleaseFlat = []; extra = 0; }
+  return authorReleasesCardHTML(groups, authorReleaseFlat, extra);
+}
+
+// Pure HTML. `flat` parallels the rendered rows for data-i indexing.
+function authorReleasesCardHTML(groups, flat, extra) {
+  if (!groups.length) return '';
+  const cards = groups.map(g => {
+    const meta = g.n + (g.n === 1 ? ' book read' : ' books read') +
+      (g.avg != null ? ' · ' + g.avg.toFixed(1) + ' average' : '');
+    const rows = g.releases.map(c => {
+      const i = flat.indexOf(c);
+      const dt = (typeof fmtDate === 'function' ? fmtDate(c.releaseDate) : (c.releaseDate || ''));
+      return '<div class="ar-rel">' +
+        '<button class="ar-main" data-ar-prev="' + i + '" aria-label="' + esc(c.title) + ', releases ' + esc(dt) + '">' +
+        '<span class="ar-title">' + esc(c.title) + '</span>' +
+        '<span class="ar-date">' + esc(dt) + '</span></button>' +
+        '<button class="btn small" data-ar-add="' + i + '">＋ Add</button>' +
+        '<button class="btn ghost small ar-dis" data-ar-dis="' + i + '" aria-label="Dismiss ' + esc(c.title) + '">✕</button></div>';
+    }).join('');
+    return '<div class="author-rel-card"><div class="ar-name">' + esc(g.name) + '</div>' +
+      '<div class="ar-meta">' + esc(meta) + '</div>' + rows + '</div>';
+  }).join('');
+  const more = extra > 0
+    ? '<button class="ar-more" data-ar-more>' + extra + ' more in Discover →</button>' : '';
+  return '<section class="home-sec" id="author-releases"><h3 class="home-sec-title">' +
+    icon('sparkles') + ' New from authors you love</h3>' + cards + more + '</section>';
+}
+
+function wireAuthorReleases() {
+  const box = document.getElementById('author-releases');
+  if (!box) return;
+  box.querySelectorAll('[data-ar-prev]').forEach(btn => btn.addEventListener('click', () => {
+    const c = authorReleaseFlat[Number(btn.dataset.arPrev)];
+    if (c && typeof openReleasePreview === 'function') openReleasePreview(c);
+  }));
+  box.querySelectorAll('[data-ar-add]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const c = authorReleaseFlat[Number(btn.dataset.arAdd)];
+    if (c && typeof addReleaseBook === 'function' && addReleaseBook(c)) {
+      btn.textContent = '✓ Added';
+      btn.disabled = true;
+      const row = btn.closest('.ar-rel');
+      if (row) row.style.opacity = '0.4';
+    }
+  }));
+  box.querySelectorAll('[data-ar-dis]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const c = authorReleaseFlat[Number(btn.dataset.arDis)];
+    if (c && typeof dismissRelease === 'function') dismissRelease(c.hcId);
+    const row = btn.closest('.ar-rel');
+    if (row) row.remove();
+    const card = btn.closest('.author-rel-card');
+    if (card && !card.querySelector('.ar-rel')) card.remove();
+    if (!box.querySelector('.author-rel-card')) box.remove();
+  }));
+  const more = box.querySelector('[data-ar-more]');
+  if (more) more.addEventListener('click', () => { if (typeof go === 'function') go('discover'); });
+}
 // Silent weekly sweep. Skips when Hardcover isn't configured or the library
 // is empty; a fully-failed sweep stamps nothing so it retries next boot.
 async function maybeAutoReleaseCheck() {
