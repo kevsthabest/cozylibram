@@ -17,6 +17,7 @@
 - Cut stickers (production): `assets/stickers/cut/<theme>/<motif>-<1|2>.png`
   with alpha, produced by `scripts/cut-stickers.py` (flood-fill background
   removal + connected components + trim).
+- Originals (`sheets/`, `cut/`) are archived on the `archive/sticker-originals` branch, not on main; only `cut-webp/` ships in the app.
 
 ## Theme palettes
 | theme | palette direction | specials |
