@@ -389,10 +389,11 @@
     });
     box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
     box(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark,  (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
-    box(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);          // crown
+    // v501: no crown board — it hung over the top shelf and cut across the tall
+    // spines. Open-top case; the back panel tops out flush with the side panels.
     var backMat = new THREE.MeshStandardMaterial({ color: 0x241a20, roughness: 0.95 });
-    var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), backMat);
-    back.position.set(0, TOP_Y / 2, WALL_Z);
+    var back = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y - 0.3), backMat);
+    back.position.set(0, (TOP_Y - 0.3) / 2, WALL_Z);
     back.receiveShadow = true;
     scene.add(back);
 
@@ -2971,9 +2972,8 @@
       LEVELS.forEach(function (top) { lb(SHELF_W, PLANK_T, PLANK_D, woodMat, 0, top - PLANK_T / 2, 0); });
       lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
       lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
-      lb(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);
-      var bk = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), backMat);
-      bk.position.set(0, TOP_Y / 2, WALL_Z); g.add(bk);
+      var bk = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y - 0.3), backMat);
+      bk.position.set(0, (TOP_Y - 0.3) / 2, WALL_Z); g.add(bk);
       var order = [2, 1, 0], li = 0, startX = -SHELF_W / 2 + 0.35, x = startX;
       (books || []).slice(0, MAX_BOOKS).forEach(function (b) {
         if (!b) return;
