@@ -120,10 +120,17 @@ into individual transparent PNGs.
 
 ## Copy banks — DRAFT for veto
 
+**Variant pools beat single picks.** Where copy has tasteful variants,
+keep the pool and select by the same seeded rotation used for stickers
+and quotes (reader id + month): a reader's card stays stable for a
+share, but the wording freshens over time. Do not collapse a pool to one
+winner unless the user vetoes the others.
+
 ### Archetype titles (by dominant genre cluster)
 - Romantasy → Romantasy Royalty
-- Dark Romance → Dark Romance Darling (alt: Dark Romance Devotee — playful
-  vs direct, open choice at veto pass)
+- Dark Romance → rotating pool: Dark Romance Darling · Dark Romance
+  Devotee · Dark Romance Romantic · Dark Romance Shadow Romantic ·
+  Dark Romance Midnight Romantic
 - Romance (contemporary) → Hopeless Romantic
 - Fantasy → Fantasy Worldwalker
 - Sci-Fi → Star Voyager
