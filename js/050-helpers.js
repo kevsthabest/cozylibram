@@ -309,6 +309,12 @@ function stars(n) {
   if (!n) return '';
   return '★'.repeat(Math.round(n)) + ' <span style="color:var(--faint)">' + Number(n).toFixed(1) + '</span>';
 }
+/* v494 (#126): default network timeout for app-initiated requests. A hung
+   request used to hang the caller forever — notably cloudPushNow, which left
+   cloudSyncing stuck and wedged all future pushes. The abort surfaces as an
+   ordinary fetch rejection, which every caller already handles as a network
+   failure. `var` (not const) so tests can shorten it. */
+var NET_TIMEOUT_MS = 30000;
 /* v225: authed same-origin API fetch. Attaches the Supabase session JWT as
    `Authorization: Bearer <token>` so the /api/* Pages Functions can verify
    the caller is signed in. cloudClient() lives in js/090-sync.js — this only
@@ -325,9 +331,14 @@ async function apiFetch(path, options) {
       token = data && data.session && data.session.access_token;
     }
   } catch (e) { token = null; }
-  if (!token) return fetch(path, options);
-  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + token });
-  return fetch(path, Object.assign({}, options, { headers }));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, NET_TIMEOUT_MS);
+  try {
+    const init = Object.assign({}, options);
+    if (!init.signal) init.signal = ctrl.signal; // a caller-provided signal wins
+    if (token) init.headers = Object.assign({}, init.headers, { Authorization: 'Bearer ' + token });
+    return await fetch(path, init);
+  } finally { clearTimeout(timer); }
 }
 
 /* v292: 429s come from two places and the client blamed "too many requests"

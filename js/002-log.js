@@ -9,10 +9,18 @@
 const APP_LOG_MEM_MAX = 300;
 const APP_LOG_STORE_MAX = 150;
 const APP_LOG_KEY = 'cozylibram.applog.v1';
+// v494 (#133): persisting on every log call meant a device-storage write per
+// save (scheduleCloudPush logs on every save) plus every sync event. Writes
+// are now throttled to one per APP_LOG_PERSIST_MS, with a flush on pagehide
+// so the last entries before unload still survive a reload.
+
+const APP_LOG_PERSIST_MS = 2000;
 
 const AppLog = {
   _mem: [],
   _levels: { info: 0, warn: 1, error: 2 },
+  _lastPersist: 0,
+  _persistPending: false,
 
   _write(level, tag, msg) {
     try {
@@ -29,6 +37,16 @@ const AppLog = {
 
   _persist() {
     try {
+      if (Date.now() - this._lastPersist < APP_LOG_PERSIST_MS) { this._persistPending = true; return; }
+      this._flush();
+    } catch (e) { /* logging must never throw */ }
+  },
+
+  // Unconditional write-through: pagehide flush and clear().
+  _flush() {
+    try {
+      this._lastPersist = Date.now();
+      this._persistPending = false;
       const keep = this._mem.slice(-APP_LOG_STORE_MAX);
       localStorage.setItem(APP_LOG_KEY, JSON.stringify(keep));
     } catch (e) { /* storage full/blocked: keep the in-memory copy */ }
@@ -62,12 +80,20 @@ const AppLog = {
   clear() {
     try {
       this._mem = [];
+      // Reset the throttle so the next write persists immediately —
+      // a clear followed by writes (and the tests) expect them stored.
+      this._lastPersist = 0;
+      this._persistPending = false;
       localStorage.removeItem(APP_LOG_KEY);
     } catch (e) {}
   },
 };
 
 AppLog._restore();
+
+try {
+  window.addEventListener('pagehide', () => { try { AppLog._flush(); } catch (e) {} });
+} catch (e) { /* very old webviews: skip the flush hook */ }
 
 /* Global safety net: uncaught exceptions and unhandled promise rejections
    land here so silent failures become visible in the log viewer. */
