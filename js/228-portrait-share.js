@@ -106,9 +106,11 @@ async function psLoadAssets(p, style) {
       if (p.polaroid) jobs.push(psLoadCover(p.polaroid.cover).then(img => { A.polaroid = img; }));
       let themeKey = 'dark';
       try { themeKey = (typeof getTheme === 'function') ? getTheme() : (document.documentElement.dataset.theme || 'dark'); } catch (e) {}
-      const paths = psStickerPaths(themeKey, p.readerKey, psMonthKey()).slice(0, 8);
+      /* Composition v2 (v502): load the theme's whole seeded set (<=25);
+         the renderer picks 10-14 for the bomb and leaves the rest out. */
+      const paths = psStickerPaths(themeKey, p.readerKey, psMonthKey());
       jobs.push(Promise.all(paths.map(s => psLoadImage(s))).then(imgs => {
-        A.stickers = imgs.filter(Boolean).slice(0, 4);
+        A.stickers = imgs.filter(Boolean);
       }));
     }
     await Promise.all(jobs);
@@ -386,16 +388,36 @@ function drawPortraitCoverStory(x, W, H, p, t, A) {
 }
 
 /* ================= C — Sticker Pack ================= */
+/* Measure a pill without drawing it: box size + per-line glyph boxes in
+   pill-local coords. The collage layout pass uses the glyph boxes as
+   protected zones before anything is drawn. */
+function psPillMetrics(x, o) {
+  const lines = o.lines || [];
+  let w = 0;
+  lines.forEach(L => {
+    x.font = L.font;
+    try { L._mw = x.measureText(L.text).width; } catch (e) { L._mw = 0; }
+    w = Math.max(w, L._mw);
+  });
+  const gap = o.lineGap != null ? o.lineGap : 8;
+  const totalH = lines.reduce((s, L) => s + L.size, 0) + gap * Math.max(0, lines.length - 1);
+  let ly = -totalH / 2;
+  const lineBoxes = [];
+  lines.forEach(L => {
+    ly += L.size;
+    /* Glyph box (baseline sits at ly - 0.22*size in the draw loop). */
+    lineBoxes.push({ x0: -(L._mw || 0) / 2, x1: (L._mw || 0) / 2, y0: ly - L.size * 1.05, y1: ly });
+    ly += gap;
+  });
+  return { w: w + (o.padX || 34) * 2, h: totalH + (o.padY || 20) * 2, lines: lineBoxes, totalH, gap };
+}
 function psPill(x, cx, cy, o) {
+  const m = psPillMetrics(x, o);
+  const lines = o.lines || [];
+  const bw = m.w, bh = m.h, totalH = m.totalH, gap = m.gap;
   x.save();
   x.translate(cx, cy);
   x.rotate((o.rot || 0) * Math.PI / 180);
-  const lines = o.lines || [];
-  let w = 0;
-  lines.forEach(L => { x.font = L.font; try { w = Math.max(w, x.measureText(L.text).width); } catch (e) {} });
-  const gap = o.lineGap != null ? o.lineGap : 8;
-  const totalH = lines.reduce((s, L) => s + L.size, 0) + gap * Math.max(0, lines.length - 1);
-  const bw = w + (o.padX || 34) * 2, bh = totalH + (o.padY || 20) * 2;
   const r = o.radius != null ? o.radius : bh / 2;
   x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = 16; x.shadowOffsetY = 7;
   cvRoundRect(x, -bw / 2, -bh / 2, bw, bh, r);
@@ -415,7 +437,7 @@ function psPill(x, cx, cy, o) {
     ly += gap;
   });
   x.restore();
-  return { w: bw, h: bh };
+  return { w: bw, h: bh, lines: m.lines };
 }
 function psStarburst(x, cx, cy, r, fill) {
   x.save();
@@ -443,115 +465,219 @@ function psIllustrated(x, img, cx, cy, size, rot) {
   x.restore();
 }
 
+/* ---- composition geometry (v502): boxes keep the sticker bomb dense
+   without ever covering text. A pill's protected zone is its TEXT lines
+   (not the whole pill), so illustrated stickers may kiss pill borders
+   exactly like a real sticker-bombed e-reader back. ---- */
+function psBox(cx, cy, w, h, rot) {
+  const a = Math.abs((rot || 0) * Math.PI / 180);
+  const c = Math.cos(a), s = Math.sin(a);
+  const hw = (w / 2) * c + (h / 2) * s;
+  const hh = (w / 2) * s + (h / 2) * c;
+  return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+}
+function psBoxesHit(a, b) {
+  return !!a && !!b && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+}
+/* Protected zones for a drawn pill: each text line's glyph box, rotated
+   into canvas coords and padded by `pad`. Returns canvas-space boxes. */
+function psPillZones(cx, cy, pill, rot, pad) {
+  const a = (rot || 0) * Math.PI / 180;
+  const c = Math.cos(a), s = Math.sin(a);
+  const p = pad || 0;
+  return (pill.lines || []).map(L => {
+    const corners = [
+      [L.x0, L.y0], [L.x1, L.y0], [L.x0, L.y1], [L.x1, L.y1]
+    ].map(([lx, ly]) => [cx + lx * c - ly * s, cy + lx * s + ly * c]);
+    const xs = corners.map(q => q[0]), ys = corners.map(q => q[1]);
+    return {
+      x0: Math.min.apply(null, xs) - p, y0: Math.min.apply(null, ys) - p,
+      x1: Math.max.apply(null, xs) + p, y1: Math.max.apply(null, ys) + p
+    };
+  });
+}
+
+/* The recent-read cover AS a sticker (v502 amendment): die-cut white
+   contour + drop shadow, no polaroid frame, no caption — the cover
+   carries its own title. If the cover image failed to load, a
+   title-text sticker with the same contour stands in. */
+function psCoverSticker(x, img, book, cx, cy, w, h, rot, t) {
+  const B = 16; // white contour width at card scale
+  x.save();
+  x.translate(cx, cy);
+  x.rotate((rot || 0) * Math.PI / 180);
+  x.shadowColor = 'rgba(0,0,0,0.4)'; x.shadowBlur = 20; x.shadowOffsetY = 9;
+  cvRoundRect(x, -w / 2 - B, -h / 2 - B, w + B * 2, h + B * 2, 22);
+  x.fillStyle = '#fdfbf7'; x.fill();
+  x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetY = 0;
+  if (img) {
+    psDrawCoverFit(x, img, 0, 0, w, h, 6);
+  } else {
+    cvRoundRect(x, -w / 2, -h / 2, w, h, 6);
+    x.fillStyle = dnaMix(t.bg2, t.accent, 0.25); x.fill();
+    x.strokeStyle = dnaAlpha(t.ink, 0.2); x.lineWidth = 2; x.stroke();
+    x.fillStyle = t.ink; x.textAlign = 'center';
+    x.font = '600 30px ' + PS_SERIF;
+    const lines = psWrap(x, (book && book.title) || 'Untitled', w - 44).slice(0, 5);
+    lines.forEach((ln, i) => x.fillText(ln, 0, 12 - ((lines.length - 1) * 38) / 2 + i * 38));
+    if (book && book.author) {
+      x.font = '21px ' + PS_SANS; x.fillStyle = t.muted;
+      x.fillText(dnaEllipsize(x, book.author, w - 44), 0, h / 2 - 24);
+    }
+  }
+  x.restore();
+}
+
 function drawPortraitStickerPack(x, W, H, p, t, A) {
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
   const darkInk = '#241a2e';
+  const GLYPH_PAD = 10; // protected margin around text glyphs + cover art
 
-  // The device: back of a sticker-bombed e-reader, flat-lay.
-  let dev = null;
+  /* FULL BLEED (composition v3): the canvas IS the e-reader back — no
+     inset device frame floating on a background, no camera dot. Matte
+     shell; stickers run to the edges and are clipped by the frame,
+     like the real sticker-bombed e-readers this is modeled on. */
+  let bgGrad = null;
   try {
-    dev = x.createLinearGradient(0, 110, 0, 1810);
-    dev.addColorStop(0, t.bg2); dev.addColorStop(1, t.card2);
+    bgGrad = x.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, t.bg2); bgGrad.addColorStop(1, t.card2);
   } catch (e) {}
-  x.save();
-  x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = 40; x.shadowOffsetY = 18;
-  cvRoundRect(x, 64, 110, W - 128, 1700, 64);
-  x.fillStyle = dev || t.bg2; x.fill();
-  x.restore();
-  cvRoundRect(x, 64, 110, W - 128, 1700, 64);
-  x.strokeStyle = dnaAlpha(t.ink, 0.22); x.lineWidth = 3; x.stroke();
-  x.beginPath();
-  try { x.arc(W / 2, 152, 9, 0, Math.PI * 2); } catch (e) {}
-  x.fillStyle = dnaAlpha(t.ink, 0.3); x.fill();
+  x.fillStyle = bgGrad || t.bg2;
+  x.fillRect(0, 0, W, H);
 
   const rng = portraitRng((p.seed ^ 0x51ab) >>> 0);
   const jit = (n) => (rng() - 0.5) * 2 * n;
 
-  /* Focal point: the archetype sticker — largest element on the device. */
-  x.font = '700 66px ' + PS_SERIF;
-  const focalText = dnaEllipsize(x, p.headline, 780);
-  psPill(x, W / 2, 330, {
+  const layout = { pills: [], coverSticker: null, coverArt: null, protectedZones: [], stickerBoxes: [], stickersDrawn: 0, coverage: 0 };
+
+  /* ---- Phase 1: data layout. Every data element is measured first;
+     its text GLYPH boxes (padded >=10px) become the collage's protected
+     zones. Pill borders and shadows may be kissed by stickers; letters
+     and the cover art may not. Data elements join the collage with
+     varied scale/tilt (genre small, fan-club large, tilts <=8deg). ---- */
+  const els = [];
+  const addPill = (cx, cy, rot, o, clampX) => {
+    const m = psPillMetrics(x, o);
+    let box = psBox(cx, cy, m.w, m.h, rot);
+    if (clampX) {
+      /* Edge pills (genre, phrases) shift inward so their text is never
+         clipped by the canvas edge, however long the line runs. */
+      if (box.x0 < 6) { cx += 6 - box.x0; box = psBox(cx, cy, m.w, m.h, rot); }
+      if (box.x1 > W - 6) { cx -= box.x1 - (W - 6); box = psBox(cx, cy, m.w, m.h, rot); }
+    }
+    const el = { cx, cy, rot, o, m, box };
+    els.push(el);
+    layout.pills.push(el.box);
+    psPillZones(cx, cy, m, rot, GLYPH_PAD).forEach(z => layout.protectedZones.push(z));
+    return el;
+  };
+
+  /* Focal point: the archetype sticker — the headline pill.
+     Shrink-to-fit before any truncation (v502): the headline is never
+     ellipsized; if it still overflows at the 38px floor, the pill takes
+     two lines instead. */
+  const mkFocal = (s) => '700 ' + s + 'px ' + PS_SERIF;
+  const focalSize = dnaFitSize(x, p.headline, 830, mkFocal, 66, 38);
+  let focalLines = [{ text: p.headline, font: mkFocal(focalSize), fg: t.gold, size: focalSize }];
+  x.font = mkFocal(focalSize);
+  let focalW = 0;
+  try { focalW = x.measureText(p.headline).width; } catch (e) {}
+  if (focalW > 830) {
+    focalLines = psWrap(x, p.headline, 830).slice(0, 2)
+      .map(ln => ({ text: ln, font: mkFocal(focalSize), fg: t.gold, size: focalSize }));
+  }
+  addPill(W / 2, 330, -2, {
     rot: -2, bg: t.card2, ring: dnaAlpha(t.gold, 0.7), padX: 52, padY: 30,
-    lines: [
-      { text: '★ READER PORTRAIT ★', font: '600 27px ' + PS_SANS, fg: t.muted, size: 27 },
-      { text: focalText, font: '700 66px ' + PS_SERIF, fg: t.gold, size: 66 }
-    ],
+    lines: [{ text: '★ READER PORTRAIT ★', font: '600 27px ' + PS_SANS, fg: t.muted, size: 27 }].concat(focalLines),
     lineGap: 14
   });
 
-  /* Genre sticker (top-left of the device). */
+  /* Genre sticker — deliberately small in the pile. */
   if (p.dominantGenre) {
-    psPill(x, 262 + jit(8), 196 + jit(6), {
-      rot: -8, bg: t.gold, padX: 26, padY: 13,
-      lines: [{ text: p.dominantGenre.toUpperCase(), font: '700 29px ' + PS_SANS, fg: darkInk, size: 29 }]
-    });
+    addPill(258, 148, -6, {
+      rot: -6, bg: t.gold, padX: 26, padY: 12,
+      lines: [{ text: p.dominantGenre.toUpperCase(), font: '700 34px ' + PS_SANS, fg: darkInk, size: 34 }]
+    }, true);
   }
 
-  /* Appetite pill (any ladder axis; falls back to a phrase sticker).
-     Spice stickers appear only when the spice axis actually fired —
-     fillers never contradict the data. */
+  /* Appetite pill (any ladder axis). Spice appears only when the spice
+     axis actually fired — stickers never contradict the data. Same
+     shrink-to-fit rule as the focal line: fit first, two lines at the
+     floor, never cut. */
+  let appetiteEl = null;
   if (p.appetite) {
-    x.font = 'italic 39px ' + PS_SERIF;
-    const appetiteText = dnaEllipsize(x, p.appetite.text, 790);
-    psPill(x, W / 2, 512, {
+    const mkApp = (s) => 'italic ' + s + 'px ' + PS_SERIF;
+    const appSize = dnaFitSize(x, p.appetite.text, 830, mkApp, 39, 38);
+    let appLines = [{ text: p.appetite.text, font: mkApp(appSize), fg: t.ink, size: appSize }];
+    x.font = mkApp(appSize);
+    let appW = 0;
+    try { appW = x.measureText(p.appetite.text).width; } catch (e) {}
+    if (appW > 830) {
+      appLines = psWrap(x, p.appetite.text, 830).slice(0, 2)
+        .map(ln => ({ text: ln, font: mkApp(appSize), fg: t.ink, size: appSize }));
+    }
+    appetiteEl = addPill(W / 2, 512, 1.5, {
       rot: 1.5, bg: t.bg, ring: dnaAlpha(t.accent, 0.8), padX: 38, padY: 18,
-      lines: [{ text: appetiteText, font: 'italic 39px ' + PS_SERIF, fg: t.ink, size: 39 }]
+      lines: appLines
     });
   }
 
-  /* Top-trope quote bubble (protected zone: left-center, near-level). */
+  /* The cover sticker slot: derived from the appetite pill's actual box
+     — its top edge sits >=24px below the pill's bottom edge, so the two
+     never intersect, whatever the appetite line does. */
+  const COVER_W = 252, COVER_H = 378, COVER_B = 16, COVER_ROT = 4;
+  let cover = null;
+  if (p.polaroid) {
+    const half = psBox(0, 0, COVER_W + COVER_B * 2, COVER_H + COVER_B * 2, COVER_ROT);
+    const coverCy = appetiteEl ? Math.ceil(appetiteEl.box.y1 + 24 - half.y0) : 800;
+    cover = { cx: 842, cy: coverCy, rot: COVER_ROT };
+    layout.coverSticker = psBox(842, coverCy, COVER_W + COVER_B * 2, COVER_H + COVER_B * 2, COVER_ROT);
+    layout.coverArt = psBox(842, coverCy, COVER_W, COVER_H, COVER_ROT);
+    layout.protectedZones.push({
+      x0: layout.coverArt.x0 - 10, y0: layout.coverArt.y0 - 10,
+      x1: layout.coverArt.x1 + 10, y1: layout.coverArt.y1 + 10
+    });
+  }
+
+  /* Top-trope quote bubble. The quote wraps to <=430px lines so the
+     bubble stays clear of the cover sticker on its right. */
   const topTrope = p.tropes.length ? p.tropes[0] : null;
   if (topTrope) {
-    psPill(x, 382, 712, {
-      rot: -1, bg: dnaMix(t.card2, t.ink, 0.07), padX: 34, padY: 24, radius: 34,
-      lines: [
-        { text: '★★★★★', font: '24px ' + PS_SANS, fg: t.gold, size: 24 },
-        { text: '“' + topTrope.quote + '”', font: 'italic 37px ' + PS_SERIF, fg: t.ink, size: 37 },
-        { text: topTrope.attribution, font: '25px ' + PS_SANS, fg: t.muted, size: 25 }
-      ],
-      lineGap: 10
+    x.font = 'italic 37px ' + PS_SERIF;
+    const quoteLines = psWrap(x, '“' + topTrope.quote + '”', 430).slice(0, 3);
+    const qLines = [{ text: '★★★★★', font: '24px ' + PS_SANS, fg: t.gold, size: 24 }]
+      .concat(quoteLines.map(ln => ({ text: ln, font: 'italic 37px ' + PS_SERIF, fg: t.ink, size: 37 })))
+      .concat([{ text: topTrope.attribution, font: '25px ' + PS_SANS, fg: t.muted, size: 25 }]);
+    addPill(378, 712, -1.5, {
+      rot: -1.5, bg: dnaMix(t.card2, t.ink, 0.07), padX: 34, padY: 24, radius: 34,
+      lines: qLines, lineGap: 10
     });
   }
 
-  /* One polaroid: the most recent read (else the top favourite). */
-  if (p.polaroid) {
-    x.save();
-    x.translate(838, 716); x.rotate(4 * Math.PI / 180);
-    x.shadowColor = 'rgba(0,0,0,0.4)'; x.shadowBlur = 20; x.shadowOffsetY = 9;
-    x.fillStyle = '#fdfbf7'; x.fillRect(-152, -206, 304, 412);
-    x.shadowColor = 'transparent'; x.shadowBlur = 0; x.shadowOffsetY = 0;
-    if (A.polaroid) psDrawCoverFit(x, A.polaroid, 0, -46, 268, 300, 2);
-    else {
-      x.fillStyle = '#e8e2d4'; x.fillRect(-134, -196, 268, 300);
-      x.fillStyle = '#5a4a3a'; x.font = 'italic 24px ' + PS_SERIF; x.textAlign = 'center';
-      psWrap(x, p.polaroid.title || '', 230).slice(0, 3).forEach((ln, i) => x.fillText(ln, 0, -110 + i * 32));
-    }
-    x.fillStyle = '#4a3b2c'; x.font = 'italic 25px ' + PS_SERIF; x.textAlign = 'center';
-    x.fillText(dnaEllipsize(x, p.polaroid.title || '', 250), 0, 168);
-    x.restore();
-  }
-
-  /* Pages starburst. */
-  psStarburst(x, 228, 1012, 148, t.gold);
-  x.save();
-  x.translate(228, 1012); x.rotate(-10 * Math.PI / 180);
-  x.fillStyle = darkInk; x.textAlign = 'center';
+  /* Pages starburst: only its TEXT is protected — the spikes are fair
+     game for sticker kisses, like the reference collages. */
+  const BURST = { cx: 224, cy: 1010, r: 150 };
   const mkB = (s) => '700 ' + s + 'px ' + PS_SERIF;
-  const bs = dnaFitSize(x, p.pages.toLocaleString(), 215, mkB, 56, 30);
-  x.font = mkB(bs);
-  x.fillText(p.pages.toLocaleString(), 0, 6);
+  const burstSize = dnaFitSize(x, p.pages.toLocaleString(), 215, mkB, 56, 30);
+  x.font = mkB(burstSize);
+  let pagesW = 0;
+  try { pagesW = x.measureText(p.pages.toLocaleString()).width; } catch (e) {}
   x.font = '700 29px ' + PS_SANS;
-  x.fillText('PAGES!', 0, 48);
-  x.restore();
+  let pagesLblW = 0;
+  try { pagesLblW = x.measureText('PAGES!').width; } catch (e) {}
+  const burstHW = Math.max(pagesW, pagesLblW) / 2 + GLYPH_PAD;
+  layout.protectedZones.push({ x0: BURST.cx - burstHW, y0: BURST.cy - 62, x1: BURST.cx + burstHW, y1: BURST.cy + 62 });
 
-  /* Top-author fan club sticker. */
+  /* Top-author fan club sticker — deliberately large in the pile.
+     Shrink-to-fit like the other text lines; never ellipsized. */
   if (p.topAuthor) {
-    x.font = '700 37px ' + PS_SANS;
-    const fanText = dnaEllipsize(x, p.topAuthor.name.toUpperCase() + ' FAN CLUB', 800);
-    psPill(x, W / 2, 1258, {
-      rot: -1.5, bg: t.accentDeep, padX: 40, padY: 20,
+    const fanRaw = p.topAuthor.name.toUpperCase() + ' FAN CLUB';
+    const mkFan = (s) => '700 ' + s + 'px ' + PS_SANS;
+    const fanSize = dnaFitSize(x, fanRaw, 800, mkFan, 37, 26);
+    addPill(545, 1252, -1.5, {
+      rot: -1.5, bg: t.accentDeep, padX: 42, padY: 20,
       lines: [
-        { text: fanText, font: '700 37px ' + PS_SANS, fg: '#ffffff', size: 37 },
+        { text: fanRaw, font: mkFan(fanSize), fg: '#ffffff', size: fanSize },
         { text: 'president, obviously', font: 'italic 27px ' + PS_SERIF, fg: 'rgba(255,255,255,0.85)', size: 27 }
       ],
       lineGap: 9
@@ -559,8 +685,8 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
   }
 
   /* Finished strip. */
-  psPill(x, W / 2, 1448, {
-    rot: 0.8, bg: t.card2, ring: dnaAlpha(t.ink, 0.35), padX: 44, padY: 20,
+  addPill(W / 2, 1402, 1, {
+    rot: 1, bg: t.card2, ring: dnaAlpha(t.ink, 0.35), padX: 44, padY: 20,
     lines: [{ text: '★ ' + p.n + (p.n === 1 ? ' STORY' : ' STORIES') + ' FINISHED ★', font: '700 39px ' + PS_SANS, fg: t.ink, size: 39 }]
   });
 
@@ -568,36 +694,180 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
      cocoon (7+ days). */
   const cocoon = p.streak >= 7;
   if (cocoon) {
-    psPill(x, W / 2, 1588, {
+    addPill(W / 2, 1536, -1, {
       rot: -1, bg: t.bg, padX: 32, padY: 14,
       lines: [{ text: 'THAT ONE ' + p.streak + '-DAY READING COCOON', font: '600 27px ' + PS_SANS, fg: t.gold, size: 27 }]
     });
   }
 
-  /* Phrase fillers + illustrated stickers fill the remaining space —
-     visual balance, not a fixed count. Zones avoid the data slots. */
+  /* Phrase fillers (data-adjacent pills, protected like the rest). */
   const phrases = psPickPhrases(p, cocoon ? 1 : 2);
   if (phrases[0]) {
-    psPill(x, 268 + jit(10), 1606 + jit(8), {
-      rot: -6, bg: dnaMix(t.bg2, t.accent, 0.3), padX: 24, padY: 12,
+    addPill(262, cocoon ? 1652 : 1576, -5, {
+      rot: -5, bg: dnaMix(t.bg2, t.accent, 0.3), padX: 24, padY: 12,
       lines: [{ text: phrases[0], font: '700 26px ' + PS_SANS, fg: t.ink, size: 26 }]
-    });
+    }, true);
   }
   if (phrases[1]) {
-    psPill(x, 806 + jit(10), 1612 + jit(8), {
-      rot: 5, bg: dnaMix(t.bg2, t.gold, 0.3), padX: 24, padY: 12,
+    addPill(812, 1586, 4, {
+      rot: 4, bg: dnaMix(t.bg2, t.gold, 0.3), padX: 24, padY: 12,
       lines: [{ text: phrases[1], font: '700 26px ' + PS_SANS, fg: t.ink, size: 26 }]
-    });
-  }
-  psIllustrated(x, A.stickers[0], 884 + jit(10), 222 + jit(8), 178, 6 + jit(4));
-  psIllustrated(x, A.stickers[1], 592 + jit(10), 1032 + jit(8), 172, -5 + jit(4));
-  psIllustrated(x, A.stickers[2], 884 + jit(10), 1212 + jit(8), 158, 8 + jit(4));
-  if (!cocoon && A.stickers[3]) {
-    // extra art low-center when no cocoon sticker claims the slot
-    psIllustrated(x, A.stickers[3], W / 2, 1596, 120, jit(5));
+    }, true);
   }
 
-  psFooter(x, W, 1762, t, A.icon);
+  /* Footer wordmark: soft dark backing pill so it stays legible over
+     art; its glyph box is protected like the other text. */
+  const FOOT_Y = 1846;
+  x.font = '600 34px ' + PS_SERIF;
+  let footTw = 0;
+  try { footTw = x.measureText('Cozy Libram').width; } catch (e) {}
+  const footW = (A.icon ? 46 + 16 : 0) + footTw;
+  const footPill = { x0: W / 2 - footW / 2 - 30, y0: FOOT_Y - 52, x1: W / 2 + footW / 2 + 30, y1: FOOT_Y + 20 };
+  layout.pills.push(footPill);
+  layout.protectedZones.push({ x0: footPill.x0 + 12, y0: footPill.y0 + 8, x1: footPill.x1 - 12, y1: footPill.y1 - 4 });
+
+  /* ---- Phase 2: the collage. Seeded scatter in three size classes —
+     heroes ~300-350px at corners/edges (partially clipped on purpose),
+     mids ~170-230px, fillers ~105-140px — rotations anywhere in +-22deg.
+     Decorative stickers overlap EACH OTHER freely; a placement is valid
+     only if its box clears every protected glyph zone. Among valid
+     candidates the scatter picks the one that covers the most still-bare
+     canvas (coverage grid), so the pile spreads like a real collage
+     instead of clumping. Deterministic per reader+month (seeded rng). */
+  const zones = layout.protectedZones;
+  const clearOfZones = (box) => !zones.some(z => psBoxesHit(box, z));
+  const canvasFrac = (box) => {
+    const ix = Math.max(0, Math.min(box.x1, W) - Math.max(box.x0, 0));
+    const iy = Math.max(0, Math.min(box.y1, H) - Math.max(box.y0, 0));
+    const area = (box.x1 - box.x0) * (box.y1 - box.y0);
+    return area > 0 ? (ix * iy) / area : 0;
+  };
+  const CELL = 30, GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
+  const grid = new Uint8Array(GW * GH);
+  const eachCell = (box, fn) => {
+    const gx0 = Math.max(0, Math.floor(box.x0 / CELL)), gx1 = Math.min(GW - 1, Math.floor(box.x1 / CELL));
+    const gy0 = Math.max(0, Math.floor(box.y0 / CELL)), gy1 = Math.min(GH - 1, Math.floor(box.y1 / CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const px = gx * CELL + CELL / 2, py = gy * CELL + CELL / 2;
+        if (px >= box.x0 && px <= box.x1 && py >= box.y0 && py <= box.y1) fn(gy * GW + gx);
+      }
+    }
+  };
+  const markBox = (box) => eachCell(box, (i) => { grid[i] = 1; });
+  const addedCells = (box) => { let n = 0; eachCell(box, (i) => { if (!grid[i]) n++; }); return n; };
+  layout.pills.forEach(markBox);
+  if (layout.coverSticker) markBox(layout.coverSticker);
+  for (let gy = 0; gy < GH; gy++) {
+    for (let gx = 0; gx < GW; gx++) {
+      const dx = gx * CELL + CELL / 2 - BURST.cx, dy = gy * CELL + CELL / 2 - BURST.cy;
+      if (dx * dx + dy * dy <= BURST.r * BURST.r) grid[gy * GW + gx] = 1;
+    }
+  }
+
+  const layers = { hero: [], mid: [], filler: [], kiss: [] };
+  const imgs = A.stickers || [];
+  let imgIdx = 0;
+  const pickBest = (layer, candidates, minFrac) => {
+    if (imgIdx >= imgs.length) return false;
+    let best = null, bestScore = -1;
+    for (const cand of candidates) {
+      const rot = (rng() * 2 - 1) * 22;
+      const box = psBox(cand.cx, cand.cy, cand.size, cand.size, rot);
+      if (canvasFrac(box) < minFrac) continue;
+      if (!clearOfZones(box)) continue;
+      const score = addedCells(box);
+      if (score > bestScore) {
+        bestScore = score;
+        best = { img: imgs[imgIdx], cx: cand.cx, cy: cand.cy, size: cand.size, rot, box };
+      }
+    }
+    if (!best) return false;
+    layers[layer].push(best);
+    markBox(best.box);
+    imgIdx++;
+    return true;
+  };
+  const randCands = (n, size) => {
+    const arr = [];
+    for (let i = 0; i < n; i++) arr.push({ cx: rng() * (W + 80) - 40, cy: rng() * (H + 80) - 40, size });
+    return arr;
+  };
+
+  const heroAnchors = [
+    { cx: 36, cy: 36 }, { cx: W - 36, cy: 36 }, { cx: 36, cy: H - 36 }, { cx: W - 36, cy: H - 36 },
+    { cx: 24, cy: 760 }, { cx: W - 24, cy: 1180 }, { cx: W / 2, cy: 16 }, { cx: 24, cy: 1330 },
+    { cx: W - 24, cy: 560 }, { cx: W / 2, cy: H - 16 }
+  ];
+  for (let hJob = 0; hJob < 5; hJob++) {
+    const size = 300 + rng() * 50;
+    const start = Math.floor(rng() * heroAnchors.length);
+    const cands = [];
+    for (let k = 0; k < heroAnchors.length; k++) {
+      const a = heroAnchors[(start + k) % heroAnchors.length];
+      cands.push({ cx: a.cx + jit(46), cy: a.cy + jit(46), size });
+      cands.push({ cx: a.cx + jit(95), cy: a.cy + jit(95), size });
+    }
+    pickBest('hero', cands, 0.42);
+  }
+  for (let mJob = 0; mJob < 9; mJob++) pickBest('mid', randCands(42, 170 + rng() * 60), 0.55);
+  for (let fJob = 0; fJob < 8; fJob++) pickBest('filler', randCands(42, 105 + rng() * 35), 0.6);
+
+  /* Kiss fillers (drawn last, over the data layer): sampled around data
+     pill borders — they may touch pill rects, never glyph zones. */
+  for (let kJob = 0; kJob < 3; kJob++) {
+    if (imgIdx >= imgs.length || !els.length) break;
+    const cands = [];
+    for (let i = 0; i < 30; i++) {
+      const el = els[Math.floor(rng() * els.length)];
+      const size = 95 + rng() * 30;
+      const ang = rng() * Math.PI * 2;
+      const rx = (el.box.x1 - el.box.x0) / 2 + size * 0.3;
+      const ry = (el.box.y1 - el.box.y0) / 2 + size * 0.3;
+      cands.push({ cx: (el.box.x0 + el.box.x1) / 2 + Math.cos(ang) * rx, cy: (el.box.y0 + el.box.y1) / 2 + Math.sin(ang) * ry, size });
+    }
+    pickBest('kiss', cands, 0.7);
+  }
+
+  /* ---- Phase 3: draw — decorative layers first, data on top, kiss
+     fillers last. ---- */
+  const drawLayer = (arr) => arr.forEach(s => {
+    psIllustrated(x, s.img, s.cx, s.cy, s.size, s.rot);
+    layout.stickerBoxes.push(s.box);
+    layout.stickersDrawn++;
+  });
+  drawLayer(layers.hero);
+  drawLayer(layers.mid);
+  drawLayer(layers.filler);
+
+  if (cover) psCoverSticker(x, A.polaroid, p.polaroid, cover.cx, cover.cy, COVER_W, COVER_H, cover.rot, t);
+  els.forEach(el => psPill(x, el.cx, el.cy, el.o));
+
+  psStarburst(x, BURST.cx, BURST.cy, BURST.r, t.gold);
+  x.save();
+  x.translate(BURST.cx, BURST.cy); x.rotate(-10 * Math.PI / 180);
+  x.fillStyle = darkInk; x.textAlign = 'center';
+  x.font = mkB(burstSize);
+  x.fillText(p.pages.toLocaleString(), 0, 6);
+  x.font = '700 29px ' + PS_SANS;
+  x.fillText('PAGES!', 0, 48);
+  x.restore();
+
+  x.save();
+  x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = 14; x.shadowOffsetY = 5;
+  cvRoundRect(x, footPill.x0, footPill.y0, footPill.x1 - footPill.x0, footPill.y1 - footPill.y0, 36);
+  x.fillStyle = dnaAlpha(t.bg, 0.78); x.fill();
+  x.restore();
+  psFooter(x, W, FOOT_Y, t, A.icon);
+
+  drawLayer(layers.kiss);
+
+  /* Coverage: the phase-2 grid already tracks every data box + placed
+     sticker box (+ the burst disc), sampled at cell centers. */
+  let covHit = 0;
+  for (let i = 0; i < grid.length; i++) if (grid[i]) covHit++;
+  layout.coverage = grid.length ? covHit / grid.length : 0;
+  return layout;
 }
 
 /* ---- render entry: one portrait, three renderers ---- */
@@ -635,13 +905,17 @@ function openPortraitShareSheet() {
     '<div class="sheet pshare-sheet">' +
       '<div class="sheet-grabber" aria-hidden="true"></div>' +
       '<p class="pshare-title">Share your portrait</p>' +
-      '<div class="pshare-track">' +
-        PS_STYLES.map(s =>
-          '<div class="pshare-slide"><div class="pshare-card" data-style="' + s.key + '">' +
-          '<div class="pshare-loading">Painting your portrait…</div></div></div>').join('') +
+      '<div class="pshare-stage">' +
+        '<button class="pshare-nav prev" aria-label="Previous style">‹</button>' +
+        '<div class="pshare-track">' +
+          PS_STYLES.map(s =>
+            '<div class="pshare-slide"><div class="pshare-card" data-style="' + s.key + '">' +
+            '<div class="pshare-loading">Painting your portrait…</div></div></div>').join('') +
+        '</div>' +
+        '<button class="pshare-nav next" aria-label="Next style">›</button>' +
       '</div>' +
       '<div class="pshare-dots">' +
-        PS_STYLES.map((s, i) => '<span class="pshare-dot' + (i === active ? ' on' : '') + '"></span>').join('') +
+        PS_STYLES.map((s, i) => '<button class="pshare-dot' + (i === active ? ' on' : '') + '" data-i="' + i + '" aria-label="Show ' + s.name + '"></button>').join('') +
       '</div>' +
       '<p class="pshare-name">' + PS_STYLES[active].name + '</p>' +
       '<button class="btn pshare-go" style="width:100%">Share this portrait</button>' +
@@ -650,17 +924,45 @@ function openPortraitShareSheet() {
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
 
+  const trackEl = overlay.querySelector('.pshare-track');
+  const dots = overlay.querySelectorAll('.pshare-dot');
+  const nameEl = overlay.querySelector('.pshare-name');
+  const prevBtn = overlay.querySelector('.pshare-nav.prev');
+  const nextBtn = overlay.querySelector('.pshare-nav.next');
+  const canvases = {};
+
+  /* One place updates the active style: dots, name, arrows, and the
+     remembered preference all follow the visible slide. */
+  const setActive = (i) => {
+    active = Math.max(0, Math.min(PS_STYLES.length - 1, i));
+    dots.forEach((d, j) => d.classList.toggle('on', j === active));
+    nameEl.textContent = PS_STYLES[active].name;
+    if (prevBtn) prevBtn.disabled = active === 0;
+    if (nextBtn) nextBtn.disabled = active === PS_STYLES.length - 1;
+    try { localStorage.setItem('pshareStyle', PS_STYLES[active].key); } catch (e) {}
+  };
+  const goTo = (i) => {
+    const target = Math.max(0, Math.min(PS_STYLES.length - 1, i));
+    try { trackEl.scrollTo({ left: target * (trackEl.clientWidth || 0), behavior: 'smooth' }); }
+    catch (e) { trackEl.scrollLeft = target * (trackEl.clientWidth || 0); }
+    setActive(target);
+  };
+
+  const onKey = (e) => {
+    if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    if (typeof overlayIsTop === 'function' && !overlayIsTop(token)) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); goTo(active + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(active - 1); }
+  };
+
   const close = () => {
+    document.removeEventListener('keydown', onKey);
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 300);
     if (typeof overlayClosed === 'function') overlayClosed(token);
   };
   const token = (typeof overlayOpened === 'function') ? overlayOpened('portrait-share', close) : null;
-
-  const trackEl = overlay.querySelector('.pshare-track');
-  const dots = overlay.querySelectorAll('.pshare-dot');
-  const nameEl = overlay.querySelector('.pshare-name');
-  const canvases = {};
+  document.addEventListener('keydown', onKey);
 
   PS_STYLES.forEach(async (s) => {
     const cv = await renderPortraitCanvas(s.key);
@@ -680,14 +982,16 @@ function openPortraitShareSheet() {
     scrollTimer = setTimeout(() => {
       const w = trackEl.clientWidth || 1;
       const i = Math.max(0, Math.min(PS_STYLES.length - 1, Math.round(trackEl.scrollLeft / w)));
-      if (i !== active) {
-        active = i;
-        dots.forEach((d, j) => d.classList.toggle('on', j === active));
-        nameEl.textContent = PS_STYLES[active].name;
-        try { localStorage.setItem('pshareStyle', PS_STYLES[active].key); } catch (e) {}
-      }
+      if (i !== active) setActive(i);
     }, 60);
   });
+
+  /* Mouse/touch switching: dots and arrows drive the same carousel the
+     swipe gesture uses (v502 — desktop had no path to styles 2 and 3). */
+  dots.forEach(d => d.addEventListener('click', () => goTo(parseInt(d.dataset.i, 10) || 0)));
+  if (prevBtn) prevBtn.addEventListener('click', () => goTo(active - 1));
+  if (nextBtn) nextBtn.addEventListener('click', () => goTo(active + 1));
+  setActive(active);
 
   overlay.querySelector('.pshare-go').addEventListener('click', async () => {
     const key = PS_STYLES[active].key;

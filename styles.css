@@ -3354,7 +3354,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   box-shadow: 0 4px 18px var(--shadow-c); }
 
 /* v398: DNF Autopsy bottom sheet */
-.dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }
+.sheet.dnf-bottom-sheet { max-height: 70vh; overflow-y: auto; }
 .dnf-sheet { padding: 8px 4px 16px; text-align: center; }
 
 /* v455: Trigger check bottom sheet — gentle heads-up, never a gate */
@@ -3723,16 +3723,54 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .s3d-sheet .sh-note { margin: 4px 0 0; font-size: 12px; opacity: .65; }
 #shelf3d #s3dScene { will-change: transform, opacity; }
 
-/* ---- Reader Portrait share sheet (v500): swipeable style carousel ---- */
+/* ---- bottom-sheet pattern (v502): the foundation the sheet markup was
+   written against — fixed scrim, bottom-anchored panel on mobile; on
+   desktop the panel becomes a centered dialog (same treatment as
+   .modal). Used by the DNF sheet and the portrait share sheet. ---- */
+.sheet-overlay { position: fixed; inset: 0; z-index: 150; background: rgba(8, 5, 12, .62);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; transition: opacity .25s ease; }
+.sheet-overlay.open { opacity: 1; }
+.sheet { background: var(--bg2); border: 1px solid var(--line); border-bottom: none;
+  border-radius: 20px 20px 0 0; width: 100%; max-width: 560px; max-height: 92vh;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+  transform: translateY(28px); transition: transform .25s ease; }
+.sheet-overlay.open .sheet { transform: none; }
+@media (min-width: 768px) {
+  .sheet-overlay { align-items: center; padding: 24px; }
+  .sheet { border-bottom: 1px solid var(--line); border-radius: 20px; }
+}
+
+/* ---- Reader Portrait share sheet (v500): swipeable style carousel.
+   v502: dots are real buttons, prev/next arrows on desktop, centered
+   dialog via the sheet pattern above. ---- */
 .pshare-sheet { max-height: 92vh; overflow-y: auto; }
 .pshare-title { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 22px; text-align: center; margin: 4px 0 14px; color: var(--ink); }
+.pshare-stage { position: relative; }
 .pshare-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -4px; }
 .pshare-track::-webkit-scrollbar { display: none; }
 .pshare-slide { flex: 0 0 100%; scroll-snap-align: center; display: flex; justify-content: center; padding: 2px 4px; }
 .pshare-card { display: flex; align-items: center; justify-content: center; min-height: 200px; }
 .pshare-card canvas { width: min(74vw, 324px); height: auto; display: block; border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); }
 .pshare-loading { color: var(--muted); font-size: 14px; padding: 60px 10px; text-align: center; }
-.pshare-dots { display: flex; justify-content: center; gap: 8px; margin: 14px 0 6px; }
-.pshare-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); transition: background .2s, transform .2s; }
-.pshare-dot.on { background: var(--gold); transform: scale(1.25); }
+.pshare-nav { display: none; }
+@media (min-width: 768px) {
+  .pshare-nav { display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+    width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card2); color: var(--ink);
+    font-size: 26px; line-height: 1; padding: 0 0 3px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+  .pshare-nav.prev { left: 2px; }
+  .pshare-nav.next { right: 2px; }
+  .pshare-nav:disabled { opacity: .35; cursor: default; }
+}
+.pshare-dots { display: flex; justify-content: center; gap: 2px; margin: 8px 0 2px; }
+.pshare-dot { -webkit-appearance: none; appearance: none; border: 0; background: transparent;
+  width: 26px; height: 26px; padding: 0; cursor: pointer; position: relative; }
+.pshare-dot::after { content: ''; position: absolute; left: 50%; top: 50%;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--line);
+  transform: translate(-50%, -50%); transition: background .2s, width .2s, height .2s; }
+.pshare-dot.on::after { background: var(--gold); width: 10px; height: 10px; }
 .pshare-name { text-align: center; font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 14px; }

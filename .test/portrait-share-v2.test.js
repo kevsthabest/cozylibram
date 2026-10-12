@@ -304,6 +304,128 @@ run('shareDnaImage()');
 ok('v1 flag keeps the old card path (no sheet)', !window.document.querySelector('.pshare-sheet'));
 run('localStorage.removeItem("portraitShareV1")');
 
+/* ---------- v502 batch 1: share-sheet controls ---------- */
+setLibrary(richBooks);
+run('shareDnaImage()');
+ok('sheet dots are real buttons', window.document.querySelectorAll('button.pshare-dot').length === 3);
+ok('sheet has prev/next arrow buttons',
+  !!window.document.querySelector('.pshare-nav.prev') && !!window.document.querySelector('.pshare-nav.next'));
+const trackEl2 = window.document.querySelector('.pshare-track');
+Object.defineProperty(trackEl2, 'clientWidth', { value: 300, configurable: true });
+let scrollArg = null;
+trackEl2.scrollTo = (o) => { scrollArg = o; };
+const dotBtns = window.document.querySelectorAll('button.pshare-dot');
+dotBtns[2].click();
+ok('dot click scrolls the carousel to its slide', !!scrollArg && scrollArg.left === 600);
+ok('dot click updates the style name + active dot',
+  window.document.querySelector('.pshare-name').textContent === 'Sticker Pack' &&
+  dotBtns[2].classList.contains('on'));
+window.document.querySelector('.pshare-nav.prev').click();
+ok('prev arrow steps back one slide', !!scrollArg && scrollArg.left === 300 &&
+  window.document.querySelector('.pshare-name').textContent === 'Cover Story');
+window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+ok('ArrowRight switches style while the sheet is open', !!scrollArg && scrollArg.left === 600 &&
+  window.document.querySelector('.pshare-name').textContent === 'Sticker Pack');
+window.document.querySelector('.pshare-close').click();
+
+/* ---------- v502 batch 1: sticker-pack geometry + density ----------
+   A measuring context with realistic text widths (the shared fakeCtx
+   measures everything as 10px, which proves nothing about layout). */
+function geoCtx() {
+  const rec = { texts: [], images: 0, arcs: [] };
+  const grad = { addColorStop() {} };
+  const ctx = {
+    font: '10px sans-serif', fillStyle: '', strokeStyle: '', shadowColor: '',
+    shadowBlur: 0, shadowOffsetY: 0, lineWidth: 1, textAlign: 'left',
+    textBaseline: 'alphabetic', globalAlpha: 1,
+    measureText(s) {
+      const m = /(\d+(?:\.\d+)?)px/.exec(ctx.font);
+      const size = m ? parseFloat(m[1]) : 10;
+      return { width: String(s).length * size * 0.52 };
+    },
+    fillText(s) { rec.texts.push(String(s)); },
+    drawImage() { rec.images++; },
+    createLinearGradient: () => grad, createRadialGradient: () => grad,
+    arc(x, y, r) { rec.arcs.push({ x, y, r }); },
+    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arcTo() {},
+    quadraticCurveTo() {}, clip() {}, fill() {}, stroke() {}, fillRect() {}, strokeRect() {}
+  };
+  return { ctx, rec };
+}
+const geoImg = { width: 600, height: 900 };
+const geoAssets = () => ({
+  covers: [], polaroid: geoImg, icon: null,
+  stickers: Array.from({ length: 24 }, () => geoImg)
+});
+const boxesHit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+function checkGeo(label, P) {
+  const { ctx, rec } = geoCtx();
+  window.__geoCtx = ctx; window.__geoP = P; window.__geoA = geoAssets();
+  themeVars = darkVars;
+  const layout = run('drawPortraitStickerPack(window.__geoCtx, 1080, 1920, window.__geoP, portraitTheme(), window.__geoA)');
+  ok(label + ': layout returned with a cover-sticker box', !!layout && !!layout.coverSticker && !!layout.coverArt);
+  ok(label + ': no pill intersects the cover art',
+    layout.pills.every(b => !boxesHit(b, layout.coverArt)));
+  const appPill = layout.pills.find(b => b.x0 < 540 && b.x1 > 540 && b.y0 < 512 && b.y1 > 512);
+  ok(label + ': cover sticker top edge clears the appetite pill by >=24px',
+    !!appPill && (layout.coverSticker.y0 - appPill.y1) >= 23.5);
+  ok(label + ': collage places 16+ distinct illustrated stickers (got ' + layout.stickersDrawn + ')',
+    layout.stickersDrawn >= 16 && layout.stickersDrawn <= 24);
+  const maxDim = (b) => Math.max(b.x1 - b.x0, b.y1 - b.y0);
+  ok(label + ': size variance — hero-class stickers present (>=300px boxes)',
+    layout.stickerBoxes.some(b => maxDim(b) >= 300));
+  ok(label + ': size variance — filler-class stickers present (<=200px boxes)',
+    layout.stickerBoxes.filter(b => maxDim(b) <= 200).length >= 3);
+  ok(label + ': stickers never cover a protected glyph zone',
+    layout.stickerBoxes.every(sb => !layout.protectedZones.some(z => boxesHit(sb, z))));
+  ok(label + ': collage coverage >=60% of canvas (got ' + Math.round((layout.coverage || 0) * 100) + '%)',
+    layout.coverage >= 0.6);
+  ok(label + ': every sticker substantially on-canvas (full bleed, clipped at edges)',
+    layout.stickerBoxes.every(sb => {
+      const ix = Math.max(0, Math.min(sb.x1, 1080) - Math.max(sb.x0, 0));
+      const iy = Math.max(0, Math.min(sb.y1, 1920) - Math.max(sb.y0, 0));
+      const area = (sb.x1 - sb.x0) * (sb.y1 - sb.y0);
+      return area > 0 && (ix * iy) / area >= 0.35;
+    }));
+  ok(label + ': no camera dot on the device back',
+    !rec.arcs.some(a => Math.abs(a.x - 540) < 2 && Math.abs(a.y - 152) < 2));
+  ok(label + ': headline + appetite drawn in full (never ellipsized)',
+    rec.texts.includes(P.headline) && rec.texts.includes(P.appetite.text) &&
+    !rec.texts.some(s => s.includes('…')));
+}
+checkGeo('geo/rich', {
+  v: 2, n: 27, headline: 'Dark Romance Midnight Romantic',
+  archetype: 'Dark Romance Midnight Romantic', clusterKey: 'darkromance', softMode: false,
+  genres: [{ name: 'Dark Romance', count: 12 }], dominantGenre: 'Dark Romance',
+  tropes: [{ name: 'Morally Grey', quote: 'Here for the morally grey, every time.',
+             attribution: '— 12 books and counting', count: 12, growing: true }],
+  gentleTropes: [],
+  appetite: { axis: 'genre', text: 'here for the sentences that stay with you' },
+  spice: { avg: 0, rated: 0 }, pages: 9841, streak: 9,
+  topAuthor: { name: 'Penelope Douglas' }, coverStrip: [],
+  polaroid: { title: 'Credence', cover: 'https://x/c.jpg' },
+  seed: 1234567, readerKey: 'reader-geo'
+});
+checkGeo('geo/soft', {
+  v: 2, n: 11, headline: 'A story still being written', archetype: null,
+  clusterKey: 'scifi', softMode: true,
+  genres: [{ name: 'Science Fiction', count: 6 }], dominantGenre: 'Science Fiction',
+  tropes: [], gentleTropes: [{ name: 'Lone Trope' }],
+  appetite: { axis: 'genre', text: 'here for the stars and the strange' },
+  spice: { avg: 0, rated: 0 }, pages: 5520, streak: 1,
+  topAuthor: { name: 'Dan Brown' }, coverStrip: [],
+  polaroid: { title: 'Rules of Prey', cover: 'https://x/p.jpg' },
+  seed: 7654321, readerKey: 'reader-geo'
+});
+
+/* density through the real render path (fake Image loads the full set) */
+setLibrary(richBooks);
+themeVars = darkVars;
+texts = []; drawImages = 0;
+await run("renderPortraitCanvas('stickers')");
+ok('sticker render draws the full collage (16+ illustrated + cover + icon)', drawImages >= 18);
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('ERROR', e); process.exit(1); });
