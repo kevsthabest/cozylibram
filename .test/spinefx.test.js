@@ -83,7 +83,7 @@ ok('overlay shows the book cover', q('.pull-overlay img').src === 'http://x/b.jp
 await tick(2100); // pull (950ms) + book-open transition (~800ms)
 ok('overlay removed after pull', qa('.pull-overlay').length === before);
 ok('spine resets to shelf after pull', !sp2.classList.contains('pulling'));
-ok('modal opens after animation', !!q('#f-fav'));
+ok('modal opens after animation', !!q('#f-fav2'));
 window.document.getElementById('m-x').click();
 
 // 7. no cover -> short pull, no overlay
@@ -92,7 +92,7 @@ q('.fav-shelf .spine[data-id="fx3"]').click();
 await tick(150);
 ok('no overlay without cover', qa('.pull-overlay').length === before);
 await tick(500);
-ok('modal still opens', !!q('#f-fav'));
+ok('modal still opens', !!q('#f-fav2'));
 window.document.getElementById('m-x').click();
 
 // 8. reduced motion -> opens immediately
@@ -101,7 +101,7 @@ q('.fav-shelf .spine[data-id="fx1"]').click();
 await tick(80);
 const spx = q('.fav-shelf .spine[data-id="fx1"]');
 ok('no pulling class when reduced motion', !spx.classList.contains('pulling'));
-ok('modal opens immediately', !!q('#f-fav'));
+ok('modal opens immediately', !!q('#f-fav2'));
 reduced = false;
 window.document.getElementById('m-x').click();
 
@@ -110,7 +110,7 @@ runInWindow(`localStorage.setItem('spicyshelves.animation', 'off');`);
 q('.fav-shelf .spine[data-id="fx2"]').click();
 await tick(80);
 ok('no pulling class when toggle off', !q('.fav-shelf .spine[data-id="fx2"]').classList.contains('pulling'));
-ok('modal opens instantly when toggle off', !!q('#f-fav'));
+ok('modal opens instantly when toggle off', !!q('#f-fav2'));
 runInWindow(`localStorage.setItem('spicyshelves.animation', 'on');`);
 
 // 10. settings shows the animation toggle, clicking Off flips state
