@@ -797,7 +797,7 @@ function wireShelf() {
     try { _shelf3dWebGLFailed = false; } catch (e) {}
     renderShelf();
   });
-  // v411: overflow menu with shelf view toggle (Kevin: discoverable home for 2D/3D switch).
+  // v411: overflow menu with shelf view toggle (User: discoverable home for 2D/3D switch).
   const menuBtn = document.getElementById('svMenu');
   const menuDropdown = document.getElementById('svMenuDropdown');
   if (menuBtn && menuDropdown) {
@@ -817,7 +817,7 @@ function wireShelf() {
       menuDropdown.hidden = true;
       renderShelf();
     });
-    // v417: Decorations inventory in menu (Kevin: wasn't findable).
+    // v417: Decorations inventory in menu (User: wasn't findable).
     const menuDecorBtn = document.getElementById('svMenuDecor');
     if (menuDecorBtn) menuDecorBtn.addEventListener('click', () => {
       menuDropdown.hidden = true;

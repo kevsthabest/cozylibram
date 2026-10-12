@@ -1,7 +1,7 @@
 /* ---- overlay history (v220): Android's system back-gesture must close the
    topmost overlay instead of navigating away. The SPA keeps its routes in
    memory (no hash routing), so without this the back gesture pops the
-   document history — dropping Kevin to whatever page was open before the app.
+   document history — dropping User to whatever page was open before the app.
 
    Design: every overlay registers with overlayOpened(slot, domCloser), which
    pushes a SAME-URL history entry (no URL/hash change, so no routing fires).

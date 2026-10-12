@@ -1412,7 +1412,7 @@ function renderDetailModal(b, viaBook) {
     saveLibrary();
     track('book_status_changed', { from: from, to: s });
     if (s === 'read') track('book_completed');
-    // v468: post-completion portrait survey — fires on completion (Kevin's call).
+    // v468: post-completion portrait survey — fires on completion (User's call).
     if (s === 'read') { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
     // v449: cozy phrasing — returning to a finished book is a "revisit"
     const isRevisit = s === 'reading' && (b.readCount || 0) >= 1;

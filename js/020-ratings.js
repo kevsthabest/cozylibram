@@ -2,7 +2,7 @@
 
 /* ---------------- genre-aware ratings ---------------- */
 // v132: 11 axes. Fiction: spice/darkness/feels/humor/scare/suspense/
-// adventure. Nonfiction (Kevin's shelves): insight/readability/depth/
+// adventure. Nonfiction (User's shelves): insight/readability/depth/
 // practical. Only axes matching the book's genres/tropes/title are shown;
 // everything else stays behind the + chips.
 const RATING_AXES = [

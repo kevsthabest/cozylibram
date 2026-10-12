@@ -299,7 +299,7 @@ function detectMilestones(lib) {
     const best = longestStreakFor(lib);
     if (best >= 7) found.push({ id: 'streak-days-7', achievedAt: null });
     if (best >= 30) found.push({ id: 'streak-days-30', achievedAt: null });
-    // Kevin's refinement: personal best streak (replaces longest session)
+    // User's refinement: personal best streak (replaces longest session)
     if (best > 0) found.push({ id: 'streak-personal-best', achievedAt: null, value: best });
   } catch (e) {}
 
@@ -392,7 +392,7 @@ function detectMilestones(lib) {
   } catch (e) {}
 
   // Phase 1: Lost in the Pages — 100+ pages in a single day
-  // (Kevin's preference over timer-based sessions: pages-per-day from logs)
+  // (User's preference over timer-based sessions: pages-per-day from logs)
   try {
     const pagesByDay = {};
     lib.forEach(b => {
@@ -485,7 +485,7 @@ function detectMilestones(lib) {
     if (top && authorCount[top] >= 3) found.push({ id: 'taste-devoted-3', achievedAt: null, detail: top });
   } catch (e) {}
 
-  // Discovery: per-series completionist (Kevin's refinement)
+  // Discovery: per-series completionist (User's refinement)
   // 2+ books owned in a series, all read. One milestone per series.
   // Re-earnable: reading a newly-added book updates achievedAt.
   try {

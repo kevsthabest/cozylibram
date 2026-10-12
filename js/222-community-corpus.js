@@ -5,13 +5,13 @@
    Principles:
    1. Users suggest from controlled vocabularies only (89-trope catalog,
       trigger taxonomy). They never mint catalog IDs.
-   2. New-trope ideas go to Kevin's curation queue — never auto-added.
-   3. Merge proposals require evidence and are Kevin-only in v1.
-   4. Every contribution carries provenance (who, when). Kevin sees who;
+   2. New-trope ideas go to User's curation queue — never auto-added.
+   3. Merge proposals require evidence and are User-only in v1.
+   4. Every contribution carries provenance (who, when). User sees who;
       the public sees "refined by the community".
    5. Anti-gaming: rate-limited submissions, obscurity-weighted milestone
       credit, per-book-per-user caps, never reward raw submissions.
-   6. v1 behavior is Kevin's queue. Tier fields exist so v2 needs no
+   6. v1 behavior is User's queue. Tier fields exist so v2 needs no
       migration; all tier weights are 1 until the community exists.
 
    Store: Supabase (see supabase/migrations/v399_community_corpus_v1.sql).
@@ -140,7 +140,7 @@ var CommunityCorpus = {
     return { ok: true, id: r.data && r.data.id };
   },
 
-  /* New-trope idea outside the catalog → Kevin's curation queue. */
+  /* New-trope idea outside the catalog → User's curation queue. */
   proposeNewTrope: async function (name, description, book) {
     if (!rateLimitToast()) return { ok: false, reason: 'rate' };
     name = String(name || '').trim();
@@ -193,7 +193,7 @@ var CommunityCorpus = {
   },
 
   /* Merge proposal: "these two are the same person". Evidence REQUIRED.
-     Never auto-applied; Kevin-only review in v1. */
+     Never auto-applied; User-only review in v1. */
   proposeMerge: async function (book, charRefA, charRefB, evidence) {
     evidence = String(evidence || '').trim();
     if (!evidence) { toast('Evidence is required — e.g. "both appear in Chapter 12"'); return { ok: false, reason: 'evidence' }; }
@@ -333,7 +333,7 @@ var CommunityCorpus = {
     try {
       var out = { trope: 0, character: 0, trigger: 0,
                   tropeW: 0, characterW: 0, triggerW: 0, weighted: 0 };
-      /* Accepted = status accepted/approved. Kevin's approval is final.
+      /* Accepted = status accepted/approved. User's approval is final.
          Anti-gaming: cap counting at 3 accepted suggestions per book per
          type (a user can't farm one popular book). */
       var tables = [

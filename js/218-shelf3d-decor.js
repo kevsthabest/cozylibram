@@ -51,7 +51,7 @@ window.Shelf3DDecor = (function () {
       svg: '<svg viewBox="0 0 30 30"><rect x="8" y="5" width="14" height="18" rx="1" fill="#8a6a3a"/><rect x="10.5" y="7.5" width="9" height="13" fill="#2a3a5a"/><circle cx="18" cy="11" r="2" fill="#f6eff8"/></svg>' },
     { id: 'succulent', name: 'Succulent', build: 'succulent', stock: 3, premium: false,
       svg: '<svg viewBox="0 0 30 30"><path d="M11 20 L19 20 L17.5 26 L12.5 26 Z" fill="#7a8a9a"/><path d="M15 20 C15 15 13 12 9 11 C13 11 14 14 15 17 C16 14 17 11 21 11 C17 12 15 15 15 20" fill="#6a9a7a"/></svg>' },
-    /* unlocked per Kevin's approval (were locked behind place-counts) */
+    /* unlocked per User's approval (were locked behind place-counts) */
     { id: 'lantern', name: 'Lantern', build: 'lantern', stock: 1, premium: true,
       svg: '<svg viewBox="0 0 30 30"><rect x="10" y="8" width="10" height="14" rx="3" fill="#3a3a4a"/><circle cx="15" cy="15" r="3" fill="#ffcf7a" opacity=".8"/></svg>' },
     { id: 'globe', name: 'Globe', build: 'globe', stock: 1, premium: true,
