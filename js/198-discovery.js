@@ -427,8 +427,8 @@ function wireAuthorReleases() {
     const c = authorReleaseFlat[Number(btn.dataset.arDis)];
     if (c && typeof dismissRelease === 'function') dismissRelease(c.hcId);
     const row = btn.closest('.ar-rel');
-    if (row) row.remove();
     const card = btn.closest('.author-rel-card');
+    if (row) row.remove();
     if (card && !card.querySelector('.ar-rel')) card.remove();
     if (!box.querySelector('.author-rel-card')) box.remove();
   }));
