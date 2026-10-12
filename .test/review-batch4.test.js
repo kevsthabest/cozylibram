@@ -138,18 +138,23 @@ obs = genreGapObs([
 ok('#146 1.0★ gap still fires', obs.length === 1 && /Romance/.test(obs[0]));
 ok('#146 threshold is a named constant at 0.5', run(`GENRE_GAP_MIN`) === 0.5);
 
-// ---------- #147: similar-books genre term reads categories ----------
+// ---------- #147: dead genre-overlap term removed (ranking = author + tropes) ----------
+// Candidates in production are hcBookToCandidate-shaped (no genres/categories),
+// so the old +2 genre term never scored. Assert real behavior: a genre-only
+// match is excluded, and author overlap (+3) outranks trope overlap (+1).
 run(`visibleRecos = [
-  { c: { title: 'Match', authors: ['X'], categories: ['Romance'], tropes: [] }, sim: 0.5 },
-  { c: { title: 'NoMatch', authors: ['X'], categories: ['Science Fiction'], tropes: [] }, sim: 0.5 }
+  { c: { hcId: '1', title: 'TropeOnly', authors: ['X'], tropes: ['enemies-to-lovers'] }, sim: 0.5 },
+  { c: { hcId: '2', title: 'AuthorMatch', authors: ['Y'], tropes: [] }, sim: 0.5 },
+  { c: { hcId: '3', title: 'GenreOnly', authors: ['Z'], categories: ['Romance'], tropes: [] }, sim: 0.5 }
 ];`);
 {
   const box = window.document.createElement('div');
   box.id = 'disc-reco';
   window.document.body.appendChild(box);
-  run(`showSimilarToSeed({ title: 'Seed', authors: ['Y'], categories: ['Romance'], tropes: [] })`);
+  run(`showSimilarToSeed({ title: 'Seed', authors: ['Y'], categories: ['Romance'], tropes: ['enemies-to-lovers'] })`);
   const titles = Array.from(box.querySelectorAll('.rel-card h3')).map(h => h.textContent);
-  ok('#147 genre overlap outranks non-match', titles[0] === 'Match');
+  ok('#147 author overlap (+3) outranks trope overlap (+1)', titles[0] === 'AuthorMatch' && titles[1] === 'TropeOnly');
+  ok('#147 genre-only candidate is excluded (dead term removed)', !titles.includes('GenreOnly'));
   box.remove();
 }
 run(`visibleRecos = [];`);
