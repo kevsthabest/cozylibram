@@ -17,6 +17,7 @@ const ALLOWED_HOSTS = new Set([
   'covers.openlibrary.org', // Open Library covers
   'books.google.com',       // Google Books thumbnails
   'hardcover.app',          // Hardcover image CDN
+  'img.hardcover.app',      // Hardcover's image CDN — book covers point here (doc.image.url, js/070-hardcover.js)
   'archive.org',            // Open Library cover redirects
 ]);
 
