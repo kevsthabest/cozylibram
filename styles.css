@@ -1047,11 +1047,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; min-height: 2.6em;
 }
-.bt-badge {
-  position: absolute; top: 6px; left: 6px; font-size: 10px; font-weight: 700;
-  padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,.65); color: #fff;
-  pointer-events: none; z-index: 2;
-}
+/* v510: the .bt-badge text pills retired — reading states live in the
+   .tile-badge bookmark chip now; the reading % survives as .bt-pct. */
 
 /* stats view */
 .dist { margin: 4px 0 20px; }
@@ -1562,14 +1559,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .spine-author { writing-mode: vertical-rl; font-size: 9px; letter-spacing: .06em;
   color: rgba(233,202,110,.78);
   max-height: 22%; overflow: hidden; white-space: nowrap; }
-/* v187: read badge — a small gold seal hanging off the spine's foot,
-   resting on the shelf plank, for finished books */
-.spine-read { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
-  width: 17px; height: 17px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fbeec2, #d9a93f 62%, #8a6414);
-  color: #2a1e06; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,.55), inset 0 0 0 1px rgba(120,80,10,.55); }
-.spine-read .ticon { width: 10px; height: 10px; stroke-width: 2.8; }
+/* v187: read badge — a small gold seal hanging off the spine's foot.
+   v510: the seal retires; the read bookmark hangs as a ribbon tail at the
+   foot instead — accent fill, ink check, drop-shadow lift off the plank. */
+.spine-read { position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  width: 15px; height: 20px; color: var(--accent);
+  display: flex; align-items: flex-start; justify-content: center;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events: none; }
+.spine-read .ticon { width: 15px; height: 20px; }
 .shelf-plank { height: 13px; margin: 0 2px; border-radius: 3px;
   background: linear-gradient(#9a6535, #6f4525 60%, #54331b);
   box-shadow: 0 5px 10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25); }
@@ -2151,20 +2148,32 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   border-radius: 50%; background: rgba(0, 0, 0, 0.55);
   display: flex; align-items: center; justify-content: center; pointer-events: none;
 }
-.card-fav .ticon { width: 14px; height: 14px; fill: var(--accent); stroke: var(--accent); }
+.card-fav .ticon { width: 17px; height: 17px; fill: var(--accent); stroke: var(--accent); }
 .bt-statusbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
 .bt-statusbar.status-tbr { background: var(--gold); }
 .bt-statusbar.status-reading { background: var(--info); }
 .bt-statusbar.status-read { background: var(--ok); }
 .bt-statusbar.status-dnf { background: var(--danger); }
 .bt-statusbar .bt-fill { display: block; height: 100%; background: rgba(255, 255, 255, 0.85); }
-/* v188: read badge on grid tiles — the same gold seal as the favorite
-   spines, bottom-right of the cover, clear of the status strip */
-.tile-read { position: absolute; right: 4px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fbeec2, #d9a93f 62%, #8a6414);
-  color: #2a1e06; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,.55), inset 0 0 0 1px rgba(120,80,10,.55); pointer-events: none; }
-.tile-read .ticon { width: 12px; height: 12px; stroke-width: 2.8; }
+/* v188: read badge on grid tiles — the same gold seal as the favorite spines.
+   v510: replaced by the status bookmark family (Variant A): a 28px dark
+   chip bottom-right, above the status strip, one bookmark silhouette per
+   state (outline TBR / half-fill reading / filled+check read / grey+slash
+   DNF). The glyph rides the theme accent; check + slash take var(--ink);
+   the DNF fill is a theme-neutral grey (state outranks theming). */
+.tile-badge { position: absolute; right: 5px; bottom: 8px; width: 28px; height: 28px;
+  border-radius: 8px; background: rgba(10,8,14,.58); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 2; }
+.tile-badge .ticon { width: 20px; height: 20px; }
+.bt-pct { position: absolute; right: 38px; bottom: 12px; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 9px; background: rgba(0,0,0,.65); color: #fff;
+  pointer-events: none; z-index: 2; }
+.bm-ink { stroke: var(--ink); }
+.bm-grey { fill: #8d8496; }
+[data-theme="light"] .bm-grey, [data-theme="candlelight"] .bm-grey,
+[data-theme="frost"] .bm-grey, [data-theme="pastel"] .bm-grey,
+[data-theme="solstice"] .bm-grey, [data-theme="wisp"] .bm-grey { fill: #a89cae; }
 
 /* ================= v126: empty-state CTA ================= */
 .empty .btn { margin-top: 14px; }

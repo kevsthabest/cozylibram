@@ -45,6 +45,21 @@ ok('unknown icon falls back to covers', window.icon('nope') === window.icon('cov
 // v189: the read seals use a real check icon, not the covers fallback
 ok('check icon renders a check mark',
   window.icon('check').includes('M8.3 12.4l2.6 2.6 4.8-5.4') && window.icon('check') !== window.icon('covers'));
+// v510: status bookmark family (Variant A) + Heart in a Book register as
+// real glyphs; the fill-state paths ride along in the icon bodies.
+['bmtbr', 'bmreading', 'bmread', 'bmdnf', 'favbook'].forEach(n => {
+  const svg = window.icon(n);
+  ok(n + ' renders an inline svg', /<svg[^>]*class="ticon"/.test(svg) && svg.includes('</svg>'));
+  ok(n + ' is a real glyph, not the covers fallback', svg !== window.icon('covers'));
+});
+ok('bmread = filled bookmark + ink check',
+  window.icon('bmread').includes('fill="currentColor"') && window.icon('bmread').includes('class="bm-ink"'));
+ok('bmreading half-fill is the fixed-cue lower polygon',
+  window.icon('bmreading').includes('M6.5 12.6h11v8'));
+ok('bmdnf = grey bookmark + ink slash',
+  window.icon('bmdnf').includes('class="bm-grey"') && window.icon('bmdnf').includes('M7.4 17.6L16.6 6'));
+ok('favbook heart is centred on the fold',
+  window.icon('favbook').includes('M12 15.1') && window.icon('favbook').includes('M12 7.4 V19.6'));
 runInWindow(`window.__axesOk = RATING_AXES.every(a => typeof a.icon === 'string' && icon(a.icon).includes('</svg>'));
 window.__axesCount = RATING_AXES.length;`);
 ok('every axis has a line-art icon', !!window.__axesOk);
