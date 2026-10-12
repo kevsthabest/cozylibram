@@ -104,7 +104,8 @@ runInWindow(`(function(){
   const M = (id, title, y) => ({ id, isbn: '', title, authors: ['A'], cover: '', description: '',
     pageCount: 300, publishedDate: '', categories: ['Fiction / Romance / General'], publicRating: null,
     ratingsCount: 0, status: 'read', ratings: {}, axes: [], myRating: 5, tropes: [], progress: 300,
-    log: [], dateAdded: fin(y, 1, 5), dateFinished: fin(y, 6, 15), notes: '' });
+    log: [{ d: fin(y, 6, 15).slice(0, 10), from: 0, to: 300 }], // v427: pages sum logs, not pageCount
+    dateAdded: fin(y, 1, 5), dateFinished: fin(y, 6, 15), notes: '' });
   library.push(M('c1', 'This Year Book', Y));
   library.push(M('p1', 'Last Year Book', Y - 1));
   window.__Y = Y;

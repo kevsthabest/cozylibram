@@ -69,7 +69,7 @@ ok('home: hierarchy order (greeting -> reading -> tiles -> recent -> up next -> 
   html1.indexOf('Up Next') < html1.indexOf('Can\u2019t decide?') &&
   html1.indexOf('Can\u2019t decide?') < html1.indexOf('id="q"'));
 ok('home: full browser still present (search + shelf chips)',
-  !!q('#q') && qa('.chip:not([data-of])').length >= 5);
+  !!q('#q') && qa('.chip:not([data-of])').length >= 4); // v403: zero-count DNF chip hidden
 
 // --- 2. Home actions navigate ---
 q('#cd-pick').click();
