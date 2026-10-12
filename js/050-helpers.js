@@ -6,7 +6,10 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-function uid() { return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* v492: per-session monotonic counter kills same-ms collisions in tight
+   loops (bulk imports call uid() hundreds of times per millisecond). */
+let _uidSeq = 0;
+function uid() { return 'b' + Date.now().toString(36) + (_uidSeq++).toString(36) + Math.random().toString(36).slice(2, 8); }
 /* v399: Top-N entries from a count map, sorted descending. Replaces the
    Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,N) idiom. */
 function topEntries(map, n) {

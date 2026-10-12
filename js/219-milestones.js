@@ -223,8 +223,19 @@ const MILESTONE_CATALOG = [
     hint: '???' },
 ];
 
-/* Simple string hash for collision-safe IDs (djb2). */
-function hashStr(s) {
+/* v492: genre source for milestone detectors. `categories` (via bookGenres())
+   is the live field; `genres` is kept for legacy book objects that predate it
+   and for the existing detector tests, which build books with `genres`. */
+function detectorGenres(b) {
+  const out = bookGenres(b).slice();
+  (b.genres || []).forEach(g => { if (!out.includes(g)) out.push(g); });
+  return out;
+}
+
+/* Simple string hash for collision-safe IDs (djb2). Renamed from hashStr:
+   classic scripts share one global namespace and 120-favorites.js already
+   owns that name with a different return type. */
+function milestoneIdHash(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
@@ -353,7 +364,7 @@ function detectMilestones(lib) {
   try {
     const genres = new Set();
     read.forEach(b => {
-      (b.genres || []).forEach(g => {
+      detectorGenres(b).forEach(g => {
         const gg = String(g).toLowerCase().trim();
         if (gg) genres.add(gg);
       });
@@ -453,7 +464,7 @@ function detectMilestones(lib) {
 
   // Taste: dark romance count
   try {
-    const dr = read.filter(b => (b.genres || []).some(g => String(g).toLowerCase().indexOf('dark romance') >= 0));
+    const dr = read.filter(b => detectorGenres(b).some(g => String(g).toLowerCase().indexOf('dark romance') >= 0));
     if (dr.length >= 10) found.push({ id: 'taste-dark-romance-10', achievedAt: null });
   } catch (e) {}
 
@@ -491,7 +502,7 @@ function detectMilestones(lib) {
       if (!allRead) return;
       // Collision-safe ID: slug + hash of the full name. Display name kept in detail.
       const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
-      const id = 'series-finished-' + slug + '-' + hashStr(sname);
+      const id = 'series-finished-' + slug + '-' + milestoneIdHash(sname);
       // achievedAt = most recent dateFinished among the series books
       const dates = books.map(b => { const d = safeDate(b.dateFinished); return d ? d.getTime() : 0; }).filter(t => t > 0);
       const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
@@ -551,7 +562,7 @@ function detectMilestones(lib) {
       }
       if (!books.every(b => b.status === 'read')) return;
       const slug = sname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
-      const id = 'series-complete-' + slug + '-' + hashStr(sname);
+      const id = 'series-complete-' + slug + '-' + milestoneIdHash(sname);
       const dates = books.map(b => { const d = safeDate(b.dateFinished); return d ? d.getTime() : 0; }).filter(t => t > 0);
       const latest = dates.length ? new Date(Math.max.apply(null, dates)).toISOString() : null;
       found.push({ id, achievedAt: latest, detail: sname });
@@ -612,7 +623,7 @@ function detectMilestones(lib) {
     read.forEach(b => {
       const t = safeDate(b.dateFinished);
       if (!t) return;
-      (b.genres || []).forEach(g => {
+      detectorGenres(b).forEach(g => {
         const gg = String(g).toLowerCase().trim();
         if (!gg) return;
         if (!genreFirst[gg] || t < genreFirst[gg]) genreFirst[gg] = t;
@@ -620,7 +631,7 @@ function detectMilestones(lib) {
     });
     Object.keys(genreFirst).forEach(gg => {
       const slug = gg.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'unknown';
-      const id = 'wander-genre-' + slug + '-' + hashStr(gg);
+      const id = 'wander-genre-' + slug + '-' + milestoneIdHash(gg);
       found.push({ id, achievedAt: genreFirst[gg].toISOString(), detail: gg });
     });
   } catch (e) {}
