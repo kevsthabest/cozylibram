@@ -443,8 +443,8 @@
 
     /* ============================== books ==============================
        Real library books replace the prototype's hardcoded demo fills.
-       setBooks() lays them out left-to-right, top shelf first; anything past
-       MAX_BOOKS (~60) is ignored. */
+       setBooks() lays them out left-to-right, top shelf first; each bookcase holds up to
+       MAX_BOOKS (~60); the view pages a bigger library across several cases. */
     var occupied = LEVELS.map(function () { return []; });  // occupied x-intervals per shelf level
     var shelfBooks = [];   // {mesh, li, rec}
 
@@ -529,6 +529,7 @@
       ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
     }
     function bookAt(e) {
+      if (gliding) return null;
       setPtr(e); ray.setFromCamera(ptr, camera);
       var meshes = shelfBooks.map(function (s) { return s.mesh; });
       var hits = ray.intersectObjects(meshes, false);
@@ -2678,60 +2679,75 @@
     /* Phase 1: persist decoration layout to localStorage.
        Save format is versioned ({v, decorations}) so future format changes
        can migrate. v0 was the unversioned raw array; v1 wraps it. */
-    var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';
-    var DECO_FORMAT_V = 1;
-    function migrateDecoFormat(parsed) {
-      // v0 -> v1: unversioned raw array becomes {v:1, decorations:[...]}.
+    var DECO_STORE_KEY = 'cozylibram.s3d.deco.v1';      // legacy: one shared layout
+    var DECO_STORE_KEY_V2 = 'cozylibram.s3d.deco.v2';   // v2: one layout per bookcase
+    var DECO_FORMAT_V = 2;
+    /* The room: each bookcase keeps its own decorations, keyed 'group:index'
+       (e.g. 'read:2'). The first case loaded after upgrade adopts the old
+       single layout so nobody loses their dressing. */
+    var caseKey = (opts && opts.caseKey) || 'tbr:0';
+    var loadingCase = false;   // suppress saves while swapping cases
+    function readDecoDoc() {
+      try {
+        var raw = localStorage.getItem(DECO_STORE_KEY_V2);
+        if (raw) {
+          var d = JSON.parse(raw);
+          if (d && d.v === 2 && d.cases && typeof d.cases === 'object') return d;
+        }
+      } catch (_) {}
+      return { v: 2, cases: {} };
+    }
+    function legacyDecoList() {
+      try {
+        var raw = localStorage.getItem(DECO_STORE_KEY);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && parsed.v === 1 && Array.isArray(parsed.decorations)) return parsed.decorations;
+      } catch (_) {}
+      return null;
+    }
+    function migrateDecoFormat(parsed) {   // kept for older callers/tests
       if (Array.isArray(parsed)) return { v: 1, decorations: parsed };
       if (parsed && typeof parsed === 'object' && parsed.v === 1 && Array.isArray(parsed.decorations))
         return parsed;
-      // Unknown future version: refuse rather than misplace decorations.
       return null;
     }
     // v453: persist the dressed-theme state so the "Default look" toggle
     // survives reload (decorations restore, but dressOn was resetting).
     var DRESS_STORE_KEY = 'cozylibram.s3d.dressed.v1';
     function saveDecoLayout() {
+      if (loadingCase) return;
       try {
         var data = placed.map(function (p) {
-          return {
-            type: p.type,
-            pi: p.pi,
-            x: p.group.position.x,
-            z: p.group.position.z,
-            room: !!p.room
-          };
+          return { type: p.type, pi: p.pi, x: p.group.position.x, z: p.group.position.z, room: !!p.room };
         });
-        localStorage.setItem(DECO_STORE_KEY, JSON.stringify({ v: DECO_FORMAT_V, decorations: data }));
+        var doc = readDecoDoc();
+        doc.cases[caseKey] = data;
+        localStorage.setItem(DECO_STORE_KEY_V2, JSON.stringify(doc));
       } catch (_) {}
     }
     function loadDecoLayout() {
       try {
-        var raw = localStorage.getItem(DECO_STORE_KEY);
-        if (!raw) return false;
-        var doc = migrateDecoFormat(JSON.parse(raw));
-        if (!doc || !doc.decorations.length) {
-          // Re-save migrated docs so the store converges on the new format.
-          if (doc) { try { localStorage.setItem(DECO_STORE_KEY, JSON.stringify(doc)); } catch (_) {} }
-          return false;
+        var doc = readDecoDoc();
+        var list = doc.cases[caseKey];
+        var known = Array.isArray(list);
+        if (!known && !Object.keys(doc.cases).length) {
+          list = legacyDecoList();       // adopt the old shared layout once
+          known = Array.isArray(list) && list.length > 0;
         }
-        doc.decorations.forEach(function (d) {
+        if (!known) return false;
+        list.forEach(function (d) {
           try {
-            if (d.room) {
-              // Room decorations need anchor lookup; skip if not available
-              return;
-            }
-            // placeDeco signature: (type, pi, x, free, opts) — free=true so
-            // restoring a saved layout never consumes inventory counts.
+            if (d.room) return;           // room decorations need anchor lookup; skipped as before
             if (typeof placeDeco === 'function') {
               placeDeco(d.type, d.pi, d.x, true);
-              // Adjust z if needed
               var p = placed[placed.length - 1];
               if (p && d.z != null) p.group.position.z = d.z;
             }
           } catch (_) {}
         });
-        return placed.length > 0;
+        return true;                      // a known (even empty) case is not re-dressed
       } catch (_) { return false; }
     }
     /* Fresh mount: try to restore saved decorations, else dress for theme.
@@ -2773,6 +2789,123 @@
     }, 900);
     animate();
 
+    /* ---- the room: switch bookcase ----
+       Slides the current case out, swaps books + decorations, slides the new
+       one in. `dir` is +1 (next, moves left) / -1 (previous) / 0 (instant). */
+    function setCase(key) {
+      if (dead || key === caseKey) return;
+      loadingCase = true;
+      try {
+        cancelActiveDrag(); deselect();
+        clearDecos();
+        dressOn = false; preDress = null; dressedTheme = null;
+        caseKey = key;
+        if (!loadDecoLayout()) applyPreset(appTheme);
+      } finally { loadingCase = false; }
+      saveDecoLayout();
+      dressLabel();
+    }
+    /* ---- neighbour bookcases (phase 2: walk the room) ----
+       Light copies of the previous/next case stand beside the active one.
+       Walking = the camera glides to a neighbour, then the real scene swaps
+       in underneath and the camera snaps back to the origin. */
+    var CASE_GAP = SHELF_W + SIDE_T * 2 + 1.4;
+    var gliding = false, pendingShow = null;
+    var liteMats = {};
+    var nbrGroups = { prev: null, next: null };
+    function liteMat(css) {
+      var k = String(css || '#5a4a6a');
+      if (!liteMats[k]) liteMats[k] = new THREE.MeshStandardMaterial({
+        color: safeColor(THREE, k, '#5a4a6a').multiplyScalar(0.8), roughness: 0.8 });
+      return liteMats[k];
+    }
+    function disposeLiteGroup(g) {
+      if (!g) return;
+      scene.remove(g);
+      g.traverse(function (o) { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+    }
+    function buildLite(books, x0) {
+      var g = new THREE.Group(); g.position.x = x0;
+      function lb(w, h, d, mat, x, y, z) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z); g.add(m); return m;
+      }
+      LEVELS.forEach(function (top) { lb(SHELF_W, PLANK_T, PLANK_D, woodMat, 0, top - PLANK_T / 2, 0); });
+      lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, -(SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
+      lb(SIDE_T, TOP_Y - 0.3, PLANK_D, woodDark, (SHELF_W / 2 + SIDE_T / 2), (TOP_Y - 0.3) / 2, 0);
+      lb(SHELF_W + SIDE_T * 2, 0.3, PLANK_D, woodMat, 0, TOP_Y - 0.15, 0);
+      var bk = new THREE.Mesh(new THREE.PlaneGeometry(SHELF_W + SIDE_T * 2, TOP_Y), liteMat('#241a20'));
+      bk.position.set(0, TOP_Y / 2, WALL_Z); g.add(bk);
+      var order = [2, 1, 0], li = 0, startX = -SHELF_W / 2 + 0.35, x = startX;
+      (books || []).slice(0, MAX_BOOKS).forEach(function (b) {
+        if (!b) return;
+        var w = clampNum(b.spineW, 0.3, 0.72, 0.44), h = clampNum(b.spineH, 1.4, 2.7, 2.0);
+        while (li < 3 && x + w > startX + (SHELF_W - 0.7)) { li++; x = startX; }
+        if (li >= 3) return;
+        lb(w, h, 1.75, liteMat(b.spineC1), x + w / 2, LEVELS[order[li]] + h / 2, 0);
+        x += w + 0.025;
+      });
+      scene.add(g);
+      return g;
+    }
+    function setNeighbours(n) {
+      disposeLiteGroup(nbrGroups.prev); disposeLiteGroup(nbrGroups.next);
+      nbrGroups.prev = (n && n.prev) ? buildLite(n.prev, -CASE_GAP) : null;
+      nbrGroups.next = (n && n.next) ? buildLite(n.next, CASE_GAP) : null;
+      markDirty();
+    }
+    function showCase(key, books, dir, nbrs) {
+      if (dead) return;
+      if (gliding) { pendingShow = { key: key, books: books, nbrs: nbrs }; return; }
+      var cv = canvas;
+      var reduce = false;
+      try { reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
+      function swap() { setCase(key); setBooks(books); setNeighbours(nbrs); }
+      if (!dir || reduce || key === caseKey) { swap(); return; }
+      var d = dir > 0 ? 1 : -1;
+      var hasNbr = !!(d > 0 ? nbrGroups.next : nbrGroups.prev);
+      if (Math.abs(dir) === 1 && hasNbr) {
+        // glide: camera walks to the neighbouring case, then the scene swaps under it
+        gliding = true; cancelActiveDrag(); deselect();
+        var lastX = 0, dist = d * CASE_GAP;
+        tween(720, function (k) {
+          var e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+          var x = dist * e, dx = x - lastX; lastX = x;
+          camBase.x += dx; camTarget.x += dx; camera.position.x += dx;
+        }, function () {
+          if (dead) return;
+          swap();
+          camBase.x -= dist; camTarget.x -= dist; camera.position.x -= dist;
+          gliding = false;
+          markDirty();
+          if (pendingShow) { var pd = pendingShow; pendingShow = null; showCase(pd.key, pd.books, 0, pd.nbrs); }
+        });
+        return;
+      }
+      tween(150, function (k) {
+        cv.style.transform = 'translateX(' + (-d * easeOut(k) * 12) + '%)';
+        cv.style.opacity = String(1 - k);
+      }, function () {
+        if (dead) return;
+        swap();
+        tween(220, function (k) {
+          cv.style.transform = 'translateX(' + (d * (1 - easeOut(k)) * 12) + '%)';
+          cv.style.opacity = String(k);
+        }, function () { cv.style.transform = ''; cv.style.opacity = ''; });
+      });
+    }
+    /* Find on shelf: lift the book and let it settle. */
+    function highlightBook(id) {
+      var hit = null;
+      shelfBooks.forEach(function (sb) { if (sb.mesh.userData.bookId === id) hit = sb; });
+      if (!hit) return false;
+      var m = hit.mesh, y0 = m.position.y;
+      tween(900, function (k) { m.position.y = y0 + Math.sin(Math.PI * k) * 0.55; },
+        function () { m.position.y = y0; markDirty(); });
+      return true;
+    }
+    function currentCase() { return caseKey; }
+
     /* v455: synchronous snapshot for shelfies. Forces a render then reads the
        drawing buffer in the same task — no preserveDrawingBuffer cost. */
     function capture() {
@@ -2783,8 +2916,10 @@
       } catch (e) { return null; }
     }
 
+    if (opts.initialNeighbours) setNeighbours(opts.initialNeighbours);
     return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams,
-      setAppTheme: setAppTheme, unmount: unmount, capture: capture };
+      setAppTheme: setAppTheme, unmount: unmount, capture: capture,
+      showCase: showCase, highlightBook: highlightBook, currentCase: currentCase };
   }
 
   /* ============================== public API ============================== */
@@ -2805,7 +2940,8 @@
       }
       active = inst;
       return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams,
-        setAppTheme: inst.setAppTheme, unmount: unmount, capture: inst.capture };
+        setAppTheme: inst.setAppTheme, unmount: unmount, capture: inst.capture,
+        showCase: inst.showCase, highlightBook: inst.highlightBook, currentCase: inst.currentCase };
     });
   }
   function unmount() {
@@ -2831,7 +2967,11 @@
     return null;
   }
 
-  window.Shelf3D = { mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
+  function showCase(key, books, dir, nbrs) { if (active) active.showCase(key, books, dir, nbrs); }
+  function highlightBook(id) { return active ? active.highlightBook(id) : false; }
+  function currentCase() { return active ? active.currentCase() : null; }
+
+  window.Shelf3D = { showCase: showCase, highlightBook: highlightBook, currentCase: currentCase, mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
     setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture };
 
 })();

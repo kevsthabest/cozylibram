@@ -9,10 +9,76 @@
    - Tapping a 3D book opens the book modal (openDetail).
    - TBR/Reading/Read chips update the 3D scene via Shelf3D.setBooks().
    - WebGL unavailable (or THREE load failure) falls back to the 2.5D view.
-   - Decorations in 3D are session-only (the 2.5D decor system is separate).
-   - Performance: book count capped at 60 for the 3D scene. */
+   - Decorations in 3D persist per bookcase (the 2.5D decor system is separate).
+   - The room: a group with more than SHELF3D_MAX_BOOKS books continues onto
+     further bookcases. Each case holds 60 books and keeps its own decorations.
+     A case bar pages between cases, "Find" jumps to a book, "Arrange" changes
+     how the room is ordered (view only: the saved shelf order is untouched). */
 
-const SHELF3D_MAX_BOOKS = 60;
+const SHELF3D_MAX_BOOKS = 60;   // books per bookcase
+const SHELF3D_ARRANGE_KEY = 'cozylibram.s3d.arrange';
+const SHELF3D_ARRANGE_MODES = [
+  ['mine', 'As I placed them'], ['title', 'Title'], ['author', 'Author'], ['series', 'Series']
+];
+let _shelf3dCaseIdx = { tbr: 0, reading: 0, read: 0 };
+let _shelf3dKeysWired = false;
+
+function shelf3dArrangeMode() {
+  try {
+    const m = localStorage.getItem(SHELF3D_ARRANGE_KEY);
+    if (SHELF3D_ARRANGE_MODES.some(function (x) { return x[0] === m; })) return m;
+  } catch (e) {}
+  return 'mine';
+}
+function shelf3dSetArrangeMode(m) {
+  try { localStorage.setItem(SHELF3D_ARRANGE_KEY, m); } catch (e) {}
+}
+function _s3dSortKey(str) {
+  return String(str || '').toLowerCase().replace(/^(the|a|an)\s+/, '').trim();
+}
+function _s3dAuthor(b) {
+  if (b.authors && b.authors.length) return String(b.authors[0] || '');
+  return String(b.author || '');
+}
+// Re-order a list of books for the room. Never mutates the input.
+function shelf3dArrange(books, mode) {
+  const list = (books || []).slice();
+  const cmp = function (a, b) { return a < b ? -1 : a > b ? 1 : 0; };
+  if (mode === 'title') {
+    list.sort(function (a, b) { return cmp(_s3dSortKey(a.title), _s3dSortKey(b.title)); });
+  } else if (mode === 'author') {
+    list.sort(function (a, b) {
+      return cmp(_s3dAuthor(a).toLowerCase(), _s3dAuthor(b).toLowerCase()) ||
+        cmp(_s3dSortKey(a.title), _s3dSortKey(b.title));
+    });
+  } else if (mode === 'series') {
+    list.sort(function (a, b) {
+      const sa = a.series && a.series.name ? String(a.series.name).toLowerCase() : '';
+      const sb = b.series && b.series.name ? String(b.series.name).toLowerCase() : '';
+      if (sa && !sb) return -1;
+      if (!sa && sb) return 1;
+      if (sa !== sb) return cmp(sa, sb);
+      const pa = Number(a.series && a.series.position) || 0;
+      const pb = Number(b.series && b.series.position) || 0;
+      return (pa - pb) || cmp(_s3dSortKey(a.title), _s3dSortKey(b.title));
+    });
+  }
+  return list;
+}
+// Split a list into bookcases of `size` books. Always returns at least one (empty) case.
+function shelf3dCases(books, size) {
+  const n = Math.max(1, size || SHELF3D_MAX_BOOKS);
+  const out = [];
+  for (let i = 0; i < (books || []).length; i += n) out.push(books.slice(i, i + n));
+  if (!out.length) out.push([]);
+  return out;
+}
+function shelf3dCaseKey(group, idx) { return group + ':' + idx; }
+// The arranged books for the current group, split into cases.
+function shelf3dRoom() {
+  const all = shelf3dArrange((typeof shelfBooks === 'function') ? shelfBooks() : [], shelf3dArrangeMode());
+  return { all: all, cases: shelf3dCases(all, SHELF3D_MAX_BOOKS) };
+}
 
 // Local mount-state tracking (robust even if the engine's `mounted` flag
 // is missing or the engine is still loading).
@@ -107,7 +173,7 @@ function shelfUnmount3D() {
 // Map real books to the 3D engine's book spec. Uses the deterministic
 // 2.5D spine palette so colors stay consistent between views.
 function shelfBooks3D(books) {
-  return (books || []).slice(0, SHELF3D_MAX_BOOKS).map(function (b) {
+  return (books || []).map(function (b) {
     const spec = (typeof shelfSpineSpec === 'function')
       ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e', w: 36, h: 190 };
     return {
@@ -164,10 +230,16 @@ function renderShelf3D() {
       return '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +
         SHELF_GROUP_LABEL[g] + ' <span class="n">' + counts[g] + '</span></button>';
     }).join('') + '</div>' +
+    '<div class="s3d-casebar" id="s3dCaseBar">' +
+      '<button class="cb-nav" id="cbPrev" aria-label="Previous bookcase">&#8249;</button>' +
+      '<div class="cb-mid"><span class="cb-label" id="cbLabel"></span><span class="cb-dots" id="cbDots"></span></div>' +
+      '<button class="cb-nav" id="cbNext" aria-label="Next bookcase">&#8250;</button>' +
+      '<button class="cb-tool" id="cbFind">Find</button>' +
+      '<button class="cb-tool" id="cbArrange">Arrange</button>' +
+    '</div>' +
+    '<div class="s3d-sheet" id="s3dSheet" hidden></div>' +
     '<div id="shelf3d"><div class="s3d-loading"><p>Loading 3D shelf…</p></div></div>' +
-    (shown.length > SHELF3D_MAX_BOOKS
-      ? '<div class="sv-hint">Showing first ' + SHELF3D_MAX_BOOKS + ' books in 3D</div>'
-      : '<div class="sv-hint">Tap a book to open it &middot; drag decorations from the inventory</div>') +
+    '<div class="sv-hint">Tap a book to open it &middot; swipe the case bar or use &#8249; &#8250; to walk the room</div>' +
     '</div>'
   );
 
@@ -220,15 +292,10 @@ function renderShelf3D() {
       document.querySelectorAll('.sv-chip').forEach(function (c) {
         c.classList.toggle('active', c === ch);
       });
-      try {
-        if (_shelf3dMounted && typeof Shelf3D !== 'undefined' && Shelf3D) {
-          Shelf3D.setBooks(shelfBooks3D(
-            (typeof shelfBooks === 'function') ? shelfBooks() : []
-          ));
-        }
-      } catch (e) {}
+      shelf3dGoCase(_shelf3dCaseIdx[shelfGroup] || 0, 0);
     });
   });
+  wireCaseBar();
 
   // Mount the 3D scene.
   const container = document.getElementById('shelf3d');
@@ -243,11 +310,14 @@ function renderShelf3D() {
     onBookTap: function (id) {
       if (typeof openDetail === 'function') openDetail(id, null);
     },
-    initialBooks: shelfBooks3D(shown),
+    initialBooks: shelfBooks3D(shelf3dRoom().cases[Math.min(_shelf3dCaseIdx[shelfGroup] || 0, shelf3dRoom().cases.length - 1)]),
+    initialNeighbours: (function () { const r = shelf3dRoom(); return shelf3dNeighbours(r, Math.min(_shelf3dCaseIdx[shelfGroup] || 0, r.cases.length - 1)); })(),
+    caseKey: shelf3dCaseKey(shelfGroup, Math.min(_shelf3dCaseIdx[shelfGroup] || 0, shelf3dRoom().cases.length - 1)),
     appTheme: (typeof getTheme === 'function') ? getTheme() : 'dark',
   }).then(function () {
     _shelf3dMounted = true;
     shelf3DApplyTheme();
+    shelf3dUpdateBar();
     // v414: remove the loading overlay — it was covering the canvas and intercepting taps.
     var loading = container.querySelector('.s3d-loading');
     if (loading) loading.remove();
@@ -258,4 +328,141 @@ function renderShelf3D() {
     _shelf3dWebGLFailed = true;
     renderShelf();
   });
+}
+
+/* ---------- the room: case bar, find, arrange ---------- */
+function shelf3dNeighbours(room, i) {
+  return {
+    prev: i > 0 ? shelfBooks3D(room.cases[i - 1]) : null,
+    next: i < room.cases.length - 1 ? shelfBooks3D(room.cases[i + 1]) : null
+  };
+}
+function shelf3dGoCase(idx, dir, thenFind) {
+  const room = shelf3dRoom();
+  const i = Math.max(0, Math.min(room.cases.length - 1, idx));
+  // |dir| > 1 means a far jump (find / dots): slide instead of gliding past cases.
+  if (dir && Math.abs(i - (_shelf3dCaseIdx[shelfGroup] || 0)) > 1) dir = dir > 0 ? 2 : -2;
+  _shelf3dCaseIdx[shelfGroup] = i;
+  try {
+    if (_shelf3dMounted && typeof Shelf3D !== 'undefined' && Shelf3D) {
+      Shelf3D.showCase(shelf3dCaseKey(shelfGroup, i), shelfBooks3D(room.cases[i]), dir || 0, shelf3dNeighbours(room, i));
+      if (thenFind != null) setTimeout(function () { try { Shelf3D.highlightBook(thenFind); } catch (e) {} }, dir ? 450 : 120);
+    }
+  } catch (e) {}
+  shelf3dUpdateBar();
+}
+function shelf3dUpdateBar() {
+  const bar = document.getElementById('s3dCaseBar');
+  if (!bar) return;
+  const room = shelf3dRoom();
+  const n = room.cases.length;
+  const i = Math.min(_shelf3dCaseIdx[shelfGroup] || 0, n - 1);
+  const first = i * SHELF3D_MAX_BOOKS + 1;
+  const last = i * SHELF3D_MAX_BOOKS + room.cases[i].length;
+  const label = document.getElementById('cbLabel');
+  if (label) {
+    label.textContent = n > 1 ? 'Case ' + (i + 1) + ' of ' + n
+      : (room.all.length ? 'Your bookcase' : 'An empty bookcase, waiting');
+    label.title = room.all.length ? 'Books ' + first + '\u2013' + last + ' of ' + room.all.length : '';
+  }
+  const dots = document.getElementById('cbDots');
+  if (dots) {
+    dots.innerHTML = n > 1 ? room.cases.map(function (_, k) {
+      return '<button class="cb-dot' + (k === i ? ' on' : '') + '" data-i="' + k + '" aria-label="Go to case ' + (k + 1) + '"></button>';
+    }).join('') : '';
+  }
+  const prev = document.getElementById('cbPrev'), next = document.getElementById('cbNext');
+  if (prev) { prev.hidden = n < 2; prev.disabled = i <= 0; }
+  if (next) { next.hidden = n < 2; next.disabled = i >= n - 1; }
+}
+function shelf3dRenderSheet(kind) {
+  const sheet = document.getElementById('s3dSheet');
+  if (!sheet) return;
+  if (!kind || sheet.dataset.kind === kind && !sheet.hidden) { sheet.hidden = true; sheet.dataset.kind = ''; return; }
+  sheet.dataset.kind = kind;
+  sheet.hidden = false;
+  if (kind === 'arrange') {
+    const cur = shelf3dArrangeMode();
+    sheet.innerHTML = '<p class="sh-title">Arrange this room</p>' +
+      SHELF3D_ARRANGE_MODES.map(function (m) {
+        return '<button class="sh-opt' + (m[0] === cur ? ' on' : '') + '" data-m="' + m[0] + '">' + m[1] + '</button>';
+      }).join('') +
+      '<p class="sh-note">Only changes how the room looks. Your own shelf order is kept.</p>';
+    sheet.querySelectorAll('.sh-opt').forEach(function (b) {
+      b.addEventListener('click', function () {
+        shelf3dSetArrangeMode(b.dataset.m);
+        _shelf3dCaseIdx[shelfGroup] = 0;
+        shelf3dRenderSheet(null);
+        shelf3dGoCase(0, 0);
+      });
+    });
+  } else {
+    sheet.innerHTML = '<input class="sh-find" id="s3dFindInput" type="search" placeholder="Find a book on these shelves…" autocomplete="off">' +
+      '<div class="sh-results" id="s3dFindResults"></div>';
+    const input = document.getElementById('s3dFindInput');
+    const out = document.getElementById('s3dFindResults');
+    const draw = function () {
+      const q = input.value.trim().toLowerCase();
+      const room = shelf3dRoom();
+      if (!q) { out.innerHTML = ''; return; }
+      const hits = [];
+      room.all.forEach(function (b, idx) {
+        const hay = (String(b.title || '') + ' ' + _s3dAuthor(b)).toLowerCase();
+        if (hay.indexOf(q) >= 0 && hits.length < 8) hits.push({ b: b, idx: idx });
+      });
+      out.innerHTML = hits.length ? hits.map(function (h) {
+        return '<button class="sh-hit" data-id="' + esc(h.b.id) + '" data-i="' + Math.floor(h.idx / SHELF3D_MAX_BOOKS) + '">' +
+          esc(h.b.title || 'Untitled') + '<small>' + esc(_s3dAuthor(h.b)) + ' · case ' + (Math.floor(h.idx / SHELF3D_MAX_BOOKS) + 1) + '</small></button>';
+      }).join('') : '<p class="sh-note">Nothing on these shelves matches. Try another group above.</p>';
+      out.querySelectorAll('.sh-hit').forEach(function (hb) {
+        hb.addEventListener('click', function () {
+          const target = parseInt(hb.dataset.i, 10) || 0;
+          const dir = target === (_shelf3dCaseIdx[shelfGroup] || 0) ? 0 : (target > (_shelf3dCaseIdx[shelfGroup] || 0) ? 1 : -1);
+          shelf3dRenderSheet(null);
+          const idv = hb.dataset.id;
+          const real = (typeof library !== 'undefined' ? library : []).find(function (x) { return String(x.id) === idv; });
+          shelf3dGoCase(target, dir, real ? real.id : idv);
+        });
+      });
+    };
+    input.addEventListener('input', draw);
+    setTimeout(function () { try { input.focus(); } catch (e) {} }, 30);
+  }
+}
+function wireCaseBar() {
+  const q = function (id) { return document.getElementById(id); };
+  const step = function (d) { shelf3dGoCase((_shelf3dCaseIdx[shelfGroup] || 0) + d, d); };
+  if (q('cbPrev')) q('cbPrev').addEventListener('click', function () { step(-1); });
+  if (q('cbNext')) q('cbNext').addEventListener('click', function () { step(1); });
+  if (q('cbFind')) q('cbFind').addEventListener('click', function () { shelf3dRenderSheet('find'); });
+  if (q('cbArrange')) q('cbArrange').addEventListener('click', function () { shelf3dRenderSheet('arrange'); });
+  const dots = q('cbDots');
+  if (dots) dots.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.cb-dot');
+    if (!b) return;
+    const t = parseInt(b.dataset.i, 10) || 0, cur = _shelf3dCaseIdx[shelfGroup] || 0;
+    if (t !== cur) shelf3dGoCase(t, t > cur ? 1 : -1);
+  });
+  // Swipe the case bar to walk the room.
+  const bar = q('s3dCaseBar');
+  if (bar) {
+    let x0 = null;
+    bar.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    bar.addEventListener('touchend', function (e) {
+      if (x0 == null) return;
+      const dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  }
+  if (!_shelf3dKeysWired) {
+    _shelf3dKeysWired = true;
+    document.addEventListener('keydown', function (e) {
+      if (!_shelf3dMounted || !document.getElementById('s3dCaseBar')) return;
+      const t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight') shelf3dGoCase((_shelf3dCaseIdx[shelfGroup] || 0) + 1, 1);
+      else if (e.key === 'ArrowLeft') shelf3dGoCase((_shelf3dCaseIdx[shelfGroup] || 0) - 1, -1);
+    });
+  }
+  shelf3dUpdateBar();
 }
