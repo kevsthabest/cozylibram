@@ -31,8 +31,10 @@ function spineHTML(b) {
   // v186: foil redesign — near-black cover-tinted base, gold-foil title,
   // double hairline rules top and bottom.
   // v187: read badge — a gold seal on the spines of finished books.
+  // v510: the seal retires; the status bookmark hangs as a ribbon tail at
+  // the spine foot instead (read state only, same semantics as the seal).
   const readBadge = b.status === 'read'
-    ? '<span class="spine-read" title="Read" aria-label="Read">' + icon('check') + '</span>' : '';
+    ? '<span class="spine-read" title="Read" aria-label="Read">' + icon('bmread') + '</span>' : '';
   return '<div class="spine" data-id="' + b.id + '" title="' + esc(b.title) + '"' +
     ' style="--sc:' + c + ';width:' + w + 'px;height:' + h + 'px">' +
     '<span class="spine-rule" aria-hidden="true"></span><span class="spine-title">' + esc(b.title) + '</span>' +

@@ -48,9 +48,20 @@ ok('tile: favorite heart on tile too',
   /card-fav/.test(run(`bookTile(${JSON.stringify(mk({ favorite: true }))}, 0)`)));
 
 // v188: read badge — gold seal on finished books' tiles only
-ok('tile: read seal on read tile', /class="tile-read"/.test(tileRead));
-ok('tile: no read seal on tbr tile', !/tile-read/.test(tileTbr));
-ok('tile: no read seal on reading tile', !/tile-read/.test(tileProg));
+// v510: the seal + TBR/DNF text badges retire for the bookmark chip family —
+// every state carries its bookmark bottom-right; the % stays a text pill.
+ok('tile: read bookmark chip on read tile', /tile-badge st-read/.test(tileRead) && /aria-label="Read"/.test(tileRead));
+ok('tile: tbr bookmark chip on tbr tile', /tile-badge st-tbr/.test(tileTbr) && /aria-label="To read"/.test(tileTbr));
+ok('tile: reading bookmark chip on reading tile', /tile-badge st-reading/.test(tileProg) && /aria-label="Reading"/.test(tileProg));
+ok('tile: reading % survives as a pill beside the chip', /bt-pct">25%/.test(tileProg));
+const tileDnf = run(`bookTile(${JSON.stringify(mk({ status: 'dnf' }))}, 0)`);
+ok('tile: dnf bookmark chip on dnf tile', /tile-badge st-dnf/.test(tileDnf) && /aria-label="Did not finish"/.test(tileDnf));
+ok('tile: no gold seal remains', !/tile-read/.test(tileRead + tileTbr + tileProg + tileDnf));
+ok('tile: no TBR/DNF text badges remain', !/bt-badge/.test(tileRead + tileTbr + tileProg + tileDnf)
+  && !/>TBR</.test(tileTbr) && !/>DNF</.test(tileDnf));
+ok('tile: favorite chip carries the Heart in a Book glyph',
+  /card-fav/.test(run(`bookTile(${JSON.stringify(mk({ favorite: true }))}, 0)`))
+  && run(`bookTile(${JSON.stringify(mk({ favorite: true }))}, 0)`).includes('M12 15.1'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -43,7 +43,11 @@ ok('foil spines carry two hairline rules',
   qa('.fav-shelf .spine').every(s => s.querySelectorAll('.spine-rule').length === 2));
 ok('no legacy single band remains', qa('.fav-shelf .spine-band').length === 0);
 // v187 read badge: gold seal on finished books' spines only
-ok('read spines carry the read seal', qa('.fav-shelf .spine-read').length === 2);
+// v510: the seal retires — the read bookmark hangs as a ribbon at the foot
+ok('read spines carry the read bookmark ribbon', qa('.fav-shelf .spine-read').length === 2);
+ok('spine ribbon is the bookmark glyph, not the old check seal',
+  qa('.fav-shelf .spine-read')[0].innerHTML.includes('M6.5 3.4')
+  && !qa('.fav-shelf .spine-read')[0].innerHTML.includes('M8.3 12.4'));
 runInWindow(`window.__tbrSpine = spineHTML({ id: 'tbr1', title: 'TBR Book', authors: ['Jane Doe'],
   pageCount: 300, status: 'tbr' });`);
 ok('unread spine has no read seal', !String(window.__tbrSpine).includes('spine-read'));
