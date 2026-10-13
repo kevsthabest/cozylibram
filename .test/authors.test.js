@@ -77,7 +77,7 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const before = window.eval(`library.length`);
   qa('#a-missing [data-madd]')[0].click();
   ok('wishlist button adds the missing book', window.eval(`library.length`) === before + 1 &&
-    window.eval(`library[0].owned`) === 'tobuy' && window.eval(`library[0].status`) === 'tbr');
+    window.eval(`library[0].owned`) === 'tobuy' && window.eval(`library[0].status`) === 'wishlist');
   ok('row marked as in wishlist after add', q('#a-missing .c-added') && q('#a-missing .c-added').textContent.includes('In wishlist'));
 
   // back button returns to the authors list
