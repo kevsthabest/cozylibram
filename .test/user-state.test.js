@@ -24,10 +24,10 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {} };
   const fake = {
-    rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, updated_at }
+    rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
     failSelect: false,
     throwFrom: false,
@@ -86,12 +86,17 @@ function clearState() {
         'cozylibram.dnaSurveyOff', 'cozylibram.dnaNudgesOff', 'spicyshelves.onboarded',
         'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
         'cozylibram.warningPrefs.v1',
+        'shelfViewMode',
+        'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
+        'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
         'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases'].includes(k) ||
       k.indexOf('spicyshelves.upnext.v1') === 0 ||
+      k.indexOf('spicyshelves.shelforder.v1') === 0 ||
       k.indexOf('seasonThemeNudge:') === 0 || k.indexOf('wrapped-banner-') === 0)) doomed.push(k);
   }
   doomed.forEach(k => ls.removeItem(k));
-  runInWindow('try { upNext = []; } catch (e) {} try { localUid = null; } catch (e) {}');
+  runInWindow('try { upNext = []; } catch (e) {} try { localUid = null; } catch (e) {}' +
+    ' try { shelfOrderCache = null; } catch (e) {}');
 }
 const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@example.com' };");
 // Point the app's per-account partition + in-memory Up Next queue at a
@@ -102,6 +107,19 @@ const probeQueue = () => {
   runInWindow('window.__probeUpNext = (typeof upNext !== "undefined" && Array.isArray(upNext)) ? upNext.slice() : null;');
   return window.__probeUpNext;
 };
+// v521: set / probe the 2D shelf order doc through the app's own write
+// path (saveShelfOrder + cache), the same pair js/229's apply uses.
+const setShelfDoc = (doc) => runInWindow(
+  'saveShelfOrder(' + JSON.stringify(doc) + '); shelfOrderCache = ' + JSON.stringify(doc) + ';');
+const probeShelfDoc = () => {
+  runInWindow('window.__probeShelf = JSON.parse(JSON.stringify(shelfOrder()));');
+  return window.__probeShelf;
+};
+// Key-order-insensitive stringify for doc comparisons.
+const canon = (o) => JSON.stringify(o, (k, v) =>
+  (v && typeof v === 'object' && !Array.isArray(v))
+    ? Object.keys(v).sort().reduce((a, key) => { a[key] = v[key]; return a; }, {})
+    : v);
 
 (async () => {
   /* ---------- migration + registration shape ---------- */
@@ -122,9 +140,9 @@ const probeQueue = () => {
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v520',
-    /APP_VERSION = 'v520'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v520"));
+  ok('version pairing is v521',
+    /APP_VERSION = 'v521'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v521"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -139,6 +157,15 @@ const probeQueue = () => {
   ok('v520 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql520) && !/alter table (public\.)?profiles/.test(sql520));
 
+  /* ---------- v521 shelf migration shape ---------- */
+  const sql521Path = path.join(ROOT, 'supabase/migrations/v521_user_state_shelf.sql');
+  ok('v521 migration file exists', fs.existsSync(sql521Path));
+  const sql521 = fs.readFileSync(sql521Path, 'utf8');
+  ok('v521 adds shelf_state jsonb with {} default',
+    /add column if not exists shelf_state jsonb not null default '\{\}'::jsonb/.test(sql521));
+  ok('v521 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql521) && !/alter table (public\.)?profiles/.test(sql521));
+
   /* ---------- collect: scope is exact ---------- */
   clearState();
   ls.setItem('theme', 'dark');
@@ -147,7 +174,7 @@ const probeQueue = () => {
   ls.setItem('wrapped-banner-2026', 'x');
   ls.setItem('spicyshelves.sortby', 'title');       // roams (User override)
   ls.setItem('spicyshelves.seriesfilter', 'all');   // roams (User override)
-  ls.setItem('shelfViewMode', 'grid');              // stays local (shelf state, follow-on)
+  ls.setItem('shelfViewMode', 'grid');              // not a settings key (rides the v521 shelf section)
   ls.setItem('spicyshelves.setgroups', '{}');       // stays local (navigation transient)
   ls.setItem('cozylibram.warningPrefs.v1', '{"excluded":[],"prominent":[],"detail":"gentle"}'); // v520 section, NOT a settings key
   ls.setItem('spicyshelves.auto_releases', '{"at":1,"list":[]}'); // v520 section, NOT a settings key
@@ -162,6 +189,10 @@ const probeQueue = () => {
     !('shelfViewMode' in collected) && !('spicyshelves.setgroups' in collected));
   ok('settings snapshot stays v518-shaped (section keys never join it)',
     !('cozylibram.warningPrefs.v1' in collected) && !('spicyshelves.auto_releases' in collected));
+  const shelfCollected = window.userStateCollectShelf();
+  ok('shelf collect scope is exact (viewmode only; no transients, no settings keys)',
+    canon(Object.keys(shelfCollected.values).sort()) === '["viewmode"]' &&
+    shelfCollected.values.viewmode === 'grid');
 
   /* ---------- pull applies newer server state, incl. restyle ---------- */
   const fake = makeFake();
@@ -458,6 +489,172 @@ const probeQueue = () => {
   const pull9b = await window.userStatePull();
   ok('missing section columns: settings pull still applies',
     pull9b === true && ls.getItem('theme') === 'velvet');
+
+  /* ---------- v521: shelf state seeds, adopts, newer wins ---------- */
+  const fakeS1 = makeFake();
+  window.__sbStub = fakeS1;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []); // localUid = user-1 (the shelforder partition)
+  const orderDoc1 = {
+    layout: 'series', format: 'compact', season: 'spring',
+    tbr: ['b2', 'b1'], reading: ['b7'],
+    decor: { tbr: [{ d: 'plant', at: 1 }, { d: 'candle', at: 3 }] },
+  };
+  const decoDoc1 = JSON.stringify({ v: 2, cases: {
+    'tbr:0': [{ type: 'plant', pi: 0, x: 1.5, z: -0.25, room: false }],
+    'read:1': [{ type: 'mug', pi: 2, x: -2, z: 0.5, room: false }],
+  } });
+  setShelfDoc(orderDoc1);
+  ls.setItem('cozylibram.s3d.deco.v2', decoDoc1);
+  ls.setItem('cozylibram.s3d.dressed.v1', 'velvet');
+  ls.setItem('cozylibram.s3d.arrange', 'colour');
+  ls.setItem('cozylibram.s3d.spines', 'classic');
+  ls.setItem('shelfViewMode', '2d');
+  await window.userStatePull();
+  const shelfSeeded = await window.userStatePush();
+  const shelfRow = fakeS1.rows.get('user-1') || {};
+  ok('shelf state seeds into its own column',
+    shelfSeeded === true && !!shelfRow.shelf_state && shelfRow.shelf_state._at > 0);
+  ok('shelf seed carries every piece',
+    !!shelfRow.shelf_state &&
+    canon(JSON.parse(shelfRow.shelf_state.values.order)) === canon(orderDoc1) &&
+    shelfRow.shelf_state.values.deco === decoDoc1 &&
+    shelfRow.shelf_state.values.dressed === 'velvet' &&
+    shelfRow.shelf_state.values.arrange === 'colour' &&
+    shelfRow.shelf_state.values.spines === 'classic' &&
+    shelfRow.shelf_state.values.viewmode === '2d');
+  // second device adopts: order doc lands via the app write path, the
+  // localStorage pieces land as raw strings
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  await window.userStatePull();
+  ok('shelf state adopts on a second device (order doc via saveShelfOrder + cache)',
+    canon(probeShelfDoc()) === canon(orderDoc1) &&
+    ls.getItem('spicyshelves.shelforder.v1.user-1') === JSON.stringify(orderDoc1));
+  ok('shelf state adopts on a second device (localStorage pieces)',
+    ls.getItem('cozylibram.s3d.deco.v2') === decoDoc1 &&
+    ls.getItem('cozylibram.s3d.dressed.v1') === 'velvet' &&
+    ls.getItem('cozylibram.s3d.arrange') === 'colour' &&
+    ls.getItem('cozylibram.s3d.spines') === 'classic' &&
+    ls.getItem('shelfViewMode') === '2d');
+  const shelfNoop = await window.userStatePush();
+  ok('adopted shelf state does not push back', shelfNoop === false);
+  // older server section is ignored
+  const rowS1 = fakeS1.rows.get('user-1');
+  rowS1.shelf_state = { _at: 1, values: { viewmode: '3d' } };
+  await window.userStatePull();
+  ok('older shelf state is ignored', ls.getItem('shelfViewMode') === '2d');
+  // newer applies with full-snapshot semantics: pieces absent from the
+  // newer snapshot are cleared locally
+  const orderDoc2 = { layout: 'manual', tbr: ['b9'] };
+  rowS1.shelf_state = { _at: Date.now() + 100000, values: {
+    order: JSON.stringify(orderDoc2), viewmode: '3d',
+  } };
+  await window.userStatePull();
+  ok('newer shelf state applies; absent pieces are cleared',
+    canon(probeShelfDoc()) === canon(orderDoc2) &&
+    ls.getItem('shelfViewMode') === '3d' &&
+    ls.getItem('cozylibram.s3d.deco.v2') === null &&
+    ls.getItem('cozylibram.s3d.dressed.v1') === null &&
+    ls.getItem('cozylibram.s3d.arrange') === null &&
+    ls.getItem('cozylibram.s3d.spines') === null);
+  // a malformed deco piece never wipes good local decorations, while
+  // the well-formed pieces of the same snapshot still apply
+  ls.setItem('cozylibram.s3d.deco.v2', decoDoc1);
+  rowS1.shelf_state = { _at: Date.now() + 200000, values: {
+    order: JSON.stringify(orderDoc2),
+    deco: '{"v":1,"decorations":[]}',
+    viewmode: '2d',
+  } };
+  await window.userStatePull();
+  ok('malformed deco piece is ignored; sibling pieces still apply',
+    ls.getItem('cozylibram.s3d.deco.v2') === decoDoc1 &&
+    ls.getItem('shelfViewMode') === '2d');
+
+  /* ---------- v521: shelf state never leaks across accounts ---------- */
+  const fakeS2 = makeFake();
+  window.__sbStub = fakeS2;
+  clearState();
+  setQueue('user-1', []);
+  setShelfDoc(orderDoc1);
+  ls.setItem('cozylibram.s3d.deco.v2', decoDoc1);
+  ls.setItem('shelfViewMode', '2d');
+  ls.setItem('cozylibram.userstate.owner', 'user-1'); // device last synced by user-1
+  setUser('user-2');
+  await window.userStatePull();
+  const shelfLeak = await window.userStatePush();
+  ok('shelf state: no seed push of another account\'s values',
+    shelfLeak === false && fakeS2.upserts.length === 0 && !fakeS2.rows.has('user-2'));
+  ls.setItem('shelfViewMode', '3d'); // a change made under user-2
+  const shelfOwn = await window.userStatePush();
+  ok('shelf state: a change under the new account pushes to its own row only',
+    shelfOwn === true && !!fakeS2.rows.get('user-2') &&
+    fakeS2.rows.get('user-2').shelf_state.values.viewmode === '3d' &&
+    !fakeS2.rows.has('user-1'));
+
+  /* ---------- v521: large shelf payload round-trips ---------- */
+  const fakeS3 = makeFake();
+  window.__sbStub = fakeS3;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  const bigOrder = { layout: 'manual', format: 'standard', season: 'spring',
+    decor: { tbr: [{ d: 'plant', at: 5 }, { d: 'candle', at: 9 }] } };
+  for (const g of ['tbr', 'reading', 'read']) {
+    bigOrder[g] = [];
+    for (let i = 0; i < 300; i++) bigOrder[g].push('bk-' + g + '-' + i);
+  }
+  const bigDecoDoc = { v: 2, cases: {} };
+  for (let c = 0; c < 24; c++) {
+    const list = [];
+    for (let i = 0; i < 12; i++) list.push({ type: 'plant', pi: i, x: 1.25 + i, z: -0.5, room: false });
+    bigDecoDoc.cases['read:' + c] = list;
+  }
+  const bigDeco = JSON.stringify(bigDecoDoc);
+  setShelfDoc(bigOrder);
+  ls.setItem('cozylibram.s3d.deco.v2', bigDeco);
+  ls.setItem('shelfViewMode', '3d');
+  await window.userStatePull();
+  const bigSeeded = await window.userStatePush();
+  const bigRow = fakeS3.rows.get('user-1') || {};
+  const bigPayloadBytes = bigRow.shelf_state ? JSON.stringify(bigRow.shelf_state).length : 0;
+  ok('large shelf payload seeds (order 900 ids + 24 cases x 12 decorations)',
+    bigSeeded === true && bigPayloadBytes > 20000);
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  await window.userStatePull();
+  ok('large shelf payload adopts intact on a second device',
+    canon(probeShelfDoc()) === canon(bigOrder) &&
+    ls.getItem('cozylibram.s3d.deco.v2') === bigDeco &&
+    ls.getItem('shelfViewMode') === '3d');
+  const bigNoop = await window.userStatePush();
+  ok('large adopted payload is hash-stable (no push-back)', bigNoop === false);
+
+  /* ---------- v521: pre-migration database fails open for shelf ---------- */
+  const fakeS4 = makeFake();
+  fakeS4.missingColumns = true;
+  window.__sbStub = fakeS4;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ls.setItem('theme', 'dark');
+  setShelfDoc(orderDoc1);
+  ls.setItem('cozylibram.s3d.deco.v2', decoDoc1);
+  let threwS4 = false, pullS4 = null;
+  try { pullS4 = await window.userStatePull(); } catch (e) { threwS4 = true; }
+  ok('missing shelf column: pull fails open, local shelf state untouched',
+    !threwS4 && pullS4 === false &&
+    canon(probeShelfDoc()) === canon(orderDoc1) &&
+    ls.getItem('cozylibram.s3d.deco.v2') === decoDoc1);
+  const pushS4 = await window.userStatePush();
+  const rowS4 = fakeS4.rows.get('user-1') || {};
+  ok('missing shelf column: settings still push; shelf simply stays local',
+    pushS4 === true && !!rowS4.settings && rowS4.settings.values.theme === 'dark' &&
+    !('shelf_state' in rowS4) &&
+    canon(probeShelfDoc()) === canon(orderDoc1));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
