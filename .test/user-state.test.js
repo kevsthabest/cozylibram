@@ -24,30 +24,47 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {} };
   const fake = {
-    rows: new Map(), // user_id -> { user_id, settings, updated_at }
+    rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, updated_at }
     upserts: [],
     failSelect: false,
     throwFrom: false,
+    missingColumns: false, // v520: simulate a pre-sections database (columns absent)
     from(table) {
       if (table !== 'user_state') throw new Error('unexpected table: ' + table);
       if (fake.throwFrom) throw new Error('client exploded');
       return {
-        select() {
+        select(cols) {
+          const wanted = String(cols || 'settings').split(',').map(s => s.trim());
           const filters = {};
           const b = {
             eq(col, val) { filters[col] = val; return b; },
             maybeSingle: async () => {
               if (fake.failSelect) return { data: null, error: new Error('network down') };
+              const missing = wanted.find(c => SECTION_COLS.includes(c));
+              if (fake.missingColumns && missing) {
+                return { data: null, error: { code: '42703', message: 'column user_state.' + missing + ' does not exist' } };
+              }
               const row = fake.rows.get(filters.user_id) || null;
-              return { data: row ? { settings: row.settings } : null, error: null };
+              if (!row) return { data: null, error: null };
+              const out = {};
+              for (const c of wanted) out[c] = (c in row) ? row[c] : COL_DEFAULTS[c];
+              return { data: out, error: null };
             },
           };
           return b;
         },
         upsert: async (row) => {
+          const badCol = SECTION_COLS.find(c => c in row);
+          if (fake.missingColumns && badCol) {
+            return { error: { code: '42703', message: 'column user_state.' + badCol + ' does not exist' } };
+          }
           fake.upserts.push(row);
-          fake.rows.set(row.user_id, Object.assign({}, row));
+          // PostgREST upsert merges into the existing row: columns not in
+          // the payload keep their stored values.
+          fake.rows.set(row.user_id, Object.assign({}, fake.rows.get(row.user_id) || {}, row));
           return { error: null };
         },
       };
@@ -56,8 +73,9 @@ function makeFake() {
   return fake;
 }
 
-// Wipe every key the module can touch (in-scope settings + bookkeeping),
-// simulating a fresh device or a new scenario.
+// Wipe every key the module can touch (in-scope settings, the v520
+// section keys, and bookkeeping), simulating a fresh device or a new
+// scenario. Also resets the in-window Up Next queue + account partition.
 function clearState() {
   const doomed = [];
   for (let i = 0; i < ls.length; i++) {
@@ -66,12 +84,24 @@ function clearState() {
       ['theme', 'accent', 'spicyshelves.animation', 'spicyshelves.favstyle',
         'pshareStyle', 'portraitShareV1', 'cozylibram.tagline', 'cl_hide_spoilers',
         'cozylibram.dnaSurveyOff', 'cozylibram.dnaNudgesOff', 'spicyshelves.onboarded',
-        'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter'].includes(k) ||
+        'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
+        'cozylibram.warningPrefs.v1',
+        'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases'].includes(k) ||
+      k.indexOf('spicyshelves.upnext.v1') === 0 ||
       k.indexOf('seasonThemeNudge:') === 0 || k.indexOf('wrapped-banner-') === 0)) doomed.push(k);
   }
   doomed.forEach(k => ls.removeItem(k));
+  runInWindow('try { upNext = []; } catch (e) {} try { localUid = null; } catch (e) {}');
 }
 const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@example.com' };");
+// Point the app's per-account partition + in-memory Up Next queue at a
+// scenario state (what setLocalUser would have established at sign-in).
+const setQueue = (uid, arr) => runInWindow(
+  'localUid = ' + (uid ? "'" + uid + "'" : 'null') + '; upNext = ' + JSON.stringify(arr) + ';');
+const probeQueue = () => {
+  runInWindow('window.__probeUpNext = (typeof upNext !== "undefined" && Array.isArray(upNext)) ? upNext.slice() : null;');
+  return window.__probeUpNext;
+};
 
 (async () => {
   /* ---------- migration + registration shape ---------- */
@@ -92,9 +122,22 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v518',
-    /APP_VERSION = 'v518'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v518"));
+  ok('version pairing is v520',
+    /APP_VERSION = 'v520'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v520"));
+
+  /* ---------- v520 sections migration shape ---------- */
+  const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
+  ok('v520 migration file exists', fs.existsSync(sql520Path));
+  const sql520 = fs.readFileSync(sql520Path, 'utf8');
+  ok('v520 adds warning_prefs jsonb with {} default',
+    /add column if not exists warning_prefs jsonb not null default '\{\}'::jsonb/.test(sql520));
+  ok('v520 adds up_next jsonb with [] default',
+    /add column if not exists up_next jsonb not null default '\[\]'::jsonb/.test(sql520));
+  ok('v520 adds release_state jsonb with {} default',
+    /add column if not exists release_state jsonb not null default '\{\}'::jsonb/.test(sql520));
+  ok('v520 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql520) && !/alter table (public\.)?profiles/.test(sql520));
 
   /* ---------- collect: scope is exact ---------- */
   clearState();
@@ -106,6 +149,8 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
   ls.setItem('spicyshelves.seriesfilter', 'all');   // roams (User override)
   ls.setItem('shelfViewMode', 'grid');              // stays local (shelf state, follow-on)
   ls.setItem('spicyshelves.setgroups', '{}');       // stays local (navigation transient)
+  ls.setItem('cozylibram.warningPrefs.v1', '{"excluded":[],"prominent":[],"detail":"gentle"}'); // v520 section, NOT a settings key
+  ls.setItem('spicyshelves.auto_releases', '{"at":1,"list":[]}'); // v520 section, NOT a settings key
   const collected = window.userStateCollect();
   ok('collect includes core keys', collected.theme === 'dark');
   ok('collect includes storeRegion (User override)', collected['spicyshelves.storeRegion'] === 'ca');
@@ -115,6 +160,8 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
     collected['seasonThemeNudge:halloween'] === '1' && collected['wrapped-banner-2026'] === 'x');
   ok('collect excludes shelf-state + navigation transients',
     !('shelfViewMode' in collected) && !('spicyshelves.setgroups' in collected));
+  ok('settings snapshot stays v518-shaped (section keys never join it)',
+    !('cozylibram.warningPrefs.v1' in collected) && !('spicyshelves.auto_releases' in collected));
 
   /* ---------- pull applies newer server state, incl. restyle ---------- */
   const fake = makeFake();
@@ -144,18 +191,22 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
   const appliedOlder = await window.userStatePull();
   ok('older pull is ignored', appliedOlder === false && ls.getItem('theme') === 'velvet');
 
-  /* ---------- push is hash-gated ---------- */
+  /* ---------- push is hash-gated; sections seed once after a pull ---------- */
   const pushed0 = await window.userStatePush();
-  ok('push with unchanged snapshot is a no-op', pushed0 === false && fake.upserts.length === 0);
+  ok('first push after pull seeds the sections only (settings already synced)',
+    pushed0 === true && fake.upserts.length === 1 && !('settings' in fake.upserts[0]) &&
+    !!fake.upserts[0].warning_prefs && !!fake.upserts[0].up_next && !!fake.upserts[0].release_state);
+  const pushedNoop = await window.userStatePush();
+  ok('push with unchanged snapshot is a no-op', pushedNoop === false && fake.upserts.length === 1);
   ls.setItem('theme', 'frost');
   const pushed1 = await window.userStatePush();
-  ok('push fires on value change', pushed1 === true && fake.upserts.length === 1);
+  ok('push fires on value change', pushed1 === true && fake.upserts.length === 2);
   ok('push upserts own row with fresh _at',
-    fake.upserts[0].user_id === 'user-1' &&
-    fake.upserts[0].settings.values.theme === 'frost' &&
-    fake.upserts[0].settings._at > 5000);
+    fake.upserts[1].user_id === 'user-1' &&
+    fake.upserts[1].settings.values.theme === 'frost' &&
+    fake.upserts[1].settings._at > 5000);
   const pushed2 = await window.userStatePush();
-  ok('second push without change is a no-op', pushed2 === false && fake.upserts.length === 1);
+  ok('second push without change is a no-op', pushed2 === false && fake.upserts.length === 2);
 
   /* ---------- seeding: empty server, first device seeds on push ---------- */
   const fake2 = makeFake();
@@ -167,7 +218,8 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
   ok('empty-server pull applies nothing', seedPull === false && fake2.upserts.length === 0);
   const seeded = await window.userStatePush();
   ok('first device seeds the row',
-    seeded === true && fake2.rows.get('user-1').settings.values.theme === 'hearthside');
+    seeded === true && fake2.rows.get('user-1').settings.values.theme === 'hearthside' &&
+    Number((fake2.rows.get('user-1').warning_prefs || {})._at) > 0);
 
   /* ---------- second device adopts before its first push ---------- */
   clearState(); // fresh device: no meta, no owner marker
@@ -213,6 +265,153 @@ const setUser = (id) => runInWindow("cloudUser = { id: '" + id + "', email: 'u@e
   const signedOutPull = await window.userStatePull();
   const signedOutPush = await window.userStatePush();
   ok('signed out: pull and push are no-ops', signedOutPull === false && signedOutPush === false);
+
+  /* ---------- v520: warning prefs seed, adopt, newer-wins ---------- */
+  const fake5 = makeFake();
+  window.__sbStub = fake5;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: ['gore'], prominent: ['sa'], detail: 'detailed' }));
+  await window.userStatePull();
+  const wpSeeded = await window.userStatePush();
+  const wpRow = fake5.rows.get('user-1') || {};
+  ok('warning prefs seed into their own column',
+    wpSeeded === true && !!wpRow.warning_prefs && wpRow.warning_prefs._at > 0 &&
+    wpRow.warning_prefs.value.detail === 'detailed' &&
+    JSON.stringify(wpRow.warning_prefs.value.excluded) === '["gore"]');
+  // second device adopts
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  await window.userStatePull();
+  const adoptedPrefs = JSON.parse(ls.getItem('cozylibram.warningPrefs.v1') || 'null');
+  ok('warning prefs adopt on a second device',
+    !!adoptedPrefs && adoptedPrefs.detail === 'detailed' &&
+    JSON.stringify(adoptedPrefs.excluded) === '["gore"]' &&
+    JSON.stringify(adoptedPrefs.prominent) === '["sa"]');
+  // older server section is ignored; newer applies; settings untouched either way
+  const row5 = fake5.rows.get('user-1');
+  row5.warning_prefs = { _at: 1, value: { excluded: ['x'], prominent: [], detail: 'gentle' } };
+  await window.userStatePull();
+  ok('older warning prefs are ignored',
+    JSON.parse(ls.getItem('cozylibram.warningPrefs.v1')).detail === 'detailed');
+  ls.setItem('theme', 'dark');
+  row5.warning_prefs = { _at: Date.now() + 100000, value: { excluded: ['y'], prominent: [], detail: 'gentle' } };
+  await window.userStatePull();
+  ok('newer warning prefs apply',
+    JSON.parse(ls.getItem('cozylibram.warningPrefs.v1')).detail === 'gentle');
+  ok('section pull leaves settings keys alone', ls.getItem('theme') === 'dark');
+
+  /* ---------- v520: warning prefs never leak across accounts ---------- */
+  const fake6 = makeFake();
+  window.__sbStub = fake6;
+  clearState();
+  setQueue('user-1', []);
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: ['gore'], prominent: [], detail: 'gentle' }));
+  ls.setItem('cozylibram.userstate.owner', 'user-1'); // device last synced by user-1
+  setUser('user-2');
+  await window.userStatePull();
+  const wpLeak = await window.userStatePush();
+  ok('warning prefs: no seed push of another account\'s values',
+    wpLeak === false && fake6.upserts.length === 0 && !fake6.rows.has('user-2'));
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: ['gore'], prominent: [], detail: 'detailed' }));
+  const wpOwn = await window.userStatePush();
+  ok('warning prefs: a change under the new account pushes to its own row',
+    wpOwn === true && fake6.rows.get('user-2').warning_prefs.value.detail === 'detailed' &&
+    !fake6.rows.has('user-1'));
+
+  /* ---------- v520: Up Next queue roams, keyed per account ---------- */
+  const fake7 = makeFake();
+  window.__sbStub = fake7;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', ['b1', 'b2']);
+  await window.userStatePull();
+  const unSeeded = await window.userStatePush();
+  const unRow = fake7.rows.get('user-1') || {};
+  ok('up next seeds the account queue array as-is',
+    unSeeded === true && !!unRow.up_next && unRow.up_next._at > 0 &&
+    JSON.stringify(unRow.up_next.value) === '["b1","b2"]');
+  // second device adopts into memory + the per-uid localStorage key
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  await window.userStatePull();
+  ok('up next adopts on a second device (memory + per-uid key)',
+    JSON.stringify(probeQueue()) === '["b1","b2"]' &&
+    ls.getItem('spicyshelves.upnext.v1.user-1') === '["b1","b2"]');
+  // a second account on this device never receives the first account's queue
+  setQueue('user-2', []);
+  setUser('user-2');
+  await window.userStatePull();
+  const unLeak = await window.userStatePush();
+  ok('up next: no seed push of another account\'s queue',
+    unLeak === false && !fake7.rows.has('user-2'));
+  setQueue('user-2', ['b7']);
+  const unOwn = await window.userStatePush();
+  ok('up next: the new account\'s own queue pushes to its own row',
+    unOwn === true && JSON.stringify(fake7.rows.get('user-2').up_next.value) === '["b7"]' &&
+    JSON.stringify(fake7.rows.get('user-1').up_next.value) === '["b1","b2"]');
+
+  /* ---------- v520: release state roams as one section ---------- */
+  const fake8 = makeFake();
+  window.__sbStub = fake8;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ls.setItem('spicyshelves.auto_releases', JSON.stringify({ at: 111, list: [{ id: 'x' }] }));
+  ls.setItem('spicyshelves.auto_releases_seen', '222');
+  ls.setItem('spicyshelves.dismissed_releases', JSON.stringify(['hc1']));
+  await window.userStatePull();
+  const relSeeded = await window.userStatePush();
+  const relRow = fake8.rows.get('user-1') || {};
+  ok('release state seeds all three keys as one section',
+    relSeeded === true && !!relRow.release_state && relRow.release_state._at > 0 &&
+    relRow.release_state.values['spicyshelves.auto_releases_seen'] === '222' &&
+    relRow.release_state.values['spicyshelves.dismissed_releases'] === '["hc1"]' &&
+    JSON.parse(relRow.release_state.values['spicyshelves.auto_releases']).list[0].id === 'x');
+  // second device adopts
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  await window.userStatePull();
+  ok('release state adopts on a second device',
+    ls.getItem('spicyshelves.auto_releases_seen') === '222' &&
+    ls.getItem('spicyshelves.dismissed_releases') === '["hc1"]' &&
+    JSON.parse(ls.getItem('spicyshelves.auto_releases')).list[0].id === 'x');
+  // a key dropped from a newer snapshot is removed locally (full-snapshot apply)
+  const row8 = fake8.rows.get('user-1');
+  row8.release_state = { _at: Date.now() + 100000, values: { 'spicyshelves.auto_releases': '{"at":333,"list":[]}' } };
+  await window.userStatePull();
+  ok('release state: keys absent from a newer snapshot are removed',
+    ls.getItem('spicyshelves.auto_releases_seen') === null &&
+    ls.getItem('spicyshelves.dismissed_releases') === null &&
+    JSON.parse(ls.getItem('spicyshelves.auto_releases')).at === 333);
+
+  /* ---------- v520: pre-migration database fails open ---------- */
+  const fake9 = makeFake();
+  fake9.missingColumns = true;
+  window.__sbStub = fake9;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ls.setItem('theme', 'dark');
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: ['gore'], prominent: [], detail: 'gentle' }));
+  let threw9 = false, pull9 = null;
+  try { pull9 = await window.userStatePull(); } catch (e) { threw9 = true; }
+  ok('missing section columns: pull fails open, local state untouched',
+    !threw9 && pull9 === false && ls.getItem('theme') === 'dark' &&
+    JSON.parse(ls.getItem('cozylibram.warningPrefs.v1')).detail === 'gentle');
+  const push9 = await window.userStatePush();
+  const row9 = fake9.rows.get('user-1') || {};
+  ok('missing section columns: settings still push; sections simply stay local',
+    push9 === true && !!row9.settings && row9.settings.values.theme === 'dark' &&
+    !('warning_prefs' in row9));
+  row9.settings = { _at: Date.now() + 100000, values: { theme: 'velvet' } };
+  const pull9b = await window.userStatePull();
+  ok('missing section columns: settings pull still applies',
+    pull9b === true && ls.getItem('theme') === 'velvet');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

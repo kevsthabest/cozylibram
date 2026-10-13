@@ -23,6 +23,12 @@
 //
 // Fail-open throughout: offline or any error → AppLog, no throw, no state
 // change, never a blocker for boot or sign-in.
+//
+// v520 adds three sibling sections on the same row — warning prefs,
+// Up Next, release state — each in its own jsonb column with its own _at
+// clock and its own slice of the sync bookkeeping (see the sections block
+// below). They are separate columns, NOT new settings keys: the settings
+// snapshot keeps its exact v518 shape.
 const USER_STATE_KEYS = [
   'theme', 'accent',
   'spicyshelves.animation', 'spicyshelves.favstyle',
@@ -90,6 +96,38 @@ function userStateMeta(uid) {
 function userStateSaveMeta(uid, meta) {
   try { localStorage.setItem(USER_STATE_META_PREFIX + uid, JSON.stringify(meta)); } catch (e) {}
 }
+// Merge-preserving meta save (v520): settings (at/hash) and the
+// per-section slices share one record — a save for one part must never
+// drop another part's bookkeeping. A fresh record starts with an empty
+// settings hash, which the settings paths treat as "never synced" (so
+// the seeding/baseline rules still run before any settings push).
+function userStatePatchMeta(uid, patch) {
+  const cur = userStateMeta(uid);
+  const curSections = (cur && cur.sections && typeof cur.sections === 'object' && !Array.isArray(cur.sections))
+    ? cur.sections : {};
+  const next = {
+    at: cur ? cur.at : 0,
+    hash: cur ? cur.hash : '',
+    sections: Object.assign({}, curSections),
+  };
+  if (patch) {
+    if (typeof patch.at === 'number') next.at = patch.at;
+    if (typeof patch.hash === 'string') next.hash = patch.hash;
+    if (patch.sections) {
+      for (const k of Object.keys(patch.sections)) next.sections[k] = patch.sections[k];
+    }
+  }
+  if (!Object.keys(next.sections).length) delete next.sections;
+  userStateSaveMeta(uid, next);
+  return next;
+}
+// One section's bookkeeping slice: { at, hash } — hash is null when the
+// section was established by a pull but nothing has synced yet (the next
+// push seeds it). Returns null when the section was never established.
+function userStateSectionMeta(meta, key) {
+  const s = (meta && meta.sections && typeof meta.sections === 'object') ? meta.sections[key] : null;
+  return (s && typeof s.at === 'number' && (typeof s.hash === 'string' || s.hash === null)) ? s : null;
+}
 function userStateOwner() {
   try { return localStorage.getItem(USER_STATE_OWNER_KEY) || null; } catch (e) { return null; }
 }
@@ -123,6 +161,151 @@ function userStateApply(values) {
   } catch (e) {}
 }
 
+/* ---------------- roaming sections (v520) ---------------- */
+// Three more slices of per-user state ride the same user_state row, each
+// in its own column (supabase/migrations/v520_user_state_sections.sql):
+//   warning   → warning_prefs  { _at, value }  — cozylibram.warningPrefs.v1, parsed JSON as-is
+//   upnext    → up_next        { _at, value }  — the Up Next queue array as-is
+//   release   → release_state  { _at, values } — the three release keys, settings-style
+// Independent columns are the point (v518 Advisor constraint): the
+// settings key list is NOT extended, full-snapshot apply stays safe per
+// section, and one section's absence never touches another's data.
+//
+// A section is present on the server only when its payload carries a
+// numeric _at > 0 — the column defaults ({} / []) mean "never synced".
+// A missing/empty server section NEVER wipes local data; the seeding
+// rules mirror settings exactly: first device seeds, second adopts,
+// another account's on-device values are baselined instead of seeded.
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release'];
+const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
+const RELEASE_STATE_KEYS = [
+  'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
+];
+
+function userStateCollectWarning() {
+  try {
+    const raw = localStorage.getItem(WARNING_PREFS_KEY);
+    if (raw == null) return { value: null };
+    const parsed = JSON.parse(raw);
+    return { value: (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null };
+  } catch (e) { return { value: null }; }
+}
+function userStateApplyWarning(payload) {
+  try {
+    const v = payload ? payload.value : null;
+    if (v && typeof v === 'object' && !Array.isArray(v)) localStorage.setItem(WARNING_PREFS_KEY, JSON.stringify(v));
+    else localStorage.removeItem(WARNING_PREFS_KEY);
+  } catch (e) {}
+}
+
+function userStateUpNextKey() {
+  try { if (typeof upNextKey === 'function') return upNextKey(); } catch (e) {}
+  try { return (typeof localUid !== 'undefined' && localUid) ? 'spicyshelves.upnext.v1.' + localUid : 'spicyshelves.upnext.v1'; }
+  catch (e) { return 'spicyshelves.upnext.v1'; }
+}
+function userStateCollectUpNext() {
+  // The authoritative queue is the in-memory one: js/040-storage.js keeps
+  // it per account slot, backed by IndexedDB since v202 — the localStorage
+  // key (spicyshelves.upnext.v1.<uid>) is the legacy mirror, read here
+  // only if the binding is somehow absent.
+  try {
+    if (typeof upNext !== 'undefined' && Array.isArray(upNext)) return { value: upNext.slice() };
+  } catch (e) {}
+  try {
+    const arr = JSON.parse(localStorage.getItem(userStateUpNextKey()) || '[]');
+    return { value: Array.isArray(arr) ? arr : [] };
+  } catch (e) { return { value: [] }; }
+}
+function userStateApplyUpNext(payload) {
+  const arr = (payload && Array.isArray(payload.value)) ? payload.value.slice() : [];
+  try { if (typeof upNext !== 'undefined') upNext = arr.slice(); } catch (e) {}
+  try { if (typeof persistUpNext === 'function') persistUpNext(); } catch (e) {}
+  try { localStorage.setItem(userStateUpNextKey(), JSON.stringify(arr)); } catch (e) {}
+}
+
+function userStateCollectRelease() {
+  const values = {};
+  try {
+    for (const k of RELEASE_STATE_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v != null) values[k] = v;
+    }
+  } catch (e) {}
+  return { values };
+}
+function userStateApplyRelease(payload) {
+  try {
+    const incoming = (payload && payload.values && typeof payload.values === 'object') ? payload.values : {};
+    for (const k of RELEASE_STATE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(incoming, k)) localStorage.setItem(k, String(incoming[k]));
+      else localStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
+
+const USER_STATE_SECTION_FNS = {
+  warning: { collect: userStateCollectWarning, apply: userStateApplyWarning },
+  upnext: { collect: userStateCollectUpNext, apply: userStateApplyUpNext },
+  release: { collect: userStateCollectRelease, apply: userStateApplyRelease },
+};
+function userStateSectionPresent(remote) {
+  return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
+}
+
+// Pull the three sections in one select. On a pre-v520 database the
+// columns don't exist and PostgREST errors the whole select — caught
+// here, so the sections simply stay device-local until the migration
+// lands (fail-open, exactly like a missing table in v518). The settings
+// pull uses its own select and is unaffected either way. deviceOwner is
+// the owner marker captured BEFORE this sync's settings apply could
+// claim ownership, so the cross-account baseline sees the truth.
+async function userStatePullSections(deviceOwner) {
+  try {
+    if (typeof cloudUser === 'undefined' || !cloudUser) return false;
+    const sb = await cloudClient().catch(() => null);
+    if (!sb) return false;
+    const uid = cloudUser.id;
+    const { data, error } = await sb.from('user_state')
+      .select('warning_prefs,up_next,release_state').eq('user_id', uid).maybeSingle();
+    if (error) throw error;
+    const meta = userStateMeta(uid);
+    let changed = false;
+    for (const key of USER_STATE_SECTION_ORDER) {
+      const remote = data ? data[USER_STATE_SECTION_COLS[key]] : null;
+      const sm = userStateSectionMeta(meta, key);
+      if (userStateSectionPresent(remote)) {
+        const remoteAt = Number(remote._at);
+        if (!sm || remoteAt > sm.at) {
+          USER_STATE_SECTION_FNS[key].apply(remote);
+          const secPatch = {};
+          secPatch[key] = { at: remoteAt, hash: userStateHash(USER_STATE_SECTION_FNS[key].collect()) };
+          userStatePatchMeta(uid, { sections: secPatch });
+          userStateClaimOwner(uid);
+          changed = true;
+        }
+      } else if (!sm) {
+        const secPatch = {};
+        if (deviceOwner && deviceOwner !== uid) {
+          // The values on this device were last synced by another
+          // account — baseline them (no seed push), like settings.
+          secPatch[key] = { at: 0, hash: userStateHash(USER_STATE_SECTION_FNS[key].collect()) };
+          AppLog.info('sync', 'roaming section ' + key + ': baselined local values from another account (no seed push)');
+        } else {
+          // Established but unseeded: the push that follows seeds it.
+          secPatch[key] = { at: 0, hash: null };
+        }
+        userStatePatchMeta(uid, { sections: secPatch });
+      }
+    }
+    if (changed) AppLog.info('sync', 'roaming sections pulled (server newer)');
+    return changed;
+  } catch (e) {
+    try { AppLog.warn('sync', 'roaming sections pull failed: ' + ((e && e.message) || e)); } catch (_) {}
+    return false;
+  }
+}
+
 // Pull the account's settings snapshot. Applies it when the server copy is
 // newer than what this device last synced for this account, then restyles
 // via the existing applyTheme() so arriving on a new device just looks
@@ -130,7 +313,7 @@ function userStateApply(values) {
 // rule): a fresh device's defaults must never overwrite the account's
 // synced settings, and an empty server means this device may seed it on
 // the following push. Returns true when local state was replaced.
-async function userStatePull() {
+async function userStatePullSettings() {
   try {
     if (typeof cloudUser === 'undefined' || !cloudUser) return false;
     const sb = await cloudClient().catch(() => null);
@@ -146,7 +329,7 @@ async function userStatePull() {
       const remoteAt = Number(remote._at) || 0;
       if (!meta || remoteAt > meta.at) {
         userStateApply(remoteValues);
-        userStateSaveMeta(uid, { at: remoteAt, hash: userStateHash(userStateCollect()) });
+        userStatePatchMeta(uid, { at: remoteAt, hash: userStateHash(userStateCollect()) });
         userStateClaimOwner(uid);
         try { if (typeof applyTheme === 'function') applyTheme(); } catch (e) {}
         AppLog.info('sync', 'roaming settings pulled (server newer)');
@@ -154,14 +337,16 @@ async function userStatePull() {
       }
       return false; // local is at least as new; the push cycle carries any diff
     }
-    // No server row for this account.
-    if (!meta) {
+    // No server row for this account. (An empty settings hash means the
+    // record was created by a sections save and settings never synced —
+    // the baseline rule below must still run; see userStatePatchMeta.)
+    if (!meta || !meta.hash) {
       const owner = userStateOwner();
       if (owner && owner !== uid) {
         // The values on this device were last synced by another account.
         // Baseline them as this account's synced state (without pushing)
         // so a later push sends only changes made from now on.
-        userStateSaveMeta(uid, { at: 0, hash: userStateHash(userStateCollect()) });
+        userStatePatchMeta(uid, { at: 0, hash: userStateHash(userStateCollect()) });
         AppLog.info('sync', 'roaming settings: baselined local values from another account (no seed push)');
       }
       // Fresh device (no owner marker) or same owner: leave unseeded —
@@ -174,6 +359,18 @@ async function userStatePull() {
   }
 }
 
+// The pull entry point (js/090-sync.js, sign-in sync): settings first,
+// then the v520 sections. The owner marker is captured before either can
+// claim ownership — the sections' cross-account baseline depends on
+// seeing whose values were on the device when the sync started. Return
+// value keeps its v518 meaning: true when the settings were replaced.
+async function userStatePull() {
+  const deviceOwner = userStateOwner();
+  const applied = await userStatePullSettings();
+  try { await userStatePullSections(deviceOwner); } catch (e) {}
+  return applied;
+}
+
 // Push the local snapshot if it changed since the last successful sync
 // for this account. Hash-gated: an unchanged snapshot costs no request.
 // Rides the cloud push cycle (js/090-sync.js) and the pagehide flush.
@@ -183,27 +380,64 @@ async function userStatePush() {
     if (typeof cloudUser === 'undefined' || !cloudUser) return false;
     const uid = cloudUser.id;
     let meta = userStateMeta(uid);
-    if (!meta) {
+    const sectionsReady = !!meta &&
+      USER_STATE_SECTION_ORDER.every(k => userStateSectionMeta(meta, k));
+    if (!meta || !meta.hash || !sectionsReady) {
       // Never push blind: establish the seeding/baseline state first so a
-      // push can't beat the sign-in pull and clobber (or leak) settings.
+      // push can't beat the sign-in pull and clobber (or leak) state.
       await userStatePull();
       meta = userStateMeta(uid);
     }
     const values = userStateCollect();
     const hash = userStateHash(values);
-    if (meta && meta.hash === hash) return false;
+    const settingsDirty = !(meta && meta.hash === hash);
+    const sectionPayloads = {};
+    const dirtySections = [];
+    for (const key of USER_STATE_SECTION_ORDER) {
+      const payload = USER_STATE_SECTION_FNS[key].collect();
+      sectionPayloads[key] = payload;
+      const sm = userStateSectionMeta(meta, key);
+      if (!sm || sm.hash !== userStateHash(payload)) dirtySections.push(key);
+    }
+    if (!settingsDirty && !dirtySections.length) return false;
     const sb = await cloudClient().catch(() => null);
     if (!sb) return false;
     userStatePushing = true;
     const at = Date.now();
-    const { error } = await sb.from('user_state').upsert(
-      { user_id: uid, settings: { _at: at, values: values }, updated_at: new Date(at).toISOString() },
-      { onConflict: 'user_id' });
-    if (error) throw error;
-    userStateSaveMeta(uid, { at: at, hash: hash });
-    userStateClaimOwner(uid);
-    AppLog.info('sync', 'roaming settings pushed');
-    return true;
+    let pushed = false;
+    if (settingsDirty) {
+      const { error } = await sb.from('user_state').upsert(
+        { user_id: uid, settings: { _at: at, values: values }, updated_at: new Date(at).toISOString() },
+        { onConflict: 'user_id' });
+      if (error) throw error;
+      userStatePatchMeta(uid, { at: at, hash: hash });
+      userStateClaimOwner(uid);
+      AppLog.info('sync', 'roaming settings pushed');
+      pushed = true;
+    }
+    if (dirtySections.length) {
+      // Separate upsert, own failure domain: on a pre-v520 database this
+      // errors (the columns don't exist yet) — caught here so a settings
+      // push above still counts, and the section bookkeeping stays
+      // un-advanced so the next cycle retries.
+      try {
+        const row = { user_id: uid, updated_at: new Date(at).toISOString() };
+        for (const key of dirtySections) {
+          row[USER_STATE_SECTION_COLS[key]] = Object.assign({ _at: at }, sectionPayloads[key]);
+        }
+        const { error } = await sb.from('user_state').upsert(row, { onConflict: 'user_id' });
+        if (error) throw error;
+        const secPatch = {};
+        for (const key of dirtySections) secPatch[key] = { at: at, hash: userStateHash(sectionPayloads[key]) };
+        userStatePatchMeta(uid, { sections: secPatch });
+        userStateClaimOwner(uid);
+        AppLog.info('sync', 'roaming sections pushed: ' + dirtySections.join(', '));
+        pushed = true;
+      } catch (e) {
+        try { AppLog.warn('sync', 'roaming sections push failed: ' + ((e && e.message) || e)); } catch (_) {}
+      }
+    }
+    return pushed;
   } catch (e) {
     try { AppLog.warn('sync', 'roaming settings push failed: ' + ((e && e.message) || e)); } catch (_) {}
     return false;
