@@ -1537,10 +1537,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .btn.sm { padding: 6px 10px; font-size: 13px; }
 .shelf-books { display: flex; align-items: flex-end; gap: 6px; padding: 12px 14px 0; overflow-x: auto; }
 .spine { flex: 0 0 auto; border-radius: 4px 4px 2px 2px; cursor: pointer; position: relative;
-  /* v186 foil: near-black cover-tinted base — --sc (cover color or
-     deterministic fallback) darkened under a black veil, cylindrical sheen kept */
+  /* v186 foil: cover-tinted base — --sc (cover color or deterministic
+     fallback) darkened under a black veil, cylindrical sheen kept.
+     v519: veil lifted (.45/.30) so sampled cover colors actually read —
+     the .74/.58 veil left only ~34% of the color mid-spine (variant B). */
   background: linear-gradient(90deg, rgba(0,0,0,.42), rgba(255,255,255,.07) 22%, rgba(255,255,255,.015) 50%, rgba(0,0,0,.40)),
-    linear-gradient(180deg, rgba(0,0,0,.74), rgba(0,0,0,.58)), var(--sc);
+    linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.30)), var(--sc);
   box-shadow: inset 0 1px 0 rgba(255,215,130,.18), inset 0 -2px 3px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.35);
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: 7px 3px; }
