@@ -415,7 +415,7 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     html += '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
       '<div class="chips" id="' + p + '-hide">' +
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
-        STATUS[s] + '</button>').join('') +
+        shelfLabel(s) + '</button>').join('') +
       '</div></div>';
   }
   html +=
@@ -714,7 +714,9 @@ function consumePendingInvite(code, friends) {
   });
 }
 function renderCovenMain(code, lists, priv) {
-  const shelves = ['tbr', 'reading', 'read', 'dnf'];
+  // v529: 'wishlist' (the gift shelf) is hideable like the four status
+  // shelves — it rides hidden_shelves as a pseudo-shelf key (js/000).
+  const shelves = ['tbr', 'reading', 'read', 'dnf', 'wishlist'];
   let html = '<div class="view-head" style="position:relative"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2>' +
     '<button id="cc-privacy-gear" aria-label="Privacy settings" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)">' + icon('gear') + '</button></div>' +
     '<p class="note" style="text-align:center">Your private reading ' + covenNameBare().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
@@ -830,7 +832,15 @@ function renderCovenFriendMain() {
   const prof = circProfiles[f.id];
   const counts = { all: circBooks.length };
   ['tbr', 'reading', 'read', 'dnf'].forEach(s => { counts[s] = circBooks.filter(b => b.status === s).length; });
-  const books = circShelf === 'all' ? circBooks : circBooks.filter(b => b.status === circShelf);
+  // v529: the gift shelf — the friend's wishlist (owned === 'tobuy'),
+  // a facet of the rows that already crossed under the books policy,
+  // not a status. When the owner hides 'wishlist', the policy keeps
+  // tobuy rows from crossing at all, so an empty gift shelf here is
+  // indistinguishable from a hidden one (the v522 silence property).
+  counts.wishlist = circBooks.filter(b => b.owned === 'tobuy').length;
+  const books = circShelf === 'all' ? circBooks
+    : circShelf === 'wishlist' ? circBooks.filter(b => b.owned === 'tobuy')
+    : circBooks.filter(b => b.status === circShelf);
   const chip = (v, label) =>
     '<button class="chip' + (circShelf === v ? ' active' : '') + '" data-cf="' + v + '">' + label +
     (counts[v] ? ' · ' + counts[v] : '') + '</button>';
@@ -844,7 +854,7 @@ function renderCovenFriendMain() {
       (prof.bio ? '<p class="cf-bio">' + esc(prof.bio) + '</p>' : '') +
       (prof.fav_genres && prof.fav_genres.length
         ? '<div class="cf-genres">' + prof.fav_genres.map(g => '<span class="chip">' + esc(g) + '</span>').join('') + '</div>' : '') : '') +
-    '<div class="chips">' + chip('all', 'All') +
+    '<div class="chips">' + chip('all', 'All') + chip('wishlist', 'Wishlist') +
     ['tbr', 'reading', 'read', 'dnf'].map(s => chip(s, STATUS[s])).join('') + '</div>';
   if (!circBooks.length) {
     html += '<div class="empty"><div class="big">' + icon('covers') + '</div>' +
@@ -919,7 +929,7 @@ function openCovenBook(b) {
   }
   const modalOpts = {
     source: 'coven-shelf',
-    contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
+    contextNote: 'On ' + circFriend.name + '’s ' + (circShelf === 'wishlist' ? 'Wishlist' : (STATUS[b.status] || b.status || 'shelf')) + ' shelf — read-only.',
     onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null
   };
   // v528: a shared-TBR match on a friend's shelf can become a buddy

@@ -14,6 +14,15 @@ const STATUS = {
   dnf: 'Did Not Finish'
 };
 
+/* v529: pseudo-shelves — keys that live in hidden_shelves alongside the
+   four statuses but are NOT book statuses. 'wishlist' is the gift shelf:
+   an ownership facet (owned === 'tobuy'), not a status, and it must
+   never join STATUS — validation, stats and shelf code treat STATUS
+   keys as statuses. shelfLabel() is the one place that names a shelf
+   key for display, statuses and pseudo-shelves alike. */
+const PSEUDO_SHELF_LABELS = { wishlist: 'Wishlist' };
+function shelfLabel(s) { return STATUS[s] || PSEUDO_SHELF_LABELS[s] || s; }
+
 let view = 'library';
 let filter = 'all';
 let ownFilter = 'all'; // all | owned | tobuy | borrowed (v148)

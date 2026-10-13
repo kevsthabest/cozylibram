@@ -432,6 +432,38 @@ $$;
 revoke all on function public.circle_book_visible(uuid, text) from public;
 grant execute on function public.circle_book_visible(uuid, text) to authenticated;
 
+-- v529: the gift-shelf gate. The wishlist is data.owned = 'tobuy',
+-- an ownership facet the two-argument helper cannot see, so this
+-- overload is its answer plus one conjunct: a tobuy row crosses only
+-- when the owner has not hidden 'wishlist' (a pseudo-shelf key in
+-- hidden_shelves — never a status). Probe-safety follows the v522
+-- rule — the extra EXISTS is keyed to tobuy books in the queried
+-- status, so an answer never exceeds what loading the shelf already
+-- shows; in the policy path the row under test satisfies it itself.
+create or replace function public.circle_book_visible(p_owner uuid, p_status text, p_owned text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select public.circle_book_visible(p_owner, p_status)
+    and (coalesce(p_owned, '') <> 'tobuy'
+      or (not exists (
+            select 1 from public.profiles p
+            where p.user_id = p_owner
+              and 'wishlist' = any (coalesce(p.hidden_shelves, '{}'::text[]))
+          )
+          and exists (
+            select 1 from public.books b
+            where b.user_id = p_owner
+              and coalesce(b.data ->> 'status', '') = coalesce(p_status, '')
+              and coalesce(b.data ->> 'owned', '') = 'tobuy'
+          )));
+$$;
+revoke all on function public.circle_book_visible(uuid, text, text) from public;
+grant execute on function public.circle_book_visible(uuid, text, text) to authenticated;
+
 -- Friends can read each other's books, minus hidden shelves and only when
 -- the owner shares with the circle. Write access stays owner-only.
 drop policy if exists "circle reads shared shelves" on books;
@@ -446,7 +478,7 @@ create policy "circle reads shared shelves" on books
           and ((cl.requester_id = books.user_id and cl.addressee_id = auth.uid())
             or (cl.addressee_id = books.user_id and cl.requester_id = auth.uid()))
       )
-      and public.circle_book_visible(books.user_id, books.data->>'status')
+      and public.circle_book_visible(books.user_id, books.data->>'status', books.data->>'owned')
     )
   );
 

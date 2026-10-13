@@ -280,13 +280,17 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   // the agreement pin now targets the NEWEST migration defining the
   // helper — the live definition must not drift between it and
   // schema.sql. The shape pins below hold for the v526 body unchanged.
+  // v529 note: v529_gift_shelf.sql re-states the two-argument body
+  // verbatim and adds a three-argument overload AFTER it, so the
+  // first-occurrence extraction below still lands on the two-argument
+  // definition in both files; the pin target moves to v529.
   const fnBody = (sql) => {
     const i = sql.indexOf('create or replace function public.circle_book_visible');
     if (i < 0) return '';
     const j = sql.indexOf('$$;', i);
     return j < 0 ? '' : sql.slice(i, j + 3);
   };
-  const migBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v526_blocks.sql'), 'utf8'));
+  const migBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v529_gift_shelf.sql'), 'utf8'));
   const schemaBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8'));
   ok('sql: helper defined in migration and schema mirror', migBody.length > 0 && schemaBody.length > 0);
   ok('sql: migration and schema.sql helper definitions agree',
