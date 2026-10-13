@@ -254,7 +254,8 @@ function saveLegacyTombFloor() {
   try { localStorage.setItem(tombFloorKey(), String(tombstoneFloor)); } catch (e) {}
 }
 // "Up Next" queue (v74): ordered book ids, per-user like the library.
-// Local-only for now — the queue is a reading plan, not synced to the cloud.
+// Roams between devices since v520 via the user_state up_next section
+// (js/229-user-state.js collects/applies this array).
 function upNextKey() {
   return localUid ? 'spicyshelves.upnext.v1.' + localUid : 'spicyshelves.upnext.v1';
 }
