@@ -1201,6 +1201,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
     '<div class="more-menu" id="m-moremenu" hidden>' +
     '<button class="more-item" id="m-share">' + icon('share') + ' <span>Share</span></button>' +
+    '<button class="more-item" id="m-toy">' + icon('gift') + ' <span>Recommend to a friend</span></button>' +
     '<button class="more-item" id="m-favmenu">' + icon('heart') + ' <span>Add to Favorites</span></button>' +
     '<button class="more-item" id="m-upnext">' + icon('upnext') + ' <span>Add to Up Next</span></button>' +
     '<button class="more-item" id="m-covermenu">' + icon('camera') + ' <span>Change Cover</span></button>' +
@@ -2040,6 +2041,14 @@ function renderDetailModal(b, viaBook) {
   document.getElementById('m-share').addEventListener('click', () => {
     moreMenu.hidden = true;
     shareBookCard(b.id);
+  });
+  // v527: "Thought of you" — recommend this book to a circle friend
+  // (js/232). The compose sheet opens over the modal via the coven
+  // sheet stack; signed-out use gets the gentle toast inside.
+  const toyItem = document.getElementById('m-toy');
+  if (toyItem) toyItem.addEventListener('click', () => {
+    moreMenu.hidden = true;
+    if (typeof openToyCompose === 'function') openToyCompose(b, toyItem);
   });
   // v224 (UX-10): Share also sits in the primary row, next to the heart.
   document.getElementById('m-share2').addEventListener('click', () => shareBookCard(b.id));
