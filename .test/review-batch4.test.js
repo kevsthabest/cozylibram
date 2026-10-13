@@ -69,6 +69,8 @@ run(`renderGateSignup()`);
   window.document.getElementById('gs-email').value = 'n@e.w';
   window.document.getElementById('gs-pass').value = 'secret1';
   window.document.getElementById('gs-pass2').value = 'secret1';
+  // v523: signup requires an age-band choice before it will submit.
+  window.document.querySelector('#gs-band [data-b="adult"]').click();
   const ev = new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
   window.document.getElementById('gs-pass2').dispatchEvent(ev);
   ok('#143 Enter in signup submits', signedUp && signedUp[0] === 'n@e.w');
