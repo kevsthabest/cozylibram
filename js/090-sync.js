@@ -209,6 +209,11 @@ async function cloudPushNow() {
     // anything edited mid-push is now strictly above it and gets its own round
     // instead of waiting for the next user save.
     if (library.some(b => b && (b._mtime || 0) > sendCeil)) scheduleCloudPush();
+    // v518: roaming settings ride the same push cycle (hash-gated inside
+    // js/229-user-state.js, so an unchanged snapshot costs no request).
+    // Runs after the books push, so the sign-in pull above has already had
+    // its chance to adopt or baseline the local snapshot.
+    try { if (typeof userStatePush === 'function') await userStatePush(); } catch (e) {}
     return true;
   } catch (e) {
     AppLog.error('sync', 'push failed: ' + ((e && e.message) || e));
@@ -320,6 +325,10 @@ async function cloudFirstSync(opts) {
   syncBegin();
   try {
     await syncCloudProfile();
+    // v518: adopt roaming settings BEFORE any push in this sync — the
+    // seeding rule from js/229-user-state.js. A fresh device's defaults
+    // must never overwrite the account's synced theme.
+    try { if (typeof userStatePull === 'function') await userStatePull(); } catch (e) {}
     if (applyTombstones(await cloudPullTombstones())) { render(); changed = true; }
     const remote = await cloudPullRows();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); changed = true; }
