@@ -667,6 +667,15 @@ function renderSettings() {
       const shelves = ['tbr', 'reading', 'read', 'dnf'].filter(s => library.some(b => b.status === s));
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
       wireCirclePrivacyPanel(box, priv, 'st');
+      // v526: Blocked readers — my own block list lives under the same
+      // panel; renderBlockedReaders (js/195) renders nothing at all
+      // when the blocks table isn't there yet.
+      if (typeof renderBlockedReaders === 'function') {
+        const bwrap = document.createElement('div');
+        bwrap.id = 'st-blocked';
+        box.appendChild(bwrap);
+        renderBlockedReaders(bwrap).catch(() => {});
+      }
     } catch (e) {
       box.innerHTML = '<p class="note">Couldn\'t load sharing settings.</p>';
     }

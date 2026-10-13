@@ -170,16 +170,29 @@ create policy "read own links" on circle_links
   for select
   using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
+-- v526: there is deliberately NO direct-insert policy on circle_links.
+-- Link creation has been RPC-only since v240 (accept_circle_invite,
+-- below); the old "send requests" policy was a REST door that could
+-- not enforce blocking silently (a policy subquery reads blocks under
+-- the caller's RLS and sees only their own blocker rows). Dropped in
+-- migrations/v526_blocks.sql; do not re-add.
 drop policy if exists "send requests" on circle_links;
-create policy "send requests" on circle_links
-  for insert
-  with check (auth.uid() = requester_id and status = 'pending');
 
 drop policy if exists "answer requests" on circle_links;
 create policy "answer requests" on circle_links
   for update
   using (auth.uid() = addressee_id and status = 'pending')
-  with check (auth.uid() = addressee_id and status in ('accepted', 'declined'));
+  with check (
+    auth.uid() = addressee_id and status in ('accepted', 'declined')
+    -- v526: an answerer who blocked the requester can't answer their
+    -- way back into a link (own blocker rows are visible to them; the
+    -- sever guarantees no pending row survives a block either way).
+    and not exists (
+      select 1 from public.blocks b
+       where b.blocker_id = auth.uid()
+         and b.blocked_id = circle_links.requester_id
+    )
+  );
 
 drop policy if exists "remove links" on circle_links;
 create policy "remove links" on circle_links
@@ -211,6 +224,134 @@ create policy "own code" on circle_invites
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- The only link-creation path (v240; v526 adds the block check, which
+-- raises the SAME 'invite not found' an unknown token gets, so a
+-- refused redemption is indistinguishable from a rotated code).
+create or replace function public.accept_circle_invite(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me uuid := auth.uid();
+  v_them uuid;
+begin
+  if v_me is null then
+    raise exception 'not signed in';
+  end if;
+  select user_id into v_them from circle_invites where code = p_token;
+  if v_them is null then
+    raise exception 'invite not found';
+  end if;
+  if exists (
+    select 1 from public.blocks b
+     where (b.blocker_id = v_me and b.blocked_id = v_them)
+        or (b.blocker_id = v_them and b.blocked_id = v_me)
+  ) then
+    raise exception 'invite not found';
+  end if;
+  if v_them = v_me then
+    raise exception 'own invite';
+  end if;
+  delete from circle_links
+   where (requester_id = v_me and addressee_id = v_them)
+      or (requester_id = v_them and addressee_id = v_me);
+  insert into circle_links (requester_id, addressee_id, status)
+  values (v_me, v_them, 'accepted');
+  return v_them;
+end;
+$$;
+revoke all on function public.accept_circle_invite(text) from public;
+grant execute on function public.accept_circle_invite(text) to authenticated;
+
+-- ============ Blocking (v526) ============
+-- A block severs a circle pair and keeps it severed — silently. The
+-- full contract (sever / silent / sticky / invisible) and the silence
+-- argument are in migrations/v526_blocks.sql. Load-bearing shapes:
+-- the ONLY read policy on blocks is "rows I created" (the blocked
+-- party can read nothing about the block, not even existence), and
+-- there is deliberately no pair_blocked() helper — a caller-invokable
+-- boolean over a chosen pair would be an existence oracle. The
+-- both-directions check is inlined where owner rights already apply:
+-- the circle_profiles view and circle_book_visible() (both below),
+-- and accept_circle_invite() above.
+create table if not exists public.blocks (
+  blocker_id uuid not null references auth.users (id) on delete cascade,
+  blocked_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
+alter table public.blocks enable row level security;
+
+drop policy if exists "read own blocks" on public.blocks;
+create policy "read own blocks" on public.blocks
+  for select
+  using (auth.uid() = blocker_id);
+
+drop policy if exists "block a reader" on public.blocks;
+create policy "block a reader" on public.blocks
+  for insert
+  with check (auth.uid() = blocker_id);
+
+drop policy if exists "unblock a reader" on public.blocks;
+create policy "unblock a reader" on public.blocks
+  for delete
+  using (auth.uid() = blocker_id);
+-- (No UPDATE policy: a block is created or deleted, never edited.)
+
+-- Sever on insert, in the same transaction, whichever path created
+-- the row. The link deletions fire the v525 unfriend trigger, which
+-- removes the pair's moment reactions.
+create or replace function public.blocks_sever_links()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.circle_links
+   where (requester_id = new.blocker_id and addressee_id = new.blocked_id)
+      or (requester_id = new.blocked_id and addressee_id = new.blocker_id);
+  return new;
+end;
+$$;
+revoke all on function public.blocks_sever_links() from public;
+
+drop trigger if exists blocks_sever on public.blocks;
+create trigger blocks_sever
+  after insert on public.blocks
+  for each row execute function public.blocks_sever_links();
+
+-- The owner's own blocked list for Settings (names/avatars live in
+-- profiles, unreadable for other users since v522). Returns ONLY
+-- rows where the caller is the blocker — who blocked YOU is not
+-- representable in its result.
+create or replace function public.my_blocked_readers()
+returns table (
+  user_id uuid,
+  first_name text,
+  last_name text,
+  avatar_id text,
+  avatar_path text,
+  blocked_at timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select b.blocked_id, p.first_name, p.last_name, p.avatar_id, p.avatar_path, b.created_at
+    from public.blocks b
+    join public.profiles p on p.user_id = b.blocked_id
+   where b.blocker_id = auth.uid()
+   order by b.created_at desc;
+$$;
+revoke all on function public.my_blocked_readers() from public;
+grant execute on function public.my_blocked_readers() to authenticated;
 
 -- Circle privacy controls on the profile: a master share switch plus
 -- per-shelf hiding (e.g. keep the DNF shelf to yourself).
@@ -248,6 +389,13 @@ as $$
   select (case
     when auth.uid() is null then false
     when auth.uid() = p_owner then true
+    -- v526: a blocked pair (either direction) sees nothing — a plain
+    -- false, indistinguishable from every other false this returns.
+    when exists (
+      select 1 from public.blocks b
+      where (b.blocker_id = auth.uid() and b.blocked_id = p_owner)
+         or (b.blocker_id = p_owner and b.blocked_id = auth.uid())
+    ) then false
     when not exists (
       select 1 from public.circle_links cl
       where cl.status = 'accepted'
@@ -312,6 +460,12 @@ create or replace view public.circle_profiles as
        where cl.status in ('accepted', 'pending')
          and ((cl.requester_id = p.user_id and cl.addressee_id = auth.uid())
            or (cl.addressee_id = p.user_id and cl.requester_id = auth.uid()))
+         -- v526: blocked pairs are excluded even if a link row exists.
+         and not exists (
+           select 1 from public.blocks b
+           where (b.blocker_id = p.user_id and b.blocked_id = auth.uid())
+              or (b.blocker_id = auth.uid() and b.blocked_id = p.user_id)
+         )
      );
 revoke all on public.circle_profiles from anon;
 grant select on public.circle_profiles to authenticated;
