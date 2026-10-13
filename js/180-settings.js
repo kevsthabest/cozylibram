@@ -667,9 +667,11 @@ function renderSettings() {
   // them into the open library, and can pull the cloud copy when signed in.
   // (v136; kept as a grace-period safety net after v204 removed the
   // sign-out hand-back with signed-out mode.)
-  document.getElementById('bk-find').addEventListener('click', () => {
+  document.getElementById('bk-find').addEventListener('click', async () => {
     const box = document.getElementById('bk-found');
-    const parts = libraryPartitions();
+    box.innerHTML = '<p class="note">Looking on this device…</p>';
+    // v517 (#131): partitions now include the IndexedDB slots (async).
+    const parts = await libraryPartitions();
     if (!parts.length) {
       box.innerHTML = '<p class="note">No saved libraries found on this device.</p>';
       return;
@@ -692,7 +694,7 @@ function renderSettings() {
       const ok = p && await confirmModal('Restore ' + p.n + ' books from "' + partitionLabel(p) +
         '"? This replaces the ' + library.length + ' books currently open.', { okLabel: 'Restore' });
       if (!ok) return;
-      const n = restorePartition(p.key);
+      const n = await restorePartition(p.key);
       render();
       toast(n ? 'Restored ' + n + ' books ✓' : 'Nothing to restore');
       document.getElementById('bk-find').click(); // refresh the list
