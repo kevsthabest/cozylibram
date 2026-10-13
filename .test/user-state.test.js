@@ -321,6 +321,52 @@ const probeQueue = () => {
     wpOwn === true && fake6.rows.get('user-2').warning_prefs.value.detail === 'detailed' &&
     !fake6.rows.has('user-1'));
 
+  /* ---------- v520: combined — B HAS a settings row; sections still baselined ---------- */
+  // The owner-ordering regression: userStatePull must capture the device
+  // owner marker BEFORE the settings pull runs, because applying B's
+  // settings claims ownership for B (userStateClaimOwner). Captured after,
+  // the marker would read "user-2" here and the sections would be treated
+  // as B's own unseeded values — the next push would seed account A's
+  // leftover section values into B's row. The cross-account tests above
+  // never caught this: their B had no server row at all, so the settings
+  // pull never claimed ownership mid-pull.
+  const fake10 = makeFake();
+  window.__sbStub = fake10;
+  fake10.rows.set('user-2', {
+    user_id: 'user-2',
+    settings: { _at: 5000, values: { theme: 'frost' } }, // B's synced settings; NO sections
+  });
+  clearState();
+  // The device last synced user-1; user-1's section values are still on it.
+  ls.setItem('cozylibram.userstate.owner', 'user-1');
+  ls.setItem('theme', 'velvet'); // user-1's theme, replaced by B's below
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: ['gore'], prominent: ['sa'], detail: 'gentle' }));
+  ls.setItem('spicyshelves.auto_releases_seen', '999');
+  ls.setItem('spicyshelves.dismissed_releases', JSON.stringify(['user-1-book']));
+  setQueue('user-1', ['a1', 'a2']); // user-1's queue still in the collect source
+  setUser('user-2');
+  const appliedB = await window.userStatePull();
+  ok('combined: B\'s server settings apply on sign-in (ownership gets claimed)',
+    appliedB === true && ls.getItem('theme') === 'frost' &&
+    ls.getItem('cozylibram.userstate.owner') === 'user-2');
+  const metaB = JSON.parse(ls.getItem('cozylibram.userstate.v1.user-2') || 'null');
+  ok('combined: sections baselined against the PRE-pull owner, not left as B\'s to seed',
+    !!metaB && !!metaB.sections &&
+    metaB.sections.warning.hash === window.userStateHash(window.userStateCollectWarning()) &&
+    metaB.sections.upnext.hash === window.userStateHash(window.userStateCollectUpNext()) &&
+    metaB.sections.release.hash === window.userStateHash(window.userStateCollectRelease()));
+  const leakPushB = await window.userStatePush();
+  const rowB = fake10.rows.get('user-2') || {};
+  ok('combined: no push writes user-1\'s section values into B\'s row',
+    leakPushB === false && fake10.upserts.length === 0 &&
+    !('warning_prefs' in rowB) && !('up_next' in rowB) && !('release_state' in rowB));
+  // And a change B actually makes still pushes — B is not wedged.
+  ls.setItem('cozylibram.warningPrefs.v1', JSON.stringify({ excluded: [], prominent: [], detail: 'detailed' }));
+  const ownPushB = await window.userStatePush();
+  ok('combined: B\'s own later section change pushes to B\'s row only',
+    ownPushB === true && fake10.rows.get('user-2').warning_prefs.value.detail === 'detailed' &&
+    !fake10.rows.has('user-1'));
+
   /* ---------- v520: Up Next queue roams, keyed per account ---------- */
   const fake7 = makeFake();
   window.__sbStub = fake7;
