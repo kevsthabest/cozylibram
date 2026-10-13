@@ -217,21 +217,58 @@ create policy "own code" on circle_invites
 alter table profiles add column if not exists share_library boolean not null default true;
 alter table profiles add column if not exists hidden_shelves text[] not null default '{}';
 
--- Friends can see each other's names, avatars, and privacy flags (needed to
--- render the circle and to enforce shelf visibility). Pending handshakes are
--- included so an incoming request shows who it's from.
-drop policy if exists "circle reads profiles" on profiles;
-create policy "circle reads profiles" on profiles
-  for select
-  using (
-    auth.uid() = user_id
-    or exists (
-      select 1 from circle_links cl
-      where cl.status in ('accepted', 'pending')
-        and ((cl.requester_id = profiles.user_id and cl.addressee_id = auth.uid())
-          or (cl.addressee_id = profiles.user_id and cl.requester_id = auth.uid()))
-    )
+-- v522 — Circle permissions Phase 1. Two more sharing controls plus the
+-- content they govern: bio / favourite genres (share_bio, default true so
+-- existing accounts keep today's de-facto exposure) and reading activity —
+-- recently finished / ratings / Reader Portrait — (share_activity, default
+-- false: opt-in for everyone). See migrations/v522_circle_projection.sql.
+alter table profiles add column if not exists bio text not null default '';
+alter table profiles add column if not exists fav_genres text[] not null default '{}';
+alter table profiles add column if not exists share_bio boolean not null default true;
+alter table profiles add column if not exists share_activity boolean not null default false;
+
+-- v522: friends no longer read base profiles rows at all (RLS is row-level,
+-- so the old policy handed over gender / hidden_shelves / updated_at to any
+-- circle partner who asked PostgREST directly). Every other-user profile
+-- read goes through the circle_profiles view further below, which projects
+-- only identity + posture flags + toggled-on fields. The books policy's
+-- share test moves into this SECURITY DEFINER helper, which returns only a
+-- boolean and never exposes the hidden-shelves list it checks against. It
+-- answers true for a status only when the owner actually has a book in
+-- it, so an RPC probe reveals nothing beyond what loading the shelf
+-- shows (a hidden shelf with no books is indistinguishable from an empty
+-- one; in the policy path the row under test satisfies that condition).
+create or replace function public.circle_book_visible(p_owner uuid, p_status text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select (case
+    when auth.uid() is null then false
+    when auth.uid() = p_owner then true
+    when not exists (
+      select 1 from public.circle_links cl
+      where cl.status = 'accepted'
+        and ((cl.requester_id = auth.uid() and cl.addressee_id = p_owner)
+          or (cl.addressee_id = auth.uid() and cl.requester_id = p_owner))
+    ) then false
+    else coalesce((
+      select p.share_library
+         and not (coalesce(p_status, '') = any (coalesce(p.hidden_shelves, '{}'::text[])))
+      from public.profiles p
+      where p.user_id = p_owner
+    ), true)
+  end)
+  and exists (
+    select 1 from public.books b
+    where b.user_id = p_owner
+      and coalesce(b.data ->> 'status', '') = coalesce(p_status, '')
   );
+$$;
+revoke all on function public.circle_book_visible(uuid, text) from public;
+grant execute on function public.circle_book_visible(uuid, text) to authenticated;
 
 -- Friends can read each other's books, minus hidden shelves and only when
 -- the owner shares with the circle. Write access stays owner-only.
@@ -247,11 +284,42 @@ create policy "circle reads shared shelves" on books
           and ((cl.requester_id = books.user_id and cl.addressee_id = auth.uid())
             or (cl.addressee_id = books.user_id and cl.requester_id = auth.uid()))
       )
-      and coalesce((select p.share_library from profiles p where p.user_id = books.user_id), true)
-      and not (coalesce(books.data->>'status', '') = any (
-        coalesce((select p.hidden_shelves from profiles p where p.user_id = books.user_id), '{}')))
+      and public.circle_book_visible(books.user_id, books.data->>'status')
     )
   );
+
+-- v522: the public projection every circle surface reads through. Runs
+-- with the view owner's rights, so the WHERE clause is the access control:
+-- self, or a user linked to the caller (accepted or pending — pending so
+-- an invite shows who it's from). bio / fav_genres cross only when the
+-- owner has share_bio on; gender, hidden_shelves and updated_at are never
+-- projected, for anyone.
+create or replace view public.circle_profiles as
+  select p.user_id,
+         p.first_name,
+         p.last_name,
+         p.avatar_id,
+         p.avatar_path,
+         p.share_library,
+         p.share_bio,
+         p.share_activity,
+         case when p.share_bio then p.bio end as bio,
+         case when p.share_bio then p.fav_genres end as fav_genres
+  from profiles p
+  where p.user_id = auth.uid()
+     or exists (
+       select 1 from circle_links cl
+       where cl.status in ('accepted', 'pending')
+         and ((cl.requester_id = p.user_id and cl.addressee_id = auth.uid())
+           or (cl.addressee_id = p.user_id and cl.requester_id = auth.uid()))
+     );
+revoke all on public.circle_profiles from anon;
+grant select on public.circle_profiles to authenticated;
+
+-- v522: base profiles rows are owner-only from here on (the "own profile"
+-- FOR ALL policy above stays); dropping the circle policy is what makes
+-- the projection a hard boundary instead of a convention.
+drop policy if exists "circle reads profiles" on profiles;
 
 -- Friends may view (not upload/delete) each other's avatar photos.
 drop policy if exists "own avatar files" on storage.objects;

@@ -5,6 +5,9 @@
 // requests, browse each other's shelves (read-only). All sharing is enforced
 // by Supabase RLS — see supabase/schema.sql. The hearth needs the cloud; the
 // section prompts for sign-in when offline or signed out.
+// v522: other users' profiles are read ONLY through the circle_profiles
+// public projection (identity + toggled-on fields) — see the projection
+// section below. Base profiles rows are owner-only.
 
 /* User's call (2026-10-11): the social section is called "The Hearth" in
    every theme. The old theme-specific names (Night Court, Harvest Court,
@@ -166,6 +169,54 @@ async function circleRemove(them) {
   if (d2.error) throw d2.error;
   delete circProfiles[them];
 }
+/* ---------- the public projection (v522) ----------
+ * Every read of ANOTHER user's profile goes through the circle_profiles
+ * view (migration v522): identity (name, avatar — always shared), the
+ * sharing-posture flags, and bio / favourite genres only when the owner
+ * has share_bio on. The base profiles row is owner-only now, so nothing
+ * beyond this shape can cross the wire — not via the app, and not via a
+ * hand-built PostgREST query either. circleProjectRow is the client-side
+ * belt to the view's braces: it rebuilds each row with only the projected
+ * keys, so even a future query mistake can't smuggle extra fields into
+ * the app. A user's OWN profile is still read from the base table (see
+ * circlePrivacy / js/105) and keeps every field. */
+const CIRCLE_PROFILE_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path,share_library,share_bio,share_activity,bio,fav_genres';
+const CIRCLE_IDENTITY_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path';
+function circleProjectRow(p) {
+  if (!p) return null;
+  const out = {
+    user_id: p.user_id,
+    first_name: p.first_name || '', last_name: p.last_name || '',
+    avatar_id: p.avatar_id || '', avatar_path: p.avatar_path || '',
+    share_library: p.share_library !== false,
+    share_bio: p.share_bio !== false,
+    share_activity: p.share_activity === true,
+  };
+  if (out.share_bio) {
+    if (p.bio) out.bio = String(p.bio);
+    if (Array.isArray(p.fav_genres) && p.fav_genres.length) out.fav_genres = p.fav_genres.slice();
+  }
+  return out;
+}
+// True when the error says the circle_profiles view isn't there (the app
+// deployed before migration v522 was applied). Only then may reads fall
+// back to the legacy identity-only base-table select; any other error is
+// real and must surface rather than silently degrade a privacy boundary.
+function circleViewMissing(e) {
+  const s = String((e && (e.code + ' ' + e.message)) || e || '');
+  return /circle_profiles/i.test(s) && /schema cache|could not find|does not exist|not found|PGRST205|404/i.test(s);
+}
+async function circleFetchProfiles(ids) {
+  const sb = await cloudClient();
+  if (!ids.length) return [];
+  const q = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS).in('user_id', ids);
+  if (!q.error) return (q.data || []).map(circleProjectRow);
+  if (!circleViewMissing(q.error)) throw q.error;
+  const legacy = await sb.from('profiles').select(CIRCLE_IDENTITY_COLS).in('user_id', ids);
+  if (legacy.error) throw legacy.error;
+  return (legacy.data || []).map(circleProjectRow);
+}
+
 async function circleLists() {
   const sb = await cloudClient();
   const me = cloudUser.id;
@@ -183,10 +234,8 @@ async function circleLists() {
   (f2.data || []).forEach(r => { ids[r.requester_id] = 1; });
   const list = Object.keys(ids);
   if (list.length) {
-    const pr = await sb.from('profiles').select('user_id,first_name,last_name,avatar_id,avatar_path')
-      .in('user_id', list);
-    if (pr.error) throw pr.error;
-    (pr.data || []).forEach(p => { circProfiles[p.user_id] = p; });
+    const rows = await circleFetchProfiles(list);
+    rows.forEach(p => { circProfiles[p.user_id] = p; });
   }
   const prof = id => circProfiles[id] || { user_id: id, first_name: '', last_name: '', avatar_id: '', avatar_path: '' };
   const name = p => ((p.first_name || '') + ' ' + (p.last_name || '')).trim() || 'A reader';
@@ -203,23 +252,125 @@ async function circleLists() {
   };
 }
 
-/* ---------- privacy ---------- */
+/* ---------- privacy ----------
+ * The owner's OWN row is read from the base table (owner-only RLS) — the
+ * full set of toggles lives here, never in the projection beyond the
+ * posture flags themselves. Defaults match migration v522: shelves keep
+ * whatever share_library already says, bio/genres on (today's de-facto
+ * exposure), activity off (opt-in for everyone). */
 async function circlePrivacy() {
   const sb = await cloudClient();
-  const r = await sb.from('profiles').select('share_library,hidden_shelves').eq('user_id', cloudUser.id).maybeSingle();
+  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity').eq('user_id', cloudUser.id).maybeSingle();
+  if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
+    // Pre-v522 database: the new toggle columns don't exist yet — fall back
+    // to the legacy columns and report the migration defaults for the rest.
+    r = await sb.from('profiles').select('share_library,hidden_shelves').eq('user_id', cloudUser.id).maybeSingle();
+  }
   if (r.error) throw r.error;
   return {
     share: r.data ? r.data.share_library !== false : true,
     hidden: (r.data && Array.isArray(r.data.hidden_shelves)) ? r.data.hidden_shelves : [],
+    bio: r.data ? r.data.share_bio !== false : true,
+    activity: r.data ? r.data.share_activity === true : false,
   };
 }
-async function circleSavePrivacy(share, hidden) {
+async function circleSavePrivacy(share, hidden, bio, activity) {
   const sb = await cloudClient();
-  const up = await sb.from('profiles').upsert({
+  const row = {
     user_id: cloudUser.id, share_library: !!share, hidden_shelves: hidden,
     updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id' });
+  };
+  // bio/activity are optional params: two-arg callers (the shelf-share
+  // consent) must not clobber toggles they don't know about, so the keys
+  // are only written when the caller passes them.
+  if (typeof bio !== 'undefined') row.share_bio = !!bio;
+  if (typeof activity !== 'undefined') row.share_activity = !!activity;
+  let up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
+  if (up.error && typeof isMissingColumn === 'function' && isMissingColumn(up.error) &&
+      ('share_bio' in row || 'share_activity' in row)) {
+    // Pre-v522 database: persist what exists; the new toggles land with
+    // their defaults when the migration is applied.
+    delete row.share_bio; delete row.share_activity;
+    up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
+  }
   if (up.error) throw up.error;
+}
+
+/* v522 — the "Circle & privacy" controls, shared by the coven Privacy
+ * sheet (prefix 'cc') and Settings → Circle & privacy (prefix 'st') so
+ * the two surfaces can never drift. Name & avatar are identity, not a
+ * toggle: they're always shared, and the panel says so instead of
+ * offering a switch that couldn't keep its promise. */
+function circlePrivacyPanelHTML(priv, p, shelves) {
+  const seg = (id, on) => '<div class="seg" id="' + id + '">' +
+    '<button data-v="1"' + (on ? ' class="active"' : '') + '>On</button>' +
+    '<button data-v="0"' + (!on ? ' class="active"' : '') + '>Off</button></div>';
+  let html =
+    '<div class="field"><label>Name &amp; avatar</label>' +
+    '<p class="note" style="margin:0">Always shared — it’s how your ' + covenNameBare().toLowerCase() + ' recognises you.</p></div>' +
+    '<div class="field"><label>Profile bio &amp; favourite genres</label>' + seg(p + '-bio', priv.bio) +
+    '<p class="note">Your short bio and favourite genres, shown on your profile to your ' + covenNameBare().toLowerCase() + '.</p></div>' +
+    '<div class="field"><label>Share my shelves &amp; books</label>' + seg(p + '-share', priv.share) +
+    '<p class="note">When off, friends still see you in their ' + covenNameBare().toLowerCase() + ', but none of your books.</p></div>';
+  if (shelves && shelves.length) {
+    html += '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
+      '<div class="chips" id="' + p + '-hide">' +
+      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
+        STATUS[s] + '</button>').join('') +
+      '</div></div>';
+  }
+  html +=
+    '<div class="field"><label>Reading activity</label>' + seg(p + '-act', priv.activity) +
+    '<p class="note">Recently finished books, your star ratings and your Reader Portrait in circle digests. Off unless you opt in.</p></div>';
+  return html;
+}
+function wireCirclePrivacyPanel(root, priv, p) {
+  const state = {
+    share: priv.share, hidden: (priv.hidden || []).slice(),
+    bio: priv.bio !== false, activity: priv.activity === true,
+  };
+  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity);
+  const segWire = (id, key, msgOn, msgOff) => {
+    root.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', async () => {
+      const v = b.dataset.v === '1';
+      if (state[key] === v) return;
+      const prev = state[key];
+      state[key] = v;
+      try {
+        await save();
+        root.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b));
+        toast(v ? msgOn : msgOff);
+      } catch (e) {
+        state[key] = prev;
+        toast('Couldn’t save: ' + ((e && e.message) || e));
+      }
+    }));
+  };
+  const circle = covenNameBare().toLowerCase();
+  segWire(p + '-share', 'share',
+    'Your shelves are shared with your ' + circle,
+    'Your shelves are hidden from your ' + circle);
+  segWire(p + '-bio', 'bio',
+    'Your bio & favourite genres are shared with your ' + circle,
+    'Your bio & favourite genres are no longer shared');
+  segWire(p + '-act', 'activity',
+    'Your reading activity is shared with your ' + circle,
+    'Your reading activity is no longer shared');
+  root.querySelectorAll('#' + p + '-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
+    const s = ch.dataset.shelf;
+    const hidden = state.hidden.slice();
+    const i = hidden.indexOf(s);
+    if (i === -1) hidden.push(s); else hidden.splice(i, 1);
+    const prev = state.hidden;
+    state.hidden = hidden;
+    try {
+      await save();
+      ch.classList.toggle('active', i === -1);
+    } catch (e) {
+      state.hidden = prev;
+      toast('Couldn’t save: ' + ((e && e.message) || e));
+    }
+  }));
 }
 
 /* ---------- shelf-share consent (v476) ----------
@@ -274,10 +425,15 @@ async function maybeAskShelfShare(friendName) {
 /* ---------- friend shelves (read-only) ---------- */
 async function circleFriendProfile(friendId) {
   const sb = await cloudClient();
-  const r = await sb.from('profiles').select('user_id,first_name,last_name,avatar_id,avatar_path')
+  const r = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS)
     .eq('user_id', friendId).maybeSingle();
-  if (r.error) throw r.error;
-  return r.data;
+  if (!r.error) return r.data ? circleProjectRow(r.data) : null;
+  if (!circleViewMissing(r.error)) throw r.error;
+  // Pre-migration fallback: identity columns only, as before v522.
+  const legacy = await sb.from('profiles').select(CIRCLE_IDENTITY_COLS)
+    .eq('user_id', friendId).maybeSingle();
+  if (legacy.error) throw legacy.error;
+  return legacy.data ? circleProjectRow(legacy.data) : null;
 }
 async function circleFriendBooks(friendId) {
   const sb = await cloudClient();
@@ -524,7 +680,12 @@ function renderCovenFriendMain() {
   let html = '<div class="view-head"><button class="btn ghost sm" id="cf-back">← Back</button>' +
     '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
     (prof ? '<div class="cf-sub">' + circAvatarHTML(prof, 'c-avatar') +
-      '<p class="note">' + counts.all + ' book' + (counts.all === 1 ? '' : 's') + ' shared with you</p></div>' : '') +
+      '<p class="note">' + counts.all + ' book' + (counts.all === 1 ? '' : 's') + ' shared with you</p></div>' +
+      // v522: bio / favourite genres ride the projection only when the
+      // friend shares them (share_bio) — absent keys render as nothing.
+      (prof.bio ? '<p class="cf-bio">' + esc(prof.bio) + '</p>' : '') +
+      (prof.fav_genres && prof.fav_genres.length
+        ? '<div class="cf-genres">' + prof.fav_genres.map(g => '<span class="chip">' + esc(g) + '</span>').join('') + '</div>' : '') : '') +
     '<div class="chips">' + chip('all', 'All') +
     ['tbr', 'reading', 'read', 'dnf'].map(s => chip(s, STATUS[s])).join('') + '</div>';
   if (!circBooks.length) {
@@ -563,40 +724,19 @@ function openCovenBook(b) {
   });
 }
 
-/* v454: privacy sheet — same controls as the old Privacy section, in a bottom sheet. */
+/* v454: privacy sheet — same controls as Settings → Circle & privacy
+ * (v522: one shared panel builder, in a bottom sheet). */
 function openPrivacySheet(priv, shelves, opener) {
+  const full = {
+    share: priv.share, hidden: priv.hidden || [],
+    bio: priv.bio !== false, activity: priv.activity === true,
+  };
   const body =
-    '<div class="field"><label>Share my shelves with my ' + covenNameBare().toLowerCase() + '</label>' +
-    '<div class="seg" id="cc-share">' +
-      '<button data-v="1"' + (priv.share ? ' class="active"' : '') + '>On</button>' +
-      '<button data-v="0"' + (!priv.share ? ' class="active"' : '') + '>Off</button></div>' +
-    '<p class="note">When off, friends still see you in their ' + covenNameBare().toLowerCase() + ', but none of your books.</p></div>' +
-    '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
-    '<div class="chips" id="cc-hide">' +
-      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
-        STATUS[s] + '</button>').join('') +
-    '</div></div>';
+    '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +
+    ' only receives what you switch on — anything off is never sent to them, not just hidden.</p>' +
+    circlePrivacyPanelHTML(full, 'cc', shelves);
   covenOpenSheet('Privacy', body, opener);
-  // Same handlers as before
-  document.querySelectorAll('#cc-share button').forEach(b => b.addEventListener('click', async () => {
-    const share = b.dataset.v === '1';
-    try {
-      await circleSavePrivacy(share, priv.hidden);
-      document.querySelectorAll('#cc-share button').forEach(x => x.classList.toggle('active', x === b));
-      toast(share ? 'Your shelves are shared with your ' + covenNameBare().toLowerCase() : 'Your shelves are hidden from your ' + covenNameBare().toLowerCase());
-    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
-  }));
-  document.querySelectorAll('#cc-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
-    const s = ch.dataset.shelf;
-    const hidden = priv.hidden.slice();
-    const i = hidden.indexOf(s);
-    if (i === -1) hidden.push(s); else hidden.splice(i, 1);
-    try {
-      await circleSavePrivacy(priv.share, hidden);
-      priv.hidden = hidden;
-      ch.classList.toggle('active', i === -1);
-    } catch (e) { toast('Couldn’t save: ' + ((e && e.message) || e)); }
-  }));
+  wireCirclePrivacyPanel(document, full, 'cc');
 }
 
 /* v454: invite sheet — the invite card UI moved into a bottom sheet. */

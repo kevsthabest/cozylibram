@@ -38,6 +38,10 @@ async function loadRecos() {
   if (!cloudUser) return [];
   let friends = [];
   try { friends = (await circleLists()).friends || []; } catch (e) { return []; }
+  // v522: recommendations are built from friends' ratings — reading
+  // activity. Friends who haven't opted in to sharing activity are left
+  // out entirely (their shelves still browse in the circle as usual).
+  friends = friends.filter(f => !(f.profile && f.profile.share_activity === false));
   if (!friends.length) return [];
   const mine = new Set();
   (library || []).forEach(b => { const k = recoKey(b); if (k) mine.add(k); });

@@ -35,7 +35,23 @@ const mkStub = () => {
     books: [],          // {user_id, book_id, isbn, data}
   };
   const files = {};
-  const rowsOf = (name) => name === 'profiles' ? Object.values(db.profiles) : db[name];
+  // v522: emulate the circle_profiles view — identity + posture flags, and
+  // bio/genres only when share_bio is on. gender / hidden_shelves /
+  // updated_at are never projected (that's the privacy contract).
+  const projectPublic = (p) => {
+    const out = { user_id: p.user_id, first_name: p.first_name || '', last_name: p.last_name || '',
+      avatar_id: p.avatar_id || '', avatar_path: p.avatar_path || '',
+      share_library: p.share_library !== false, share_bio: p.share_bio !== false,
+      share_activity: p.share_activity === true };
+    if (out.share_bio) {
+      if (p.bio) out.bio = p.bio;
+      if (Array.isArray(p.fav_genres) && p.fav_genres.length) out.fav_genres = p.fav_genres.slice();
+    }
+    return out;
+  };
+  const rowsOf = (name) => name === 'profiles' ? Object.values(db.profiles)
+    : name === 'circle_profiles' ? Object.values(db.profiles).map(projectPublic)
+    : db[name];
   const applyConds = (rows, conds) => rows.filter(r => conds.every(([c, v]) => r[c] === v));
   const table = (name) => ({
     select(cols) {
@@ -324,6 +340,8 @@ stub.rpc = (fn, args) => {
 
   // ---- v100: stats slot integration (real refresh path, stub cloud) ----
   useAs(A);
+  // v522: stats are reading activity — Ben has opted in to sharing it.
+  stub.db.profiles[B] = Object.assign({}, stub.db.profiles[B], { share_activity: true });
   stub.db.circle_links.push({ requester_id: A, addressee_id: B, status: 'accepted', created_at: new Date().toISOString() });
   runInWindow('library = ' + JSON.stringify([
     { id: 'm1', title: 'Shared Tome', authors: ['A. Writer'], status: 'read', myRating: 5, categories: ['Fiction / Romance'] },

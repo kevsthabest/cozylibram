@@ -1884,6 +1884,9 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .c-avatar.letter { background: linear-gradient(135deg, var(--accent), var(--gold)); }
 .cf-sub { display: flex; align-items: center; gap: 10px; justify-content: center; margin: 4px 0 8px; }
 .cf-sub .note { margin: 0; }
+/* v522: friend bio + favourite genres on the circle friend header */
+.cf-bio { text-align: center; margin: 0 auto 8px; max-width: 34em; }
+.cf-genres { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 0 0 10px; }
 .cb-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
 .cb-head .cover-wrap { width: 96px; flex: 0 0 auto; }
 

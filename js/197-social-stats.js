@@ -214,6 +214,15 @@ async function loadCovenStats() {
   const friends = ((await circleLists()).friends) || [];
   const people = [{ id: 'me', name: 'You', profile: null, stats: statPersonBooks(typeof library !== 'undefined' ? library : []) }];
   for (const f of friends) {
+    // v522: reading activity is opt-in. When a friend's projection says
+    // share_activity is off, they contribute nothing here — their books
+    // aren't even fetched for stats. (Their shelves stay browsable in the
+    // circle; that's the separate shelves toggle.) The person row remains
+    // so counts of circle members stay honest, with empty stats.
+    if (f.profile && f.profile.share_activity === false) {
+      people.push({ id: f.id, name: f.name || 'A friend', profile: f.profile, stats: statPersonBooks([]) });
+      continue;
+    }
     // v496 (#140): fetch books + profile concurrently per friend instead of
     // two sequential round-trips. Error semantics preserved: a books failure
     // still skips the friend; a profile failure falls back to f.profile.

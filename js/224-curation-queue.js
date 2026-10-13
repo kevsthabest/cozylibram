@@ -246,12 +246,14 @@ async function renderCqList(sb) {
      round-trips (107 items × 2 queries was hanging the render). The display
      defaults to "no votes yet"; re-enable when voting goes live. */
   var consens = {};
-  /* suggester names (best-effort from profiles) */
+  /* suggester names (best-effort from the v522 public projection — the
+     base profiles table is owner-only now; unlinked suggesters simply
+     don't resolve, exactly as the old RLS policy behaved) */
   var names = {};
   try {
     var ids = [...new Set(cqItems.map(function (x) { return x.by; }).filter(Boolean))];
     if (ids.length) {
-      var pr = await sb.from('profiles').select('user_id, first_name').in('user_id', ids);
+      var pr = await sb.from('circle_profiles').select('user_id, first_name').in('user_id', ids);
       (pr.data || []).forEach(function (p) {
         if (p.first_name) names[p.user_id] = p.first_name;
       });
