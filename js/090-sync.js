@@ -473,12 +473,16 @@ async function cloudWipe() {
   if (error) toast('Cloud wipe failed: ' + error.message);
 }
 
-async function cloudSignUp(email, password, firstName, lastName) {
+async function cloudSignUp(email, password, firstName, lastName, ageBand) {
   const sb = await cloudClient().catch(() => null);
   if (!sb) { toast('Cloud sync is not configured — add it to server-config.json on your home PC'); return; }
   const meta = {};
   if (firstName) meta.first_name = firstName;
   if (lastName) meta.last_name = lastName;
+  // v523: the self-declared age band rides user_metadata like the
+  // names; enterApp adopts it into user_state exactly once (the band
+  // itself never lives in profiles — see js/230-privacy.js).
+  if (ageBand === 'teen' || ageBand === 'adult') meta.age_band = ageBand;
   const { data, error } = await sb.auth.signUp({ email: email, password: password, options: { data: meta } });
   if (error) { toast('Sign up failed: ' + error.message); return; }
   // v118: remember the signup so the next enterApp can log account_created
