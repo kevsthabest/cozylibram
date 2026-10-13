@@ -71,6 +71,80 @@
   var WALL_Z = -PLANK_D / 2 - 0.16;          // bookcase back panel plane
   var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
 
+  /* ---------- decoration footprints + the shared case packer (v514) ----------
+     Shelf decorations are anchored (saved per bookcase: level + x) and books
+     flow around them. One pure packer is the single source of truth for how
+     books fill a case: the engine lays out the visible case with it, and
+     js/217-shelf3d-view.js slices the room into cases by simulating it, so
+     case boundaries always match what the engine can actually show.
+     Footprints mirror the makers' userData.fw (guarded by
+     .test/shelf-reflow.test.js, which parses the makers). Edge-draped pieces
+     (fairy lights, star garland) hang at the plank's front edge in front of
+     the books — they never displace books, so their footprint here is 0. */
+  var DECO_FOOTPRINTS = {
+    plant: 0.75, candle: 0.55, mug: 0.6, stack: 1.2, clock: 0.6, photo: 0.55,
+    succulent: 0.5, lantern: 0.45, globe: 0.62, vase: 0.5, gifts: 0.75,
+    eggs: 0.7, coins: 0.42, clover: 0.45, applebowl: 0.85,
+    'dragon-egg': 0.7, 'storm-lantern': 0.42, 'rider-blade': 0.7,
+    'thorn-crown': 0.65, 'moon-goblet': 0.5, 'night-bloom': 0.6,
+    'holo-cube': 0.5, 'signal-dish': 0.65, 'data-core': 0.55,
+    'mushroom-cottage': 0.75, 'firefly-jar': 0.45, 'wisp-lantern': 0.6,
+    lights: 0, stargarland: 0
+  };
+  function shelf3dDecoFootprint(type) {
+    var fw = DECO_FOOTPRINTS[type];
+    return (typeof fw === 'number') ? fw : 0;
+  }
+  function s3dDim(v, lo, hi, fb) {
+    v = Number(v);
+    if (!isFinite(v)) return fb;
+    return Math.min(hi, Math.max(lo, v));
+  }
+  /* Pack `books` ([{spineW, spineH}]) into one bookcase around per-level
+     obstacle intervals (decorations). Levels fill top-first (LEVELS order
+     [2, 1, 0] by index, as setBooks has always done). A book that cannot fit
+     in the rest of a level — shelf end or the next obstacle — retries on the
+     next level; a book that fits nowhere in the case overflows (the caller
+     flows it into the next case). Returns { placed: [{i, li, x, w, h}],
+     overflow: [indices] }. Pure: no THREE, no DOM. */
+  function shelf3dPackCase(books, obstacles, cap) {
+    var order = [2, 1, 0];
+    var startX = -SHELF_W / 2 + 0.35, limit = startX + (SHELF_W - 0.7);
+    var gap = 0.025;
+    var maxN = (typeof cap === 'number' && cap > 0) ? cap : MAX_BOOKS;
+    var obs = order.map(function (li) {
+      return ((obstacles && obstacles[li]) || []).slice().sort(function (a, b) { return a[0] - b[0]; });
+    });
+    var placed = [], overflow = [];
+    var li = 0, x = startX;
+    (books || []).forEach(function (b, i) {
+      if (!b) { overflow.push(i); return; }
+      if (placed.length >= maxN) { overflow.push(i); return; }
+      var w = s3dDim(b.spineW, 0.3, 0.72, 0.44);
+      var h = s3dDim(b.spineH, 1.4, 2.7, 2.0);
+      var done = false;
+      while (li < 3 && !done) {
+        var lvl = order[li], blocked = obs[li];
+        var cx = x;
+        for (;;) {
+          if (cx + w > limit) break;
+          var hit = null;
+          for (var oi = 0; oi < blocked.length; oi++) {
+            if (cx < blocked[oi][1] && cx + w > blocked[oi][0]) { hit = blocked[oi]; break; }
+          }
+          if (!hit) { done = true; break; }
+          cx = hit[1] + gap;
+        }
+        if (done) {
+          placed.push({ i: i, li: lvl, x: cx, w: w, h: h });
+          x = cx + w + gap;
+        } else { li++; x = startX; }
+      }
+      if (!done) overflow.push(i);
+    });
+    return { placed: placed, overflow: overflow };
+  }
+
   /* ---------- camera fit / pan math (pure — unit tested) ---------- */
   /* Distance at which a `fitW` x `fitH` frame (world units, centred on the
      view target) exactly fills a PerspectiveCamera with vertical fov
@@ -662,31 +736,94 @@
       });
       shelfBooks.length = 0;
     }
-    function setBooks(books) {
-      clearBooks();
-      if (!books || !books.length) { renderer.shadowMap.needsUpdate = true; markDirty(); return; }
-      var list = books.slice(0, MAX_BOOKS);
-      var order = [2, 1, 0];   // fill the top shelf first, like the prototype
-      var li = 0;
-      var startX = -SHELF_W / 2 + 0.35;
-      var x = startX;
-      list.forEach(function (b) {
-        if (!b) return;
-        var w = clampNum(b.spineW, 0.3, 0.72, 0.44);
-        var h = clampNum(b.spineH, 1.4, 2.7, 2.0);
-        var d = 1.75;
-        while (li < 3 && x + w > startX + (SHELF_W - 0.7)) { li++; x = startX; }
-        if (li >= 3) return;   // shelves are full — ignore the rest
-        var mesh = makeBook(b, w, h, d);
-        mesh.position.set(x + w / 2, LEVELS[order[li]] + h / 2, 0);
-        scene.add(mesh);
-        var rec = [x, x + w];
-        occupied[order[li]].push(rec);
-        shelfBooks.push({ mesh: mesh, li: order[li], rec: rec });
-        x += w + 0.025;
+    /* v514: books flow around decorations. setBooks retains the list it is
+       given (the view passes this case's books plus the next case's, so a
+       decoration removal can pull books in) and lays out what fits via the
+       shared packer (shelf3dPackCase) around the placed decorations'
+       intervals. Decorations register in `occupied` first and stay put;
+       reflowBooks() re-runs the same layout after a decoration is placed,
+       moved, or removed — surviving books slide (tween) to their new spots,
+       displaced books leave (they belong to the next case now), and books
+       that newly fit pop in. Reduced motion: everything snaps. */
+    var currentBooks = [];
+    function s3dReducedMotion() {
+      try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+      catch (_) { return false; }
+    }
+    function bookObstacles() {
+      var obs = LEVELS.map(function () { return []; });
+      placed.forEach(function (p) {
+        if (p.room || !p.rec) return;
+        if (p.group.userData.edge) return;   // edge-draped: hangs in front, displaces nothing
+        obs[p.pi].push(p.rec);
       });
+      return obs;
+    }
+    function layoutCurrentBooks(animate) {
+      var pack = shelf3dPackCase(currentBooks, bookObstacles(), MAX_BOOKS);
+      var byId = {};
+      shelfBooks.forEach(function (sb) { byId[sb.mesh.userData.bookId] = sb; });
+      shelfBooks.forEach(function (sb) {
+        var oi = occupied[sb.li].indexOf(sb.rec);
+        if (oi >= 0) occupied[sb.li].splice(oi, 1);
+      });
+      var slide = animate && !s3dReducedMotion();
+      var next = [];
+      pack.placed.forEach(function (pl) {
+        var b = currentBooks[pl.i];
+        var rec = [pl.x, pl.x + pl.w];
+        occupied[pl.li].push(rec);
+        var sb = byId[b.id];
+        if (sb) {
+          delete byId[b.id];
+          sb.li = pl.li; sb.rec = rec;
+          var tx = pl.x + pl.w / 2, ty = LEVELS[pl.li] + pl.h / 2;
+          var sx = sb.mesh.position.x, sy = sb.mesh.position.y;
+          if (!slide || (Math.abs(sx - tx) < 0.001 && Math.abs(sy - ty) < 0.001)) {
+            sb.mesh.position.set(tx, ty, 0);
+          } else {
+            (function (mesh) {
+              tween(260, function (k) {
+                mesh.position.x = sx + (tx - sx) * easeOut(k);
+                mesh.position.y = sy + (ty - sy) * easeOut(k);
+              });
+            })(sb.mesh);
+          }
+        } else {
+          var mesh = makeBook(b, pl.w, pl.h, 1.75);
+          mesh.position.set(pl.x + pl.w / 2, LEVELS[pl.li] + pl.h / 2, 0);
+          scene.add(mesh);
+          sb = { mesh: mesh, li: pl.li, rec: rec };
+          if (slide) {
+            mesh.scale.setScalar(0.01);
+            (function (m2) {
+              tween(220, function (k) { m2.scale.setScalar(Math.max(0.01, easeOutBack(k))); });
+            })(mesh);
+          }
+        }
+        next.push(sb);
+      });
+      Object.keys(byId).forEach(function (id) {
+        scene.remove(byId[id].mesh);
+        disposeDeep(byId[id].mesh);
+      });
+      shelfBooks = next;
       renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake shadows after books change
       markDirty();
+    }
+    function setBooks(books) {
+      /* Retain up to two cases' worth: the extra case is the pull-in
+         reservoir for decoration removals. The packer caps the visible
+         case at MAX_BOOKS and overflows the rest, exactly like slicing. */
+      currentBooks = (books || []).slice(0, MAX_BOOKS * 2);
+      layoutCurrentBooks(false);
+    }
+    function reflowBooks() {
+      if (dead) return;
+      layoutCurrentBooks(true);
+      if (typeof opts.onDecoChange === 'function') {
+        try { opts.onDecoChange(); } catch (e) {}
+      }
     }
     var ray = new THREE.Raycaster();
     var ptr = new THREE.Vector2();
@@ -1637,6 +1774,14 @@
     })();
 
     function findFreeSpot(pi, x, fw) {
+      var sx = scanFreeSpot(pi, x, fw);
+      return (sx == null) ? THREE.MathUtils.clamp(x, -SHELF_W / 2 + 0.45 + fw / 2, SHELF_W / 2 - 0.45 - fw / 2) : sx;
+    }
+    /* The gap hunt itself: returns a free centre x on the level, or null
+       when the level has no gap wide enough (v514: a full level is no
+       longer a dead end — placeDeco claims the drop spot and the books
+       reflow around it). */
+    function scanFreeSpot(pi, x, fw) {
       var minX = -SHELF_W / 2 + 0.45 + fw / 2, maxX = SHELF_W / 2 - 0.45 - fw / 2;
       x = THREE.MathUtils.clamp(x, minX, maxX);
       var occ = occupied[pi].slice().sort(function (a, b) { return a[0] - b[0]; });
@@ -1650,7 +1795,7 @@
           if (!blocked) return sx;
         }
       }
-      return x;
+      return null;
     }
     function registerSpot(pi, x, fw) {
       var rec = [x - fw / 2, x + fw / 2];
@@ -1675,7 +1820,13 @@
       if (!maker) throw new Error('Unknown decoration: ' + type);
       var g = maker(opts || {});
       var fw = g.userData.fw;
-      x = findFreeSpot(pi, x, fw);
+      /* v514: prefer a genuine gap; on a full level, claim the drop spot
+         (clamped) — the placeDeco wrapper reflows the books around the
+         claimed interval, so a packed shelf is no longer undecoratable. */
+      var spot = scanFreeSpot(pi, x, fw);
+      x = (spot == null)
+        ? THREE.MathUtils.clamp(x, -SHELF_W / 2 + 0.45 + fw / 2, SHELF_W / 2 - 0.45 - fw / 2)
+        : spot;
       if (g.userData.edge) {
         g.position.set(x, LEVELS[pi] + 0.06, PLANK_D / 2 - 0.4);
       } else {
@@ -2359,6 +2510,11 @@
               g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k)));
               g3.position.y = startY2 + (endY2 - startY2) * easeOut(k);
             });
+            /* v514: a move is a layout change — persist it (moves previously
+               only saved lazily on the next unrelated save) and let the
+               books readjust around the decoration's new spot. */
+            saveDecoLayout();
+            reflowBooks();
           } else g3.scale.setScalar(1);
           select(g3);   // re-select after move
         }
@@ -2889,7 +3045,9 @@
     }
 
     /* ----- go ----- */
-    if (opts.initialBooks) setBooks(opts.initialBooks);
+    /* v514: decorations restore BEFORE the initial book layout (below),
+       so books flow around them; on case switches setCase loads the
+       decorations first too — both orders converge to the same layout. */
     /* Phase 1: persist decoration layout to localStorage.
        Save format is versioned ({v, decorations}) so future format changes
        can migrate. v0 was the unversioned raw array; v1 wraps it. */
@@ -2986,6 +3144,9 @@
     placeDeco = function () {
       var r = _origPlaceDeco.apply(this, arguments);
       saveDecoLayout();
+      /* v514: books readjust around the new decoration (skipped mid-case-
+         swap: setBooks lays the incoming case out right after anyway). */
+      if (!loadingCase) reflowBooks();
       renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake after deco change
       markDirty();
       return r;
@@ -2994,10 +3155,12 @@
     removeDeco = function () {
       var r = _origRemoveDeco.apply(this, arguments);
       saveDecoLayout();
+      if (!loadingCase) reflowBooks();
       renderer.shadowMap.needsUpdate = true;
       markDirty();
       return r;
     };
+    if (opts.initialBooks) setBooks(opts.initialBooks);
     onboardTimer = setTimeout(function () {
       if (!dead) toast(DEFAULT_HINT, 4200);   // brief onboarding, then it gets out of the way
     }, 900);
@@ -3136,7 +3299,8 @@
     if (opts.initialNeighbours) setNeighbours(opts.initialNeighbours);
     return { setBooks: setBooks, setTheme: setTheme, setThemeParams: setThemeParams,
       setAppTheme: setAppTheme, unmount: unmount, capture: capture,
-      showCase: showCase, highlightBook: highlightBook, currentCase: currentCase };
+      showCase: showCase, highlightBook: highlightBook, currentCase: currentCase,
+      setNeighbours: setNeighbours };
   }
 
   /* ============================== public API ============================== */
@@ -3158,7 +3322,8 @@
       active = inst;
       return { setBooks: inst.setBooks, setTheme: inst.setTheme, setThemeParams: inst.setThemeParams,
         setAppTheme: inst.setAppTheme, unmount: unmount, capture: inst.capture,
-        showCase: inst.showCase, highlightBook: inst.highlightBook, currentCase: inst.currentCase };
+        showCase: inst.showCase, highlightBook: inst.highlightBook, currentCase: inst.currentCase,
+        setNeighbours: inst.setNeighbours };
     });
   }
   function unmount() {
@@ -3166,6 +3331,11 @@
   }
   function setBooks(books) {
     if (active) active.setBooks(books);
+  }
+  /* v514: refresh the neighbour previews without touching the visible case
+     (the view calls this after a decoration change re-slices the room). */
+  function setNeighbours(n) {
+    if (active) active.setNeighbours(n);
   }
   function setTheme(themeKey) {
     if (active) active.setTheme(themeKey);
@@ -3190,6 +3360,9 @@
 
   window.Shelf3D = { showCase: showCase, highlightBook: highlightBook, currentCase: currentCase, mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
     setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture,
-    fitDistance: shelf3dFitDistance, clampPan: shelf3dClampPan };
+    fitDistance: shelf3dFitDistance, clampPan: shelf3dClampPan,
+    /* v514: pure layout math shared with js/217's case slicer. */
+    packCase: shelf3dPackCase, decoFootprint: shelf3dDecoFootprint,
+    setNeighbours: setNeighbours };
 
 })();
