@@ -54,8 +54,11 @@ ok('sign-out: per-user slot keeps its copy',
 run('setLocalUser("user-1")');
 ok('sign-in again: books are back', run('library.length') === 3);
 
+// v517 (#131): libraryPartitions/restorePartition are async (IndexedDB slot
+// enumeration), so sections 3+ run inside an async block.
+(async () => {
 // --- 3. libraryPartitions lists every partition ---
-const parts = run('JSON.stringify(libraryPartitions())');
+const parts = JSON.stringify(await run('libraryPartitions()'));
 const parsed = JSON.parse(parts);
 ok('partitions: per-user slot listed with the books',
   parsed.some(p => p.key === 'spicyshelves.library.v2.user-1' && p.n === 3));
@@ -69,11 +72,11 @@ ok('partitionLabel: other sign-in labelled', run("partitionLabel({key:'spicyshel
 run('setLocalUser(null)'); // signed out; simulate a stranded per-user partition:
 run('library = [];');
 ok('setup: library looks empty', run('library.length') === 0);
-const restored = run("restorePartition('spicyshelves.library.v2.user-1')");
+const restored = await run("restorePartition('spicyshelves.library.v2.user-1')");
 ok('restorePartition: returns book count', restored === 3);
 ok('restorePartition: library has the books', run('library.length') === 3);
 ok('restorePartition: books migrated', run("library.every(b => b.id && b.title)") === true);
-ok('restorePartition: bad key returns 0', run("restorePartition('spicyshelves.library.v2.nope')") === 0);
+ok('restorePartition: bad key returns 0', (await run("restorePartition('spicyshelves.library.v2.nope')")) === 0);
 
 // --- 5. Sign-out with an empty library is a no-op ---
 window.localStorage.clear();
@@ -96,3 +99,4 @@ ok('original user: books are back', run('library.length') === 2);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
+})();

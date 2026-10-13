@@ -623,33 +623,103 @@ async function setLocalUserIdb(uid) {
 // looks empty can be found and restored. (v136 introduced this for the
 // sign-out hand-back; v204 removed the hand-back with signed-out mode, but
 // the recovery UI stays as a grace-period safety net.)
-// v202: lists the legacy localStorage partitions (grace-period fallback);
-// the live data now lives in IndexedDB.
-function libraryPartitions() {
-  const out = [];
+// v517 (#131): the live libraries have lived in IndexedDB slots
+// (`cozylibram.<uid|offline>`) since v202, but this listing only ever read
+// the legacy localStorage keys — so on a device whose data had migrated
+// (or that never had legacy keys) Settings reported "No saved libraries
+// found" while the books sat in a slot, invisible to recovery. Enumeration
+// is now async and slot-first: slots are discovered via
+// indexedDB.databases(), each slot supersedes its legacy twin (the
+// read-only grace copy of the same library), and the legacy keys remain
+// as the fallback for browsers without databases() and for pre-v202
+// partitions that never became slots.
+async function libraryPartitions() {
+  const byKey = {};
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k !== 'spicyshelves.library.v1' && k.indexOf('spicyshelves.library.v2.') !== 0) continue;
       let n = -1;
       try { const a = JSON.parse(localStorage.getItem(k)); n = Array.isArray(a) ? a.length : -1; } catch (e) {}
-      out.push({ key: k, n: n, current: k === libKey() });
+      byKey[k] = { key: k, n: n, current: k === libKey() };
     }
   } catch (e) {}
+  for (const s of await slotPartitions()) {
+    delete byKey[legacyKeyForSlot(s.key)]; // the slot is the live copy
+    byKey[s.key] = s;
+  }
+  const out = Object.keys(byKey).map(k => byKey[k]);
   out.sort((a, b) => b.n - a.n);
   return out;
 }
+// The legacy localStorage key that held the same library a slot now holds.
+function legacyKeyForSlot(dbName) {
+  const suffix = dbName.slice(IDB_SLOT_PREFIX.length);
+  return suffix === 'offline' ? 'spicyshelves.library.v1'
+    : 'spicyshelves.library.v2.' + suffix;
+}
+// The slot uid behind a partition key (null = the offline slot), for
+// idbOpenSlot. Keys that aren't slot database names return undefined.
+function slotUidForKey(key) {
+  if (typeof key !== 'string' || key.indexOf(IDB_SLOT_PREFIX) !== 0) return undefined;
+  const suffix = key.slice(IDB_SLOT_PREFIX.length);
+  return suffix === 'offline' ? null : suffix;
+}
+// On-device IndexedDB slots with their book counts. Empty slots are not
+// saved libraries and are omitted. Where indexedDB.databases() is
+// unavailable (older Firefox) only the currently open slot can be vouched
+// for; the legacy enumeration above still runs, so the list degrades
+// instead of going blind.
+async function slotPartitions() {
+  if (idbDisabled || typeof indexedDB === 'undefined') return [];
+  let names = null;
+  if (typeof indexedDB.databases === 'function') {
+    try {
+      const list = await indexedDB.databases();
+      names = (list || []).map(d => d && d.name)
+        .filter(n => typeof n === 'string' && n.indexOf(IDB_SLOT_PREFIX) === 0);
+    } catch (e) { names = null; }
+  }
+  if (!names) {
+    return (currentDb && library.length)
+      ? [{ key: idbSlotName(localUid), n: library.length, current: true }] : [];
+  }
+  const out = [];
+  for (const name of names) {
+    try {
+      const db = await idbOpenSlot(slotUidForKey(name));
+      const n = await idbCountBooks(db);
+      if (n < 1) continue;
+      out.push({ key: name, n: n, current: name === idbSlotName(localUid) });
+    } catch (e) { /* an unreadable slot shouldn't hide the rest */ }
+  }
+  return out;
+}
 function partitionLabel(p) {
-  if (p.key === 'spicyshelves.library.v1') return 'Offline shelf (signed out)';
-  if (localUid && p.key === 'spicyshelves.library.v2.' + localUid) return 'This account';
+  if (p.key === 'spicyshelves.library.v1' || p.key === idbSlotName(null)) return 'Offline shelf (signed out)';
+  if (p.key === libKey() || (localUid && p.key === idbSlotName(localUid))) return 'This account';
   return 'Another sign-in on this device';
 }
-// Restore a partition's books into the currently open library slot.
-function restorePartition(key) {
+// Restore a partition's books into the currently open library slot. Slot
+// partitions are read from their IndexedDB database; legacy partitions
+// from localStorage. A restore is an explicit un-delete: the restored ids
+// are untombstoned, or the next sync push would re-delete them (the same
+// contract resurrectCloudBooks follows for cloud restores, js/090-sync.js).
+async function restorePartition(key) {
   let arr = null;
-  try { const a = JSON.parse(localStorage.getItem(key)); if (Array.isArray(a)) arr = a; } catch (e) {}
+  const slotUid = slotUidForKey(key);
+  if (slotUid !== undefined) {
+    if (idbDisabled || typeof indexedDB === 'undefined') return 0;
+    try {
+      const books = await idbGetAllBooks(await idbOpenSlot(slotUid));
+      if (Array.isArray(books)) arr = books;
+    } catch (e) { return 0; }
+  } else {
+    try { const a = JSON.parse(localStorage.getItem(key)); if (Array.isArray(a)) arr = a; } catch (e) {}
+  }
   if (!arr) return 0;
   library = arr.map(migrateBook); // v495 (#125): migrateBook wraps+dirties — restored content may differ from the store, so it all persists
+  library.forEach(b => untombstone(b.id));
   saveLibrary();
   return library.length;
 }
