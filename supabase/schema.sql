@@ -233,7 +233,11 @@ alter table profiles add column if not exists share_activity boolean not null de
 -- read goes through the circle_profiles view further below, which projects
 -- only identity + posture flags + toggled-on fields. The books policy's
 -- share test moves into this SECURITY DEFINER helper, which returns only a
--- boolean and never exposes the hidden-shelves list it checks against.
+-- boolean and never exposes the hidden-shelves list it checks against. It
+-- answers true for a status only when the owner actually has a book in
+-- it, so an RPC probe reveals nothing beyond what loading the shelf
+-- shows (a hidden shelf with no books is indistinguishable from an empty
+-- one; in the policy path the row under test satisfies that condition).
 create or replace function public.circle_book_visible(p_owner uuid, p_status text)
 returns boolean
 language sql
@@ -241,7 +245,7 @@ security definer
 stable
 set search_path = public
 as $$
-  select case
+  select (case
     when auth.uid() is null then false
     when auth.uid() = p_owner then true
     when not exists (
@@ -256,7 +260,12 @@ as $$
       from public.profiles p
       where p.user_id = p_owner
     ), true)
-  end;
+  end)
+  and exists (
+    select 1 from public.books b
+    where b.user_id = p_owner
+      and coalesce(b.data ->> 'status', '') = coalesce(p_status, '')
+  );
 $$;
 revoke all on function public.circle_book_visible(uuid, text) from public;
 grant execute on function public.circle_book_visible(uuid, text) to authenticated;

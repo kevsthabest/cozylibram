@@ -49,8 +49,13 @@ alter table public.profiles
 -- circle policy gone, that subquery would see no row and silently default
 -- to "shared, nothing hidden" — a leak. This SECURITY DEFINER helper does
 -- the whole visibility test inside the database and returns only a boolean:
--- it never hands the hidden-shelves list to any caller (a direct RPC call
--- learns nothing the caller couldn't already infer from which books load).
+-- it never hands the hidden-shelves list to any caller. A direct RPC call
+-- learns nothing beyond what loading the shelf already reveals — the
+-- trailing EXISTS makes the helper answer true for a status only when the
+-- owner actually has a book in it, so probing a status with no books
+-- cannot distinguish "hidden" from "empty". (In the policy path a row is
+-- always under test, so that row itself satisfies the EXISTS and policy
+-- behaviour is unchanged.)
 create or replace function public.circle_book_visible(p_owner uuid, p_status text)
 returns boolean
 language sql
@@ -58,7 +63,7 @@ security definer
 stable
 set search_path = public
 as $$
-  select case
+  select (case
     when auth.uid() is null then false
     when auth.uid() = p_owner then true
     when not exists (
@@ -73,7 +78,12 @@ as $$
       from public.profiles p
       where p.user_id = p_owner
     ), true)
-  end;
+  end)
+  and exists (
+    select 1 from public.books b
+    where b.user_id = p_owner
+      and coalesce(b.data ->> 'status', '') = coalesce(p_status, '')
+  );
 $$;
 revoke all on function public.circle_book_visible(uuid, text) from public;
 grant execute on function public.circle_book_visible(uuid, text) to authenticated;

@@ -265,6 +265,39 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   const lp = probe('loadProfile()');
   ok('loadProfile round-trips bio/genres locally', lp.bio === 'Cloud bio' && lp.favGenres.join(',') === 'Gothic,Horror');
 
+  // ---------- migration SQL: circle_book_visible probe hardening ----------
+  // The helper is RPC-callable by any authenticated user. Without the
+  // books EXISTS, an accepted friend could probe the four shelf statuses
+  // and reconstruct hidden_shelves even for shelves holding ZERO books —
+  // the hiding configuration itself leaking to the person it's hidden
+  // from. Pin the hardening in BOTH the migration and the schema.sql
+  // mirror (they must stay in agreement), and pin that the accepted-link
+  // check still gates everything: a stranger gets false no matter how
+  // many books the owner has.
+  const fnBody = (sql) => {
+    const i = sql.indexOf('create or replace function public.circle_book_visible');
+    if (i < 0) return '';
+    const j = sql.indexOf('$$;', i);
+    return j < 0 ? '' : sql.slice(i, j + 3);
+  };
+  const migBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v522_circle_projection.sql'), 'utf8'));
+  const schemaBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8'));
+  ok('sql: helper defined in migration and schema mirror', migBody.length > 0 && schemaBody.length > 0);
+  ok('sql: migration and schema.sql helper definitions agree',
+    migBody.replace(/\s+/g, ' ') === schemaBody.replace(/\s+/g, ' '));
+  [['migration', migBody], ['schema.sql', schemaBody]].forEach(([label, body]) => {
+    ok('sql (' + label + '): true requires a book of the owner in the queried status',
+      /end\)\s+and exists \(\s*select 1 from public\.books b\s+where b\.user_id = p_owner/.test(body));
+    ok('sql (' + label + '): book status compared like-with-like (coalesced)',
+      /coalesce\(b\.data ->> 'status', ''\) = coalesce\(p_status, ''\)/.test(body));
+    ok('sql (' + label + '): accepted-link check still runs first (strangers false regardless of books)',
+      /when not exists \(\s*select 1 from public\.circle_links[\s\S]*?cl\.status = 'accepted'[\s\S]*?\) then false/.test(body) &&
+      body.indexOf('public.circle_links') < body.indexOf('from public.books') &&
+      body.indexOf('public.circle_links') < body.indexOf('from public.profiles'));
+    ok('sql (' + label + '): share_library + hidden_shelves test intact behind the link check',
+      /select p\.share_library\s+and not \(coalesce\(p_status, ''\) = any \(coalesce\(p\.hidden_shelves/.test(body));
+  });
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(2); });
