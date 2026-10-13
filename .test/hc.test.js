@@ -18,6 +18,7 @@ window.fetch = async (url, opts) => {
 require('./harness').loadApp(window);
 
 const tsDoc = (doc) => ({ data: { search: { results: { found: 1, hits: [{ document: doc }] } } } });
+const tsDocs = (docs) => ({ data: { search: { results: { found: docs.length, hits: docs.map(d => ({ document: d })) } } } });
 const tsEmpty = { data: { search: { results: { found: 0, hits: [] } } } };
 
 const onyxDoc = {
@@ -108,6 +109,76 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   ok('detail html: warnings collapsible', htmlOut.includes('<details') && htmlOut.includes('Content warnings (2)'));
   ok('detail html: escaped', !htmlOut.includes('<img src=x') && htmlOut.includes('&lt;img'));
   ok('detail html: empty book -> empty', window.hcDetailHTML({}) === '');
+
+  // ---- v516 (#132): title-fallback acceptance --------------------------------
+  // The fallback used to accept any doc sharing the book's first 12 title
+  // characters. These pin the tightened matcher: prefix collisions rejected,
+  // genuine title/author/ISBN proofs accepted.
+  const housemaidDoc = {
+    title: 'The Housemaid', author_names: ['Freida McFadden'],
+    content_warnings: ['Violence', 'Murder'], moods: ['tense', 'dark'],
+    genres: ['Thriller'], series_names: ['The Housemaid'],
+    featured_series: { position: 1, details: '1', series: { name: 'The Housemaid' } },
+    isbns: ['9781538742573'], description: 'Book one.', pages: 336,
+  };
+  const secretDoc = Object.assign({}, housemaidDoc, {
+    title: "The Housemaid's Secret",
+    content_warnings: ['Gaslighting'],
+    featured_series: { position: 2, details: '2', series: { name: 'The Housemaid' } },
+    isbns: ['9781538742580'],
+  });
+
+  // 11. The #132 repro: same author, title is a 12-char prefix collision.
+  responseQueue = [tsDoc(secretDoc)];
+  const hm1 = { id: 'h1', title: 'The Housemaid', authors: ['Freida McFadden'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const rHm1 = await window.enrichHardcover(hm1);
+  ok('#132: prefix-collision doc rejected', rHm1 === false && !hm1.hcEnriched);
+  ok('#132: wrong book warnings not applied', hm1.contentWarnings === undefined && hm1.series === undefined);
+
+  // 12. The colliding doc ranks first, the real one second -> real one wins.
+  responseQueue = [tsDocs([secretDoc, housemaidDoc])];
+  const hm2 = { id: 'h2', title: 'The Housemaid', authors: ['Freida McFadden'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const rHm2 = await window.enrichHardcover(hm2);
+  ok('#132: exact doc picked over collision', rHm2 === true && hm2.series && hm2.series.position === 1);
+  ok('#132: warnings come from the matched doc', Array.isArray(hm2.contentWarnings) && hm2.contentWarnings.includes('Murder') && !hm2.contentWarnings.includes('Gaslighting'));
+
+  // 13. Reverse direction: the sequel must not pick up book one's data either.
+  responseQueue = [tsDoc(housemaidDoc)];
+  const hm3 = { id: 'h3', title: "The Housemaid's Secret", authors: ['Freida McFadden'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const rHm3 = await window.enrichHardcover(hm3);
+  ok('#132: shorter prefix doc rejected for the sequel', rHm3 === false && !hm3.hcEnriched);
+
+  // 14. Subtitle carried by the library title only -> main-title match accepted.
+  responseQueue = [tsDoc(housemaidDoc)];
+  const hm4 = { id: 'h4', title: 'The Housemaid: A Novel', authors: ['Freida McFadden'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const rHm4 = await window.enrichHardcover(hm4);
+  ok('fallback: one-sided subtitle accepted', rHm4 === true && hm4.series && hm4.series.position === 1);
+
+  // 15. Series parenthetical on the library title -> normalized match accepted.
+  responseQueue = [tsDoc(onyxDoc)];
+  const bk15 = { id: 'h5', title: 'Onyx Storm (The Empyrean, #3)', authors: ['Rebecca Yarros'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const r15 = await window.enrichHardcover(bk15);
+  ok('fallback: series parenthetical accepted', r15 === true && bk15.series && bk15.series.name === 'The Empyrean');
+
+  // 16. Full title matches but the author is a different person -> rejected.
+  responseQueue = [tsDoc(onyxDoc)];
+  const bk16 = { id: 'h6', title: 'Onyx Storm', authors: ['Somebody Else'], isbn: '', categories: [], tropes: [], ratings: {}, axes: [] };
+  const r16 = await window.enrichHardcover(bk16);
+  ok('fallback: author mismatch rejected', r16 === false && !bk16.hcEnriched);
+
+  // 17. ISBN search missed; title doc's title form would NOT match, but its
+  // isbns[] list the book's ISBN-10 (book carries the 13) -> ISBN proof wins.
+  responseQueue = [tsEmpty, tsDoc(Object.assign({}, onyxDoc, { title: 'Onyx Storm — Special Edition', isbns: ['0349437068'] }))];
+  const bk17 = { id: 'h7', title: 'Onyx Storm', authors: ['Rebecca Yarros'], isbn: '9780349437064', categories: [], tropes: [], ratings: {}, axes: [] };
+  const r17 = await window.enrichHardcover(bk17);
+  ok('fallback: isbns[] proof accepted (10<->13)', r17 === true && bk17.series && bk17.series.name === 'The Empyrean');
+
+  // 18. Edition variant: book ISBN not in the doc's isbns[] at all, but full
+  // title + author agree -> accepted (an ISBN mismatch never vetoes).
+  responseQueue = [tsEmpty, tsDoc(Object.assign({}, onyxDoc, { isbns: ['0000000000'] }))];
+  const bk18 = { id: 'h8', title: 'Onyx Storm', authors: ['Rebecca Yarros'], isbn: '9780349437064', categories: [], tropes: [], ratings: {}, axes: [] };
+  const r18 = await window.enrichHardcover(bk18);
+  ok('fallback: different-edition ISBN does not veto title+author', r18 === true && bk18.hcEnriched === true);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
