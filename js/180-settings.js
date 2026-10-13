@@ -367,6 +367,11 @@ function renderSettings() {
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
   const htmlPrivacy =
+    // v522: Circle & privacy — the live sharing controls (same shared
+    // panel as the Hearth's Privacy sheet, js/195), filled in async below.
+    setSub('Circle & privacy') +
+    '<p class="note" style="margin:0 2px 10px">Your circle only receives what you switch on — anything off is never sent to them, not just hidden in the app.</p>' +
+    '<div id="st-circle-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
     setSub('The Hearth sharing') +
     '<div id="st-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
     '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
@@ -627,7 +632,8 @@ function renderSettings() {
     const d = document.getElementById('st-analytics-detail');
     if (d) d.hidden = !d.hidden;
   });
-  // v117: privacy summary — the full sharing controls live on the Coven tab
+  // v117: privacy summary (v522: the live controls are the Circle &
+  // privacy panel above; this box stays as the at-a-glance summary)
   (async () => {
     const box = document.getElementById('st-privacy');
     if (!box) return;
@@ -644,6 +650,25 @@ function renderSettings() {
         : 'Sharing is off — nobody can see your books.') + '</p>';
     } catch (e) {
       box.innerHTML = '<p class="note">Couldn\'t load sharing status.</p>';
+    }
+  })();
+
+  // v522: Circle & privacy panel — live toggles, same controls (and same
+  // save path) as the Hearth's Privacy sheet.
+  (async () => {
+    const box = document.getElementById('st-circle-privacy');
+    if (!box) return;
+    if (!cloudUser || typeof circlePrivacy !== 'function' || typeof circlePrivacyPanelHTML !== 'function') {
+      box.innerHTML = '<p class="note">Sign in to manage what your circle can see.</p>';
+      return;
+    }
+    try {
+      const priv = await circlePrivacy();
+      const shelves = ['tbr', 'reading', 'read', 'dnf'].filter(s => library.some(b => b.status === s));
+      box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
+      wireCirclePrivacyPanel(box, priv, 'st');
+    } catch (e) {
+      box.innerHTML = '<p class="note">Couldn\'t load sharing settings.</p>';
     }
   })();
 

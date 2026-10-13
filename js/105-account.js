@@ -17,7 +17,9 @@ function profileKey() {
   return 'spicyshelves.profile.' + (cloudUser ? cloudUser.id : 'offline');
 }
 function blankProfile() {
-  return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0 };
+  // v522: bio + favGenres — the shareable profile content the Circle &
+  // privacy "bio & favourite genres" toggle governs.
+  return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0, bio: '', favGenres: [] };
 }
 function loadProfile() {
   let p = null;
@@ -29,6 +31,9 @@ function loadProfile() {
   base.gender = ['f', 'm', 'other'].indexOf(p.gender) !== -1 ? p.gender : ''; // v177: greeting term
   base.avatarCloudPath = String(p.avatarCloudPath || '');
   base.updatedAt = Number(p.updatedAt) || 0;
+  base.bio = String(p.bio || '').slice(0, 240);
+  base.favGenres = Array.isArray(p.favGenres)
+    ? p.favGenres.map(g => String(g || '').trim()).filter(Boolean).slice(0, 8) : [];
   if (p.avatar && typeof p.avatar === 'object') {
     if (p.avatar.type === 'default' && DEFAULT_AVATARS.some(a => a.id === p.avatar.id)) base.avatar = { type: 'default', id: p.avatar.id };
     else if (p.avatar.type === 'upload' && p.avatar.dataUrl) base.avatar = { type: 'upload', dataUrl: p.avatar.dataUrl };
@@ -127,8 +132,15 @@ async function pushCloudProfile(p) {
       avatar_path: cloudPath,
       updated_at: new Date(p.updatedAt || Date.now()).toISOString()
     });
+    // v522: three-tier upsert — full row (bio/genres included), then
+    // without bio/genres, then the bare row — so a database missing any
+    // of the newer columns still syncs names/avatars (the v178 pattern).
     let up = await sb.from('profiles').upsert(
-      Object.assign({ gender: p.gender || '' }, baseRow()), { onConflict: 'user_id' });
+      Object.assign({ gender: p.gender || '', bio: p.bio || '', fav_genres: p.favGenres || [] }, baseRow()), { onConflict: 'user_id' });
+    if (up.error && isMissingColumn(up.error)) {
+      up = await sb.from('profiles').upsert(
+        Object.assign({ gender: p.gender || '' }, baseRow()), { onConflict: 'user_id' });
+    }
     if (up.error && isMissingColumn(up.error)) {
       up = await sb.from('profiles').upsert(baseRow(), { onConflict: 'user_id' });
     }
@@ -161,10 +173,15 @@ async function syncCloudProfile() {
   if (!sb || !cloudUser) return;
   try {
     // v178: prefer the gender column, fall back to the old column set when
-    // the database hasn't been migrated yet.
-    const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender';
+    // the database hasn't been migrated yet. v522: bio/fav_genres ride the
+    // fullest tier, with the same missing-column fallback ladder.
+    const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender,bio,fav_genres';
+    const COLS_MID = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender';
     const COLS_BASIC = 'first_name,last_name,avatar_id,avatar_path,updated_at';
     let res = await sb.from('profiles').select(COLS_FULL).eq('user_id', cloudUser.id).maybeSingle();
+    if (res.error && isMissingColumn(res.error)) {
+      res = await sb.from('profiles').select(COLS_MID).eq('user_id', cloudUser.id).maybeSingle();
+    }
     if (res.error && isMissingColumn(res.error)) {
       res = await sb.from('profiles').select(COLS_BASIC).eq('user_id', cloudUser.id).maybeSingle();
     }
@@ -177,6 +194,10 @@ async function syncCloudProfile() {
       p.firstName = row.first_name || '';
       p.lastName = row.last_name || '';
       if (['f', 'm', 'other'].indexOf(row.gender) !== -1) p.gender = row.gender;
+      if (typeof row.bio === 'string') p.bio = row.bio.slice(0, 240);
+      if (Array.isArray(row.fav_genres)) {
+        p.favGenres = row.fav_genres.map(g => String(g || '').trim()).filter(Boolean).slice(0, 8);
+      }
       await adoptCloudPhoto(sb, p, row);
       p.updatedAt = remoteTs;
       saveProfile(p);
@@ -333,6 +354,12 @@ function renderProfile() {
       '<button type="button" data-g="m" class="' + (p.gender === 'm' ? 'active' : '') + '">Male</button>' +
       '<button type="button" data-g="other" class="' + (p.gender === 'other' ? 'active' : '') + '">Other</button></div>' +
       '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
+      '<div class="field"><label>Bio</label>' +
+      '<textarea id="pf-bio" class="text-input" rows="2" maxlength="240" placeholder="A line or two about your reading life">' + esc(p.bio || '') + '</textarea>' +
+      '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on in Settings → Circle &amp; privacy.</p></div>' +
+      '<div class="field"><label>Favourite genres</label>' +
+      '<input id="pf-genres" class="text-input" value="' + esc((p.favGenres || []).join(', ')) + '" maxlength="200" placeholder="Romantasy, Gothic horror, Space opera">' +
+      '<p class="note" style="margin:6px 0 0">Comma-separated, up to 8.</p></div>' +
       '<div class="field"><label>Email</label>' +
       '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
       '<button class="btn block" id="pf-save">Save profile</button>' +
@@ -375,6 +402,10 @@ function renderProfile() {
     np.lastName = document.getElementById('pf-last').value.trim().slice(0, 40);
     const gsel = document.querySelector('#pf-gender button.active');
     np.gender = gsel ? gsel.dataset.g : '';
+    const bioEl = document.getElementById('pf-bio');
+    if (bioEl) np.bio = bioEl.value.trim().slice(0, 240);
+    const genEl = document.getElementById('pf-genres');
+    if (genEl) np.favGenres = genEl.value.split(',').map(g => g.trim()).filter(Boolean).slice(0, 8);
     touchProfile(np);
     pushCloudProfile(np);
     renderTopbar();

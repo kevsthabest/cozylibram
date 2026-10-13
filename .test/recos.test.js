@@ -24,7 +24,22 @@ const tick = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
 // ---- compact stub supabase client ----
 const mkStub = () => {
   const db = { circle_invites: [], circle_links: [], profiles: {}, books: [] };
-  const rowsOf = (n) => n === 'profiles' ? Object.values(db.profiles) : db[n];
+  // v522: emulate the circle_profiles view (identity + posture flags +
+  // bio/genres gated on share_bio; private fields never projected).
+  const projectPublic = (p) => {
+    const out = { user_id: p.user_id, first_name: p.first_name || '', last_name: p.last_name || '',
+      avatar_id: p.avatar_id || '', avatar_path: p.avatar_path || '',
+      share_library: p.share_library !== false, share_bio: p.share_bio !== false,
+      share_activity: p.share_activity === true };
+    if (out.share_bio) {
+      if (p.bio) out.bio = p.bio;
+      if (Array.isArray(p.fav_genres) && p.fav_genres.length) out.fav_genres = p.fav_genres.slice();
+    }
+    return out;
+  };
+  const rowsOf = (n) => n === 'profiles' ? Object.values(db.profiles)
+    : n === 'circle_profiles' ? Object.values(db.profiles).map(projectPublic)
+    : db[n];
   const table = (name) => ({
     select() {
       const qq = { _conds: [], _in: null,
@@ -72,8 +87,9 @@ const bookRow = (user_id, book_id, data) => ({ user_id, book_id, isbn: data.isbn
     { requester_id: A, addressee_id: B, status: 'accepted' },
     { requester_id: C, addressee_id: A, status: 'accepted' },
   );
-  stub.db.profiles[B] = { user_id: B, first_name: 'Ann', last_name: 'Reader', avatar_id: '', avatar_path: '' };
-  stub.db.profiles[C] = { user_id: C, first_name: 'Cat', last_name: '', avatar_id: '', avatar_path: '' };
+  // v522: recos are reading activity — both friends have opted in.
+  stub.db.profiles[B] = { user_id: B, first_name: 'Ann', last_name: 'Reader', avatar_id: '', avatar_path: '', share_activity: true };
+  stub.db.profiles[C] = { user_id: C, first_name: 'Cat', last_name: '', avatar_id: '', avatar_path: '', share_activity: true };
   // Ann: one 5★ book, one 3★ book (below the bar)
   stub.db.books.push(bookRow(B, 'g1', { id: 'g1', title: 'Great Book', authors: ['W. Riter'], isbn: '978123', myRating: 5, status: 'read', cover: '' }));
   stub.db.books.push(bookRow(B, 'ok1', { id: 'ok1', title: 'Okay Book', authors: ['O. Kaye'], myRating: 3, status: 'read', cover: '' }));
