@@ -103,6 +103,11 @@ function releaseInLibrary(c) {
 function hcBookToCandidate(b) {
   const names = (b.contributions || []).map(x => String((((x || {}).author) || {}).name || '')).filter(Boolean);
   const ed = b.default_physical_edition || {};
+  const coverEd = b.default_cover_edition || {};
+  // v530: language lives on editions in Hardcover's schema (books have no
+  // language field). Physical edition first, cover edition as fallback —
+  // audiobook records have no physical edition but do have a cover one.
+  const langOf = e => { const l = (e || {}).language; return (l && l.language) ? String(l.language) : ''; };
   return {
     hcId: b.id,
     title: b.title || 'Untitled',
@@ -111,7 +116,15 @@ function hcBookToCandidate(b) {
     cover: (b.image && b.image.url) || '',
     description: b.description || '',
     pages: b.pages || null,
-    isbns: ed.isbn_13 ? [String(ed.isbn_13)] : []
+    isbns: ed.isbn_13 ? [String(ed.isbn_13)] : [],
+    // v530: edition signals for the Recommended sweep's one-edition-per-work
+    // collapse (see recoIsAudioRecord / recoLangCode). Inert for the New
+    // Releases sweep, which shares this mapper: absent fields read as null.
+    audioSeconds: (typeof b.audio_seconds === 'number' && isFinite(b.audio_seconds)) ? b.audio_seconds : null,
+    defAudioId: b.default_audio_edition_id != null ? b.default_audio_edition_id : null,
+    defPhysId: b.default_physical_edition_id != null ? b.default_physical_edition_id : null,
+    defEbookId: b.default_ebook_edition_id != null ? b.default_ebook_edition_id : null,
+    langName: langOf(ed) || langOf(coverEd) || ''
   };
 }
 
@@ -981,15 +994,210 @@ function isRecoMerch(c) {
   const t = String((c && c.title) || '');
   return RECO_MERCH_RE.test(t);
 }
+
+/* ---------------- v530: one edition per work, print + language aware ----
+   Hardcover models formats and translations as SEPARATE book records of the
+   same work, and the pre-v530 sweep deduped by book id only — so one work
+   could surface as its print record, its audiobook record and a dramatized
+   record side by side, and foreign-language records landed in an English
+   reader's list. The collapse below groups the whole sweep by work and
+   keeps exactly one record per work:
+     browser-language print → browser-language any-format →
+     language-unknown print → language-unknown any-format,
+   dropping records whose language is KNOWN to differ from the browser's.
+   Catalog signals (verified against Hardcover's official GraphQL schema
+   docs, hardcoverapp/hardcover-docs): books.audio_seconds (Int, "Audiobook
+   duration in seconds"), books.default_audio_edition_id /
+   default_physical_edition_id / default_ebook_edition_id, and the edition
+   language name via editions.language { language } (books have no language
+   field). Title / contributor patterns only supplement the catalog data. */
+
+// Pure: the browser's primary language subtag ('en' from 'en-CA'), '' when
+// unavailable — '' disables language exclusion entirely.
+function recoBrowserLang() {
+  try {
+    const l = (typeof navigator !== 'undefined' && navigator && navigator.language) || '';
+    return String(l).split('-')[0].trim().toLowerCase();
+  } catch (e) { return ''; }
+}
+
+// Language names (English exonyms + common endonyms) → ISO 639-1, for when
+// Hardcover states a language as a name rather than a code.
+const RECO_LANG_NAME_TO_CODE = {
+  english: 'en', french: 'fr', 'français': 'fr', german: 'de', deutsch: 'de',
+  spanish: 'es', 'español': 'es', italian: 'it', italiano: 'it',
+  portuguese: 'pt', 'português': 'pt', dutch: 'nl', nederlands: 'nl',
+  flemish: 'nl', russian: 'ru', 'русский': 'ru', japanese: 'ja', '日本語': 'ja',
+  korean: 'ko', '한국어': 'ko', chinese: 'zh', '中文': 'zh',
+  arabic: 'ar', 'العربية': 'ar', hindi: 'hi', 'हिन्दी': 'hi',
+  polish: 'pl', polski: 'pl', swedish: 'sv', svenska: 'sv',
+  norwegian: 'no', norsk: 'no', danish: 'da', dansk: 'da',
+  finnish: 'fi', suomi: 'fi', czech: 'cs', 'čeština': 'cs',
+  hungarian: 'hu', magyar: 'hu', turkish: 'tr', 'türkçe': 'tr',
+  ukrainian: 'uk', 'українська': 'uk', greek: 'el', 'ελληνικά': 'el',
+  hebrew: 'he', 'עברית': 'he', persian: 'fa', farsi: 'fa', 'فارسی': 'fa',
+  thai: 'th', 'ภาษาไทย': 'th', vietnamese: 'vi', 'tiếng việt': 'vi',
+  indonesian: 'id', 'bahasa indonesia': 'id', malay: 'ms',
+  romanian: 'ro', 'română': 'ro', bulgarian: 'bg', 'български': 'bg',
+  croatian: 'hr', hrvatski: 'hr', serbian: 'sr', 'српски': 'sr',
+  slovak: 'sk', 'slovenčina': 'sk', slovenian: 'sl', 'slovenščina': 'sl',
+  lithuanian: 'lt', 'lietuvių': 'lt', latvian: 'lv', 'latviešu': 'lv',
+  estonian: 'et', eesti: 'et', catalan: 'ca', 'català': 'ca',
+  basque: 'eu', euskara: 'eu', galician: 'gl', galego: 'gl',
+  welsh: 'cy', cymraeg: 'cy', irish: 'ga', gaeilge: 'ga',
+  icelandic: 'is', 'íslenska': 'is', albanian: 'sq', shqip: 'sq',
+  macedonian: 'mk', 'македонски': 'mk', belarusian: 'be', 'беларуская': 'be',
+  bosnian: 'bs', bosanski: 'bs', georgian: 'ka', 'ქართული': 'ka',
+  armenian: 'hy', 'հայերեն': 'hy', azerbaijani: 'az', kazakh: 'kk',
+  uzbek: 'uz', bengali: 'bn', 'বাংলা': 'bn', tamil: 'ta', 'தமிழ்': 'ta',
+  telugu: 'te', 'తెలుగు': 'te', marathi: 'mr', 'मराठी': 'mr',
+  urdu: 'ur', 'اردو': 'ur', swahili: 'sw', kiswahili: 'sw',
+  amharic: 'am', 'አማርኛ': 'am', yoruba: 'yo', igbo: 'ig', hausa: 'ha',
+  tagalog: 'tl', filipino: 'tl', burmese: 'my', 'မြန်မာ': 'my',
+  khmer: 'km', 'ខ្មែរ': 'km', lao: 'lo', 'ລາວ': 'lo',
+  mongolian: 'mn', 'монгол': 'mn', tibetan: 'bo', sinhala: 'si',
+  'සිංහල': 'si', malayalam: 'ml', 'മലയാളം': 'ml', kannada: 'kn',
+  'ಕನ್ನಡ': 'kn', gujarati: 'gu', 'ગુજરાતી': 'gu', punjabi: 'pa',
+  'ਪੰਜਾਬੀ': 'pa', nepali: 'ne', 'नेपाली': 'ne', latin: 'la', esperanto: 'eo'
+};
+// ISO 639-2/3 → 639-1 for the common codes (Hardcover names languages, but
+// a code-shaped value is handled too).
+const RECO_LANG_6392_TO_1 = {
+  eng: 'en', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de', spa: 'es', ita: 'it',
+  por: 'pt', dut: 'nl', nld: 'nl', rus: 'ru', jpn: 'ja', kor: 'ko', chi: 'zh',
+  zho: 'zh', ara: 'ar', hin: 'hi', pol: 'pl', swe: 'sv', nor: 'no', dan: 'da',
+  fin: 'fi', ces: 'cs', cze: 'cs', hun: 'hu', tur: 'tr', ukr: 'uk', ell: 'el',
+  gre: 'el', heb: 'he', fas: 'fa', per: 'fa', tha: 'th', vie: 'vi', ind: 'id',
+  may: 'ms', msa: 'ms', ron: 'ro', rum: 'ro', bul: 'bg', hrv: 'hr', srp: 'sr',
+  slk: 'sk', slo: 'sk', slv: 'sl', lit: 'lt', lav: 'lv', est: 'et', cat: 'ca',
+  baq: 'eu', eus: 'eu', glg: 'gl', cym: 'cy', wel: 'cy', gle: 'ga', isl: 'is',
+  ice: 'is', alb: 'sq', sqi: 'sq', mac: 'mk', mkd: 'mk', bel: 'be', bos: 'bs',
+  kat: 'ka', geo: 'ka', hye: 'hy', arm: 'hy', aze: 'az', kaz: 'kk', uzb: 'uz',
+  ben: 'bn', tam: 'ta', tel: 'te', mar: 'mr', urd: 'ur', swa: 'sw', amh: 'am',
+  yor: 'yo', ibo: 'ig', hau: 'ha', fil: 'tl', tgl: 'tl', bur: 'my', mya: 'my',
+  khm: 'km', lao: 'lo', mon: 'mn', tib: 'bo', bod: 'bo', sin: 'si', mal: 'ml',
+  kan: 'kn', guj: 'gu', pan: 'pa', nep: 'ne', lat: 'la', epo: 'eo'
+};
+
+// Pure: normalize a catalog language value (name or code) to an ISO 639-1
+// code. null when the catalog states no language at all (unknown — the
+// caller fails open). A stated value we cannot map comes back as itself
+// (lowercased): it is KNOWN, and it can never equal a browser subtag, so
+// the record is treated as a language mismatch rather than as unknown.
+function recoLangCode(raw) {
+  const s = String(raw || '').trim().toLowerCase().split(/[-_]/)[0];
+  if (!s) return null;
+  if (/^[a-z]{2}$/.test(s)) return s;
+  if (/^[a-z]{3}$/.test(s)) return RECO_LANG_6392_TO_1[s] || s;
+  return RECO_LANG_NAME_TO_CODE[s] || s;
+}
+
+// Pure: is this candidate an audiobook record? Primary signal is catalog
+// data (book-level audio_seconds; an audio default edition with no print
+// or ebook default). A record that HAS a physical default is the work's
+// main record even when an audio edition also exists under it — only an
+// audio-only default set marks the record itself as the audiobook.
+// Title wording and a "Full Cast" dramatized-audio credit supplement.
+const RECO_AUDIO_TITLE_RE = /\b(audiobook|audio book|unabridged|dramatized adaptation|graphic audio)\b/i;
+function recoIsAudioRecord(c) {
+  if (!c) return false;
+  if (Number(c.audioSeconds) > 0) return true;
+  if (c.defAudioId != null && c.defPhysId == null && c.defEbookId == null) return true;
+  if (RECO_AUDIO_TITLE_RE.test(String(c.title || ''))) return true;
+  const names = (c.authors || []).map(a => String(a || '').trim().toLowerCase());
+  if (names.indexOf('full cast') !== -1) return true;
+  return false;
+}
+
+// Pure: edition preference tier for one candidate under the browser
+// language `want` (a 639-1 subtag, or '' to disable language handling).
+// -1 = known language mismatch (excluded); lower tier wins within a work:
+// 0 browser-lang print, 1 browser-lang any format, 2 unknown-lang print,
+// 3 unknown-lang any format. With no browser language, everything is
+// "unknown" (tiers 2/3) — print still beats audio, nothing is excluded.
+function recoEditionRank(c, wantLang) {
+  const want = String(wantLang || '').trim().toLowerCase();
+  const code = recoLangCode(c && c.langName);
+  const audio = recoIsAudioRecord(c);
+  if (want && code) {
+    if (code !== want) return -1;
+    return audio ? 1 : 0;
+  }
+  return audio ? 3 : 2;
+}
+
+// Pure: work grouping key — normalized title + first author. Modeled on
+// js/150's looseTitleKey (parenthetical qualifiers are edition noise), but
+// deliberately does NOT strip a " - …" suffix wholesale: distinct series
+// entries like "Mistborn - The Well of Ascension" must not collapse into
+// "Mistborn - The Final Empire". Only a trailing format phrase is cut.
+// '' when there is no usable title (such candidates never group).
+function recoWorkKey(c) {
+  const t = String((c && c.title) || '')
+    .replace(/\s*\[[^\]]*\]/g, ' ')
+    .replace(/\s*\([^)]*\)/g, ' ')
+    .replace(/\s+[-–—:]\s*(audiobook|audio book|unabridged|dramatized adaptation|graphic audio)\b.*$/i, ' ')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/^the /, '');
+  if (!t) return '';
+  const a = String(((c && c.authors) || [])[0] || '').trim().toLowerCase();
+  return t + '|' + a;
+}
+
+// Pure: collapse a swept candidate list to one record per work under the
+// browser language. Known-language mismatches drop out; within a work the
+// lowest recoEditionRank wins (ties keep the first swept — the sweep is
+// newest-first per author, authors in loved order). Output order follows
+// each work's first appearance, so the loved-author fallback ranking in
+// refreshRecommendations keeps its shape on the non-embedded path too.
+function collapseRecoWorks(cands, wantLang) {
+  const order = [];
+  const groups = new Map();
+  (cands || []).forEach(c => {
+    const rank = recoEditionRank(c, wantLang);
+    if (rank < 0) return;
+    const key = recoWorkKey(c);
+    if (!key) { order.push({ c: c, rank: rank }); return; }
+    const g = groups.get(key);
+    if (!g) {
+      const e = { c: c, rank: rank };
+      groups.set(key, e);
+      order.push(e);
+    } else if (rank < g.rank) {
+      g.c = c;
+      g.rank = rank;
+    }
+  });
+  return order.map(e => e.c);
+}
+
+// v530: the sweep asks Hardcover for the edition signals the collapse
+// needs. If the extended query is ever rejected (schema drift), fall back
+// per author to the pre-v530 field set — those candidates carry no
+// signals, so they collapse as unknown-language print by title alone and
+// recommendations degrade instead of vanishing.
+function recoSweepQuery(author, extended) {
+  const fields = extended
+    ? ' { id title description pages audio_seconds default_audio_edition_id' +
+      ' default_physical_edition_id default_ebook_edition_id image { url }' +
+      ' contributions { author { name } }' +
+      ' default_physical_edition { isbn_13 language { language } }' +
+      ' default_cover_edition { language { language } } } }'
+    : ' { id title description pages image { url }' +
+      ' contributions { author { name } } default_physical_edition { isbn_13 } } }';
+  return 'query { books(where: {contributions: {author: {name: {_eq: ' + JSON.stringify(author) + '}}},' +
+    ' canonical_id: {_is_null: true}}, order_by: {release_date: desc}, limit: 12)' + fields;
+}
 async function sweepRecoCandidates(authors, dismissed) {
   const out = [], seen = new Set();
   for (const a of (authors || []).slice(0, 6)) {
     try {
-      const q = 'query { books(where: {contributions: {author: {name: {_eq: ' + JSON.stringify(a) + '}}},' +
-        ' canonical_id: {_is_null: true}}, order_by: {release_date: desc}, limit: 12)' +
-        ' { id title description pages image { url }' +
-        ' contributions { author { name } } default_physical_edition { isbn_13 } } }';
-      const data = await hcGraphQL(q);
+      let data = null;
+      try { data = await hcGraphQL(recoSweepQuery(a, true)); }
+      catch (e) { data = await hcGraphQL(recoSweepQuery(a, false)); }
       ((data || {}).books || []).forEach(b => {
         if (b.id == null || seen.has(b.id)) return;
         if (dismissed.has('hc:' + b.id)) return;
@@ -1003,7 +1211,10 @@ async function sweepRecoCandidates(authors, dismissed) {
     } catch (e) { /* next author */ }
     await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
   }
-  return out;
+  // v530: one edition per work across the WHOLE sweep, print preferred,
+  // editions respecting the browser's language — before any ranking, so
+  // the embedded path and the warming-up fallback collapse identically.
+  return collapseRecoWorks(out, recoBrowserLang());
 }
 
 function addRecoBook(c) {
