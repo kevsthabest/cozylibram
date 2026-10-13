@@ -256,6 +256,34 @@ async function loadCovenStats() {
     ? covenAwards(people).filter(a => a.label !== 'Spiciest Shelf')
     : covenAwards(people);
 
+  // v525: moments — discrete finishes (js/231) for the reaction feed.
+  // Computed from the SAME per-person book lists as every aggregate
+  // above: a friend who hasn't opted into activity was never fetched
+  // (empty stats → no moments), and a shielded viewer's friends' books
+  // were shield-filtered before this point, so a filtered book yields
+  // no moment and its reactions are never fetched. Own books are
+  // never filtered (the shield never touches your own library).
+  let moments = [];
+  if (typeof momentsFromBooks === 'function') {
+    const now = new Date();
+    const ownM = [], friendM = [];
+    people.forEach(p => {
+      const ownerId = p.id === 'me'
+        ? ((typeof cloudUser !== 'undefined' && cloudUser) ? cloudUser.id : 'me')
+        : p.id;
+      const list = p.id === 'me' ? ownM : friendM;
+      momentsFromBooks(ownerId, p.stats.books, now).forEach(m => { m.person = p; list.push(m); });
+    });
+    // Your own moments get guaranteed slots: a prolific circle must
+    // not push the finishes you received reactions on out of the feed
+    // (they're the rows this feature exists to show you). Friends fill
+    // the rest; the merged feed stays capped and newest-first.
+    const byDayDesc = (a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0);
+    ownM.sort(byDayDesc); friendM.sort(byDayDesc);
+    moments = ownM.slice(0, 10).concat(friendM.slice(0, 20)).sort(byDayDesc);
+    if (typeof MOMENT_FEED_MAX === 'number') moments = moments.slice(0, MOMENT_FEED_MAX);
+  }
+
   // Soulmate scores + taste overlap per friend.
   const soulmates = others.map(p => ({ p: p, sm: soulmateScore(me, p.stats) }))
     .filter(x => x.sm).sort((a, b) => b.sm.score - a.sm.score);
@@ -280,7 +308,7 @@ async function loadCovenStats() {
   });
   const trending = topKeys(gCounts, 5);
 
-  return { people: people, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending };
+  return { people: people, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending, moments: moments };
 }
 
 // --- UI --------------------------------------------------------------------
@@ -309,6 +337,14 @@ function covenStatsHTML(d) {
         '<div class="circle-actions"><b class="serif" style="font-size:20px">' + x.sm.score + '%</b></div></div>';
     });
     discoverHTML += '</div>';
+  }
+
+  // v525: Recent finishes — the discrete moments friends can react to
+  // (js/231). Newest first across the whole circle, you included (your
+  // rows are where reactions you received show up).
+  if (d.moments && d.moments.length && typeof momentRowHTML === 'function') {
+    activityHTML += '<div class="circle-card"><h3 style="margin:0 0 10px">Recent finishes</h3><div class="circle-list">' +
+      d.moments.map(m => momentRowHTML(m)).join('') + '</div></div>';
   }
 
   // Circle digest: this month's activity in circle order (you first, then
@@ -405,6 +441,8 @@ function refreshCovenStats() {
         }));
       // Recos fill the Discover tab's slot
       if (typeof refreshRecos === 'function') refreshRecos();
+      // v525: reactions for exactly the rendered moments
+      if (typeof wireMomentReactions === 'function') wireMomentReactions(el, d.moments || []);
     })
     .catch(() => { const el = document.getElementById('stats-slot'); if (el) el.innerHTML = ''; });
 }

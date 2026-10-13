@@ -351,3 +351,116 @@ drop policy if exists "own avatar deletes" on storage.objects;
 create policy "own avatar deletes" on storage.objects
   for delete
   using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
+
+-- ============ Reactions on moments (v525, Social build #1) ============
+-- Moments (a circle member finishing a book) are computed client-side
+-- from the digest's book lists; reactions to them live here. The full
+-- rationale — the no-counts rule, the RPC-gated write path, and the
+-- unfriend semantics — is in migrations/v525_moment_reactions.sql.
+-- A reaction row is readable ONLY by its giver or the moment's owner
+-- (a third friend cannot enumerate, so no tally can be computed over
+-- other people's reactions); writes go through react_to_moment(),
+-- which re-validates friendship, the owner's current activity opt-in,
+-- read-shelf visibility, and the book's real finish at write time.
+-- There are deliberately no insert/update policies.
+create table if not exists public.moment_reactions (
+  moment_key text not null,
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  giver_id uuid not null references auth.users (id) on delete cascade,
+  kind text not null check (kind in ('heart', 'sparkles', 'moon', 'trophy', 'smile')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (moment_key, giver_id),
+  check (giver_id <> owner_id)
+);
+
+alter table public.moment_reactions enable row level security;
+
+drop policy if exists "giver or owner reads reactions" on public.moment_reactions;
+create policy "giver or owner reads reactions" on public.moment_reactions
+  for select
+  using (auth.uid() = giver_id or auth.uid() = owner_id);
+
+drop policy if exists "giver removes own reaction" on public.moment_reactions;
+create policy "giver removes own reaction" on public.moment_reactions
+  for delete
+  using (auth.uid() = giver_id);
+
+create or replace function public.react_to_moment(p_owner uuid, p_book_id text, p_day text, p_kind text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_day date;
+  v_key text;
+begin
+  if v_uid is null then raise exception 'not signed in'; end if;
+  if p_kind not in ('heart', 'sparkles', 'moon', 'trophy', 'smile') then
+    raise exception 'unknown reaction kind';
+  end if;
+  if v_uid = p_owner then raise exception 'cannot react to your own moment'; end if;
+  begin
+    v_day := p_day::date;
+  exception when others then
+    raise exception 'invalid moment day';
+  end;
+  if v_day < current_date - 92 or v_day > current_date + 1 then
+    raise exception 'moment outside the reaction window';
+  end if;
+  if not exists (
+    select 1 from public.circle_links cl
+    where cl.status = 'accepted'
+      and ((cl.requester_id = v_uid and cl.addressee_id = p_owner)
+        or (cl.addressee_id = v_uid and cl.requester_id = p_owner))
+  ) then raise exception 'not circle friends'; end if;
+  if not exists (
+    select 1 from public.profiles p
+    where p.user_id = p_owner and p.share_activity = true
+  ) then raise exception 'owner is not sharing activity'; end if;
+  if not public.circle_book_visible(p_owner, 'read') then
+    raise exception 'read shelf is not shared';
+  end if;
+  if not exists (
+    select 1 from public.books b
+    where b.user_id = p_owner and b.book_id = p_book_id
+      and b.data ->> 'status' = 'read'
+      and left(b.data ->> 'dateFinished', 10) = p_day
+  ) then raise exception 'no such moment'; end if;
+  v_key := p_owner::text || ':' || p_book_id || ':' || p_day;
+  insert into public.moment_reactions (moment_key, owner_id, giver_id, kind)
+  values (v_key, p_owner, v_uid, p_kind)
+  on conflict (moment_key, giver_id)
+  do update set kind = excluded.kind, updated_at = now();
+  return v_key;
+end;
+$$;
+revoke all on function public.react_to_moment(uuid, text, text, text) from public;
+grant execute on function public.react_to_moment(uuid, text, text, text) to authenticated;
+
+create or replace function public.moment_reactions_unfriend()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.circle_links cl
+    where cl.status = 'accepted'
+      and ((cl.requester_id = old.requester_id and cl.addressee_id = old.addressee_id)
+        or (cl.requester_id = old.addressee_id and cl.addressee_id = old.requester_id))
+  ) then
+    delete from public.moment_reactions
+    where (owner_id = old.requester_id and giver_id = old.addressee_id)
+       or (owner_id = old.addressee_id and giver_id = old.requester_id);
+  end if;
+  return old;
+end;
+$$;
+drop trigger if exists moment_reactions_unfriend_cleanup on public.circle_links;
+create trigger moment_reactions_unfriend_cleanup
+  after delete on public.circle_links
+  for each row execute function public.moment_reactions_unfriend();
