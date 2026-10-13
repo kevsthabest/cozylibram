@@ -2505,16 +2505,48 @@
           // v422: restY is updated during drag when pi changes, so cross-shelf
           // drags settle on the new shelf.
           if (m.moved) {
-            var startY2 = g3.position.y, endY2 = (typeof m.restY === 'number') ? m.restY : g3.position.y;
-            tween(180, function (k) {
-              g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * easeOut(k)));
-              g3.position.y = startY2 + (endY2 - startY2) * easeOut(k);
-            });
-            /* v514: a move is a layout change — persist it (moves previously
-               only saved lazily on the next unrelated save) and let the
-               books readjust around the decoration's new spot. */
-            saveDecoLayout();
-            reflowBooks();
+            /* v515: settle the mesh onto the CLAIMED spot, not just back to
+               rest height. During the drag the ghost follows the raw pointer
+               x (1:1) while the placed record — and the snap guide — hold
+               the claimed landing (findFreeSpot's gap, or the clamped claim
+               on a full level). Before v515 nothing moved the mesh to the
+               claim: it stayed wedged at the finger x while reflowBooks()
+               flowed the books around the record's interval and
+               saveDecoLayout() persisted the mesh x — three positions for
+               one decoration. Now the drop tween lands x (and z) on the
+               record's centre, and save + reflow run once it has landed —
+               the same contract the place/remove wrappers keep. After the
+               drop: mesh x == record centre == saved x. Reduced motion
+               snaps, like the reflow itself. (pointercancel already
+               restored to the record centre; the drop was the outlier.) */
+            var rec3 = null;
+            placed.forEach(function (p) { if (p.group === g3) rec3 = p; });
+            var startX3 = g3.position.x, startY2 = g3.position.y, startZ3 = g3.position.z;
+            var endX3 = (rec3 && rec3.rec) ? (rec3.rec[0] + rec3.rec[1]) / 2 : startX3;
+            var endY2 = (typeof m.restY === 'number') ? m.restY : startY2;
+            var endZ3 = g3.userData.edge ? (PLANK_D / 2 - 0.4) : 0.1;
+            if (s3dReducedMotion()) {
+              g3.scale.setScalar(1);
+              g3.position.set(endX3, endY2, endZ3);
+              saveDecoLayout();
+              reflowBooks();
+            } else {
+              tween(180, function (k) {
+                var e3 = easeOut(k);
+                g3.scale.setScalar(Math.max(1, 1.18 - 0.18 * e3));
+                g3.position.x = startX3 + (endX3 - startX3) * e3;
+                g3.position.y = startY2 + (endY2 - startY2) * e3;
+                g3.position.z = startZ3 + (endZ3 - startZ3) * e3;
+              }, function () {
+                /* persist + reflow only once the mesh sits on the claimed
+                   spot (saveDecoLayout reads group.position.x). If a new
+                   drag already grabbed something, its own drop owns the
+                   next save + reflow. */
+                if (dead || moveDrag || trayDrag || roomDrag) return;
+                saveDecoLayout();
+                reflowBooks();
+              });
+            }
           } else g3.scale.setScalar(1);
           select(g3);   // re-select after move
         }

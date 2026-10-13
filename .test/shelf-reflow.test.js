@@ -156,7 +156,9 @@ const sliceLens = (books, group) => JSON.parse(run(`JSON.stringify(shelf3dSliceR
   ok('engine: full level claims the drop spot', src215.includes('scanFreeSpot(pi, x, fw)') && src215.includes('claim the drop spot'));
   ok('engine: decorations restore before the initial book layout',
     src215.indexOf('var restored = loadDecoLayout();') < src215.indexOf('if (opts.initialBooks) setBooks(opts.initialBooks);'));
-  ok('engine: move-drop persists + reflows', src215.includes('saveDecoLayout();\n            reflowBooks();'));
+  ok('engine: move-drop settles onto the claimed spot, then persists + reflows',
+    src215.includes('(rec3.rec[0] + rec3.rec[1]) / 2') &&
+    /saveDecoLayout\(\);\s*\n\s*reflowBooks\(\);/.test(src215));
   ok('view: goCase passes case + next case to the engine', src217.includes('shelf3dCaseBooks(room, i)'));
   ok('view: engine gets the deco-change callback', src217.includes('onDecoChange: shelf3dOnDecoChange'));
   ok('view: find labels use real case boundaries', !src217.includes('Math.floor(h.idx / SHELF3D_MAX_BOOKS)'));
