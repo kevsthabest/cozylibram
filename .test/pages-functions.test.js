@@ -190,6 +190,9 @@ async function main() {
     if (u === 'https://img.hardcover.app/abc123.jpg') {
       return new Response(IMG, { headers: { 'Content-Type': 'image/jpeg' } });
     }
+    if (u === 'https://assets.hardcover.app/abc123.jpg') {
+      return new Response(IMG, { headers: { 'Content-Type': 'image/jpeg' } });
+    }
     if (u.startsWith('https://books.google.com/')) {
       fetchedUpstream.push(u);
       return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
@@ -314,6 +317,11 @@ async function main() {
     /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.jpg$/.test(ccHcImgBody.coverUrl || ''));
   const ccHcSub = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://evil.hardcover.app/x.jpg' })));
   ok('cc: other hardcover.app subdomains still rejected (exact-match allowlist)', ccHcSub.status === 403);
+  // v518: assets.hardcover.app is where Hardcover cover URLs point now —
+  // the adoption gate must accept it (it always did; pinned alongside the
+  // cover-proxy fix for the same host).
+  const ccHcAssets = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://assets.hardcover.app/abc123.jpg' })));
+  ok('cc: assets.hardcover.app passes the host gate (200)', ccHcAssets.status === 200);
   // ---- functions/_lib/require-user (v225) ----
   // Reuse the hardcover fetch mock shape: auth URL answers from the token.
   globalThis.fetch = async (url, init) => {
@@ -625,6 +633,15 @@ async function main() {
     if (url === 'https://img.hardcover.app/abc123.jpg') {
       return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
     }
+    if (url === 'https://assets.hardcover.app/abc123.jpg') {
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
+    }
+    if (url === 'https://images-na.ssl-images-amazon.com/images/I/51abc.jpg') {
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
+    }
+    if (url === 'https://m.media-amazon.com/images/I/51abc.jpg') {
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/jpeg' } });
+    }
     throw new Error('network down');
   };
   const prox = (u) => proxyFn.onRequest({ request: new Request('https://app.test/cover-proxy?url=' + encodeURIComponent(u)) });
@@ -637,7 +654,51 @@ async function main() {
   ok('proxy: other hardcover.app subdomains still rejected (exact-match allowlist)', hcSub.status === 403);
   const evil = await prox('https://169.254.169.254/latest/meta-data');
   ok('proxy: unlisted host rejected (SSRF)', evil.status === 403);
+  // v518: assets.hardcover.app is where Hardcover cover URLs point now —
+  // it was on cache-cover's list but missing here, so spine-colour
+  // sampling 403'd and silently fell back to the palette colour.
+  const hcAssets = await prox('https://assets.hardcover.app/abc123.jpg');
+  ok('proxy: 200 for assets.hardcover.app (current Hardcover cover CDN)', hcAssets.status === 200);
+  ok('proxy: assets.hardcover.app returns the image', (hcAssets.headers.get('Content-Type') || '').startsWith('image/'));
+  // v518: Amazon image CDN hosts (Goodreads cover art) — same gap.
+  const amzNa = await prox('https://images-na.ssl-images-amazon.com/images/I/51abc.jpg');
+  ok('proxy: 200 for images-na.ssl-images-amazon.com', amzNa.status === 200);
+  const amzM = await prox('https://m.media-amazon.com/images/I/51abc.jpg');
+  ok('proxy: 200 for m.media-amazon.com', amzM.status === 200);
+  // Lookalikes of the newly added hosts must still 403 (exact-match).
+  const look1 = await prox('https://evil-assets.hardcover.app/abc123.jpg');
+  ok('proxy: evil-assets.hardcover.app rejected', look1.status === 403);
+  const look2 = await prox('https://assets.hardcover.app.evil.com/abc123.jpg');
+  ok('proxy: assets.hardcover.app.evil.com rejected', look2.status === 403);
+  const look3 = await prox('https://notmedia-amazon.com/images/I/51abc.jpg');
+  ok('proxy: notmedia-amazon.com rejected', look3.status === 403);
+  const look4 = await prox('https://sub.m.media-amazon.com/images/I/51abc.jpg');
+  ok('proxy: subdomains of listed Amazon hosts rejected (exact-match)', look4.status === 403);
+  const look5 = await prox('https://images-na.ssl-images-amazon.com.evil.com/images/I/51abc.jpg');
+  ok('proxy: images-na.ssl-images-amazon.com.evil.com rejected', look5.status === 403);
   globalThis.fetch = realFetch;
+
+  // ---- cover-host allowlist parity (v518) ----
+  // cover-proxy and cache-cover both import their host sets from
+  // functions/_lib/cover-hosts.js, so drift is impossible by construction;
+  // these pins fail loudly if a future edit changes the shared membership
+  // or the per-endpoint composition.
+  const hostsFn = await import(path.resolve(__dirname, '../functions/_lib/cover-hosts.js'));
+  const sortedJoin = (s) => [...s].sort().join(',');
+  const SHARED_HOSTS = ['archive.org', 'assets.hardcover.app', 'books.google.com',
+    'covers.openlibrary.org', 'images-na.ssl-images-amazon.com', 'img.hardcover.app',
+    'm.media-amazon.com'];
+  ok('hosts: shared set membership pinned',
+    sortedJoin(hostsFn.COVER_HOSTS_SHARED) === SHARED_HOSTS.join(','));
+  ok('hosts: proxy set = shared + hardcover.app (proxy-only)',
+    sortedJoin(hostsFn.COVER_PROXY_HOSTS) === [...SHARED_HOSTS, 'hardcover.app'].sort().join(','));
+  ok('hosts: cache-cover set = shared + Goodreads/Apple adoption hosts',
+    sortedJoin(hostsFn.CACHE_COVER_HOSTS) === [...SHARED_HOSTS, 'i.gr-assets.com',
+      'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
+      'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com'].sort().join(','));
+  ok('hosts: every shared host is in both endpoint sets',
+    [...hostsFn.COVER_HOSTS_SHARED].every((h) =>
+      hostsFn.COVER_PROXY_HOSTS.has(h) && hostsFn.CACHE_COVER_HOSTS.has(h)));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
