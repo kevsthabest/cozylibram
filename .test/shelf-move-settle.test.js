@@ -328,13 +328,14 @@ async function dragCandle(m, pi, rawX, settleMs) {
 /* ---------- scenarios ---------- */
 (async function main() {
 
-  /* ----- A: a free gap exists elsewhere on the level -----
+  /* ----- A: drop inside a packed book run — the books make room (v523) -----
      25 books: top level packs around the seeded candle, middle level is
      partly filled from the left with a wide free run to the right. The
-     candle is dropped at raw x -3.0 — inside the middle level's book run
-     (wedged). findFreeSpot claims a gap in the free run instead; the mesh
-     must settle THERE, books must flow around that interval, and the
-     saved layout must agree with the mesh. */
+     candle is dropped at raw x -3.0 — inside the middle level's book run.
+     Since v523 a decoration only avoids other decorations, so the drop
+     spot itself is claimed: the mesh settles at -3.0 and the books flow
+     around that interval, splitting to both sides. The v515 contract —
+     mesh, saved layout and book layout in agreement — is unchanged. */
   {
     const m = await mountShelf(books(25), { 'tbr:0': [{ type: 'candle', pi: 2, x: -3.5, room: false }] });
     const candle = findDeco(m.scene, 'candle');
@@ -344,8 +345,11 @@ async function dragCandle(m, pi, rawX, settleMs) {
 
     await dragCandle(m, 1, -3.0);
     ok('A: candle moved to the middle level', near(candle.position.y, LEVELS[1], 0.01));
-    ok('A: candle did NOT stay at the raw drop x (-3.0)', !near(candle.position.x, -3.0, 0.05));
-    ok('A: candle settled in the free run right of the packed books', candle.position.x > -1.2);
+    ok('A: candle stayed at the raw drop x (-3.0) (v523: books are not obstacles)',
+      near(candle.position.x, -3.0, 0.05));
+    ok('A: books split around the candle (books on both sides of it on the level)',
+      bookInfo(m.scene).some(r => r.li === 1 && r.b <= candle.position.x - CANDLE_FW / 2 + 1e-6) &&
+      bookInfo(m.scene).some(r => r.li === 1 && r.a >= candle.position.x + CANDLE_FW / 2 - 1e-6));
     ok('A: no book overlaps the candle interval on its level',
       !overlapsOnLevel(m.scene, 1, candle.position.x - CANDLE_FW / 2, candle.position.x + CANDLE_FW / 2));
     const sv = savedDeco();
@@ -409,9 +413,8 @@ async function dragCandle(m, pi, rawX, settleMs) {
         addListener: function () {}, removeListener: function () {} };
     };
     await dragCandle(m, 1, -3.0, 250);
-    ok('D: reduced-motion drop still lands on the claim, not the raw x',
-      near(candle.position.y, LEVELS[1], 0.01) && !near(candle.position.x, -3.0, 0.05) &&
-      candle.position.x > -1.2);
+    ok('D: reduced-motion drop snaps onto the drop x (v523: books make room)',
+      near(candle.position.y, LEVELS[1], 0.01) && near(candle.position.x, -3.0, 0.05));
     ok('D: no book overlaps the candle interval',
       !overlapsOnLevel(m.scene, 1, candle.position.x - CANDLE_FW / 2, candle.position.x + CANDLE_FW / 2));
     const sv = savedDeco();
