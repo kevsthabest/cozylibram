@@ -57,7 +57,7 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
     /from public\.books b\s+where b\.user_id = v_uid and b\.book_id = p_book_id/.test(sql) &&
     /jsonb_build_object\(/.test(sql) &&
     /public\.toy_cover_ok\(v_cover\)/.test(sql));
-  ok(label + ': send RPC validation order is pinned (note → book → friends → consent → silent → caps)',
+  ok(label + ': send RPC validation order is pinned (note → book → friends → consent → caps → silent)',
     (() => {
       const s0 = sql.indexOf('function public.send_thought_of_you');
       const body = sql.slice(s0, sql.indexOf('$$;', s0));
@@ -68,7 +68,7 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
       const i4 = body.indexOf('select p.receive_recos into v_recv');
       const i5 = body.indexOf('from public.toy_dismissals d');
       const i6 = body.indexOf("return 'slow_down'");
-      return i0 !== -1 && i0 < i1 && i1 < i2 && i2 < i3 && i3 < i4 && i4 < i5 && i5 < i6;
+      return i0 !== -1 && i0 < i1 && i1 < i2 && i2 < i3 && i3 < i4 && i4 < i6 && i6 < i5;
     })());
   ok(label + ': blocked pair folds into the generic friendship refusal inside the RPC',
     /or exists \(\s+select 1 from public\.blocks b\s+where \(b\.blocker_id = v_uid and b\.blocked_id = p_recipient\)/.test(sql));
@@ -299,6 +299,12 @@ const mkStub = () => {
       }
       const recip = db.profiles.find(p => p.user_id === args.p_recipient);
       if (!recip || recip.receive_recos !== true) return { data: 'ok', error: null };
+      // Caps run BEFORE the silent-state checks (mirrors the SQL): an
+      // over-cap sender hears 'slow_down' uniformly, so the answer
+      // reports only the sender's own volume — never a dismissal receipt.
+      const today = db.toy_send_log.filter(l => Date.now() - l.ts < 86400e3);
+      if (today.filter(l => l.sender_id === uid && l.recipient_id === args.p_recipient).length >= 5 ||
+          today.filter(l => l.sender_id === uid).length >= 20) return { data: 'slow_down', error: null };
       const snap = buildSnapshot(row);
       const key = keyOf(snap.isbn, snap.title, snap.authors[0] || '');
       if (db.toy_dismissals.some(d => d.sender_id === uid && d.recipient_id === args.p_recipient && d.book_key === key)) return { data: 'ok', error: null };
@@ -306,9 +312,6 @@ const mkStub = () => {
       const owned = db.books.some(b => b.user_id === args.p_recipient &&
         keyOf(b.data && b.data.isbn || b.isbn, b.data && b.data.title, firstAuthorOf(b.data)) === key);
       if (owned) return { data: 'ok', error: null };
-      const today = db.toy_send_log.filter(l => Date.now() - l.ts < 86400e3);
-      if (today.filter(l => l.sender_id === uid && l.recipient_id === args.p_recipient).length >= 5 ||
-          today.filter(l => l.sender_id === uid).length >= 20) return { data: 'slow_down', error: null };
       db.thought_of_you.push({
         id: 'toy-' + (++seq), sender_id: uid, recipient_id: args.p_recipient,
         sender_book_id: args.p_book_id, book_key: key, book: snap,
@@ -607,6 +610,28 @@ const slotHTML = () => { const s = w.document.getElementById('toy-slot'); return
   for (let i = 0; i < 20; i++) db.toy_send_log.push({ sender_id: PET, recipient_id: 'user-x', ts: Date.now() });
   r = await rpc('send_thought_of_you', { p_recipient: PAL, p_book_id: 'pet-six', p_note: '' });
   ok('caps: the 20/day global cap refuses a fresh pair too', r.data === 'slow_down');
+  db.toy_send_log.length = 0;
+
+  /* ---- caps ORDER: caps answer before the silent-state checks, so an
+   * over-cap sender hears 'slow_down' uniformly. Were the silent checks
+   * first, a dismissed/duplicate/owned book would answer 'ok' while a
+   * fresh book answered 'slow_down' — a differential that resolves to
+   * a dismissal receipt. ---- */
+  const burnCap = (who) => { for (let i = 0; i < 20; i++) db.toy_send_log.push({ sender_id: who, recipient_id: 'user-x', ts: Date.now() }); };
+  burnCap(PAL);
+  r = await (signIn(PAL), rpc('send_thought_of_you', { p_recipient: ME, p_book_id: 'pal-tame', p_note: '' }));
+  ok('caps order: an over-cap re-send of a DISMISSED book answers slow_down (no dismissal receipt)',
+    r.data === 'slow_down' && !db.thought_of_you.some(t => t.book.title === 'A Gentle Season'));
+  db.books.push({ user_id: ME, book_id: 'me-dragon', isbn: '9780000000001', data: prof('me-dragon', { title: 'The Dragon Ledger', authors: ['Dana Drake'], isbn: '9780000000001', status: 'tbr' }) });
+  r = await rpc('send_thought_of_you', { p_recipient: ME, p_book_id: 'pal-dragon', p_note: '' });
+  ok('caps order: an over-cap send of an ALREADY-OWNED book answers slow_down, not the silent ok',
+    r.data === 'slow_down');
+  db.books = db.books.filter(b => b.book_id !== 'me-dragon');
+  db.toy_send_log.length = 0;
+  burnCap(PET);
+  r = await (signIn(PET), rpc('send_thought_of_you', { p_recipient: ME, p_book_id: 'pet-one', p_note: '' }));
+  ok('caps order: an over-cap re-send of a DUPLICATE still in the inbox answers slow_down, not the silent ok',
+    r.data === 'slow_down' && db.thought_of_you.filter(t => t.sender_id === PET).length === 5);
   db.toy_send_log.length = 0;
 
   /* ---- blocks: silent refusal + sever sweep ---- */

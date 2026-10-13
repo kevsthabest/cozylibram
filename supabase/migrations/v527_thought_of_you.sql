@@ -314,6 +314,21 @@ begin
   select p.receive_recos into v_recv from public.profiles p where p.user_id = p_recipient;
   if not found or v_recv is distinct from true then return 'ok'; end if;
 
+  -- The sender's own caps: the one distinct outcome (see header).
+  -- Checked BEFORE the silent outcomes below, deliberately: an
+  -- over-cap sender must hear 'slow_down' uniformly, so the answer
+  -- reports only the sender's own volume. Were the silent checks
+  -- first, a dismissed (or duplicate, or already-owned) book would
+  -- answer 'ok' while a fresh book answered 'slow_down' — and that
+  -- differential would resolve to a dismissal receipt.
+  if (select count(*) from public.toy_send_log l
+       where l.sender_id = v_uid and l.recipient_id = p_recipient
+         and l.created_at >= date_trunc('day', now())) >= 5
+     or (select count(*) from public.toy_send_log l
+       where l.sender_id = v_uid
+         and l.created_at >= date_trunc('day', now())) >= 20
+  then return 'slow_down'; end if;
+
   -- Snapshot: a fresh object built from whitelisted scalars only.
   v_authors := (
     select coalesce(jsonb_agg(a order by ord), '[]'::jsonb)
@@ -404,15 +419,6 @@ begin
                  else '' end
           ) = v_key
   ) then return 'ok'; end if;
-
-  -- The sender's own caps: the one distinct outcome (see header).
-  if (select count(*) from public.toy_send_log l
-       where l.sender_id = v_uid and l.recipient_id = p_recipient
-         and l.created_at >= date_trunc('day', now())) >= 5
-     or (select count(*) from public.toy_send_log l
-       where l.sender_id = v_uid
-         and l.created_at >= date_trunc('day', now())) >= 20
-  then return 'slow_down'; end if;
 
   insert into public.thought_of_you (sender_id, recipient_id, sender_book_id, book_key, book, note)
   values (v_uid, p_recipient, p_book_id, v_key, v_snap, btrim(coalesce(p_note, '')))
