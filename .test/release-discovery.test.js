@@ -79,8 +79,8 @@ ok('authors ranked by read count then rating',
   const added = window.addReleaseBook(list[1]);
   runInWindow(`window.__inLib = library.find(b => b.title === 'Future Book') || null;`);
   const inLib = window.__inLib;
-  ok('add lands an unowned TBR book with the release date',
-    !!added && !!inLib && inLib.owned === 'tobuy' && inLib.status === 'tbr' && inLib.releaseDate === isoIn(30));
+  ok('add lands an unowned Wishlist-shelf book with the release date (v529)',
+    !!added && !!inLib && inLib.owned === 'tobuy' && inLib.status === 'wishlist' && inLib.releaseDate === isoIn(30));
   ok('added book carries the Hardcover id and skips re-enrichment',
     inLib.hcId === 1 && inLib.hcEnriched === true);
 
@@ -89,7 +89,7 @@ ok('authors ranked by read count then rating',
 
   // wishlist: check button + today-release fix
   runInWindow(`
-    library.push({ id: 't1', title: 'Today Book', authors: ['Ann Author'], status: 'tbr',
+    library.push({ id: 't1', title: 'Today Book', authors: ['Ann Author'], status: 'wishlist',
       owned: 'tobuy', cover: '', tropes: [], releaseDate: '${isoIn(0)}', dateAdded: '2026-01-01T00:00:00.000Z' });
     view = 'wishlist'; renderWishlist();
   `);

@@ -83,20 +83,22 @@ ok('owned filter shows none now', qa('.book-card').length === 0);
 q('[data-of="all"]').click();
 ok('all restores all three', qa('.book-card').length === 3);
 
-// 7. wishlist (reached from the Library toolbar): only to-buy, never borrowed
-runInWindow(`go('library')`);
+// 7. wishlist (reached from the Library toolbar): the Wishlist shelf
+// only. v529: wishlist-ness is the status — o2 is shelved there (its
+// to-buy facet alone no longer puts a book on this view).
+runInWindow(`library.find(b => b.id === 'o2').status = 'wishlist'; go('library')`);
 ok('library toolbar links to wishlist', !!q('#lib-wishlist'));
 q('#lib-wishlist').click();
 ok('wishlist view renders', !!q('.wish-head'));
-ok('wishlist shows only to-buy', qa('#view .book-card').length === 1);
+ok('wishlist shows only the Wishlist shelf', qa('#view .book-card').length === 1);
 ok('wishlist cards have to-buy badges',
   qa('#view .book-card .badge.tobuy').length === 1);
 q('#view .book-card').click();
 ok('wishlist card opens detail', !!q('#f-owned'));
 window.document.getElementById('m-x').click();
 
-// 8. empty wishlist state
-runInWindow(`library.forEach(b => b.owned = 'owned'); renderWishlist();`);
+// 8. empty wishlist state (v529: empty = nobody on the Wishlist shelf)
+runInWindow(`library.forEach(b => { b.owned = 'owned'; b.status = 'tbr'; }); renderWishlist();`);
 ok('empty wishlist message', q('#view .empty').textContent.includes('Nothing on the wishlist'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

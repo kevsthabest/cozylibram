@@ -91,8 +91,8 @@ const PROP_VALUES = {
   source: ['search', 'isbn', 'barcode', 'isbn_list', 'goodreads', 'storygraph',
            'hardcover', 'bookmory', 'manual', 'recommendation', 'discovery'],
   axis: ['spice', 'scare', 'suspense', 'adventure'],
-  from: ['tbr', 'reading', 'read', 'dnf'],
-  to:   ['tbr', 'reading', 'read', 'dnf'],
+  from: ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
+  to:   ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
   // Preview kinds are fixed internal constants (150-modal-discovery.js:326);
   // without this entry any kind value was stored unvalidated.
   kind: ['reco', 'release', 'coven-reco', 'friend', 'external'],

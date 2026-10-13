@@ -73,7 +73,7 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   runInWindow(`window.__added = library[0];`);
   ok('added to library', window.__added.title === 'Missing Book One');
   ok('added as to-buy (wishlist)', window.__added.owned === 'tobuy');
-  ok('added as tbr', window.__added.status === 'tbr');
+  ok('added on the Wishlist shelf (v529: a status, not the facet)', window.__added.status === 'wishlist');
   ok('button becomes confirmation', q('#c-more').textContent.includes('In wishlist'));
   q('#c-x').click();
 

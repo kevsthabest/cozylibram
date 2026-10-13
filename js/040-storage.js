@@ -279,6 +279,19 @@ function loadLegacyAll() {
   tombstones = loadLegacyTombstones();
   tombstoneFloor = loadLegacyTombFloor();
   upNext = loadLegacyUpNext();
+  // v529: one-time wishlist-shelf migration, legacy-backend flavour —
+  // the flag is a per-partition localStorage key beside the library.
+  // This runs during script load, so persistence is the direct legacy
+  // write (no cloud scheduling yet); the transform's _mtime bump
+  // guarantees the changed books ride the next regular push.
+  try {
+    const fk = libKey() + '.wishlist529';
+    if (!localStorage.getItem(fk)) {
+      const nW = wishlistShelfTransform(library);
+      localStorage.setItem(fk, '1');
+      if (nW) saveLegacyLibrary();
+    }
+  } catch (e) {}
 }
 
 /* ---------------- IndexedDB backend (v202) ---------------- */
@@ -322,6 +335,18 @@ async function loadSlotState(db) {
   // differential persist below knows what's new vs. deleted.
   for (const b of library) unmarkDirty(b);
   knownBookIds = new Set(library.map(b => b.id));
+  // v529: one-time wishlist-shelf migration (js/020 wishlistShelfTransform),
+  // flagged per slot in the slot kv. Changed books re-dirty via their
+  // proxies and carry a fresh _mtime from the transform, so they
+  // persist + push on the next save at the latest (at boot, right now).
+  if (!(await idbKvGet(db, 'wishlistShelfV529'))) {
+    const nW = wishlistShelfTransform(library);
+    await idbKvPut(db, 'wishlistShelfV529', 1);
+    if (nW) {
+      persistBooks();
+      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+    }
+  }
   tombstones = (await idbKvGet(db, 'tombstones')) || [];
   tombstoneFloor = Number(await idbKvGet(db, 'tombFloor')) || 0;
   upNext = (await idbKvGet(db, 'upNext')) || [];
@@ -575,6 +600,19 @@ function setLocalUserLegacy(uid) {
   }
   tombstoneFloor = nextFloor;
   upNext = loadLegacyUpNext(); // v74: queue is per-user too
+  // v529: the same one-time wishlist-shelf migration for the incoming
+  // partition, under its own flag. (The first-sign-in adoption moves
+  // the pre-v204 offline shelf — pre-migration data by construction,
+  // since signed-out mode is retired — so transforming it here under
+  // the account's flag is the same one-time pass, not a re-run.)
+  try {
+    const fk = libKey() + '.wishlist529';
+    if (!localStorage.getItem(fk)) {
+      const nW = wishlistShelfTransform(library);
+      localStorage.setItem(fk, '1');
+      if (nW) saveLibrary();
+    }
+  } catch (e) {}
 }
 
 async function setLocalUserIdb(uid) {

@@ -145,6 +145,34 @@ function migrateBook(b) {
   return trackBook(b); // v495 (#125): wrap for dirty-flag change tracking (idempotent)
 }
 
+/* v529: one-time wishlist-shelf migration — the pure transform.
+   Until v529 the wishlist was the owned === 'tobuy' facet at any
+   status; from v529 the Wishlist is a shelf (status === 'wishlist')
+   and the facet means only "not in hand yet". The transform runs
+   ONCE per library partition (flagged by the load paths in
+   js/040-storage.js) — it must never re-run, because after the
+   migration a tbr + tobuy book is a legitimate new state (a reco or
+   search add the reader doesn't own yet), not a wishlist book.
+   Rule (Decision A): a tobuy book WITHOUT reading history (tbr, dnf,
+   or any non-read/reading status) moves to the Wishlist shelf, facet
+   untouched — 'tobuy' is its honest not-yet-acquired state. A tobuy
+   book WITH history (read / reading) keeps its shelf — history wins —
+   and the facet is normalized away to 'owned': it was read, so the
+   to-buy marker was the stale half of the old signal. Changed books
+   get a fresh _mtime so they win the next cloud merge and push once;
+   the load paths persist them through the dirty-flag machinery.
+   Returns the number of books changed. Idempotent on its own output. */
+function wishlistShelfTransform(books) {
+  let n = 0;
+  const now = Date.now();
+  for (const b of (books || [])) {
+    if (!b || b.owned !== 'tobuy') continue;
+    if (b.status === 'read' || b.status === 'reading') { b.owned = 'owned'; b._mtime = now; n++; }
+    else if (b.status !== 'wishlist') { b.status = 'wishlist'; b._mtime = now; n++; }
+  }
+  return n;
+}
+
 // Ownership badge: line-art home vs cart vs lent-out book (v84, v148)
 function ownedBadge(b) {
   if (b.owned === 'tobuy') return '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';

@@ -267,6 +267,8 @@ async function searchSeriesId(seriesName, authorName) {
 }
 
 // Add a discovered book straight to the wishlist (she doesn't own it yet).
+// v529: that means the Wishlist SHELF (status) — the tobuy facet is
+// just the not-in-hand ownership state that rides along.
 function addExternalBook(x) {
   const book = {
     id: uid(),
@@ -280,8 +282,8 @@ function addExternalBook(x) {
     categories: [],
     publicRating: null,
     ratingsCount: 0,
-    status: 'tbr',
-    owned: 'tobuy', // discovered = wanted
+    status: 'wishlist',
+    owned: 'tobuy', // discovered = wanted, not yet in hand
     ratings: {},
     myRating: 0,
     tropes: [],
@@ -1034,6 +1036,9 @@ function renderDetailModal(b, viaBook) {
     reading: { label: 'Currently Reading', ic: 'reading' },
     read:    { label: 'Read',              ic: 'read' },
     dnf:     { label: 'DNF',               ic: 'dnf' },
+    // v529: the Wishlist shelf is a normal status choice here — moving
+    // a book to/from it is an ordinary shelf change in this sheet.
+    wishlist:{ label: 'Wishlist',          ic: 'gift' },
   };
   const OWNED_META = {
     owned:    { label: 'Owned',    ic: 'owned' },
@@ -1419,6 +1424,9 @@ function renderDetailModal(b, viaBook) {
     reading: { label: 'Log Pages',        ic: 'pencil',  run: () => scrollToField('m-progress') },
     read:    { label: 'Rate & Review',    ic: 'heart',   run: () => scrollToField('f-myrating') },
     dnf:     { label: 'Give it another go', ic: 'tbr',   run: () => primarySetStatus('tbr') },
+    // v529: the wishlist's primary act is the move onto the TBR shelf
+    // (the "I got it / I'm going to read it" step of the lifecycle).
+    wishlist:{ label: 'Move to TBR',        ic: 'tbr',   run: () => primarySetStatus('tbr') },
   };
   const paintPrimary = () => {
     const cfg = PRIMARY[draft.status] || PRIMARY.tbr;
@@ -2130,7 +2138,9 @@ function renderDetailModal(b, viaBook) {
     try { if (typeof WorkStore !== 'undefined' && WorkStore.invalidate) WorkStore.invalidate(b); } catch (e) {}
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
-    if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
+    // v529: wishlisting a book also takes it off the queue — every
+    // non-TBR shelf means "not imminently readable from your shelves".
+    if (['reading', 'read', 'dnf', 'wishlist'].includes(draft.status)) upNextRemove(id);
     var _becameRead = draft.status === 'read' && _aBefore.status !== 'read';
     saveLibrary(); close(); render();
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events

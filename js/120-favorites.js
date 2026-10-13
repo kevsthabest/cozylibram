@@ -516,9 +516,10 @@ function cantDecideHTML() {
 
 function shelfTilesHTML(counts) {
   // v173: six tiles per the mockup — the four shelves plus Favorites and
-  // Wishlist (books marked "to buy").
+  // Wishlist. v529: Wishlist is the fifth shelf (a status), counted like
+  // the others — no longer the owned === 'tobuy' facet count.
   const fav = library.filter(b => b.favorite).length;
-  const wish = library.filter(b => b.owned === 'tobuy').length;
+  const wish = library.filter(b => b.status === 'wishlist').length;
   const tiles = [
     ['tbr', 'TBR', counts.tbr], ['reading', 'Reading', counts.reading],
     ['read', 'Read', counts.read], ['dnf', 'DNF', counts.dnf],
@@ -544,7 +545,7 @@ function libraryHomeHTML(counts) {
 function renderLibrary() {
   clearTimeout(libSearchTimer); libSearchTimer = null; // batch 4, issue #149
   const books = filteredBooks();
-  const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
+  const counts = { tbr: 0, reading: 0, read: 0, dnf: 0, wishlist: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
   const isHome = filter === 'all' && ownFilter === 'all' && !query.trim();
 
@@ -566,6 +567,8 @@ function renderLibrary() {
     chip('reading', icon('reading') + ' Reading · ' + counts.reading, filter === 'reading') +
     chip('read', icon('read') + ' Read · ' + counts.read, filter === 'read') +
     // v403: hide zero-count filters (they only show empty views)
+    // v529: the Wishlist shelf gets its chip on the same rule.
+    (counts.wishlist > 0 ? chip('wishlist', icon('gift') + ' Wishlist · ' + counts.wishlist, filter === 'wishlist') : '') +
     (counts.dnf > 0 ? chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') : '') +
     '</div>';
   const ownCounts = { owned: 0, tobuy: 0, borrowed: 0 };
