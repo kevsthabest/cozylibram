@@ -40,8 +40,9 @@ const USER_STATE_KEYS = [
   // overriding the earlier keep-it-local reconciliation.
   'spicyshelves.storeRegion',
   // User's call (2026-10-13): sort + series filter roam too — all user
-  // details sync. Only navigation transients (setgroups, covenTab) and
-  // shelf-state keys stay local; shelf state gets its own section later.
+  // details sync. Only navigation transients (setgroups, covenTab) stay
+  // local; shelf state is NOT a settings key — it rides its own section
+  // (v521, below) so this snapshot keeps its exact v518 shape.
   'spicyshelves.sortby', 'spicyshelves.seriesfilter',
 ];
 // Prefix families: seasonThemeNudge:<season>, wrapped-banner-<...>.
@@ -176,8 +177,11 @@ function userStateApply(values) {
 // A missing/empty server section NEVER wipes local data; the seeding
 // rules mirror settings exactly: first device seeds, second adopts,
 // another account's on-device values are baselined instead of seeded.
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release'];
+//
+// v521 adds a fourth section, shelf (column shelf_state), on the same
+// machinery — see the shelf block below for its inventory.
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -244,22 +248,146 @@ function userStateApplyRelease(payload) {
   } catch (e) {}
 }
 
+/* ---------------- roaming shelf state (v521) ---------------- */
+// The fourth section: shelf state, in its own column (shelf_state,
+// supabase/migrations/v521_user_state_shelf.sql), payload { _at, values }
+// where values maps a fixed piece name to the raw string that piece
+// lives in on-device — settings/release-style full snapshot: a piece
+// absent from a newer snapshot is cleared locally. Inventory, from
+// reading the code that writes and reads each piece (piece → live
+// source):
+//   order    — the 2D shelf doc: per-group manual order + layout +
+//              format + season + 2D decorations, all one object behind
+//              shelfOrder() (js/205-shelfview.js), persisted per account
+//              partition to spicyshelves.shelforder.v1.<uid>. Collect
+//              reads the in-memory doc (what the user actually sees);
+//              apply writes back through saveShelfOrder() + the cache
+//              assignment — the app's own write path, so the shelf
+//              re-renders from the adopted doc on its next render.
+//   deco     — cozylibram.s3d.deco.v2: 3D decorations per bookcase
+//              ({ v: 2, cases: { 'group:index': [...] } }). js/215 reads
+//              and writes this localStorage key directly, so
+//              localStorage IS the live source (the 3D scene's placed
+//              list is a closure rebuilt from it on mount / case load).
+//   dressed  — cozylibram.s3d.dressed.v1: the 3D dressed-theme name.
+//   arrange  — cozylibram.s3d.arrange: 3D room arrange mode (js/217).
+//   spines   — cozylibram.s3d.spines: 3D spines mode (js/217).
+//   viewmode — shelfViewMode: the 2D/3D shelf view mode (js/217).
+// Deliberately NOT synced: cozylibram.s3d.deco.v1 (legacy format the
+// v2 doc adopts once — syncing it could resurrect superseded layouts),
+// spicyshelves.setgroups (navigation transient), spicyshelves.
+// spinecolors (a derived cache of sampled cover colours — recomputable,
+// and spine colour itself rides the book rows), spicyshelves.layout
+// (the LIBRARY browse layout, not shelf state — and the settings key
+// list stays frozen), book poses (stored on book records; they already
+// roam with the library), and session transients (case index, decor
+// undo stack, current group — never persisted at all).
+const SHELF_STATE_LS_PIECES = {
+  deco: 'cozylibram.s3d.deco.v2',
+  dressed: 'cozylibram.s3d.dressed.v1',
+  arrange: 'cozylibram.s3d.arrange',
+  spines: 'cozylibram.s3d.spines',
+  viewmode: 'shelfViewMode',
+};
+
+function userStateCollectShelf() {
+  const values = {};
+  try {
+    let doc = null;
+    try { if (typeof shelfOrder === 'function') doc = shelfOrder(); } catch (e) {}
+    if (!doc) {
+      try { if (typeof loadShelfOrder === 'function') doc = loadShelfOrder(); } catch (e) {}
+    }
+    // An empty doc is the pristine default — omitting the piece keeps
+    // untouched devices' payloads empty (and under full-snapshot apply
+    // an omitted piece still clears, which is how a deliberate reset
+    // propagates).
+    if (doc && typeof doc === 'object' && !Array.isArray(doc) && Object.keys(doc).length) {
+      values.order = JSON.stringify(doc);
+    }
+  } catch (e) {}
+  try {
+    for (const piece of Object.keys(SHELF_STATE_LS_PIECES)) {
+      const v = localStorage.getItem(SHELF_STATE_LS_PIECES[piece]);
+      if (v != null) values[piece] = v;
+    }
+  } catch (e) {}
+  return { values };
+}
+
+function userStateApplyShelfOrder(doc) {
+  let wrote = false;
+  try {
+    if (typeof saveShelfOrder === 'function') { saveShelfOrder(doc); wrote = true; }
+  } catch (e) {}
+  // The cache assignment mirrors js/205's own setters: without it the
+  // running shelf would keep rendering the pre-apply doc until reload.
+  try { shelfOrderCache = doc; wrote = true; } catch (e) {}
+  if (!wrote) {
+    try {
+      if (typeof shelfOrderKey === 'function') {
+        localStorage.setItem(shelfOrderKey(), JSON.stringify(doc));
+      }
+    } catch (e) {}
+  }
+}
+function userStateApplyShelf(payload) {
+  const incoming = (payload && payload.values && typeof payload.values === 'object') ? payload.values : {};
+  try {
+    if (!Object.prototype.hasOwnProperty.call(incoming, 'order')) {
+      userStateApplyShelfOrder({});
+    } else {
+      let doc = null;
+      try {
+        const parsed = JSON.parse(String(incoming.order));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) doc = parsed;
+      } catch (e) {}
+      // A malformed order piece is ignored, never allowed to wipe a
+      // good local arrangement (same type-gate spirit as warning prefs).
+      if (doc) userStateApplyShelfOrder(doc);
+    }
+  } catch (e) {}
+  try {
+    for (const piece of Object.keys(SHELF_STATE_LS_PIECES)) {
+      const key = SHELF_STATE_LS_PIECES[piece];
+      if (!Object.prototype.hasOwnProperty.call(incoming, piece)) {
+        localStorage.removeItem(key);
+        continue;
+      }
+      const raw = String(incoming[piece]);
+      if (piece === 'deco') {
+        // Mirror js/215's readDecoDoc validation: only a well-formed
+        // v2 doc may replace the local one.
+        let valid = false;
+        try {
+          const d = JSON.parse(raw);
+          valid = !!d && d.v === 2 && !!d.cases && typeof d.cases === 'object';
+        } catch (e) {}
+        if (!valid) continue;
+      }
+      localStorage.setItem(key, raw);
+    }
+  } catch (e) {}
+}
+
 const USER_STATE_SECTION_FNS = {
   warning: { collect: userStateCollectWarning, apply: userStateApplyWarning },
   upnext: { collect: userStateCollectUpNext, apply: userStateApplyUpNext },
   release: { collect: userStateCollectRelease, apply: userStateApplyRelease },
+  shelf: { collect: userStateCollectShelf, apply: userStateApplyShelf },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
 }
 
-// Pull the three sections in one select. On a pre-v520 database the
-// columns don't exist and PostgREST errors the whole select — caught
-// here, so the sections simply stay device-local until the migration
-// lands (fail-open, exactly like a missing table in v518). The settings
-// pull uses its own select and is unaffected either way. deviceOwner is
-// the owner marker captured BEFORE this sync's settings apply could
-// claim ownership, so the cross-account baseline sees the truth.
+// Pull the sections in one select. On a database missing any section
+// column (pre-v520, or pre-v521 for shelf_state) PostgREST errors the
+// whole select — caught here, so the sections simply stay device-local
+// until the migration lands (fail-open, exactly like a missing table
+// in v518). The settings pull uses its own select and is unaffected
+// either way. deviceOwner is the owner marker captured BEFORE this
+// sync's settings apply could claim ownership, so the cross-account
+// baseline sees the truth.
 async function userStatePullSections(deviceOwner) {
   try {
     if (typeof cloudUser === 'undefined' || !cloudUser) return false;
@@ -267,7 +395,7 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     const meta = userStateMeta(uid);
     let changed = false;
@@ -416,10 +544,10 @@ async function userStatePush() {
       pushed = true;
     }
     if (dirtySections.length) {
-      // Separate upsert, own failure domain: on a pre-v520 database this
-      // errors (the columns don't exist yet) — caught here so a settings
-      // push above still counts, and the section bookkeeping stays
-      // un-advanced so the next cycle retries.
+      // Separate upsert, own failure domain: on a database missing the
+      // section columns (pre-v520 / pre-v521) this errors — caught here
+      // so a settings push above still counts, and the section
+      // bookkeeping stays un-advanced so the next cycle retries.
       try {
         const row = { user_id: uid, updated_at: new Date(at).toISOString() };
         for (const key of dirtySections) {
