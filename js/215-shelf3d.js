@@ -1773,18 +1773,28 @@
       return m;
     })();
 
-    function findFreeSpot(pi, x, fw) {
-      var sx = scanFreeSpot(pi, x, fw);
+    function findFreeSpot(pi, x, fw, edge, ignoreRec) {
+      var sx = scanFreeSpot(pi, x, fw, edge, ignoreRec);
       return (sx == null) ? THREE.MathUtils.clamp(x, -SHELF_W / 2 + 0.45 + fw / 2, SHELF_W / 2 - 0.45 - fw / 2) : sx;
     }
     /* The gap hunt itself: returns a free centre x on the level, or null
        when the level has no gap wide enough (v514: a full level is no
        longer a dead end — placeDeco claims the drop spot and the books
        reflow around it). */
-    function scanFreeSpot(pi, x, fw) {
+    function scanFreeSpot(pi, x, fw, edge, ignoreRec) {
       var minX = -SHELF_W / 2 + 0.45 + fw / 2, maxX = SHELF_W / 2 - 0.45 - fw / 2;
       x = THREE.MathUtils.clamp(x, minX, maxX);
-      var occ = occupied[pi].slice().sort(function (a, b) { return a[0] - b[0]; });
+      /* v523: a decoration only avoids OTHER decorations. Books are not obstacles: the drop
+         spot is claimed and the books flow around it (reflowBooks), so a decoration lands
+         exactly where it was set instead of hopping to the nearest gap beside the books.
+         Edge-draped pieces (lights, garlands) only avoid other edge pieces. */
+      var occ = [];
+      placed.forEach(function (pp) {
+        if (pp.room || !pp.rec || pp.pi !== pi || pp.rec === ignoreRec) return;
+        if (!!pp.group.userData.edge !== !!edge) return;
+        occ.push(pp.rec);
+      });
+      occ.sort(function (a, b) { return a[0] - b[0]; });
       for (var off = 0; off <= SHELF_W; off += 0.15) {
         var cands = [x + off, x - off];
         for (var ci = 0; ci < cands.length; ci++) {
@@ -1823,7 +1833,7 @@
       /* v514: prefer a genuine gap; on a full level, claim the drop spot
          (clamped) — the placeDeco wrapper reflows the books around the
          claimed interval, so a packed shelf is no longer undecoratable. */
-      var spot = scanFreeSpot(pi, x, fw);
+      var spot = scanFreeSpot(pi, x, fw, !!g.userData.edge);
       x = (spot == null)
         ? THREE.MathUtils.clamp(x, -SHELF_W / 2 + 0.45 + fw / 2, SHELF_W / 2 - 0.45 - fw / 2)
         : spot;
@@ -1932,9 +1942,11 @@
     function placeRoomDeco(type, pos, anchor, free, opts) {
       var g = ROOM_MAKERS[type](opts || {});
       g.position.copy(pos);
+      var rs = roomItemScale(pos);
+      g.userData.roomScale = rs;
       g.scale.setScalar(0.01);   // 220ms ease-out-back pop on place
       scene.add(g);
-      tween(220, function (k) { g.scale.setScalar(Math.max(0.01, easeOutBack(k))); });
+      tween(220, function (k) { g.scale.setScalar(Math.max(0.01, rs * easeOutBack(k))); });
       if (anchor) anchor.usedBy = g;
       placed.push({ group: g, room: true, anchor: anchor || null, type: type, opts: opts || null });
       if (!free) consumeInventory(type); else buildInventory();
@@ -1967,6 +1979,33 @@
        floor items sit on the floor (clamped, never under the bookcase),
        wall items stick to the wall (back panel plane). */
     var ROOM_WALL_TYPES = ['web', 'moon', 'snowflake'];
+    /* v523: the room surfaces a wall/floor piece can be left on. A ray picks whichever surface
+       it meets first: the bookcase back panel (inside the case) or the room wall behind it.
+       Pieces on the far wall are scaled up so they read at the same size as on the panel. */
+    var ROOM_WALL_Z = -8.9, WALL_ITEM_SCALE = 1.7;
+    var floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    function roomSurfaceHit(type, rayObj) {
+      if (type === 'pumpkin') {
+        var fp = new THREE.Vector3();
+        if (!rayObj.ray.intersectPlane(floorPlane, fp)) return null;
+        var cp = clampFloorPos(new THREE.Vector3(fp.x, 0, fp.z));
+        return { pos: cp, kind: 'floor' };
+      }
+      var surf = [];
+      if (back) surf.push(back);
+      if (wallMesh) surf.push(wallMesh);
+      var hits = rayObj.intersectObjects(surf, false);
+      if (!hits.length) return null;
+      var h = hits[0], onWall = h.object === wallMesh;
+      var px = h.point.x, py = h.point.y;
+      if (onWall) {
+        px = THREE.MathUtils.clamp(px, -26, 26); py = THREE.MathUtils.clamp(py, 0.8, 16.5);
+      } else {
+        px = THREE.MathUtils.clamp(px, -5.3, 5.3); py = THREE.MathUtils.clamp(py, 1, 7.6);
+      }
+      return { pos: new THREE.Vector3(px, py, (onWall ? ROOM_WALL_Z : WALL_Z) + 0.05), kind: onWall ? 'wall' : 'panel' };
+    }
+    function roomItemScale(pos) { return (pos && pos.z < WALL_Z - 2) ? WALL_ITEM_SCALE : 1; }
     function roomDropPos(type, x, y, z) {
       if (type === 'pumpkin') {
         return clampFloorPos(new THREE.Vector3(x, 0, z));
@@ -2071,7 +2110,7 @@
       pickedType = item.type;
       closeInventory();
       showPlacingBar(item);
-      setHint(item.room ? 'Tap the room to place the ' + item.name.toLowerCase()
+      setHint(item.room ? 'Tap the wall or floor where you want the ' + item.name.toLowerCase()
                         : 'Tap a shelf to place the ' + item.name.toLowerCase());
     }
     /* shared post-placement: select + undo bar so a mistake costs one tap */
@@ -2208,10 +2247,14 @@
       if (pickedType && !trayDrag && !roomDrag) {
         var item = invByType(pickedType);
         if (item && item.room) {
-          // room deco picked up: tap = auto-place at first free anchor
-          var a = firstFreeAnchor(item.type);
+          // room deco picked up: tap = leave it where the finger is (v523). Only when the tap
+          // lands on nothing placeable do we fall back to the first free anchor.
+          setPtr(e); ray.setFromCamera(ptr, camera);
+          var rh = roomSurfaceHit(item.type, ray);
+          var a = rh ? null : firstFreeAnchor(item.type);
           pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);
-          if (a) { var g2 = placeRoomDeco(item.type, a.pos, a); afterPlace(item, g2); }
+          if (rh) { var g2 = placeRoomDeco(item.type, rh.pos, null); afterPlace(item, g2); }
+          else if (a) { var g2b = placeRoomDeco(item.type, a.pos, a); afterPlace(item, g2b); }
           else toast('No free spot for the ' + item.name.toLowerCase(), 2200);
           tapPlacedDeco = true;   // suppress book-tap on the matching pointerup
         } else if (item) {
@@ -2286,7 +2329,7 @@
       var p = null;
       placed.forEach(function (pp) { if (pp.group === g) p = pp; });
       var baseY = (p && p.room) ? g.position.y : LEVELS[p.pi];
-      var r2 = (p && p.room) ? 0.8
+      var r2 = (p && p.room) ? 0.8 * (g.userData.roomScale || 1)
         : Math.max(g.userData.fw || 0.8, g.userData.fd || 0.8) / 2 + 0.18;
       var gs = r2 * 2.6;   // glow texture is a soft ring on a 1x1 plane
       selRing.scale.set(gs, gs, 1);
@@ -2377,7 +2420,7 @@
         var hit = zoneHit(e);
         if (hit) {
           var fw = trayDrag.group.userData.fw;
-          var x = findFreeSpot(hit.pi, hit.point.x, fw); // snapped, for drop
+          var x = findFreeSpot(hit.pi, hit.point.x, fw, !!trayDrag.group.userData.edge); // claimed spot, for drop
           trayDrag.pi = hit.pi; trayDrag.x = x;
           trayDrag.group.visible = true;
           // 1:1 follow — ghost tracks the raw pointer x (not the snapped
@@ -2414,7 +2457,19 @@
         camera.getWorldDirection(camDir);
         dragPlane.setFromNormalAndCoplanarPoint(camDir, new THREE.Vector3(0, 3, 0));
         var pt = new THREE.Vector3();
-        if (ray.ray.intersectPlane(dragPlane, pt)) {
+        var surfHit = roomSurfaceHit(roomDrag.type, ray);
+        if (surfHit) {
+          /* v523: the ghost rides the surface under the finger (wall, panel or floor) and the
+             drop lands exactly there. */
+          var lift4 = (e.pointerType === 'touch') ? 0.45 : 0;
+          roomDrag.group.visible = true;
+          roomDrag.group.scale.setScalar((roomDrag.moved ? 1.18 : 1) * roomItemScale(surfHit.pos));
+          roomDrag.targetX = surfHit.pos.x; roomDrag.targetY = surfHit.pos.y + lift4; roomDrag.targetZ = surfHit.pos.z;
+          roomDrag.surf = surfHit;
+          roomDrag.hasTarget = true;
+        } else if (roomDrag.type === 'pumpkin' || ROOM_WALL_TYPES.indexOf(roomDrag.type) >= 0) {
+          roomDrag.group.visible = false; roomDrag.hasTarget = false; roomDrag.surf = null;   // off any surface: dropping cancels
+        } else if (ray.ray.intersectPlane(dragPlane, pt)) {
           roomDrag.group.visible = true;
           var lift2 = (e.pointerType === 'touch') ? 0.45 : 0;
           roomDrag.targetX = THREE.MathUtils.clamp(pt.x, -9, 9);
@@ -2438,7 +2493,7 @@
             var fw2 = moveDrag.group.userData.fw;
             var oi = occupied[hit2.pi].indexOf(rec.rec);
             if (oi >= 0) occupied[hit2.pi].splice(oi, 1);
-            var x2 = findFreeSpot(hit2.pi, hit2.point.x, fw2); // snapped, for drop
+            var x2 = findFreeSpot(hit2.pi, hit2.point.x, fw2, !!moveDrag.group.userData.edge, rec.rec); // claimed spot, for drop
             occupied[hit2.pi].push(rec.rec);
             rec.pi = hit2.pi;
             rec.rec[0] = x2 - fw2 / 2; rec.rec[1] = x2 + fw2 / 2;
@@ -2475,7 +2530,8 @@
         highlightZones(false);
         if (r.moved && r.hasTarget) {
           discardGhost(r.group);
-          var g = placeRoomDeco(r.type, roomDropPos(r.type, r.targetX, r.targetY, r.targetZ), null);
+          var dropAt = r.surf ? r.surf.pos : roomDropPos(r.type, r.targetX, r.targetY, r.targetZ);
+          var g = placeRoomDeco(r.type, dropAt, null);
           afterPlace(invByType(r.type), g);
         } else {
           discardGhost(r.group); // dropped outside: cancel
@@ -3124,7 +3180,7 @@
       if (loadingCase) return;
       try {
         var data = placed.map(function (p) {
-          return { type: p.type, pi: p.pi, x: p.group.position.x, z: p.group.position.z, room: !!p.room };
+          return { type: p.type, pi: p.pi, x: p.group.position.x, y: p.group.position.y, z: p.group.position.z, room: !!p.room };
         });
         var doc = readDecoDoc();
         doc.cases[caseKey] = data;
@@ -3143,7 +3199,15 @@
         if (!known) return false;
         list.forEach(function (d) {
           try {
-            if (d.room) return;           // room decorations need anchor lookup; skipped as before
+            if (d.room) {
+              /* v523: wall / floor pieces come back exactly where they were left. Records saved
+                 before this had no y; those use a sensible wall height. */
+              if (ROOM_MAKERS[d.type] && typeof d.x === 'number' && typeof d.z === 'number') {
+                var ry = (typeof d.y === 'number') ? d.y : (d.type === 'pumpkin' ? 0 : 5);
+                placeRoomDeco(d.type, new THREE.Vector3(d.x, ry, d.z), null, true);
+              }
+              return;
+            }
             if (typeof placeDeco === 'function') {
               placeDeco(d.type, d.pi, d.x, true);
               var p = placed[placed.length - 1];
@@ -3151,6 +3215,7 @@
             }
           } catch (_) {}
         });
+        deselect();                       // placeRoomDeco selects; nothing should look selected on load
         return true;                      // a known (even empty) case is not re-dressed
       } catch (_) { return false; }
     }
@@ -3180,6 +3245,14 @@
          swap: setBooks lays the incoming case out right after anyway). */
       if (!loadingCase) reflowBooks();
       renderer.shadowMap.needsUpdate = true;  // Phase 1: rebake after deco change
+      markDirty();
+      return r;
+    };
+    /* v523: wall / floor pieces persist too (they used to vanish on reload). */
+    var _origPlaceRoomDeco = placeRoomDeco;
+    placeRoomDeco = function () {
+      var r = _origPlaceRoomDeco.apply(this, arguments);
+      saveDecoLayout();
       markDirty();
       return r;
     };

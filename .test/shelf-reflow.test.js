@@ -153,7 +153,15 @@ const sliceLens = (books, group) => JSON.parse(run(`JSON.stringify(shelf3dSliceR
   ok('engine: setBooks lays out via the shared packer', src215.includes('shelf3dPackCase(currentBooks, bookObstacles(), MAX_BOOKS)'));
   ok('engine: place/remove wrappers reflow the books',
     (src215.match(/if \(!loadingCase\) reflowBooks\(\);/g) || []).length === 2);
-  ok('engine: full level claims the drop spot', src215.includes('scanFreeSpot(pi, x, fw)') && src215.includes('claim the drop spot'));
+  ok('engine: full level claims the drop spot', src215.includes('scanFreeSpot(pi, x, fw,') && src215.includes('claim the drop spot'));
+  ok('engine (v523): decorations avoid other decorations, not books',
+    src215.includes('a decoration only avoids OTHER decorations') && !/occupied\[pi\]\.slice\(\)\.sort/.test(src215));
+  ok('engine (v523): wall/floor pieces land where tapped or dropped',
+    src215.includes('function roomSurfaceHit(') && src215.includes('var rh = roomSurfaceHit(item.type, ray);') &&
+    src215.includes('var dropAt = r.surf ? r.surf.pos'));
+  ok('engine (v523): wall/floor pieces persist (y saved, restored on load, wrapper saves)',
+    src215.includes('y: p.group.position.y') && src215.includes('placeRoomDeco(d.type, new THREE.Vector3(d.x, ry, d.z), null, true)') &&
+    src215.includes('var _origPlaceRoomDeco = placeRoomDeco;'));
   ok('engine: decorations restore before the initial book layout',
     src215.indexOf('var restored = loadDecoLayout();') < src215.indexOf('if (opts.initialBooks) setBooks(opts.initialBooks);'));
   ok('engine: move-drop settles onto the claimed spot, then persists + reflows',
