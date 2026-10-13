@@ -725,8 +725,10 @@ function renderCovenFriendMain() {
     circBooks.forEach(b => { map[b.id] = b; });
     circBookMap = map;
     // v523: display copies strip the spice badge when the shield is on
-    // (js/230 shieldCardBook); circBookMap keeps the originals for the
-    // preview modal, which is book metadata and stays untouched.
+    // (js/230 shieldCardBook); circBookMap keeps the originals — the
+    // preview modal receives the book's metadata as-is, but openCovenBook
+    // blanks a shielded high-spice cover on its transient copy (v524:
+    // in this flow the cover is a shared-view cover, not metadata).
     const cardBook = (typeof shieldCardBook === 'function') ? shieldCardBook : (x) => x;
     html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
   }
@@ -771,7 +773,16 @@ function markShieldedCovers() {
 // (replacing its own tiny overlay) — description, tropes, genres, with +TBR
 // adding a clean copy per the v97 rule and Wishlist as usual.
 function openCovenBook(b) {
-  openPreviewModal(previewTransient(b, 'friend'), {
+  const t = previewTransient(b, 'friend');
+  // v524 (Advisor ruling): the modal's DATA is metadata, but its cover in
+  // this friend flow is a shared-view cover, which the shield promises to
+  // blur. Blank the cover on the transient copy — the placeholder renders;
+  // the original book keeps its cover (+TBR still copies it as before).
+  if (typeof shieldOn === 'function' && shieldOn() &&
+      typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(b, circSpiceMap)) {
+    t.cover = '';
+  }
+  openPreviewModal(t, {
     source: 'coven-shelf',
     contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
     onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null

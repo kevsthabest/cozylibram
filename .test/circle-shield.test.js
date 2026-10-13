@@ -316,6 +316,34 @@ const NOW = new Date().toISOString();
   ok('profile save updates the band via user_state', probe('privacyState()').band === 'adult');
   ok('profile row still carries NO band', !('band' in stub.db.profiles[ME]) && !('age_band' in stub.db.profiles[ME]));
 
+  /* ---------- H. friend preview modal: the cover is a shared-view cover ---------- */
+  // Advisor ruling (v524): the modal's DATA is metadata, but its cover in
+  // the friend flow functions as a shared-view cover, which the shield
+  // promises to blur — openCovenBook blanks it on the transient copy.
+  useAs(ME);
+  runInWindow('circFriend = { id: "' + FRIEND + '", name: "Fran Friend" }; circSpiceMap = {}; window.__capT = null; openPreviewModal = function(t, opts) { window.__capT = t; };');
+  const modalHot = { id: 'hot1', title: 'Filthy Book', authors: ['A One'], status: 'read', myRating: 5, ratings: { spice: 5 }, axes: ['spice'], cover: 'https://x/hot1.jpg', categories: ['Fiction / Romance'] };
+  const modalWarm = { id: 'warm1', title: 'Steamy Book', authors: ['A Two'], status: 'read', myRating: 5, ratings: { spice: 3 }, axes: ['spice'], cover: 'https://x/warm1.jpg', categories: ['Fiction / Romance'] };
+  const modalBase = { id: 'base1', title: 'Baseline Book', authors: ['A Three'], status: 'read', myRating: 5, ratings: {}, cover: 'https://x/base1.jpg', categories: ['Fiction / Romance'] };
+  probe('setShield(true)');
+  probe('openCovenBook(' + JSON.stringify(modalHot) + ')');
+  const capHot = probe('window.__capT');
+  ok('modal: shielded + high-spice → transient cover blanked (placeholder renders)', !!capHot && capHot.cover === '');
+  ok('modal: blanking hits only the transient copy — source book keeps its cover', modalHot.cover === 'https://x/hot1.jpg');
+  probe('openCovenBook(' + JSON.stringify(modalWarm) + ')');
+  const capWarm = probe('window.__capT');
+  ok('modal: shielded + not-high-spice → cover intact', !!capWarm && capWarm.cover === 'https://x/warm1.jpg');
+  const modalMap = await probe('shieldSpiceMapFor([' + JSON.stringify(modalBase) + '])');
+  runInWindow('circSpiceMap = ' + JSON.stringify(modalMap) + ';');
+  probe('openCovenBook(' + JSON.stringify(modalBase) + ')');
+  const capBase = probe('window.__capT');
+  ok('modal: shielded + baseline-spice 4 → transient cover blanked', !!capBase && capBase.cover === '');
+  runInWindow('circSpiceMap = {};');
+  probe('setShield(false)');
+  probe('openCovenBook(' + JSON.stringify(modalHot) + ')');
+  const capOff = probe('window.__capT');
+  ok('modal: shield OFF → cover intact', !!capOff && capOff.cover === 'https://x/hot1.jpg');
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(2); });
