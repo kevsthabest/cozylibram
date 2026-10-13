@@ -169,6 +169,97 @@ async function circleRemove(them) {
   if (d2.error) throw d2.error;
   delete circProfiles[them];
 }
+
+/* ---------- blocking (v526) ----------
+ * Blocking severs a circle pair and keeps it severed, silently: the
+ * insert into blocks fires a database trigger that deletes the pair's
+ * links (and, through the v525 unfriend trigger, their reactions);
+ * the projection and book visibility exclude blocked pairs outright;
+ * and invite redemption refuses them with the same 'invite not found'
+ * a dead token gets. The other person is never told, and no query
+ * available to them can reveal the block — the blocks table's only
+ * read policy is "rows I created", so everything below reads MY list
+ * and nothing else. Unblocking deletes my row; it does NOT restore
+ * any old link (a fresh invite is required, like anyone new). */
+function blocksMissing(e) {
+  const s = String((e && (e.code + ' ' + e.message)) || e || '');
+  return /block/i.test(s) && /schema cache|could not find|does not exist|not found|PGRST20[0-9]|404/i.test(s);
+}
+let circBlocksState = null; // null = unknown; boolean once proven
+async function circleBlocksSupported() {
+  if (circBlocksState !== null) return circBlocksState;
+  try {
+    const sb = await cloudClient();
+    const r = await sb.from('blocks').select('blocked_id').limit(1);
+    if (!r.error) { circBlocksState = true; return true; }
+    if (blocksMissing(r.error)) { circBlocksState = false; return false; }
+  } catch (e) { /* transient failure: unsupported for this render, not cached */ }
+  return false;
+}
+// Pre-migration tolerance: when the blocks table isn't there yet the
+// block affordances hide entirely — nothing renders half-working.
+async function applyBlockUi(scope) {
+  if (!cloudUser) return;
+  if (await circleBlocksSupported()) return;
+  (scope || document).querySelectorAll('[data-block]').forEach(b => { b.style.display = 'none'; });
+}
+async function circleBlock(them) {
+  const sb = await cloudClient();
+  const ins = await sb.from('blocks').insert({ blocker_id: cloudUser.id, blocked_id: them });
+  if (ins.error) {
+    // Already blocked (unique violation): the sever ran when the row
+    // was created, so the end state is exactly what was asked for.
+    const s = String(ins.error.code || '') + ' ' + String(ins.error.message || '');
+    if (!/23505|duplicate|unique/i.test(s)) throw ins.error;
+  }
+  delete circProfiles[them];
+}
+async function circleUnblock(them) {
+  const sb = await cloudClient();
+  const del = await sb.from('blocks').delete().eq('blocked_id', them);
+  if (del.error) throw del.error;
+}
+// My blocked list (Settings). Returns null when the blocks machinery
+// isn't there yet (pre-v526 database) so the section can hide.
+async function circleBlockedReaders() {
+  const sb = await cloudClient();
+  const r = await sb.rpc('my_blocked_readers');
+  if (r.error) {
+    if (blocksMissing(r.error)) return null;
+    throw r.error;
+  }
+  return r.data || [];
+}
+// Settings → Circle & privacy: the Blocked readers list. Only ever
+// shows people I blocked (the RPC cannot return anything else).
+async function renderBlockedReaders(box) {
+  if (!box || !cloudUser) return;
+  let rows = null;
+  try { rows = await circleBlockedReaders(); } catch (e) { rows = null; }
+  if (!rows) { box.innerHTML = ''; return; }
+  let html = '<div class="field" style="margin-top:20px"><label>Blocked readers</label>';
+  if (!rows.length) {
+    html += '<p class="note">You haven’t blocked anyone.</p>';
+  } else {
+    html += '<div class="circle-list">' + rows.map(r => {
+      const nm = ((r.first_name || '') + ' ' + (r.last_name || '')).trim() || 'A reader';
+      return '<div class="circle-row">' + circAvatarHTML(r, 'c-avatar') +
+        '<div class="circle-meta"><b>' + esc(nm) + '</b></div>' +
+        '<div class="circle-actions"><button class="btn ghost sm" data-unblock="' + esc(r.user_id) + '">Unblock</button></div></div>';
+    }).join('') + '</div>';
+  }
+  html += '<p class="note">Blocking removes you from each other’s ' + covenNameBare().toLowerCase() +
+    ' and stops either of you re-adding the other. They aren’t told. Unblocking doesn’t restore the old connection — they’d need a fresh invite, like anyone new.</p></div>';
+  box.innerHTML = html;
+  box.querySelectorAll('[data-unblock]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await circleUnblock(b.dataset.unblock);
+      toast('Unblocked — a fresh invite can connect you again');
+      renderBlockedReaders(box);
+    } catch (e) { toast('Couldn’t unblock: ' + ((e && e.message) || e)); }
+  }));
+  circleUpgradeAvatars(box);
+}
 /* ---------- the public projection (v522) ----------
  * Every read of ANOTHER user's profile goes through the circle_profiles
  * view (migration v522): identity (name, avatar — always shared), the
@@ -556,7 +647,16 @@ function renderInviteAccept(slot, inv) {
       clearPendingInvite();
       renderCoven();
       maybeAskShelfShare(inv.name); // v476: private-by-default consent, once
-    } catch (e) { toast('Couldn’t accept: ' + ((e && e.message) || e)); }
+    } catch (e) {
+      // v526: a refused redemption (a block stands between the pair)
+      // raises the same server error as a dead token — answer with the
+      // same words the paste flow uses for a dead link, never the raw
+      // shape, so the two stay indistinguishable.
+      const raw = (e && e.message) || String(e || '');
+      toast(/invite not found/i.test(raw)
+        ? 'Couldn’t accept — this invite link is no longer valid. Ask for a fresh one.'
+        : 'Couldn’t accept: ' + raw);
+    }
   });
   slot.querySelector('#cc-dismiss').addEventListener('click', () => {
     clearPendingInvite();
@@ -614,7 +714,8 @@ function renderCovenMain(code, lists, priv) {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Accept</button>' +
         '<button class="btn ghost sm" data-decline="' + esc(r.id) + '">Decline</button>' +
-        '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>', 'wants to join your ' + covenNameBare().toLowerCase());
+        '<button class="btn ghost sm" data-report="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Report</button>' +
+        '<button class="btn ghost sm" data-block="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Block</button>', 'wants to join your ' + covenNameBare().toLowerCase());
     });
     lists.sent.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
@@ -661,6 +762,10 @@ function renderCovenMain(code, lists, priv) {
   document.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
     openReportSheet(b.dataset.report, b.dataset.name || 'this user');
   }));
+  document.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => {
+    openBlockSheet(b.dataset.block, b.dataset.name || 'this reader');
+  }));
+  applyBlockUi(document.getElementById('view'));
   // v454: privacy gear opens the sheet
   const gearBtn = document.getElementById('cc-privacy-gear');
   if (gearBtn) gearBtn.addEventListener('click', () => openPrivacySheet(priv, shelves, gearBtn));
@@ -704,8 +809,9 @@ function renderCovenFriendMain() {
   const chip = (v, label) =>
     '<button class="chip' + (circShelf === v ? ' active' : '') + '" data-cf="' + v + '">' + label +
     (counts[v] ? ' · ' + counts[v] : '') + '</button>';
-  let html = '<div class="view-head"><button class="btn ghost sm" id="cf-back">← Back</button>' +
-    '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
+  let html = '<div class="view-head" style="position:relative"><button class="btn ghost sm" id="cf-back">← Back</button>' +
+    '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2>' +
+    '<button class="btn ghost sm" data-block="' + esc(f.id) + '" data-name="' + esc(f.name) + '" style="position:absolute;right:0;top:50%;transform:translateY(-50%)">Block</button></div>' +
     (prof ? '<div class="cf-sub">' + circAvatarHTML(prof, 'c-avatar') +
       '<p class="note">' + counts.all + ' book' + (counts.all === 1 ? '' : 's') + ' shared with you</p></div>' +
       // v522: bio / favourite genres ride the projection only when the
@@ -734,6 +840,10 @@ function renderCovenFriendMain() {
   }
   setView(html);
   document.getElementById('cf-back').addEventListener('click', () => go('coven'));
+  document.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => {
+    openBlockSheet(b.dataset.block, b.dataset.name || 'this reader', () => go('coven'));
+  }));
+  applyBlockUi(document.getElementById('view'));
   document.querySelectorAll('[data-cf]').forEach(c => c.addEventListener('click', () => {
     circShelf = c.dataset.cf;
     animateIn = false;
@@ -827,6 +937,7 @@ function openInviteSheet(code, opener, friends) {
         '<button class="btn ghost sm" data-view="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Shelves</button>' +
         '<button class="btn ghost sm" data-remove="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Remove</button>' +
         '<button class="btn ghost sm" data-report="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Report</button>' +
+        '<button class="btn ghost sm" data-block="' + esc(f.id) + '" data-name="' + esc(f.name) + '">Block</button>' +
         '<button class="btn ghost sm friend-menu-btn" data-fmenu="' + esc(f.id) + '" aria-label="More options">…</button>' +
         '</div></div>').join('') + '</div>'
       : '<p class="note">No friends yet.</p>') +
@@ -862,6 +973,10 @@ function openInviteSheet(code, opener, friends) {
   ref.sheet.querySelectorAll('[data-report]').forEach(b => b.addEventListener('click', () => {
     openReportSheet(b.dataset.report, b.dataset.name || 'this user');
   }));
+  ref.sheet.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => {
+    openBlockSheet(b.dataset.block, b.dataset.name || 'this reader');
+  }));
+  applyBlockUi(ref.sheet);
   // v454: "..." menu toggles the full button row on narrow widths
   ref.sheet.querySelectorAll('[data-fmenu]').forEach(b => b.addEventListener('click', () => {
     const row = b.closest('.friend-actions');
@@ -929,6 +1044,46 @@ function openRemoveFriendSheet(friendId, friendName) {
   ov.querySelector('#rf-yes').addEventListener('click', async () => {
     try { await circleRemove(friendId); close(); renderCoven(); }
     catch (e) { toast('Couldn\u2019t remove: ' + ((e && e.message) || e)); }
+  });
+}
+
+/* v526: block a reader — same sheet pattern as remove/report. Calm,
+   plain language: what happens, and the fact that they aren't told.
+   `after` replaces the default re-render (the friend view navigates
+   back to the circle instead). */
+function openBlockSheet(friendId, friendName, after) {
+  const ov = document.createElement('div');
+  ov.className = 'collection-overlay';
+  ov.innerHTML =
+    '<div class="modal-backdrop" id="bl-back"><div class="modal" role="dialog" aria-label="Block reader">' +
+    '<button class="modal-close" id="bl-x">\u2715</button>' +
+    '<h2 class="serif">Block ' + esc(friendName) + '?</h2>' +
+    '<p class="note"><b>' + esc(friendName) + '</b> will be removed from your ' + covenNameBare().toLowerCase() +
+    ', and neither of you will be able to add the other again while the block stands. They won’t be told — it will look like any other removal.</p>' +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="bl-cancel">Keep friend</button>' +
+    '<button class="btn danger" id="bl-yes">Block</button></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  const closeDom = () => ov.remove();
+  const ovToken = overlayOpened('sheet', closeDom);
+  const close = () => { overlayClosed(ovToken); closeDom(); };
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(ov.querySelector('#bl-back .modal'), close);
+  ov.querySelector('#bl-back').addEventListener('click', e => { if (e.target.id === 'bl-back') close(); });
+  ov.querySelector('#bl-x').addEventListener('click', close);
+  ov.querySelector('#bl-cancel').addEventListener('click', close);
+  ov.querySelector('#bl-yes').addEventListener('click', async () => {
+    try {
+      await circleBlock(friendId);
+      track('reader_blocked');
+      close();
+      toast('Blocked — you’re out of each other’s ' + covenNameBare().toLowerCase() + ' now');
+      if (after) after(); else renderCoven();
+    } catch (e) {
+      if (typeof blocksMissing === 'function' && blocksMissing(e)) toast('Blocking isn’t available right now — try again soon');
+      else toast('Couldn’t block: ' + ((e && e.message) || e));
+    }
   });
 }
 
