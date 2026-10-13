@@ -231,15 +231,30 @@ async function loadCovenStats() {
       circleFriendProfile(f.id).then(profile => ({ ok: true, profile }), () => ({ ok: false }))
     ]);
     if (!booksRes.ok) continue;
-    const books = booksRes.books;
+    let books = booksRes.books;
+    // v523: content shield — a shielded viewer's circle stats are
+    // computed WITHOUT friends' adult (high-spice) titles: they leave
+    // every aggregate (digest counts, soulmate inputs, buddy reads,
+    // now-reading, trending). The viewer's OWN books (people[0], from
+    // the local library) are never filtered — the shield never touches
+    // your own library.
+    if (typeof shieldOn === 'function' && shieldOn() && typeof shieldIsHighSpice === 'function') {
+      let smap = {};
+      if (typeof shieldSpiceMapFor === 'function') { try { smap = await shieldSpiceMapFor(books); } catch (e) { smap = {}; } }
+      books = books.filter(b => !shieldIsHighSpice(b, smap));
+    }
     const profile = profileRes.ok ? profileRes.profile : (f.profile || null);
     people.push({ id: f.id, name: f.name || 'A friend', profile: profile, stats: statPersonBooks(books) });
   }
   const me = people[0].stats;
   const others = people.slice(1);
 
-  // Superlatives across the circle (you included).
-  const awards = covenAwards(people);
+  // Superlatives across the circle (you included). v523: for a shielded
+  // viewer the "Spiciest Shelf" award itself is a spice indicator —
+  // it's suppressed, not just computed over filtered books.
+  const awards = (typeof shieldOn === 'function' && shieldOn())
+    ? covenAwards(people).filter(a => a.label !== 'Spiciest Shelf')
+    : covenAwards(people);
 
   // Soulmate scores + taste overlap per friend.
   const soulmates = others.map(p => ({ p: p, sm: soulmateScore(me, p.stats) }))

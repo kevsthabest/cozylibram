@@ -153,6 +153,52 @@ const WorkStore = {
     } catch (e) { return null; }
   },
 
+  /* v523: bulk, READ-ONLY work spice lookup for the content shield
+     (js/230). Unlike resolve(), this never creates work rows — browsing
+     a friend's shelves must not mutate the shared tables. One select
+     for the whole list, matched on (title_norm, author_norm) in JS.
+     Returns { 'titleNorm|authorNorm': spice } with the v313 baseline
+     precedence (manual wins whenever set, else detected); works with
+     no spice data are absent from the map. Never throws. */
+  async spiceMapFor(books, opts) {
+    opts = opts || {};
+    const out = {};
+    try {
+      const keys = [];
+      const seen = new Set();
+      (books || []).forEach(b => {
+        let k = null;
+        try { k = workKeysFor(b); } catch (e) { k = null; }
+        if (!k) return;
+        const id = k.titleNorm + '|' + k.authorNorm;
+        if (seen.has(id)) return;
+        seen.add(id);
+        keys.push({ id: id, titleNorm: k.titleNorm });
+      });
+      if (!keys.length) return out;
+      let sb = null;
+      try { sb = opts.getClient ? await opts.getClient() : await cloudClient(); }
+      catch (e) { sb = null; }
+      if (!sb) return out;
+      const titles = Array.from(new Set(keys.map(k => k.titleNorm)));
+      const { data, error } = await sb.from('works')
+        .select('title_norm, author_norm, spice_detected, spice_manual')
+        .in('title_norm', titles);
+      if (error || !Array.isArray(data)) return out;
+      const byKey = {};
+      data.forEach(r => {
+        if (!r) return;
+        const man = (r.spice_manual == null) ? null : Number(r.spice_manual);
+        const det = (r.spice_detected == null) ? null : Number(r.spice_detected);
+        const v = (man != null && Number.isFinite(man) && man >= 0 && man <= 5) ? man
+          : (det != null && Number.isFinite(det) && det >= 0 && det <= 5) ? det : null;
+        if (v != null) byKey[String(r.title_norm) + '|' + String(r.author_norm)] = v;
+      });
+      keys.forEach(k => { if (byKey[k.id] != null) out[k.id] = byKey[k.id]; });
+      return out;
+    } catch (e) { return out; }
+  },
+
   /* v402: fetch chapter-level metadata for progressive disclosure.
      Returns { triggerChapters, chapterSpice, avgDialogueRatio } (nulls when
      absent), or null when the work can't be resolved. Never throws. */

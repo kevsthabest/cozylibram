@@ -217,6 +217,30 @@ function renderReleaseResults(list) {
   if (!box) return;
   box.innerHTML = releaseResultsHTML(list);
   wireReleaseResults(box, list);
+  shieldPaintReleaseCovers(box, list);
+}
+
+// v523: content shield, Discover only — blur release covers whose work
+// is known high-spice. The same results render on the Wishlist (the
+// viewer's own surface) unshielded, so the gate is the current view,
+// not the markup. The work-spice lookup is async and lands when it
+// lands; release candidates are future-dated books, so work-level
+// spice for them is rare and unknown spice stays visible (the
+// shield's unknown rule).
+function shieldPaintReleaseCovers(box, list) {
+  if (!box || typeof shieldOn !== 'function' || !shieldOn()) return;
+  if (typeof view === 'undefined' || view !== 'discover') return;
+  if (typeof shieldSpiceMapFor !== 'function' || typeof shieldIsHighSpice !== 'function') return;
+  shieldSpiceMapFor(list || []).then(map => {
+    if (!document.body.contains(box)) return;
+    box.querySelectorAll('.rel-card').forEach(card => {
+      const c = (list || [])[Number(card.dataset.i)];
+      if (c && shieldIsHighSpice(c, map)) {
+        const w = card.querySelector('.cover-wrap');
+        if (w) w.classList.add('shield-blur');
+      }
+    });
+  }).catch(() => {});
 }
 
 // Shared wiring: the Wishlist's "Check for new releases" button and (v175)
@@ -249,6 +273,7 @@ function wireReleaseCheck() {
       box.innerHTML = (prog ? '<p class="note">' + prog + '</p>' : '') +
         (list.length ? releaseResultsHTML(list) : (done ? releaseResultsHTML([]) : ''));
       wireReleaseResults(box, list);
+      if (done) shieldPaintReleaseCovers(box, list); // v523: final paint only; no-op unless Discover + shield on
     };
     try {
       const res = await checkNewReleases(
@@ -997,6 +1022,7 @@ function addRecoBook(c) {
 
 let visibleRecos = []; // ranked [{c, sim}] currently on screen
 let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219)
+let visibleRecoSpice = {}; // v523: work-spice map for the visible candidates (shield)
 
 // v219: tapping a recommendation opens the read-only preview modal —
 // description, tropes, genres. The +TBR / dismiss buttons keep their
@@ -1043,7 +1069,14 @@ function recoCardHTML(r, i, lovedIds) {
   recoSharedTropes((c.title || '') + ' ' + (c.description || ''), lovedIds).slice(0, 2)
     .forEach(t => chips.push('<span class="why-chip">\u2726 ' + esc(t) + '</span>'));
   if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
-  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c, 'reco-cover') +
+  // v523: content shield — a candidate whose work is known high-spice
+  // gets a blurred cover and a Shielded chip (Discover candidates carry
+  // no spice of their own; the work baseline is the only signal, and
+  // unknown spice stays visible per the shield's unknown rule).
+  const shieldedCover = (typeof shieldOn === 'function' && shieldOn() &&
+    typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(c, visibleRecoSpice));
+  if (shieldedCover) chips.push('<span class="why-chip">' + icon('eyeoff') + ' Shielded</span>');
+  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c, 'reco-cover' + (shieldedCover ? ' shield-blur' : '')) +
     '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
     '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
     (chips.length ? '<div class="why-chips">' + chips.join('') + '</div>' : '') +
@@ -1085,11 +1118,12 @@ function wireRecoResults(box) {
   }));
 }
 
-function renderRecoResults(ranked, lovedIds, embedded) {
+function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
   visibleRecos = ranked;
   visibleRecoLoved = lovedIds || [];
+  visibleRecoSpice = spiceMap || {};
   // v224 (UX-06): the section label stays up in every state — empty or loaded.
   if (!ranked.length) {
     box.innerHTML = recoHeadHTML() + '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
@@ -1178,7 +1212,14 @@ async function refreshRecommendations() {
         .sort((x, y) => ((rank[x.loveAuthor] == null ? 99 : rank[x.loveAuthor]) - (rank[y.loveAuthor] == null ? 99 : rank[y.loveAuthor])))
         .map(c => ({ c: c, sim: null })), RECO_FINAL_COUNT);
     }
-    renderRecoResults(ranked, lovedIds, !!profile && ranked[0] && ranked[0].sim != null);
+    // v523: content shield — fetch the work-spice map for the final
+    // candidates so recoCardHTML can blur known high-spice covers.
+    // Skipped entirely when the shield is off (zero behavior change).
+    let spiceMap = {};
+    if (typeof shieldOn === 'function' && shieldOn() && typeof shieldSpiceMapFor === 'function') {
+      try { spiceMap = await shieldSpiceMapFor(ranked.map(r => r.c)); } catch (e) { spiceMap = {}; }
+    }
+    renderRecoResults(ranked, lovedIds, !!profile && ranked[0] && ranked[0].sim != null, spiceMap);
   } catch (e) {
     box.innerHTML = '<p class="note">Recommendations hiccuped \u2014 try again in a bit.</p>';
   }

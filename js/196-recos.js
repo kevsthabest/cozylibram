@@ -52,11 +52,23 @@ async function loadRecos() {
   const fetched = await Promise.all(friends.map(f =>
     circleFriendBooks(f.id).then(books => ({ f: f, books: books }), () => null)
   ));
+  // v523: content shield — adult (high-spice) titles are excluded from
+  // "You'd love this" for a shielded viewer: not blurred, gone. The
+  // filter runs over the fetched copies only; nothing about the
+  // friends' data changes. Shield off → this block is skipped entirely.
+  const shielded = typeof shieldOn === 'function' && shieldOn();
+  let spiceMap = {};
+  if (shielded && typeof shieldSpiceMapFor === 'function') {
+    const all = [];
+    fetched.forEach(r => { if (r) (r.books || []).forEach(b => all.push(b)); });
+    try { spiceMap = await shieldSpiceMapFor(all); } catch (e) { spiceMap = {}; }
+  }
   for (const r of fetched) {
     if (!r) continue;
     const f = r.f;
     const books = r.books;
     books.forEach(b => {
+      if (shielded && typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(b, spiceMap)) return;
       const r = Number(b.myRating) || 0;
       if (r < 4) return; // v97: only 4★+ earns a recommendation
       const k = recoKey(b);
