@@ -111,14 +111,14 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   ok('missing name rejected',
     q('#gs-status').textContent.indexOf('first and last name') >= 0 && !window.__sbStub.signupMeta);
   q('#gs-first').value = 'Wifey';
-  q('#gs-band [data-b="adult"]').click(); // v523: the age-group declaration is required
+  q('#gs-band [data-b="adult"]').click(); // v524: the age-group declaration is required
   q('#gs-create').click();
   await tick(4);
   ok('names travel in signup user_metadata',
     !!window.__sbStub.signupMeta &&
     window.__sbStub.signupMeta.first_name === 'Wifey' &&
     window.__sbStub.signupMeta.last_name === 'Reader');
-  ok('age band travels in signup user_metadata (v523)',
+  ok('age band travels in signup user_metadata (v524)',
     !!window.__sbStub.signupMeta && window.__sbStub.signupMeta.age_band === 'adult');
   q('#gs-back').click();
   await tick();

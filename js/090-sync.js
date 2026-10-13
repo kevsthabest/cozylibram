@@ -479,7 +479,7 @@ async function cloudSignUp(email, password, firstName, lastName, ageBand) {
   const meta = {};
   if (firstName) meta.first_name = firstName;
   if (lastName) meta.last_name = lastName;
-  // v523: the self-declared age band rides user_metadata like the
+  // v524: the self-declared age band rides user_metadata like the
   // names; enterApp adopts it into user_state exactly once (the band
   // itself never lives in profiles — see js/230-privacy.js).
   if (ageBand === 'teen' || ageBand === 'adult') meta.age_band = ageBand;

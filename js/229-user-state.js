@@ -181,13 +181,13 @@ function userStateApply(values) {
 // v521 adds a fourth section, shelf (column shelf_state), on the same
 // machinery — see the shelf block below for its inventory.
 //
-// v523 adds a fifth section, privacy (column privacy_state): the age
+// v524 adds a fifth section, privacy (column privacy_state): the age
 // band + content shield object from js/230-privacy.js, warning-style
 // { _at, value }. See the privacy block below.
-/* ---------------- roaming privacy state (v523) ---------------- */
+/* ---------------- roaming privacy state (v524) ---------------- */
 // The fifth section: age band + content shield (js/230-privacy.js), in
 // its own column (privacy_state, supabase/migrations/
-// v523_user_state_privacy.sql), payload { _at, value } — value is the
+// v524_user_state_privacy.sql), payload { _at, value } — value is the
 // privacy object as-is, warning-style. The band lives ONLY in this
 // section and its on-device key: never in profiles (circle friends
 // project those rows) and never in the settings snapshot, whose key

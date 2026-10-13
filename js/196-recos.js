@@ -52,7 +52,7 @@ async function loadRecos() {
   const fetched = await Promise.all(friends.map(f =>
     circleFriendBooks(f.id).then(books => ({ f: f, books: books }), () => null)
   ));
-  // v523: content shield — adult (high-spice) titles are excluded from
+  // v524: content shield — adult (high-spice) titles are excluded from
   // "You'd love this" for a shielded viewer: not blurred, gone. The
   // filter runs over the fetched copies only; nothing about the
   // friends' data changes. Shield off → this block is skipped entirely.

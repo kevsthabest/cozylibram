@@ -1,6 +1,6 @@
 'use strict';
 
-/* ---------------- age band + content shield (v523) ----------------
+/* ---------------- age band + content shield (v524) ----------------
    Circle permissions Phase 2 (the User's design, approved 2026-10-13):
    the app is 13+ going forward, and Circles get an age-aware shield.
 
@@ -166,7 +166,7 @@ async function shieldSpiceMapFor(books) {
 /* Display copy for shared surfaces: with the shield on, the spice
    axis badge is stripped (spice indicators hidden) — every other
    field renders as-is. Returns the book itself when the shield is
-   off, so unshielded rendering is byte-identical to before v523. */
+   off, so unshielded rendering is byte-identical to before v524. */
 function shieldCardBook(b) {
   if (!b || !shieldOn()) return b;
   if (!Array.isArray(b.axes) || b.axes.indexOf('spice') === -1) return b;

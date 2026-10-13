@@ -322,7 +322,7 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
   html +=
     '<div class="field"><label>Reading activity</label>' + seg(p + '-act', priv.activity) +
     '<p class="note">Recently finished books, your star ratings and your Reader Portrait in circle digests. Off unless you opt in.</p></div>';
-  // v523: the content shield — the one INCOMING control in this panel
+  // v524: the content shield — the one INCOMING control in this panel
   // (what the viewer sees, not what they send). Its state lives in
   // user_state (js/230-privacy.js), never in profiles, so it is read
   // directly here rather than arriving via circlePrivacy().
@@ -364,7 +364,7 @@ function wireCirclePrivacyPanel(root, priv, p) {
   segWire(p + '-act', 'activity',
     'Your reading activity is shared with your ' + circle,
     'Your reading activity is no longer shared');
-  // v523: the shield seg saves through js/230 (user_state) — deliberately
+  // v524: the shield seg saves through js/230 (user_state) — deliberately
   // NOT through circleSavePrivacy, so shield state can never land in
   // the profiles row a friend projects.
   if (typeof setShield === 'function' && typeof shieldOn === 'function') {
@@ -679,7 +679,7 @@ function renderCovenFriend() {
     .then(([prof, books]) => {
       if (prof) { circProfiles[f.id] = prof; f.name = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || f.name; }
       circBooks = books.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
-      // v523: content shield — resolve work-level spice for the grid in
+      // v524: content shield — resolve work-level spice for the grid in
       // the background (the avatar-upgrade pattern); record-rated books
       // blur on first paint, baseline-only books when the map lands.
       circSpiceMap = {};
@@ -724,7 +724,7 @@ function renderCovenFriendMain() {
     const map = {};
     circBooks.forEach(b => { map[b.id] = b; });
     circBookMap = map;
-    // v523: display copies strip the spice badge when the shield is on
+    // v524: display copies strip the spice badge when the shield is on
     // (js/230 shieldCardBook); circBookMap keeps the originals — the
     // preview modal receives the book's metadata as-is, but openCovenBook
     // blanks a shielded high-spice cover on its transient copy (v524:
@@ -747,8 +747,8 @@ function renderCovenFriendMain() {
   circleUpgradeAvatars(document.getElementById('view'));
 }
 let circBookMap = {};
-let circSpiceMap = {}; // v523: work-spice map for the open friend's books
-/* v523: content shield — blur high-spice covers in the friend grid and
+let circSpiceMap = {}; // v524: work-spice map for the open friend's books
+/* v524: content shield — blur high-spice covers in the friend grid and
    tag them with a "Shielded" badge so the blur reads as deliberate,
    not as a broken image. Idempotent; runs at first paint (record-rated
    books) and again when the work-spice map lands. */

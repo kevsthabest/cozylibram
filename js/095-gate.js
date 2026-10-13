@@ -141,7 +141,7 @@ function renderGateSignup() {
     '<p class="note" id="gs-status">Your shelves, on every device.</p>' +
     '<input id="gs-first" type="text" class="text-input" placeholder="First name" autocomplete="given-name">' +
     '<input id="gs-last" type="text" class="text-input" placeholder="Last name" autocomplete="family-name">' +
-    // v523: age band — self-declared at signup, stated 13+ floor. The
+    // v524: age band — self-declared at signup, stated 13+ floor. The
     // band only sets starting positions for the privacy + shield
     // toggles (js/230-privacy.js); it is stored privately (user_state),
     // never displayed, and can be changed later in Profile.
@@ -159,7 +159,7 @@ function renderGateSignup() {
   );
   const busy = (msg) => { const st = document.getElementById('gs-status'); if (st) st.textContent = msg; };
   document.getElementById('gs-back').addEventListener('click', renderGate);
-  // v523: single-select age band (radio behavior — no clear-to-unset).
+  // v524: single-select age band (radio behavior — no clear-to-unset).
   const bandBtns = Array.from(document.querySelectorAll('#gs-band button'));
   bandBtns.forEach(b => b.addEventListener('click', () => {
     bandBtns.forEach(x => x.classList.toggle('active', x === b));
@@ -294,7 +294,7 @@ async function enterApp(user) {
   analyticsSessionBoot(); // v118: session_started + onboarding funnel events
   adoptLegacyMetadata(user);
   await syncCloudProfile();
-  // v523: adopt the signup age band from user_metadata (one-time seed —
+  // v524: adopt the signup age band from user_metadata (one-time seed —
   // a band later changed in Profile is never stomped), then land any
   // teen starting positions still pending (declared at signup before
   // email confirmation, when no session existed to write them with).

@@ -141,9 +141,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v523',
-    /APP_VERSION = 'v523'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v523"));
+  ok('version pairing is v524',
+    /APP_VERSION = 'v524'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v524"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -167,14 +167,14 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v521 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql521) && !/alter table (public\.)?profiles/.test(sql521));
 
-  /* ---------- v523 privacy migration shape ---------- */
-  const sql523Path = path.join(ROOT, 'supabase/migrations/v523_user_state_privacy.sql');
-  ok('v523 migration file exists', fs.existsSync(sql523Path));
-  const sql523 = fs.readFileSync(sql523Path, 'utf8');
-  ok('v523 adds privacy_state jsonb with {} default',
-    /add column if not exists privacy_state jsonb not null default '\{\}'::jsonb/.test(sql523));
-  ok('v523 migration touches only user_state (no policies, no other tables)',
-    !/create policy|drop policy|create table/.test(sql523) && !/alter table (public\.)?profiles/.test(sql523));
+  /* ---------- v524 privacy migration shape ---------- */
+  const sql524Path = path.join(ROOT, 'supabase/migrations/v524_user_state_privacy.sql');
+  ok('v524 migration file exists', fs.existsSync(sql524Path));
+  const sql524 = fs.readFileSync(sql524Path, 'utf8');
+  ok('v524 adds privacy_state jsonb with {} default',
+    /add column if not exists privacy_state jsonb not null default '\{\}'::jsonb/.test(sql524));
+  ok('v524 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql524) && !/alter table (public\.)?profiles/.test(sql524));
 
   /* ---------- collect: scope is exact ---------- */
   clearState();

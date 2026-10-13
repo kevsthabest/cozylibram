@@ -232,7 +232,7 @@ async function loadCovenStats() {
     ]);
     if (!booksRes.ok) continue;
     let books = booksRes.books;
-    // v523: content shield — a shielded viewer's circle stats are
+    // v524: content shield — a shielded viewer's circle stats are
     // computed WITHOUT friends' adult (high-spice) titles: they leave
     // every aggregate (digest counts, soulmate inputs, buddy reads,
     // now-reading, trending). The viewer's OWN books (people[0], from
@@ -249,7 +249,7 @@ async function loadCovenStats() {
   const me = people[0].stats;
   const others = people.slice(1);
 
-  // Superlatives across the circle (you included). v523: for a shielded
+  // Superlatives across the circle (you included). v524: for a shielded
   // viewer the "Spiciest Shelf" award itself is a spice indicator —
   // it's suppressed, not just computed over filtered books.
   const awards = (typeof shieldOn === 'function' && shieldOn())

@@ -1,4 +1,4 @@
--- v523: user_state privacy section — age band + content shield roam.
+-- v524: user_state privacy section — age band + content shield roam.
 -- v518 created user_state with a single `settings` jsonb column; v520
 -- added warning prefs, Up Next, and release state as sibling columns;
 -- v521 added shelf state. The Circle permissions Phase 2 state (age

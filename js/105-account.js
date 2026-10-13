@@ -355,7 +355,7 @@ function renderProfile() {
       '<button type="button" data-g="m" class="' + (p.gender === 'm' ? 'active' : '') + '">Male</button>' +
       '<button type="button" data-g="other" class="' + (p.gender === 'other' ? 'active' : '') + '">Other</button></div>' +
       '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
-      // v523: age band — the owner's own setting only. It renders here
+      // v524: age band — the owner's own setting only. It renders here
       // (their private Profile editor) and NOWHERE else: never on the
       // public projection, never as a badge. Stored in user_state.
       '<div class="field"><label>Age group</label>' +
@@ -417,7 +417,7 @@ function renderProfile() {
     if (genEl) np.favGenres = genEl.value.split(',').map(g => g.trim()).filter(Boolean).slice(0, 8);
     touchProfile(np);
     pushCloudProfile(np);
-    // v523: age band saves through js/230 (user_state), not the
+    // v524: age band saves through js/230 (user_state), not the
     // profiles row. Only a live selection writes; the first teen
     // selection applies the teen starting positions exactly once.
     const bsel = document.querySelector('#pf-band button.active');
@@ -425,7 +425,7 @@ function renderProfile() {
     renderTopbar();
     toast('Profile saved ✨');
   });
-  // v523: band picker — radio behavior (tap to select; no clear-to-unset,
+  // v524: band picker — radio behavior (tap to select; no clear-to-unset,
   // "unset" only ever means "never declared").
   const bbtns = Array.from(document.querySelectorAll('#pf-band button'));
   bbtns.forEach(b => b.addEventListener('click', () => {

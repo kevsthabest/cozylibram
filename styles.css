@@ -582,7 +582,7 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   font-size: 26px;
 }
 .cover-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* v523: content shield — a high-spice cover in a shared view. The blur
+/* v524: content shield — a high-spice cover in a shared view. The blur
    is strong enough that no cover detail survives; the scale pushes the
    lighter blur falloff past the wrap's clipped edges. */
 .cover-wrap.shield-blur img { filter: blur(12px) saturate(.6); transform: scale(1.3); }

@@ -220,7 +220,7 @@ function renderReleaseResults(list) {
   shieldPaintReleaseCovers(box, list);
 }
 
-// v523: content shield, Discover only — blur release covers whose work
+// v524: content shield, Discover only — blur release covers whose work
 // is known high-spice. The same results render on the Wishlist (the
 // viewer's own surface) unshielded, so the gate is the current view,
 // not the markup. The work-spice lookup is async and lands when it
@@ -273,7 +273,7 @@ function wireReleaseCheck() {
       box.innerHTML = (prog ? '<p class="note">' + prog + '</p>' : '') +
         (list.length ? releaseResultsHTML(list) : (done ? releaseResultsHTML([]) : ''));
       wireReleaseResults(box, list);
-      if (done) shieldPaintReleaseCovers(box, list); // v523: final paint only; no-op unless Discover + shield on
+      if (done) shieldPaintReleaseCovers(box, list); // v524: final paint only; no-op unless Discover + shield on
     };
     try {
       const res = await checkNewReleases(
@@ -1022,7 +1022,7 @@ function addRecoBook(c) {
 
 let visibleRecos = []; // ranked [{c, sim}] currently on screen
 let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219)
-let visibleRecoSpice = {}; // v523: work-spice map for the visible candidates (shield)
+let visibleRecoSpice = {}; // v524: work-spice map for the visible candidates (shield)
 
 // v219: tapping a recommendation opens the read-only preview modal —
 // description, tropes, genres. The +TBR / dismiss buttons keep their
@@ -1069,7 +1069,7 @@ function recoCardHTML(r, i, lovedIds) {
   recoSharedTropes((c.title || '') + ' ' + (c.description || ''), lovedIds).slice(0, 2)
     .forEach(t => chips.push('<span class="why-chip">\u2726 ' + esc(t) + '</span>'));
   if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
-  // v523: content shield — a candidate whose work is known high-spice
+  // v524: content shield — a candidate whose work is known high-spice
   // gets a blurred cover and a Shielded chip (Discover candidates carry
   // no spice of their own; the work baseline is the only signal, and
   // unknown spice stays visible per the shield's unknown rule).
@@ -1212,7 +1212,7 @@ async function refreshRecommendations() {
         .sort((x, y) => ((rank[x.loveAuthor] == null ? 99 : rank[x.loveAuthor]) - (rank[y.loveAuthor] == null ? 99 : rank[y.loveAuthor])))
         .map(c => ({ c: c, sim: null })), RECO_FINAL_COUNT);
     }
-    // v523: content shield — fetch the work-spice map for the final
+    // v524: content shield — fetch the work-spice map for the final
     // candidates so recoCardHTML can blur known high-spice covers.
     // Skipped entirely when the shield is off (zero behavior change).
     let spiceMap = {};

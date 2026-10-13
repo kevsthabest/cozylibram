@@ -1,4 +1,4 @@
-// Circle permissions Phase 2 (v523): age band + content shield.
+// Circle permissions Phase 2 (v524): age band + content shield.
 //
 // The rulings under test:
 // - The band lives ONLY in user_state (privacy section) — never in a

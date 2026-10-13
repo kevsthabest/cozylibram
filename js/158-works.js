@@ -153,7 +153,7 @@ const WorkStore = {
     } catch (e) { return null; }
   },
 
-  /* v523: bulk, READ-ONLY work spice lookup for the content shield
+  /* v524: bulk, READ-ONLY work spice lookup for the content shield
      (js/230). Unlike resolve(), this never creates work rows — browsing
      a friend's shelves must not mutate the shared tables. One select
      for the whole list, matched on (title_norm, author_norm) in JS.
