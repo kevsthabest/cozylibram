@@ -4,22 +4,15 @@
 // colors) from hosts that don't send CORS headers. Mirrors server.py's
 // /cover-proxy contract: image bytes, 4 MB cap, must be an image.
 //
-// Guards: only https, and the host must be on the known-cover-host allowlist
-// below (tight allowlist replaces server.py's DNS-based SSRF check — a
-// non-listed host can never be fetched, so private/loopback targets are
-// unreachable by construction).
-//
-// Add a host here if a new cover provider is ever adopted.
+// Guards: only https, and the host must be on the known-cover-host
+// allowlist (tight allowlist replaces server.py's DNS-based SSRF check —
+// a non-listed host can never be fetched, so private/loopback targets
+// are unreachable by construction). The allowlist lives in
+// functions/_lib/cover-hosts.js, shared with /api/cache-cover so the two
+// endpoints' host sets cannot diverge (they did twice: v504, v518).
 
 import { rateLimit } from './_lib/rate-limit.js';
-
-const ALLOWED_HOSTS = new Set([
-  'covers.openlibrary.org', // Open Library covers
-  'books.google.com',       // Google Books thumbnails
-  'hardcover.app',          // Hardcover image CDN
-  'img.hardcover.app',      // Hardcover's image CDN — book covers point here (doc.image.url, js/070-hardcover.js)
-  'archive.org',            // Open Library cover redirects
-]);
+import { COVER_PROXY_HOSTS as ALLOWED_HOSTS } from './_lib/cover-hosts.js';
 
 const MAX_BYTES = 4 * 1024 * 1024;
 

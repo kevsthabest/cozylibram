@@ -20,25 +20,11 @@
 
 import { rateLimit } from '../_lib/rate-limit.js';
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
+import { CACHE_COVER_HOSTS as ALLOWED_HOSTS } from '../_lib/cover-hosts.js';
 
-// Hosts we adopt covers from. Verified against live library data 2026-09-30
-// (real hostnames, not guesses): assets.hardcover.app is Hardcover's image
-// CDN and img.hardcover.app is where cover URLs point today; the Amazon
-// hosts serve Goodreads cover art (images-na... paths embed
-// compressed.photo.goodreads.com). Apple hosts are included for picker
-// adoptions even though none are stored yet.
-const ALLOWED_HOSTS = new Set([
-  'covers.openlibrary.org',           // Open Library covers
-  'books.google.com',                // Google Books thumbnails
-  'assets.hardcover.app',            // Hardcover image CDN
-  'img.hardcover.app',               // Hardcover's image CDN — book covers point here (doc.image.url, js/070-hardcover.js)
-  'images-na.ssl-images-amazon.com', // Goodreads-via-Amazon CDN
-  'm.media-amazon.com',              // Amazon media CDN
-  'i.gr-assets.com',                 // Goodreads images
-  'archive.org',                     // Open Library cover redirects
-  'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
-  'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com', // Apple Books artwork
-]);
+// Hosts we adopt covers from: the shared cover-host allowlist in
+// functions/_lib/cover-hosts.js (single source of truth, shared with
+// cover-proxy.js so the two endpoints' host sets cannot diverge).
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
