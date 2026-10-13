@@ -69,6 +69,80 @@ function hcHits(data) {
   try { return data.search.results.hits || []; } catch (e) { return []; }
 }
 
+// v516 (#132): does this Hardcover doc actually list the book's ISBN?
+// Same guard as the page-count waterfall (js/080): normalize both sides
+// and compare ISBN-13 forms, so a 10 on one side matches a 13 on the other.
+function hcDocIsbnMatch(doc, isbn) {
+  const clean = String(isbn || '').replace(/[^0-9X]/gi, '').toUpperCase();
+  if (!clean || !doc) return false;
+  const want13 = (typeof isbn13of === 'function') ? isbn13of(clean) : clean;
+  return (doc.isbns || []).some(i => {
+    const n = String(i || '').replace(/[^0-9X]/gi, '').toUpperCase();
+    return n === clean || ((typeof isbn13of === 'function') && isbn13of(n) === want13);
+  });
+}
+
+// v516 (#132): title comparison form for the fallback matcher — the same
+// recipe as normTitle (js/134): trailing "(Series, #1)" dropped, case and
+// punctuation ignored.
+function hcMatchTitle(t) {
+  return String(t || '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Full-title agreement. The one legitimate asymmetry: a subtitle carried by
+// only one side ("The Housemaid: A Novel" in the library, "The Housemaid"
+// on Hardcover) — then that side's main title must BE the other side's
+// whole title. The >= 4 guard keeps a colon inside a title (Re:ZERO, It)
+// from turning its first fragment into a "main title". Two different
+// subtitles with a shared main title ("Dune: Part One" / "Part Two") match
+// neither form and are rejected.
+function hcTitleMatch(docTitle, bookTitle) {
+  const a = hcMatchTitle(docTitle), b = hcMatchTitle(bookTitle);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const mainOf = t => {
+    const raw = String(t || '');
+    const i = raw.indexOf(':');
+    return i >= 0 ? hcMatchTitle(raw.slice(0, i)) : '';
+  };
+  const am = mainOf(docTitle), bm = mainOf(bookTitle);
+  return (am.length >= 4 && am === b) || (bm.length >= 4 && bm === a);
+}
+
+// First-author agreement. Either side missing author data can't disagree —
+// the (already strict) title match carries the acceptance then.
+function hcAuthorMatch(doc, book) {
+  const bFirst = (book.authors || [])[0], dFirst = (doc.author_names || [])[0];
+  if (!bFirst || !dFirst) return true;
+  const key = (typeof authorKey === 'function') ? authorKey
+    : (n => String(n || '').toLowerCase().replace(/\s+/g, ' ').trim());
+  if (!key(bFirst) || !key(dFirst)) return true;
+  if (key(bFirst) === key(dFirst)) return true;
+  // Co-author order differs between sources: either first author showing
+  // up anywhere in the other side's list is agreement enough.
+  return (doc.author_names || []).some(a => key(a) === key(bFirst)) ||
+         (book.authors || []).some(a => key(a) === key(dFirst));
+}
+
+// v516 (#132): acceptance for the title-search fallback. Before, any doc
+// whose title shared the book's first 12 characters was applied —
+// "The Housemaid" picked up "The Housemaid's Secret"'s series, moods and
+// content warnings. Now a doc must prove it is the same book: its isbns[]
+// list the book's ISBN (the strongest signal — preferred where the data
+// exists), or the full titles match AND the first authors agree. An ISBN
+// mismatch alone never vetoes a title+author match: the book's ISBN may
+// belong to a different edition of the same work.
+function hcFallbackDocMatches(doc, book) {
+  if (!doc || !book) return false;
+  if (hcDocIsbnMatch(doc, book.isbn)) return true;
+  return hcTitleMatch(doc.title, book.title) && hcAuthorMatch(doc, book);
+}
+
 // Enrich a book with Hardcover data: series, content warnings, moods, genres, rating.
 // Returns true when Hardcover had the book.
 async function enrichHardcover(book) {
@@ -77,14 +151,13 @@ async function enrichHardcover(book) {
     let doc = null;
     if (book.isbn) {
       const data = await hcGraphQL('query { search(query: "' + book.isbn + '", query_type: "Book", per_page: 5) { results } }');
-      doc = hcHits(data).map(h => h.document).find(d =>
-        d && (d.isbns || []).some(i => String(i).replace(/[^0-9X]/gi, '') === book.isbn)) || null;
+      doc = hcHits(data).map(h => h.document).find(d => hcDocIsbnMatch(d, book.isbn)) || null;
     }
     if (!doc && book.title) {
       const q = book.title + ' ' + (book.authors[0] || '');
       const data = await hcGraphQL('query { search(query: ' + JSON.stringify(q) + ', query_type: "Book", per_page: 3) { results } }');
       const docs = hcHits(data).map(h => h.document).filter(Boolean);
-      doc = docs.find(d => (d.title || '').toLowerCase().slice(0, 12) === book.title.toLowerCase().slice(0, 12)) || null;
+      doc = docs.find(d => hcFallbackDocMatches(d, book)) || null;
     }
     if (!doc) return false;
     applyHardcoverDoc(book, doc);
