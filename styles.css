@@ -1884,6 +1884,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 }
 .rx-chip .ticon { width: 13px; height: 13px; color: var(--accent); }
 .rx-chip.mine { border-color: var(--accent); color: var(--text); }
+/* v527: "Thought of you" cards + compose sheet. The note reads as a
+   quoted aside; the sub-actions (Dismiss / Report / Block) sit quiet
+   under the meta so +TBR stays the one loud action. */
+.toy-note { font-style: italic; display: block; }
+.toy-sub { display: flex; gap: 16px; margin-top: 2px; }
+.toy-friends { display: flex; flex-wrap: wrap; gap: 8px; }
+.toy-friend { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card2);
+  color: var(--text); font: inherit; font-size: 14px; cursor: pointer; min-height: 44px; }
+.toy-friend.sel { border-color: var(--accent); }
 .moment-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px 56px; }
 .moment-picker[hidden] { display: none; }
 .rx-kind {
