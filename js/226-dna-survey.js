@@ -130,8 +130,11 @@ function openDnaSurvey(b) {
   dnaSurveyToken = (typeof overlayOpened === 'function') ? overlayOpened('dna-survey', close) : null;
 
   /* v513: drag-to-dismiss — standing app rule: every sheet wires the
-     shared helper. A drag-dismiss is a plain close, same as Skip. */
-  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
+     shared helper. A drag-dismiss means exactly what Skip and the
+     scrim tap mean (finish('skip'): persist the seen flag, then
+     close) — hence the lazy wrapper: finish is assigned below. */
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(sheet, function () { finish('skip'); });
 
   // trope chips with search
   var renderTropes = function (q) {
