@@ -351,7 +351,7 @@ async function circleLists() {
  * exposure), activity off (opt-in for everyone). */
 async function circlePrivacy() {
   const sb = await cloudClient();
-  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos').eq('user_id', cloudUser.id).maybeSingle();
+  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites').eq('user_id', cloudUser.id).maybeSingle();
   if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
     // Pre-v522 database: the new toggle columns don't exist yet — fall back
     // to the legacy columns and report the migration defaults for the rest.
@@ -367,26 +367,29 @@ async function circlePrivacy() {
     // header for the called-out decision). Never projected to friends:
     // this is read from the reader's OWN profile row only.
     recos: r.data ? r.data.receive_recos !== false : true,
+    // v528: buddy read invitations — the same posture as recos.
+    buddy: r.data ? r.data.receive_buddy_invites !== false : true,
   };
 }
-async function circleSavePrivacy(share, hidden, bio, activity, recos) {
+async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy) {
   const sb = await cloudClient();
   const row = {
     user_id: cloudUser.id, share_library: !!share, hidden_shelves: hidden,
     updated_at: new Date().toISOString(),
   };
-  // bio/activity/recos are optional params: two-arg callers (the
+  // bio/activity/recos/buddy are optional params: two-arg callers (the
   // shelf-share consent) must not clobber toggles they don't know
   // about, so the keys are only written when the caller passes them.
   if (typeof bio !== 'undefined') row.share_bio = !!bio;
   if (typeof activity !== 'undefined') row.share_activity = !!activity;
   if (typeof recos !== 'undefined') row.receive_recos = !!recos;
+  if (typeof buddy !== 'undefined') row.receive_buddy_invites = !!buddy;
   let up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   if (up.error && typeof isMissingColumn === 'function' && isMissingColumn(up.error) &&
-      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row)) {
+      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row || 'receive_buddy_invites' in row)) {
     // Pre-migration database: persist what exists; the new toggles
     // land with their defaults when the migration is applied.
-    delete row.share_bio; delete row.share_activity; delete row.receive_recos;
+    delete row.share_bio; delete row.share_activity; delete row.receive_recos; delete row.receive_buddy_invites;
     up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   }
   if (up.error) throw up.error;
@@ -421,7 +424,11 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     // v527: the one inbound social switch — whether friends may push
     // "Thought of you" recommendation cards to this reader.
     '<div class="field"><label>Book recommendations from friends</label>' + seg(p + '-recos', priv.recos !== false) +
-    '<p class="note">Friends in your ' + covenNameBare().toLowerCase() + ' can send you a book with a short note (\u201CThought of you\u201D). Off stops new recommendations from arriving.</p></div>';
+    '<p class="note">Friends in your ' + covenNameBare().toLowerCase() + ' can send you a book with a short note (\u201CThought of you\u201D). Off stops new recommendations from arriving.</p></div>' +
+    // v528: the buddy-read counterpart — whether friends may invite
+    // this reader to read a book together.
+    '<div class="field"><label>Buddy read invitations</label>' + seg(p + '-buddyinv', priv.buddy !== false) +
+    '<p class="note">Friends in your ' + covenNameBare().toLowerCase() + ' can invite you to read a book together. Off stops new invitations from arriving.</p></div>';
   // v524: the content shield — the one INCOMING control in this panel
   // (what the viewer sees, not what they send). Its state lives in
   // user_state (js/230-privacy.js), never in profiles, so it is read
@@ -436,9 +443,9 @@ function wireCirclePrivacyPanel(root, priv, p) {
   const state = {
     share: priv.share, hidden: (priv.hidden || []).slice(),
     bio: priv.bio !== false, activity: priv.activity === true,
-    recos: priv.recos !== false,
+    recos: priv.recos !== false, buddy: priv.buddy !== false,
   };
-  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos);
+  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos, state.buddy);
   const segWire = (id, key, msgOn, msgOff) => {
     root.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', async () => {
       const v = b.dataset.v === '1';
@@ -468,6 +475,9 @@ function wireCirclePrivacyPanel(root, priv, p) {
   segWire(p + '-recos', 'recos',
     'Friends can send you book recommendations',
     'Friends can no longer send you recommendations');
+  segWire(p + '-buddyinv', 'buddy',
+    'Friends can invite you to buddy reads',
+    'Friends can no longer invite you to buddy reads');
   // v524: the shield seg saves through js/230 (user_state) — deliberately
   // NOT through circleSavePrivacy, so shield state can never land in
   // the profiles row a friend projects.
@@ -907,11 +917,27 @@ function openCovenBook(b) {
       typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(b, circSpiceMap)) {
     t.cover = '';
   }
-  openPreviewModal(t, {
+  const modalOpts = {
     source: 'coven-shelf',
     contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
     onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null
-  });
+  };
+  // v528: a shared-TBR match on a friend's shelf can become a buddy
+  // read invitation right here (js/233 decides eligibility: both
+  // copies on TBR, no row standing). The button lives in the modal's
+  // primary row via the opt-in opts.onBuddyRead slot (js/150).
+  if (typeof buddyOfferBookId === 'function' && circFriend) {
+    const myBookId = buddyOfferBookId(circFriend.id, b);
+    if (myBookId) {
+      const friendId = circFriend.id, key = recoKey(b);
+      modalOpts.onBuddyRead = async () => {
+        if (typeof buddySendInvite !== 'function') return false;
+        await buddySendInvite(friendId, key, null);
+        return true;
+      };
+    }
+  }
+  openPreviewModal(t, modalOpts);
 }
 
 /* v454: privacy sheet — same controls as Settings → Circle & privacy
@@ -920,6 +946,10 @@ function openPrivacySheet(priv, shelves, opener) {
   const full = {
     share: priv.share, hidden: priv.hidden || [],
     bio: priv.bio !== false, activity: priv.activity === true,
+    // v528: carry the inbound toggles through the rebuild — without
+    // them, any save from this sheet would reset a Settings choice
+    // (recos had this latent gap; buddy must not inherit it).
+    recos: priv.recos !== false, buddy: priv.buddy !== false,
   };
   const body =
     '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +

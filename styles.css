@@ -1889,6 +1889,19 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
    under the meta so +TBR stays the one loud action. */
 .toy-note { font-style: italic; display: block; }
 .toy-sub { display: flex; gap: 16px; margin-top: 2px; }
+/* v528: buddy reads — state chips reuse the reaction-chip shape so
+   presence reads as the same quiet register everywhere in the Hearth;
+   the consent line sits one step quieter still. */
+.buddy-consent { opacity: .85; }
+.buddy-line { display: block; }
+.buddy-invite { padding: 2px 0 4px; }
+.buddy-invite .buddy-consent { margin: 8px 0 0; }
+.buddy-states { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.buddy-states:empty { display: none; }
+.buddy-done { display: flex; align-items: center; gap: 5px; margin-top: 2px;
+  font-size: 12.5px; color: var(--accent); }
+.buddy-done:empty { display: none; }
+.buddy-done .ticon { width: 14px; height: 14px; }
 .toy-friends { display: flex; flex-wrap: wrap; gap: 8px; }
 .toy-friend { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--card2);

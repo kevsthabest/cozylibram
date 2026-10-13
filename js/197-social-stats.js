@@ -381,7 +381,11 @@ function covenStatsHTML(d) {
       bd.books.forEach(b => {
         buddyHTML += '<div class="circle-row">' + statAvatar(bd.p) +
           '<div class="circle-meta"><b>' + esc(b.title || 'Untitled') + '</b>' +
-          '<span class="note">you + ' + esc(bd.p.name) + '</span></div></div>';
+          '<span class="note">you + ' + esc(bd.p.name) + '</span></div>' +
+          // v528: the match becomes an invitation (js/233 wires it;
+          // pre-migration the button hides and the card reads as before).
+          '<div class="circle-actions"><button class="btn ghost sm" data-buddy-invite="' +
+          esc(typeof recoKey === 'function' ? recoKey(b) : '') + '" data-buddy-friend="' + esc(bd.p.id) + '">Read together</button></div></div>';
       });
     });
     buddyHTML += '</div></div>';
@@ -443,6 +447,8 @@ function refreshCovenStats() {
       if (typeof refreshRecos === 'function') refreshRecos();
       // v525: reactions for exactly the rendered moments
       if (typeof wireMomentReactions === 'function') wireMomentReactions(el, d.moments || []);
+      // v528: buddy read invitations + active reads into the Buddy tab
+      if (typeof wireBuddyReads === 'function') wireBuddyReads(el);
     })
     .catch(() => { const el = document.getElementById('stats-slot'); if (el) el.innerHTML = ''; });
 }
