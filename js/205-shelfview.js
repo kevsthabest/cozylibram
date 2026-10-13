@@ -1022,6 +1022,10 @@ function shelfSheetShell(title, bodyHTML) {
   const close = () => shelfCloseSheet();
   scrim.addEventListener('click', close);
   if (typeof overlayOpened === 'function') shelfSheetToken = overlayOpened('shelf-photo', close);
+  /* v513: drag-to-dismiss — standing app rule: every sheet wires the
+     shared helper. Wired in the shell so all shelf sheets get it,
+     including the spine viewfinder: shelfCloseSheet stops the camera. */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
   return { sheet, close };
 }
 

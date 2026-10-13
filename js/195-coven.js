@@ -686,6 +686,9 @@ function covenOpenSheet(title, bodyHTML, opener, onDismiss) {
   const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
   document.addEventListener('keydown', onKey);
   sheet._covenClose = close;
+  /* v513: drag-to-dismiss — standing app rule: every sheet wires the
+     shared helper (the sheet already ships a grabber handle). */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
   return { sheet: sheet, close: close };
 }
 function covenCloseSheet() {

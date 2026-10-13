@@ -44,6 +44,11 @@ function openDnfReasonSheet(b) {
   };
   const token = (typeof overlayOpened === 'function') ? overlayOpened('dnf-reason', close) : null;
 
+  /* v513: drag-to-dismiss — the other .sheet-foundation consumer was
+     missing the same wireSheetDrag wiring as the portrait sheet. */
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(overlay.querySelector('.dnf-bottom-sheet'), close);
+
   overlay.querySelectorAll('.dnf-reason-btn').forEach(btn =>
     btn.addEventListener('click', () => {
       saveDnfReason(b, btn.dataset.reason);

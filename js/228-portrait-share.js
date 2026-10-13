@@ -992,6 +992,15 @@ function openPortraitShareSheet() {
   const token = (typeof overlayOpened === 'function') ? overlayOpened('portrait-share', close) : null;
   document.addEventListener('keydown', onKey);
 
+  /* v513: drag-to-dismiss — the gesture half of the .sheet pattern.
+     Every other sheet wires wireSheetDrag; this one never did, so a
+     downward swipe could scroll content but never close the sheet.
+     The helper's own guards cover the carousel inside: gestures
+     starting in the horizontal track (or running mostly horizontal)
+     are refused, and the scrollTop veto keeps a scrolled sheet up. */
+  if (typeof wireSheetDrag === 'function')
+    wireSheetDrag(overlay.querySelector('.pshare-sheet'), close);
+
   PS_STYLES.forEach(async (s) => {
     const cv = await renderPortraitCanvas(s.key);
     const mount = overlay.querySelector('.pshare-card[data-style="' + s.key + '"]');

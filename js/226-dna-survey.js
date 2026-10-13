@@ -129,6 +129,10 @@ function openDnaSurvey(b) {
   // gesture dismisses the sheet instead of exiting the app.
   dnaSurveyToken = (typeof overlayOpened === 'function') ? overlayOpened('dna-survey', close) : null;
 
+  /* v513: drag-to-dismiss — standing app rule: every sheet wires the
+     shared helper. A drag-dismiss is a plain close, same as Skip. */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
+
   // trope chips with search
   var renderTropes = function (q) {
     q = String(q || '').toLowerCase();
@@ -269,6 +273,10 @@ function openWarningPrefs() {
   };
   // v496 (#139): register with the overlay manager (Android back dismisses).
   warnPrefToken = (typeof overlayOpened === 'function') ? overlayOpened('warn-prefs', close) : null;
+
+  /* v513: drag-to-dismiss — standing app rule (see openDnaSurvey).
+     Dragging down discards unsaved picks, exactly like Cancel. */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
 
   sheet.querySelectorAll('#wpDetail button').forEach(function (b) {
     b.addEventListener('click', function () {

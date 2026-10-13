@@ -162,6 +162,86 @@ ok('detector: a non-overflowing rail is not a scroller',
   await sleep(280);
   ok('... and still dismisses', dE.dismissed === 1);
 
+  // ---- DNF reason sheet: the other .sheet-foundation consumer (v513) ----
+  // It built the same .sheet-overlay/.sheet pair as the portrait sheet
+  // and was missing the same wireSheetDrag wiring. openDnfReasonSheet
+  // only touches the book object on a reason tap, so a stub is fine.
+  runInWindow('openDnfReasonSheet({ id: "dnfT1", status: "dnf" })');
+  const dnfSheet = window.document.querySelector('.dnf-bottom-sheet');
+  ok('dnf sheet opens', !!dnfSheet);
+  const dnfOverlay = dnfSheet.parentElement;
+  const dnfTitle = dnfSheet.querySelector('.dnf-title');
+  fire(dnfTitle, 'touchstart', 100, 100, 0);
+  fire(dnfTitle, 'touchmove', 100, 112, 16);
+  fire(dnfTitle, 'touchmove', 100, 200, 32);
+  ok('dnf sheet tracks a downward drag', dnfSheet.style.transform === 'translateY(88px)');
+  fire(dnfTitle, 'touchend', 100, 200, 48);
+  await sleep(280); // 190ms dismiss delay -> close()
+  ok('dnf sheet closes on a downward drag', !dnfOverlay.classList.contains('open'));
+  await sleep(400); // close()'s own 300ms removal
+  ok('dnf overlay is removed after the drag-dismiss', !window.document.querySelector('.dnf-bottom-sheet'));
+
+  // ---- v513 (standing rule): every .sv-sheet / .coven-sheet surface ----
+  // Swipe-to-dismiss is an app rule, not a per-sheet option: the sheets
+  // that predate wireSheetDrag (custom .sv-sheet / .coven-sheet shells)
+  // wire the same helper to their existing close(). One shell-level wire
+  // per family covers every sheet built on it. Same drag recipe as DNF:
+  // claim at +12px, track to +100px, release, wait out the dismiss.
+  const dragDismiss = async (name, sheet, target, goneCheck) => {
+    ok(name + ' opens', !!sheet);
+    if (!sheet) return;
+    fire(target, 'touchstart', 100, 100, 0);
+    fire(target, 'touchmove', 100, 112, 16);
+    fire(target, 'touchmove', 100, 200, 32);
+    ok(name + ' tracks a downward drag', sheet.style.transform === 'translateY(88px)');
+    fire(target, 'touchend', 100, 200, 48);
+    await sleep(600); // 190ms dismiss delay + the close()'s own removal
+    ok(name + ' closes on a downward drag', goneCheck());
+  };
+
+  // trigger-check sheet (js/221)
+  runInWindow('openTriggerCheckSheet({ id: "tcT1", title: "T", contentWarnings: ["x"] }, null)');
+  const tcSheet = window.document.querySelector('#tcSheet');
+  await dragDismiss('trigger-check sheet', tcSheet,
+    tcSheet && tcSheet.querySelector('.tc-title'),
+    () => !window.document.querySelector('#tcSheet'));
+
+  // community-corpus sheet shell (js/223) — covers every corpus sheet
+  runInWindow('ccSheet("T", "<p>body</p>")');
+  const ccEl = window.document.querySelector('#ccSheet');
+  await dragDismiss('corpus sheet', ccEl,
+    ccEl && ccEl.querySelector('.tc-title'),
+    () => !window.document.querySelector('#ccSheet'));
+
+  // shelf sheet shell (js/205) — covers the photo / decor / layout /
+  // viewfinder sheets; the shell close also stops the camera.
+  runInWindow('shelfSheetShell("T", "<p>body</p>")');
+  const svEl = window.document.querySelector('#svSheet');
+  await dragDismiss('shelf sheet', svEl,
+    svEl && svEl.querySelector('.sv-sheet-title'),
+    () => !window.document.querySelector('#svSheet'));
+
+  // coven sheet shell (js/195)
+  runInWindow('covenOpenSheet("T", "<p>body</p>")');
+  const cvEl = window.document.querySelector('#covenSheet');
+  await dragDismiss('coven sheet', cvEl,
+    cvEl && cvEl.querySelector('h3'),
+    () => !window.document.querySelector('#covenSheet'));
+
+  // DNA survey sheet (js/226)
+  runInWindow('openDnaSurvey({ id: "svT1", title: "T" })');
+  const dnaEl = window.document.querySelector('#dnaSurveySheet');
+  await dragDismiss('dna survey sheet', dnaEl,
+    dnaEl && dnaEl.querySelector('.survey-title'),
+    () => !window.document.querySelector('#dnaSurveySheet'));
+
+  // warning-preferences sheet (js/226)
+  runInWindow('openWarningPrefs()');
+  const wpEl = window.document.querySelector('#warnPrefSheet');
+  await dragDismiss('warn-prefs sheet', wpEl,
+    wpEl && wpEl.querySelector('.survey-title, .portrait-label'),
+    () => !window.document.querySelector('#warnPrefSheet'));
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

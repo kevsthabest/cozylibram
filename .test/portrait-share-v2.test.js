@@ -49,7 +49,14 @@ const lightVars = {
   '--gold': '#a87b24', '--accent': '#e5488f', '--accent-deep': '#c2377a'
 };
 let themeVars = darkVars;
-window.getComputedStyle = () => ({ getPropertyValue: (n) => themeVars[n] || '' });
+/* v513: the stub also answers overflowX from the element's inline style —
+   sheetDragStartsInHScroller (js/150) reads it to refuse dismiss gestures
+   that start in a horizontal scroller, and a stub returning undefined
+   silently disables that refusal in this suite. */
+window.getComputedStyle = (el) => ({
+  overflowX: (el && el.style && el.style.overflowX) || '',
+  getPropertyValue: (n) => themeVars[n] || ''
+});
 
 require('./harness').loadApp(window);
 
@@ -374,6 +381,8 @@ ok('track keeps native scroll-snap (the swipe is still native scrolling)',
   run('shareDnaImage()');
   const dTrack = window.document.querySelector('.pshare-track');
   ok('driver: share sheet track is mounted', !!dTrack);
+  dTrack.style.overflowX = 'auto'; // jsdom loads no styles.css; mirror the real rule inline
+  Object.defineProperty(dTrack, 'scrollWidth', { value: 900, configurable: true });
   Object.defineProperty(dTrack, 'clientWidth', { value: 300, configurable: true });
   let dScrollArg = null;
   dTrack.scrollTo = (o) => { dScrollArg = o; };
@@ -453,6 +462,88 @@ ok('track keeps native scroll-snap (the swipe is still native scrolling)',
 
   const ov2 = window.document.querySelector('.sheet-overlay');
   if (ov2) ov2.remove();
+}
+
+/* ---------- v513: portrait sheet drag-to-dismiss ----------
+   The sheet got the .sheet CSS foundation in v500 but never the
+   wireSheetDrag half of the pattern, so a downward swipe could not
+   close it (every other sheet dismisses that way). Synthetic touch
+   events, same pattern as the driver block above. wireSheetDrag
+   gates on touch support — opt this window in first. */
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const tev = (type, points, ts) => {
+    const ev = new window.Event(type, { bubbles: true, cancelable: true });
+    ev.touches = (type === 'touchend' || type === 'touchcancel') ? [] : points;
+    ev.changedTouches = points;
+    Object.defineProperty(ev, 'timeStamp', { value: ts });
+    return ev;
+  };
+  const pt = (x, y) => ({ clientX: x, clientY: y });
+  const fireT = (target, type, points, ts) => {
+    const ev = tev(type, points, ts);
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  window.ontouchstart = null; // wireSheetDrag's touch-support gate
+  window.document.querySelectorAll('.sheet-overlay').forEach(o => o.remove());
+  run('localStorage.removeItem("pshareStyle")');
+  setLibrary(richBooks);
+  run('shareDnaImage()');
+  const gSheet = window.document.querySelector('.pshare-sheet');
+  ok('dismiss: portrait sheet is mounted', !!gSheet);
+  const gTitle = gSheet.querySelector('.pshare-title');
+
+  /* downward drag from the top: claims, tracks, dismisses via close() */
+  fireT(gTitle, 'touchstart', [pt(100, 100)], 0);
+  fireT(gTitle, 'touchmove', [pt(100, 112)], 16); // crosses the 10px gate -> claim
+  fireT(gTitle, 'touchmove', [pt(100, 200)], 32);
+  ok('dismiss: downward drag tracks the finger', gSheet.style.transform === 'translateY(88px)');
+  fireT(gTitle, 'touchend', [pt(100, 200)], 48);
+  await sleep(260); // wireSheetDrag's 190ms dismiss delay -> close()
+  const gOverlay = window.document.querySelector('.sheet-overlay');
+  ok('dismiss: downward drag closes the sheet (open class removed)',
+    !!gOverlay && !gOverlay.classList.contains('open'));
+  await sleep(400); // close()'s own 300ms removal
+  ok('dismiss: overlay is removed after close',
+    !window.document.querySelector('.pshare-sheet'));
+
+  /* downward drag that starts inside the carousel: refused, no dismiss */
+  run('shareDnaImage()');
+  const hSheet = window.document.querySelector('.pshare-sheet');
+  const hTrack = hSheet.querySelector('.pshare-track');
+  hTrack.style.overflowX = 'auto'; // jsdom loads no styles.css; mirror the real rule inline
+  Object.defineProperty(hTrack, 'scrollWidth', { value: 900, configurable: true });
+  Object.defineProperty(hTrack, 'clientWidth', { value: 300, configurable: true });
+  fireT(hTrack, 'touchstart', [pt(100, 100)], 0);
+  fireT(hTrack, 'touchmove', [pt(100, 112)], 16);
+  fireT(hTrack, 'touchmove', [pt(100, 320)], 32); // long downward pull, still refused
+  fireT(hTrack, 'touchend', [pt(100, 320)], 48);
+  await sleep(260);
+  ok('dismiss: a drag starting in the carousel never drags or closes the sheet',
+    hSheet.style.transform === '' &&
+    window.document.querySelector('.sheet-overlay').classList.contains('open'));
+  hSheet.querySelector('.pshare-close').click();
+  await sleep(350);
+  ok('dismiss: carousel sheet still closes via its button',
+    !window.document.querySelector('.pshare-sheet'));
+
+  /* downward drag while the sheet is scrolled: the scrollTop veto holds */
+  run('shareDnaImage()');
+  const sSheet = window.document.querySelector('.pshare-sheet');
+  const sTitle = sSheet.querySelector('.pshare-title');
+  Object.defineProperty(sSheet, 'scrollTop', { value: 40, configurable: true });
+  fireT(sTitle, 'touchstart', [pt(100, 100)], 0);
+  fireT(sTitle, 'touchmove', [pt(100, 112)], 16);
+  fireT(sTitle, 'touchmove', [pt(100, 320)], 32);
+  fireT(sTitle, 'touchend', [pt(100, 320)], 48);
+  await sleep(260);
+  ok('dismiss: a scrolled sheet does not dismiss on a downward drag',
+    sSheet.style.transform === '' &&
+    window.document.querySelector('.sheet-overlay').classList.contains('open'));
+  const sOverlay = window.document.querySelector('.sheet-overlay');
+  if (sOverlay) sOverlay.remove();
 }
 
 /* ---------- v502 batch 1: sticker-pack geometry + density ----------
