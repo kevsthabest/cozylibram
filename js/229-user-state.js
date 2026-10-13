@@ -180,8 +180,46 @@ function userStateApply(values) {
 //
 // v521 adds a fourth section, shelf (column shelf_state), on the same
 // machinery — see the shelf block below for its inventory.
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf'];
+//
+// v523 adds a fifth section, privacy (column privacy_state): the age
+// band + content shield object from js/230-privacy.js, warning-style
+// { _at, value }. See the privacy block below.
+/* ---------------- roaming privacy state (v523) ---------------- */
+// The fifth section: age band + content shield (js/230-privacy.js), in
+// its own column (privacy_state, supabase/migrations/
+// v523_user_state_privacy.sql), payload { _at, value } — value is the
+// privacy object as-is, warning-style. The band lives ONLY in this
+// section and its on-device key: never in profiles (circle friends
+// project those rows) and never in the settings snapshot, whose key
+// list stays frozen at its v518 shape (the full-snapshot apply of an
+// older client must never be able to delete a band).
+const PRIVACY_STATE_KEY = 'cozylibram.privacy.v1';
+function userStatePrivacyNormalize(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  return {
+    band: (v.band === 'teen' || v.band === 'adult') ? v.band : null,
+    shield: v.shield === true,
+    teenDefaultsApplied: v.teenDefaultsApplied === true,
+    bandSetAt: Number(v.bandSetAt) || 0,
+  };
+}
+function userStateCollectPrivacy() {
+  try {
+    const raw = localStorage.getItem(PRIVACY_STATE_KEY);
+    if (raw == null) return { value: null };
+    return { value: userStatePrivacyNormalize(JSON.parse(raw)) };
+  } catch (e) { return { value: null }; }
+}
+function userStateApplyPrivacy(payload) {
+  try {
+    const v = userStatePrivacyNormalize(payload ? payload.value : null);
+    if (v) localStorage.setItem(PRIVACY_STATE_KEY, JSON.stringify(v));
+    else localStorage.removeItem(PRIVACY_STATE_KEY);
+  } catch (e) {}
+}
+
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -375,6 +413,7 @@ const USER_STATE_SECTION_FNS = {
   upnext: { collect: userStateCollectUpNext, apply: userStateApplyUpNext },
   release: { collect: userStateCollectRelease, apply: userStateApplyRelease },
   shelf: { collect: userStateCollectShelf, apply: userStateApplyShelf },
+  privacy: { collect: userStateCollectPrivacy, apply: userStateApplyPrivacy },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
@@ -395,7 +434,7 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state,shelf_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     const meta = userStateMeta(uid);
     let changed = false;

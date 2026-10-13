@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -86,6 +86,7 @@ function clearState() {
         'cozylibram.dnaSurveyOff', 'cozylibram.dnaNudgesOff', 'spicyshelves.onboarded',
         'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
         'cozylibram.warningPrefs.v1',
+        'cozylibram.privacy.v1',
         'shelfViewMode',
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
@@ -165,6 +166,15 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     /add column if not exists shelf_state jsonb not null default '\{\}'::jsonb/.test(sql521));
   ok('v521 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql521) && !/alter table (public\.)?profiles/.test(sql521));
+
+  /* ---------- v523 privacy migration shape ---------- */
+  const sql523Path = path.join(ROOT, 'supabase/migrations/v523_user_state_privacy.sql');
+  ok('v523 migration file exists', fs.existsSync(sql523Path));
+  const sql523 = fs.readFileSync(sql523Path, 'utf8');
+  ok('v523 adds privacy_state jsonb with {} default',
+    /add column if not exists privacy_state jsonb not null default '\{\}'::jsonb/.test(sql523));
+  ok('v523 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql523) && !/alter table (public\.)?profiles/.test(sql523));
 
   /* ---------- collect: scope is exact ---------- */
   clearState();
