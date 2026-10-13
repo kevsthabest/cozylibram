@@ -11,9 +11,12 @@
    - WebGL unavailable (or THREE load failure) falls back to the 2.5D view.
    - Decorations in 3D persist per bookcase (the 2.5D decor system is separate).
    - The room: a group with more than SHELF3D_MAX_BOOKS books continues onto
-     further bookcases. Each case holds 60 books and keeps its own decorations.
-     A case bar pages between cases, "Find" jumps to a book, "Arrange" changes
-     how the room is ordered (view only: the saved shelf order is untouched). */
+     further bookcases. Each case holds up to 60 books and keeps its own
+     decorations; since v514 decorations displace books, case boundaries are
+     computed by simulating the engine's packer (see shelf3dSliceRoom). A
+     case bar pages between cases, "Find" jumps to a book, "Arrange"
+     changes how the room is ordered (view only: the saved shelf order is
+     untouched). */
 
 const SHELF3D_MAX_BOOKS = 60;   // books per bookcase
 const SHELF3D_ARRANGE_KEY = 'cozylibram.s3d.arrange';
@@ -132,10 +135,94 @@ function shelf3dCases(books, size) {
   return out;
 }
 function shelf3dCaseKey(group, idx) { return group + ':' + idx; }
+/* v514: decorations displace books, so cases no longer hold a fixed count.
+   The saved per-case decoration layouts (the engine's v2 doc) become
+   per-level obstacle intervals, and the room is sliced by simulating the
+   engine's own packer (Shelf3D.packCase) case by case: books fill each
+   case around its decorations and overflow into the next. A case that
+   holds decorations but no books still exists (decorations stay anchored
+   to their bookcase even when every book has flowed elsewhere). */
+function shelf3dDecoDoc() {
+  try {
+    const d = JSON.parse(localStorage.getItem('cozylibram.s3d.deco.v2') || 'null');
+    if (d && d.v === 2 && d.cases && typeof d.cases === 'object') return d;
+  } catch (e) {}
+  return { v: 2, cases: {} };
+}
+function shelf3dCaseObstacles(group, idx, doc) {
+  const obs = { 0: [], 1: [], 2: [] };
+  const fp = (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.decoFootprint === 'function')
+    ? Shelf3D.decoFootprint : null;
+  if (!fp) return obs;
+  ((doc && doc.cases[shelf3dCaseKey(group, idx)]) || []).forEach(function (d) {
+    if (!d || d.room || typeof d.pi !== 'number' || typeof d.x !== 'number' || !obs[d.pi]) return;
+    const fw = fp(d.type);
+    if (fw > 0) obs[d.pi].push([d.x - fw / 2, d.x + fw / 2]);
+  });
+  return obs;
+}
+function shelf3dSliceRoom(all, group) {
+  const pack = (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.packCase === 'function')
+    ? Shelf3D.packCase : null;
+  if (!pack) return shelf3dCases(all, SHELF3D_MAX_BOOKS);   // engine script absent: legacy chunking
+  const doc = shelf3dDecoDoc();
+  let minCases = 1;
+  Object.keys(doc.cases).forEach(function (k) {
+    const parts = k.split(':');
+    if (parts[0] !== group) return;
+    if (((doc.cases[k]) || []).some(function (d) { return d && !d.room; })) {
+      minCases = Math.max(minCases, (parseInt(parts[1], 10) || 0) + 1);
+    }
+  });
+  const specs = shelfBooks3D(all);
+  const cases = [];
+  let i = 0, ci = 0;
+  while (i < all.length || ci < minCases) {
+    const res = pack(specs.slice(i, i + SHELF3D_MAX_BOOKS), shelf3dCaseObstacles(group, ci, doc), SHELF3D_MAX_BOOKS);
+    cases.push(all.slice(i, i + res.placed.length));
+    i += res.placed.length;
+    ci++;
+    if (ci > 500) break;   // sanity bound on pathological saved layouts
+  }
+  if (!cases.length) cases.push([]);
+  return cases;
+}
+// Which case (0-based) holds the book at position `idx` in room.all.
+function shelf3dCaseOf(room, idx) {
+  if (!room || !room.starts) return Math.floor(idx / SHELF3D_MAX_BOOKS);
+  let c = 0;
+  for (let k = 0; k < room.starts.length; k++) { if (room.starts[k] <= idx) c = k; }
+  return c;
+}
+// The engine's book list for a case: the case's own books plus the next
+// case's — the engine lays out what fits and keeps the rest as the
+// reservoir a decoration removal can pull books in from.
+function shelf3dCaseBooks(room, i) {
+  return shelfBooks3D((room.cases[i] || []).concat(room.cases[i + 1] || []));
+}
 // The arranged books for the current group, split into cases.
 function shelf3dRoom() {
   const all = shelf3dArrange((typeof shelfBooks === 'function') ? shelfBooks() : [], shelf3dArrangeMode());
-  return { all: all, cases: shelf3dCases(all, SHELF3D_MAX_BOOKS) };
+  const cases = shelf3dSliceRoom(all, shelfGroup);
+  const starts = [];
+  let acc = 0;
+  cases.forEach(function (c) { starts.push(acc); acc += c.length; });
+  return { all: all, cases: cases, starts: starts };
+}
+/* v514: a decoration was placed, moved, or removed in the engine — case
+   boundaries may have shifted. Refresh the case bar and the neighbour
+   previews; the engine reflows the visible case's books itself. */
+function shelf3dOnDecoChange() {
+  try {
+    if (!_shelf3dMounted) return;
+    const room = shelf3dRoom();
+    const i = Math.min(_shelf3dCaseIdx[shelfGroup] || 0, room.cases.length - 1);
+    _shelf3dCaseIdx[shelfGroup] = i;
+    if (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.setNeighbours === 'function') {
+      Shelf3D.setNeighbours(shelf3dNeighbours(room, i));
+    }
+    shelf3dUpdateBar();
+  } catch (e) {}
 }
 
 // Local mount-state tracking (robust even if the engine's `mounted` flag
@@ -370,7 +457,8 @@ function renderShelf3D() {
     onBookTap: function (id) {
       if (typeof openDetail === 'function') openDetail(id, null);
     },
-    initialBooks: shelfBooks3D(shelf3dRoom().cases[Math.min(_shelf3dCaseIdx[shelfGroup] || 0, shelf3dRoom().cases.length - 1)]),
+    onDecoChange: shelf3dOnDecoChange,
+    initialBooks: (function () { const r = shelf3dRoom(); return shelf3dCaseBooks(r, Math.min(_shelf3dCaseIdx[shelfGroup] || 0, r.cases.length - 1)); })(),
     initialNeighbours: (function () { const r = shelf3dRoom(); return shelf3dNeighbours(r, Math.min(_shelf3dCaseIdx[shelfGroup] || 0, r.cases.length - 1)); })(),
     caseKey: shelf3dCaseKey(shelfGroup, Math.min(_shelf3dCaseIdx[shelfGroup] || 0, shelf3dRoom().cases.length - 1)),
     appTheme: (typeof getTheme === 'function') ? getTheme() : 'dark',
@@ -406,7 +494,7 @@ function shelf3dGoCase(idx, dir, thenFind) {
   _shelf3dCaseIdx[shelfGroup] = i;
   try {
     if (_shelf3dMounted && typeof Shelf3D !== 'undefined' && Shelf3D) {
-      Shelf3D.showCase(shelf3dCaseKey(shelfGroup, i), shelfBooks3D(room.cases[i]), dir || 0, shelf3dNeighbours(room, i));
+      Shelf3D.showCase(shelf3dCaseKey(shelfGroup, i), shelf3dCaseBooks(room, i), dir || 0, shelf3dNeighbours(room, i));
       if (thenFind != null) setTimeout(function () { try { Shelf3D.highlightBook(thenFind); } catch (e) {} }, dir ? 450 : 120);
     }
   } catch (e) {}
@@ -418,8 +506,8 @@ function shelf3dUpdateBar() {
   const room = shelf3dRoom();
   const n = room.cases.length;
   const i = Math.min(_shelf3dCaseIdx[shelfGroup] || 0, n - 1);
-  const first = i * SHELF3D_MAX_BOOKS + 1;
-  const last = i * SHELF3D_MAX_BOOKS + room.cases[i].length;
+  const first = (room.starts ? room.starts[i] : i * SHELF3D_MAX_BOOKS) + 1;
+  const last = (room.starts ? room.starts[i] : i * SHELF3D_MAX_BOOKS) + room.cases[i].length;
   const label = document.getElementById('cbLabel');
   if (label) {
     label.textContent = n > 1 ? 'Case ' + (i + 1) + ' of ' + n
@@ -483,8 +571,8 @@ function shelf3dRenderSheet(kind) {
         if (hay.indexOf(q) >= 0 && hits.length < 8) hits.push({ b: b, idx: idx });
       });
       out.innerHTML = hits.length ? hits.map(function (h) {
-        return '<button class="sh-hit" data-id="' + esc(h.b.id) + '" data-i="' + Math.floor(h.idx / SHELF3D_MAX_BOOKS) + '">' +
-          esc(h.b.title || 'Untitled') + '<small>' + esc(_s3dAuthor(h.b)) + ' · case ' + (Math.floor(h.idx / SHELF3D_MAX_BOOKS) + 1) + '</small></button>';
+        return '<button class="sh-hit" data-id="' + esc(h.b.id) + '" data-i="' + shelf3dCaseOf(room, h.idx) + '">' +
+          esc(h.b.title || 'Untitled') + '<small>' + esc(_s3dAuthor(h.b)) + ' · case ' + (shelf3dCaseOf(room, h.idx) + 1) + '</small></button>';
       }).join('') : '<p class="sh-note">Nothing on these shelves matches. Try another group above.</p>';
       out.querySelectorAll('.sh-hit').forEach(function (hb) {
         hb.addEventListener('click', function () {
