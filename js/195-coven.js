@@ -322,6 +322,14 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
   html +=
     '<div class="field"><label>Reading activity</label>' + seg(p + '-act', priv.activity) +
     '<p class="note">Recently finished books, your star ratings and your Reader Portrait in circle digests. Off unless you opt in.</p></div>';
+  // v524: the content shield — the one INCOMING control in this panel
+  // (what the viewer sees, not what they send). Its state lives in
+  // user_state (js/230-privacy.js), never in profiles, so it is read
+  // directly here rather than arriving via circlePrivacy().
+  const shieldNow = (typeof privacyState === 'function') ? privacyState().shield : false;
+  html +=
+    '<div class="field"><label>Content shield</label>' + seg(p + '-shield', shieldNow) +
+    '<p class="note">For what you see: high-spice covers are blurred and spice ratings hidden in shared views, Discover and recommendations — and adult titles stay out of “You’d love this” and circle stats. Your own library is never changed.</p></div>';
   return html;
 }
 function wireCirclePrivacyPanel(root, priv, p) {
@@ -356,6 +364,18 @@ function wireCirclePrivacyPanel(root, priv, p) {
   segWire(p + '-act', 'activity',
     'Your reading activity is shared with your ' + circle,
     'Your reading activity is no longer shared');
+  // v524: the shield seg saves through js/230 (user_state) — deliberately
+  // NOT through circleSavePrivacy, so shield state can never land in
+  // the profiles row a friend projects.
+  if (typeof setShield === 'function' && typeof shieldOn === 'function') {
+    root.querySelectorAll('#' + p + '-shield button').forEach(b => b.addEventListener('click', () => {
+      const v = b.dataset.v === '1';
+      if (shieldOn() === v) return;
+      setShield(v);
+      root.querySelectorAll('#' + p + '-shield button').forEach(x => x.classList.toggle('active', x === b));
+      toast(v ? 'Content shield on' : 'Content shield off');
+    }));
+  }
   root.querySelectorAll('#' + p + '-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
     const s = ch.dataset.shelf;
     const hidden = state.hidden.slice();
@@ -659,6 +679,13 @@ function renderCovenFriend() {
     .then(([prof, books]) => {
       if (prof) { circProfiles[f.id] = prof; f.name = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || f.name; }
       circBooks = books.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+      // v524: content shield — resolve work-level spice for the grid in
+      // the background (the avatar-upgrade pattern); record-rated books
+      // blur on first paint, baseline-only books when the map lands.
+      circSpiceMap = {};
+      if (typeof shieldOn === 'function' && shieldOn() && typeof shieldSpiceMapFor === 'function') {
+        shieldSpiceMapFor(circBooks).then(m => { circSpiceMap = m || {}; markShieldedCovers(); }).catch(() => {});
+      }
       renderCovenFriendMain();
     })
     .catch(e => {
@@ -697,7 +724,13 @@ function renderCovenFriendMain() {
     const map = {};
     circBooks.forEach(b => { map[b.id] = b; });
     circBookMap = map;
-    html += '<div class="grid">' + books.map((b, i) => bookCard(b, i)).join('') + '</div>';
+    // v524: display copies strip the spice badge when the shield is on
+    // (js/230 shieldCardBook); circBookMap keeps the originals — the
+    // preview modal receives the book's metadata as-is, but openCovenBook
+    // blanks a shielded high-spice cover on its transient copy (v524:
+    // in this flow the cover is a shared-view cover, not metadata).
+    const cardBook = (typeof shieldCardBook === 'function') ? shieldCardBook : (x) => x;
+    html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
   }
   setView(html);
   document.getElementById('cf-back').addEventListener('click', () => go('coven'));
@@ -710,14 +743,46 @@ function renderCovenFriendMain() {
     const b = circBookMap[c.dataset.id];
     if (b) openCovenBook(b);
   }));
+  markShieldedCovers();
   circleUpgradeAvatars(document.getElementById('view'));
 }
 let circBookMap = {};
+let circSpiceMap = {}; // v524: work-spice map for the open friend's books
+/* v524: content shield — blur high-spice covers in the friend grid and
+   tag them with a "Shielded" badge so the blur reads as deliberate,
+   not as a broken image. Idempotent; runs at first paint (record-rated
+   books) and again when the work-spice map lands. */
+function markShieldedCovers() {
+  if (typeof shieldOn !== 'function' || !shieldOn()) return;
+  if (typeof shieldIsHighSpice !== 'function') return;
+  document.querySelectorAll('#view .book-card').forEach(c => {
+    const b = circBookMap[c.dataset.id];
+    if (!b || !shieldIsHighSpice(b, circSpiceMap)) return;
+    const w = c.querySelector('.cover-wrap');
+    if (w) w.classList.add('shield-blur');
+    const badges = c.querySelector('.badges');
+    if (badges && !badges.querySelector('.shield-note')) {
+      const s = document.createElement('span');
+      s.className = 'badge shield-note';
+      s.innerHTML = icon('eyeoff') + ' Shielded';
+      badges.appendChild(s);
+    }
+  });
+}
 // v219: the read-only friend shelf browser opens the shared preview modal
 // (replacing its own tiny overlay) — description, tropes, genres, with +TBR
 // adding a clean copy per the v97 rule and Wishlist as usual.
 function openCovenBook(b) {
-  openPreviewModal(previewTransient(b, 'friend'), {
+  const t = previewTransient(b, 'friend');
+  // v524 (Advisor ruling): the modal's DATA is metadata, but its cover in
+  // this friend flow is a shared-view cover, which the shield promises to
+  // blur. Blank the cover on the transient copy — the placeholder renders;
+  // the original book keeps its cover (+TBR still copies it as before).
+  if (typeof shieldOn === 'function' && shieldOn() &&
+      typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(b, circSpiceMap)) {
+    t.cover = '';
+  }
+  openPreviewModal(t, {
     source: 'coven-shelf',
     contextNote: 'On ' + circFriend.name + '’s ' + (STATUS[b.status] || b.status || 'shelf') + ' shelf — read-only.',
     onAddTBR: () => addBook(covenCleanCopy(b), false, 'coven-shelf') || null

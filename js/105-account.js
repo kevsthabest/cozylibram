@@ -323,6 +323,7 @@ function fileToAvatarDataURL(file) {
 }
 function renderProfile() {
   const p = loadProfile();
+  const bandNow = (typeof privacyState === 'function') ? privacyState().band : null;
   const email = (cloudUser && cloudUser.email) || '';
   const pickSel = (id) => (p.avatar.type === 'default' && p.avatar.id === id) ? ' sel' : '';
   setView(
@@ -354,6 +355,14 @@ function renderProfile() {
       '<button type="button" data-g="m" class="' + (p.gender === 'm' ? 'active' : '') + '">Male</button>' +
       '<button type="button" data-g="other" class="' + (p.gender === 'other' ? 'active' : '') + '">Other</button></div>' +
       '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
+      // v524: age band — the owner's own setting only. It renders here
+      // (their private Profile editor) and NOWHERE else: never on the
+      // public projection, never as a badge. Stored in user_state.
+      '<div class="field"><label>Age group</label>' +
+      '<div class="seg" id="pf-band" style="grid-template-columns:1fr 1fr">' +
+      '<button type="button" data-b="teen" class="' + (bandNow === 'teen' ? 'active' : '') + '">13–17</button>' +
+      '<button type="button" data-b="adult" class="' + (bandNow === 'adult' ? 'active' : '') + '">18+</button></div>' +
+      '<p class="note" style="margin:6px 0 0">Stored privately — never shown on your profile or to your circle. Choosing 13–17 for the first time turns on the content shield and starts your circle sharing closed; every setting stays yours to change afterwards.</p></div>' +
       '<div class="field"><label>Bio</label>' +
       '<textarea id="pf-bio" class="text-input" rows="2" maxlength="240" placeholder="A line or two about your reading life">' + esc(p.bio || '') + '</textarea>' +
       '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on in Settings → Circle &amp; privacy.</p></div>' +
@@ -408,9 +417,20 @@ function renderProfile() {
     if (genEl) np.favGenres = genEl.value.split(',').map(g => g.trim()).filter(Boolean).slice(0, 8);
     touchProfile(np);
     pushCloudProfile(np);
+    // v524: age band saves through js/230 (user_state), not the
+    // profiles row. Only a live selection writes; the first teen
+    // selection applies the teen starting positions exactly once.
+    const bsel = document.querySelector('#pf-band button.active');
+    if (bsel && typeof setAgeBand === 'function') setAgeBand(bsel.dataset.b);
     renderTopbar();
     toast('Profile saved ✨');
   });
+  // v524: band picker — radio behavior (tap to select; no clear-to-unset,
+  // "unset" only ever means "never declared").
+  const bbtns = Array.from(document.querySelectorAll('#pf-band button'));
+  bbtns.forEach(b => b.addEventListener('click', () => {
+    bbtns.forEach(x => x.classList.toggle('active', x === b));
+  }));
   // v177: gender picker toggles (tap the active one to clear back to unset)
   const gbtns = Array.from(document.querySelectorAll('#pf-gender button'));
   gbtns.forEach(b => b.addEventListener('click', () => {

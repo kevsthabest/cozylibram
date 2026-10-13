@@ -141,6 +141,15 @@ function renderGateSignup() {
     '<p class="note" id="gs-status">Your shelves, on every device.</p>' +
     '<input id="gs-first" type="text" class="text-input" placeholder="First name" autocomplete="given-name">' +
     '<input id="gs-last" type="text" class="text-input" placeholder="Last name" autocomplete="family-name">' +
+    // v524: age band — self-declared at signup, stated 13+ floor. The
+    // band only sets starting positions for the privacy + shield
+    // toggles (js/230-privacy.js); it is stored privately (user_state),
+    // never displayed, and can be changed later in Profile.
+    '<div class="field" style="text-align:left;margin:2px 0 10px"><label>Your age group</label>' +
+    '<div class="seg" id="gs-band" style="grid-template-columns:1fr 1fr">' +
+    '<button type="button" data-b="teen">13–17</button>' +
+    '<button type="button" data-b="adult">18+</button></div>' +
+    '<p class="note" style="margin:6px 0 0">Cozy Libram is for readers 13 and up. Your age group sets your starting privacy and content settings — stored privately, never shown to anyone.</p></div>' +
     '<input id="gs-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
     '<input id="gs-pass" type="password" class="text-input" placeholder="Password (6+ characters)" autocomplete="new-password">' +
     '<input id="gs-pass2" type="password" class="text-input" placeholder="Confirm password" autocomplete="new-password">' +
@@ -150,6 +159,11 @@ function renderGateSignup() {
   );
   const busy = (msg) => { const st = document.getElementById('gs-status'); if (st) st.textContent = msg; };
   document.getElementById('gs-back').addEventListener('click', renderGate);
+  // v524: single-select age band (radio behavior — no clear-to-unset).
+  const bandBtns = Array.from(document.querySelectorAll('#gs-band button'));
+  bandBtns.forEach(b => b.addEventListener('click', () => {
+    bandBtns.forEach(x => x.classList.toggle('active', x === b));
+  }));
   document.getElementById('gs-create').addEventListener('click', () => {
     const first = document.getElementById('gs-first').value.trim();
     const last = document.getElementById('gs-last').value.trim();
@@ -160,8 +174,15 @@ function renderGateSignup() {
     if (!em) { busy('Enter your email.'); return; }
     if (pw.length < 6) { busy('Use a password with at least 6 characters.'); return; }
     if (pw !== pw2) { busy('Those passwords don\'t match — try again.'); return; }
+    const bsel = document.querySelector('#gs-band button.active');
+    const band = bsel ? bsel.dataset.b : '';
+    if (band !== 'teen' && band !== 'adult') { busy('Choose your age group — it sets your starting privacy settings.'); return; }
     busy('Creating account…');
-    cloudSignUp(em, pw, first, last);
+    // Record the band on this device immediately (shield state applies
+    // even before email confirmation); it also travels in user_metadata
+    // so the first sign-in on any device adopts it (enterApp).
+    try { if (typeof setAgeBand === 'function') setAgeBand(band); } catch (e) {}
+    cloudSignUp(em, pw, first, last, band);
   });
   gateSubmitOnEnter(['gs-first', 'gs-last', 'gs-email', 'gs-pass', 'gs-pass2'], 'gs-create');
 }
@@ -273,6 +294,12 @@ async function enterApp(user) {
   analyticsSessionBoot(); // v118: session_started + onboarding funnel events
   adoptLegacyMetadata(user);
   await syncCloudProfile();
+  // v524: adopt the signup age band from user_metadata (one-time seed —
+  // a band later changed in Profile is never stomped), then land any
+  // teen starting positions still pending (declared at signup before
+  // email confirmation, when no session existed to write them with).
+  try { if (typeof adoptSignupBand === 'function') await adoptSignupBand(user); } catch (e) {}
+  try { if (typeof applyPendingTeenDefaults === 'function') await applyPendingTeenDefaults(); } catch (e) {}
   await cloudFirstSync();
   cloudRealtimeStart(); // v143: live sync while signed in (fire and forget)
   maybeOnboard(); // v127: library is settled — welcome brand-new accounts
