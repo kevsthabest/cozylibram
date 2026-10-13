@@ -40,6 +40,10 @@ function ccSheet(title, bodyHTML, onMount) {
   requestAnimationFrame(function () { sheet.classList.add('open'); });
   ccSheetToken = (typeof overlayOpened === 'function') ? overlayOpened('cc-sheet', closeCcSheet) : null;
   scrim.addEventListener('click', closeCcSheet);
+  /* v513: drag-to-dismiss — standing app rule: every sheet wires the
+     shared helper. Wired here in the shell so every corpus sheet
+     (trope picker, character flow, merge, …) gets the gesture. */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, closeCcSheet);
   if (typeof onMount === 'function') onMount(sheet, closeCcSheet);
   return closeCcSheet;
 }

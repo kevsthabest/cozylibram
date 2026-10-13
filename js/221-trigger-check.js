@@ -61,6 +61,10 @@ function openTriggerCheckSheet(b, onStart) {
   };
   const token = (typeof overlayOpened === 'function') ? overlayOpened('trigger-check', close) : null;
 
+  /* v513: drag-to-dismiss — standing app rule: every sheet wires the
+     shared helper. Same outcome as a scrim tap: shown, then dismissed. */
+  if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
+
   document.getElementById('tcStart').addEventListener('click', function () {
     close();
     if (typeof onStart === 'function') onStart();
