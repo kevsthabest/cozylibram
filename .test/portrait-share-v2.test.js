@@ -346,6 +346,115 @@ ok('track keeps native scroll-snap (the swipe is still native scrolling)',
   /overflow-x:\s*auto/.test(cssRule('.pshare-track')) &&
   /scroll-snap-type:\s*x mandatory/.test(cssRule('.pshare-track')));
 
+/* ---------- v512: JS gesture driver ----------
+   v511's touch-action claims still lost the gesture on the User's
+   Pixel, so js/228 now drives horizontal drags itself (wireSheetDrag
+   shape). jsdom has no touch pipeline: dispatch synthetic touch
+   events — the swipe-dismiss suite's pattern — and assert
+   scrollLeft / preventDefault / dots / name. */
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const tev = (type, points, ts) => {
+    const ev = new window.Event(type, { bubbles: true, cancelable: true });
+    ev.touches = (type === 'touchend' || type === 'touchcancel') ? [] : points;
+    ev.changedTouches = points;
+    Object.defineProperty(ev, 'timeStamp', { value: ts });
+    return ev;
+  };
+  const pt = (x, y) => ({ clientX: x, clientY: y });
+  const fireT = (target, type, points, ts) => {
+    const ev = tev(type, points, ts);
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  window.document.querySelectorAll('.sheet-overlay').forEach(o => o.remove());
+  run('localStorage.removeItem("pshareStyle")');
+  setLibrary(richBooks);
+  run('shareDnaImage()');
+  const dTrack = window.document.querySelector('.pshare-track');
+  ok('driver: share sheet track is mounted', !!dTrack);
+  Object.defineProperty(dTrack, 'clientWidth', { value: 300, configurable: true });
+  let dScrollArg = null;
+  dTrack.scrollTo = (o) => { dScrollArg = o; };
+  dTrack.scrollLeft = 0;
+  const dDots = window.document.querySelectorAll('button.pshare-dot');
+  const dName = () => window.document.querySelector('.pshare-name').textContent;
+  const activeDot = () => Array.from(dDots).findIndex(d => d.classList.contains('on'));
+
+  ok('driver: .pshare-drag suspends snap in CSS',
+    /scroll-snap-type:\s*none/.test(cssRule('.pshare-track.pshare-drag')));
+
+  /* horizontal drag past the threshold: claims, drives, settles */
+  fireT(dTrack, 'touchstart', [pt(200, 100)], 0);
+  const claimMove = fireT(dTrack, 'touchmove', [pt(185, 102)], 16); // dx -15, dy 2
+  ok('driver: a clearly-horizontal move claims the gesture (preventDefault)',
+    claimMove.defaultPrevented === true);
+  ok('driver: claiming suspends snap (.pshare-drag on the track)',
+    dTrack.classList.contains('pshare-drag'));
+  ok('driver: the claimed drag drives scrollLeft from total travel',
+    dTrack.scrollLeft === 15);
+  fireT(dTrack, 'touchmove', [pt(10, 104)], 32); // dx -190
+  ok('driver: scrollLeft follows the finger', dTrack.scrollLeft === 190);
+  fireT(dTrack, 'touchend', [pt(10, 104)], 48);
+  ok('driver: touchend settles on the nearest slide via goTo',
+    !!dScrollArg && dScrollArg.left === 300);
+  ok('driver: settle syncs dots + name and restores snap',
+    activeDot() === 1 && dName() === 'Cover Story' && !dTrack.classList.contains('pshare-drag'));
+
+  /* a mostly-vertical drag never claims, even if it later turns horizontal */
+  dTrack.scrollLeft = 0;
+  fireT(dTrack, 'touchstart', [pt(100, 100)], 100);
+  const vMove = fireT(dTrack, 'touchmove', [pt(102, 150)], 116); // dy 50, dx 2
+  const vMove2 = fireT(dTrack, 'touchmove', [pt(30, 160)], 132); // dx now -70
+  ok('driver: a vertical-first drag is never claimed (no preventDefault)',
+    vMove.defaultPrevented === false && vMove2.defaultPrevented === false);
+  ok('driver: a stood-down drag leaves scrollLeft + snap alone',
+    dTrack.scrollLeft === 0 && !dTrack.classList.contains('pshare-drag'));
+  fireT(dTrack, 'touchend', [pt(30, 160)], 148);
+
+  /* a tap does nothing */
+  const dotBefore = activeDot();
+  fireT(dTrack, 'touchstart', [pt(100, 100)], 200);
+  fireT(dTrack, 'touchend', [pt(100, 100)], 260);
+  ok('driver: a tap changes no slide and never suspends snap',
+    activeDot() === dotBefore && dTrack.scrollLeft === 0 && !dTrack.classList.contains('pshare-drag'));
+
+  /* a second finger kills the gesture state; the next gesture starts clean */
+  fireT(dTrack, 'touchstart', [pt(200, 100), pt(220, 120)], 300);
+  const mtMove = fireT(dTrack, 'touchmove', [pt(150, 101)], 316);
+  ok('driver: a multi-touch start leaves no gesture to claim',
+    mtMove.defaultPrevented === false && dTrack.scrollLeft === 0 && !dTrack.classList.contains('pshare-drag'));
+  fireT(dTrack, 'touchend', [pt(150, 101)], 332);
+  fireT(dTrack, 'touchstart', [pt(200, 100)], 400);
+  fireT(dTrack, 'touchmove', [pt(150, 101)], 416); // dx -50
+  ok('driver: the next single-touch gesture claims and drives cleanly',
+    dTrack.scrollLeft === 50 && dTrack.classList.contains('pshare-drag'));
+  fireT(dTrack, 'touchend', [pt(150, 101)], 432);
+  ok('driver: state reset after the clean gesture (snap restored)',
+    !dTrack.classList.contains('pshare-drag') && activeDot() === 0);
+
+  /* scroll-sync: guarded during a driven drag, live for plain scrolls */
+  dTrack.scrollLeft = 600; // slide 2, not yet synced
+  dTrack.dispatchEvent(new window.Event('scroll'));
+  await sleep(100);
+  ok('driver: scroll-sync still syncs dots for a plain scroll',
+    activeDot() === 2 && dName() === 'Sticker Pack');
+  fireT(dTrack, 'touchstart', [pt(100, 100)], 500);
+  fireT(dTrack, 'touchmove', [pt(260, 102)], 516); // dx +160 -> scrollLeft 440 (slide-1 territory)
+  ok('driver: rightward drag drives scrollLeft back', dTrack.scrollLeft === 440);
+  dTrack.dispatchEvent(new window.Event('scroll'));
+  await sleep(100);
+  ok('driver: scroll-sync is guarded mid-drag (dots stay on slide 2)',
+    activeDot() === 2);
+  fireT(dTrack, 'touchend', [pt(260, 102)], 532);
+  ok('driver: touchend settle syncs dots to the landed slide',
+    activeDot() === 1 && dName() === 'Cover Story');
+
+  const ov2 = window.document.querySelector('.sheet-overlay');
+  if (ov2) ov2.remove();
+}
+
 /* ---------- v502 batch 1: sticker-pack geometry + density ----------
    A measuring context with realistic text widths (the shared fakeCtx
    measures everything as 10px, which proves nothing about layout). */

@@ -1004,8 +1004,59 @@ function openPortraitShareSheet() {
     if (active > 0) trackEl.scrollLeft = active * (trackEl.clientWidth || 0);
   });
 
+  /* v512: JS gesture driver for the carousel. v511's touch-action
+     claims weren't enough on Android — native arbitration still hands
+     diagonal swipes to the sheet's vertical scroller and the cards
+     never move. So the driver claims clearly-horizontal drags itself,
+     in wireSheetDrag's shape (js/150): undecided until ~10px of
+     travel, then either claims the horizontal axis and drives
+     scrollLeft directly, or stands down for the rest of the gesture
+     and lets the sheet scroll (even when the touch started on a
+     card). While a drag is driven, snap is suspended (.pshare-drag)
+     and the scroll-sync listener below stands aside — touchend
+     settles through goTo(), the one place dots/name/preference sync.
+     Touch only; mouse users keep the arrows and dots. */
+  let drvX = null, drvY = null, drvScroll = 0, drvAxis = ''; // '' | 'x' | 'y'
+  const drvReset = () => {
+    drvX = null; drvY = null; drvAxis = '';
+    trackEl.classList.remove('pshare-drag');
+  };
+  const drvSettle = () => {
+    const w = trackEl.clientWidth || 1;
+    const i = Math.max(0, Math.min(PS_STYLES.length - 1, Math.round(trackEl.scrollLeft / w)));
+    drvReset();
+    goTo(i);
+  };
+  trackEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { drvReset(); return; }
+    drvX = e.touches[0].clientX; drvY = e.touches[0].clientY;
+    drvScroll = trackEl.scrollLeft; drvAxis = '';
+    trackEl.classList.remove('pshare-drag');
+  }, { passive: true });
+  trackEl.addEventListener('touchmove', (e) => {
+    if (drvX == null) return;
+    if (e.touches.length !== 1) { drvSettle(); return; } // second finger: end the gesture cleanly
+    if (drvAxis === 'y') return; // stood down — the sheet owns this gesture
+    const dx = e.touches[0].clientX - drvX;
+    const dy = e.touches[0].clientY - drvY;
+    if (drvAxis === '') {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // not enough travel to call the axis
+      if (Math.abs(dy) > Math.abs(dx)) { drvAxis = 'y'; return; }
+      if (Math.abs(dx) === Math.abs(dy)) return; // perfectly diagonal: stay undecided
+      drvAxis = 'x';
+      trackEl.classList.add('pshare-drag'); // snap off while the finger drives
+    }
+    // Claimed: keep the sheet's vertical scroller out of this gesture
+    // and drive the track straight from the gesture's total travel.
+    if (e.cancelable) e.preventDefault();
+    trackEl.scrollLeft = drvScroll - dx;
+  }, { passive: false });
+  trackEl.addEventListener('touchend', () => { if (drvX != null) drvSettle(); }, { passive: true });
+  trackEl.addEventListener('touchcancel', () => { if (drvX != null) drvSettle(); }, { passive: true });
+
   let scrollTimer = null;
   trackEl.addEventListener('scroll', () => {
+    if (drvAxis === 'x') return; // a driven drag is in progress; it settles on touchend
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       const w = trackEl.clientWidth || 1;
