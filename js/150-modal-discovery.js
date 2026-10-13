@@ -582,7 +582,12 @@ function openPreviewModal(t, opts) {
     (opts.contextNote ? '<p class="note">' + esc(opts.contextNote) + '</p>' : '') +
     '</div>' +
     '<div class="d-primary-row"><button class="btn primary d-primary" id="p-tbr">＋ TBR</button>' +
-    '<button class="btn ghost" id="p-wish">' + icon('gift') + ' Wishlist</button></div>' +
+    '<button class="btn ghost" id="p-wish">' + icon('gift') + ' Wishlist</button>' +
+    // v528: an opt-in extra action for callers that have one (the
+    // friend-shelf buddy-read invitation, js/195/js/233). Absent
+    // unless opts.onBuddyRead is passed — every other caller renders
+    // exactly as before.
+    (opts.onBuddyRead ? '<button class="btn ghost" id="p-buddy">' + icon('friends') + ' Read together</button>' : '') + '</div>' +
     (why.length ? '<div class="why-chips">' + why.join('') + '</div>' : '') +
     '<div id="p-descread">' + descHTML() + '</div>' +
     '</div>' +
@@ -623,6 +628,18 @@ function openPreviewModal(t, opts) {
     if (btn) btn.outerHTML = '<p class="note" style="text-align:center">' + icon('gift') + ' In your wishlist</p>';
     track('preview_wishlist', { source: opts.source || 'preview' });
     toast('Added to wishlist 💝');
+  });
+
+  // v528: the opt-in buddy-read action (see the render above). The
+  // callback owns the RPC + toasts; here we just guard double taps
+  // and settle the button's label.
+  const pBuddy = document.getElementById('p-buddy');
+  if (pBuddy && opts.onBuddyRead) pBuddy.addEventListener('click', async () => {
+    pBuddy.disabled = true;
+    let okSent = false;
+    try { okSent = !!(await opts.onBuddyRead()); } catch (e) { okSent = false; }
+    if (okSent) { pBuddy.textContent = 'Invitation sent'; }
+    else { pBuddy.disabled = false; }
   });
 
   // Sparse rows (missing-by-author/series) carry no description — enrich
