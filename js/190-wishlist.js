@@ -1,8 +1,10 @@
 'use strict';
 
-/* ---- wishlist tab: books marked "to buy" ---- */
+/* ---- wishlist tab: the Wishlist shelf ----
+   v529: wishlist-ness is the status, never the owned facet (books
+   marked "to buy" on other shelves are not wishlist books). */
 function renderWishlist() {
-  const books = library.filter(b => b.owned === 'tobuy')
+  const books = library.filter(b => b.status === 'wishlist')
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')));
   // v113: announced books with a future release date surface first, by date.
   // v114: a release *today* counts too (daysUntil 0 is not falsy-safe).
@@ -18,7 +20,7 @@ function renderWishlist() {
   if (!books.length) {
     html += emptyState({
       icon: 'gift', title: 'Nothing on the wishlist… yet',
-      body: 'Open any book and choose <b>' + icon('tobuy') + ' To buy</b><br>under Ownership to add it here.',
+      body: 'Open any book and choose the <b>' + icon('gift') + ' Wishlist</b> shelf<br>to add it here — or add an upcoming release from Discover.',
       cta: { label: 'Discover books', go: 'discover' },
     });
   } else {

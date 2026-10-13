@@ -11,7 +11,12 @@ const STATUS = {
   tbr: 'To Be Read',
   reading: 'Currently Reading',
   read: 'Read',
-  dnf: 'Did Not Finish'
+  dnf: 'Did Not Finish',
+  // v529: the wishlist is a true shelf — a status of its own, not the
+  // owned === 'tobuy' facet it was until now. Wishlist-ness derives
+  // ONLY from this status; 'tobuy' survives purely as an ownership
+  // facet ("not in hand yet") on books of any shelf.
+  wishlist: 'Wishlist'
 };
 
 let view = 'library';

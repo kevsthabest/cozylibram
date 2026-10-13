@@ -664,7 +664,10 @@ function renderSettings() {
     }
     try {
       const priv = await circlePrivacy();
-      const shelves = ['tbr', 'reading', 'read', 'dnf'].filter(s => library.some(b => b.status === s));
+      // v529: shelves offered for hiding = the statuses the owner
+      // actually has books on, Wishlist included now that it's a
+      // status (was: facet books had no hide control at all here).
+      const shelves = Object.keys(STATUS).filter(s => library.some(b => b.status === s));
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
       wireCirclePrivacyPanel(box, priv, 'st');
       // v526: Blocked readers — my own block list lives under the same

@@ -603,6 +603,7 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
 .badge.status-reading { border-color: var(--info); color: var(--info); }
 .badge.status-read { border-color: var(--ok); color: var(--ok); }
 .badge.status-dnf { border-color: var(--danger); color: var(--danger); }
+.badge.status-wishlist { border-color: #d083c7; color: #d083c7; }
 .badge.spice { border-color: var(--accent); color: var(--accent); }
 
 .empty {
@@ -2210,6 +2211,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .bt-statusbar.status-reading { background: var(--info); }
 .bt-statusbar.status-read { background: var(--ok); }
 .bt-statusbar.status-dnf { background: var(--danger); }
+.bt-statusbar.status-wishlist { background: #d083c7; }
 .bt-statusbar .bt-fill { display: block; height: 100%; background: rgba(255, 255, 255, 0.85); }
 /* v188: read badge on grid tiles — the same gold seal as the favorite spines.
    v510: replaced by the status bookmark family (Variant A): a 28px dark

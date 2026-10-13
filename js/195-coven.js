@@ -714,7 +714,9 @@ function consumePendingInvite(code, friends) {
   });
 }
 function renderCovenMain(code, lists, priv) {
-  const shelves = ['tbr', 'reading', 'read', 'dnf'];
+  // v529: every status is a hideable shelf, Wishlist included — it is a
+  // real status key in hidden_shelves now, no pseudo-shelf machinery.
+  const shelves = Object.keys(STATUS);
   let html = '<div class="view-head" style="position:relative"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2>' +
     '<button id="cc-privacy-gear" aria-label="Privacy settings" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)">' + icon('gear') + '</button></div>' +
     '<p class="note" style="text-align:center">Your private reading ' + covenNameBare().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
@@ -829,7 +831,7 @@ function renderCovenFriendMain() {
   const f = circFriend;
   const prof = circProfiles[f.id];
   const counts = { all: circBooks.length };
-  ['tbr', 'reading', 'read', 'dnf'].forEach(s => { counts[s] = circBooks.filter(b => b.status === s).length; });
+  ['tbr', 'reading', 'read', 'dnf', 'wishlist'].forEach(s => { counts[s] = circBooks.filter(b => b.status === s).length; });
   const books = circShelf === 'all' ? circBooks : circBooks.filter(b => b.status === circShelf);
   const chip = (v, label) =>
     '<button class="chip' + (circShelf === v ? ' active' : '') + '" data-cf="' + v + '">' + label +
@@ -844,7 +846,11 @@ function renderCovenFriendMain() {
       (prof.bio ? '<p class="cf-bio">' + esc(prof.bio) + '</p>' : '') +
       (prof.fav_genres && prof.fav_genres.length
         ? '<div class="cf-genres">' + prof.fav_genres.map(g => '<span class="chip">' + esc(g) + '</span>').join('') + '</div>' : '') : '') +
-    '<div class="chips">' + chip('all', 'All') +
+    // v529: the gift shelf rides right after All (adapted from the
+    // superseded facet build) — as a plain status chip: the books
+    // policy + circle_book_visible already gate it by the owner's
+    // share_library / hidden_shelves, exactly like the other shelves.
+    '<div class="chips">' + chip('all', 'All') + chip('wishlist', STATUS.wishlist) +
     ['tbr', 'reading', 'read', 'dnf'].map(s => chip(s, STATUS[s])).join('') + '</div>';
   if (!circBooks.length) {
     html += '<div class="empty"><div class="big">' + icon('covers') + '</div>' +
