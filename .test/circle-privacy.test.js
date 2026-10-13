@@ -274,13 +274,19 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   // mirror (they must stay in agreement), and pin that the accepted-link
   // check still gates everything: a stranger gets false no matter how
   // many books the owner has.
+  // v526 note: the helper was superseded by migrations/v526_blocks.sql
+  // (a blocked-pair branch ahead of the link check; everything else
+  // carried over verbatim). The v522 migration is frozen as applied, so
+  // the agreement pin now targets the NEWEST migration defining the
+  // helper — the live definition must not drift between it and
+  // schema.sql. The shape pins below hold for the v526 body unchanged.
   const fnBody = (sql) => {
     const i = sql.indexOf('create or replace function public.circle_book_visible');
     if (i < 0) return '';
     const j = sql.indexOf('$$;', i);
     return j < 0 ? '' : sql.slice(i, j + 3);
   };
-  const migBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v522_circle_projection.sql'), 'utf8'));
+  const migBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v526_blocks.sql'), 'utf8'));
   const schemaBody = fnBody(fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8'));
   ok('sql: helper defined in migration and schema mirror', migBody.length > 0 && schemaBody.length > 0);
   ok('sql: migration and schema.sql helper definitions agree',
