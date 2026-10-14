@@ -251,6 +251,25 @@ const readerOrders = ['r1', 'r2', 'r3', 'r4', 'r5'].map(k =>
   JSON.stringify(run("psStickerPaths('velvet', '" + k + "', '2026-10')")));
 ok('different readers get different rotations', new Set(readerOrders).size > 1);
 
+/* ---------- sticker pool == disk inventory for irregular sheets (#213) ----
+   Four shipped sheets are numbered non-contiguously (retired numbers).
+   psStickerPaths must consume js/105's stickerSheetNumbers — the same
+   inventory truth as the avatar picker — never enumerate 1..count, or
+   the rotation picks phantom files and never reaches real stickers
+   past the gaps. */
+for (const theme of ['briarthrone', 'light', 'midnight', 'wisp']) {
+  const pool = new Set(run("psStickerPaths('" + theme + "', 'r', '2026-10')"));
+  const disk = new Set(fs.readdirSync(path.join(__dirname, '..', 'assets/stickers/cut-webp', theme))
+    .filter(f => f.endsWith('.webp'))
+    .map(f => 'assets/stickers/cut-webp/' + theme + '/' + f));
+  ok('psStickerPaths(' + theme + ') pool == disk inventory (irregular sheet numbering)',
+    pool.size === disk.size && Array.from(disk).every(p => pool.has(p)));
+}
+ok('no phantom briarthrone b-04 in the share pool',
+  !run("psStickerPaths('briarthrone', 'r', '2026-10')").some(p => p.includes('briarthrone-b-04')));
+ok('briarthrone b-21 (past the naive count range) is in the share pool',
+  run("psStickerPaths('briarthrone', 'r', '2026-10')").some(p => p.includes('briarthrone-b-21.webp')));
+
 /* ---------- renderer smoke tests: 3 styles x 2 theme classes ---------- */
 const richBooks = [];
 for (let i = 0; i < 12; i++) {
