@@ -199,6 +199,12 @@ function applyRoamedViewState() {
 // v524 adds a fifth section, privacy (column privacy_state): the age
 // band + content shield object from js/230-privacy.js, warning-style
 // { _at, value }. See the privacy block below.
+//
+// v536 adds a sixth section, milestone (column milestone_state): the
+// pinned milestone id, warning-style { _at, value }. v537 adds a
+// seventh, prefs (column prefs_state): the analytics opt-out and the
+// reading-log remove-entry visibility keys, release-style
+// { _at, values }. See their blocks below.
 /* ---------------- roaming privacy state (v524) ---------------- */
 // The fifth section: age band + content shield (js/230-privacy.js), in
 // its own column (privacy_state, supabase/migrations/
@@ -259,8 +265,50 @@ function userStateApplyMilestonePin(payload) {
   } catch (e) {}
 }
 
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone'];
+/* ---------------- roaming device prefs (v537) ---------------- */
+// The seventh section: two keys that lived only in per-device
+// localStorage but are account preferences, not device ones — the
+// analytics opt-out (spicyshelves.analytics, js/065) and the reading-
+// log "Remove today's entry" visibility (spicyshelves.logremove,
+// js/040 read, js/180 write). Opting out on one device left the other
+// still emitting (audit finding; Decision: both roam). Own column
+// (prefs_state, supabase/migrations/v537_user_state_prefs.sql),
+// payload { _at, values } — release-style: values maps each key to
+// its raw localStorage string, and a key absent from a newer snapshot
+// is removed locally (full-snapshot semantics within the section,
+// exactly like release). They are NOT settings keys: the v518 list
+// stays frozen, and a full-snapshot settings apply from an older
+// client must never be able to delete an opt-out.
+//
+// Both keys are read live from localStorage at point of use
+// (analyticsEnabled() on every track/flush; the log-remove read on
+// every log render), so apply writing localStorage IS the live apply
+// — no restyle hook needed, same as the release pieces. And because
+// the live read is local, an opt-out set on this device is honoured
+// from boot, before any pull runs.
+const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove'];
+function userStateCollectPrefs() {
+  const values = {};
+  try {
+    for (const k of PREFS_STATE_KEYS) {
+      const v = localStorage.getItem(k);
+      if (v != null) values[k] = v;
+    }
+  } catch (e) {}
+  return { values };
+}
+function userStateApplyPrefs(payload) {
+  try {
+    const incoming = (payload && payload.values && typeof payload.values === 'object') ? payload.values : {};
+    for (const k of PREFS_STATE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(incoming, k)) localStorage.setItem(k, String(incoming[k]));
+      else localStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
+
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state', prefs: 'prefs_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone', 'prefs'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -456,6 +504,7 @@ const USER_STATE_SECTION_FNS = {
   shelf: { collect: userStateCollectShelf, apply: userStateApplyShelf },
   privacy: { collect: userStateCollectPrivacy, apply: userStateApplyPrivacy },
   milestone: { collect: userStateCollectMilestonePin, apply: userStateApplyMilestonePin },
+  prefs: { collect: userStateCollectPrefs, apply: userStateApplyPrefs },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
@@ -476,7 +525,7 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     const meta = userStateMeta(uid);
     let changed = false;
