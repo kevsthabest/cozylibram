@@ -473,7 +473,7 @@ async function cloudWipe() {
   if (error) toast('Cloud wipe failed: ' + error.message);
 }
 
-async function cloudSignUp(email, password, firstName, lastName, ageBand) {
+async function cloudSignUp(email, password, firstName, lastName, ageBand, handle) {
   const sb = await cloudClient().catch(() => null);
   if (!sb) { toast('Cloud sync is not configured — add it to server-config.json on your home PC'); return; }
   const meta = {};
@@ -483,6 +483,12 @@ async function cloudSignUp(email, password, firstName, lastName, ageBand) {
   // names; enterApp adopts it into user_state exactly once (the band
   // itself never lives in profiles — see js/230-privacy.js).
   if (ageBand === 'teen' || ageBand === 'adult') meta.age_band = ageBand;
+  // v551: the required signup handle rides along the same way. It is
+  // NOT claimed here — claim_handle needs an authenticated session
+  // and a profiles row — enterApp claims it on the first sign-in
+  // (claimSignupHandle, js/237). Callers without a handle (the
+  // Settings create-account shortcut) simply omit it.
+  if (handle) meta.handle = handle;
   const { data, error } = await sb.auth.signUp({ email: email, password: password, options: { data: meta } });
   if (error) { toast('Sign up failed: ' + error.message); return; }
   // v118: remember the signup so the next enterApp can log account_created

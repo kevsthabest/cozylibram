@@ -76,6 +76,12 @@ function handleScreenHit(text, mode) {
   return null;
 }
 
+/* Is a screen hit one of the reserved terms? (The editor and the
+   signup form word reserved hits apart from slur hits.) */
+function handleHitIsReserved(hit) {
+  return HANDLE_SCREEN_RESERVED.indexOf(hit) !== -1;
+}
+
 /* The profile save's pre-check (the server trigger is the backstop):
    returns 'firstName' | 'lastName' | 'bio' | null. */
 function profileContentScreenHit(p) {
@@ -438,6 +444,72 @@ function openHandleReportSheet(handle) {
       toast('Couldn’t send that report — that handle is no longer available.');
     }
   });
+}
+
+/* ---------- the signup handle: the deferred claim (v551) ----------
+   Since v551 the Create-account form REQUIRES the handle (User
+   directive: Name, Email and handle). The claim itself cannot happen
+   there — claim_handle needs an authenticated session and a profiles
+   row, and email confirmation means the form usually runs signed-out —
+   so the chosen handle rides user_metadata (meta.handle, js/090)
+   exactly like the signup names, and enterApp calls this helper once
+   the first session's profile load has completed.
+
+   The invariant that makes a stale stash harmless: this helper only
+   ever claims into an EMPTY profile handle. Once profile.handle is
+   set — by this helper, by the Profile editor, or by another device —
+   the stash is dead and never fires. The per-session flag below only
+   bounds repeat attempts within one session; clearing the stash is
+   best-effort (updateUser can fail offline) and is NOT load-bearing. */
+let signupHandleClaimFor = null;
+
+async function clearSignupHandleStash() {
+  try {
+    const sb = await cloudClient().catch(() => null);
+    if (sb && sb.auth && typeof sb.auth.updateUser === 'function') {
+      await sb.auth.updateUser({ data: { handle: '' } });
+    }
+  } catch (e) { /* tolerated — see the invariant above */ }
+  try { if (cloudUser && cloudUser.user_metadata) cloudUser.user_metadata.handle = ''; } catch (e) {}
+}
+
+async function claimSignupHandle(user) {
+  if (!user || !user.id) return;
+  if (signupHandleClaimFor === user.id) return; // once per user per session
+  const md = user.user_metadata || {};
+  const stash = cleanHandleInput(md.handle || '');
+  if (!stash) { signupHandleClaimFor = user.id; return; }
+  if ((loadProfile().handle || '') !== '') { signupHandleClaimFor = user.id; return; }
+  signupHandleClaimFor = user.id; // set BEFORE the await: never loops
+  if (!handleFormatValid(stash)) {
+    // A malformed stash can only arrive from an older/other client —
+    // it can never claim; drop it quietly rather than nag.
+    await clearSignupHandleStash();
+    return;
+  }
+  const res = await claimHandleRpc(stash);
+  if (res && res.ok) {
+    const p = loadProfile();
+    p.handle = res.handle || stash;
+    saveProfile(p); // no updatedAt stamp — the handle never rides the profile sync (see js/105)
+    await clearSignupHandleStash();
+    toast('Your handle @' + p.handle + ' is yours');
+    return;
+  }
+  if (res && ['taken', 'quarantined', 'screened', 'reserved', 'cooldown', 'invalid'].indexOf(res.error) !== -1) {
+    // A typed refusal is final for this stash: clear it, say honestly
+    // what happened, and put the reader in the Profile editor to pick
+    // another — the claim race they lost was real (account created,
+    // email confirmed, handle gone in the meantime).
+    await clearSignupHandleStash();
+    toast(res.error === 'taken'
+      ? 'The handle @' + stash + ' was just taken — pick yours in Profile.'
+      : handleClaimErrorMessage(res) + ' Pick yours in Profile.');
+    if (typeof go === 'function') go('profile');
+    return;
+  }
+  // 'unsupported' (a pre-v550 database) or a transient failure: leave
+  // the stash in place — a later session can complete the claim.
 }
 
 /* ---------- friend card: "formerly @…" ---------- */

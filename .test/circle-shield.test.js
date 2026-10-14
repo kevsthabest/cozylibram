@@ -300,6 +300,7 @@ const NOW = new Date().toISOString();
   ok('signup states the 13+ floor', (window.document.querySelector('.gate-card') || {}).textContent.indexOf('13 and up') !== -1);
   const setField = (id, v) => { window.document.getElementById(id).value = v; };
   setField('gs-first', 'New'); setField('gs-last', 'Reader');
+  setField('gs-handle', 'new_reader'); // v551: the handle is a required signup field
   setField('gs-email', 'new@x.y'); setField('gs-pass', 'secret1'); setField('gs-pass2', 'secret1');
   window.document.getElementById('gs-create').click(); await tick(2);
   ok('signup requires an age-group choice', (window.document.getElementById('gs-status') || {}).textContent.indexOf('age group') !== -1 && !stub.signUpArgs);

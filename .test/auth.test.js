@@ -97,6 +97,7 @@ const lsBooks = (k) => { try { return JSON.parse(lsGet(k)) || []; } catch (e) { 
   ok('sign-in fields hidden on the signup form', !q('#gate-signin'));
   q('#gs-first').value = 'Wifey';
   q('#gs-last').value = 'Reader';
+  q('#gs-handle').value = 'wifey_reads'; // v551: the handle is a required signup field
   q('#gs-email').value = 'new@example.com';
   q('#gs-pass').value = 'secret12';
   q('#gs-pass2').value = 'mismatch';
