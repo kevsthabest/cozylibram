@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -87,6 +87,7 @@ function clearState() {
         'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
         'cozylibram.warningPrefs.v1',
         'cozylibram.privacy.v1',
+        'spicyshelves.analytics', 'spicyshelves.logremove',
         'shelfViewMode',
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
@@ -141,9 +142,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v536',
-    /APP_VERSION = 'v536'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v536"));
+  ok('version pairing is v537',
+    /APP_VERSION = 'v537'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v537"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -185,6 +186,15 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v536 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql536) && !/alter table (public\.)?profiles/.test(sql536));
 
+  /* ---------- v537 prefs migration shape ---------- */
+  const sql537Path = path.join(ROOT, 'supabase/migrations/v537_user_state_prefs.sql');
+  ok('v537 migration file exists', fs.existsSync(sql537Path));
+  const sql537 = fs.readFileSync(sql537Path, 'utf8');
+  ok('v537 adds prefs_state jsonb with {} default',
+    /add column if not exists prefs_state jsonb not null default '\{\}'::jsonb/.test(sql537));
+  ok('v537 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql537) && !/alter table (public\.)?profiles/.test(sql537));
+
   /* ---------- v536 milestone pin section: collect/apply ---------- */
   clearState();
   ok('milestone pin collect is null when unset',
@@ -204,6 +214,39 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
   ok('settings key list stays frozen (no milestone key in USER_STATE_KEYS)',
     !window.__probeKeys.includes('cozylibram.milestonePin.v1'));
+
+  /* ---------- v537 device-prefs section: collect/apply ---------- */
+  clearState();
+  ok('prefs collect is empty when neither key is set',
+    JSON.stringify(window.userStateCollectPrefs()) === '{"values":{}}');
+  ls.setItem('spicyshelves.analytics', '0');
+  ls.setItem('spicyshelves.logremove', 'on');
+  ok('prefs collect reads both device keys',
+    window.userStateCollectPrefs().values['spicyshelves.analytics'] === '0' &&
+    window.userStateCollectPrefs().values['spicyshelves.logremove'] === 'on');
+  window.userStateApplyPrefs({ values: { 'spicyshelves.analytics': '1', 'spicyshelves.logremove': 'off' } });
+  ok('prefs apply writes both keys',
+    ls.getItem('spicyshelves.analytics') === '1' && ls.getItem('spicyshelves.logremove') === 'off');
+  window.userStateApplyPrefs({ values: { 'spicyshelves.analytics': '0' } });
+  ok('prefs apply is full-snapshot: a key absent from the snapshot is removed',
+    ls.getItem('spicyshelves.analytics') === '0' && ls.getItem('spicyshelves.logremove') === null);
+  window.userStateApplyPrefs({ values: null });
+  ok('prefs apply with a malformed payload clears both keys (never throws)',
+    ls.getItem('spicyshelves.analytics') === null && ls.getItem('spicyshelves.logremove') === null);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (neither prefs key joins USER_STATE_KEYS)',
+    !window.__probeKeys.includes('spicyshelves.analytics') &&
+    !window.__probeKeys.includes('spicyshelves.logremove'));
+  ok('settings snapshot never collects the prefs keys',
+    !('spicyshelves.analytics' in window.userStateCollect()) &&
+    !('spicyshelves.logremove' in window.userStateCollect()));
+  // Local-first: an opt-out already on the device is the live read at
+  // boot, with no pull having run (analyticsEnabled reads localStorage).
+  ls.setItem('spicyshelves.analytics', '0');
+  ok('local opt-out is honoured from the local read (no sync needed)',
+    window.eval('analyticsEnabled()') === false);
+  ls.removeItem('spicyshelves.analytics');
+  ok('no local opt-out reads as enabled (default)', window.eval('analyticsEnabled()') === true);
 
   /* ---------- collect: scope is exact ---------- */
   clearState();
@@ -707,6 +750,63 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     pushS4 === true && !!rowS4.settings && rowS4.settings.values.theme === 'dark' &&
     !('shelf_state' in rowS4) &&
     canon(probeShelfDoc()) === canon(orderDoc1));
+
+  /* ---------- v537: prefs seed, adopt, toggle-push ---------- */
+  const fakeP = makeFake();
+  window.__sbStub = fakeP;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  // Device 1: the reader opts out (js/180's toggle writes via
+  // setAnalyticsEnabled, js/065) and shows the log-remove entry button.
+  runInWindow('setAnalyticsEnabled(false);');
+  ls.setItem('spicyshelves.logremove', 'on');
+  await window.userStatePull();
+  const prefsSeeded = await window.userStatePush();
+  const prefsRow = fakeP.rows.get('user-1') || {};
+  ok('prefs seed into their own column (analytics opt-out + logremove)',
+    prefsSeeded === true && !!prefsRow.prefs_state && prefsRow.prefs_state._at > 0 &&
+    prefsRow.prefs_state.values['spicyshelves.analytics'] === '0' &&
+    prefsRow.prefs_state.values['spicyshelves.logremove'] === 'on');
+  // Device 2: fresh local state adopts the opt-out, and it applies live.
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ok('second device starts with analytics enabled (no local opt-out)',
+    window.eval('analyticsEnabled()') === true);
+  await window.userStatePull();
+  ok('prefs adopt on a second device (the opt-out roams)',
+    ls.getItem('spicyshelves.analytics') === '0' && ls.getItem('spicyshelves.logremove') === 'on');
+  ok('adopted opt-out applies live (analyticsEnabled flips, no reload)',
+    window.eval('analyticsEnabled()') === false);
+  const prefsNoop = await window.userStatePush();
+  ok('adopted prefs are hash-stable (no push-back)', prefsNoop === false);
+  // Toggling back on this device pushes the new value via the section.
+  runInWindow('setAnalyticsEnabled(true);');
+  const prefsToggled = await window.userStatePush();
+  ok('opting back in pushes through the prefs section',
+    prefsToggled === true &&
+    (fakeP.rows.get('user-1') || {}).prefs_state.values['spicyshelves.analytics'] === '1');
+
+  /* ---------- v537: pre-migration database fails open for prefs ---------- */
+  const fakeP2 = makeFake();
+  fakeP2.missingColumns = true;
+  window.__sbStub = fakeP2;
+  clearState();
+  setUser('user-1');
+  setQueue('user-1', []);
+  ls.setItem('theme', 'dark');
+  runInWindow('setAnalyticsEnabled(false);');
+  let threwP = false, pullP = null;
+  try { pullP = await window.userStatePull(); } catch (e) { threwP = true; }
+  ok('missing prefs column: pull fails open, local opt-out untouched',
+    !threwP && pullP === false && ls.getItem('spicyshelves.analytics') === '0');
+  const pushP = await window.userStatePush();
+  const rowP = fakeP2.rows.get('user-1') || {};
+  ok('missing prefs column: settings still push; prefs simply stay local',
+    pushP === true && !!rowP.settings && !('prefs_state' in rowP) &&
+    window.eval('analyticsEnabled()') === false);
+  runInWindow('setAnalyticsEnabled(true);');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

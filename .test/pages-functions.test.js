@@ -1,5 +1,6 @@
 // Pages Functions tests: /config.js, /cover-proxy, /api/hardcover, /api/gbooks.
 // The function files are ESM; load them with dynamic import.
+const fs = require('fs');
 const path = require('path');
 
 let pass = 0, fail = 0;
@@ -10,7 +11,6 @@ const configPayload = async (res) =>
 async function main() {
   const configFn = await import(path.resolve(__dirname, '../functions/config.js.js'));
   const proxyFn = await import(path.resolve(__dirname, '../functions/cover-proxy.js'));
-  const ccFn = await import(path.resolve(__dirname, '../functions/api/cache-cover.js'));
   const hcFn = await import(path.resolve(__dirname, '../functions/api/hardcover.js'));
   const gbFn = await import(path.resolve(__dirname, '../functions/api/gbooks/[[path]].js'));
   const ruFn = await import(path.resolve(__dirname, '../functions/_lib/require-user.js'));
@@ -175,153 +175,6 @@ async function main() {
 
   globalThis.fetch = realFetch;
 
-  // ---- /api/cache-cover (v216: canonical cover cache) ----
-  const IMG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
-  const BIG = new Uint8Array(5 * 1024 * 1024);
-  const storageCalls = [];
-  const fetchedUpstream = []; // v216 follow-up: records upstream fetch URLs to prove the http→https upgrade
-  let storageMode = 'ok'; // 'ok' | 'duplicate'
-  globalThis.fetch = async (url, init) => {
-    const u = String(url);
-    if (u === AUTH_URL) return authMock(init); // v225: sign-in gate
-    if (u === 'https://covers.openlibrary.org/b/id/1-L.jpg') {
-      return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
-    }
-    if (u === 'https://img.hardcover.app/abc123.jpg') {
-      return new Response(IMG, { headers: { 'Content-Type': 'image/jpeg' } });
-    }
-    if (u === 'https://assets.hardcover.app/abc123.jpg') {
-      return new Response(IMG, { headers: { 'Content-Type': 'image/jpeg' } });
-    }
-    if (u.startsWith('https://books.google.com/')) {
-      fetchedUpstream.push(u);
-      return new Response(IMG, { headers: { 'Content-Type': 'image/png' } });
-    }
-    if (u === 'https://covers.openlibrary.org/b/id/big.jpg') {
-      return new Response(BIG, { headers: { 'Content-Type': 'image/jpeg' } });
-    }
-    if (u === 'https://covers.openlibrary.org/b/id/notimage') {
-      return new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } });
-    }
-    if (u.startsWith('https://x.supabase.co/storage/v1/object/covers/')) {
-      storageCalls.push({ url: u, headers: init.headers });
-      if (storageMode === 'duplicate') {
-        return new Response(JSON.stringify({
-          statusCode: '400', error: 'Duplicate', message: 'The resource already exists',
-        }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({}), { status: 200 });
-    }
-    throw new Error('network down');
-  };
-  const ccEnv = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'svc1' };
-  const ccReq = (body, method) => ({
-    env: ccEnv,
-    request: new Request('https://app.test/api/cache-cover', Object.assign(
-      { method: method || 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' } },
-      (method || 'POST') === 'GET' ? {} : {
-        body: body === undefined
-          ? JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' })
-          : body,
-      })),
-  });
-  const ccGet = await ccFn.onRequest(ccReq(undefined, 'GET'));
-  ok('cc: GET rejected (405)', ccGet.status === 405);
-  // v225: the sign-in gate.
-  const ccNoAuth = await ccFn.onRequest({
-    env: ccEnv,
-    request: new Request('https://app.test/api/cache-cover', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' }),
-    }),
-  });
-  ok('cc: missing auth header -> 401', ccNoAuth.status === 401);
-  const ccBadTok = await ccFn.onRequest({
-    env: ccEnv,
-    request: new Request('https://app.test/api/cache-cover', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer bad-token' },
-      body: JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/1-L.jpg' }),
-    }),
-  });
-  ok('cc: invalid session token -> 401', ccBadTok.status === 401);
-  const ccNoEnv = await ccFn.onRequest({
-    env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' },
-    request: new Request('https://app.test/api/cache-cover', {
-      method: 'POST', headers: { 'Authorization': 'Bearer good-token' },
-    }),
-  });
-  ok('cc: missing service key -> 503', ccNoEnv.status === 503);
-  const ccHttp = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.test/x.jpg' })));
-  ok('cc: http url -> 400', ccHttp.status === 400);
-  // v216 follow-up: allowlisted http hosts are upgraded to https, non-allowlisted http still rejected
-  const ccHttpGb = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://books.google.com/books/content?id=abc&printsec=frontcover&img=1' })));
-  const ccHttpGbBody = await ccHttpGb.json();
-  ok('cc: allowlisted http upgraded to https (200)', ccHttpGb.status === 200);
-  ok('cc: upgraded fetch went out over https',
-    fetchedUpstream.length === 1 && fetchedUpstream[0].startsWith('https://books.google.com/'));
-  ok('cc: upgraded url returns the canonical bucket URL',
-    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.png$/.test(ccHttpGbBody.coverUrl || ''));
-  const ccHttpEvil = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'http://evil.example.com/x.jpg' })));
-  ok('cc: non-allowlisted http still rejected (400)', ccHttpEvil.status === 400);
-  storageCalls.length = 0; // the upgrade test above uploaded once; reset for the x-upsert assertions below
-  const ccBadBody = await ccFn.onRequest({
-    env: ccEnv,
-    request: new Request('https://app.test/api/cache-cover', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer good-token' }, body: 'not json{',
-    }),
-  });
-  ok('cc: unparseable body -> 400', ccBadBody.status === 400);
-  const ccEvil = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://169.254.169.254/x.jpg' })));
-  ok('cc: unlisted host rejected (SSRF, 403)', ccEvil.status === 403);
-  const ccEvil2 = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://evil.example.com/x.jpg' })));
-  ok('cc: unknown host rejected (403)', ccEvil2.status === 403);
-
-  const ccOk = await ccFn.onRequest(ccReq());
-  const ccBody = await ccOk.json();
-  ok('cc: 200 on success', ccOk.status === 200);
-  ok('cc: returns the public bucket URL',
-    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.png$/.test(ccBody.coverUrl));
-  ok('cc: upload used x-upsert false (dedup by construction)',
-    storageCalls.length === 1 && storageCalls[0].headers['x-upsert'] === 'false');
-  ok('cc: service key attached server-side, never echoed in the response',
-    storageCalls[0].headers['Authorization'] === 'Bearer svc1' &&
-    storageCalls[0].headers['apikey'] === 'svc1' &&
-    JSON.stringify(ccBody).indexOf('svc1') === -1);
-
-  // same bytes -> same object key (content-addressed)
-  const ccOk2 = await ccFn.onRequest(ccReq());
-  const ccBody2 = await ccOk2.json();
-  ok('cc: same bytes map to the same canonical URL (dedup)',
-    ccOk2.status === 200 && ccBody2.coverUrl === ccBody.coverUrl);
-
-  // duplicate-object error from Storage is the dedup hit, not a failure
-  storageMode = 'duplicate';
-  const ccDup = await ccFn.onRequest(ccReq());
-  const ccDupBody = await ccDup.json();
-  ok('cc: duplicate upload still 200s with the canonical URL',
-    ccDup.status === 200 && ccDupBody.coverUrl === ccBody.coverUrl);
-  storageMode = 'ok';
-
-  const ccNotImg = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/notimage' })));
-  ok('cc: non-image content-type -> 502', ccNotImg.status === 502);
-  const ccBig = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://covers.openlibrary.org/b/id/big.jpg' })));
-  ok('cc: over-4MB image -> 502', ccBig.status === 502);
-
-  // Cover-storage PR A: img.hardcover.app parity with cover-proxy (v504) —
-  // Hardcover cover URLs (doc.image.url) point at this CDN, so the picker
-  // path must pass cache-cover's host gate too.
-  const ccHcImg = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://img.hardcover.app/abc123.jpg' })));
-  const ccHcImgBody = await ccHcImg.json();
-  ok('cc: img.hardcover.app passes the host gate (200)', ccHcImg.status === 200);
-  ok('cc: img.hardcover.app returns the canonical bucket URL',
-    /^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/covers\/[0-9a-f]{64}\.jpg$/.test(ccHcImgBody.coverUrl || ''));
-  const ccHcSub = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://evil.hardcover.app/x.jpg' })));
-  ok('cc: other hardcover.app subdomains still rejected (exact-match allowlist)', ccHcSub.status === 403);
-  // v518: assets.hardcover.app is where Hardcover cover URLs point now —
-  // the adoption gate must accept it (it always did; pinned alongside the
-  // cover-proxy fix for the same host).
-  const ccHcAssets = await ccFn.onRequest(ccReq(JSON.stringify({ url: 'https://assets.hardcover.app/abc123.jpg' })));
-  ok('cc: assets.hardcover.app passes the host gate (200)', ccHcAssets.status === 200);
   // ---- functions/_lib/require-user (v225) ----
   // Reuse the hardcover fetch mock shape: auth URL answers from the token.
   globalThis.fetch = async (url, init) => {
@@ -655,8 +508,8 @@ async function main() {
   const evil = await prox('https://169.254.169.254/latest/meta-data');
   ok('proxy: unlisted host rejected (SSRF)', evil.status === 403);
   // v518: assets.hardcover.app is where Hardcover cover URLs point now —
-  // it was on cache-cover's list but missing here, so spine-colour
-  // sampling 403'd and silently fell back to the palette colour.
+  // it was on the adoption endpoint's list but missing here, so spine-
+  // colour sampling 403'd and silently fell back to the palette colour.
   const hcAssets = await prox('https://assets.hardcover.app/abc123.jpg');
   ok('proxy: 200 for assets.hardcover.app (current Hardcover cover CDN)', hcAssets.status === 200);
   ok('proxy: assets.hardcover.app returns the image', (hcAssets.headers.get('Content-Type') || '').startsWith('image/'));
@@ -679,10 +532,12 @@ async function main() {
   globalThis.fetch = realFetch;
 
   // ---- cover-host allowlist parity (v518) ----
-  // cover-proxy and cache-cover both import their host sets from
-  // functions/_lib/cover-hosts.js, so drift is impossible by construction;
-  // these pins fail loudly if a future edit changes the shared membership
-  // or the per-endpoint composition.
+  // cover-proxy imports its host set from functions/_lib/cover-hosts.js,
+  // so drift is impossible by construction; these pins fail loudly if a
+  // future edit changes the shared membership or the proxy composition.
+  // (v537: the /api/cache-cover endpoint is deleted — the trusted union
+  // export stays pinned here because the ToY snapshot allowlist pins
+  // against the same arrays; see .test/social-thought-of-you.test.js.)
   const hostsFn = await import(path.resolve(__dirname, '../functions/_lib/cover-hosts.js'));
   const sortedJoin = (s) => [...s].sort().join(',');
   const SHARED_HOSTS = ['archive.org', 'assets.hardcover.app', 'books.google.com',
@@ -692,13 +547,17 @@ async function main() {
     sortedJoin(hostsFn.COVER_HOSTS_SHARED) === SHARED_HOSTS.join(','));
   ok('hosts: proxy set = shared + hardcover.app (proxy-only)',
     sortedJoin(hostsFn.COVER_PROXY_HOSTS) === [...SHARED_HOSTS, 'hardcover.app'].sort().join(','));
-  ok('hosts: cache-cover set = shared + Goodreads/Apple adoption hosts',
+  ok('hosts: trusted union = shared + Goodreads/Apple adoption hosts',
     sortedJoin(hostsFn.CACHE_COVER_HOSTS) === [...SHARED_HOSTS, 'i.gr-assets.com',
       'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
       'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com'].sort().join(','));
-  ok('hosts: every shared host is in both endpoint sets',
+  ok('hosts: every shared host is in the proxy set and the trusted union',
     [...hostsFn.COVER_HOSTS_SHARED].every((h) =>
       hostsFn.COVER_PROXY_HOSTS.has(h) && hostsFn.CACHE_COVER_HOSTS.has(h)));
+  ok('v537: the /api/cache-cover endpoint file is gone',
+    !fs.existsSync(path.resolve(__dirname, '../functions/api/cache-cover.js')));
+  ok('v537: the backfill-covers script (its only caller) is gone',
+    !fs.existsSync(path.resolve(__dirname, '../scripts/backfill-covers.js')));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

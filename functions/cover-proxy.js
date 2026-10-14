@@ -8,8 +8,9 @@
 // allowlist (tight allowlist replaces server.py's DNS-based SSRF check —
 // a non-listed host can never be fetched, so private/loopback targets
 // are unreachable by construction). The allowlist lives in
-// functions/_lib/cover-hosts.js, shared with /api/cache-cover so the two
-// endpoints' host sets cannot diverge (they did twice: v504, v518).
+// functions/_lib/cover-hosts.js — a single source of truth since the
+// endpoints' private copies diverged twice (v504, v518). (The other
+// consumer, /api/cache-cover, was removed in v537.)
 
 import { rateLimit } from './_lib/rate-limit.js';
 import { COVER_PROXY_HOSTS as ALLOWED_HOSTS } from './_lib/cover-hosts.js';

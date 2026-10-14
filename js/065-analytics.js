@@ -101,7 +101,12 @@ const PROP_VALUES = {
   // books reach the wishlist after being added elsewhere — so it is omitted.
   source: ['search', 'isbn', 'barcode', 'isbn_list', 'goodreads', 'storygraph',
            'hardcover', 'bookmory', 'manual', 'recommendation', 'discovery'],
-  axis: ['spice', 'scare', 'suspense', 'adventure'],
+  // v537 (audit #15, second half): all 11 axes from RATING_AXES
+  // (js/020-ratings.js) — the enum previously named only the first
+  // four the author happened to list, so rating_axis_used silently
+  // dropped its axis prop for the other seven.
+  axis: ['spice', 'darkness', 'feels', 'humor', 'scare', 'suspense',
+         'adventure', 'insight', 'readability', 'depth', 'practical'],
   from: ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
   to:   ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
   // Preview kinds are fixed internal constants (150-modal-discovery.js:326);

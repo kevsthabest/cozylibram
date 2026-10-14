@@ -113,6 +113,22 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
   runInWindow(`trackBookSaveDiff({ status: 'reading' }, { status: 'dnf' })`);
   ok('dnf tracked', names().includes('book_dnf'));
 
+  // 10b. v537 (audit #15, second half): rating_axis_used keeps its axis
+  // prop for ALL 11 rating axes — PROP_VALUES.axis named only four, so
+  // the other seven axes' props were silently dropped. The canonical
+  // list is RATING_AXES (js/020-ratings.js); pin the enum against it.
+  runInWindow(`localStorage.clear(); analyticsQueue = null;`);
+  const AXES11 = runInWindow(`RATING_AXES.map(a => a.key)`);
+  ok('the rating system has exactly 11 axes', AXES11.length === 11);
+  for (const a of AXES11) runInWindow(`track('rating_axis_used', { axis: '${a}' })`);
+  const axisProps = runInWindow(`(JSON.parse(localStorage.getItem('${qkey('u1')}') || '[]')).map(e => e.properties.axis || null)`);
+  ok('rating_axis_used survives with its axis prop for every one of the 11 axes',
+    JSON.stringify(axisProps) === JSON.stringify(AXES11));
+  runInWindow(`track('rating_axis_used', { axis: 'bogus' })`);
+  const bogusEv = runInWindow(`(JSON.parse(localStorage.getItem('${qkey('u1')}') || '[]')).pop()`);
+  ok('an unknown axis still drops its prop (the enum stays closed)',
+    !!bogusEv && bogusEv.event_name === 'rating_axis_used' && !('axis' in bogusEv.properties));
+
   // 11. Batching: 55 events upload as 50 + 5.
   runInWindow(`localStorage.clear(); analyticsQueue = null; window.__aFake.inserted = [];`);
   runInWindow(`for (let i = 0; i < 55; i++) track('book_opened');`);
