@@ -10,6 +10,7 @@
 const AVATAR_SETS = [
   { key: 'classics', name: 'Libram Classics' },
   { key: 'stormrider', name: 'Stormrider' },
+  { key: 'voidsignal', name: 'Voidsignal' },
 ];
 const DEFAULT_AVATARS = [
   { id: 'rose', label: 'Dark Rose', src: 'img/avatars/avatar-rose.webp', set: 'classics' },
@@ -27,6 +28,16 @@ const DEFAULT_AVATARS = [
   { id: 'parapet', label: 'Parapet at Dusk', src: 'img/avatars/avatar-parapet.webp', set: 'stormrider', premium: true },
   { id: 'ring', label: 'Signet Ring', src: 'img/avatars/avatar-ring.webp', set: 'stormrider', premium: true },
   { id: 'tabby', label: "Rider's Tabby", src: 'img/avatars/avatar-tabby.webp', set: 'stormrider', premium: true },
+  // v544: Voidsignal — original Darknet-inspired art, inspired-by only
+  // (network webs, AR overlays, circuits, cornfields — no space imagery).
+  { id: 'darknet', label: 'Darknet Web', src: 'img/avatars/avatar-darknet.webp', set: 'voidsignal', premium: true },
+  { id: 'visor', label: 'AR Visor', src: 'img/avatars/avatar-visor.webp', set: 'voidsignal', premium: true },
+  { id: 'daemon', label: 'Daemon Sigil', src: 'img/avatars/avatar-daemon.webp', set: 'voidsignal', premium: true },
+  { id: 'cornsignal', label: 'Cornfield Signal', src: 'img/avatars/avatar-cornsignal.webp', set: 'voidsignal', premium: true },
+  { id: 'drone', label: 'Drone', src: 'img/avatars/avatar-drone.webp', set: 'voidsignal', premium: true },
+  { id: 'circuitkey', label: 'Circuit Key', src: 'img/avatars/avatar-circuitkey.webp', set: 'voidsignal', premium: true },
+  { id: 'strands', label: 'Data Strands', src: 'img/avatars/avatar-strands.webp', set: 'voidsignal', premium: true },
+  { id: 'silo', label: 'Silo Broadcast', src: 'img/avatars/avatar-silo.webp', set: 'voidsignal', premium: true },
 ];
 
 // Profile storage: one slot per user id ('offline' when not signed in).
