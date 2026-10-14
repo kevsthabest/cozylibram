@@ -1248,6 +1248,9 @@ function renderDetailModal(b, viaBook) {
     '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button></div>' +
     descHTML('m-desc-hero', 'd-hero-desc') +
     '</div>' +
+    // v541: "Reading it too" presence slot (js/235 fills it async;
+    // stays empty unless a circle friend is visibly reading this).
+    '<div id="m-rittoo"></div>' +
     // v468: Book Portrait card — pinned under the hero, above the tabs.
     (typeof portraitCardHTML === 'function' ? portraitCardHTML(b) : '') +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
@@ -1765,6 +1768,9 @@ function renderDetailModal(b, viaBook) {
     btn.addEventListener('click', () => loadCharsTabForBook(b)));
   // v337: load memorable quotes for the Details tab
   loadQuotesForBook(b);
+  // v541: shared-reading presence (js/235) — fills #m-rittoo when a
+  // circle friend is visibly reading this book; silent otherwise.
+  if (typeof fillReadingItToo === 'function') fillReadingItToo(b);
   document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));

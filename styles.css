@@ -1916,6 +1916,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   font-size: 12.5px; color: var(--accent); }
 .buddy-done:empty { display: none; }
 .buddy-done .ticon { width: 14px; height: 14px; }
+/* v541: "Reading it too" presence — avatars + names in the same
+   quiet register as the reaction chips; the slot itself renders
+   nothing when nobody qualifies (no placeholder, no empty state). */
+#m-rittoo:empty { display: none; }
+.rit-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px 0; }
+.rit-avatars { display: inline-flex; flex-wrap: wrap; gap: 4px; flex: 0 0 auto; }
+.c-avatar.rit-avatar { width: 28px; height: 28px; font-size: 12px; }
+.rit-text { font-size: 13.5px; color: var(--muted); }
+.rit-line { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .toy-friends { display: flex; flex-wrap: wrap; gap: 8px; }
 .toy-friend { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--card2);
