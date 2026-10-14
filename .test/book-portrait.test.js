@@ -112,5 +112,111 @@ p226.localStorage.setItem('cozylibram.dnaSurveyOff', '0');
 // re-read with prior survey + thin portrait → eligible
 ok('eligible: re-read thin portrait', eligible(Object.assign({ readCount: 2, dnaSurveyCompletedOnce: true }, readBook)) === true);
 
-console.log('\n' + _pass + ' passed, ' + _fail + ' failed');
-process.exit(_fail ? 1 : 0);
+// ---- v547: portraitEnhance — decided merge precedence + async char path ----
+// Precedence (User's call, 2026-10-14): community-accepted first, pipeline
+// second, user's own third; the first source to claim a trope owns its slot
+// AND its provenance label. Drives the real portraitEnhance through its
+// window export with cloud / CharacterStore / document stubbed.
+const ROOT547 = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+function jeq(name, a, b) {
+  ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.stringify(b) + ')',
+    JSON.stringify(a) === JSON.stringify(b));
+}
+
+function runEnhance547(book, opts) {
+  opts = opts || {};
+  const els = {};
+  ['portraitCard', 'ptChars', 'ptTropes', 'ptPct', 'ptWarns'].forEach(function (id) {
+    els[id] = { innerHTML: '', textContent: '', dataset: {}, isConnected: true };
+  });
+  els.portraitCard.dataset.book = book.id || '';
+  const taxNames = opts.taxNames || {};
+  const sb = {
+    from: function () {
+      return { select: function () { return { eq: function () { return { eq: function () {
+        return Promise.resolve({ data: opts.communityRows || [] });
+      } }; } }; } };
+    },
+  };
+  const sbx = loadJS(ROOT547 + '/js/225-book-portrait.js', {
+    esc: s => String(s == null ? '' : s), icon: () => '', bookGenres: () => [],
+    library: [book],
+    document: {
+      getElementById: id => els[id] || null,
+      addEventListener: () => {},
+      querySelector: () => null,
+    },
+    cloudClient: async () => sb,
+    bookKeyFor: b => 'key-' + (b.id || ''),
+    TropeTaxonomy: {
+      byId: id => (taxNames[id] ? { name: taxNames[id] } : null),
+      resolveId: name => {
+        for (const k in taxNames) if (taxNames[k] === name) return k;
+        return undefined;
+      },
+    },
+    resolveWork: async b => 'w-' + (b.id || ''),
+    CharacterStore: { listForWork: async wid => (opts.charRows || {})[wid] || [] },
+  });
+  return sbx.window.portraitEnhance(book).then(() => ({ card: els.portraitCard, els }));
+}
+
+(async function () {
+  // -- merge precedence: overlaps across all three sources --
+  // 'Shared Trope': community + user (case variant). 'Dual Source':
+  // pipeline + user (case variant). Community rows include a duplicate.
+  const book1 = {
+    id: 'pm1', status: 'read',
+    tropes: ['shared trope', 'dual source', 'User Only'],
+    tropesAI: ['Dual Source', 'Pipeline Pick'],
+  };
+  const r1 = await runEnhance547(book1, {
+    communityRows: [{ trope_id: 't-shared' }, { trope_id: 't-gem' }, { trope_id: 't-gem' }],
+    taxNames: { 't-shared': 'Shared Trope', 't-gem': 'Community Gem' },
+  });
+  const merged = r1.card._ptTropes || [];
+  jeq('merge: exact order (community -> pipeline -> user)',
+    merged.map(t => t.name),
+    ['Shared Trope', 'Community Gem', 'Dual Source', 'Pipeline Pick', 'User Only']);
+  jeq('merge: provenance follows precedence',
+    merged.map(t => t.source),
+    ['community', 'community', 'auto', 'auto', 'you']);
+  eq('merge: deduped to 5', merged.length, 5);
+
+  // -- async character path: 0 characters --
+  const bookC0 = { id: 'pc0', status: 'read', tropes: ['x'], tropesAI: [] };
+  const r0 = await runEnhance547(bookC0, { charRows: { 'w-pc0': [] } });
+  ok('chars 0: invite shown', r0.els.ptChars.innerHTML.indexOf('No characters recorded') !== -1);
+  eq('chars 0: _ptChars.count', r0.card._ptChars.count, 0);
+  eq('chars 0: pct gets no char credit', r0.els.ptPct.textContent, '30% mapped');
+
+  // -- async character path: 2 characters, role weight orders the top --
+  const bookC2 = { id: 'pc2', status: 'read', tropes: ['x'], tropesAI: [] };
+  const r2 = await runEnhance547(bookC2, { charRows: { 'w-pc2': [
+    { name: 'Ana', role: 'supporting' }, { name: 'Zed', role: 'protagonist' },
+  ] } });
+  eq('chars 2: count', r2.card._ptChars.count, 2);
+  jeq('chars 2: top by role weight', r2.card._ptChars.top.map(c => c.name), ['Zed', 'Ana']);
+  ok('chars 2: chips rendered, no overflow', r2.els.ptChars.innerHTML.indexOf('Zed') !== -1 &&
+    !/>\+\d</.test(r2.els.ptChars.innerHTML));
+  eq('chars 2: pct gets +25 char credit', r2.els.ptPct.textContent, '55% mapped');
+
+  // -- async character path: 5 characters, +N overflow --
+  const bookC5 = { id: 'pc5', status: 'read', tropes: ['x'], tropesAI: [] };
+  const r5 = await runEnhance547(bookC5, { charRows: { 'w-pc5': [
+    { name: 'M1', role: 'minor' }, { name: 'P1', role: 'protagonist' },
+    { name: 'S1', role: 'supporting' }, { name: 'M2', role: 'minor' },
+    { name: 'S2', role: 'supporting' },
+  ] } });
+  eq('chars 5: count', r5.card._ptChars.count, 5);
+  jeq('chars 5: top 2 by role weight', r5.card._ptChars.top.map(c => c.name), ['P1', 'S1']);
+  ok('chars 5: overflow +3 chip', r5.els.ptChars.innerHTML.indexOf('+3') !== -1);
+  eq('chars 5: pct gets +25 char credit', r5.els.ptPct.textContent, '55% mapped');
+})().then(function () {
+  console.log('\n' + _pass + ' passed, ' + _fail + ' failed');
+  process.exit(_fail ? 1 : 0);
+}, function (e) {
+  console.log('FAIL - v547 async section threw: ' + (e && e.stack || e));
+  console.log('\n' + _pass + ' passed, ' + (_fail + 1) + ' failed');
+  process.exit(1);
+});
