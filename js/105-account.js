@@ -64,6 +64,7 @@ function loadProfile() {
     ? p.favGenres.map(g => String(g || '').trim()).filter(Boolean).slice(0, 8) : [];
   if (p.avatar && typeof p.avatar === 'object') {
     if (p.avatar.type === 'default' && DEFAULT_AVATARS.some(a => a.id === p.avatar.id)) base.avatar = { type: 'default', id: p.avatar.id };
+    else if (p.avatar.type === 'sticker' && stickerAvatarValid(p.avatar.id)) base.avatar = { type: 'sticker', id: p.avatar.id };
     else if (p.avatar.type === 'upload' && p.avatar.dataUrl) base.avatar = { type: 'upload', dataUrl: p.avatar.dataUrl };
   }
   return base;
@@ -156,7 +157,7 @@ async function pushCloudProfile(p) {
       user_id: cloudUser.id,
       first_name: p.firstName || '',
       last_name: p.lastName || '',
-      avatar_id: p.avatar.type === 'default' ? p.avatar.id : '',
+      avatar_id: cloudAvatarId(p),
       avatar_path: cloudPath,
       updated_at: new Date(p.updatedAt || Date.now()).toISOString()
     });
@@ -175,8 +176,80 @@ async function pushCloudProfile(p) {
     if (up.error) throw up.error;
   } catch (e) { /* offline — local copy is the source of truth */ }
 }
+/* ---- sticker avatars (v546): the Reader Portrait sticker library
+   (js/228's PS_STICKER_SETS catalog) doubles as profile pictures.
+   Persistence rides the same profiles.avatar_id text column as catalog
+   avatars, under a namespaced id — 'stk:<theme-dir>/<file-stem>', e.g.
+   'stk:velvet/velvet-a-01' — so a sticker id can never collide with a
+   present or future catalog id (bare slugs: no prefix, no slash), and it
+   resolves to its file with no lookup table. Unknown or stale ids fall
+   back to the initial avatar exactly like bogus catalog ids. ---- */
+const STICKER_AVATAR_PREFIX = 'stk:';
+function stickerCatalog() {
+  // js/228 loads after js/105; every real call site runs post-boot, and
+  // the typeof guard keeps the first renderTopbar (end of this file,
+  // before js/228 executes) safe — a sticker avatar just shows its
+  // initial for that one paint and resolves on the next render.
+  try { return (typeof PS_STICKER_SETS !== 'undefined' && PS_STICKER_SETS) ? PS_STICKER_SETS : null; }
+  catch (e) { return null; }
+}
+function parseStickerAvatarId(id) {
+  if (typeof id !== 'string' || id.indexOf(STICKER_AVATAR_PREFIX) !== 0) return null;
+  const m = /^([a-z0-9-]+)\/([a-z0-9-]+)-([ab])-(\d{2})$/.exec(id.slice(STICKER_AVATAR_PREFIX.length));
+  if (!m || m[2] !== m[1]) return null; // the file stem repeats its theme dir
+  return { theme: m[1], sheet: m[3], num: parseInt(m[4], 10), stem: m[2] + '-' + m[3] + '-' + m[4] };
+}
+/* Four shipped sheets are NOT numbered contiguously (some numbers were
+   retired when the sets were cut): the catalog counts are right, the
+   ranges are not. These explicit lists are the inventory truth for
+   those sheets; every other sheet is contiguous 01..count. The
+   sticker-avatars suite pins registry == disk inventory, so a future
+   re-cut that changes the numbering fails loudly here. (The portrait
+   picker in js/228 still enumerates by count — see the v546 PR note.) */
+const STICKER_SHEET_NUMBERS = {
+  'briarthrone/b': [1, 2, 3, 5, 10, 11, 13, 14, 15, 18, 19, 20, 21],
+  'light/a': [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  'midnight/b': [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13],
+  'wisp/b': [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+};
+function stickerSheetNumbers(theme, sheet) {
+  const explicit = STICKER_SHEET_NUMBERS[theme + '/' + sheet];
+  if (explicit) return explicit;
+  const cat = stickerCatalog();
+  if (!cat || !cat[theme]) return [];
+  const n = cat[theme][sheet === 'a' ? 0 : 1] || 0;
+  const out = [];
+  for (let i = 1; i <= n; i++) out.push(i);
+  return out;
+}
+function stickerAvatarValid(id) {
+  const parts = parseStickerAvatarId(id);
+  if (!parts || parts.num < 1) return false;
+  const cat = stickerCatalog();
+  if (!cat) return true; // catalog not loaded yet — rendering re-validates
+  if (!cat[parts.theme]) return false;
+  return stickerSheetNumbers(parts.theme, parts.sheet).indexOf(parts.num) !== -1;
+}
+function stickerAvatarPath(parts) {
+  return 'assets/stickers/cut-webp/' + parts.theme + '/' + parts.stem + '.webp';
+}
+function stickerAvatarSrc(id) {
+  if (!stickerAvatarValid(id)) return null;
+  if (!stickerCatalog()) return null; // unresolved until js/228 lands; initial shows meanwhile
+  return stickerAvatarPath(parseStickerAvatarId(id));
+}
 function themedOrLetterAvatar(id) {
-  return DEFAULT_AVATARS.some(a => a.id === id) ? { type: 'default', id: id } : { type: 'letter' };
+  if (id && DEFAULT_AVATARS.some(a => a.id === id)) return { type: 'default', id: id };
+  if (id && stickerAvatarValid(id)) return { type: 'sticker', id: id };
+  return { type: 'letter' };
+}
+/* Pure: the profiles.avatar_id value for a profile — the catalog id for
+   painted avatars, the namespaced 'stk:' id for stickers, '' otherwise
+   (uploads live in avatar_path; initials store nothing). */
+function cloudAvatarId(p) {
+  if (!p || !p.avatar) return '';
+  if (p.avatar.type === 'default' || p.avatar.type === 'sticker') return p.avatar.id || '';
+  return '';
 }
 // Adopt the photo a winning cloud row points at (download once, keep local).
 async function adoptCloudPhoto(sb, p, row) {
@@ -245,6 +318,7 @@ function avatarSrc(p) {
     const a = DEFAULT_AVATARS.find(x => x.id === p.avatar.id);
     if (a) return a.src;
   }
+  if (p.avatar.type === 'sticker') return stickerAvatarSrc(p.avatar.id);
   return null;
 }
 function avatarLetter(p) {
@@ -255,8 +329,33 @@ function avatarLetter(p) {
 }
 function avatarHTML(p, cls) {
   const src = avatarSrc(p);
-  if (src) return '<img class="' + cls + '" src="' + esc(src) + '" alt="Profile picture">';
+  if (src) {
+    // v546: sticker avatars carry .avatar-stk (contain rendering on the
+    // disc, styles.css) plus the owner's initial for the load-failure
+    // fallback below.
+    if (p.avatar.type === 'sticker') {
+      return '<img class="' + cls + ' avatar-stk" src="' + esc(src) + '" data-letter="' + esc(avatarLetter(p)) + '" alt="Profile picture">';
+    }
+    return '<img class="' + cls + '" src="' + esc(src) + '" alt="Profile picture">';
+  }
   return '<span class="' + cls + ' letter">' + esc(avatarLetter(p)) + '</span>';
+}
+/* v546: a sticker avatar that can't be fetched (offline, or evicted from
+   the count-capped runtime sticker cache) degrades to the initial —
+   never a broken-image glyph. One capture-phase listener covers every
+   surface avatarHTML renders; data-cav (js/195's friend marker) rides
+   along so photo upgrades still find the node. */
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('error', (e) => {
+    const t = e && e.target;
+    if (!t || t.tagName !== 'IMG' || !t.classList || !t.classList.contains('avatar-stk')) return;
+    const span = document.createElement('span');
+    span.className = (t.className || '').replace('avatar-stk', '').trim() + ' letter';
+    span.textContent = t.getAttribute('data-letter') || '•';
+    const cav = t.getAttribute('data-cav');
+    if (cav) span.setAttribute('data-cav', cav);
+    if (t.parentNode) t.parentNode.replaceChild(span, t);
+  }, true);
 }
 const signedIn = () => !!(cloudUser && cloudUser.email);
 
@@ -353,32 +452,13 @@ function renderProfile() {
   const p = loadProfile();
   const bandNow = (typeof privacyState === 'function') ? privacyState().band : null;
   const email = (cloudUser && cloudUser.email) || '';
-  const pickSel = (id) => (p.avatar.type === 'default' && p.avatar.id === id) ? ' sel' : '';
   setView(
     '<div class="view-head"><button class="btn ghost sm" id="pf-back">← Back</button>' +
     '<h2 class="serif">Profile</h2></div>' +
     '<div class="pf-card">' +
       '<div class="pf-avatar-row">' + avatarHTML(p, 'pf-avatar') +
       '<div><button class="btn ghost sm" id="pf-change">Change picture</button>' +
-      '<p class="note" style="margin:6px 0 0">Pick a themed avatar or upload your own.</p></div></div>' +
-      '<div id="pf-picker" class="pf-picker" hidden>' +
-        // v542: picker is grouped by avatar set (AVATAR_SETS order); the
-        // upload / initial tiles trail the sets as their own quiet row.
-        AVATAR_SETS.map(s =>
-          '<div class="pf-set-label">' + esc(s.name) + '</div>' +
-          '<div class="pf-grid">' +
-          DEFAULT_AVATARS.filter(a => a.set === s.key).map(a =>
-            '<button class="pf-pick' + pickSel(a.id) + '" data-av="' + a.id + '" title="' + esc(a.label) + '" aria-label="' + esc(a.label) + '">' +
-            '<img src="' + a.src + '" alt="' + esc(a.label) + '"></button>').join('') +
-          '</div>').join('') +
-        '<div class="pf-grid" style="margin-top:10px">' +
-        '<button class="pf-pick' + (p.avatar.type === 'upload' ? ' sel' : '') + '" data-av="__upload" title="Upload your own" aria-label="Upload your own">' +
-          '<span class="pf-upload">' + icon('camera') + '</span></button>' +
-        '<button class="pf-pick' + (p.avatar.type === 'letter' ? ' sel' : '') + '" data-av="__letter" title="Just my initial" aria-label="Just my initial">' +
-          '<span class="pf-letter">' + esc(avatarLetter(p)) + '</span></button>' +
-        '</div>' +
-        '<input type="file" id="pf-file" accept="image/*" hidden>' +
-      '</div>' +
+      '<p class="note" style="margin:6px 0 0">Painted avatars, stickers, or your own photo — try them on first.</p></div></div>' +
       '<div class="field"><label>First name</label>' +
       '<input id="pf-first" class="text-input" value="' + esc(p.firstName) + '" autocomplete="given-name" maxlength="40"></div>' +
       '<div class="field"><label>Last name</label>' +
@@ -410,34 +490,9 @@ function renderProfile() {
     '</div>'
   );
   document.getElementById('pf-back').addEventListener('click', () => go('library'));
-  const picker = document.getElementById('pf-picker');
+  // v546: the picker is the Collections + Fitting Room sheet (js/236).
   document.getElementById('pf-change').addEventListener('click', () => {
-    picker.hidden = !picker.hidden;
-  });
-  const applyAvatar = (av, msg) => {
-    const np = loadProfile();
-    np.avatar = av;
-    if (av.type === 'upload') np.avatarCloudPath = ''; // new photo → re-upload
-    touchProfile(np);
-    pushCloudProfile(np);
-    renderTopbar();
-    renderProfile();
-    if (msg) toast(msg);
-  };
-  picker.querySelectorAll('[data-av]').forEach(b =>
-    b.addEventListener('click', () => {
-      const id = b.dataset.av;
-      if (id === '__letter') applyAvatar({ type: 'letter' }, 'Avatar cleared ✨');
-      else if (id === '__upload') document.getElementById('pf-file').click();
-      else applyAvatar({ type: 'default', id: id }, 'Avatar updated ✨');
-    }));
-  document.getElementById('pf-file').addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    try {
-      const dataUrl = await fileToAvatarDataURL(f);
-      applyAvatar({ type: 'upload', dataUrl: dataUrl }, 'Photo uploaded ✨');
-    } catch (err) { toast('Could not use that photo — try a JPG or PNG.'); }
+    if (typeof openAvatarPicker === 'function') openAvatarPicker();
   });
   document.getElementById('pf-save').addEventListener('click', () => {
     const np = loadProfile();

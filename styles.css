@@ -445,6 +445,190 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
   background: linear-gradient(135deg, var(--accent), var(--gold));
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
 }
+/* v546: sticker avatars render CONTAIN on the disc (die-cut art on
+   transparency — never cover-cropped). Element+class (0,1,1) beats the
+   plain-class object-fit:cover on .menu-avatar-img/.st-avatar/.c-avatar/
+   .pf-avatar. If the sticker fails to load, js/105 swaps the img for the
+   letter span, so no surface ever shows a broken image. */
+img.avatar-stk {
+  object-fit: contain; padding: 9%;
+  background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
+}
+/* v546: picture picker sheet (js/236) — Variant B, Collections +
+   Fitting Room. Modeled on .cover-picker; the sheet is the scroller. */
+.apk-backdrop {
+  position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.55);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.apk-sheet {
+  background: var(--bg2); border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 20px 20px 0 0; width: min(560px, 100%); max-height: 62vh;
+  overflow-y: auto; overscroll-behavior: contain; position: relative;
+  padding: 0 16px 20px;
+}
+.apk-sheet.tall { max-height: 88vh; }
+.apk-top {
+  position: sticky; top: 0; z-index: 3; background: var(--bg2);
+  margin: 0 -16px; padding: 0 16px 8px;
+}
+.apk-handle { display: flex; justify-content: center; padding: 8px 0 2px; }
+.apk-handle i { width: 40px; height: 5px; border-radius: 3px; background: var(--line); }
+.apk-head { display: flex; align-items: center; gap: 8px; }
+.apk-iconbtn {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink); cursor: pointer; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.apk-ttl { flex: 1; min-width: 0; }
+.apk-ttl b { display: block; font-size: 17px; }
+.apk-ttl small {
+  display: block; color: var(--faint); font-size: 11.5px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.apk-curdisc {
+  width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--accent);
+  overflow: hidden; flex: 0 0 auto; background: var(--card2);
+}
+.apk-disc {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
+  font-weight: 700; color: #fff;
+}
+.apk-disc img { width: 100%; height: 100%; display: block; }
+.apk-disc.letter { background: linear-gradient(135deg, var(--accent), var(--gold)); }
+.apk-sec {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--faint); margin: 16px 0 8px;
+}
+.apk-motifs {
+  display: flex; gap: 14px; overflow-x: auto; padding: 2px 2px 6px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.apk-motifs::-webkit-scrollbar { display: none; }
+.apk-motif {
+  background: none; border: 0; color: var(--soft); cursor: pointer; padding: 0;
+  font-family: inherit; font-size: 11px; display: flex; flex-direction: column;
+  align-items: center; gap: 5px; flex: 0 0 auto;
+}
+.apk-motif-disc {
+  width: 56px; height: 56px; border-radius: 50%; overflow: hidden;
+  border: 1px solid var(--line); display: block;
+  background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
+}
+.apk-motif-disc img { width: 100%; height: 100%; object-fit: contain; padding: 11%; display: block; }
+.apk-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.apk-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  padding: 12px; cursor: pointer; text-align: left; font-family: inherit;
+  color: var(--ink); display: flex; align-items: center; gap: 12px; width: 100%;
+}
+.apk-card.wide { margin-bottom: 2px; }
+.apk-card.allthemes { border-style: dashed; align-items: center; }
+.apk-card-hero {
+  width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  background: var(--card2); display: block;
+}
+.apk-card-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apk-card-hero.stk {
+  background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
+}
+.apk-card-hero.stk img { object-fit: contain; padding: 9%; }
+.apk-card-meta { flex: 1; min-width: 0; }
+.apk-card-meta b { display: block; font-size: 14.5px; }
+.apk-card-meta small { display: block; color: var(--faint); font-size: 11.5px; margin-top: 2px; }
+.apk-yours-icons { display: flex; align-items: center; flex: 0 0 auto; }
+.apk-yours-up {
+  width: 44px; height: 44px; border-radius: 50%; background: var(--card2);
+  border: 1.5px dashed var(--faint); display: inline-flex; align-items: center;
+  justify-content: center; font-size: 19px;
+}
+.apk-yours-letter {
+  width: 44px; height: 44px; border-radius: 50%; margin-left: -10px;
+  background: linear-gradient(135deg, var(--accent), var(--gold)); color: #fff;
+  font-weight: 700; font-size: 18px; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--card);
+}
+.apk-stage.apk-enter { animation: apkIn .22s ease both; }
+@keyframes apkIn { from { opacity: .35; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.apk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 6px; }
+.apk-tile {
+  aspect-ratio: 1; border-radius: 50%; padding: 0; cursor: pointer; position: relative;
+  border: 2px solid transparent; background: var(--card2); font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.apk-tile.stk { background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%); }
+.apk-tile img { width: 100%; height: 100%; border-radius: 50%; display: block; }
+.apk-tile .apk-ring {
+  position: absolute; inset: -2px; border-radius: 50%; pointer-events: none;
+}
+.apk-tile.sel .apk-ring { border: 2.5px solid var(--accent); }
+.apk-tile .apk-ck {
+  position: absolute; right: -2px; top: -2px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 11px; font-weight: 800;
+  display: none; align-items: center; justify-content: center; border: 2px solid var(--bg2);
+}
+.apk-tile.sel .apk-ck { display: flex; }
+.apk-tile.try .apk-ring { border: 2.5px solid var(--gold); }
+.apk-tile .apk-up-ic { font-size: 26px; }
+.apk-tile .apk-letter-disc {
+  width: 100%; height: 100%; border-radius: 50%; color: #fff; font-weight: 700;
+  font-size: 26px; text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  display: flex; align-items: center; justify-content: center;
+}
+.apk-hint { color: var(--faint); font-size: 12px; margin: 12px 2px 0; }
+.apk-trows { display: flex; flex-direction: column; margin-top: 4px; }
+.apk-trow {
+  display: flex; align-items: center; gap: 12px; padding: 9px 2px; cursor: pointer;
+  background: none; border: 0; border-bottom: 1px solid var(--line);
+  font-family: inherit; color: var(--ink); text-align: left; width: 100%;
+}
+.apk-trow-hero {
+  width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
+}
+.apk-trow-hero img { width: 100%; height: 100%; object-fit: contain; padding: 9%; display: block; }
+.apk-trow-meta { flex: 1; min-width: 0; }
+.apk-trow-meta b { display: block; font-size: 14.5px; }
+.apk-trow-meta small { display: block; color: var(--faint); font-size: 11.5px; }
+.apk-trow-chev { color: var(--faint); font-size: 20px; }
+/* The fitting room pins to the sheet's footprint (the sheet is
+   bottom-anchored, same width/centering) rather than sticky-in-flow:
+   sticky as a direct child of the tall scroller lets it scroll away
+   under a long grid. While the sheet is drag-transformed, the fixed
+   bar's containing block becomes the sheet, so it follows the drag. */
+.apk-fitting {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: min(560px, 100%); z-index: 5;
+  padding: 12px 16px 16px;
+  background: var(--card); border-top: 1px solid var(--line);
+  border-radius: 16px 16px 0 0; box-shadow: 0 -10px 24px rgba(0,0,0,.28);
+  display: none;
+}
+.apk-sheet.fit-open { padding-bottom: 176px; }
+.apk-fitting.open { display: block; animation: apkUp .2s ease both; }
+@keyframes apkUp { from { transform: translate(-50%, 10px); opacity: .4; } to { transform: translate(-50%, 0); opacity: 1; } }
+.apk-fit-row { display: flex; gap: 14px; align-items: center; }
+.apk-fit-big {
+  width: 68px; height: 68px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  border: 2px solid var(--gold); background: var(--card2);
+  font-size: 26px;
+}
+.apk-fit-meta { flex: 1; min-width: 0; }
+.apk-fit-name { font-weight: 700; font-size: 15px; }
+.apk-fit-sub { color: var(--faint); font-size: 11.5px; margin-top: 1px; }
+.apk-sizes { display: flex; gap: 16px; margin-top: 8px; }
+.apk-sizes figure { margin: 0; text-align: center; }
+.apk-sizes figcaption { font-size: 10px; color: var(--faint); margin-top: 3px; }
+.apk-discwrap {
+  border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
+  background: var(--card2); margin: 0 auto; font-size: 12px;
+}
+.apk-discwrap.s30 { width: 30px; height: 30px; }
+.apk-discwrap.s38 { width: 38px; height: 38px; font-size: 15px; }
+.apk-fit-btns { display: flex; gap: 8px; margin-top: 12px; }
 
 /* ---------- views ---------- */
 #view { max-width: 560px; margin: 0 auto; padding: 6px 14px 24px; }

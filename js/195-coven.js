@@ -594,6 +594,9 @@ function circAvatarHTML(profile, cls) {
   const p = { avatar: { type: 'letter' }, firstName: profile.first_name, lastName: profile.last_name };
   if (profile.avatar_id && DEFAULT_AVATARS.some(a => a.id === profile.avatar_id)) {
     p.avatar = { type: 'default', id: profile.avatar_id };
+  } else if (profile.avatar_id && stickerAvatarValid(profile.avatar_id)) {
+    // v546: a friend's sticker avatar (namespaced 'stk:' id in avatar_id).
+    p.avatar = { type: 'sticker', id: profile.avatar_id };
   } else if (profile._photoUrl) {
     p.avatar = { type: 'upload', dataUrl: profile._photoUrl };
   }
