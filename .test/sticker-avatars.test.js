@@ -138,6 +138,18 @@ const lsGet = (k) => { try { return window.localStorage.getItem(k); } catch (e) 
   const css = fs.readFileSync(path.join(APP_DIR, 'styles.css'), 'utf8');
   ok('styles.css pins img.avatar-stk to object-fit: contain',
     /img\.avatar-stk\s*\{[^}]*object-fit:\s*contain/.test(css));
+  // v548: the Settings account card renders avatarHTML(prof,
+  // 'st-avatar-card') — the class MUST carry its own bounded disc rule,
+  // or the <img> renders at natural size (full card width).
+  const cardRule = /\.st-avatar-card\s*\{([^}]*)\}/.exec(css);
+  const cardW = cardRule && /width:\s*(\d+)px/.exec(cardRule[1]);
+  const cardH = cardRule && /height:\s*(\d+)px/.exec(cardRule[1]);
+  ok('styles.css bounds .st-avatar-card to a disc of at most 96px',
+    !!cardRule && !!cardW && !!cardH &&
+    +cardW[1] <= 96 && +cardH[1] <= 96 && cardW[1] === cardH[1] &&
+    /border-radius:\s*50%/.test(cardRule[1]) && /object-fit:\s*cover/.test(cardRule[1]));
+  ok('styles.css gives .st-avatar-card.letter a centred letter treatment',
+    /\.st-avatar-card\.letter\s*\{[^}]*justify-content:\s*center/.test(css));
   const friend = probe("circAvatarHTML({ user_id: 'u9', first_name: 'Pal', last_name: '', avatar_id: 'stk:velvet/velvet-a-01' }, 'c-avatar')");
   ok('a friend sticker avatar renders through circAvatarHTML',
     friend.includes('avatar-stk') && friend.includes('assets/stickers/cut-webp/velvet/velvet-a-01.webp'));
