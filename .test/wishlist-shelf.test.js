@@ -214,8 +214,11 @@ ok('TBR roulette pool excludes the Wishlist shelf by status',
   const panel = probe(`circlePrivacyPanelHTML({ share: true, hidden: ['wishlist'], bio: true, activity: false, recos: true, buddy: true }, 'st', Object.keys(STATUS))`);
   ok('privacy panel offers Wishlist as a hideable shelf, active when hidden',
     panel.includes('data-shelf="wishlist"') && /data-shelf="wishlist"/.test(panel) && panel.includes('>Wishlist</button>'));
-  ok('settings + coven derive hideable shelves from STATUS (wishlist included by construction)',
-    /Object\.keys\(STATUS\)\.filter/.test(read('js/180-settings.js')) &&
+  // v534: this pin used to assert the settings-side presence FILTER
+  // (Object.keys(STATUS).filter(...)) — the exact shape of the
+  // unhide-empty-shelf trap. Both surfaces now derive the full list.
+  ok('settings + coven derive hideable shelves from STATUS (full list, wishlist included)',
+    /const shelves = Object\.keys\(STATUS\);/.test(read('js/180-settings.js')) &&
     /const shelves = Object\.keys\(STATUS\);/.test(read('js/195-coven.js')));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

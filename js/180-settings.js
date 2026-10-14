@@ -426,7 +426,10 @@ function renderSettings() {
   var htmlLedger =
     '<div class="stat-row">' +
     '<div class="stat"><div class="n">' + esc(formatMoney(listTotal)) + '</div><div class="l">Est. value</div></div>' +
-    (ledgerCount ? '<div class="stat"><div class="n">' + esc(formatMoney(ledgerTotal)) + '</div><div class="l">Total spent</div></div>' : '') +
+    // v534: Total spent renders unconditionally again (pre-v476
+    // behavior) — making it conditional on a priced book existing
+    // silently dropped the line from the ledger entirely.
+    '<div class="stat"><div class="n">' + esc(formatMoney(ledgerTotal)) + '</div><div class="l">Total spent</div></div>' +
     '</div>' +
     '<p class="note">A rough estimate — actual prices vary.</p>' +
     (ledgerSources.length ? '<div class="field"><label>By source</label>' +
@@ -554,19 +557,37 @@ function renderSettings() {
         const data = JSON.parse(r.result);
         const books = Array.isArray(data) ? data : data.books;
         if (!Array.isArray(books)) throw new Error('bad file');
-        let added = 0, skipped = 0;
+        let added = 0, updated = 0, skipped = 0;
         const imported = [];
         books.forEach(b => {
           if (!b || !b.title) { skipped++; return; }
-          const nb = migrateBook(Object.assign(normalizeVolume({ volumeInfo: {} }), b, { id: uid() }));
-          if (alreadyHave(nb)) { skipped++; return; }
-          library.push(nb); imported.push(nb); added++;
+          // v534: keep the exported id. The Up Next queue, the manual
+          // shelf order and the roamed state are all keyed by book id,
+          // and a re-import must not duplicate the library (or the
+          // cloud rows a push would create from fresh ids). Collision
+          // rule: an incoming id that already exists overwrites that
+          // book in place — restore semantics — and lifts its
+          // tombstone, so the next cloud merge can't re-delete it.
+          // Only id-less records mint a fresh id.
+          const keepId = (typeof b.id === 'string' && b.id) ? b.id : null;
+          const nb = migrateBook(Object.assign(normalizeVolume({ volumeInfo: {} }), b, { id: keepId || uid() }));
+          const at = library.findIndex(x => x && x.id === nb.id);
+          if (at !== -1) {
+            library[at] = nb; imported.push(nb); updated++;
+          } else if (alreadyHave(nb)) { skipped++; return; }
+          else {
+            library.push(nb); imported.push(nb); added++;
+          }
+          // A restored book (either path) lifts its tombstone —
+          // otherwise the next cloud merge would re-delete it.
+          const ti = tombstones.findIndex(t => t && t.id === nb.id);
+          if (ti !== -1) tombstones.splice(ti, 1);
         });
         saveLibrary(); render();
         // Cover-storage closure: enqueue adoption for the imported
         // covers in the background — the import never waits on it.
         if (typeof adoptBookCoverInBackground === 'function') imported.forEach(adoptBookCoverInBackground);
-        toast('Imported ' + added + ' books' + (skipped ? ' (' + skipped + ' skipped)' : ''));
+        toast('Imported ' + added + ' books' + (updated ? ' (' + updated + ' restored)' : '') + (skipped ? ' (' + skipped + ' skipped)' : ''));
       } catch (err) { toast('Could not read that file'); }
     };
     r.readAsText(f);
@@ -664,10 +685,12 @@ function renderSettings() {
     }
     try {
       const priv = await circlePrivacy();
-      // v529: shelves offered for hiding = the statuses the owner
-      // actually has books on, Wishlist included now that it's a
-      // status (was: facet books had no hide control at all here).
-      const shelves = Object.keys(STATUS).filter(s => library.some(b => b.status === s));
+      // v529: shelves offered for hiding = statuses, Wishlist included
+      // now that it's a status. v534: the FULL status list, like the
+      // Hearth sheet (js/195) — filtering to statuses with books on
+      // them trapped the user: a shelf hidden while it had books and
+      // later emptied lost its only Settings unhide chip.
+      const shelves = Object.keys(STATUS);
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
       wireCirclePrivacyPanel(box, priv, 'st');
       // v526: Blocked readers — my own block list lives under the same

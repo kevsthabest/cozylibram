@@ -5,7 +5,8 @@
    wooden shelves instead of the cover grid. Spine colors/geometry are
    derived deterministically from each book id (stable across renders).
 
-   - TBR / Reading / Read chips switch the shelf's book set.
+   - One chip per status (TBR / Reading / Read / Wishlist / DNF)
+     switches the shelf's book set.
    - Tap a spine opens the book modal (openBookFromEl).
    - Drag a spine to rearrange; the per-group order persists device-local
      in localStorage (like upNext — a reading plan, not synced).
@@ -16,8 +17,12 @@
    - Camera capture reuses the vision photo pattern: a file input with
      capture="environment" opens the camera directly on mobile. */
 
-const SHELF_GROUPS = ['tbr', 'reading', 'read'];
-const SHELF_GROUP_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read' };
+// v534: all five statuses are shelf groups — Wishlist and DNF books
+// used to never appear on the Shelves tab (2D or Room) at all. The
+// Room renderer (js/217) builds its chips/counts from these same
+// constants, so both views learn the new groups together.
+const SHELF_GROUPS = ['tbr', 'reading', 'read', 'wishlist', 'dnf'];
+const SHELF_GROUP_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', wishlist: 'Wishlist', dnf: 'DNF' };
 // Books per shelf row. 8 spines + decor fits a 360px phone.
 const SHELF_ROW_SIZE = 8;
 
@@ -1041,9 +1046,10 @@ function shelfOpenPhotoSheet(id) {
       '<button data-pose="' + p[0] + '" class="' + (pose === p[0] ? 'active' : '') + '">' + p[1] + '</button>'
     ).join('') + '</div>' +
     // v400: move to shelf (status) from long-press menu
+    // v534: every shelf group is a destination (Wishlist + DNF included)
     '<div class="sv-seg" role="group" aria-label="Shelf">' +
-    [['tbr', 'TBR'], ['reading', 'Reading'], ['read', 'Read']].map(s =>
-      '<button data-shelf="' + s[0] + '" class="' + (curStatus === s[0] ? 'active' : '') + '">' + s[1] + '</button>'
+    SHELF_GROUPS.map(g =>
+      '<button data-shelf="' + g + '" class="' + (curStatus === g ? 'active' : '') + '">' + SHELF_GROUP_LABEL[g] + '</button>'
     ).join('') + '</div>' +
     '<button class="sv-sheet-btn" id="svPhotoTake">' + icon('camera') + ' Photograph spine</button>' +
     /* M5: the button must also appear for binary spines (spinePhotoAssetId /

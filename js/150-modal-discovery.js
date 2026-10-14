@@ -1641,19 +1641,14 @@ function renderDetailModal(b, viaBook) {
 
   root.querySelectorAll('#f-status [data-s]').forEach(btn =>
     btn.addEventListener('click', () => {
-      // v353: save immediately for consistency with primary button (triage #5+6)
-      const prevStatus = b.status;
+      // v534: the shelf picker STAGES into the draft until Save. It used
+      // to write b.status + saveLibrary() on tap (v353), so a pick the
+      // user never saved leaked: the reopened modal showed the unsaved
+      // status while the grid tag and header counts kept the old one.
+      // Now a discarded pick changes nothing anywhere; Save commits it
+      // (including the DNF reason prompt, below). The primary action
+      // button still commits immediately — it's an action, not a picker.
       draft.status = btn.dataset.s;
-      b.status = btn.dataset.s;
-      saveLibrary();
-      // v398: DNF Autopsy — prompt for a reason when a book is newly marked DNF
-      if (btn.dataset.s === 'dnf' && prevStatus !== 'dnf' && typeof openDnfReasonSheet === 'function') {
-        setTimeout(() => {
-          // Guard: don't open the sheet if the modal was closed meanwhile
-          if (!root.isConnected) return;
-          openDnfReasonSheet(b);
-        }, 350);
-      }
       root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');
       if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';
@@ -2147,6 +2142,13 @@ function renderDetailModal(b, viaBook) {
     toast('Saved ✨');
     // v468: post-completion portrait survey (save-flow path to 'read').
     if (_becameRead) { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
+    // v534: DNF Autopsy prompt — follows the now-staged shelf pick, so
+    // it fires on Save when the book newly lands on DNF (the pick-time
+    // prompt went away with the picker's immediate save: an unsaved
+    // DNF pick must not prompt for a reason).
+    if (draft.status === 'dnf' && _aBefore.status !== 'dnf' && typeof openDnfReasonSheet === 'function') {
+      try { openDnfReasonSheet(b); } catch (e) {}
+    }
   });
 
   document.getElementById('m-del').addEventListener('click', async () => {

@@ -162,6 +162,21 @@ function userStateApply(values) {
   } catch (e) {}
 }
 
+// v534: sortBy / seriesFilter are boot-time globals read once from
+// localStorage (js/000-core.js, js/140-collections.js). A settings
+// snapshot adopted from another device replaces those keys, but
+// nothing re-read them — the adopted sort/filter only took effect
+// after a full reload. Re-read them (same validation as boot) and
+// re-render the live view.
+function applyRoamedViewState() {
+  try {
+    sortBy = localStorage.getItem('spicyshelves.sortby') || 'added';
+    const sf = localStorage.getItem('spicyshelves.seriesfilter');
+    seriesFilter = (sf === 'started' || sf === 'completed') ? sf : 'all';
+  } catch (e) {}
+  try { if (typeof render === 'function') render(); } catch (e) {}
+}
+
 /* ---------------- roaming sections (v520) ---------------- */
 // Three more slices of per-user state ride the same user_state row, each
 // in its own column (supabase/migrations/v520_user_state_sections.sql):
@@ -499,6 +514,7 @@ async function userStatePullSettings() {
         userStatePatchMeta(uid, { at: remoteAt, hash: userStateHash(userStateCollect()) });
         userStateClaimOwner(uid);
         try { if (typeof applyTheme === 'function') applyTheme(); } catch (e) {}
+        try { applyRoamedViewState(); } catch (e) {} // v534: live sort/filter adopt
         AppLog.info('sync', 'roaming settings pulled (server newer)');
         return true;
       }

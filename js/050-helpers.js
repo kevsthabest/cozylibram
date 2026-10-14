@@ -125,6 +125,10 @@ const ICONS = {
     '<path class="bm-ink" d="M9.2 10.6l2.1 2.1 3.9-4.1" fill="none" stroke-width="1.9"/>',
   bmdnf: '<path class="bm-grey" d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" stroke="none"/>' +
     '<path class="bm-ink" d="M7.4 17.6L16.6 6" fill="none" stroke-width="2.1"/>',
+  // v534: wishlist — the outline silhouette with a sparkle (the want-it
+  // state: not yet on a shelf, marked as wished for).
+  bmwishlist: '<path d="M12 7.3l1.05 3 3 1.05-3 1.05L12 15.4l-1.05-3-3-1.05 3-1.05z" fill="currentColor" stroke="none"/>' +
+    '<path d="M6.5 3.4 Q6.5 2.2 8.1 2.8 L12 5 L15.9 2.8 Q17.5 2.2 17.5 3.4 V20.6 L12 17.4 L6.5 20.6 Z" stroke-width="1.9"/>',
   // DNF: x in circle
   dnf: '<circle cx="12" cy="12" r="8.5"/><line x1="9.2" y1="9.2" x2="14.8" y2="14.8"/><line x1="14.8" y1="9.2" x2="9.2" y2="14.8"/>',
   // up next: skip-forward
