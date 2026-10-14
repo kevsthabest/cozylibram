@@ -1045,6 +1045,50 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     pushR === true && !!rowR3.settings && !('reco_state' in rowR3) &&
     setEq(await probeDismissals(), ['hc:keep']));
 
+  /* ---------- v559 reco: a failed push re-read skips the column, retries next cycle ---------- */
+  // The server gains a dismissal from another device after this device's
+  // last pull. This device's push then cannot re-read reco_state (the
+  // read errors): it must NOT upsert its local-only set over the server
+  // copy. The reco column is skipped, the section bookkeeping stays
+  // un-advanced, and the next healthy push completes the union.
+  const fakeR4 = makeFake();
+  window.__sbStub = fakeR4;
+  clearState();
+  setUser('user-1');
+  fakeR4.rows.set('user-1', {
+    user_id: 'user-1',
+    settings: { _at: 5000, values: {} },
+    reco_state: { _at: 5000, value: ['hc:s1'] },
+  });
+  await window.recoDismiss('hc:l1');
+  await window.userStatePull(); // establish meta; union [l1, s1] locally, reco owes a push
+  // Another device dismisses hc:s2 and syncs it after our pull.
+  fakeR4.rows.get('user-1').reco_state = { _at: 6000, value: ['hc:s1', 'hc:s2'] };
+  await window.recoDismiss('hc:l2');
+  const upsertsBeforeR4 = fakeR4.upserts.length;
+  fakeR4.failSelect = true;
+  await window.userStatePush();
+  fakeR4.failSelect = false;
+  const rowR4 = fakeR4.rows.get('user-1') || {};
+  ok('reco re-read error: the server copy is not overwritten',
+    !!rowR4.reco_state && setEq(rowR4.reco_state.value, ['hc:s1', 'hc:s2']));
+  ok('reco re-read error: no upsert in that push carried reco_state',
+    fakeR4.upserts.slice(upsertsBeforeR4).every(r => !('reco_state' in r)));
+  ok('reco re-read error: the local dismissal set is untouched',
+    setEq(await probeDismissals(), ['hc:l1', 'hc:s1', 'hc:l2']));
+  const metaR4 = JSON.parse(ls.getItem('cozylibram.userstate.v1.user-1') || 'null');
+  ok('reco re-read error: the section bookkeeping stays un-advanced',
+    !!metaR4 && !!metaR4.sections && !!metaR4.sections.reco && metaR4.sections.reco.hash === null);
+  const retryPushR4 = await window.userStatePush();
+  const rowR4b = fakeR4.rows.get('user-1') || {};
+  ok('next healthy push completes the union on the server',
+    retryPushR4 === true && !!rowR4b.reco_state &&
+    setEq(rowR4b.reco_state.value, ['hc:l1', 'hc:s1', 'hc:l2', 'hc:s2']));
+  ok('next healthy push adopts the server-only dismissal locally',
+    setEq(await probeDismissals(), ['hc:l1', 'hc:s1', 'hc:l2', 'hc:s2']));
+  ok('after the retry the reco section is clean (a further push is a no-op)',
+    (await window.userStatePush()) === false);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('test crashed:', e); process.exit(1); });

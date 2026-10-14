@@ -793,35 +793,47 @@ async function userStatePush() {
       // so a settings push above still counts, and the section
       // bookkeeping stays un-advanced so the next cycle retries.
       try {
+        let recoReadFailed = false;
         if (dirtySections.indexOf('reco') !== -1) {
           // Read-merge-write (v559): union the server's current reco set
           // into the payload — and adopt it locally — before upserting,
           // so this push can never drop dismissals another device
-          // synced after this device last pulled. A failed read skips
-          // the merge; the upsert below still carries the local set,
-          // and the next pull re-unions.
+          // synced after this device last pulled. If the re-read itself
+          // errors, the server's current set is unknown: skip the reco
+          // column in this upsert entirely and leave its bookkeeping
+          // un-advanced (the same failure pattern as a failed section
+          // upsert below), so the next cycle retries the
+          // read-merge-write instead of overwriting the server copy
+          // with the local-only set.
           try {
             const cur = await sb.from('user_state').select('reco_state').eq('user_id', uid).maybeSingle();
-            const remote = (!cur.error && cur.data) ? cur.data.reco_state : null;
+            if (cur.error) throw cur.error;
+            const remote = cur.data ? cur.data.reco_state : null;
             if (userStateSectionPresent(remote) && typeof recoUnionDismissals === 'function') {
               const merged = recoUnionDismissals(sectionPayloads.reco.value, remote.value);
               sectionPayloads.reco = { value: merged };
               if (typeof recoMergeRoamedDismissals === 'function') recoMergeRoamedDismissals(merged);
             }
-          } catch (e) {}
+          } catch (e) {
+            recoReadFailed = true;
+            try { AppLog.warn('sync', 'roaming reco push skipped (server copy unreadable); will retry next cycle'); } catch (_) {}
+          }
         }
-        const row = { user_id: uid, updated_at: new Date(at).toISOString() };
-        for (const key of dirtySections) {
-          row[USER_STATE_SECTION_COLS[key]] = Object.assign({ _at: at }, sectionPayloads[key]);
+        const pushSections = recoReadFailed ? dirtySections.filter(k => k !== 'reco') : dirtySections;
+        if (pushSections.length) {
+          const row = { user_id: uid, updated_at: new Date(at).toISOString() };
+          for (const key of pushSections) {
+            row[USER_STATE_SECTION_COLS[key]] = Object.assign({ _at: at }, sectionPayloads[key]);
+          }
+          const { error } = await sb.from('user_state').upsert(row, { onConflict: 'user_id' });
+          if (error) throw error;
+          const secPatch = {};
+          for (const key of pushSections) secPatch[key] = { at: at, hash: userStateHash(sectionPayloads[key]) };
+          userStatePatchMeta(uid, { sections: secPatch });
+          userStateClaimOwner(uid);
+          AppLog.info('sync', 'roaming sections pushed: ' + pushSections.join(', '));
+          pushed = true;
         }
-        const { error } = await sb.from('user_state').upsert(row, { onConflict: 'user_id' });
-        if (error) throw error;
-        const secPatch = {};
-        for (const key of dirtySections) secPatch[key] = { at: at, hash: userStateHash(sectionPayloads[key]) };
-        userStatePatchMeta(uid, { sections: secPatch });
-        userStateClaimOwner(uid);
-        AppLog.info('sync', 'roaming sections pushed: ' + dirtySections.join(', '));
-        pushed = true;
       } catch (e) {
         try { AppLog.warn('sync', 'roaming sections push failed: ' + ((e && e.message) || e)); } catch (_) {}
       }
