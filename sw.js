@@ -26,7 +26,7 @@ const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '03
 // pin the match.
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown', 'onyxdragon', 'golddragon', 'egg', 'daggers', 'goggles', 'parapet', 'ring', 'tabby', 'darknet', 'visor', 'daemon', 'cornsignal', 'drone', 'circuitkey', 'strands', 'silo'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v194 (security): vendored third-party libs, precached like first-party code.
-const VENDOR = ['supabase.min.js', 'quagga.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
+const VENDOR = ['supabase.min.js', 'zxing/share.js', 'zxing/es/reader.js', 'zxing/zxing_reader.wasm', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
 // v184: bespoke per-theme modal artwork, complete set (all ten themes)
 // Batch 4 (issue #144): precache exactly the theme SVGs styles.css references
 // (15 themes × divider/moon = 30). The 9 vine-*.svg entries and

@@ -190,28 +190,21 @@ async function decodePhotoFile(file) {
           toast('Barcode read was garbled — try closer, in good light');
           return;
         }
-      } catch (e) { /* fall through to quagga */ }
+      } catch (e) { /* fall through to the ZXing fallback */ }
     }
-    await loadQuagga();
-    const url = URL.createObjectURL(file);
-    Quagga.decodeSingle({
-      src: url,
-      numOfWorkers: 0,
-      inputStream: { size: 1024 },
-      decoder: { readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader'] },
-      locate: true
-    }, result => {
-      URL.revokeObjectURL(url);
-      const code = result && result.codeResult && result.codeResult.code;
-      // v193: instant — single decode, no consensus; garbled reads fail the
-      // check digit and report cleanly instead of hanging on "Reading…".
-      if (code) {
-        if (onBarcode(code, true)) return;
-        mount.innerHTML = '';
-        toast('Barcode read was garbled — try closer, in good light');
-      }
-      else { mount.innerHTML = ''; toast('No barcode found — try closer, in good light'); }
-    });
+    // Fallback: vendored ZXing reader (zxing-wasm) decodes the photo bytes
+    // itself — no object URL, no second decode engine.
+    const zxing = await loadZXingReader();
+    const results = await zxing.readBarcodes(file, { formats: ZXING_FORMATS, tryHarder: true });
+    const code = results && results.length ? results[0].text : null;
+    // v193: instant — single decode, no consensus; garbled reads fail the
+    // check digit and report cleanly instead of hanging on "Reading…".
+    if (code) {
+      if (onBarcode(code, true)) return;
+      mount.innerHTML = '';
+      toast('Barcode read was garbled — try closer, in good light');
+    }
+    else { mount.innerHTML = ''; toast('No barcode found — try closer, in good light'); }
   } catch (e) {
     mount.innerHTML = '';
     toast('Could not read that photo');
@@ -251,12 +244,13 @@ async function startScan() {
         } catch (e) {}
       }, 600);
       return;
-    } catch (e) { /* fall through to quagga */ }
+    } catch (e) { /* fall through to the ZXing fallback */ }
   }
-  // Fallback: Quagga2 via CDN
+  // Fallback: vendored ZXing (zxing-wasm) frame loop over the stream
+  // already attached above.
   try {
-    await loadQuagga();
-    startQuagga(video);
+    await loadZXingReader();
+    startZXing(video);
   } catch (e) {
     toast('Live scanning not supported here — use Search or ISBN');
   }
@@ -305,7 +299,7 @@ function stopScan() {
   scanState.lastCode = null; scanState.hits = 0; // v193: reset misread consensus
   if (scanState.timer) { clearInterval(scanState.timer); scanState.timer = null; }
   if (scanState.stream) { scanState.stream.getTracks().forEach(t => t.stop()); scanState.stream = null; }
-  stopQuagga();
+  stopZXing();
   const toggle = document.getElementById('scan-toggle');
   if (toggle) toggle.textContent = 'Start camera';
   const video = document.getElementById('scan-video');
@@ -326,39 +320,52 @@ function renderKeepScan() {
   render();
 }
 
-function loadQuagga() {
-  return new Promise((resolve, reject) => {
-    if (window.Quagga) return resolve();
-    const s = document.createElement('script');
-    // v194 (security): vendored as js/vendor/quagga.min.js (pinned 0.12.1,
-    // see js/vendor/SOURCES.txt). Same-origin, no CDN, works offline.
-    s.src = 'js/vendor/quagga.min.js';
-    s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-function startQuagga(video) {
-  if (!window.Quagga || !video) return;
-  scanState.quagga = true;
-  Quagga.init({
-    inputStream: { name: 'Live', type: 'LiveStream', target: video.parentElement,
-      constraints: { facingMode: 'environment' } },
-    decoder: { readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader'] },
-    locate: true
-  }, err => {
-    if (err) { scanState.quagga = false; return; }
-    Quagga.start();
-    Quagga.onDetected(d => {
-      const code = d && d.codeResult && d.codeResult.code;
-      if (code) onBarcode(code);
+// v553: ZXing fallback decoder (zxing-wasm 3.1.5, vendored under
+// js/vendor/zxing/ — see js/vendor/SOURCES.txt). Engages only where
+// BarcodeDetector is absent (Safari, Firefox); the BarcodeDetector path
+// above never loads any of it. Loaded lazily via dynamic import, the
+// same pattern as js/207's vendored three module.
+const ZXING_FORMATS = ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E'];
+let zxingModulePromise = null;
+function loadZXingReader() {
+  if (!zxingModulePromise) {
+    zxingModulePromise = import('./js/vendor/zxing/es/reader.js').then(m => {
+      // Upstream's default locateFile points the .wasm at a CDN; the
+      // explicit override pins it to the vendored same-origin copy.
+      m.prepareZXingModule({ overrides: { locateFile: (f) => 'js/vendor/zxing/' + f } });
+      return m;
     });
-  });
-}
-function stopQuagga() {
-  if (scanState.quagga && window.Quagga) {
-    try { Quagga.stop(); Quagga.offDetected(); } catch (e) {}
   }
-  scanState.quagga = false;
+  return zxingModulePromise;
+}
+function startZXing(video) {
+  if (!video) return;
+  scanState.zxing = true;
+  const canvas = document.createElement('canvas');
+  const tick = async () => {
+    if (!scanState.active || !scanState.zxing) return;
+    try {
+      if (video.readyState >= 2 && video.videoWidth) {
+        const scale = Math.min(1, 1280 / video.videoWidth);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const zxing = await loadZXingReader();
+          const results = await zxing.readBarcodes(
+            ctx.getImageData(0, 0, canvas.width, canvas.height), { formats: ZXING_FORMATS });
+          if (results && results.length && results[0].text) onBarcode(results[0].text);
+        }
+      }
+    } catch (e) {}
+    if (scanState.active && scanState.zxing) scanState.zxingTimer = setTimeout(tick, 300);
+  };
+  tick();
+}
+function stopZXing() {
+  if (scanState.zxingTimer) { clearTimeout(scanState.zxingTimer); scanState.zxingTimer = null; }
+  scanState.zxing = false;
 }
 
 async function isbnLookupUI(isbn, mount, source) {
