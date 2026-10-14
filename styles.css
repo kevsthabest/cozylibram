@@ -451,7 +451,7 @@ h1, h2, h3, .serif { font-family: 'Playfair Display', Georgia, serif; }
    .pf-avatar. If the sticker fails to load, js/105 swaps the img for the
    letter span, so no surface ever shows a broken image. */
 img.avatar-stk {
-  object-fit: contain; padding: 9%;
+  object-fit: contain; padding: 6px;
   background: radial-gradient(circle at 50% 42%, var(--card2), var(--card) 74%);
 }
 /* v546: picture picker sheet (js/236) — Variant B, Collections +

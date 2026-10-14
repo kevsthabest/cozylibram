@@ -138,6 +138,18 @@ const lsGet = (k) => { try { return window.localStorage.getItem(k); } catch (e) 
   const css = fs.readFileSync(path.join(APP_DIR, 'styles.css'), 'utf8');
   ok('styles.css pins img.avatar-stk to object-fit: contain',
     /img\.avatar-stk\s*\{[^}]*object-fit:\s*contain/.test(css));
+  // v549: the sticker inset must be a FIXED length, never a percentage.
+  // Percentage padding resolves against the containing block's width, not
+  // the element's: in a wide container (the Settings account card, the
+  // profile rows, circle rows) 9% per side met or exceeded the disc, the
+  // border-box content box collapsed to zero, and object-fit: contain
+  // painted the sticker into nothing — an empty gradient disc, and no
+  // letter either because the img never errored. A px inset cannot
+  // collapse no matter how wide the container gets.
+  const stkRule = /img\.avatar-stk\s*\{([^}]*)\}/.exec(css);
+  const stkPad = stkRule && /padding:\s*([^;]+);/.exec(stkRule[1]);
+  ok('styles.css insets img.avatar-stk with a fixed length, never a percentage',
+    !!stkRule && !!stkPad && !stkPad[1].includes('%') && /\d+px/.test(stkPad[1]));
   // v548: the Settings account card renders avatarHTML(prof,
   // 'st-avatar-card') — the class MUST carry its own bounded disc rule,
   // or the <img> renders at natural size (full card width).
