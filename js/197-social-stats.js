@@ -323,6 +323,18 @@ async function loadCovenStats() {
     if (shared.length) buddies.push({ p: p, books: shared.slice(0, 6) });
   });
 
+  // v541: "Reading it too" — my currently-reading books that a
+  // friend is also visibly reading. Computed from the SHELF view
+  // (the v532 consent split: shelf-visible is the consent and the
+  // share_activity toggle is never consulted; the shield filter
+  // above already removed friends' high-spice copies for a shielded
+  // viewer, so a suppressed work simply never overlaps). Presence
+  // only — js/235 derives nothing from progress, logs, or dates.
+  const readingToo = (typeof ritOverlaps === 'function')
+    ? ritOverlaps(me.reading || [],
+        others.map(p => ({ person: p, reading: ((p.shelfStats || p.stats).reading || []) })))
+    : [];
+
   // Now reading across the coven.
   const nowReading = [];
   people.forEach(p => {
@@ -336,7 +348,7 @@ async function loadCovenStats() {
   });
   const trending = topKeys(gCounts, 5);
 
-  return { people: people, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending, moments: moments };
+  return { people: people, awards: awards, soulmates: soulmates, buddies: buddies, nowReading: nowReading, trending: trending, moments: moments, readingToo: readingToo };
 }
 
 // --- UI --------------------------------------------------------------------
@@ -373,6 +385,13 @@ function covenStatsHTML(d) {
   if (d.moments && d.moments.length && typeof momentRowHTML === 'function') {
     activityHTML += '<div class="circle-card"><h3 style="margin:0 0 10px">Recent finishes</h3><div class="circle-list">' +
       d.moments.map(m => momentRowHTML(m)).join('') + '</div></div>';
+  }
+
+  // v541: Reading it too (js/235) — shared reads among your own
+  // currently-reading books. Renders nothing when there are no
+  // overlaps (no heading over nothing, the v535 discipline).
+  if (d.readingToo && d.readingToo.length && typeof ritHearthCardHTML === 'function') {
+    activityHTML += ritHearthCardHTML(d.readingToo);
   }
 
   // Circle digest: this month's activity in circle order (you first, then
