@@ -1008,17 +1008,10 @@ function shareCanvasFile(cv, name, title) {
   if (!cv || !cv.toBlob) { toast('Image export isn’t supported on this device'); return; }
   cv.toBlob(async (blob) => {
     if (!blob) { toast('Could not create the image'); return; }
-    const file = new File([blob], name, { type: 'image/png' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: title || name }); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast('Image saved 📥');
+    // v560: the hand-off itself lives in shareOrDownloadFile (js/050);
+    // the 'Image saved' toast belongs to the download outcome only, as before.
+    const how = await shareOrDownloadFile({ blob: blob, filename: name, title: title });
+    if (how === 'downloaded') toast('Image saved 📥');
   }, 'image/png');
 }
 async function drawBookCard(b) {
