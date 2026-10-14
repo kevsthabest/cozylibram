@@ -84,21 +84,27 @@ const syncJs = read('js/090-sync.js');
 const addJs = read('js/130-add.js');
 ok('vendor: supabase lib is same-origin', /SB_LIB_URL = 'js\/vendor\/supabase\.min\.js'/.test(syncJs));
 ok('vendor: supabase lib has no CDN url', !/cdn\.jsdelivr\.net|unpkg\.com/.test(syncJs));
-ok('vendor: quagga is same-origin', /s\.src = 'js\/vendor\/quagga\.min\.js'/.test(addJs));
-ok('vendor: quagga has no CDN url', !/cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net/.test(addJs));
+ok('vendor: zxing reader is same-origin', /js\/vendor\/zxing\/es\/reader\.js/.test(addJs));
+ok('vendor: zxing has no CDN url', !/cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fastly\.jsdelivr\.net|unpkg\.com/.test(addJs));
 ok('vendor: supabase file exists', fs.existsSync(path.join(ROOT, 'js/vendor/supabase.min.js')));
-ok('vendor: quagga file exists', fs.existsSync(path.join(ROOT, 'js/vendor/quagga.min.js')));
+ok('vendor: zxing files exist',
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/es/reader.js')) &&
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/share.js')) &&
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/zxing_reader.wasm')));
 ok('vendor: supabase exposes createClient',
   /createClient/.test(read('js/vendor/supabase.min.js').slice(0, 4000) +
     read('js/vendor/supabase.min.js').slice(-4000)));
-ok('vendor: quagga build looks like quagga 0.12.1',
-  read('js/vendor/quagga.min.js').length > 50000);
+ok('vendor: zxing wasm is the real reader build',
+  fs.statSync(path.join(ROOT, 'js/vendor/zxing/zxing_reader.wasm')).size > 900000);
+ok('vendor: zxing glue carries no CDN reference',
+  !/jsdelivr|unpkg\.com|cdnjs/.test(read('js/vendor/zxing/share.js') + read('js/vendor/zxing/es/reader.js')));
 ok('vendor: sources documented', /supabase-js@2\.117\.2/.test(read('js/vendor/SOURCES.txt')));
+ok('vendor: sources document zxing', /zxing-wasm@3\.1\.5/.test(read('js/vendor/SOURCES.txt')));
 
 /* ---- 4. service worker precaches the vendor libs ---- */
 
 const sw = read('sw.js');
-ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'quagga\.min\.js', 'three\.min\.js'\]/.test(sw));
+ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'zxing\/share\.js', 'zxing\/es\/reader\.js', 'zxing\/zxing_reader\.wasm', 'three\.min\.js'\]/.test(sw));
 ok('sw: vendor files in ASSETS', /\.concat\(JS, VENDOR, AVATARS/.test(sw));
 
 /* ---- 5. Pages Functions rate limiter ---- */

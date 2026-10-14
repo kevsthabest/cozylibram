@@ -56,17 +56,26 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   await window.decodePhotoFile(file);
   ok('photo barcode detected via BarcodeDetector', lookedUp === '9780349437064');
 
-  // 5. Photo decode falls back to Quagga when no BarcodeDetector
-  delete window.BarcodeDetector;
-  let quaggaCfg = null;
-  window.Quagga = { decodeSingle: (cfg, cb) => { quaggaCfg = cfg; cb({ codeResult: { code: '9781234567897' } }); } };
+  // 4b. BarcodeDetector present -> the ZXing fallback module is never loaded
+  let zxingLoads = 0;
+  window.loadZXingReader = async () => { zxingLoads++; return { readBarcodes: async () => [] }; };
   lookedUp = null;
   await window.decodePhotoFile(file);
-  ok('photo barcode detected via Quagga fallback', lookedUp === '9781234567897');
-  ok('quagga uses EAN readers', quaggaCfg.decoder.readers.includes('ean_reader'));
+  ok('detector path never loads the zxing fallback', zxingLoads === 0 && lookedUp === '9780349437064');
+
+  // 5. Photo decode falls back to ZXing (vendored zxing-wasm) when no BarcodeDetector
+  delete window.BarcodeDetector;
+  let zxingSrc = null, zxingOpts = null;
+  window.loadZXingReader = async () => ({ readBarcodes: async (src, opts) => { zxingSrc = src; zxingOpts = opts; return [{ text: '9781234567897', format: 'EAN13' }]; } });
+  lookedUp = null;
+  await window.decodePhotoFile(file);
+  ok('photo barcode detected via ZXing fallback', lookedUp === '9781234567897');
+  ok('zxing restricted to EAN/UPC formats',
+    !!zxingOpts && JSON.stringify(zxingOpts.formats) === JSON.stringify(['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E']));
+  ok('zxing decodes the photo file itself', zxingSrc === file);
 
   // 6. Unreadable photo -> friendly message, no crash
-  window.Quagga = { decodeSingle: (cfg, cb) => cb({}) };
+  window.loadZXingReader = async () => ({ readBarcodes: async () => [] });
   lookedUp = null;
   q('#toast-root').innerHTML = '';
   await window.decodePhotoFile(file);
@@ -107,6 +116,24 @@ const lastToast = () => { const t = q('#toast-root').lastChild; return t ? t.tex
   ok('title input does not hit isbn lookup', window.__isbnSeen === null);
   ok('title input runs catalog search (fails without network here)',
     q('#s-results').textContent.includes('Search failed'));
+
+  // 9. Live fallback branch: no BarcodeDetector -> startZXing engages on the
+  // video element; stopScan tears it down via stopZXing. (Frame decoding
+  // itself is proven against the real vendored bytes in zxing-decode.test.js;
+  // jsdom has no camera frames or 2d canvas to feed the loop here.)
+  setSecure(true);
+  window.renderAdd();
+  if (!q('#scan-video')) q('#add-scan-btn').click(); // panel state survives re-renders (v193) — expand only if collapsed
+  delete window.BarcodeDetector;
+  window.isbnLookupUI = (isbn) => { lookedUp = isbn; };
+  let zxingStartedWith = null, zxingStops = 0;
+  window.startZXing = (v) => { zxingStartedWith = v; };
+  window.stopZXing = () => { zxingStops++; };
+  await window.startScan();
+  ok('live scan engages the zxing fallback without BarcodeDetector',
+    !!zxingStartedWith && zxingStartedWith.id === 'scan-video');
+  window.stopScan();
+  ok('stopScan stops the zxing fallback', zxingStops === 1);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
