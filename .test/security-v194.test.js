@@ -7,7 +7,8 @@
 //  2. bookCard / bookTile / statusbar escape id + status at the HTML sink
 //     (defense in depth, even for objects that bypass migrateBook).
 //  3. Third-party libs are vendored same-origin (no CDN, no floating tags).
-//  4. The service worker precaches the vendored libs.
+//  4. The service worker precaches the vendored libs — except the zxing
+//     decoder, which is runtime-cached on first use (PR #225 Decision).
 //  5. The Pages Functions rate limiter allows / blocks / recovers correctly.
 //  6. The book_meta ownership migration is present and consistent between
 //     schema.sql and supabase/migrations/.
@@ -84,22 +85,48 @@ const syncJs = read('js/090-sync.js');
 const addJs = read('js/130-add.js');
 ok('vendor: supabase lib is same-origin', /SB_LIB_URL = 'js\/vendor\/supabase\.min\.js'/.test(syncJs));
 ok('vendor: supabase lib has no CDN url', !/cdn\.jsdelivr\.net|unpkg\.com/.test(syncJs));
-ok('vendor: quagga is same-origin', /s\.src = 'js\/vendor\/quagga\.min\.js'/.test(addJs));
-ok('vendor: quagga has no CDN url', !/cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net/.test(addJs));
+ok('vendor: zxing reader is same-origin', /js\/vendor\/zxing\/es\/reader\.js/.test(addJs));
+ok('vendor: zxing has no CDN url', !/cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fastly\.jsdelivr\.net|unpkg\.com/.test(addJs));
 ok('vendor: supabase file exists', fs.existsSync(path.join(ROOT, 'js/vendor/supabase.min.js')));
-ok('vendor: quagga file exists', fs.existsSync(path.join(ROOT, 'js/vendor/quagga.min.js')));
+ok('vendor: zxing files exist',
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/es/reader.js')) &&
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/share.js')) &&
+  fs.existsSync(path.join(ROOT, 'js/vendor/zxing/zxing_reader.wasm')));
 ok('vendor: supabase exposes createClient',
   /createClient/.test(read('js/vendor/supabase.min.js').slice(0, 4000) +
     read('js/vendor/supabase.min.js').slice(-4000)));
-ok('vendor: quagga build looks like quagga 0.12.1',
-  read('js/vendor/quagga.min.js').length > 50000);
+ok('vendor: zxing wasm is the real reader build',
+  fs.statSync(path.join(ROOT, 'js/vendor/zxing/zxing_reader.wasm')).size > 900000);
+ok('vendor: zxing glue carries no CDN reference',
+  !/jsdelivr|unpkg\.com|cdnjs/.test(read('js/vendor/zxing/share.js') + read('js/vendor/zxing/es/reader.js')));
 ok('vendor: sources documented', /supabase-js@2\.117\.2/.test(read('js/vendor/SOURCES.txt')));
+ok('vendor: sources document zxing', /zxing-wasm@3\.1\.5/.test(read('js/vendor/SOURCES.txt')));
 
-/* ---- 4. service worker precaches the vendor libs ---- */
+/* ---- 4. service worker vendor caching ---- */
+// Precache-pin movement history (named movements, CONSTRAINTS rule 4):
+//   #1 (v553, PR #225): the quagga element became the three zxing
+//      entries when the fallback decoder was swapped.
+//   #2 (v553 amendment, PR #225, Decision): the zxing entries LEAVE the
+//      expected precache set — the decoder is runtime-cached instead
+//      (ZXING_CACHE pins below). Strictness unchanged: the pin still
+//      matches the whole VENDOR list literally, and still fails only on
+//      the pre-existing three.min.js baseline element.
+//   #3 (v558 rebase, PR #225): the branch was rebased onto v557 main
+//      and renumbered; the expected precache set was re-verified
+//      against the composed sw.js on the rebased tree — unchanged
+//      (supabase + three in VENDOR; quagga gone; zxing runtime-cached
+//      and absent from every precache list).
 
 const sw = read('sw.js');
-ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'quagga\.min\.js', 'three\.min\.js'\]/.test(sw));
+ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'three\.min\.js'\]/.test(sw));
 ok('sw: vendor files in ASSETS', /\.concat\(JS, VENDOR, AVATARS/.test(sw));
+ok('sw: zxing absent from precache lists',
+  !/VENDOR = \[[^\]]*zxing/.test(sw) && !/'zxing\/(share|es\/reader|zxing_reader)/.test(sw));
+ok('sw: zxing runtime cache declared',
+  /ZXING_CACHE = 'cozy-libram-zxing'/.test(sw) && /ZXING_PATH = '\/js\/vendor\/zxing\/'/.test(sw));
+ok('sw: zxing runtime cache is cache-first with fill',
+  /caches\.open\(ZXING_CACHE\)/.test(sw) && /url\.pathname\.indexOf\(ZXING_PATH\) === 0/.test(sw));
+ok('sw: zxing runtime cache survives version bumps', /k !== ZXING_CACHE/.test(sw));
 
 /* ---- 5. Pages Functions rate limiter ---- */
 

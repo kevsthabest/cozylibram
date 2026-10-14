@@ -10,7 +10,7 @@ social shelves.
 
 **Add books, three taps or less**
 - 📷 Barcode scan with the phone camera (native `BarcodeDetector`,
-  vendored QuaggaJS fallback, manual ISBN as backup)
+  vendored ZXing (zxing-wasm) fallback, manual ISBN as backup)
 - 🔍 Title/author search across Google Books, Open Library, and Hardcover
 - ⌨️ Bulk ISBN import — paste a stack, paced lookup, one-tap add
 - 📥 Import hub: Goodreads CSV, StoryGraph CSV, Hardcover CSV, ISBN
