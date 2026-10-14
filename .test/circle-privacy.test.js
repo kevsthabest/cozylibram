@@ -315,6 +315,133 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
       /select p\.share_library\s+and not \(coalesce\(p_status, ''\) = any \(coalesce\(p\.hidden_shelves/.test(body));
   });
 
+  // ---------- circle_profiles projection shape-pin (QA Scout item 1) ----------
+  // The behaviour tests above drive a hand-written JS mirror of the view
+  // (projectPublic). Until now NOTHING pinned the mirror to the SQL: add
+  // `gender` (or drop a CASE gate) in the real view and every behaviour
+  // test stayed green while friends received the field. These pins parse
+  // the select list out of BOTH live SQL copies — the newest migration
+  // definition and the schema.sql mirror — and assert the exact ordered
+  // projection, both CASE gates, and the absence of the never-projected
+  // columns. "Newest migration" is NOT a hardcoded filename: the scan
+  // below walks supabase/migrations/ in filename (apply) order and pins
+  // the LAST `create or replace view public.circle_profiles` found, so
+  // a future migration that restates the view in a new file is pinned
+  // too instead of bypassing a pin stuck on a stale copy (the v522
+  // migration is frozen as applied; v526 currently restates its view).
+  const viewSelectItems = (sql) => {
+    const i = sql.indexOf('create or replace view public.circle_profiles');
+    if (i < 0) return null;
+    const sel = sql.indexOf('select', i);
+    const from = sql.indexOf('\n  from ', sel);
+    if (sel < 0 || from < 0) return null;
+    return sql.slice(sel + 'select'.length, from)
+      .split(',')
+      .map(s => s.replace(/\s+/g, ' ').trim());
+  };
+  const viewStatement = (sql) => {
+    const i = sql.indexOf('create or replace view public.circle_profiles');
+    if (i < 0) return '';
+    const j = sql.indexOf('revoke all on public.circle_profiles', i);
+    const raw = j < 0 ? sql.slice(i) : sql.slice(i, j);
+    // Strip comment lines: the schema.sql header above the view NAMES the
+    // forbidden columns to say they are excluded — that is prose, not SQL.
+    return raw.split('\n').filter(l => !/^\s*--/.test(l)).join('\n');
+  };
+  const EXPECTED_PROJECTION = [
+    'p.user_id', 'p.first_name', 'p.last_name', 'p.avatar_id', 'p.avatar_path',
+    'p.share_library', 'p.share_bio', 'p.share_activity',
+    'case when p.share_bio then p.bio end as bio',
+    'case when p.share_bio then p.fav_genres end as fav_genres',
+  ];
+  const projectionHolds = (items) =>
+    Array.isArray(items) && JSON.stringify(items) === JSON.stringify(EXPECTED_PROJECTION);
+  // Migration scan: read every migration in filename order and keep the
+  // LAST view definition (within a file, the last one wins too — it is
+  // the statement that runs last). pickLastViewDef is pure over an
+  // ordered [{ name, text }] list so the ordering rule is unit-testable
+  // below without touching the real directory.
+  const VIEW_DEF_RE = /create\s+or\s+replace\s+view\s+public\.circle_profiles\b/gi;
+  const pickLastViewDef = (entries) => {
+    let found = null;
+    entries.forEach(({ name, text }) => {
+      const hits = [...text.matchAll(VIEW_DEF_RE)];
+      if (hits.length) found = { file: name, sql: text.slice(hits[hits.length - 1].index) };
+    });
+    return found;
+  };
+  const migEntries = fs.readdirSync(path.join(APP_DIR, 'supabase/migrations'))
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .map(name => ({ name, text: fs.readFileSync(path.join(APP_DIR, 'supabase/migrations', name), 'utf8') }));
+  const migScan = pickLastViewDef(migEntries);
+  ok('sql (scan): a circle_profiles definition is found in the migrations', !!migScan);
+  // Independent ordering cross-check: the literal phrase (the exact
+  // phrasing both v522 and v526 use) must name the same last file, so a
+  // scanner bug cannot quietly pin an earlier definition.
+  const literalLast = migEntries
+    .filter(e => e.text.includes('create or replace view public.circle_profiles'))
+    .map(e => e.name).pop();
+  ok('sql (scan): the pinned definition comes from the last migration (in filename order) that defines the view',
+    !!migScan && migScan.file === literalLast);
+  const migSql = migScan ? migScan.sql : '';
+  const schemaSql = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
+  [['migration', migSql], ['schema.sql', schemaSql]].forEach(([label, sql]) => {
+    const items = viewSelectItems(sql);
+    ok('sql (' + label + '): circle_profiles projection is exactly the v522 column list, in order',
+      projectionHolds(items));
+    ok('sql (' + label + '): bio crosses only behind the share_bio CASE gate',
+      !!items && /^case when p\.share_bio then p\.bio end as bio$/.test(items[8] || ''));
+    ok('sql (' + label + '): fav_genres crosses only behind the share_bio CASE gate',
+      !!items && /^case when p\.share_bio then p\.fav_genres end as fav_genres$/.test(items[9] || ''));
+    const stmt = viewStatement(sql);
+    ok('sql (' + label + '): gender / hidden_shelves / updated_at appear nowhere in the view',
+      !/\bgender\b/.test(stmt) && !/hidden_shelves/.test(stmt) && !/updated_at/.test(stmt));
+  });
+  ok('sql: migration and schema.sql projections agree with each other',
+    JSON.stringify(viewSelectItems(migSql)) === JSON.stringify(viewSelectItems(schemaSql)));
+  // Drift proof: the pin MUST fail on a mutated projection — an added
+  // column, a dropped CASE gate, a dropped flag. (In-test mutated
+  // strings only; the real SQL files are never touched.)
+  const goodItems = viewSelectItems(schemaSql);
+  const withGender = goodItems.slice(); withGender.splice(3, 0, 'p.gender');
+  ok('pin drift proof: an added column (gender) breaks the pin', !projectionHolds(withGender));
+  const ungated = goodItems.slice(); ungated[8] = 'p.bio as bio';
+  ok('pin drift proof: dropping the bio CASE gate breaks the pin', !projectionHolds(ungated));
+  const droppedFlag = goodItems.filter(c => c !== 'p.share_activity');
+  ok('pin drift proof: a dropped column breaks the pin', !projectionHolds(droppedFlag));
+  // Scanner drift proof: the scan must target the LAST definition, so a
+  // future migration restating the view (in a new file, or later in the
+  // same file) cannot slip a widened projection past a pin stuck on an
+  // earlier copy. Synthetic ordered sets only — real files untouched.
+  const mkView = (widened) =>
+    'create or replace view public.circle_profiles as\n  select ' +
+    ['p.user_id', 'p.first_name', 'p.last_name'].concat(widened ? ['p.gender'] : [],
+      ['p.avatar_id', 'p.avatar_path', 'p.share_library', 'p.share_bio', 'p.share_activity',
+       'case when p.share_bio then p.bio end as bio',
+       'case when p.share_bio then p.fav_genres end as fav_genres']).join(',\n         ') +
+    '\n  from public.profiles p\n';
+  const scanWidened = pickLastViewDef([
+    { name: 'v900_earlier.sql', text: mkView(false) },
+    { name: 'v901_later.sql', text: mkView(true) },
+  ]);
+  ok('pin drift proof: the scan targets the last definition in an ordered set',
+    !!scanWidened && scanWidened.file === 'v901_later.sql');
+  ok('pin drift proof: a later widening restatement fails the projection check',
+    !!scanWidened && !projectionHolds(viewSelectItems(scanWidened.sql)));
+  const scanRestored = pickLastViewDef([
+    { name: 'v900_earlier.sql', text: mkView(true) },
+    { name: 'v901_later.sql', text: mkView(false) },
+  ]);
+  ok('pin drift proof: the scan follows order, not content (a later sound restatement passes)',
+    !!scanRestored && scanRestored.file === 'v901_later.sql' &&
+    projectionHolds(viewSelectItems(scanRestored.sql)));
+  const scanDoubled = pickLastViewDef([
+    { name: 'v900_single.sql', text: mkView(false) + '\n' + mkView(true) },
+  ]);
+  ok('pin drift proof: within one file, the last of two definitions is the pinned one',
+    !!scanDoubled && !projectionHolds(viewSelectItems(scanDoubled.sql)));
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(2); });

@@ -577,6 +577,102 @@ run(`localStorage.removeItem('cozylibram.milestones')`);
   ok('reset: flushed push carried the earned row', !!(flush && flush.rows.some(function (r) { return r.milestone_id === 'books-finished-1' && r.user_id === 'u1'; })));
   run(`cloudClient = window.__origCloudClientFlush; cloudUser = null; resetMilestoneSync(); localStorage.removeItem('cozylibram.milestones'); localStorage.removeItem('cozylibram.milestones.owner');`);
 
+  /* ---- Async detectors: social + community (QA Scout item 4) ----
+     checkSocialMilestones / checkCommunityMilestones / markMilestoneSeen
+     had ZERO executions: checkMilestones fires them fire-and-forget and
+     the unstubbed environment made them return early. Here they are
+     driven DIRECTLY (awaited) with CharacterWiki._sb and
+     CommunityCorpus.acceptedCounts stubbed at the module seam, counts
+     fed just below / at / above each threshold. */
+  run(`localStorage.removeItem('cozylibram.milestones')`);
+  run(`
+    window.__earnedCalls = [];
+    onMilestonesEarned = function (fresh) { window.__earnedCalls.push(fresh.slice()); };
+    window.__socialRows = [];
+    window.__origSb = CharacterWiki._sb;
+    CharacterWiki._sb = async function () {
+      return { from: function () { return { select: function () { return {
+        range: async function (a, b) { return { data: window.__socialRows.slice(a, b + 1), error: null }; }
+      }; } }; } };
+    };
+    window.__setSocial = function (rows) { window.__socialRows = rows; };
+  `);
+  const rels = (n, base) => Array.from({ length: n }, (_, i) => ({ to: base + i, type: 'ally' }));
+  const setSocial = (rows) => run(`window.__setSocial(${JSON.stringify(rows)})`);
+  const storeNow = () => run(`loadMilestones()`);
+  // below both thresholds: 2 distinct works, 9 valid relationships
+  setSocial([
+    { work_id: 'w1', relationships: rels(5, 'a') },
+    { work_id: 'w2', relationships: rels(4, 'b') },
+    { work_id: null, relationships: [] },
+  ]);
+  await run(`checkSocialMilestones()`);
+  ok('social: below thresholds earns nothing', !storeNow()['lore-characters-3'] && !storeNow()['lore-relationships-10']);
+  // at the works threshold exactly (3 distinct works), still 9 relationships
+  setSocial([
+    { work_id: 'w1', relationships: rels(5, 'a') },
+    { work_id: 'w2', relationships: rels(4, 'b') },
+    { work_id: 'w3', relationships: [] },
+  ]);
+  await run(`checkSocialMilestones()`);
+  ok('social: 3 distinct works earns Names in the Margins (value 3, unseen)',
+    storeNow()['lore-characters-3'] && storeNow()['lore-characters-3'].value === 3 && storeNow()['lore-characters-3'].seen === false);
+  ok('social: relationships still below at 9', !storeNow()['lore-relationships-10']);
+  ok('social: the earn is surfaced via onMilestonesEarned',
+    JSON.stringify(run(`window.__earnedCalls`)) === JSON.stringify([['lore-characters-3']]));
+  // at the relationships threshold exactly: 10 valid + 3 invalid entries
+  setSocial([
+    { work_id: 'w1', relationships: rels(5, 'a') },
+    { work_id: 'w2', relationships: rels(5, 'b').concat([{ to: 'no-type' }, { type: 'ally' }, null]) },
+    { work_id: 'w3', relationships: [] },
+  ]);
+  await run(`checkSocialMilestones()`);
+  ok('social: 10 valid relationships earns Web of Fate (invalid entries do not count)',
+    storeNow()['lore-relationships-10'] && storeNow()['lore-relationships-10'].value === 10 && storeNow()['lore-relationships-10'].seen === false);
+  // idempotent: bigger data does not overwrite the recorded values
+  setSocial([
+    { work_id: 'w1', relationships: rels(9, 'a') },
+    { work_id: 'w2', relationships: rels(9, 'b') },
+    { work_id: 'w3', relationships: rels(9, 'c') },
+    { work_id: 'w4', relationships: rels(9, 'd') },
+  ]);
+  await run(`checkSocialMilestones()`);
+  ok('social: re-run with more data keeps the original values (3 / 10)',
+    storeNow()['lore-characters-3'].value === 3 && storeNow()['lore-relationships-10'].value === 10);
+  // markMilestoneSeen: flips + persists; unknown id is a no-op
+  run(`markMilestoneSeen('lore-characters-3')`);
+  ok('markMilestoneSeen: flips seen on the earned milestone', storeNow()['lore-characters-3'].seen === true);
+  ok('markMilestoneSeen: the flip is persisted to localStorage',
+    JSON.parse(run(`localStorage.getItem('cozylibram.milestones')`))['lore-characters-3'].seen === true);
+  run(`markMilestoneSeen('no-such-milestone')`);
+  ok('markMilestoneSeen: unknown id is a silent no-op', !storeNow()['no-such-milestone']);
+  // unavailable Supabase: silent no-op (the production safe default)
+  run(`localStorage.removeItem('cozylibram.milestones'); CharacterWiki._sb = async function () { return null; };`);
+  await run(`checkSocialMilestones()`);
+  ok('social: null client earns nothing and does not throw', Object.keys(storeNow()).length === 0);
+  run(`CharacterWiki._sb = window.__origSb;`);
+
+  /* community detectors: obscurity-weighted threshold 3 per pillar */
+  run(`
+    window.__origAcceptedCounts = CommunityCorpus.acceptedCounts;
+    window.__counts = { trope: 0, character: 0, trigger: 0, tropeW: 0, characterW: 0, triggerW: 0, weighted: 0 };
+    CommunityCorpus.acceptedCounts = async function () { return window.__counts; };
+    localStorage.removeItem('cozylibram.milestones');
+  `);
+  const setCounts = (c) => run(`window.__counts = ${JSON.stringify(c)}`);
+  setCounts({ trope: 9, character: 0, trigger: 4, tropeW: 2.9, characterW: 0, triggerW: 1.5, weighted: 4.4 });
+  await run(`checkCommunityMilestones()`);
+  ok('community: raw counts alone earn nothing (weighted 2.9 < 3)', !storeNow()['lore-trope-archivist'] && !storeNow()['lore-lookout']);
+  setCounts({ trope: 4, character: 0, trigger: 0, tropeW: 3, characterW: 0, triggerW: 0, weighted: 3 });
+  await run(`checkCommunityMilestones()`);
+  ok('community: weighted 3 exactly earns the trope pillar (value = raw count 4)',
+    storeNow()['lore-trope-archivist'] && storeNow()['lore-trope-archivist'].value === 4 && storeNow()['lore-trope-archivist'].seen === false);
+  setCounts({ trope: 4, character: 2, trigger: 1, tropeW: 3, characterW: 5.5, triggerW: 3.25, weighted: 11.75 });
+  await run(`checkCommunityMilestones()`);
+  ok('community: character + trigger pillars earn at/above the weighted threshold',
+    !!storeNow()['lore-dramatis-personae'] && !!storeNow()['lore-lookout']);
+  run(`CommunityCorpus.acceptedCounts = window.__origAcceptedCounts; localStorage.removeItem('cozylibram.milestones'); delete window.onMilestonesEarned;`);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('FATAL - async milestone sync test: ' + ((e && e.message) || e)); process.exit(1); });
