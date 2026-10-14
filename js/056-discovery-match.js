@@ -1,7 +1,7 @@
 'use strict';
 
 /* ---------------- discovery matching core ----------------
-   Extracted from js/150-modal-discovery.js: the pure matchers that decide
+   Extracted from js/150-modal-discovery.js (v556): the pure matchers that decide
    whether an external row is already in the library, a duplicate of another
    row, foreign-only, junk or a mashed-title record — and the loose title
    key (v116) they share. They are a de-facto shared API (js/140 calls
