@@ -96,8 +96,21 @@ function releaseInLibrary(c) {
   const t = String(c.title || '').toLowerCase().trim();
   const a = String((c.authors || [])[0] || '').toLowerCase().trim();
   if (!t) return false;
-  return library.some(b => String(b.title || '').toLowerCase().trim() === t &&
+  const ownedTitle = (title) => library.some(b =>
+    String(b.title || '').toLowerCase().trim() === title &&
     String((b.authors || [])[0] || '').toLowerCase().trim() === a);
+  if (ownedTitle(t)) return true;
+  // v533: omnibus records bundle several works into one title ("Beach
+  // Read / People We Meet On Vacation / Book Lovers / Happy Place").
+  // The bundle carries its OWN ISBN and its joined title equals no
+  // single owned title, so both checks above miss it and an all-owned
+  // bundle surfaced as a new find. If EVERY '/'-separated segment is an
+  // owned title by the same first author, the bundle is in the library;
+  // a partially-owned bundle is a genuine recommendation and stays.
+  if (!a) return false;
+  const segs = t.split(/\s*\/\s*/).map(s => s.trim()).filter(Boolean);
+  if (segs.length < 2) return false;
+  return segs.every(seg => ownedTitle(seg));
 }
 
 function hcBookToCandidate(b) {
@@ -1010,7 +1023,11 @@ function isRecoMerch(c) {
    duration in seconds"), books.default_audio_edition_id /
    default_physical_edition_id / default_ebook_edition_id, and the edition
    language name via editions.language { language } (books have no language
-   field). Title / contributor patterns only supplement the catalog data. */
+   field). Title / contributor patterns only supplement the catalog data.
+   v533: production probing showed those edition signals are stated for
+   only a small minority of records, so unstated records additionally go
+   through a conservative stopword detector (recoDetectLangCode below) —
+   the catalog's stated language still wins whenever one exists. */
 
 // Pure: the browser's primary language subtag ('en' from 'en-CA'), '' when
 // unavailable — '' disables language exclusion entirely.
@@ -1092,6 +1109,92 @@ function recoLangCode(raw) {
   return RECO_LANG_NAME_TO_CODE[s] || s;
 }
 
+/* v533: detection supplement for records the catalog leaves UNSTATED.
+   Production probing (2026-10-13) showed Hardcover states a language for
+   only a small minority of records — genuinely foreign records (Dutch,
+   Italian) routinely arrive with no language on any edition, so the
+   stated-language rules above never engage and the fail-open "unknown"
+   tier lets them headline. Detection fills ONLY the unstated case:
+   a stated language always wins, even when it looks wrong (one live
+   English record is mislabeled "Persian" — a catalog error, documented
+   here as a known casualty; correcting stated values is out of scope).
+
+   Method: count function-word (stopword) hits per language over the
+   record's own text. A language is called only on a clear win — at
+   least RECO_DETECT_MIN_HITS hits AND a lead of RECO_DETECT_MIN_MARGIN
+   over the runner-up. Below that bar the record stays unknown and
+   fails open exactly as before: wrongly EXCLUDING a browser-language
+   book is the worst outcome, so every tie or near-tie resolves to
+   unknown. The title is scored on its own first — it is the record's
+   own voice, and a clear title verdict stands even when an inherited
+   description blurb in another language would outvote it combined. */
+const RECO_DETECT_MIN_HITS = 3;
+const RECO_DETECT_MIN_MARGIN = 2;
+// Diacritic-folded forms (één→een, für→fur, não→nao) to match the
+// folded token stream. Genuinely ambiguous words (was, war, will, door,
+// ten) are deliberately absent from every list.
+const RECO_DETECT_STOPWORDS = {
+  en: ['the', 'of', 'and', 'a', 'an', 'in', 'to', 'is', 'are', 'be', 'been', 'it', 'its', 'he', 'she', 'they', 'we', 'you', 'his', 'her', 'their', 'our', 'your', 'my', 'him', 'them', 'this', 'that', 'these', 'those', 'with', 'for', 'on', 'at', 'by', 'from', 'as', 'but', 'not', 'no', 'if', 'or', 'so', 'than', 'then', 'when', 'while', 'who', 'which', 'all', 'any', 'more', 'most', 'other', 'some', 'only', 'over', 'under', 'into', 'about', 'after', 'before', 'between', 'through', 'during', 'out', 'up', 'down', 'here', 'there', 'where', 'how', 'can', 'could', 'would', 'should', 'do', 'does', 'did', 'have', 'has', 'had', 'one', 'two', 'first', 'now', 'just', 'even', 'still', 'also', 'very', 'much', 'many'],
+  nl: ['de', 'het', 'een', 'van', 'in', 'is', 'ik', 'hij', 'zij', 'wij', 'dat', 'die', 'dit', 'deze', 'aan', 'met', 'ook', 'maar', 'als', 'bij', 'nog', 'wel', 'niet', 'zijn', 'haar', 'hun', 'mijn', 'naar', 'uit', 'over', 'onder', 'tussen', 'doorheen', 'voor', 'tegen', 'zonder', 'tijdens', 'na', 'tot', 'om', 'op', 'er', 'daar', 'hier', 'waar', 'wanneer', 'waarom', 'hoe', 'wie', 'wat', 'geen', 'werd', 'wordt', 'worden', 'hebben', 'heeft', 'kunnen', 'kan', 'zal', 'zullen', 'zou', 'zouden', 'moeten', 'moet', 'willen', 'wil', 'zelf', 'elkaar', 'samen', 'altijd', 'nooit', 'weer', 'heel', 'erg', 'toch', 'juist', 'eens', 'iets', 'niets', 'iemand', 'niemand', 'alles', 'veel', 'meer', 'andere', 'eigen', 'elke', 'beide', 'zo', 'nu', 'toen', 'omdat', 'zodat', 'terwijl', 'hoewel', 'den', 'des'],
+  de: ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines', 'und', 'ist', 'sind', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'sich', 'nicht', 'auch', 'als', 'an', 'am', 'ans', 'im', 'vom', 'von', 'zu', 'zum', 'zur', 'in', 'ins', 'auf', 'aus', 'bei', 'mit', 'nach', 'uber', 'fur', 'um', 'durch', 'gegen', 'ohne', 'unter', 'vor', 'zwischen', 'seit', 'bis', 'wenn', 'aber', 'doch', 'schon', 'noch', 'nur', 'so', 'wie', 'wo', 'wer', 'man', 'mein', 'meine', 'sein', 'seine', 'haben', 'hat', 'hatte', 'werden', 'wird', 'wurde', 'konnen', 'kann', 'mussen', 'muss', 'sollen', 'soll', 'machen', 'gibt', 'am'],
+  fr: ['le', 'la', 'les', 'de', 'des', 'du', 'un', 'une', 'est', 'sont', 'et', 'a', 'au', 'aux', 'ce', 'cet', 'cette', 'ces', 'dans', 'en', 'sur', 'sous', 'chez', 'pour', 'par', 'avec', 'sans', 'vers', 'depuis', 'pendant', 'apres', 'avant', 'entre', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son', 'sa', 'ses', 'notre', 'nos', 'votre', 'vos', 'leur', 'leurs', 'ne', 'pas', 'se', 'lui', 'y', 'qui', 'que', 'quoi', 'dont', 'ou', 'mais', 'donc', 'alors', 'comme', 'quand', 'meme', 'aussi', 'tres', 'plus', 'moins', 'peu', 'beaucoup', 'toujours', 'jamais', 'souvent', 'maintenant', 'fait', 'ont', 'etre', 'avoir', 'suis', 'es', 'sommes', 'cela', 'celui', 'celle', 'ceux', 'ici'],
+  es: ['el', 'la', 'los', 'las', 'de', 'del', 'un', 'una', 'unos', 'unas', 'es', 'son', 'y', 'o', 'en', 'que', 'por', 'para', 'con', 'sin', 'sobre', 'entre', 'cuando', 'muy', 'mas', 'pero', 'sus', 'su', 'al', 'lo', 'como', 'ya', 'este', 'esta', 'esto', 'estos', 'estas', 'ese', 'esa', 'eso', 'mi', 'mis', 'tu', 'tus', 'nuestro', 'nuestra', 'le', 'les', 'me', 'te', 'se', 'nos', 'no', 'si', 'porque', 'tambien', 'hasta', 'desde', 'donde', 'quien', 'quienes', 'cual', 'todo', 'toda', 'todos', 'todas', 'otro', 'otra', 'otros', 'otras', 'mismo', 'cada', 'tan', 'tanto', 'durante', 'segun', 'era', 'eran', 'fue', 'fueron', 'hay', 'han', 'ha', 'tiene', 'tienen', 'hace', 'puede', 'pueden', 'va', 'van'],
+  it: ['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'un', 'una', 'uno', 'che', 'e', 'non', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'del', 'della', 'dello', 'dei', 'degli', 'delle', 'nel', 'nella', 'nello', 'nei', 'negli', 'nelle', 'sul', 'sulla', 'sullo', 'al', 'alla', 'allo', 'ai', 'agli', 'alle', 'dal', 'dalla', 'dallo', 'dai', 'dagli', 'dalle', 'questo', 'questa', 'questi', 'queste', 'quello', 'quella', 'quelli', 'quelle', 'anche', 'come', 'ma', 'se', 'piu', 'ci', 'ne', 'si', 'io', 'tu', 'lui', 'lei', 'noi', 'voi', 'loro', 'mio', 'mia', 'miei', 'mie', 'tuo', 'tua', 'suo', 'sua', 'suoi', 'sue', 'nostro', 'nostra', 'sono', 'era', 'erano', 'siamo', 'siete', 'ho', 'hai', 'ha', 'abbiamo', 'avete', 'hanno', 'fatto', 'quando', 'dove', 'molto', 'tutto', 'tutta', 'tutti', 'tutte', 'cosa', 'cosi', 'perche', 'mentre', 'dopo', 'prima', 'senza', 'sotto', 'sopra', 'ancora', 'ogni', 'qualche', 'altro', 'altra', 'altri', 'altre', 'poco', 'quanto', 'gia', 'invece', 'forse', 'pero', 'dunque', 'quindi', 'allora', 'ora', 'stato', 'stata'],
+  pt: ['o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'por', 'pelo', 'pela', 'pelos', 'pelas', 'para', 'com', 'sem', 'que', 'e', 'nao', 'se', 'ao', 'aos', 'seu', 'sua', 'seus', 'suas', 'meu', 'minha', 'meus', 'minhas', 'ele', 'ela', 'eles', 'elas', 'voce', 'mais', 'muito', 'ja', 'quando', 'como', 'mas', 'tambem', 'sobre', 'entre', 'depois', 'antes', 'ate', 'so', 'sao', 'era', 'eram', 'foi', 'foram', 'tem', 'tinha', 'vai', 'vao', 'pode', 'podem', 'lhe', 'lhes', 'isso', 'isto', 'aquilo', 'esse', 'essa', 'este', 'esta', 'estes', 'estas', 'aquele', 'aquela', 'tudo', 'todo', 'toda', 'todos', 'todas', 'outro', 'outra', 'cada', 'mesmo', 'mesma', 'onde', 'quem', 'qual', 'quanto', 'pois', 'porque', 'porem', 'ainda', 'sempre', 'nunca', 'talvez', 'aqui', 'bem'],
+};
+const RECO_DETECT_SETS = {};
+Object.keys(RECO_DETECT_STOPWORDS).forEach(code => {
+  RECO_DETECT_SETS[code] = new Set(RECO_DETECT_STOPWORDS[code]);
+});
+
+// Pure: stopword hit counts per language for a text. Tokens are
+// diacritic-folded lowercase letter runs.
+function recoLangScores(text) {
+  const scores = { en: 0, nl: 0, de: 0, fr: 0, es: 0, it: 0, pt: 0 };
+  const toks = String(text || '').toLowerCase()
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .split(/[^\p{L}]+/u).filter(Boolean);
+  toks.forEach(tok => {
+    for (const code in RECO_DETECT_SETS) {
+      if (RECO_DETECT_SETS[code].has(tok)) scores[code]++;
+    }
+  });
+  return scores;
+}
+
+// Pure: the winning language from a score table, or null when the
+// evidence is below the confidence bar (unknown — caller fails open).
+function recoLangFromScores(scores) {
+  let best = null, bestN = 0, secondN = 0;
+  for (const code in scores) {
+    const n = scores[code];
+    if (n > bestN) { secondN = bestN; bestN = n; best = code; }
+    else if (n > secondN) { secondN = n; }
+  }
+  return (best && bestN >= RECO_DETECT_MIN_HITS && bestN - secondN >= RECO_DETECT_MIN_MARGIN)
+    ? best : null;
+}
+
+// Pure: detect a candidate's language from its own text (title first,
+// then title + description). null = no confident call. Only meaningful
+// for candidates with no stated language — see recoCandidateLangCode.
+function recoDetectLangCode(c) {
+  if (!c) return null;
+  const fromTitle = recoLangFromScores(recoLangScores(c.title));
+  if (fromTitle) return fromTitle;
+  return recoLangFromScores(recoLangScores(
+    String(c.title || '') + ' ' + String(c.description || '')));
+}
+
+// Pure: the language code a candidate is classified by — the catalog's
+// stated language when there is one (it always wins), otherwise the
+// detected language, otherwise null (unknown; ranking fails open).
+function recoCandidateLangCode(c) {
+  const stated = recoLangCode(c && c.langName);
+  if (stated) return stated;
+  return recoDetectLangCode(c);
+}
+
 // Pure: is this candidate an audiobook record? Primary signal is catalog
 // data (book-level audio_seconds; an audio default edition with no print
 // or ebook default). A record that HAS a physical default is the work's
@@ -1117,7 +1220,10 @@ function recoIsAudioRecord(c) {
 // "unknown" (tiers 2/3) — print still beats audio, nothing is excluded.
 function recoEditionRank(c, wantLang) {
   const want = String(wantLang || '').trim().toLowerCase();
-  const code = recoLangCode(c && c.langName);
+  // v533: stated language wins; unstated records fall back to detection
+  // (recoCandidateLangCode) so a confidently foreign record is a KNOWN
+  // mismatch here, not an "unknown" that fails open.
+  const code = recoCandidateLangCode(c);
   const audio = recoIsAudioRecord(c);
   if (want && code) {
     if (code !== want) return -1;
@@ -1178,7 +1284,10 @@ function collapseRecoWorks(cands, wantLang) {
 // needs. If the extended query is ever rejected (schema drift), fall back
 // per author to the pre-v530 field set — those candidates carry no
 // signals, so they collapse as unknown-language print by title alone and
-// recommendations degrade instead of vanishing.
+// recommendations degrade instead of vanishing. v533: the fallback is no
+// longer silent — one AppLog line per affected sweep (visible in the
+// Observatory log viewer), so a production schema change that strips
+// every edition signal leaves a trace instead of shipping blind.
 function recoSweepQuery(author, extended) {
   const fields = extended
     ? ' { id title description pages audio_seconds default_audio_edition_id' +
@@ -1193,11 +1302,12 @@ function recoSweepQuery(author, extended) {
 }
 async function sweepRecoCandidates(authors, dismissed) {
   const out = [], seen = new Set();
+  let fellBack = false;
   for (const a of (authors || []).slice(0, 6)) {
     try {
       let data = null;
       try { data = await hcGraphQL(recoSweepQuery(a, true)); }
-      catch (e) { data = await hcGraphQL(recoSweepQuery(a, false)); }
+      catch (e) { fellBack = true; data = await hcGraphQL(recoSweepQuery(a, false)); }
       ((data || {}).books || []).forEach(b => {
         if (b.id == null || seen.has(b.id)) return;
         if (dismissed.has('hc:' + b.id)) return;
@@ -1210,6 +1320,13 @@ async function sweepRecoCandidates(authors, dismissed) {
       });
     } catch (e) { /* next author */ }
     await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
+  }
+  if (fellBack) {
+    try {
+      if (typeof AppLog === 'object' && AppLog) {
+        AppLog.warn('reco', 'extended edition-signal query rejected; legacy fallback used — recommendations carry no stated language/audio signals this sweep');
+      }
+    } catch (e) { /* logging must never break the sweep */ }
   }
   // v530: one edition per work across the WHOLE sweep, print preferred,
   // editions respecting the browser's language — before any ranking, so

@@ -6,6 +6,11 @@
 // per-author schema-drift fallback, and the pre-existing dismissal /
 // in-library / merch filters still applying before the collapse).
 //
+// v533 additions: omnibus segment-match in releaseInLibrary, the drift
+// fallback's AppLog trace, and the stopword language detector for
+// records the catalog leaves unstated (fixtures include the real Dutch
+// and Italian records observed headlining an English list, Oct 2026).
+//
 // Fixture provenance: the raw book objects below mirror the field shapes
 // of Hardcover's official GraphQL schema documentation
 // (github.com/hardcoverapp/hardcover-docs — Books schema field table:
@@ -201,6 +206,103 @@ const hcAudio = (over) => hcBook(Object.assign({
     window.__queries.length === 2 && window.__queries[1].indexOf('audio_seconds') === -1);
   ok('drift: fallback path still collapses to one edition',
     sweptDrift.length === 1 && sweptDrift[0].hcId === 1);
+
+  // ---- v533: releaseInLibrary — omnibus segment match ----
+  const henryLib = ['Beach Read', 'People We Meet On Vacation', 'Book Lovers', 'Happy Place']
+    .map(t => ({ title: t, authors: ['Emily Henry'], isbn: '' }));
+  const omniCand = {
+    title: 'Beach Read / People We Meet On Vacation / Book Lovers / Happy Place',
+    authors: ['Emily Henry'], isbns: ['9780593440875'], // the bundle's OWN isbn — matches nothing
+  };
+  runInWindow('library = ' + JSON.stringify(henryLib));
+  ok('omnibus: all segments owned by same author → in library', getX('releaseInLibrary(X)', omniCand) === true);
+  runInWindow('library = ' + JSON.stringify(henryLib.slice(0, 3)));
+  ok('omnibus: one segment unowned → stays recommendable', getX('releaseInLibrary(X)', omniCand) === false);
+  runInWindow('library = ' + JSON.stringify(henryLib.map(b => ({ title: b.title, authors: ['Someone Else'], isbn: '' }))));
+  ok('omnibus: segments owned by a different author → stays', getX('releaseInLibrary(X)', omniCand) === false);
+  runInWindow('library = ' + JSON.stringify(henryLib));
+  ok('omnibus: two-segment bundle, all owned → in library',
+    getX('releaseInLibrary(X)', { title: 'Beach Read / Book Lovers', authors: ['Emily Henry'], isbns: [] }) === true);
+  ok('omnibus: direct single-title match unchanged',
+    getX('releaseInLibrary(X)', { title: 'Beach Read', authors: ['Emily Henry'], isbns: [] }) === true);
+  ok('omnibus: unowned single title unaffected',
+    getX('releaseInLibrary(X)', { title: 'Funny Story', authors: ['Emily Henry'], isbns: [] }) === false);
+
+  // ---- v533: language detection for unstated records ----
+  const det = (title, desc) => getX('recoDetectLangCode(X)', { title: title, description: desc || '' });
+  // The real records observed live (production probing, 2026-10-13).
+  ok('detect: Dutch "Nog één week samen" → nl', det('Nog één week samen') === 'nl');
+  ok('detect: Dutch "Zo was het niet bedoeld" → nl', det('Zo was het niet bedoeld') === 'nl');
+  ok('detect: Italian Crescent City record title → it', det('Crescent City - La casa di cielo e aria') === 'it');
+  // Other languages, via title + description evidence.
+  ok('detect: German (Kafka) → de',
+    det('Die Verwandlung', 'Als Gregor Samsa eines Morgens aus unruhigen Träumen erwachte, fand er sich in seinem Bett zu einem ungeheuren Ungeziefer verwandelt.') === 'de');
+  ok('detect: French (Hugo) → fr',
+    det('Les Misérables', "Jean Valjean est poursuivi par l'inspecteur Javert, qui le traque sans relâche dans les rues de Paris, où il rencontre une enfant que sa mère lui a confiée avant de mourir.") === 'fr');
+  ok('detect: Spanish (Zafón) → es',
+    det('La sombra del viento', 'Un amanecer de 1945, un muchacho es conducido por su padre a un misterioso lugar oculto en el corazón de la ciudad vieja: el Cementerio de los Libros Olvidados.') === 'es');
+  ok('detect: Portuguese (Machado) → pt, not es',
+    det('Dom Casmurro', 'Um romance sobre o ciúme: Bentinho conta a sua história, porque ele não sabe se Capitu o traiu, e com as lembranças de uma vida inteira ele ainda não conseguiu esquecer o que passou.') === 'pt');
+  // English controls — never a confident foreign call.
+  ok('detect: English title with invented words → en', det('The Priory of the Orange Tree') === 'en');
+  ok('detect: English title only → en', det('A Court of Thorns and Roses') === 'en');
+  ok('detect: English blurb → en',
+    det('Mistborn: The Final Empire', 'In a world where ash falls from the sky and mists rule the night, a street urchin discovers she has the power to burn metals and change the fate of an empire that has stood for a thousand years.') === 'en');
+  ok('detect: foreign-looking proper nouns, English text → en',
+    det('The Shadow of the Wind', "A boy takes a mysterious book from a labyrinthine library and finds that someone is destroying every copy of the author's other works, one by one.") === 'en');
+  // Below the bar → unknown (fail-open preserved).
+  ok('detect: one-word title "It" → unknown', det('It') === null);
+  ok('detect: one-word title "Dune" → unknown', det('Dune') === null);
+  ok('detect: short English title below bar → unknown', det('Klara and the Sun') === null);
+  ok('detect: lone foreign stopword → unknown', det('Het') === null);
+  ok('detect: null candidate → null', get('recoDetectLangCode(null)') === null);
+
+  // ---- v533: stated language always wins over detection ----
+  ok('stated wins: mislabeled "Persian" stays fa (documented casualty)',
+    getX('recoCandidateLangCode(X)', { langName: 'Persian', title: 'Crown of Midnight', description: 'An English blurb about an assassin and her prince, with the fate of the kingdom in her hands.' }) === 'fa');
+  ok('stated wins: Persian-labeled record still excluded for en',
+    getX('recoEditionRank(X, "en")', { langName: 'Persian', title: 'Crown of Midnight', description: '', audioSeconds: null, defAudioId: null, defPhysId: 1, defEbookId: null }) === -1);
+  ok('stated wins: English label beats a Dutch-looking title',
+    getX('recoCandidateLangCode(X)', { langName: 'English', title: 'Nog één week samen', description: '' }) === 'en');
+
+  // ---- v533: detected language drives rank + collapse like a stated one ----
+  const dutchCand = { title: 'Nog één week samen', authors: ['Marijke Vos'], langName: '', description: '', audioSeconds: null, defAudioId: null, defPhysId: 1, defEbookId: null, hcId: 401 };
+  const italCand = { title: 'Crescent City - La casa di cielo e aria', authors: ['Sarah J. Maas'], langName: '', description: '', audioSeconds: null, defAudioId: null, defPhysId: 1, defEbookId: null, hcId: 402 };
+  ok('rank: detected-nl record excluded for en browser', getX('recoEditionRank(X, "en")', dutchCand) === -1);
+  ok('rank: detected-nl record is browser-lang print for nl browser', getX('recoEditionRank(X, "nl")', dutchCand) === 0);
+  ok('rank: detected-it record excluded for en browser', getX('recoEditionRank(X, "en")', italCand) === -1);
+  ok('rank: undetectable record still fails open (unknown print = 2)',
+    getX('recoEditionRank(X, "en")', Object.assign({}, dutchCand, { title: 'Dune' })) === 2);
+  out = collapse([dutchCand, enPrint2], 'en');
+  ok('collapse: detected-foreign work dropped for en browser', out.length === 1 && out[0].hcId === 101);
+  out = collapse([dutchCand, enPrint2], 'nl');
+  ok('collapse: same record kept for nl browser, en record dropped', out.length === 1 && out[0].hcId === 401);
+
+  // Sweep end-to-end: an unstated Dutch record is filtered by detection.
+  runInWindow('library = []');
+  const rawDutch = hcBook({
+    id: 7, title: 'Nog één week samen', description: '',
+    default_physical_edition: { isbn_13: '9789000377931', language: null },
+    default_cover_edition: { language: null },
+  });
+  runInWindow('hcGraphQL = async (q) => ({ books: ' + JSON.stringify([rawDutch, rawPrint]) + ' });');
+  const sweptDet = await get('sweepRecoCandidates(["Rebecca Yarros"], new Set())');
+  ok('sweep: unstated Dutch record excluded via detection', sweptDet.length === 1 && sweptDet[0].hcId === 1);
+
+  // ---- v533: drift fallback leaves exactly one AppLog trace per sweep ----
+  window.__queries = [];
+  runInWindow('hcGraphQL = async (q) => { window.__queries.push(q);' +
+    ' if (q.indexOf("audio_seconds") !== -1) throw new Error("field drift");' +
+    ' return { books: [] }; };');
+  runInWindow('AppLog.clear()');
+  await get('sweepRecoCandidates(["Rebecca Yarros", "Sarah J. Maas"], new Set())');
+  ok('fallback: one AppLog warn (tag "reco") per sweep, not per author',
+    get('AppLog.entries("warn").filter(e => e.tag === "reco").length') === 1);
+  runInWindow('AppLog.clear()');
+  runInWindow('hcGraphQL = async (q) => ({ books: [] });');
+  await get('sweepRecoCandidates(["Rebecca Yarros"], new Set())');
+  ok('fallback: no AppLog warn on the happy path',
+    get('AppLog.entries("warn").filter(e => e.tag === "reco").length') === 0);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
