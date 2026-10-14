@@ -97,19 +97,23 @@ ok('authors ranked by read count then rating',
   const pills = [...window.document.querySelectorAll('.up-pill')].map(p => p.textContent);
   ok('a book releasing today counts as upcoming', pills.some(p => /today/.test(p)));
 
-  // v134/v175: the New Releases tile itself runs the check (it used to be a dead div)
+  // v134/v175: the New Releases tile ran the check inline (it used to be a
+  // dead div). v538: the tile is retired — the inline section's Check now
+  // button owns the same wiring, results render as a rail on Discover.
   runInWindow(`
     view = 'discover'; renderDiscover();
     window.__realCheck = checkNewReleases;
     checkNewReleases = async () => ({ list: [{ hcId: 99, title: 'Card Book', authors: ['Ann Author'],
       releaseDate: '${isoIn(20)}', cover: '', description: '', pages: 100, isbns: [] }], failed: 0, total: 1 });
   `);
-  const relCard = window.document.querySelector('[data-dtile="releases"]');
-  ok('New Releases is a real tappable card', !!relCard && relCard.tagName === 'BUTTON');
+  const relCard = window.document.querySelector('#disc-rel-check');
+  ok('New Releases check is a real tappable control (v538: no doorway tile)',
+    !!relCard && relCard.tagName === 'BUTTON' && !window.document.querySelector('[data-dtile="releases"]'));
   relCard.click();
   await new Promise(r => setTimeout(r, 300));
-  ok('card click runs the check and renders results',
+  ok('check click runs the sweep and renders results as a rail',
     !!window.document.querySelector('#release-results .rel-card') &&
+    !!window.document.querySelector('#release-results .rail') &&
     window.document.getElementById('release-results').textContent.includes('Card Book'));
   runInWindow(`checkNewReleases = window.__realCheck;`);
   // v135: when every author lookup fails, the sweep reports it honestly
@@ -119,9 +123,9 @@ ok('authors ranked by read count then rating',
   ok('total failure is counted, not mistaken for "caught up"',
     bad.list.length === 0 && bad.failed === bad.total && bad.total === 2);
   runInWindow(`view = 'discover'; renderDiscover();`);
-  window.document.querySelector('[data-dtile="releases"]').click();
+  window.document.querySelector('#disc-rel-check').click();
   await new Promise(r => setTimeout(r, 2500));
-  ok('card shows an honest error when Hardcover is unreachable',
+  ok('check shows an honest error when Hardcover is unreachable',
     /Couldn't reach Hardcover/.test(window.document.getElementById('release-results').textContent));
   window.fetch = realFetch;
 

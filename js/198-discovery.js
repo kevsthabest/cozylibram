@@ -223,6 +223,34 @@ function releaseResultsHTML(list) {
     ).join('') + '</div>';
 }
 
+// v538: on Discover the release list renders as a cover rail (the tab's
+// shelves); everywhere else (the Wishlist view) the grid above stands.
+// Cards keep the .rel-card / [data-add] / [data-dis] / .cover-wrap
+// hooks either way, so wireReleaseResults and the shield painter don't
+// care which shape a list took.
+function releaseListHTML(list) {
+  if (typeof view !== 'undefined' && view === 'discover') return releaseRailHTML(list);
+  return releaseResultsHTML(list);
+}
+function releaseRailHTML(list) {
+  if (!list.length) {
+    return '<p class="note">No new releases found — you\u2019re all caught up ✨</p>';
+  }
+  return '<div class="rail rel-rail">' + list.map((c, i) => {
+    const d = c.releaseDate ? new Date(c.releaseDate + 'T12:00:00') : null;
+    const tag = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : '';
+    return '<div class="rail-card rel-card" data-i="' + i + '">' +
+      '<div class="rail-coverbox">' + coverHTML(c) +
+      (tag ? '<span class="rel-tag">' + esc(tag) + '</span>' : '') + '</div>' +
+      '<h3 class="rail-title">' + esc(c.title) + '</h3>' +
+      '<p class="rail-author">' + esc(displayAuthors(c.authors)) + '</p>' +
+      '<p class="rail-why">' + icon('calendar') + ' ' + esc(releaseCountdown(c.releaseDate)) + '</p>' +
+      '<div class="rail-acts">' +
+      '<button class="btn small" data-add="' + i + '">＋ Add</button>' +
+      '<button class="btn ghost small" data-dis="' + i + '" aria-label="Dismiss">✕</button></div></div>';
+  }).join('') + '</div>';
+}
+
 function wireReleaseResults(box, list) {
   box.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', e => {
     if (e.target.closest('[data-add]') || e.target.closest('[data-dis]')) return;
@@ -249,7 +277,7 @@ function wireReleaseResults(box, list) {
 function renderReleaseResults(list) {
   const box = document.getElementById('release-results');
   if (!box) return;
-  box.innerHTML = releaseResultsHTML(list);
+  box.innerHTML = releaseListHTML(list);
   wireReleaseResults(box, list);
   shieldPaintReleaseCovers(box, list);
 }
@@ -277,13 +305,14 @@ function shieldPaintReleaseCovers(box, list) {
   }).catch(() => {});
 }
 
-// Shared wiring: the Wishlist's "Check for new releases" button and (v175)
-// Discover's New Releases tile. The tile shows progress inline in
+// Shared wiring: the Wishlist's "Check for new releases" button and
+// Discover's inline Check now (v175 tile; v538 a text button in the New
+// releases section head). The Discover control shows progress inline in
 // #release-results; the Wishlist button keeps its old label-swap behavior.
 function wireReleaseCheck() {
-  const btn = document.querySelector('[data-dtile="releases"]') || document.getElementById('rel-check');
+  const btn = document.querySelector('[data-dtile="releases"]') || document.getElementById('disc-rel-check') || document.getElementById('rel-check');
   if (!btn) return;
-  const isTile = btn.hasAttribute('data-dtile');
+  const isTile = btn.hasAttribute('data-dtile') || btn.id === 'disc-rel-check';
   btn.addEventListener('click', async () => {
     if (btn.disabled) return;
     if (!hcReady()) { toast('Hardcover isn\u2019t available right now — try again later'); return; }
@@ -305,7 +334,7 @@ function wireReleaseCheck() {
       if (!box) return;
       const list = cleanList();
       box.innerHTML = (prog ? '<p class="note">' + prog + '</p>' : '') +
-        (list.length ? releaseResultsHTML(list) : (done ? releaseResultsHTML([]) : ''));
+        (list.length ? releaseListHTML(list) : (done ? releaseListHTML([]) : ''));
       wireReleaseResults(box, list);
       if (done) shieldPaintReleaseCovers(box, list); // v524: final paint only; no-op unless Discover + shield on
     };
@@ -554,25 +583,44 @@ async function maybeAutoReleaseCheck() {
   } catch (e) {}
 }
 
-/* ---------------- Discover landing (v121, restyled v175) ----------------
-   "What are you in the mood for?" per the UI mockup: a featured Surprise Me
-   card, four tiles (My Favorites / Similar Books / Authors / New Releases),
-   a full-width Recommended banner (v234 UX-06: the fifth tile sat orphaned
-   on its own grid row), an Add-a-book row, and a
-   From-Your-<covenName> section. Every tile routes to a real feature; the release
-   check runs inline under the New Releases tile. */
-function discTile(ic, title, blurb, target) {
-  return '<button class="disc-tile" data-dtile="' + target + '">' +
-    '<span class="disc-ic">' + icon(ic) + '</span>' +
-    '<b>' + esc(title) + '</b><small>' + esc(blurb) + '</small></button>';
+/* ---------------- Discover landing (v121, restyled v175, remade v538) ----
+   v538: Variant B, "The Stage & The Shelves" — the tab is organized by
+   JOB. "Tonight's read" is a stage: the Surprise Me roulette behind a
+   single centred TBR cover ("Let the shelf decide."). "Find new books"
+   is three sideways cover rails by source: Recommended for you (with
+   Similar Books absorbed as a "More like" seed lens — no longer a
+   destination), New releases (the sweep inline, no doorway tile), and
+   From Your <covenName> (friend picks riding the loadRecos path). The
+   My Favorites and Add a Book tiles are retired: Favorites is a Library
+   surface, and Add lives in the permanent nav. All mechanics underneath
+   (roulette, reco sweep/ranking, release sweep) are unchanged. */
+
+// v538: the seed lens's candidates — her highest-rated books and
+// favorites, best first. Shared by the chips row and the lens itself.
+function similarSeeds() {
+  return library.filter(b => b.favorite || (b.myRating || 0) >= 4)
+    .sort((a, b) => ((b.myRating || 0) - (a.myRating || 0)) || ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)))
+    .slice(0, 6);
 }
 
-// v175: "Similar Books — like this one": pick a seed from her highest-rated
-// books and favorites; tapping one opens its detail sheet, whose Discovery
-// section already lists similar books from her shelves.
-// v224 (UX-06): the section carries a proper label now, not just the prompt.
+// v538: "More like:" chips above the Recommended rail. Renders '' when
+// she has no seeds yet (the Recommended empty states carry the guidance).
+function seedLensHTML() {
+  const seeds = similarSeeds();
+  if (!seeds.length) return '';
+  return '<div class="seed-lens"><span class="seed-lens-label">More like:</span>' +
+    '<div class="seed-chips">' + seeds.map(b =>
+      '<button class="seed-chip" data-seed="' + esc(b.id) + '">' + esc(b.title) + '</button>').join('') +
+    '</div></div>';
+}
+
 // v403: Show books similar to a seed book (from recommendations).
 // Filters the recommendation pool by seed's author/genres.
+// v538: this is now the seed LENS — it re-renders the Recommended rail
+// in place with just the matches, instead of swapping in a separate
+// Similar view. Tapping the active chip again clears it (clearRecoLens).
+let recoLastRender = null;  // last full render's args — the lens restore point
+let recoLensSeedId = null;  // seed id while the lens is applied
 function showSimilarToSeed(seed) {
   const seedAuthors = (seed.authors || []).map(a => String(a).trim().toLowerCase());
   const seedTropes = (seed.tropes || []).map(t => String(t).trim().toLowerCase());
@@ -596,160 +644,150 @@ function showSimilarToSeed(seed) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
 
-  // Show the recommendations section with filtered results
-  const p = document.getElementById('disc-similar');
-  if (p) p.hidden = true; // hide seeds, show results
-
-  if (!scored.length) {
-    box.innerHTML = '<h3 class="wish-section">' + icon('covers') +
-      ' Books like ' + esc(seed.title) + '</h3>' +
-      '<p class="note">No similar books found in recommendations yet. ' +
-      'Try the "Recommended for you" scan.</p>' +
-      '<button class="btn ghost sm" id="sim-back">← Back to seeds</button>';
-  } else {
-    box.innerHTML = '<h3 class="wish-section">' + icon('covers') +
-      ' Books like ' + esc(seed.title) + '</h3>' +
-      '<div class="grid">' + scored.slice(0, 12).map((x, i) => {
-        const c = x.r.c;
-        return '<div class="book-card rel-card" data-i="' + i + '">' +
-          '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
-          '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
-          '<span class="why-chip">≈' + Math.round((x.r.sim || 0) * 100) + '% match</span>' +
-          '</div></div>';
-      }).join('') + '</div>' +
-      '<button class="btn ghost sm" id="sim-back">← Back to seeds</button>';
-    // Wire up the filtered cards
-    const filtered = scored.slice(0, 12).map(x => x.r);
-    box.querySelectorAll('.rel-card').forEach(card =>
-      card.addEventListener('click', () => {
-        const r = filtered[Number(card.dataset.i)];
-        if (r) openRecoPreview(r);
-      }));
-  }
-  const back = document.getElementById('sim-back');
-  if (back) back.addEventListener('click', () => {
-    box.innerHTML = '';
-    delete box.dataset.loaded;
-    const sp = document.getElementById('disc-similar');
-    if (sp) {
-      sp.hidden = false;
-      sp.innerHTML = similarSeedHTML();
-      sp.querySelectorAll('[data-seed]').forEach(s =>
-        s.addEventListener('click', () => {
-          const sd = library.find(b => b.id === s.dataset.seed);
-          if (sd) showSimilarToSeed(sd);
-        }));
-    }
-  });
-  // Ensure the recommendations section is visible
-  const recoSection = document.getElementById('disc-reco');
-  if (recoSection) recoSection.hidden = false;
+  // v538: the lens re-renders the rail in place — the subset becomes
+  // visibleRecos, so wireRecoResults (preview / ＋TBR / dismiss) lines
+  // up exactly as it does for the full ranking. recoLastRender keeps
+  // the un-lensed render for the restore.
+  recoLensSeedId = seed.id;
+  document.querySelectorAll('.seed-chip').forEach(ch =>
+    ch.classList.toggle('on', ch.dataset.seed === seed.id));
+  const head = '<div class="lens-head"><span>Books like <b>' + esc(seed.title) + '</b></span>' +
+    '<button class="taplink" id="sim-clear">✕ Clear</button></div>';
+  const subset = scored.map(x => x.r).slice(0, 12);
+  visibleRecos = subset;
+  box.innerHTML = head + (subset.length
+    ? recoRailHTML(subset, visibleRecoLoved)
+    : '<p class="note">No similar books found in recommendations yet. Try the full list, or check back after the next scan.</p>');
+  if (subset.length) wireRecoResults(box);
+  const clear = document.getElementById('sim-clear');
+  if (clear) clear.addEventListener('click', clearRecoLens);
 }
 
-function similarSeedHTML() {
-  const head = '<h3 class="wish-section">' + icon('covers') + ' Similar Books</h3>';
-  const seeds = library.filter(b => b.favorite || (b.myRating || 0) >= 4)
-    .sort((a, b) => ((b.myRating || 0) - (a.myRating || 0)) || ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)))
-    .slice(0, 6);
-  if (!seeds.length)
-    return head + '<p class="note">Rate a few books 4\u2605 or tap the \u2661 on a favorite — your top books will show up here as starting points.</p>';
-  return head + '<p class="note">Like which one?</p><div class="sim-seeds">' + seeds.map(b =>
-    '<button class="sim-seed" data-seed="' + esc(b.id) + '" aria-label="Find books like ' + esc(b.title) + '">' +
-    (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">'
-             : '<span class="sim-nocover">' + icon('covers') + '</span>') +
-    '<small>' + esc(b.title) + '</small></button>').join('') + '</div>';
+// v538: drop the seed lens and re-render the full Recommended ranking.
+function clearRecoLens() {
+  recoLensSeedId = null;
+  document.querySelectorAll('.seed-chip.on').forEach(c => c.classList.remove('on'));
+  if (recoLastRender) renderRecoResults(recoLastRender.ranked, recoLastRender.lovedIds, recoLastRender.embedded, recoLastRender.spiceMap);
 }
 
 function renderDiscover() {
   track('discover_opened', null, { dedupeKey: 'discover-open', dedupeMs: 8000 });
+  // v538: the stage shows the TBR book the roulette is about to choose
+  // from — prefer one with a cover; fall back to its title treatment.
+  const tbr = (typeof tbrBooks === 'function') ? tbrBooks() : library.filter(b => b.status === 'tbr');
+  const stageBook = tbr.find(b => b.cover) || tbr[0] || null;
+  const stageCover = !stageBook ? '' :
+    stageBook.cover
+      ? '<div class="stage-cover"><img src="' + esc(stageBook.cover) + '" alt="" loading="lazy"></div>'
+      : '<div class="stage-cover stage-cover-ph"' + (stageBook.coverColor ? ' style="background:' + esc(stageBook.coverColor) + '"' : '') +
+        '><b class="serif">' + esc(stageBook.title) + '</b><small>' + esc(displayAuthors(stageBook.authors)) + '</small></div>';
+  const tbrLine = !tbr.length
+    ? 'Your TBR is empty — add a few books, then let the shelf decide.'
+    : 'One of the ' + tbr.length + (tbr.length === 1 ? ' book' : ' books') + ' waiting on your TBR.';
   setView(
-    // v233: hero carries the themed moon ornament only — the v175 sparkles
-    // badge was dropped (triple-icon stack looked cluttered).
+    // v538 header: plain framing, no mood promise the tab can't keep.
+    // The themed moon stays as the hero's one ornament.
     '<div class="disc-hero"><span class="disc-moon" aria-hidden="true"></span>' +
-    '<h2 class="serif">What are you in the mood for?</h2>' +
-    '<p>Find your next favorite book, or let us surprise you.</p></div>' +
+    '<h2 class="serif">Discover</h2>' +
+    '<p>Two ways in — pick one.</p></div>' +
 
-    '<button class="disc-surprise" data-dtile="pick">' +
-    '<span class="disc-ic">' + icon('dice') + '</span>' +
-    '<span class="disc-tx"><b>Surprise Me</b><small>Pick something from your TBR</small></span>' +
-    '<span class="disc-go" aria-hidden="true">→</span></button>' +
+    // v538 THE STAGE: one centred cover (the fan side-covers were cut
+    // in the design critique) over a quiet gold settle.
+    '<div class="disc-stage">' +
+    '<div class="disc-job">Tonight\u2019s read</div>' +
+    stageCover +
+    '<div class="serif stage-headline">Let the shelf decide.</div>' +
+    '<p class="stage-sub">' + tbrLine + '</p>' +
+    '<button class="btn stage-btn" data-dtile="pick">' + icon('dice') + ' Surprise Me</button>' +
+    '<div><button class="taplink" id="disc-browse-tbr">or browse your TBR →</button></div></div>' +
 
-    '<div class="disc-tiles">' +
-    discTile('heart', 'My Favorites', 'Books you\u2019ve loved', 'favorites') +
-    discTile('covers', 'Similar Books', 'Like this one', 'similar') +
-    discTile('user', 'Authors', 'Your favorite authors', 'authors') +
-    discTile('calendar', 'New Releases', 'Fresh picks', 'releases') +
-    '</div>' +
+    '<div class="disc-job-row"><span>Find new books</span><i></i></div>' +
 
-    '<div id="disc-sim" hidden></div>' +
+    '<section class="disc-sec">' +
+    '<div class="disc-sec-head"><h3 class="serif">' + icon('crystal') + ' Recommended for you</h3></div>' +
+    '<div id="disc-seeds">' + seedLensHTML() + '</div>' +
+    '<div id="disc-reco"><p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p></div></section>' +
 
-    // v234 (UX-06): Recommended gets the Surprise Me treatment — a full-width
-    // banner instead of an orphaned fifth tile.
-    '<button class="disc-surprise" data-dtile="recommended">' +
-    '<span class="disc-ic">' + icon('crystal') + '</span>' +
-    '<span class="disc-tx"><b>Recommended</b><small>Picked for your taste</small></span>' +
-    '<span class="disc-go" aria-hidden="true">→</span></button>' +
+    // v538: New Releases is an inline section now — the sweep's results
+    // sit in the rail; "All authors →" lives under it (authors view
+    // unchanged). Check now is the same control wireReleaseCheck has
+    // always owned, wearing a link's clothes.
+    '<section class="disc-sec">' +
+    '<div class="disc-sec-head"><h3 class="serif">' + icon('sparkles') + ' New releases</h3>' +
+    '<button class="taplink" id="disc-rel-check">Check now</button></div>' +
+    '<div class="disc-releases"><div id="release-results"><p class="note">New books from your authors land here.</p></div></div>' +
+    '<button class="authors-row" data-dtile="authors">' +
+    '<span class="disc-ic">' + icon('user') + '</span>' +
+    '<span class="disc-tx"><b>All authors</b><small>Everyone on your shelves, A–Z</small></span>' +
+    '<span class="disc-go" aria-hidden="true">→</span></button></section>' +
 
-    '<div id="disc-reco" hidden></div>' +
-
-    '<button class="disc-search" data-dtile="search">' +
-    '<span class="disc-ic">' + icon('search') + '</span>' +
-    '<span class="disc-tx"><b>Add a book</b>' +
-    '<small>Search across your library and external sources</small></span>' +
-    '<span class="disc-go" aria-hidden="true">→</span></button>' +
-
-    // v535 (UX P2-6): covenName() carries its article ("The Hearth"),
-    // which doubled it after "From Your" — use the bare form. The
-    // section has only ever been a heading + View All (books live
-    // behind the button), so add the quiet descriptive line the other
-    // tiles carry instead of a heading floating over nothing.
-    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenNameBare()) + '</h3>' +
-    '<button class="taplink" id="disc-coven-all">View All →</button></div>' +
-    '<p class="note" style="margin:2px 0 0">What your circle is reading and loving.</p></div>' +
-
-    '<div class="disc-releases"><div id="release-results"></div></div>');
+    // v535 (UX P2-6) stands: covenName() carries its article ("The
+    // Hearth"), which doubled it after "From Your" — bare form here.
+    // v538: the section is real now — a rail of the circle's picks,
+    // not just a heading + link over nothing.
+    '<section class="disc-sec">' +
+    '<div class="disc-sec-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenNameBare()) + '</h3>' +
+    '<button class="taplink" id="disc-coven-all">Open →</button></div>' +
+    '<div id="disc-hearth"><p class="note">Books your circle rates 4\u2605 or higher will land here.</p></div></section>'
+  );
   wireReleaseCheck();
   renderVisibleReleases(); // v150: restore the release list across re-renders
+  refreshRecommendations(); // v538: inline section — loads on arrival; the v536 memo keeps revisits cheap
+  refreshDiscoverHearth();
 
   document.querySelectorAll('[data-dtile]').forEach(el => el.addEventListener('click', () => {
     const t = el.dataset.dtile;
     if (t === 'pick') go('pick');
     else if (t === 'authors') go('authors');
-    else if (t === 'search') { addTab = 'search'; go('add'); }
-    else if (t === 'favorites') { // v173 home-tile behavior: the shelf lives on Library home
-      filter = 'all'; ownFilter = 'all'; query = '';
-      go('library');
-      // v427: defer scroll until after paint — synchronous scrollIntoView
-      // after go() raced the render and silently failed (issue #52).
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const f = document.querySelector('.fav-shelf');
-        if (f && f.scrollIntoView) f.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-      }));
-    }
-    else if (t === 'similar') {
-      const p = document.getElementById('disc-sim');
-      p.hidden = !p.hidden;
-      if (!p.hidden) {
-        p.innerHTML = similarSeedHTML();
-        p.querySelectorAll('[data-seed]').forEach(s =>
-          s.addEventListener('click', () => {
-            // v403: seed click shows books SIMILAR to the seed, not the seed itself.
-            // Filter recommendations by the seed's author/genres and show them.
-            const seed = library.find(b => b.id === s.dataset.seed);
-            if (seed) {
-              showSimilarToSeed(seed);
-            }
-          }));
-      }
-    }
-    else if (t === 'recommended') {
-      const p = document.getElementById('disc-reco');
-      p.hidden = !p.hidden;
-      if (!p.hidden && !p.dataset.loaded) { p.dataset.loaded = '1'; refreshRecommendations(); }
-    }
-    // 'releases' is owned by wireReleaseCheck (shared with the Wishlist button).
+    // Releases is owned by wireReleaseCheck (shared with the Wishlist button).
+  }));
+  const browse = document.getElementById('disc-browse-tbr');
+  if (browse) browse.addEventListener('click', () => {
+    filter = 'tbr'; ownFilter = 'all'; query = ''; go('library');
+  });
+  document.querySelectorAll('.seed-chip').forEach(chip => chip.addEventListener('click', async () => {
+    const seed = library.find(b => b.id === chip.dataset.seed);
+    if (!seed) return;
+    if (recoLensSeedId === seed.id) { clearRecoLens(); return; }
+    if (!visibleRecos.length) { try { await refreshRecommendations(); } catch (e) {} }
+    showSimilarToSeed(seed);
   }));
   document.getElementById('disc-coven-all').addEventListener('click', () => go('coven'));
+}
+
+/* ---------------- Discover: From Your Hearth rail (v538) ----------------
+   Friend picks on Discover ride the exact data path as the Hearth's own
+   "You'd love this" (loadRecos, js/196): friends' 4★+ books not on her
+   shelves, with the v524 shield exclusion and the v535 warning filter
+   applied upstream — this is that list in cover-rail form. Tapping a
+   card opens the same read-only preview the Hearth uses, and its
+   ＋ Add to TBR resolves through recoCache — loadRecos keeps the array
+   and the cache the same object, so the rail's indices line up. No
+   friend-initial badges on covers (design critique cut): who loved a
+   book is a quiet text line under it. */
+function refreshDiscoverHearth() {
+  const box = document.getElementById('disc-hearth');
+  if (!box) return;
+  const quiet = '<p class="note">Books your circle rates 4\u2605 or higher will land here.</p>';
+  if (typeof loadRecos !== 'function') { box.innerHTML = quiet; return; }
+  loadRecos().then(recos => {
+    if (!document.body.contains(box)) return;
+    if (!recos.length) { box.innerHTML = quiet; return; }
+    box.innerHTML = '<div class="rail hearth-rail">' + recos.slice(0, 10).map((r, i) => {
+      const b = r.book;
+      const names = r.ratings.map(x => esc(String(x.name).split(' ')[0])).join(', ');
+      return '<div class="rail-card hearth-card" data-i="' + i + '">' + recoCoverHTML(b) +
+        '<h3 class="rail-title">' + esc(b.title) + '</h3>' +
+        '<p class="rail-author">' + esc(displayAuthors(b.authors)) + '</p>' +
+        '<p class="rail-why">' + stars(r.avg) + '</p>' +
+        '<p class="rail-who">Loved by ' + names + '</p></div>';
+    }).join('') + '</div>';
+    box.querySelectorAll('.hearth-card').forEach(card => card.addEventListener('click', () => {
+      const i = Number(card.dataset.i);
+      const r = recos[i];
+      if (r) openCovenRecoPreview(r, i);
+    }));
+  }).catch(() => { if (document.body.contains(box)) box.innerHTML = quiet; });
 }
 
 /* ---------------- Recommended for you (v213, diversity v214) ----------------
@@ -1452,27 +1490,37 @@ function openReleasePreview(c) {
   });
 }
 
+// v538: the Recommended card is a rail card — cover, title, author, ONE
+// compact why line, and the ＋TBR / ✕ row. The full why (loved author,
+// shared tropes, match %) still lives in the preview sheet the cover
+// opens. The why line's priority: the shield state (it changes what
+// she sees), then match strength, then the loved author behind the pick.
 function recoCardHTML(r, i, lovedIds) {
   const c = r.c;
-  const chips = [];
-  if (c.loveAuthor) chips.push('<span class="why-chip">' + icon('heart') + ' ' + esc(c.loveAuthor) + '</span>');
-  recoSharedTropes((c.title || '') + ' ' + (c.description || ''), lovedIds).slice(0, 2)
-    .forEach(t => chips.push('<span class="why-chip">\u2726 ' + esc(t) + '</span>'));
-  if (r.sim != null) chips.push('<span class="why-chip">\u2248' + Math.round(r.sim * 100) + '% match</span>');
   // v524: content shield — a candidate whose work is known high-spice
-  // gets a blurred cover and a Shielded chip (Discover candidates carry
+  // gets a blurred cover and a Shielded line (Discover candidates carry
   // no spice of their own; the work baseline is the only signal, and
   // unknown spice stays visible per the shield's unknown rule).
   const shieldedCover = (typeof shieldOn === 'function' && shieldOn() &&
     typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(c, visibleRecoSpice));
-  if (shieldedCover) chips.push('<span class="why-chip">' + icon('eyeoff') + ' Shielded</span>');
-  return '<div class="book-card rel-card" data-i="' + i + '">' + coverHTML(c, 'reco-cover' + (shieldedCover ? ' shield-blur' : '')) +
-    '<div class="book-meta"><h3>' + esc(c.title) + '</h3>' +
-    '<p class="author">' + esc(displayAuthors(c.authors)) + '</p>' +
-    (chips.length ? '<div class="why-chips">' + chips.join('') + '</div>' : '') +
-    '</div><div style="align-self:center;display:flex;gap:6px">' +
+  let why = '';
+  if (shieldedCover) why = icon('eyeoff') + ' Shielded';
+  else if (r.sim != null) why = '\u2248' + Math.round(r.sim * 100) + '% match';
+  else if (c.loveAuthor) why = icon('heart') + ' ' + esc(c.loveAuthor);
+  return '<div class="rail-card rel-card" data-i="' + i + '">' +
+    coverHTML(c, 'reco-cover' + (shieldedCover ? ' shield-blur' : '')) +
+    '<h3 class="rail-title">' + esc(c.title) + '</h3>' +
+    '<p class="rail-author">' + esc(displayAuthors(c.authors)) + '</p>' +
+    (why ? '<p class="rail-why">' + why + '</p>' : '') +
+    '<div class="rail-acts">' +
     '<button class="btn small" data-add="' + i + '">\uFF0B TBR</button>' +
     '<button class="btn ghost small" data-dis="' + i + '" aria-label="Not for me">\u2715</button></div></div>';
+}
+
+// v538: the Recommended rail — shared by the full ranking and the seed
+// lens subset (both render through wireRecoResults afterwards).
+function recoRailHTML(ranked, lovedIds) {
+  return '<div class="rail reco-rail">' + ranked.map((r, i) => recoCardHTML(r, i, lovedIds)).join('') + '</div>';
 }
 
 function wireRecoResults(box) {
@@ -1514,25 +1562,24 @@ function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
   visibleRecos = ranked;
   visibleRecoLoved = lovedIds || [];
   visibleRecoSpice = spiceMap || {};
-  // v224 (UX-06): the section label stays up in every state — empty or loaded.
+  // v538: a fresh full render supersedes any applied seed lens, and is
+  // the restore point the lens clears back to. The section label is
+  // static markup in renderDiscover now (v224's always-up label stands).
+  recoLastRender = { ranked, lovedIds: visibleRecoLoved, embedded: !!embedded, spiceMap: visibleRecoSpice };
+  recoLensSeedId = null;
+  document.querySelectorAll('.seed-chip.on').forEach(c => c.classList.remove('on'));
   if (!ranked.length) {
-    box.innerHTML = recoHeadHTML() + '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
+    box.innerHTML = '<p class="note">Nothing new from your favorite authors right now \u2014 check back later \u2728</p>';
     return;
   }
-  box.innerHTML = recoHeadHTML() +
+  box.innerHTML =
     (embedded ? '' : '<p class="note">\u2726 Taste matching is still warming up \u2014 showing fresh picks from your favorite authors.</p>') +
-    '<div class="grid">' + ranked.map((r, i) => recoCardHTML(r, i, lovedIds)).join('') + '</div>' +
+    recoRailHTML(ranked, lovedIds) +
     '<p class="note" style="text-align:center"><button class="btn ghost small" id="reco-refresh">\u21BB Refresh</button></p>';
   wireRecoResults(box);
   const rf = document.getElementById('reco-refresh');
   if (rf) rf.addEventListener('click', () => refreshRecommendations(true)); // v536: the Refresh button is an explicit re-sweep, bypassing the memo
   track('reco_viewed', { count: ranked.length, embedded: !!embedded });
-}
-
-// v224 (UX-06): the Recommended section label renders in every state,
-// including loading and the early-return empty states below.
-function recoHeadHTML() {
-  return '<h3 class="wish-section">' + icon('crystal') + ' Recommended for you</h3>';
 }
 // v536 (UX P3-9): session memo for the ranked Recommended list. Every
 // call used to re-run the whole pipeline -- work-id resolution, taste
@@ -1561,12 +1608,12 @@ async function refreshRecommendations(force) {
     // the profile at top weight, so a thin rating history still works).
     const profBooks = library.filter(b => b && (b.status === 'read' || b.favorite));
     if (!profBooks.length) {
-      box.innerHTML = recoHeadHTML() + '<p class="note">Finish a few books or tap \u2661 on some favorites \u2014 your taste profile grows from the books you love.</p>';
+      box.innerHTML = '<p class="note">Finish a few books or tap \u2661 on some favorites \u2014 your taste profile grows from the books you love.</p>';
       return;
     }
     const authors = topLovedAuthors(6);
     if (!authors.length) {
-      box.innerHTML = recoHeadHTML() + '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
+      box.innerHTML = '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
       return;
     }
     if (!force && _recoMemo && _recoMemo.fp === recoTasteFingerprint(authors, profBooks)) {
@@ -1577,10 +1624,10 @@ async function refreshRecommendations(force) {
       return;
     }
     if (!hcReady()) {
-      box.innerHTML = recoHeadHTML() + '<p class="note">Hardcover isn\u2019t available right now \u2014 recommendations need it. Try again later.</p>';
+      box.innerHTML = '<p class="note">Hardcover isn\u2019t available right now \u2014 recommendations need it. Try again later.</p>';
       return;
     }
-  box.innerHTML = recoHeadHTML() + '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
+  box.innerHTML = '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
     // Taste profile: weighted mean of her read books' and favorites'
     // work embeddings (v214: favorites included at top weight).
     // v496 (#141): resolve work ids in bounded-concurrency chunks instead of
