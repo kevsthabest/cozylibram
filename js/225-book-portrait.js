@@ -26,19 +26,44 @@ function findBook(id) {
 }
 
 /* ---------- local data ---------- */
-function localTropes(b) {
-  // user tropes first (deliberate), then pipeline AI not already listed
+// One source's trope list, deduped within itself (case-insensitive).
+function sourceTropes(list, source) {
   var out = [], seen = {};
-  (b.tropes || []).forEach(function (t) {
+  (list || []).forEach(function (t) {
     t = String(t || '').trim(); if (!t) return;
     var k = t.toLowerCase();
-    if (!seen[k]) { seen[k] = 1; out.push({ name: t, source: 'you' }); }
+    if (!seen[k]) { seen[k] = 1; out.push({ name: t, source: source }); }
   });
-  (b.tropesAI || []).forEach(function (t) {
-    t = String(t || '').trim(); if (!t) return;
-    var k = t.toLowerCase();
-    if (!seen[k]) { seen[k] = 1; out.push({ name: t, source: 'auto' }); }
+  return out;
+}
+function localTropes(b) {
+  // Local/sync view: user tropes first (deliberate), then pipeline AI not
+  // already listed. portraitEnhance re-merges under the decided precedence
+  // (community → pipeline → user) — see mergePortraitTropes.
+  var out = sourceTropes(b.tropes, 'you'), seen = {};
+  out.forEach(function (t) { seen[t.name.toLowerCase()] = 1; });
+  sourceTropes(b.tropesAI, 'auto').forEach(function (t) {
+    var k = t.name.toLowerCase();
+    if (!seen[k]) { seen[k] = 1; out.push(t); }
   });
+  return out;
+}
+/* v547: the decided merge (User's call, 2026-10-14). Community-accepted
+   first, then pipeline, then the user's own — across the whole merged
+   list. Provenance follows precedence: the first source to claim a
+   trope owns its slot AND its label (community+user → 'community';
+   pipeline+user → 'auto'). Dedupe is case-insensitive, as elsewhere. */
+function mergePortraitTropes(community, b) {
+  var out = [], seen = {};
+  function push(list) {
+    (list || []).forEach(function (t) {
+      var k = String(t.name || '').trim().toLowerCase();
+      if (k && !seen[k]) { seen[k] = 1; out.push(t); }
+    });
+  }
+  push(community);
+  push(sourceTropes(b.tropesAI, 'auto'));
+  push(sourceTropes(b.tropes, 'you'));
   return out;
 }
 function localWarnings(b) {
@@ -115,8 +140,9 @@ async function communityTropes(b) {
     if (!sb) return out;
     var key = bookKeyFor(b);
     var r = await sb.from('book_tropes').select('trope_id').eq('book_key', key).eq('source', 'community');
+    // Deduped within the community set only — cross-source dedupe (and
+    // which source owns a shared trope) is the merge's job (v547).
     var seen = {};
-    localTropes(b).forEach(function (t) { seen[t.name.toLowerCase()] = 1; });
     (r.data || []).forEach(function (row) {
       var name = row.trope_id;
       try {
@@ -246,7 +272,7 @@ async function portraitEnhance(b) {
     var ct = await communityTropes(fresh);
     var tEl = document.getElementById('ptTropes');
     if (tEl && card.isConnected) {
-      var merged = ct.concat(localTropes(fresh));
+      var merged = mergePortraitTropes(ct, fresh);
       merged.forEach(function (t) {
         if (!t.id && typeof TropeTaxonomy !== 'undefined' && TropeTaxonomy.resolveId) {
           try { t.id = TropeTaxonomy.resolveId(t.name); } catch (e) {}
@@ -398,6 +424,6 @@ if (typeof window !== 'undefined') {
   window.portraitLocalTropes = localTropes;
 }
 if (typeof module !== 'undefined') {
-  module.exports = { portraitScore: portraitScore, localTropes: localTropes, warningsState: warningsState };
+  module.exports = { portraitScore: portraitScore, localTropes: localTropes, warningsState: warningsState, mergePortraitTropes: mergePortraitTropes };
 }
 })();
