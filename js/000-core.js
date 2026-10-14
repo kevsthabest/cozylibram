@@ -11,13 +11,19 @@ const STATUS = {
   tbr: 'To Be Read',
   reading: 'Currently Reading',
   read: 'Read',
-  dnf: 'Did Not Finish',
-  // v529: the wishlist is a true shelf — a status of its own, not the
-  // owned === 'tobuy' facet it was until now. Wishlist-ness derives
-  // ONLY from this status; 'tobuy' survives purely as an ownership
-  // facet ("not in hand yet") on books of any shelf.
-  wishlist: 'Wishlist'
+  dnf: 'Did Not Finish'
 };
+
+// v559 (Decision): the Wishlist is not a status. A book is on the
+// Wishlist exactly when it is TBR and not yet owned — the to-buy part
+// of TBR. This helper is the single owner of that derivation; no
+// surface equality-checks a wishlist status anymore. The Wishlist
+// SHELF persists as a view over this derivation, and the status term
+// keeps the history exception: a read/reading/dnf book marked to-buy
+// is never a wishlist book. (Re-decides the v529 status model.)
+function isWishlistBook(b) {
+  return !!b && b.status === 'tbr' && b.owned === 'tobuy';
+}
 
 let view = 'library';
 let filter = 'all';

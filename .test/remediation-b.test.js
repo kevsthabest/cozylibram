@@ -5,11 +5,13 @@
 //  2. Book-modal shelf picker stages until Save — an unsaved pick
 //     changes nothing (record, reopened modal, grid tag); the DNF
 //     reason prompt fires on Save, not on pick.
-//  4. Shelves tab models all five statuses (chips + groups, 2D here;
-//     the Room builds from the same SHELF_GROUPS constants) and the
-//     long-press move sheet offers all five destinations.
-//  6. Settings hide-chips render for every status, even empty+hidden.
-//  7. STATUS_BADGE covers 'wishlist' with a real bmwishlist glyph.
+//  4. Shelves tab models all five shelf groups (the four statuses +
+//     the derived Wishlist group, 2D here; the Room builds from the
+//     same SHELF_GROUPS constants) and the long-press move sheet
+//     offers all five destinations.
+//  6. Settings hide-chips render for every shelf, even empty+hidden.
+//  7. STATUS_BADGE covers 'wishlist' with a real bmwishlist glyph
+//     (v559: the badge of a derived wishlist book, tbr + tobuy).
 //  8. Purchase Ledger always renders the TOTAL SPENT line.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
@@ -57,9 +59,9 @@ const setLib = (books) => runInWindow(`library = ${JSON.stringify(books)}; saveL
   ok('wishlist badge uses the bmwishlist glyph', run(`STATUS_BADGE.wishlist[0]`) === 'bmwishlist');
   ok('bmwishlist is a real icon (not the covers fallback)',
     run(`icon('bmwishlist')`) !== run(`icon('covers')`) && run(`icon('bmwishlist')`).includes('M12 7.3'));
-  setLib([mk('w1', 'Wished', 'wishlist')]);
+  setLib([mk('w1', 'Wished', 'tbr', { owned: 'tobuy' })]);
   const wishCard = run(`bookTile(library[0], 0)`);
-  ok('wishlist tile renders the badge chip with label',
+  ok('wishlist tile renders the badge chip with label (derived tbr + tobuy book)',
     wishCard.includes('tile-badge st-wishlist') && wishCard.includes('aria-label="Wishlist"'));
 
   /* ---------- 2. modal shelf picker stages until Save ---------- */
@@ -104,9 +106,9 @@ const setLib = (books) => runInWindow(`library = ${JSON.stringify(books)}; saveL
 
   /* ---------- 4. Shelves tab: five statuses ---------- */
   setLib([mk('t1', 'TBR One', 'tbr'), mk('r1', 'Reading One', 'reading'),
-    mk('d1', 'Read One', 'read'), mk('w1', 'Wishlist One', 'wishlist'), mk('f1', 'DNF One', 'dnf')]);
+    mk('d1', 'Read One', 'read'), mk('w1', 'Wishlist One', 'tbr', { owned: 'tobuy' }), mk('f1', 'DNF One', 'dnf')]);
   runInWindow(`shelfSetViewMode('2d'); shelfGroup = 'tbr'; renderShelf();`);
-  ok('SHELF_GROUPS models all five statuses',
+  ok('SHELF_GROUPS models all five shelf groups',
     JSON.stringify(run(`SHELF_GROUPS.slice()`)) === '["tbr","reading","read","wishlist","dnf"]');
   const chipGroups = qa('#view .sv-chip').map(c => c.dataset.g);
   ok('shelf chips render for all five groups',
@@ -123,7 +125,9 @@ const setLib = (books) => runInWindow(`library = ${JSON.stringify(books)}; saveL
   ok('move-to sheet offers all five destinations',
     ['tbr', 'reading', 'read', 'wishlist', 'dnf'].every(g => dests.includes(g)));
   qa('#svSheet [data-shelf]').find(b => b.dataset.shelf === 'wishlist').click();
-  ok('move-to moves the book to the wishlist shelf', run(`library.find(b => b.id === 't1').status`) === 'wishlist');
+  ok('move-to moves the book to the wishlist shelf (v559: writes the derived pair)',
+    run(`library.find(b => b.id === 't1').status`) === 'tbr' &&
+    run(`library.find(b => b.id === 't1').owned`) === 'tobuy');
   runInWindow(`shelfCloseSheet();`);
 
   /* ---------- 6 + 8. Settings: unhide chips + ledger total ---------- */

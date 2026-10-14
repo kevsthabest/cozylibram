@@ -423,6 +423,16 @@ async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy) {
   if (up.error) throw up.error;
 }
 
+/* v559: the hideable-shelf list — the four statuses plus 'wishlist'.
+ * The Wishlist is no longer a status, but its SHELF identity persists
+ * for visibility: hidden_shelves keeps the 'wishlist' key, and both
+ * privacy surfaces offer it. (Server note: circle_book_visible gates
+ * on the stored status string, so a hidden 'wishlist' key alone no
+ * longer gates the derived set server-side — those books carry status
+ * 'tbr' now; hiding 'tbr' hides them with the rest of the TBR.) */
+function hideableShelves() { return Object.keys(STATUS).concat(['wishlist']); }
+function shelfLabel(s) { return s === 'wishlist' ? 'Wishlist' : (STATUS[s] || s); }
+
 /* v522 — the "Circle & privacy" controls, shared by the coven Privacy
  * sheet (prefix 'cc') and Settings → Circle & privacy (prefix 'st') so
  * the two surfaces can never drift. Name & avatar are identity, not a
@@ -443,7 +453,7 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     html += '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
       '<div class="chips" id="' + p + '-hide">' +
       shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
-        STATUS[s] + '</button>').join('') +
+        shelfLabel(s) + '</button>').join('') +
       '</div></div>';
   }
   html +=
@@ -754,9 +764,10 @@ function consumePendingInvite(code, friends) {
   });
 }
 function renderCovenMain(code, lists, priv) {
-  // v529: every status is a hideable shelf, Wishlist included — it is a
-  // real status key in hidden_shelves now, no pseudo-shelf machinery.
-  const shelves = Object.keys(STATUS);
+  // v559: hideable shelves = the four statuses + the Wishlist view
+  // identity (hideableShelves) — 'wishlist' stays a hidden_shelves key
+  // even though it is no longer a status.
+  const shelves = hideableShelves();
   let html = '<div class="view-head" style="position:relative"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2>' +
     '<button id="cc-privacy-gear" aria-label="Privacy settings" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)">' + icon('gear') + '</button></div>' +
     '<p class="note" style="text-align:center">Your private reading ' + covenNameBare().toLowerCase() + ' — add people you trust,<br>browse each other’s shelves.</p>' +
@@ -873,8 +884,11 @@ function renderCovenFriendMain() {
   const f = circFriend;
   const prof = circProfiles[f.id];
   const counts = { all: circBooks.length };
-  ['tbr', 'reading', 'read', 'dnf', 'wishlist'].forEach(s => { counts[s] = circBooks.filter(b => b.status === s).length; });
-  const books = circShelf === 'all' ? circBooks : circBooks.filter(b => b.status === circShelf);
+  ['tbr', 'reading', 'read', 'dnf'].forEach(s => { counts[s] = circBooks.filter(b => b.status === s).length; });
+  counts.wishlist = circBooks.filter(isWishlistBook).length; // v559: a friend's wishlist is their tbr + tobuy set
+  const books = circShelf === 'all' ? circBooks
+    : circShelf === 'wishlist' ? circBooks.filter(isWishlistBook)
+    : circBooks.filter(b => b.status === circShelf);
   const chip = (v, label) =>
     '<button class="chip' + (circShelf === v ? ' active' : '') + '" data-cf="' + v + '">' + label +
     (counts[v] ? ' · ' + counts[v] : '') + '</button>';
@@ -892,11 +906,9 @@ function renderCovenFriendMain() {
       // linkage-gated server-side) while the previous handle's
       // 90-day quarantine runs; stays hidden otherwise.
       '<p class="note" id="cf-formerly" hidden></p>' : '') +
-    // v529: the gift shelf rides right after All (adapted from the
-    // superseded facet build) — as a plain status chip: the books
-    // policy + circle_book_visible already gate it by the owner's
-    // share_library / hidden_shelves, exactly like the other shelves.
-    '<div class="chips">' + chip('all', 'All') + chip('wishlist', STATUS.wishlist) +
+    // v559: the gift shelf rides right after All — its count and its
+    // shelf are the friend's derived tbr + tobuy set (isWishlistBook).
+    '<div class="chips">' + chip('all', 'All') + chip('wishlist', 'Wishlist') +
     ['tbr', 'reading', 'read', 'dnf'].map(s => chip(s, STATUS[s])).join('') + '</div>';
   if (!circBooks.length) {
     html += '<div class="empty"><div class="big">' + icon('covers') + '</div>' +

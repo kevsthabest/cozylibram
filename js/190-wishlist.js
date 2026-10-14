@@ -1,10 +1,11 @@
 'use strict';
 
 /* ---- wishlist tab: the Wishlist shelf ----
-   v529: wishlist-ness is the status, never the owned facet (books
-   marked "to buy" on other shelves are not wishlist books). */
+   v559: the Wishlist is a VIEW over the derivation (isWishlistBook,
+   js/000) — the to-buy part of TBR. Books marked "to buy" on read /
+   reading / dnf are history, not wishlist, and never render here. */
 function renderWishlist() {
-  const books = library.filter(b => b.status === 'wishlist')
+  const books = library.filter(isWishlistBook)
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')));
   // v113: announced books with a future release date surface first, by date.
   // v114: a release *today* counts too (daysUntil 0 is not falsy-safe).
@@ -20,7 +21,7 @@ function renderWishlist() {
   if (!books.length) {
     html += emptyState({
       icon: 'gift', title: 'Nothing on the wishlist… yet',
-      body: 'Open any book and choose the <b>' + icon('gift') + ' Wishlist</b> shelf<br>to add it here — or add an upcoming release from Discover.',
+      body: 'Books on your TBR that you don\'t own yet live here.<br>Mark a book <b>To buy</b> in its Ownership — or add an upcoming release from Discover.',
       cta: { label: 'Discover books', go: 'discover' },
     });
   } else {

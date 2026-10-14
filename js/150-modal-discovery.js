@@ -178,8 +178,9 @@ async function searchSeriesId(seriesName, authorName) {
 }
 
 // Add a discovered book straight to the wishlist (she doesn't own it yet).
-// v529: that means the Wishlist SHELF (status) — the tobuy facet is
-// just the not-in-hand ownership state that rides along.
+// v559: that means the born pair status 'tbr' + owned 'tobuy' — the
+// Wishlist is the to-buy part of TBR (isWishlistBook, js/000), derived
+// from the pair, never a status of its own.
 function addExternalBook(x) {
   const book = {
     id: uid(),
@@ -193,7 +194,7 @@ function addExternalBook(x) {
     categories: [],
     publicRating: null,
     ratingsCount: 0,
-    status: 'wishlist',
+    status: 'tbr',
     owned: 'tobuy', // discovered = wanted, not yet in hand
     ratings: {},
     myRating: 0,
@@ -833,9 +834,8 @@ function renderDetailModal(b, viaBook) {
     reading: { label: 'Currently Reading', ic: 'reading' },
     read:    { label: 'Read',              ic: 'read' },
     dnf:     { label: 'DNF',               ic: 'dnf' },
-    // v529: the Wishlist shelf is a normal status choice here — moving
-    // a book to/from it is an ordinary shelf change in this sheet.
-    wishlist:{ label: 'Wishlist',          ic: 'gift' },
+    // v559: four statuses only — the Wishlist is not a shelf choice;
+    // it derives from TBR + To buy (see the buy-wrap note below).
   };
   const OWNED_META = {
     owned:    { label: 'Owned',    ic: 'owned' },
@@ -1110,6 +1110,9 @@ function renderDetailModal(b, viaBook) {
     '<span class="mrow-val" id="f-owned-val">' + (OWNED_META[draft.owned] || OWNED_META.tobuy).label + '</span><span class="mrow-chev">›</span></button>' +
     '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div></details>' +
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
+    // v559: membership legibility — a TBR book marked To buy IS on the
+    // Wishlist (derived, js/000); say so where the reader is looking.
+    '<p class="note" id="m-wishnote" style="margin:0 0 6px"' + (isWishlistBook(draft) ? '' : ' hidden') + '>🎁 On your Wishlist — books on your TBR marked To buy live on the Wishlist.</p>' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
@@ -1224,12 +1227,18 @@ function renderDetailModal(b, viaBook) {
     reading: { label: 'Log Pages',        ic: 'pencil',  run: () => scrollToField('m-progress') },
     read:    { label: 'Rate & Review',    ic: 'heart',   run: () => scrollToField('f-myrating') },
     dnf:     { label: 'Give it another go', ic: 'tbr',   run: () => primarySetStatus('tbr') },
-    // v529: the wishlist's primary act is the move onto the TBR shelf
-    // (the "I got it / I'm going to read it" step of the lifecycle).
-    wishlist:{ label: 'Move to TBR',        ic: 'tbr',   run: () => primarySetStatus('tbr') },
   };
+  // v559: a wishlist book is already TBR, so its "Move to TBR" primary
+  // is gone; the primary act for a wishlist-derived draft is the
+  // acquisition — mark it owned, and it leaves the Wishlist by
+  // derivation (status stays 'tbr'). The resolver keys on the DRAFT,
+  // like the status map it extends, so staged ownership picks repaint
+  // the primary too (paintOwnedRow calls paintPrimary).
+  const primaryCfg = () => isWishlistBook(draft)
+    ? { label: 'Mark owned', ic: 'owned', run: () => primaryMarkOwned() }
+    : (PRIMARY[draft.status] || PRIMARY.tbr);
   const paintPrimary = () => {
-    const cfg = PRIMARY[draft.status] || PRIMARY.tbr;
+    const cfg = primaryCfg();
     const btn = document.getElementById('m-primary');
     if (btn) btn.innerHTML = icon(cfg.ic) + ' ' + esc(cfg.label);
   };
@@ -1274,6 +1283,21 @@ function renderDetailModal(b, viaBook) {
     paintPrimary();
     renderProgressSection();
   };
+  // v559: the acquisition primary — mirrors primarySetStatusGo's
+  // commit-and-repaint shape, but flips the ownership facet instead of
+  // the status: the book stays on the TBR and leaves the Wishlist by
+  // derivation (isWishlistBook, js/000).
+  const primaryMarkOwned = () => {
+    if (b.owned === 'owned') return;
+    b.owned = 'owned'; draft.owned = 'owned';
+    saveLibrary();
+    root.querySelectorAll('#f-owned [data-o]').forEach(x => x.classList.toggle('active', x.dataset.o === 'owned'));
+    paintOwnedRow(); // facet row label/icon + buy-wrap note follow
+    const bw = document.getElementById('m-buywrap');
+    if (bw) bw.style.display = 'none';
+    paintPrimary();
+    toast('Marked owned 📚');
+  };
   const scrollToField = (fid) => {
     showDTab('details'); // v174: tabbed modal — the target lives on Details
     const el = document.getElementById(fid);
@@ -1284,8 +1308,7 @@ function renderDetailModal(b, viaBook) {
   };
   paintPrimary();
   document.getElementById('m-primary').addEventListener('click', () => {
-    const cfg = PRIMARY[draft.status] || PRIMARY.tbr;
-    cfg.run();
+    primaryCfg().run();
   });
   const moreBtn = document.getElementById('m-more');
   const moreMenu = document.getElementById('m-moremenu');
@@ -1409,12 +1432,20 @@ function renderDetailModal(b, viaBook) {
 
   // v182: mockup tappable rows — the row button expands the options; picking
   // one sets the draft value, repaints the row, and collapses.
+  // v559: the buy-wrap's Wishlist note follows the DRAFT pair — staging
+  // To buy on a TBR book shows it, staging Owned (or another shelf)
+  // hides it, all before Save commits anything.
+  const paintWishNote = () => {
+    const n = document.getElementById('m-wishnote');
+    if (n) n.hidden = !isWishlistBook(draft);
+  };
   const paintShelfRow = () => {
     const m = STATUS_META[draft.status] || STATUS_META.tbr;
     const v = document.getElementById('f-status-val');
     const ic = document.getElementById('f-status-ic');
     if (v) v.textContent = m.label;
     if (ic) ic.innerHTML = icon(m.ic);
+    paintWishNote();
   };
   const paintOwnedRow = () => {
     const m = OWNED_META[draft.owned] || OWNED_META.tobuy;
@@ -1422,6 +1453,8 @@ function renderDetailModal(b, viaBook) {
     const ic = document.getElementById('f-owned-ic');
     if (v) v.textContent = m.label;
     if (ic) ic.innerHTML = icon(m.ic);
+    paintWishNote();
+    paintPrimary(); // v559: the acquisition primary follows the facet too
   };
   root.querySelectorAll('[data-mrow]').forEach(t => t.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1936,9 +1969,10 @@ function renderDetailModal(b, viaBook) {
     try { if (typeof WorkStore !== 'undefined' && WorkStore.invalidate) WorkStore.invalidate(b); } catch (e) {}
     // v74: starting (or finishing) a book takes it off the Up Next queue —
     // it's no longer "next" once she's reading it.
-    // v529: wishlisting a book also takes it off the queue — every
-    // non-TBR shelf means "not imminently readable from your shelves".
-    if (['reading', 'read', 'dnf', 'wishlist'].includes(draft.status)) upNextRemove(id);
+    // v559: a wishlist book IS a TBR book now, so it is exactly what the
+    // queue holds — no eviction for the derived shelf; the three
+    // non-TBR statuses still evict.
+    if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
     var _becameRead = draft.status === 'read' && _aBefore.status !== 'read';
     saveLibrary(); close(); render();
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events

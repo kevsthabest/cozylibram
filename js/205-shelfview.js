@@ -69,6 +69,10 @@ function shelfSpineSpec(book) {
 }
 
 function shelfGroupBooks(books, group) {
+  // v559: the 'wishlist' group is the derived set (isWishlistBook);
+  // every other group matches its status — so the TBR group includes
+  // the wishlist books (the Wishlist is a subset view of TBR).
+  if (group === 'wishlist') return (books || []).filter(isWishlistBook);
   return (books || []).filter(b => String((b && b.status) || 'tbr') === group);
 }
 
@@ -1034,6 +1038,9 @@ function shelfOpenPhotoSheet(id) {
   if (!book) return;
   const pose = shelfPoseOf(book);
   const curStatus = String(book.status || 'tbr');
+  // v559: the book's organizing group derives like everywhere else —
+  // a wishlist book's current group is 'wishlist', not its raw status.
+  const curGroup = isWishlistBook(book) ? 'wishlist' : curStatus;
   const { sheet, close } = shelfSheetShell(esc(book.title || 'Untitled'),
     '<div class="sv-seg" role="group" aria-label="Display style">' +
     [['up', 'Upright'], ['down', 'Laid down'], ['face', 'Face out']].map(p =>
@@ -1043,7 +1050,7 @@ function shelfOpenPhotoSheet(id) {
     // v534: every shelf group is a destination (Wishlist + DNF included)
     '<div class="sv-seg" role="group" aria-label="Shelf">' +
     SHELF_GROUPS.map(g =>
-      '<button data-shelf="' + g + '" class="' + (curStatus === g ? 'active' : '') + '">' + SHELF_GROUP_LABEL[g] + '</button>'
+      '<button data-shelf="' + g + '" class="' + (curGroup === g ? 'active' : '') + '">' + SHELF_GROUP_LABEL[g] + '</button>'
     ).join('') + '</div>' +
     '<button class="sv-sheet-btn" id="svPhotoTake">' + icon('camera') + ' Photograph spine</button>' +
     /* M5: the button must also appear for binary spines (spinePhotoAssetId /
@@ -1057,11 +1064,18 @@ function shelfOpenPhotoSheet(id) {
       sheet.querySelectorAll('[data-pose]').forEach(x => x.classList.toggle('active', x === b));
     }));
   // v400: shelf move — update status and re-render
+  // v559: the Wishlist destination writes the derived pair (tbr +
+  // tobuy); leaving the Wishlist for TBR is the acquisition move
+  // (owned := 'owned', status stays 'tbr') — the same ruling as the
+  // book modal's primary action. Other destinations write the status.
   sheet.querySelectorAll('[data-shelf]').forEach(b =>
     b.addEventListener('click', () => {
       const ns = b.dataset.shelf;
-      if (ns !== book.status) {
-        book.status = ns;
+      const fromStatus = book.status, fromOwned = book.owned;
+      if (ns === 'wishlist') { book.status = 'tbr'; book.owned = 'tobuy'; }
+      else if (ns === 'tbr' && isWishlistBook(book)) { book.owned = 'owned'; }
+      else { book.status = ns; }
+      if (book.status !== fromStatus || book.owned !== fromOwned) {
         book._mtime = Date.now();
         if (typeof saveLibrary === 'function') saveLibrary();
         if (typeof scheduleCloudPush === 'function') scheduleCloudPush();

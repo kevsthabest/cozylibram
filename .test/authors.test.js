@@ -38,21 +38,21 @@ const mk = (id, title, author, owned) =>
 const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
 
 (async () => {
-  // v534: the wishlist split is by STATUS (v529 model), not the owned
-  // facet — these fixtures used to pin the retired facet model
-  // (a tbr + tobuy book counted as "wanted"). Now: a2 is a reco-add
-  // shape (tbr + tobuy) and counts as on-shelf; a5 is a true wishlist
-  // book (status 'wishlist', facet 'owned' — the status wins).
+  // v559: the wishlist split is by DERIVATION (isWishlistBook: tbr +
+  // tobuy) — a2 is a reco-add shape (tbr + tobuy) and counts as
+  // "wanted" now (the unified model: the Wishlist is the to-buy part
+  // of TBR, whatever flow added the book); a5 is a second wishlist
+  // book (tbr + tobuy). Supersedes the v534 status-split fixtures.
   runInWindow(`localStorage.clear();
     library.push(${mk('a1', 'Owned Book', ['Jane Doe'], 'owned')});
     library.push(${mk('a2', 'Reco Add', ['Jane Doe'], 'tobuy')});
     library.push(${mk('a3', 'Smith Book', ['John Smith'], 'owned')});
     library.push(${mk('a4', 'Co-written', ['Jane Doe', 'John Smith'], 'owned')});
-    library.push(Object.assign(${mk('a5', 'Wishlist Book', ['Jane Doe'], 'owned')}, { status: 'wishlist' }));`);
+    library.push(${mk('a5', 'Wishlist Book', ['Jane Doe'], 'tobuy')});`);
 
   // index: dedupes, counts, only authors with >= 1 owned book, sorted A-Z
   const idx = window.eval(`authorIndex().map(e => e.name + ':' + e.owned.length + ':' + e.wanted.length).join('|')`);
-  ok('authorIndex dedupes and counts (wishlist by status, not facet)', idx === 'Jane Doe:3:1|John Smith:2:0');
+  ok('authorIndex dedupes and counts (wishlist by derivation)', idx === 'Jane Doe:2:2|John Smith:2:0');
 
   // authors live under the Discover tab now (v121)
   runInWindow(`go('discover')`);
@@ -62,8 +62,8 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   runInWindow(`renderAuthors()`);
   const rows = qa('[data-author]');
   ok('authors list renders one row per author', rows.length === 2);
-  ok('author row shows owned count', rows[0].textContent.includes('3 owned'));
-  ok('author row shows wishlist count from status', rows[0].textContent.includes('1 on wishlist'));
+  ok('author row shows owned count', rows[0].textContent.includes('2 owned'));
+  ok('author row shows wishlist count from derivation', rows[0].textContent.includes('2 on wishlist'));
 
   // detail view: owned + wishlist sections
   runInWindow(`openAuthor('Jane Doe')`);
@@ -73,10 +73,10 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const dText = q('#view').textContent;
   const shelfPart = dText.slice(dText.indexOf('On your shelves'), dText.indexOf('On your wishlist'));
   const wishPart = dText.slice(dText.indexOf('On your wishlist'), dText.indexOf('Missing from your shelves'));
-  ok('detail: tbr + tobuy reco add sits on the shelves, not the wishlist',
-    shelfPart.includes('Reco Add') && !wishPart.includes('Reco Add'));
-  ok('detail: wishlist section holds only the status-wishlist book',
-    wishPart.includes('Wishlist Book') && !wishPart.includes('Owned Book'));
+  ok('detail: tbr + tobuy reco add sits on the wishlist, not the shelves (v559)',
+    wishPart.includes('Reco Add') && !shelfPart.includes('Reco Add'));
+  ok('detail: wishlist section holds the derived wishlist books only',
+    wishPart.includes('Wishlist Book') && wishPart.includes('Reco Add') && !wishPart.includes('Owned Book'));
   ok('detail has wishlist section', q('#view').textContent.includes('On your wishlist') && q('#view').textContent.includes('Wishlist Book'));
 
   // missing section: shaded rows for books not in the library
@@ -91,7 +91,7 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
   const before = window.eval(`library.length`);
   qa('#a-missing [data-madd]')[0].click();
   ok('wishlist button adds the missing book', window.eval(`library.length`) === before + 1 &&
-    window.eval(`library[0].owned`) === 'tobuy' && window.eval(`library[0].status`) === 'wishlist');
+    window.eval(`library[0].owned`) === 'tobuy' && window.eval(`library[0].status`) === 'tbr');
   ok('row marked as in wishlist after add', q('#a-missing .c-added') && q('#a-missing .c-added').textContent.includes('In wishlist'));
 
   // back button returns to the authors list

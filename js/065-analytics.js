@@ -107,8 +107,10 @@ const PROP_VALUES = {
   // dropped its axis prop for the other seven.
   axis: ['spice', 'darkness', 'feels', 'humor', 'scare', 'suspense',
          'adventure', 'insight', 'readability', 'depth', 'practical'],
-  from: ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
-  to:   ['tbr', 'reading', 'read', 'dnf', 'wishlist'],
+  // v559: 'wishlist' is no longer a status, so it leaves the transition
+  // matrix — wishlist-ness is derived (tbr + tobuy), not a transition.
+  from: ['tbr', 'reading', 'read', 'dnf'],
+  to:   ['tbr', 'reading', 'read', 'dnf'],
   // Preview kinds are fixed internal constants (150-modal-discovery.js:326);
   // without this entry any kind value was stored unvalidated.
   kind: ['reco', 'release', 'coven-reco', 'friend', 'external'],

@@ -184,7 +184,7 @@ const dayAgoISO = (n) => new Date(Date.now() - n * 864e5).toISOString();
 const MY_LIBRARY = [
   { id: 'me-quest', title: 'Shared Quest', authors: ['Q. Author'], isbn: ISBN_A, status: 'tbr', cover: '', coverColor: '', ratings: {} },
   { id: 'me-spicy', title: 'Spicy Shared', authors: ['H. Heat'], isbn: ISBN_B, status: 'tbr', cover: '', coverColor: '', ratings: { spice: 5 } },
-  { id: 'me-wish', title: 'Wish Match', authors: ['W. One'], isbn: ISBN_C, status: 'wishlist', cover: '', coverColor: '', ratings: {} },
+  { id: 'me-wish', title: 'Wish Match', authors: ['W. One'], isbn: ISBN_C, status: 'tbr', owned: 'tobuy', cover: '', coverColor: '', ratings: {} },
   { id: 'me-wish2', title: 'Wish Two', authors: ['W. Two'], isbn: ISBN_D, status: 'tbr', cover: '', coverColor: '', ratings: {} },
 ];
 
@@ -286,11 +286,14 @@ const MY_LIBRARY = [
   runInWindow('buddySupportKnown = null;');
 
   /* ---------- Wishlist offers ---------- */
-  ok('wishlist: buddyPreReading accepts tbr + wishlist, refuses the rest',
-    probe('buddyPreReading("tbr")') === true && probe('buddyPreReading("wishlist")') === true &&
+  // v559: a wishlist book IS a tbr book (tbr + tobuy), so the
+  // pre-reading rule is the tbr term alone — the probes below use the
+  // post-migration shapes a wishlist copy actually carries now.
+  ok('wishlist: buddyPreReading accepts tbr (wishlist books included), refuses the rest',
+    probe('buddyPreReading("tbr")') === true &&
     probe('buddyPreReading("read")') === false && probe('buddyPreReading("reading")') === false);
-  ok('wishlist: their Wishlist copy is offerable when my copy is on TBR',
-    probe('buddyOfferBookId("' + PAM + '", { status: "wishlist", title: "Wish Two", authors: ["W. Two"], isbn: "' + ISBN_D + '" })') === 'me-wish2');
+  ok('wishlist: their Wishlist copy (tbr + tobuy) is offerable when my copy is on TBR',
+    probe('buddyOfferBookId("' + PAM + '", { status: "tbr", owned: "tobuy", title: "Wish Two", authors: ["W. Two"], isbn: "' + ISBN_D + '" })') === 'me-wish2');
   ok('wishlist: their TBR copy is offerable when MY copy sits on the Wishlist',
     probe('buddyOfferBookId("' + PAM + '", { status: "tbr", title: "Wish Match", authors: ["W. One"], isbn: "' + ISBN_C + '" })') === 'me-wish');
   ok('wishlist: a read copy is still not offerable',

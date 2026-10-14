@@ -751,12 +751,12 @@ function renderSettings() {
     }
     try {
       const priv = await circlePrivacy();
-      // v529: shelves offered for hiding = statuses, Wishlist included
-      // now that it's a status. v534: the FULL status list, like the
-      // Hearth sheet (js/195) — filtering to statuses with books on
-      // them trapped the user: a shelf hidden while it had books and
-      // later emptied lost its only Settings unhide chip.
-      const shelves = Object.keys(STATUS);
+      // v559: shelves offered for hiding = hideableShelves() (the four
+      // statuses + the Wishlist view identity), like the Hearth sheet
+      // (js/195). v534: the FULL list — filtering to statuses with
+      // books on them trapped the user: a shelf hidden while it had
+      // books and later emptied lost its only Settings unhide chip.
+      const shelves = hideableShelves();
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
       wireCirclePrivacyPanel(box, priv, 'st');
       // v526: Blocked readers — my own block list lives under the same

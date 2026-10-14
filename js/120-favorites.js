@@ -516,10 +516,10 @@ function cantDecideHTML() {
 
 function shelfTilesHTML(counts) {
   // v173: six tiles per the mockup — the four shelves plus Favorites and
-  // Wishlist. v529: Wishlist is the fifth shelf (a status), counted like
-  // the others — no longer the owned === 'tobuy' facet count.
+  // Wishlist. v559: the Wishlist tile counts the derived set (tbr +
+  // tobuy — the to-buy part of TBR), via isWishlistBook.
   const fav = library.filter(b => b.favorite).length;
-  const wish = library.filter(b => b.status === 'wishlist').length;
+  const wish = library.filter(isWishlistBook).length;
   const tiles = [
     ['tbr', 'TBR', counts.tbr], ['reading', 'Reading', counts.reading],
     ['read', 'Read', counts.read], ['dnf', 'DNF', counts.dnf],
@@ -547,6 +547,7 @@ function renderLibrary() {
   const books = filteredBooks();
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0, wishlist: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
+  counts.wishlist = library.filter(isWishlistBook).length; // v559: derived, not a status count
   const isHome = filter === 'all' && ownFilter === 'all' && !query.trim();
 
   let html = (isHome ? seasonThemeNudgeHTML() : '') +
@@ -567,7 +568,7 @@ function renderLibrary() {
     chip('reading', icon('reading') + ' Reading · ' + counts.reading, filter === 'reading') +
     chip('read', icon('read') + ' Read · ' + counts.read, filter === 'read') +
     // v403: hide zero-count filters (they only show empty views)
-    // v529: the Wishlist shelf gets its chip on the same rule.
+    // v559: the Wishlist chip counts the derived set, on the same rule.
     (counts.wishlist > 0 ? chip('wishlist', icon('gift') + ' Wishlist · ' + counts.wishlist, filter === 'wishlist') : '') +
     (counts.dnf > 0 ? chip('dnf', icon('dnf') + ' DNF · ' + counts.dnf, filter === 'dnf') : '') +
     '</div>';
@@ -578,10 +579,12 @@ function renderLibrary() {
     '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">' + icon('owned') + ' Owned · ' + ownCounts.owned + '</button>' +
     // v403: hide zero-count filters
     // v535 (UX P3-16): the facet chip reads "Not owned", not "To buy" —
-    // since v529 Wishlist is a STATUS (the chip row above), and this
-    // row filters the ownership facet. "To buy" here read as the same
-    // set as the Wishlist shelf; a tbr+tobuy book is not on it. The
-    // card badge and modal picker keep "To buy" (unambiguous there).
+    // this row filters the ownership facet across ALL shelves, while
+    // the Wishlist chip above is the derived tbr + tobuy set. (v559:
+    // the sets now overlap on TBR books by design — the Wishlist IS
+    // the to-buy part of TBR — but this chip still spans every shelf,
+    // including read/reading books marked to-buy.) The card badge and
+    // modal picker keep "To buy" (unambiguous there).
     (ownCounts.tobuy > 0 ? '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' Not owned · ' + ownCounts.tobuy + '</button>' : '') +
     (ownCounts.borrowed > 0 ? '<button class="chip' + (ownFilter === 'borrowed' ? ' active' : '') + '" data-of="borrowed">' + icon('borrowed') + ' Borrowed · ' + ownCounts.borrowed + '</button>' : '') +
     '</div>';

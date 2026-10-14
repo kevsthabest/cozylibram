@@ -205,11 +205,12 @@ async function buddyStates(id) {
 
 /* ---------- offers ---------- */
 
-/* The pre-reading shelves (v532): TBR and Wishlist. The v531
- * presence ladder and the server's buddy_invite gate already
- * treat a Wishlist copy as a valid pre-reading copy — this offer
- * gate was the only piece still insisting on TBR alone. */
-function buddyPreReading(status) { return status === 'tbr' || status === 'wishlist'; }
+/* The pre-reading shelf (v532): TBR — which, since v559, includes
+ * the Wishlist (a wishlist book IS a tbr book; wishlist-ness is the
+ * tobuy facet on top). The v531 presence ladder and the server's
+ * buddy_invite gate treat a to-buy TBR copy as a valid pre-reading
+ * copy, which the status term now expresses on its own. */
+function buddyPreReading(status) { return status === 'tbr'; }
 
 /* My book id if I can invite this friend to buddy-read their book:
  * the shared pre-reading rule (their copy and mine both sit on a

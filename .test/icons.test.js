@@ -80,7 +80,7 @@ ok('series view header uses line icon', !!q('#view h2 .ticon'));
 
 // v84: book detail modal uses line-art icons instead of emoji glyphs
 runInWindow(`openBookFromEl(null, 'q1');`);
-ok('modal shelf buttons use line icons', qa('#f-status .ticon').length === 6); // v182: 4 options + the row icon; v529: 5 options (Wishlist shelf added)
+ok('modal shelf buttons use line icons', qa('#f-status .ticon').length === 5); // v182: 4 options + the row icon; v529: 5 options (Wishlist shelf added); v559: back to 4 options (Wishlist retired as a status)
 ok('no emoji left in shelf buttons',
   !['📖','📘','✅','🚫'].some(e => q('#f-status').textContent.includes(e)));
 ok('up next button uses line icon', !!q('#m-upnext .ticon'));

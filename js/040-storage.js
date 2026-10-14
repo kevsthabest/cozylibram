@@ -275,6 +275,44 @@ function saveLegacyUpNext() {
   try { localStorage.setItem(upNextKey(), JSON.stringify(upNext)); } catch (e) {}
 }
 function loadLegacyAll() {
+  // v559: one-time wishlist unification, legacy-backend flavour — the
+  // v529 pattern with its own per-partition flag, but it must run on
+  // the RAW stored rows: loadLegacyLibrary() maps migrateBook, whose
+  // status coercion would erase the status-'wishlist' evidence the
+  // transform keys on. When it converts anything, the unified rows
+  // are written straight back before the normal load reads them; the
+  // transform's _mtime bump rides the next regular push. A partition
+  // that somehow never ran v529 gets the v529 transform FIRST, on the
+  // rows as its block below would see them (post-migrateBook), under
+  // its own flag — the two transforms must land in version order, or
+  // the v529 pass would re-wishlist what v559 just unified.
+  try {
+    const fkU = libKey() + '.wishlist559';
+    if (!localStorage.getItem(fkU)) {
+      let raw = JSON.parse(localStorage.getItem(libKey())) || [];
+      // Captured before any mapping: in the both-flags-unset path the
+      // v529 pre-run's migrateBook map coerces these rows' status, and
+      // the sweep below still owes them the unification pair.
+      const storedWish = new Set(raw.filter(b => b && b.status === 'wishlist').map(b => b.id));
+      let dirtyRaw = false;
+      const fk9 = libKey() + '.wishlist529';
+      if (!localStorage.getItem(fk9)) {
+        raw = raw.map(migrateBook);
+        if (wishlistShelfTransform(raw)) dirtyRaw = true;
+        localStorage.setItem(fk9, '1');
+      }
+      let nU = wishlistUnifyTransform(raw);
+      if (storedWish.size) {
+        const now = Date.now();
+        for (const b of raw) {
+          if (b && storedWish.has(b.id) && b.owned !== 'tobuy') { b.owned = 'tobuy'; b._mtime = now; nU++; }
+        }
+      }
+      if (nU) dirtyRaw = true;
+      localStorage.setItem(fkU, '1');
+      if (dirtyRaw) localStorage.setItem(libKey(), JSON.stringify(raw));
+    }
+  } catch (e) {}
   library = loadLegacyLibrary();
   tombstones = loadLegacyTombstones();
   tombstoneFloor = loadLegacyTombFloor();
@@ -329,7 +367,13 @@ async function migrateSlotFromLegacy(db) {
 }
 
 async function loadSlotState(db) {
-  library = (await idbGetAllBooks(db)).map(migrateBook);
+  // v559: the stored ids carrying status 'wishlist' are captured from
+  // the RAW rows before the migrateBook map below — its coercion to
+  // 'tbr' would erase the evidence the unification keys on. The
+  // transform itself runs after the v529 block (see there).
+  const rawBooks = await idbGetAllBooks(db);
+  const storedWishIds = new Set(rawBooks.filter(b => b && b.status === 'wishlist').map(b => b.id));
+  library = rawBooks.map(migrateBook);
   // v495 (#125): freshly loaded books are already in the store — unmark the
   // dirty flags trackBook() set, and record the store's id set so the
   // differential persist below knows what's new vs. deleted.
@@ -343,6 +387,29 @@ async function loadSlotState(db) {
     const nW = wishlistShelfTransform(library);
     await idbKvPut(db, 'wishlistShelfV529', 1);
     if (nW) {
+      persistBooks();
+      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+    }
+  }
+  // v559: one-time wishlist unification, its own per-slot kv flag —
+  // sequenced AFTER the v529 block so the transforms land in version
+  // order. Books the v529 pass just shelved carry status 'wishlist'
+  // in the library and the transform converts them; stored
+  // status-'wishlist' rows were coerced to 'tbr' by the map above, so
+  // their captured ids get the same pair directly (status already
+  // 'tbr'; the facet is the transform's one sanctioned write).
+  // Mutations ride the proxies, so changed books re-dirty and persist
+  // + push exactly like the v529 pass above.
+  if (!(await idbKvGet(db, 'wishlistUnifiedV559'))) {
+    let nU = wishlistUnifyTransform(library);
+    if (storedWishIds.size) {
+      const now = Date.now();
+      for (const b of library) {
+        if (storedWishIds.has(b.id) && b.owned !== 'tobuy') { b.owned = 'tobuy'; b._mtime = now; nU++; }
+      }
+    }
+    await idbKvPut(db, 'wishlistUnifiedV559', 1);
+    if (nU) {
       persistBooks();
       if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
     }
@@ -611,6 +678,20 @@ function setLocalUserLegacy(uid) {
       const nW = wishlistShelfTransform(library);
       localStorage.setItem(fk, '1');
       if (nW) saveLibrary();
+    }
+  } catch (e) {}
+  // v559: the same one-time wishlist unification for the incoming
+  // partition, under its own flag. The incoming rows arrive through
+  // loadLegacyLibrary (already migrateBook-coerced), and loadLegacyAll
+  // runs the raw-row pass under this same flag on the next legacy
+  // load — in practice this finds nothing; it keeps the per-partition
+  // flag bookkeeping identical across the adoption path.
+  try {
+    const fkU = libKey() + '.wishlist559';
+    if (!localStorage.getItem(fkU)) {
+      const nU = wishlistUnifyTransform(library);
+      localStorage.setItem(fkU, '1');
+      if (nU) saveLibrary();
     }
   } catch (e) {}
 }

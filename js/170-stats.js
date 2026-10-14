@@ -1096,12 +1096,14 @@ async function drawBookCard(b) {
       y += 64;
     } else if (b.status === 'read') {
       x.fillText('✅ Finished' + (b.dateFinished ? ' · ' + fmtDate(b.dateFinished) : ''), W / 2, y); y += 72;
+    } else if (isWishlistBook(b)) {
+      // v559: checked before plain tbr so a wishlist book keeps its
+      // 🎁 line on the share card instead of the generic TBR line.
+      x.fillText('🎁 On my wishlist', W / 2, y); y += 72;
     } else if (b.status === 'tbr') {
       x.fillText('📖 On my TBR', W / 2, y); y += 72;
     } else if (b.status === 'dnf') {
       x.fillText('🚫 DNF', W / 2, y); y += 72;
-    } else if (b.status === 'wishlist') {
-      x.fillText('🎁 On my wishlist', W / 2, y); y += 72;
     }
     x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
     x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, H - 80);
@@ -1195,10 +1197,12 @@ function renderStats() {
   const hrsMo = Math.round(pagesMo / 60); // ~1 page a minute
   const monthName = nowD.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
-  const counts = { tbr: 0, reading: 0, read: 0, dnf: 0, wishlist: 0 };
+  // v559: four status buckets — to-buy TBR books count as TBR (the
+  // Wishlist is the to-buy part of TBR, not a peer bucket).
+  const counts = { tbr: 0, reading: 0, read: 0, dnf: 0 };
   library.forEach(b => { if (counts[b.status] != null) counts[b.status]++; });
-  const max = Math.max(1, counts.tbr, counts.reading, counts.read, counts.dnf, counts.wishlist);
-  const barColor = { tbr: 'var(--gold)', reading: '#6aa8e5', read: 'var(--ok)', dnf: 'var(--danger)', wishlist: '#d083c7' };
+  const max = Math.max(1, counts.tbr, counts.reading, counts.read, counts.dnf);
+  const barColor = { tbr: 'var(--gold)', reading: '#6aa8e5', read: 'var(--ok)', dnf: 'var(--danger)' };
   const distRows = Object.keys(STATUS).map(s =>
     '<div class="dist-row"><span class="lbl">' + STATUS[s] + '</span>' +
     '<div class="bar"><div class="fill" style="width:' + Math.round(counts[s] / max * 100) + '%;background:' + barColor[s] + '"></div></div>' +
