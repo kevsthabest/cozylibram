@@ -1,9 +1,10 @@
-// Tests for v121 — P0 navigation rework (UI Improvement Pass), restyled v175.
+// Tests for v121 — P0 navigation rework (UI Improvement Pass), restyled v175,
+// Discover landing remade v538 (The Stage & The Shelves).
 //
 // Covered: five-tab bottom nav (Library, Discover, +Add center, Stats, Coven),
-// navTab parent mapping for sub-views, Discover landing cards routing to real
-// features, inline release check wiring, Library toolbar Wishlist link, and
-// the discover_opened analytics event.
+// navTab parent mapping for sub-views, Discover landing controls routing to
+// real features, inline release check wiring, Library toolbar Wishlist link,
+// and the discover_opened analytics event.
 //
 // Nothing is removed: every previous top-level destination (wishlist, authors,
 // pick) must remain reachable through its new parent tab.
@@ -66,49 +67,61 @@ run("go('pick')");
 ok('go(pick): discover tab active',
   q('.bottom-nav button[data-nav="discover"]').classList.contains('active'));
 
-// --- 4. Discover landing ---
+// --- 4. Discover landing (v538: The Stage & The Shelves) ---
 run("go('discover')");
 const viewHTML = q('#view').innerHTML;
-ok('discover: asks the mood question',
-  viewHTML.indexOf('What are you in the mood for?') !== -1);
+ok('discover: no mood question (v538 — the tab makes no mood promise)',
+  viewHTML.indexOf('What are you in the mood for?') === -1);
+ok('discover: stage present — centred cover slot, headline, Surprise Me',
+  !!q('.disc-stage') && viewHTML.indexOf('Let the shelf decide.') !== -1 && !!q('[data-dtile="pick"]'));
 const tiles = qa('#view [data-dtile]').map(c => c.dataset.dtile).sort();
-ok('discover: mockup tiles present (v175, +recommended v213)',
-  JSON.stringify(tiles) === JSON.stringify(['authors', 'favorites', 'pick', 'recommended', 'releases', 'search', 'similar']));
-ok('discover: every tile has a plain-language explanation',
-  qa('#view [data-dtile]').every(c => (c.querySelector('small') || { textContent: '' }).textContent.trim().length > 3));
-ok('discover: New Releases tile + inline results box present',
-  !!q('[data-dtile="releases"]') && !!q('#release-results'));
-ok('discover: From Your Coven section with View All',
-  !!q('#disc-coven-all'));
+ok('discover: only pick + authors carry data-dtile (tiles retired, v538)',
+  JSON.stringify(tiles) === JSON.stringify(['authors', 'pick']));
+ok('discover: favorites / search / similar / recommended doorways are gone',
+  !q('[data-dtile="favorites"]') && !q('[data-dtile="search"]') &&
+  !q('[data-dtile="similar"]') && !q('[data-dtile="recommended"]'));
+ok('discover: releases are inline — results box + Check now, no doorway tile',
+  !!q('#release-results') && !!q('#disc-rel-check') && !q('[data-dtile="releases"]'));
+ok('discover: From Your Hearth section with its Open link',
+  !!q('#disc-coven-all') && viewHTML.indexOf('From Your') !== -1);
+ok('discover: Recommended section renders inline (seed lens slot + reco box)',
+  !!q('#disc-seeds') && !!q('#disc-reco'));
 
-// Tile routing — each target is a real feature, never a dead end.
+// Routing — each control reaches a real feature, never a dead end.
 q('#view [data-dtile="pick"]').click(); // Surprise Me
 ok('discover: Surprise Me opens roulette', run("view") === 'pick');
 run("go('discover')");
-q('#view [data-dtile="authors"]').click(); // Authors
-ok('discover: Authors tile opens author discovery', run("view") === 'authors');
+q('#view [data-dtile="authors"]').click(); // All authors
+ok('discover: All authors opens author discovery', run("view") === 'authors');
 run("go('discover')");
-q('#view [data-dtile="search"]').click(); // Search the Library & Beyond
-ok('discover: Search opens add in search mode (v172: unified view)',
-  run("view") === 'add' && run("addTab") === 'search');
-run("go('discover')");
-q('#view [data-dtile="favorites"]').click(); // My Favorites
-ok('discover: My Favorites opens the library home', run("view") === 'library');
+q('#disc-browse-tbr').click(); // or browse your TBR
+ok('discover: browse-your-TBR opens the library on the TBR filter',
+  run("view") === 'library' && run("filter") === 'tbr');
 run("go('discover')");
 run(`library.push({ id: 'sim1', title: 'Seed Book', authors: ['Ann Author'], status: 'read',
   progress: 100, pageCount: 200, isbn: '', publishedDate: '', cover: '', tropes: [],
   publicRating: null, ratingsCount: 0, genres: [], myRating: 5, ratings: {}, axes: [],
   favorite: true, notes: '', description: '', quotes: [], log: [],
   dateAdded: '2026-01-01T00:00:00.000Z', dateFinished: null });`);
-q('#view [data-dtile="similar"]').click(); // Similar Books
-ok('discover: Similar Books expands the seed picker',
-  q('#disc-sim').hidden === false && !!q('#disc-sim [data-seed]'));
-q('#disc-sim [data-seed]').click();
-ok('discover: seed shows similar books in recommendations (v403)',
-  !!q('#disc-reco') && q('#disc-reco').hidden === false);
+run("go('discover')");
+ok('discover: seed lens chips render for a loved book (Similar absorbed, v538)',
+  !!q('.seed-chip[data-seed="sim1"]'));
+// Seed lens: preset the reco pool, tap the chip, the rail narrows in place.
+run(`visibleRecos = [
+  { c: { hcId: 's1', title: 'Same Author Book', authors: ['Ann Author'], tropes: [] }, sim: 0.5 },
+  { c: { hcId: 's2', title: 'Unrelated Book', authors: ['Someone Else'], tropes: [] }, sim: 0.5 }
+];`);
+q('.seed-chip[data-seed="sim1"]').click();
+ok('discover: seed lens narrows the Recommended rail in place',
+  qa('#disc-reco .rail-card').length === 1 &&
+  q('#disc-reco .rail-card .rail-title').textContent === 'Same Author Book' &&
+  q('.seed-chip[data-seed="sim1"]').classList.contains('on'));
+q('.seed-chip[data-seed="sim1"]').click();
+ok('discover: tapping the active chip clears the lens',
+  !q('.seed-chip[data-seed="sim1"]').classList.contains('on'));
 run(`go('discover');`);
-q('#disc-coven-all').click(); // Coven View All
-ok('discover: Coven View All navigates to the coven tab', run("view") === 'coven');
+q('#disc-coven-all').click(); // Hearth Open
+ok('discover: Hearth Open navigates to the coven tab', run("view") === 'coven');
 
 // --- 5. Wishlist stays reachable via Library ---
 run("go('library')");
