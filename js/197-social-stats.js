@@ -214,23 +214,40 @@ async function loadCovenStats() {
   const friends = ((await circleLists()).friends) || [];
   const people = [{ id: 'me', name: 'You', profile: null, stats: statPersonBooks(typeof library !== 'undefined' ? library : []) }];
   for (const f of friends) {
-    // v522: reading activity is opt-in. When a friend's projection says
-    // share_activity is off, they contribute nothing here — their books
-    // aren't even fetched for stats. (Their shelves stay browsable in the
-    // circle; that's the separate shelves toggle.) The person row remains
-    // so counts of circle members stay honest, with empty stats.
-    if (f.profile && f.profile.share_activity === false) {
-      people.push({ id: f.id, name: f.name || 'A friend', profile: f.profile, stats: statPersonBooks([]) });
-      continue;
-    }
+    // v522: reading activity is opt-in. A friend whose projection says
+    // share_activity is off contributes NOTHING to the activity
+    // surfaces (digest, moments, soulmates, now-reading, trending,
+    // awards): their activity stats stay empty, exactly as before.
+    // The person row remains so counts of circle members stay
+    // honest.
+    //
+    // v532 (remediation Batch A, RC1): their books are now FETCHED
+    // anyway — for buddy-read matching only. The assertion, stated
+    // plainly: discovering a shared-TBR match is SHELF-BROWSING, not
+    // activity. The fetch rides the same circleFriendBooks RLS path
+    // as opening their shelves (share_library, hidden shelves and
+    // blocks govern what comes back; share_library off → nothing
+    // comes back), and v528's ratified presence model is a per-book
+    // grant whose server gate (buddy_invite) never consulted
+    // share_activity. This restores that consent model; it does not
+    // widen it — the activity gate stays exactly where it belongs,
+    // on the activity surfaces, via the `stats` view below.
+    const activityOff = !!(f.profile && f.profile.share_activity === false);
     // v496 (#140): fetch books + profile concurrently per friend instead of
-    // two sequential round-trips. Error semantics preserved: a books failure
-    // still skips the friend; a profile failure falls back to f.profile.
+    // two sequential round-trips. Error semantics: a books failure
+    // still skips the friend for stats; a profile failure falls back
+    // to f.profile. An activity-off friend was never going to
+    // contribute stats, so their row survives a failed fetch with
+    // empty stats (and no shelf view, so no matches either).
     const [booksRes, profileRes] = await Promise.all([
       circleFriendBooks(f.id).then(books => ({ ok: true, books }), () => ({ ok: false })),
       circleFriendProfile(f.id).then(profile => ({ ok: true, profile }), () => ({ ok: false }))
     ]);
-    if (!booksRes.ok) continue;
+    const profile = profileRes.ok ? profileRes.profile : (f.profile || null);
+    if (!booksRes.ok) {
+      if (activityOff) people.push({ id: f.id, name: f.name || 'A friend', profile: profile, stats: statPersonBooks([]), shelfStats: statPersonBooks([]) });
+      continue;
+    }
     let books = booksRes.books;
     // v524: content shield — a shielded viewer's circle stats are
     // computed WITHOUT friends' adult (high-spice) titles: they leave
@@ -243,8 +260,14 @@ async function loadCovenStats() {
       if (typeof shieldSpiceMapFor === 'function') { try { smap = await shieldSpiceMapFor(books); } catch (e) { smap = {}; } }
       books = books.filter(b => !shieldIsHighSpice(b, smap));
     }
-    const profile = profileRes.ok ? profileRes.profile : (f.profile || null);
-    people.push({ id: f.id, name: f.name || 'A friend', profile: profile, stats: statPersonBooks(books) });
+    // Two views of the one fetched list (v532): the SHELF view is
+    // everything RLS handed back and feeds buddy matching only; the
+    // ACTIVITY view is empty unless the friend opted in, and feeds
+    // every other surface. Both inherit the shield filtering above,
+    // so a shielded viewer's matches compute over filtered books.
+    const shelfStats = statPersonBooks(books);
+    const stats = activityOff ? statPersonBooks([]) : shelfStats;
+    people.push({ id: f.id, name: f.name || 'A friend', profile: profile, stats: stats, shelfStats: shelfStats });
   }
   const me = people[0].stats;
   const others = people.slice(1);
@@ -257,9 +280,10 @@ async function loadCovenStats() {
     : covenAwards(people);
 
   // v525: moments — discrete finishes (js/231) for the reaction feed.
-  // Computed from the SAME per-person book lists as every aggregate
-  // above: a friend who hasn't opted into activity was never fetched
-  // (empty stats → no moments), and a shielded viewer's friends' books
+  // Computed from the ACTIVITY view of each person (p.stats): a
+  // friend who hasn't opted into activity has empty activity stats
+  // → no moments (their shelf view, fetched for buddy matching,
+  // never reaches this code), and a shielded viewer's friends' books
   // were shield-filtered before this point, so a filtered book yields
   // no moment and its reactions are never fetched. Own books are
   // never filtered (the shield never touches your own library).
@@ -288,10 +312,14 @@ async function loadCovenStats() {
   const soulmates = others.map(p => ({ p: p, sm: soulmateScore(me, p.stats) }))
     .filter(x => x.sm).sort((a, b) => b.sm.score - a.sm.score);
 
-  // Buddy reads per friend.
+  // Buddy reads per friend. v532: computed from the SHELF view —
+  // a shared-TBR match is shelf-browsing, not activity (see the
+  // fetch above), so an activity-off friend can still match, while
+  // a friend whose RLS fetch returned nothing (library unshared,
+  // shelves hidden, blocked) cannot.
   const buddies = [];
   others.forEach(p => {
-    const shared = buddyReads(me, p.stats);
+    const shared = buddyReads(me, p.shelfStats || p.stats);
     if (shared.length) buddies.push({ p: p, books: shared.slice(0, 6) });
   });
 
@@ -391,9 +419,32 @@ function covenStatsHTML(d) {
     buddyHTML += '</div></div>';
   }
 
+  // v532 (RC2): the Buddy tab gets an empty state. Before this, a
+  // circle with no shared-TBR matches rendered a literally empty
+  // panel — no list, no guidance (UX wave P1-1) — and the tab read
+  // as broken rather than merely quiet. If invitations or active
+  // reads exist, js/233 removes this note when it paints them.
+  if (!buddyHTML) {
+    buddyHTML = '<p class="note" id="buddy-empty-note" style="text-align:center;padding:10px 6px">' +
+      'Books that sit on both your TBR and a friend\u2019s will show up here, ready to read together. ' +
+      'You can also open any book on a friend\u2019s shelf and invite them from there.</p>';
+  }
+
+  // v532 (RC2): the same for the Discover tab — when soulmates and
+  // awards are empty at render time and recommendations (the
+  // #reco-slot, filled async by js/196) don't land either, the tab
+  // says so instead of showing a blank. js/196 removes this note
+  // when recommendations render.
+  if (!discoverHTML) {
+    discoverHTML = '<p class="note" id="discover-empty-note" style="text-align:center;padding:10px 6px">' +
+      'Nothing here yet \u2014 as your friends share their reading, recommendations and soulmate scores will gather here.</p>';
+  }
+
   // Now reading + trending
   if (d.nowReading.length || d.trending.length) {
-    activityHTML += '<div class="circle-card"><h3 style="margin:0 0 10px">Around the ' + esc(covenName().toLowerCase()) + '</h3>';
+    // v532: covenName() already carries the article ("The Hearth")
+    // — "Around The Hearth", never "Around the the hearth".
+    activityHTML += '<div class="circle-card"><h3 style="margin:0 0 10px">Around ' + esc(covenName()) + '</h3>';
     d.nowReading.slice(0, 6).forEach(nr => {
       activityHTML += '<div class="circle-row">' + statAvatar(nr.p) +
         '<div class="circle-meta"><b>' + esc(nr.p.name) + '</b>' +
@@ -450,5 +501,11 @@ function refreshCovenStats() {
       // v528: buddy read invitations + active reads into the Buddy tab
       if (typeof wireBuddyReads === 'function') wireBuddyReads(el);
     })
-    .catch(() => { const el = document.getElementById('stats-slot'); if (el) el.innerHTML = ''; });
+    .catch(() => {
+      // v532 (RC2): a failed load used to erase the slot outright,
+      // leaving the Hearth looking merely empty. Say what happened
+      // instead of swallowing it.
+      const el = document.getElementById('stats-slot');
+      if (el) el.innerHTML = '<p class="note" style="text-align:center">Couldn\u2019t load your circle stats just now \u2014 reopen this tab to try again.</p>';
+    });
 }

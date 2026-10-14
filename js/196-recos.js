@@ -45,6 +45,16 @@ async function loadRecos() {
   if (!friends.length) return [];
   const mine = new Set();
   (library || []).forEach(b => { const k = recoKey(b); if (k) mine.add(k); });
+  // v532 (remediation Batch A, Strategist #2): a book already
+  // sitting in the viewer's Thought-of-you inbox is being
+  // recommended by a person, on purpose — the same work shouldn't
+  // ALSO headline this list while the card lives (the inbox's
+  // 60-day life). Keys come from js/232's inbox helper; any failure
+  // there means no suppression, never broken recos.
+  const inInbox = new Set();
+  if (typeof toyInboxKeys === 'function') {
+    try { (await toyInboxKeys()).forEach(k => inInbox.add(k)); } catch (e) { /* suppression is a courtesy, not a gate */ }
+  }
   const byKey = {};
   // v496 (#140): fetch all friends' shelves concurrently instead of one
   // sequential round-trip per friend. Aggregation is order-independent
@@ -72,7 +82,7 @@ async function loadRecos() {
       const r = Number(b.myRating) || 0;
       if (r < 4) return; // v97: only 4★+ earns a recommendation
       const k = recoKey(b);
-      if (!k || mine.has(k)) return;
+      if (!k || mine.has(k) || inInbox.has(k)) return;
       if (!byKey[k]) byKey[k] = { book: b, ratings: [] };
       if (!byKey[k].ratings.some(x => x.friendId === f.id))
         byKey[k].ratings.push({ friendId: f.id, name: f.name || 'A friend', rating: r });
@@ -112,7 +122,13 @@ function refreshRecos() {
   loadRecos().then(recos => {
     if (!document.body.contains(slot)) return; // user navigated away mid-load
     slot.innerHTML = recos.length ? recoSectionHTML(recos) : '';
-    if (recos.length) track('recommendation_opened', { source: 'coven' }, { dedupeKey: 'reco-open' });
+    if (recos.length) {
+      track('recommendation_opened', { source: 'coven' }, { dedupeKey: 'reco-open' });
+      // v532 (RC2): recommendations landed → js/197's Discover-tab
+      // empty-state note has done its job.
+      const note = document.getElementById('discover-empty-note');
+      if (note) note.remove();
+    }
     slot.querySelectorAll('[data-reco-add]').forEach(btn => {
       btn.addEventListener('click', () => recoAddToTBR(Number(btn.dataset.recoAdd)));
     });

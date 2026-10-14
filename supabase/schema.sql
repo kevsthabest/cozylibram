@@ -544,10 +544,35 @@ create table if not exists public.moment_reactions (
 
 alter table public.moment_reactions enable row level security;
 
+-- v532: the giver branch additionally requires the owner's CURRENT
+-- sharing posture (moment_owner_sharing — share_activity on AND
+-- circle_book_visible(owner, 'read'), the same two facts the write
+-- RPC checks). The owner branch stays ungated; see
+-- migrations/v532_reactions_read_posture.sql.
+create or replace function public.moment_owner_sharing(p_owner uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+           select 1 from public.profiles p
+            where p.user_id = p_owner
+              and p.share_activity
+         )
+         and public.circle_book_visible(p_owner, 'read');
+$$;
+revoke all on function public.moment_owner_sharing(uuid) from public;
+grant execute on function public.moment_owner_sharing(uuid) to authenticated;
+
 drop policy if exists "giver or owner reads reactions" on public.moment_reactions;
 create policy "giver or owner reads reactions" on public.moment_reactions
   for select
-  using (auth.uid() = giver_id or auth.uid() = owner_id);
+  using (
+    auth.uid() = owner_id
+    or (auth.uid() = giver_id and public.moment_owner_sharing(owner_id))
+  );
 
 drop policy if exists "giver removes own reaction" on public.moment_reactions;
 create policy "giver removes own reaction" on public.moment_reactions
@@ -1493,3 +1518,100 @@ drop trigger if exists buddy_reads_unfriend_cleanup on public.circle_links;
 create trigger buddy_reads_unfriend_cleanup
   after delete on public.circle_links
   for each row execute function public.buddy_reads_unfriend();
+
+-- ============ Remediation Batch A (v532) ============
+-- Sender outbox RPCs + invite-inviter naming. Full rationale in
+-- migrations/v532_sent_outbox.sql and v532_invite_inviter.sql.
+-- Caller-scoped SECURITY DEFINER reads of the caller's OWN sends;
+-- the underlying tables gain no new policies, and no
+-- recipient-side state is returned (my_sent_buddy_invites does not
+-- return the buddy row's status at all).
+
+create or replace function public.my_sent_thoughts()
+returns table (
+  id uuid,
+  recipient_id uuid,
+  recipient_name text,
+  sender_book_id text,
+  book jsonb,
+  note text,
+  created_at timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select t.id,
+         t.recipient_id,
+         nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), ''),
+         t.sender_book_id,
+         t.book,
+         t.note,
+         t.created_at
+    from public.thought_of_you t
+    left join public.profiles p on p.user_id = t.recipient_id
+   where t.sender_id = auth.uid()
+   order by t.created_at desc
+   limit 50;
+$$;
+revoke all on function public.my_sent_thoughts() from public;
+grant execute on function public.my_sent_thoughts() to authenticated;
+
+create or replace function public.my_sent_buddy_invites()
+returns table (
+  id uuid,
+  invitee_id uuid,
+  invitee_name text,
+  book_key text,
+  created_at timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select r.id,
+         r.invitee_id,
+         nullif(trim(coalesce(p.first_name, '') || ' ' || coalesce(p.last_name, '')), ''),
+         r.book_key,
+         r.created_at
+    from public.buddy_reads r
+    left join public.profiles p on p.user_id = r.invitee_id
+   where r.inviter_id = auth.uid()
+   order by r.created_at desc
+   limit 50;
+$$;
+revoke all on function public.my_sent_buddy_invites() from public;
+grant execute on function public.my_sent_buddy_invites() to authenticated;
+
+create or replace function public.invite_inviter_name(p_token text)
+returns text
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_them uuid;
+  v_name text;
+begin
+  if auth.uid() is null then return null; end if;
+  select user_id into v_them from public.circle_invites where code = p_token;
+  if v_them is null or v_them = auth.uid() then return null; end if;
+  if exists (
+    select 1 from public.blocks b
+     where (b.blocker_id = auth.uid() and b.blocked_id = v_them)
+        or (b.blocker_id = v_them and b.blocked_id = auth.uid())
+  ) then
+    return null;
+  end if;
+  select nullif(trim(coalesce(first_name, '') || ' ' || coalesce(last_name, '')), '')
+    into v_name
+    from public.profiles
+   where user_id = v_them;
+  return v_name;
+end;
+$$;
+revoke all on function public.invite_inviter_name(text) from public;
+grant execute on function public.invite_inviter_name(text) to authenticated;
