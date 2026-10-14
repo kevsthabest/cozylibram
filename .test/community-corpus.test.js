@@ -134,7 +134,9 @@ const CC = moduleObj.exports;
   ok('wiki: instance pills', ch.indexOf('provPill(inst.sourceType)') >= 0);
   ok('wiki: pending count (no unreviewed content)', ch.indexOf('pendingCount') >= 0);
   ok('wiki: voting surface parked (comment)', /voting surface.*parked/i.test(ch));
-  const admin = fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
+  // CharacterStore (and its canonical detail query) moved to
+  // js/154-characterstore.js — same assertion, new home.
+  const admin = fs.readFileSync(path.join(ROOT, 'js/154-characterstore.js'), 'utf8');
   ok('wiki: source_type in canonical detail query', admin.indexOf('source_type') >= 0);
   const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
   ok('css: prov-pill styles', css.indexOf('.prov-pill') >= 0);
