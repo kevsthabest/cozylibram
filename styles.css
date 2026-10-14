@@ -2221,6 +2221,11 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .st-pname { font-weight: 600; margin-bottom: 6px; }
 .st-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex: none; }
 .st-avatar.letter { display: inline-flex; align-items: center; justify-content: center; background: var(--card2); font-size: 22px; }
+/* v548: the signed-in account card's avatar (avatarHTML 'st-avatar-card')
+   — same 84px disc as .pf-avatar. img.avatar-stk (0,1,1) still beats the
+   cover below (0,1,0), so stickers keep contain on this disc too. */
+.st-avatar-card { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex: none; }
+.st-avatar-card.letter { display: inline-flex; align-items: center; justify-content: center; background: var(--card2); font-size: 34px; }
 /* v113: upcoming releases */
 .release-line { color: var(--accent, #e8a0bf); font-weight: 600; }
 .wish-section { display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 18px 0 10px; }
