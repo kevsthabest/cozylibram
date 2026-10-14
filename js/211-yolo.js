@@ -6,8 +6,10 @@
    tighten (ecTightenQuad) runs first for precision; YOLO refines when
    they disagree (damaged/warped books where straight edges fail).
 
-   The model is loaded lazily (only when orbit capture runs) and the
-   12MB .onnx is precached by the service worker for offline use.
+   The model is loaded lazily (only when orbit capture runs). The
+   12MB .onnx is NOT precached by the service worker — it is fetched
+   at runtime on first use, so a first-ever orbit capture needs a
+   connection (later captures ride the browser cache).
    Detection is class-agnostic: we pick by guide-overlap geometry, not
    the COCO label (a spine is often called 'tie' or 'skateboard'). */
 

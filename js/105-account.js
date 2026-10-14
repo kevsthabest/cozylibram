@@ -224,8 +224,8 @@ function parseStickerAvatarId(id) {
    ranges are not. These explicit lists are the inventory truth for
    those sheets; every other sheet is contiguous 01..count. The
    sticker-avatars suite pins registry == disk inventory, so a future
-   re-cut that changes the numbering fails loudly here. (The portrait
-   picker in js/228 still enumerates by count — see the v546 PR note.) */
+   re-cut that changes the numbering fails loudly here. js/228's
+   portrait-share rotation consumes these same lists (v552, #213). */
 const STICKER_SHEET_NUMBERS = {
   'briarthrone/b': [1, 2, 3, 5, 10, 11, 13, 14, 15, 18, 19, 20, 21],
   'light/a': [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],

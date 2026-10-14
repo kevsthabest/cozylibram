@@ -37,11 +37,16 @@ function psStickerPaths(themeKey, readerKey, monthKey) {
   const counts = PS_STICKER_SETS[dir];
   if (!counts) return [];
   const all = [];
-  ['a', 'b'].forEach((sheet, si) => {
-    for (let i = 1; i <= counts[si]; i++) {
+  ['a', 'b'].forEach((sheet) => {
+    // v552 (#213): the sticker numbers come from js/105's
+    // stickerSheetNumbers — the same inventory truth the avatar picker
+    // uses. Four shipped sheets are numbered non-contiguously (retired
+    // numbers), so enumerating 1..count here produced phantom paths
+    // (files that don't exist) and missed real stickers past the gaps.
+    stickerSheetNumbers(dir, sheet).forEach(i => {
       all.push('assets/stickers/cut-webp/' + dir + '/' + dir + '-' + sheet + '-' +
         String(i).padStart(2, '0') + '.webp');
-    }
+    });
   });
   const rng = portraitRng(portraitHash(String(readerKey || '') + ':' + String(monthKey || '')));
   for (let i = all.length - 1; i > 0; i--) {
