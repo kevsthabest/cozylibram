@@ -111,6 +111,10 @@ ok('unmount safe when Shelf3D undefined', run(`shelfUnmount3D(), true`));
 
 /* ---- 5. file wiring ---- */
 const swJs = fs.readFileSync(ROOT + '/sw.js', 'utf8');
+ok('sw.js precaches 204-shelf3d-layout.js', swJs.includes('204-shelf3d-layout.js'));
+ok('index.html loads 204-shelf3d-layout.js', html.includes('js/204-shelf3d-layout.js'));
+ok('204 loads before 215 in index.html',
+  html.indexOf('js/204-shelf3d-layout.js') < html.indexOf('js/215-shelf3d.js'));
 ok('sw.js precaches 215-shelf3d.js', swJs.includes('215-shelf3d.js'));
 ok('sw.js precaches 216-shelf3d-theme.js', swJs.includes('216-shelf3d-theme.js'));
 ok('sw.js precaches 217-shelf3d-view.js', swJs.includes('217-shelf3d-view.js'));
@@ -237,11 +241,13 @@ ok('218 loads before 215 in index.html',
 {
   const APP_DIR = require('./harness').APP_DIR;
   const srcFix = fs.readFileSync(APP_DIR + '/js/215-shelf3d.js', 'utf8');
-  // section 4 deleted window.Shelf3D, so lift the pure helpers from source
-  const f0 = srcFix.indexOf('function shelf3dFitDistance');
-  const f1 = srcFix.indexOf('function shelf3dClampPan');
-  const f2 = srcFix.indexOf('\n  }', f1) + 4;
-  run(srcFix.slice(f0, f2) + '\n;window.__fit = shelf3dFitDistance; window.__clampPan = shelf3dClampPan;');
+  // section 4 deleted window.Shelf3D, so lift the pure helpers from source —
+  // they live in js/204-shelf3d-layout.js since the layout-math extraction
+  const srcLayout = fs.readFileSync(APP_DIR + '/js/204-shelf3d-layout.js', 'utf8');
+  const f0 = srcLayout.indexOf('function shelf3dFitDistance');
+  const f1 = srcLayout.indexOf('function shelf3dClampPan');
+  const f2 = srcLayout.indexOf('\n}', f1) + 2;
+  run(srcLayout.slice(f0, f2) + '\n;window.__fit = shelf3dFitDistance; window.__clampPan = shelf3dClampPan;');
   const fit = window.__fit, clampPan = window.__clampPan;
   ok('fit + clamp helpers exposed on Shelf3D',
     srcFix.includes('fitDistance: shelf3dFitDistance') && srcFix.includes('clampPan: shelf3dClampPan'));
