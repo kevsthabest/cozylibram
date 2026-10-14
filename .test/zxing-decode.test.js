@@ -1,4 +1,4 @@
-// ZXing fallback decode proof (v553): the vendored zxing-wasm reader build
+// ZXing fallback decode proof (v558): the vendored zxing-wasm reader build
 // must actually decode a real EAN-13 with the vendored bytes — not a stub.
 // A known ISBN is rendered to an in-memory RGBA image with a hand-rolled
 // EAN-13 encoder, then read back through js/vendor/zxing/es/reader.js +

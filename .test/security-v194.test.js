@@ -111,6 +111,11 @@ ok('vendor: sources document zxing', /zxing-wasm@3\.1\.5/.test(read('js/vendor/S
 //      (ZXING_CACHE pins below). Strictness unchanged: the pin still
 //      matches the whole VENDOR list literally, and still fails only on
 //      the pre-existing three.min.js baseline element.
+//   #3 (v558 rebase, PR #225): the branch was rebased onto v557 main
+//      and renumbered; the expected precache set was re-verified
+//      against the composed sw.js on the rebased tree — unchanged
+//      (supabase + three in VENDOR; quagga gone; zxing runtime-cached
+//      and absent from every precache list).
 
 const sw = read('sw.js');
 ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'three\.min\.js'\]/.test(sw));

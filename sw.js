@@ -13,12 +13,15 @@ const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bum
 const STICKER_CACHE = 'cozy-libram-stickers';
 const STICKER_CACHE_MAX = 96;
 const STICKERS_PATH = '/assets/stickers/cut-webp/';
-// v553 (Decision on PR #225): the ZXing barcode-decoder files under
+// v558 (Decision on PR #225): the ZXing barcode-decoder files under
 // js/vendor/zxing/ (~1 MB incl. the .wasm) are runtime-cached on first
 // fallback use, NEVER precached — installs stay lean; the first scan on
 // a browser without BarcodeDetector fetches them once over the network,
 // later scans run offline. Survives version bumps like the cover and
-// sticker caches. The path is a closed set of three files (share.js,
+// sticker caches — with one discipline: bump this name when the
+// vendored zxing version changes, since the name is the only eviction
+// lever for a stale decoder. The path is a closed set of three files
+// (share.js,
 // es/reader.js, zxing_reader.wasm), so no eviction cap is needed.
 const ZXING_CACHE = 'cozy-libram-zxing';
 const ZXING_PATH = '/js/vendor/zxing/';
@@ -139,7 +142,7 @@ self.addEventListener('fetch', (e) => {
     })());
     return;
   }
-  // v553: ZXing decoder files — cache-first with runtime fill, same
+  // v558: ZXing decoder files — cache-first with runtime fill, same
   // pattern as stickers. Both request shapes land here as same-origin
   // GETs under ZXING_PATH: the dynamic import() of es/reader.js (and its
   // share.js dependency) and the locateFile fetch of the .wasm. The

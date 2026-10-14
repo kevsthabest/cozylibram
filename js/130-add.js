@@ -320,7 +320,7 @@ function renderKeepScan() {
   render();
 }
 
-// v553: ZXing fallback decoder (zxing-wasm 3.1.5, vendored under
+// v558: ZXing fallback decoder (zxing-wasm 3.1.5, vendored under
 // js/vendor/zxing/ — see js/vendor/SOURCES.txt). Engages only where
 // BarcodeDetector is absent (Safari, Firefox); the BarcodeDetector path
 // above never loads any of it. Loaded lazily via dynamic import, the
