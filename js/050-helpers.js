@@ -187,6 +187,11 @@ const ICONS = {
   eyeoff: '<path d="M4 4l16 16"/><path d="M10.5 5.9c.5-.1 1-.1 1.5-.1 6 0 9.5 6.2 9.5 6.2a17.6 17.6 0 0 1-3.1 3.5M6.6 6.8A16.6 16.6 0 0 0 2.5 12S6 18.5 12 18.5c1.2 0 2.4-.2 3.4-.7"/>',
   // import / export
   download: '<path d="M12 4v11"/><path d="M7.5 11l4.5 4.5L16.5 11"/><path d="M4.5 19.5h15"/>',
+  // v535 (audit #14): 'edit' and 'inbox' were referenced (book edit
+  // form, admin Curation tab) but never defined — icon() silently fell
+  // back to the covers glyph. Feather-style pencil + tray, same stroke set.
+  edit: '<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   upload: '<path d="M12 15V4"/><path d="M7.5 8.5L12 4l4.5 4.5"/><path d="M4.5 19.5h15"/>',
   // document (page counts, metadata)
   doc: '<path d="M6 3.5h8L19 8.5V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"/><path d="M14 3.5V8.5H19"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="16.5" x2="15" y2="16.5"/>',

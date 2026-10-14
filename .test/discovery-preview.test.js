@@ -2,7 +2,7 @@
 // Pure (no DOM): previewTransient normalizes every source shape (Discovery
 // candidate, New-Release candidate, external missing-by-author row, Coven
 // friend book), the transient id is synthetic and never a library id,
-// previewSections reports which sections render, the builder never mutates
+// the builder never mutates
 // its input, and covenCleanCopy drops the friend's personal data.
 // jsdom: openPreviewModal renders the read-only chrome (+TBR + Wishlist
 // present; every library-only control absent), keeps the v215 sheet chrome,
@@ -65,16 +65,12 @@ const recoSrc = () => ({
   ok('builder does not mutate the source object',
     probe(`(() => { const s = ${JSON.stringify(recoSrc())}; const b4 = JSON.stringify(s); previewTransient(s, 'reco'); return JSON.stringify(s) === b4; })()`));
 
-  // ---- 5. previewSections: pure section flags
-  const sec = probe(`previewSections(${JSON.stringify(t1)})`);
-  ok('sections on for a rich transient',
-    sec.description && sec.tropes === false && sec.genres && sec.series === false && sec.actions);
-  const secSparse = probe(`previewSections(${JSON.stringify(t2)})`);
-  ok('sections off for a sparse transient', !secSparse.description && !secSparse.tropes && !secSparse.genres);
+  // ---- 5. section flags (v535: previewSections was dead code — the
+  // preview modal inlines its section logic and never called it; the
+  // function and its pins were removed in the audit #20 sweep. The
+  // bookGenres pins below stay: bookGenres is live.)
   // v237: format tags are not genres
   ok('bookGenres strips format tags', probe(`bookGenres({categories:['Audiobook','Fiction / Romance']}).join(',')`) === 'Romance');
-  const secJunk = probe(`previewSections({categories:['Audiobook','Ebook']})`);
-  ok('genres section off when only format tags remain', secJunk.genres === false);
   // v262: Open Library subject headings are not genres
   ok('bookGenres strips character headings',
     probe(`bookGenres({categories:['Blomkvist, Mikael (Fictional character)','Salander, Lisbeth (Fictional character)','Suspense fiction']}).join(',')`) === 'Suspense fiction');

@@ -13,10 +13,6 @@
 (function () {
 'use strict';
 
-function escH(s) {
-  try { return (typeof esc === 'function') ? esc(s) : String(s); }
-  catch (e) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-}
 function dnaSurveyOff() {
   try { return localStorage.getItem('cozylibram.dnaSurveyOff') === '1'; } catch (e) { return false; }
 }
@@ -72,7 +68,7 @@ async function warnOptions() {
 function chipRow(items, group, labelKey) {
   return '<div class="survey-chips">' + items.map(function (it) {
     var label = it[labelKey] || it.id;
-    return '<button class="chip survey-chip" data-sg="' + group + '" data-sid="' + escH(it.id) + '">' + escH(label) + '</button>';
+    return '<button class="chip survey-chip" data-sg="' + group + '" data-sid="' + esc(it.id) + '">' + esc(label) + '</button>';
   }).join('') + '</div>';
 }
 
@@ -217,8 +213,10 @@ function openDnaSurvey(b) {
 }
 
 /* ---------- warning preferences (v468) ----------
-   Private per-device store: which warnings to exclude from discovery,
-   which to surface prominently, and how much detail to show. */
+   Which warnings to exclude from discovery, which to surface
+   prominently, and how much detail to show. Stored locally and, since
+   v520, synced to the reader's own account via the warning_prefs
+   user_state section — private to the account, never shared. */
 function getWarningPrefs() {
   var d = { excluded: [], prominent: [], detail: 'gentle' };
   try {
@@ -232,6 +230,128 @@ function getWarningPrefs() {
   } catch (e) {}
   return d;
 }
+/* ---------- warning preference consumers (v535) ----------
+   Until v535 the prefs above were write-only (fully-baked audit #1):
+   the sheet promised three behaviours and nothing read the values.
+   The consumers are Discover filtering (js/196 "You'd love this" +
+   js/198 recommendations), the trigger check (js/221), and the book
+   modal (js/070 hcDetailHTML + js/225 portrait chips).
+   Matching is against the controlled trigger taxonomy: the prefs store
+   taxonomy ids, while books carry warning STRINGS — Hardcover's free
+   strings, or community labels merged in by js/223 (a taxonomy label,
+   sometimes with a ' (community)' suffix). A warning string hits a
+   taxonomy id when, suffix stripped, it equals the id, the id's slug,
+   or the taxonomy label (via the cached map below). Strings that
+   resolve to nothing the reader picked simply don't participate —
+   the prefs can only act on the vocabulary they were picked from.
+   The taxonomy map is a disposable cache of public vocabulary data
+   (localStorage, device-local by design — it is not a user detail). */
+var WARN_TAXONOMY_KEY = 'cozylibram.warnTaxonomy.v1';
+var warnTaxonomyMem = null;
+function warnTaxonomyRows() {
+  if (warnTaxonomyMem) return warnTaxonomyMem;
+  try {
+    var raw = localStorage.getItem(WARN_TAXONOMY_KEY);
+    if (raw) { var rows = JSON.parse(raw); if (Array.isArray(rows)) warnTaxonomyMem = rows; }
+  } catch (e) {}
+  return warnTaxonomyMem || [];
+}
+function cacheWarnTaxonomy(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  var byId = {};
+  warnTaxonomyRows().forEach(function (r) { if (r && r.id) byId[r.id] = r; });
+  rows.forEach(function (r) {
+    if (!r || !r.id) return;
+    var prev = byId[r.id] || {};
+    byId[r.id] = {
+      id: r.id,
+      label: r.label || prev.label || r.id,
+      description: r.description || prev.description || ''
+    };
+  });
+  warnTaxonomyMem = Object.keys(byId).map(function (k) { return byId[k]; });
+  try { localStorage.setItem(WARN_TAXONOMY_KEY, JSON.stringify(warnTaxonomyMem)); } catch (e) {}
+}
+async function primeWarningTaxonomy() {
+  try {
+    if (typeof window !== 'undefined' && window.CommunityCorpus && window.CommunityCorpus.taxonomy) {
+      var rows = await window.CommunityCorpus.taxonomy();
+      if (rows && rows.length) cacheWarnTaxonomy(rows);
+    }
+  } catch (e) {}
+  return warnTaxonomyRows();
+}
+function warnSlug(s) {
+  return String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+function warnStringHitsId(w, id) {
+  var s = String(w || '').replace(/\s*\(community\)\s*$/i, '').trim();
+  if (!s || !id) return false;
+  var low = s.toLowerCase(), slug = warnSlug(s);
+  if (low === id || slug === id) return true;
+  var rows = warnTaxonomyRows();
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (r.id !== id) continue;
+    return !!(r.label && (String(r.label).toLowerCase() === low || warnSlug(r.label) === slug));
+  }
+  return false;
+}
+/* Subset of `ids` that at least one of the book's warnings hits. */
+function warnHitIds(warnings, ids) {
+  if (!Array.isArray(warnings) || !Array.isArray(ids) || !ids.length) return [];
+  return ids.filter(function (id) {
+    return warnings.some(function (w) { return warnStringHitsId(w, id); });
+  });
+}
+function warnBookExcluded(b, prefs) {
+  if (!b || !prefs || !prefs.excluded || !prefs.excluded.length) return false;
+  return warnHitIds(b.contentWarnings, prefs.excluded).length > 0;
+}
+function warnIsProminent(w, prefs) {
+  if (!prefs || !prefs.prominent || !prefs.prominent.length) return false;
+  return prefs.prominent.some(function (id) { return warnStringHitsId(w, id); });
+}
+/* Stable partition: prominent warnings first, original order kept
+   inside each group (the sheet promises "always shown prominently" —
+   first and emphasised, never re-sorted beyond that). */
+function warnOrderProminent(warnings, prefs) {
+  var list = (warnings || []).slice();
+  if (!prefs || !prefs.prominent || !prefs.prominent.length) return list;
+  var first = [], rest = [];
+  list.forEach(function (w) { (warnIsProminent(w, prefs) ? first : rest).push(w); });
+  return first.concat(rest);
+}
+function warnDescFor(w) {
+  var s = String(w || '').replace(/\s*\(community\)\s*$/i, '').trim();
+  if (!s) return '';
+  var low = s.toLowerCase(), slug = warnSlug(s);
+  var rows = warnTaxonomyRows();
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (r.id === low || r.id === slug || (r.label && (String(r.label).toLowerCase() === low || warnSlug(r.label) === slug))) {
+      return r.description || '';
+    }
+  }
+  return '';
+}
+/* 'on-request' reveal state: session-only, per book. A reader who
+   asked to see warnings only on request taps once per book to reveal;
+   nothing is persisted (the pref itself is the persistent choice). */
+var warnRevealedKeys = {};
+var warnRevealBooks = {};
+function warnRevealKey(b) {
+  if (!b) return '';
+  return String(b.id || b.isbn || b.title || '');
+}
+function warnIsRevealed(b) { return !!warnRevealedKeys[warnRevealKey(b)]; }
+function warnReveal(b) { var k = warnRevealKey(b); if (k) warnRevealedKeys[k] = 1; }
+/* Book refs behind on-request reveal buttons (js/070's hcDetailHTML
+   renders the button; its delegated click handler needs the book to
+   repaint the section — preview transients aren't in the library). */
+function warnRegisterRevealBook(b) { var k = warnRevealKey(b); if (k) warnRevealBooks[k] = b; }
+function warnBookForReveal(key) { return warnRevealBooks[String(key || '')] || null; }
+
 function openWarningPrefs() {
   if (document.getElementById('warnPrefSheet')) return;
   var prefs = getWarningPrefs();
@@ -243,7 +363,7 @@ function openWarningPrefs() {
   var body =
     '<div class="survey-inner">' +
     '<p class="survey-title">Content warning preferences</p>' +
-    '<p class="note">Private to this device. These shape how warnings appear for you — never shared.</p>' +
+    '<p class="note">Private to your account — they sync across your devices and are never shared with anyone. These shape how warnings appear for you.</p>' +
     '<div class="survey-sec"><div class="portrait-label">How much detail?</div>' +
     '<div class="seg" id="wpDetail" style="grid-template-columns:repeat(3,1fr)">' +
     [['gentle', 'Gentle'], ['detailed', 'Detailed'], ['on-request', 'On request']].map(function (o) {
@@ -287,12 +407,14 @@ function openWarningPrefs() {
       sheet.querySelectorAll('#wpDetail button').forEach(function (x) { x.classList.toggle('active', x === b); });
     });
   });
+  primeWarningTaxonomy();
   var fill = function (boxId, group) {
     warnOptions().then(function (rows) {
+      cacheWarnTaxonomy(rows);
       var box = sheet.querySelector('#' + boxId);
       if (!box || !box.isConnected) return;
       box.innerHTML = rows.length ? '<div class="survey-chips">' + rows.map(function (r) {
-        return '<button class="chip survey-chip' + (sel[group][r.id] ? ' on' : '') + '" data-wg="' + group + '" data-wid="' + escH(r.id) + '">' + escH(r.label) + '</button>';
+        return '<button class="chip survey-chip' + (sel[group][r.id] ? ' on' : '') + '" data-wg="' + group + '" data-wid="' + esc(r.id) + '">' + esc(r.label) + '</button>';
       }).join('') + '</div>' : '<p class="note">Warning list needs internet — try again when you\u2019re back online.</p>';
     });
   };
@@ -323,6 +445,18 @@ if (typeof window !== 'undefined') {
   window.openDnaSurvey = openDnaSurvey;
   window.openWarningPrefs = openWarningPrefs;
   window.getWarningPrefs = getWarningPrefs;
+  window.warnBookExcluded = warnBookExcluded;
+  window.warnHitIds = warnHitIds;
+  window.warnIsProminent = warnIsProminent;
+  window.warnOrderProminent = warnOrderProminent;
+  window.warnDescFor = warnDescFor;
+  window.warnIsRevealed = warnIsRevealed;
+  window.warnReveal = warnReveal;
+  window.warnRevealKey = warnRevealKey;
+  window.warnRegisterRevealBook = warnRegisterRevealBook;
+  window.warnBookForReveal = warnBookForReveal;
+  window.primeWarningTaxonomy = primeWarningTaxonomy;
+  window.cacheWarnTaxonomy = cacheWarnTaxonomy;
 }
 if (typeof module !== 'undefined') module.exports = { dnaSurveyEligible: dnaSurveyEligible };
 })();

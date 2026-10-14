@@ -885,7 +885,16 @@ function renderCovenFriendMain() {
     // preview modal receives the book's metadata as-is, but openCovenBook
     // blanks a shielded high-spice cover on its transient copy (v524:
     // in this flow the cover is a shared-view cover, not metadata).
-    const cardBook = (typeof shieldCardBook === 'function') ? shieldCardBook : (x) => x;
+    const shieldCopy = (typeof shieldCardBook === 'function') ? shieldCardBook : (x) => x;
+    // v535 (audit #16): the owner's favorite flag is private taste
+    // data with no sharing control of its own (hidden_shelves keys
+    // are statuses) — every other surface treats Favorites as the
+    // owner's shelf, so friend grids render from a copy with the
+    // flag stripped. circBookMap keeps the originals untouched.
+    const cardBook = (b) => {
+      const c = shieldCopy(b);
+      return (c && c.favorite) ? Object.assign({}, c, { favorite: false }) : c;
+    };
     html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
   }
   setView(html);

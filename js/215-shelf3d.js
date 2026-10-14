@@ -231,6 +231,14 @@
     '  transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.9,.3,1.1);overflow-y:auto;}',
     '.s3d-root #s3dInvPanel.open{transform:translateY(0);}',
     '.s3d-root #s3dInvPanel h3{margin:0 0 4px;font-size:15px;color:#f6eff8;font-family:system-ui,sans-serif;}',
+    // v535 (UX P2-8): a visible close control — the panel previously
+    // closed only via the (hidden) toggle button, Esc, or picking an item.
+    '.s3d-root .s3d-inv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}',
+    '.s3d-root #s3dInvClose{flex:0 0 auto;width:30px;height:30px;border-radius:999px;border:1px solid rgba(229,184,106,.35);',
+    '  background:rgba(40,30,52,.9);color:#f6eff8;font-size:17px;line-height:1;cursor:pointer;font-family:system-ui,sans-serif;}',
+    '.s3d-root #s3dInvClose:active{transform:scale(.93);border-color:#e5b86a;}',
+    '.s3d-root .inv-item:disabled{opacity:.45;cursor:default;}',
+    '.s3d-root .inv-item:focus-visible{outline:2px solid #e5b86a;outline-offset:2px;}',
     '.s3d-root #s3dInvPanel .sub{font-size:11px;color:#b9a8c6;font-family:system-ui,sans-serif;margin-bottom:10px;}',
     '.s3d-root #s3dInvGrid{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 10px;',
     '  -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;}',
@@ -288,7 +296,7 @@
     '<div id="s3dHint"><span></span></div>',
     '<button id="s3dInvBtn" aria-label="Open decoration inventory">\u25a6</button>',
     '<div id="s3dInvPanel">',
-    '  <h3>Decoration inventory</h3>',
+    '  <div class="s3d-inv-head"><h3>Decoration inventory</h3><button id="s3dInvClose" aria-label="Close decoration inventory">×</button></div>',
     '  <div class="sub">Tap to pick up, then tap a shelf to place &middot; or drag straight onto a shelf</div>',
     '  <div id="s3dInvTabs"><button data-tab="shelf" class="on">Shelf</button><button data-tab="room">Room</button></div>',
     '  <div id="s3dInvGrid"></div>',
@@ -2169,12 +2177,23 @@
       }
       INVENTORY.filter(function (item) { return (invTab === 'room') === !!item.room; })
         .forEach(function (item) {
-          var d = document.createElement('div');
+          // v535 (UX P2-8): real buttons — keyboard-focusable and
+          // operable. Pointer taps still pick up via bindTileGestures'
+          // pointerup; the click handler below only answers
+          // keyboard-generated clicks (detail === 0), so a pointer tap
+          // never picks up twice. Unowned tiles are disabled.
+          var d = document.createElement('button');
+          d.type = 'button';
           d.className = 'inv-item' + (pickedType === item.type ? ' picked' : '');
           d.dataset.deco = item.type;
           d.innerHTML = item.svg + '<div>' + item.name + '</div>' +
             '<span class="cnt">\u00d7' + item.owned + '</span>';
-          if (item.owned > 0) bindTileGestures(d, item);   // v442: swipe scrolls, vertical drag picks up, tap picks up
+          if (item.owned > 0) {
+            bindTileGestures(d, item);   // v442: swipe scrolls, vertical drag picks up, tap picks up
+            d.addEventListener('click', function (e) { if (e.detail === 0) pickUp(item); });
+          } else {
+            d.disabled = true;
+          }
           grid.appendChild(d);
         });
       var sub = root.querySelector('#s3dInvPanel .sub');
@@ -2225,6 +2244,8 @@
       if (p.classList.contains('open')) closeInventory();
       else { clearUndo(); buildInventory(); openInventory(); }
     });
+    // v535 (UX P2-8): the panel's own visible close button.
+    $('s3dInvClose').addEventListener('click', function () { closeInventory(); });
     /* v442: placing-bar buttons */
     $('s3dPlaceCancel').addEventListener('click', function () {
       pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT);

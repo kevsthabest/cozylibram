@@ -97,7 +97,9 @@ const tick = () => new Promise(r => setTimeout(r, 20));
   // 4. series without token -> hint
   runInWindow(`delete window.SPICY_CONFIG; seriesCache.clear(); openCollection('series', 'Test Saga', 'd1');`);
   await tick(); await tick();
-  ok('no-token hint shown', q('#c-more').textContent.includes('Connect Hardcover'));
+  // v535 (audit #19): the hint no longer points at the removed
+  // "Settings → Hardcover" section — it says Hardcover is unavailable.
+  ok('no-token hint shown', q('#c-more').textContent.includes('isn’t available'));
   q('#c-x').click();
 
   // 5. dedupe helpers

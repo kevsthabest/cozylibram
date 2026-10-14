@@ -577,7 +577,12 @@ function renderLibrary() {
     '<button class="chip' + (ownFilter === 'all' ? ' active' : '') + '" data-of="all">Ownership: All</button>' +
     '<button class="chip' + (ownFilter === 'owned' ? ' active' : '') + '" data-of="owned">' + icon('owned') + ' Owned · ' + ownCounts.owned + '</button>' +
     // v403: hide zero-count filters
-    (ownCounts.tobuy > 0 ? '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' To buy · ' + ownCounts.tobuy + '</button>' : '') +
+    // v535 (UX P3-16): the facet chip reads "Not owned", not "To buy" —
+    // since v529 Wishlist is a STATUS (the chip row above), and this
+    // row filters the ownership facet. "To buy" here read as the same
+    // set as the Wishlist shelf; a tbr+tobuy book is not on it. The
+    // card badge and modal picker keep "To buy" (unambiguous there).
+    (ownCounts.tobuy > 0 ? '<button class="chip' + (ownFilter === 'tobuy' ? ' active' : '') + '" data-of="tobuy">' + icon('tobuy') + ' Not owned · ' + ownCounts.tobuy + '</button>' : '') +
     (ownCounts.borrowed > 0 ? '<button class="chip' + (ownFilter === 'borrowed' ? ' active' : '') + '" data-of="borrowed">' + icon('borrowed') + ' Borrowed · ' + ownCounts.borrowed + '</button>' : '') +
     '</div>';
 

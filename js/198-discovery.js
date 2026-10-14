@@ -128,6 +128,11 @@ function hcBookToCandidate(b) {
     releaseDate: String(b.release_date || '').slice(0, 10),
     cover: (b.image && b.image.url) || '',
     description: b.description || '',
+    // v535: warning passthrough for the discovery filter — Hardcover's
+    // books type has no content_warnings field today (it lives on
+    // search docs; recoApplyWarningFilter enriches from there), but a
+    // source row that ever carries them is honoured as-is.
+    contentWarnings: Array.isArray(b.content_warnings) ? b.content_warnings.slice() : [],
     pages: b.pages || null,
     isbns: ed.isbn_13 ? [String(ed.isbn_13)] : [],
     // v530: edition signals for the Recommended sweep's one-edition-per-work
@@ -281,7 +286,7 @@ function wireReleaseCheck() {
   const isTile = btn.hasAttribute('data-dtile');
   btn.addEventListener('click', async () => {
     if (btn.disabled) return;
-    if (!hcReady()) { toast('Connect Hardcover in Settings → Hardcover first'); return; }
+    if (!hcReady()) { toast('Hardcover isn\u2019t available right now — try again later'); return; }
     track('release_discovery_opened');
     btn.disabled = true;
     const box = document.getElementById('release-results');
@@ -323,7 +328,7 @@ function wireReleaseCheck() {
       // would be a lie when we never actually reached Hardcover.
       if (!found.length && res.total > 0 && res.failed >= res.total) {
         if (box) box.innerHTML = '<p class="note">Couldn\'t reach Hardcover for any author — ' +
-          'check the connection in Settings → Hardcover, then try again.</p>';
+          'check your connection, then try again.</p>';
       } else {
         paint();
         saveAutoReleases(found); // v149: manual checks refresh the auto cache
@@ -693,8 +698,14 @@ function renderDiscover() {
     '<small>Search across your library and external sources</small></span>' +
     '<span class="disc-go" aria-hidden="true">→</span></button>' +
 
-    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenName()) + '</h3>' +
-    '<button class="taplink" id="disc-coven-all">View All →</button></div></div>' +
+    // v535 (UX P2-6): covenName() carries its article ("The Hearth"),
+    // which doubled it after "From Your" — use the bare form. The
+    // section has only ever been a heading + View All (books live
+    // behind the button), so add the quiet descriptive line the other
+    // tiles carry instead of a heading floating over nothing.
+    '<div class="disc-coven"><div class="disc-coven-head"><h3 class="serif">' + icon('friends') + ' From Your ' + esc(covenNameBare()) + '</h3>' +
+    '<button class="taplink" id="disc-coven-all">View All →</button></div>' +
+    '<p class="note" style="margin:2px 0 0">What your circle is reading and loving.</p></div>' +
 
     '<div class="disc-releases"><div id="release-results"></div></div>');
   wireReleaseCheck();
@@ -1253,6 +1264,54 @@ function recoWorkKey(c) {
   return t + '|' + a;
 }
 
+/* v535 (audit #1): "Filter from discovery" for Recommended. Sweep
+   candidates carry no warning data — Hardcover's books type has no
+   content_warnings field; warnings live only on search-index docs —
+   so the final ranked candidates (≤ RECO_FINAL_COUNT) are enriched via
+   hcSearchDocs and matched against the reader's excluded set. The doc
+   must verify as THIS work (ISBN or title/author) before its warnings
+   count. Fail-open everywhere: no prefs, no taxonomy, a failed lookup,
+   or an unverifiable doc all keep the candidate — a filter hiccup
+   must never empty the list. Session-cached per work. */
+const recoWarnCache = {};
+async function recoCandidateWarnings(c) {
+  const key = recoWorkKey(c);
+  if (key && Object.prototype.hasOwnProperty.call(recoWarnCache, key)) return recoWarnCache[key];
+  let warns = null;
+  try {
+    const shim = Object.assign({}, c, { isbn: (c.isbns && c.isbns[0]) || '' });
+    const docs = await hcSearchDocs(shim);
+    const doc = (docs || []).find(d => {
+      try {
+        if (c.isbns && c.isbns.length && typeof hcDocIsbnMatch === 'function' &&
+            c.isbns.some(i => hcDocIsbnMatch(d, i))) return true;
+        return typeof hcFallbackDocMatches === 'function' && hcFallbackDocMatches(d, shim);
+      } catch (e) { return false; }
+    });
+    if (doc && Array.isArray(doc.content_warnings)) warns = doc.content_warnings.slice();
+  } catch (e) { warns = null; }
+  if (key) recoWarnCache[key] = warns;
+  return warns;
+}
+async function recoApplyWarningFilter(ranked) {
+  try {
+    const prefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null;
+    if (!prefs || !prefs.excluded || !prefs.excluded.length) return ranked;
+    if (typeof warnHitIds !== 'function') return ranked;
+    if (typeof primeWarningTaxonomy === 'function') { try { await primeWarningTaxonomy(); } catch (e) {} }
+    const kept = [];
+    for (const r of ranked) {
+      const c = r && r.c;
+      if (!c) { kept.push(r); continue; }
+      let warns = (Array.isArray(c.contentWarnings) && c.contentWarnings.length) ? c.contentWarnings : null;
+      if (!warns) warns = await recoCandidateWarnings(c);
+      if (warns && warnHitIds(warns, prefs.excluded).length) continue;
+      kept.push(r);
+    }
+    return kept;
+  } catch (e) { return ranked; }
+}
+
 // Pure: collapse a swept candidate list to one record per work under the
 // browser language. Known-language mismatches drop out; within a work the
 // lowest recoEditionRank wins (ties keep the first swept — the sweep is
@@ -1493,7 +1552,7 @@ async function refreshRecommendations() {
       return;
     }
     if (!hcReady()) {
-      box.innerHTML = recoHeadHTML() + '<p class="note">Connect Hardcover in Settings \u2192 Hardcover to browse recommendations.</p>';
+      box.innerHTML = recoHeadHTML() + '<p class="note">Hardcover isn\u2019t available right now \u2014 recommendations need it. Try again later.</p>';
       return;
     }
     // Taste profile: weighted mean of her read books' and favorites'
@@ -1543,6 +1602,10 @@ async function refreshRecommendations() {
         .sort((x, y) => ((rank[x.loveAuthor] == null ? 99 : rank[x.loveAuthor]) - (rank[y.loveAuthor] == null ? 99 : rank[y.loveAuthor])))
         .map(c => ({ c: c, sim: null })), RECO_FINAL_COUNT);
     }
+    // v535 (audit #1): warning-preference discovery filter (see
+    // recoApplyWarningFilter). Runs on the final ranked list only, so
+    // Similar Books (which reads renderRecoResults' output) inherits it.
+    ranked = await recoApplyWarningFilter(ranked);
     // v524: content shield — fetch the work-spice map for the final
     // candidates so recoCardHTML can blur known high-spice covers.
     // Skipped entirely when the shield is off (zero behavior change).

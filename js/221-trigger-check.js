@@ -26,16 +26,48 @@ function openTriggerCheckSheet(b, onStart) {
   b.triggerCheckSeen = true;
   if (typeof saveLibrary === 'function') saveLibrary();
 
-  const tags = (b.contentWarnings || []).map(function (w) {
-    return '<span class="warn-tag">' + esc(String(w)) + '</span>';
-  }).join('');
+  // v535 (audit #1): the warning preferences finally apply here.
+  // Prominent warnings come first and emphasised; the detail level
+  // shapes how much is shown — 'gentle' (the default) is exactly the
+  // pre-v535 sheet, 'detailed' adds taxonomy descriptions, and
+  // 'on-request' holds the names behind an explicit reveal tap.
+  const prefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : { excluded: [], prominent: [], detail: 'gentle' };
+  if (typeof primeWarningTaxonomy === 'function') {
+    try {
+      primeWarningTaxonomy().then(function () {
+        // Never let a late taxonomy fill defeat an 'on-request' hold.
+        if (prefs.detail === 'on-request' &&
+            !(typeof warnIsRevealed === 'function' && warnIsRevealed(b))) return;
+        const box = document.getElementById('tcTags');
+        if (box && document.querySelector('.tc-sheet')) box.innerHTML = tcTagsHTML();
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  const tcTagsHTML = function () {
+    const ordered = (typeof warnOrderProminent === 'function')
+      ? warnOrderProminent(b.contentWarnings, prefs) : (b.contentWarnings || []);
+    return ordered.map(function (w) {
+      const prom = (typeof warnIsProminent === 'function') && warnIsProminent(w, prefs);
+      const desc = (prefs.detail === 'detailed' && typeof warnDescFor === 'function') ? warnDescFor(w) : '';
+      return '<span class="tc-warn-item"><span class="warn-tag' + (prom ? ' warn-tag-prom' : '') + '">' +
+        esc(String(w)) + '</span>' +
+        (desc ? ' <span class="warn-desc">' + esc(desc) + '</span>' : '') + '</span>';
+    }).join('');
+  };
+  const revealed = prefs.detail !== 'on-request' ||
+    (typeof warnIsRevealed === 'function' && warnIsRevealed(b));
+  const tagsBlock = revealed
+    ? '<div class="warn-tags tc-tags" id="tcTags">' + tcTagsHTML() + '</div>'
+    : '<div class="warn-tags tc-tags" id="tcTags"><span class="note">You\u2019ve chosen to see ' +
+      'warnings only when you ask.</span></div>' +
+      '<button class="btn ghost" id="tcShowWarns">Show warnings</button>';
 
   const bodyHTML =
     '<div class="tc-inner">' +
     '<div class="tc-emoji" aria-hidden="true">🕯️</div>' +
     '<p class="tc-title">A quick heads-up</p>' +
     '<p class="tc-sub">Readers flagged <b>' + esc(b.title || 'this book') + '</b> for:</p>' +
-    '<div class="warn-tags tc-tags">' + tags + '</div>' +
+    tagsBlock +
     '<p class="tc-note">No pressure — just wanted you to know before you dive in. Take it at your own pace. 🤎</p>' +
     '<button class="btn tc-start" id="tcStart">Start anyway</button>' +
     '<button class="btn ghost tc-later" id="tcLater">Not now</button>' +
@@ -65,6 +97,13 @@ function openTriggerCheckSheet(b, onStart) {
      shared helper. Same outcome as a scrim tap: shown, then dismissed. */
   if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
 
+  const showBtn = document.getElementById('tcShowWarns');
+  if (showBtn) showBtn.addEventListener('click', function () {
+    if (typeof warnReveal === 'function') warnReveal(b);
+    const box = document.getElementById('tcTags');
+    if (box) box.innerHTML = tcTagsHTML();
+    showBtn.remove();
+  });
   document.getElementById('tcStart').addEventListener('click', function () {
     close();
     if (typeof onStart === 'function') onStart();

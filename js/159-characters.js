@@ -927,38 +927,6 @@ function initD3Graph(box) {
   });
 }
 
-/* v338: group relationships by person, resolving contradictions.
-   If the same person appears as both parent and child (pipeline error),
-   keep only 'parent' (the more commonly correct direction) and flag it.
-   Returns [{name, types: [], contradicted: bool}]. */
-function charGroupRelationships(relationships) {
-  const byPerson = {};
-  (relationships || []).forEach(r => {
-    const name = String(r.to || '').trim();
-    if (!name) return;
-    const type = charNormRelType(r.type);
-    const key = name.toLowerCase();
-    if (!byPerson[key]) byPerson[key] = { name, types: new Set(), contradicted: false, importance: 0 };
-    byPerson[key].types.add(type);
-    // v348: track max importance across duplicate entries
-    const imp = parseInt(r.importance, 10);
-    if (Number.isFinite(imp) && imp > byPerson[key].importance) byPerson[key].importance = imp;
-  });
-  // Resolve parent/child contradictions
-  Object.values(byPerson).forEach(p => {
-    if (p.types.has('parent') && p.types.has('child')) {
-      p.types.delete('child');
-      p.contradicted = true;
-    }
-  });
-  return Object.values(byPerson).map(p => ({
-    name: p.name,
-    types: [...p.types].sort(),
-    contradicted: p.contradicted,
-    importance: p.importance || null,
-  })).sort((a, b) => a.name.localeCompare(b.name));
-}
-
 /* v333: render a relationship target name as a tappable link when it
    resolves to a known character, plain text otherwise. */
 function charRelLink(name, workChars) {
