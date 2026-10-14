@@ -89,8 +89,9 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('email shows the account address', Array.from(qa('input')).some(i => i.value === 'wife@example.com'));
   ok('twenty-two themed default avatars offered (6 Classics + 8 Stormrider + 8 Voidsignal, v544)', probe('DEFAULT_AVATARS.length') === 22);
   q('#pf-change').click(); await tick();
-  ok('picker opens with twenty-two defaults + upload + initial',
-    qa('#pf-picker [data-av]').length === 24);
+  ok('picture picker sheet opens with no avatar grid rendered yet (v546)',
+    !!q('#avatar-picker') && qa('#avatar-picker .apk-tile').length === 0);
+  q('#apk-close').click(); await tick();
   ok('avatar image files exist', probe("DEFAULT_AVATARS.every(a => a.src.indexOf('img/avatars/avatar-') === 0)"));
 
   // Save names.
@@ -121,14 +122,20 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   runInWindow(`renderProfile();`); await tick();
   ok('back on the profile view', !!q('#pf-first'));
 
-  // Pick a themed default.
+  // Pick a themed default (v546 re-pin: through the fitting room —
+  // tapping a tile tries it on; only "Use this picture" saves).
   q('#pf-change').click(); await tick();
-  q('#pf-picker [data-av="raven"]').click(); await tick();
+  q('#apk-stage1 [data-apk-col="painted:classics"]').click(); await tick();
+  const ravenTile = qa('#apk-stage2 .apk-tile').find(t => t.getAttribute('title') === 'Raven');
+  ravenTile.click(); await tick();
+  ok('tapping a tile tries it on without saving',
+    JSON.parse(lsGet('spicyshelves.profile.u1')).avatar.type === 'letter');
+  q('#apk-use').click(); await tick();
   const saved2 = JSON.parse(lsGet('spicyshelves.profile.u1'));
   ok('default avatar choice saved', saved2.avatar.type === 'default' && saved2.avatar.id === 'raven');
   ok('topbar shows the chosen avatar image', q('#menu-btn img') && q('#menu-btn img').src.includes('avatar-raven.webp'));
-  q('#pf-change').click(); await tick();
-  ok('chosen avatar marked selected', !!q('#pf-picker [data-av="raven"].sel'));
+  ok('chosen avatar marked selected', ravenTile.classList.contains('sel'));
+  q('#apk-close').click(); await tick();
 
   // Back button returns home.
   q('#pf-back').click(); await tick();

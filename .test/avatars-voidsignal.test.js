@@ -143,33 +143,43 @@ function cornerMaxima(files) {
     probe('loadProfile()').avatar.type === 'letter');
   window.localStorage.removeItem('spicyshelves.profile.offline');
 
-  /* ---- picker: three grouped sets, selection saves + syncs as before ---- */
+  /* ---- picker (v546 re-pin): the Collections + Fitting Room sheet
+     replaces the inline grouped picker. Grouping is pinned through the
+     shared collections model; saving now goes tap → try-on → "Use this
+     picture" (tap alone saves nothing). ---- */
   runInWindow('cloudUser = { id: "u1", email: "operative@example.com" };');
   probe('renderTopbar()');
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="profile"]').click(); await tick();
   q('#pf-change').click(); await tick();
-  ok('picker renders all three set headings in AVATAR_SETS order',
-    JSON.stringify(qa('#pf-picker .pf-set-label').map(e => e.textContent)) === '["Libram Classics","Stormrider","Voidsignal"]');
-  ok('picker offers 22 avatars + upload + initial', qa('#pf-picker [data-av]').length === 24);
-  const gridOf = (id) => {
-    const btn = q('#pf-picker [data-av="' + id + '"]');
-    const grid = btn && btn.closest('.pf-grid');
-    const label = grid && grid.previousElementSibling;
-    return label && label.classList.contains('pf-set-label') ? label.textContent : '';
-  };
-  ok('Voidsignal tiles sit under the Voidsignal heading',
-    VOIDSIGNAL.every(id => gridOf(id) === 'Voidsignal'));
-  ok('Stormrider tiles still sit under the Stormrider heading', gridOf('tabby') === 'Stormrider');
-  q('#pf-picker [data-av="cornsignal"]').click(); await tick();
+  ok('the picture picker sheet opens from the profile page', !!q('#avatar-picker'));
+  ok('sheet stage 1 shows the painted collections in AVATAR_SETS order and no tiles yet',
+    JSON.stringify(qa('#apk-stage1 [data-apk-col]').map(e => e.dataset.apkCol).filter(k => k.indexOf('painted:') === 0)) ===
+      '["painted:classics","painted:stormrider","painted:voidsignal"]' &&
+    qa('#avatar-picker .apk-tile').length === 0);
+  ok('picker collections group every avatar under its set (22 painted total)',
+    JSON.stringify(probe("pickerCollections().filter(c => c.kind === 'painted').map(c => [c.key, c.count])")) ===
+      '[["painted:classics",6],["painted:stormrider",8],["painted:voidsignal",8]]');
+  ok('Voidsignal collection holds exactly the Voidsignal ids',
+    JSON.stringify(probe("pickerCollections().find(c => c.key === 'painted:voidsignal').items.map(i => i.id)")) ===
+      JSON.stringify(VOIDSIGNAL));
+  q('#apk-stage1 [data-apk-col="painted:voidsignal"]').click(); await tick();
+  ok('the Voidsignal grid offers its 8 avatars', qa('#apk-stage2 .apk-tile').length === 8);
+  const cornTile = qa('#apk-stage2 .apk-tile').find(t => t.getAttribute('title') === 'Cornfield Signal');
+  const beforeTap = lsGet('spicyshelves.profile.u1');
+  cornTile.click(); await tick();
+  ok('tapping a tile tries it on without saving',
+    q('#apk-fitting').classList.contains('open') && lsGet('spicyshelves.profile.u1') === beforeTap);
+  q('#apk-use').click(); await tick();
   const saved = JSON.parse(lsGet('spicyshelves.profile.u1'));
   ok('choosing a Voidsignal avatar saves it as a default avatar',
     saved.avatar.type === 'default' && saved.avatar.id === 'cornsignal');
   ok('topbar shows the chosen Voidsignal avatar image',
     !!q('#menu-btn img') && q('#menu-btn img').src.includes('avatar-cornsignal.webp'));
   q('#pf-change').click(); await tick();
+  q('#apk-stage1 [data-apk-col="painted:voidsignal"]').click(); await tick();
   ok('chosen Voidsignal avatar is marked selected in the picker',
-    !!q('#pf-picker [data-av="cornsignal"].sel'));
+    qa('#apk-stage2 .apk-tile').some(t => t.classList.contains('sel') && t.getAttribute('title') === 'Cornfield Signal'));
 
   console.log(`\navatars-voidsignal: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

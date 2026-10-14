@@ -107,33 +107,43 @@ function webpSize(buf) {
     probe('loadProfile()').avatar.type === 'letter');
   window.localStorage.removeItem('spicyshelves.profile.offline');
 
-  /* ---- picker: grouped by set, selection saves + syncs as before ---- */
+  /* ---- picker (v546 re-pin): the Collections + Fitting Room sheet
+     replaces the inline grouped picker. Grouping is pinned through the
+     shared collections model; saving now goes tap → try-on → "Use this
+     picture" (tap alone saves nothing). ---- */
   runInWindow('cloudUser = { id: "u1", email: "rider@example.com" };');
   probe('renderTopbar()');
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="profile"]').click(); await tick();
   q('#pf-change').click(); await tick();
-  ok('picker renders all three set headings, Classics first',
-    JSON.stringify(qa('#pf-picker .pf-set-label').map(e => e.textContent)) === '["Libram Classics","Stormrider","Voidsignal"]');
-  ok('picker offers 22 avatars + upload + initial', qa('#pf-picker [data-av]').length === 24);
-  const gridOf = (id) => {
-    const btn = q('#pf-picker [data-av="' + id + '"]');
-    const grid = btn && btn.closest('.pf-grid');
-    const label = grid && grid.previousElementSibling;
-    return label && label.classList.contains('pf-set-label') ? label.textContent : '';
-  };
-  ok('Classics tiles sit under the Libram Classics heading', gridOf('raven') === 'Libram Classics');
-  ok('Stormrider tiles sit under the Stormrider heading',
-    STORMRIDER.every(id => gridOf(id) === 'Stormrider'));
-  q('#pf-picker [data-av="tabby"]').click(); await tick();
+  ok('the picture picker sheet opens from the profile page', !!q('#avatar-picker'));
+  ok('sheet stage 1 shows the painted collections in AVATAR_SETS order and no tiles yet',
+    JSON.stringify(qa('#apk-stage1 [data-apk-col]').map(e => e.dataset.apkCol).filter(k => k.indexOf('painted:') === 0)) ===
+      '["painted:classics","painted:stormrider","painted:voidsignal"]' &&
+    qa('#avatar-picker .apk-tile').length === 0);
+  ok('picker collections group every avatar under its set (22 painted total)',
+    JSON.stringify(probe("pickerCollections().filter(c => c.kind === 'painted').map(c => [c.key, c.count])")) ===
+      '[["painted:classics",6],["painted:stormrider",8],["painted:voidsignal",8]]');
+  ok('Stormrider collection holds exactly the Stormrider ids',
+    JSON.stringify(probe("pickerCollections().find(c => c.key === 'painted:stormrider').items.map(i => i.id)")) ===
+      JSON.stringify(STORMRIDER));
+  q('#apk-stage1 [data-apk-col="painted:stormrider"]').click(); await tick();
+  ok('the Stormrider grid offers its 8 avatars', qa('#apk-stage2 .apk-tile').length === 8);
+  const tabbyTile = qa('#apk-stage2 .apk-tile').find(t => t.getAttribute('title') === "Rider's Tabby");
+  const beforeTap = lsGet('spicyshelves.profile.u1');
+  tabbyTile.click(); await tick();
+  ok('tapping a tile tries it on without saving',
+    q('#apk-fitting').classList.contains('open') && lsGet('spicyshelves.profile.u1') === beforeTap);
+  q('#apk-use').click(); await tick();
   const saved = JSON.parse(lsGet('spicyshelves.profile.u1'));
   ok('choosing a Stormrider avatar saves it as a default avatar',
     saved.avatar.type === 'default' && saved.avatar.id === 'tabby');
   ok('topbar shows the chosen Stormrider avatar image',
     !!q('#menu-btn img') && q('#menu-btn img').src.includes('avatar-tabby.webp'));
   q('#pf-change').click(); await tick();
+  q('#apk-stage1 [data-apk-col="painted:stormrider"]').click(); await tick();
   ok('chosen Stormrider avatar is marked selected in the picker',
-    !!q('#pf-picker [data-av="tabby"].sel'));
+    qa('#apk-stage2 .apk-tile').some(t => t.classList.contains('sel') && t.getAttribute('title') === "Rider's Tabby"));
 
   console.log(`\navatars-stormrider: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
