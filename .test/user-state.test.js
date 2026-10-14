@@ -141,9 +141,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v533',
-    /APP_VERSION = 'v533'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v533"));
+  ok('version pairing is v534',
+    /APP_VERSION = 'v534'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v534"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -223,6 +223,19 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     window.document.documentElement.dataset.accent === 'gold');
   const meta1 = JSON.parse(ls.getItem('cozylibram.userstate.v1.user-1') || 'null');
   ok('pull records per-user meta', !!meta1 && meta1.at === 5000 && typeof meta1.hash === 'string');
+
+  /* ---------- v534: adopted sort/series filter apply live, no reload ---------- */
+  runInWindow(`sortBy = 'added'; seriesFilter = 'all';`);
+  fake.rows.set('user-1', {
+    user_id: 'user-1',
+    settings: { _at: 6000, values: { theme: 'velvet', accent: 'gold', 'spicyshelves.storeRegion': 'us', 'spicyshelves.sortby': 'title', 'spicyshelves.seriesfilter': 'started' } },
+  });
+  const appliedView = await window.userStatePull();
+  ok('v534: pull with roamed sort/filter applies', appliedView === true);
+  ok('v534: adopted sortBy takes effect on the live global (no reload)',
+    window.eval(`sortBy`) === 'title');
+  ok('v534: adopted seriesFilter takes effect on the live global (no reload)',
+    window.eval(`seriesFilter`) === 'started');
 
   /* ---------- pull ignores older server state ---------- */
   fake.rows.set('user-1', {

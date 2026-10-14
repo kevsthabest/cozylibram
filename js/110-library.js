@@ -32,7 +32,8 @@ const STATUS_BADGE = {
   tbr: ['bmtbr', 'To read'],
   reading: ['bmreading', 'Reading'],
   read: ['bmread', 'Read'],
-  dnf: ['bmdnf', 'Did not finish']
+  dnf: ['bmdnf', 'Did not finish'],
+  wishlist: ['bmwishlist', 'Wishlist'] // v534: the fifth status gets its chip too
 };
 
 /* v125: glanceable cards — favorite heart overlaid on the cover, status strip
