@@ -191,7 +191,11 @@ function ev(uid, name, cat, props, created) {
 
   /* ---- 8. structural: the dashboard can only read safe columns ---- */
   {
-    const src = fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
+    // CharacterStore moved to js/154-characterstore.js (architecture
+    // candidate 3); the select census covers the same code as before by
+    // reading both homes, in load order, with identical assertions.
+    const src = fs.readFileSync(path.join(ROOT, 'js/154-characterstore.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
     const sels = [...src.matchAll(/\.select\('([^']+)'\)/g)].map(m => m[1]);
     // The third select is Trope Lab's coverage scan: book_key (a cache key,
     // ISBN or normalized title/author — no titles, descriptions, or notes)
