@@ -37,6 +37,10 @@ const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '03
 // keep in step with DEFAULT_AVATARS in js/105-account.js; the avatars suites
 // pin the match.
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown', 'onyxdragon', 'golddragon', 'egg', 'daggers', 'goggles', 'parapet', 'ring', 'tabby', 'darknet', 'visor', 'daemon', 'cornsignal', 'drone', 'circuitkey', 'strands', 'silo'].map(id => './img/avatars/avatar-' + id + '.webp');
+// v554: vendored webfonts (assets/fonts/). Precached like the rest of the
+// shell: type is the first thing a reader sees, and a first offline paint in
+// fallback fonts would be a visible regression. 12 subset files, ~331 KB.
+const FONTS = ['inter-400-latin.woff2', 'inter-400-latin-ext.woff2', 'inter-500-latin.woff2', 'inter-500-latin-ext.woff2', 'inter-600-latin.woff2', 'inter-600-latin-ext.woff2', 'playfair-display-500-latin.woff2', 'playfair-display-500-latin-ext.woff2', 'playfair-display-700-latin.woff2', 'playfair-display-700-latin-ext.woff2', 'playfair-display-500-italic-latin.woff2', 'playfair-display-500-italic-latin-ext.woff2'].map(f => './assets/fonts/' + f);
 // v194 (security): vendored third-party libs, precached like first-party code.
 // (The zxing decoder is the exception — runtime-cached, see ZXING_CACHE.)
 const VENDOR = ['supabase.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
@@ -45,7 +49,7 @@ const VENDOR = ['supabase.min.js', 'three.module.js'].map(f => './js/vendor/' + 
 // (15 themes × divider/moon = 30). The 9 vine-*.svg entries and
 // Asset/floral-right.svg were precached but referenced nowhere — dropped.
 const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight', 'midnight', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night', 'haunt', 'yuletide', 'fete', 'amour', 'shamrock', 'pastel', 'harvest', 'solstice'].flatMap(t => ['divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
-const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png'].concat(JS, VENDOR, AVATARS, THEME_ART);
+const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png'].concat(JS, VENDOR, AVATARS, THEME_ART, FONTS);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

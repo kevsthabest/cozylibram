@@ -12,9 +12,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-512.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- v554: fonts are vendored (assets/fonts/ + @font-face in styles.css) —
+     no runtime font CDN. -->
 <script>
 /* v543: pre-paint theme boot. styles.css's :root defaults ARE the Dark theme
    (violet accent), and data-theme is only set when js/010-theming.js runs at
@@ -166,7 +165,24 @@
 <script src="js/237-handles.js"></script>
 <script src="js/214-wrapped.js"></script>
 <script>
-if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+/* v554: service worker gate. Inside a native shell (Capacitor) the shell
+   owns the app lifecycle and update path, so the PWA service worker must
+   not register there. The marker is the shell's own bridge: window.Capacitor
+   present and reporting a native platform. Capacitor present but lacking
+   isNativePlatform still counts as a shell (the bridge object alone is not
+   something a plain browser ever sets); every other case — no bridge, web
+   platform, a bridge that throws — registers exactly as before. Conservative
+   by design: any doubt means today's behaviour. Pinned by
+   .test/capacitor-readiness.test.js. */
+window.cozyInNativeShell = function () {
+  try {
+    var C = window.Capacitor;
+    if (!C) return false;
+    if (typeof C.isNativePlatform !== 'function') return true;
+    return !!C.isNativePlatform();
+  } catch (e) { return false; }
+};
+if (!window.cozyInNativeShell() && 'serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   navigator.serviceWorker.register('sw.js').catch(function(){});
 }
 </script>
