@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state', 'finale_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {}, finale_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state', 'finale_state', 'reco_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {}, finale_state: {}, reco_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -93,7 +93,8 @@ function clearState() {
         'shelfViewMode',
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
-        'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases'].includes(k) ||
+        'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
+        'spicyshelves.reco_dismissed'].includes(k) ||
       k.indexOf('spicyshelves.upnext.v1') === 0 ||
       k.indexOf('spicyshelves.shelforder.v1') === 0 ||
       k.indexOf('seasonThemeNudge:') === 0 || k.indexOf('wrapped-banner-') === 0)) doomed.push(k);
@@ -124,6 +125,10 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   (v && typeof v === 'object' && !Array.isArray(v))
     ? Object.keys(v).sort().reduce((a, key) => { a[key] = v[key]; return a; }, {})
     : v);
+// v559: the local Discover dismissal set, read back through js/198's own
+// reader (IDB in production; the localStorage fallback in this env).
+const probeDismissals = async () => Array.from(await window.recoDismissedSet());
+const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 (async () => {
   /* ---------- migration + registration shape ---------- */
@@ -144,9 +149,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v574',
-    /APP_VERSION = 'v574'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v574"));
+  ok('version pairing is v559',
+    /APP_VERSION = 'v559'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v559"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -906,6 +911,139 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     pushP === true && !!rowP.settings && !('prefs_state' in rowP) &&
     window.eval('analyticsEnabled()') === false);
   runInWindow('setAnalyticsEnabled(true);');
+
+  /* ---------- v559 reco migration shape ---------- */
+  const sql559Path = path.join(ROOT, 'supabase/migrations/v559_user_state_reco.sql');
+  ok('v559 migration file exists', fs.existsSync(sql559Path));
+  const sql559 = fs.readFileSync(sql559Path, 'utf8');
+  ok('v559 adds reco_state jsonb with {} default',
+    /add column if not exists reco_state jsonb not null default '\{\}'::jsonb/.test(sql559));
+  ok('v559 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql559) && !/alter table (public\.)?profiles/.test(sql559));
+  runInWindow('window.__probeRecoCol = USER_STATE_SECTION_COLS.reco;' +
+    ' window.__probeRecoFns = typeof USER_STATE_SECTION_FNS.reco.collect === "function" &&' +
+    ' typeof USER_STATE_SECTION_FNS.reco.apply === "function";');
+  ok('reco section is registered (column reco_state, collect+apply wired)',
+    window.__probeRecoCol === 'reco_state' && window.__probeRecoFns === true);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no reco key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('reco_dismissed') &&
+    !('spicyshelves.reco_dismissed' in window.userStateCollect()));
+
+  /* ---------- v559 reco section: collect / union-apply units ---------- */
+  clearState();
+  ok('reco collect is empty when nothing was dismissed',
+    JSON.stringify(window.userStateCollectReco()) === '{"value":[]}');
+  await window.recoDismiss('hc:1');
+  await window.recoDismiss('hc:2');
+  ok('reco collect reads the local dismissal set',
+    JSON.stringify(window.userStateCollectReco().value) === '["hc:1","hc:2"]');
+  const recoExtras1 = window.userStateApplyReco({ value: ['hc:2', 'hc:3'] });
+  ok('reco apply unions the roamed set into the local store',
+    setEq(await probeDismissals(), ['hc:1', 'hc:2', 'hc:3']));
+  ok('reco apply reports local extras (a push is owed so the union propagates)',
+    recoExtras1 === true);
+  const recoExtras2 = window.userStateApplyReco({ value: ['hc:1', 'hc:2', 'hc:3', 'hc:9'] });
+  ok('reco apply adopts server-only keys',
+    setEq(await probeDismissals(), ['hc:1', 'hc:2', 'hc:3', 'hc:9']));
+  ok('reco apply with a superset payload reports no local extras',
+    recoExtras2 === false);
+  // Cap after merge: 150 local + 150 disjoint roamed keys union to 300;
+  // the merged set keeps the newest 200 (local tail, then roamed keys).
+  clearState();
+  await window.recoDismissedSet(); // fresh session: mirror re-reads the (empty) store
+  const bigA = []; for (let i = 0; i < 150; i++) bigA.push('hc:a' + i);
+  const bigB = []; for (let i = 0; i < 150; i++) bigB.push('hc:b' + i);
+  window.recoMergeRoamedDismissals(bigA); // seed the local store via the write path
+  window.userStateApplyReco({ value: bigB });
+  const capped = await probeDismissals();
+  ok('reco merge caps at 200 after merging, keeping the tail',
+    capped.length === 200 && capped[0] === 'hc:a100' &&
+    capped[capped.length - 1] === 'hc:b149' && !capped.includes('hc:a99'));
+
+  /* ---------- v559 reco: first push seeds from the local set ---------- */
+  const fakeR1 = makeFake();
+  window.__sbStub = fakeR1;
+  clearState();
+  setUser('user-1');
+  await window.recoDismiss('hc:a1');
+  await window.recoDismiss('hc:a2');
+  await window.userStatePull();
+  const recoSeeded = await window.userStatePush();
+  const recoRow1 = fakeR1.rows.get('user-1') || {};
+  ok('reco seed push carries the existing local dismissals (never an empty array)',
+    recoSeeded === true && !!recoRow1.reco_state && recoRow1.reco_state._at > 0 &&
+    setEq(recoRow1.reco_state.value, ['hc:a1', 'hc:a2']));
+
+  /* ---------- v559 reco: two-device union merge ---------- */
+  // Device B: fresh local state, one dismissal made before its first
+  // pull (offline). The pull must union, not overwrite; B's push must
+  // carry the union up; A then adopts B's dismissal on its next pull.
+  clearState();
+  setUser('user-1');
+  await window.recoDismiss('hc:b1');
+  await window.userStatePull();
+  ok('two-device: pull unions the server set into the local store (nothing lost)',
+    setEq(await probeDismissals(), ['hc:a1', 'hc:a2', 'hc:b1']));
+  const recoUnionPush = await window.userStatePush();
+  ok('two-device: the union pushes back up',
+    recoUnionPush === true &&
+    setEq((fakeR1.rows.get('user-1') || {}).reco_state.value, ['hc:a1', 'hc:a2', 'hc:b1']));
+  // Device A returns (fresh local copy of its own two dismissals):
+  clearState();
+  setUser('user-1');
+  await window.recoDismiss('hc:a1');
+  await window.recoDismiss('hc:a2');
+  await window.userStatePull();
+  ok('two-device: the first device adopts the other device\'s dismissal',
+    setEq(await probeDismissals(), ['hc:a1', 'hc:a2', 'hc:b1']));
+  await window.recoDismiss('hc:a1'); // re-dismiss an already-roamed key
+  ok('two-device: overlap dedupes (re-dismissing a roamed key changes nothing)',
+    (await probeDismissals()).length === 3);
+
+  /* ---------- v559 reco: a stale device's push cannot drop newer dismissals ---------- */
+  // This device last synced when the server held the same single local
+  // dismissal; since then another device pushed two more. This device
+  // dismisses one of its own and pushes — the push must read-merge the
+  // server set so the other device's dismissals survive and are adopted.
+  const fakeR2 = makeFake();
+  window.__sbStub = fakeR2;
+  clearState();
+  setUser('user-1');
+  await window.recoDismiss('hc:l1');
+  fakeR2.rows.set('user-1', {
+    user_id: 'user-1',
+    settings: { _at: 5000, values: {} },
+    reco_state: { _at: 5000, value: ['hc:s1', 'hc:s2'] },
+  });
+  runInWindow("userStatePatchMeta('user-1', { at: 5000," +
+    ' hash: userStateHash(userStateCollect()),' +
+    ' sections: { reco: { at: 5000, hash: userStateHash(userStateCollectReco()) } } });');
+  await window.recoDismiss('hc:l2');
+  const stalePush = await window.userStatePush();
+  const recoRow2 = fakeR2.rows.get('user-1') || {};
+  ok('stale push read-merges: the other device\'s dismissals survive',
+    stalePush === true && !!recoRow2.reco_state &&
+    setEq(recoRow2.reco_state.value, ['hc:l1', 'hc:l2', 'hc:s1', 'hc:s2']));
+  ok('stale push adopts the server dismissals locally',
+    setEq(await probeDismissals(), ['hc:l1', 'hc:l2', 'hc:s1', 'hc:s2']));
+
+  /* ---------- v559: pre-migration database fails open for reco ---------- */
+  const fakeR3 = makeFake();
+  fakeR3.missingColumns = true;
+  window.__sbStub = fakeR3;
+  clearState();
+  setUser('user-1');
+  await window.recoDismiss('hc:keep');
+  let threwR = false, pullR = null;
+  try { pullR = await window.userStatePull(); } catch (e) { threwR = true; }
+  ok('missing reco column: pull fails open, local dismissals untouched',
+    !threwR && pullR === false && setEq(await probeDismissals(), ['hc:keep']));
+  const pushR = await window.userStatePush();
+  const rowR3 = fakeR3.rows.get('user-1') || {};
+  ok('missing reco column: settings still push; dismissals simply stay local',
+    pushR === true && !!rowR3.settings && !('reco_state' in rowR3) &&
+    setEq(await probeDismissals(), ['hc:keep']));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
