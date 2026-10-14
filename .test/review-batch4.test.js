@@ -66,6 +66,7 @@ run(`renderGateSignup()`);
 {
   window.document.getElementById('gs-first').value = 'A';
   window.document.getElementById('gs-last').value = 'B';
+  window.document.getElementById('gs-handle').value = 'ab_reader'; // v551: signup requires a handle before it will submit.
   window.document.getElementById('gs-email').value = 'n@e.w';
   window.document.getElementById('gs-pass').value = 'secret1';
   window.document.getElementById('gs-pass2').value = 'secret1';
