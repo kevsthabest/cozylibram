@@ -1,9 +1,13 @@
 // Stormrider avatar set (v542): eight original dragon-rider avatars join
 // DEFAULT_AVATARS as a second set. Registration in js/105 IS the sync
-// allowlist, so the pins here are: all 14 ids registered with set/premium
-// shape, sw.js precaches all 14, every file exists on disk as a sane WebP,
-// the picker renders grouped by set, and a Stormrider id survives the same
-// loadProfile / themedOrLetterAvatar validation a Classic does.
+// allowlist, so the pins here are: all ids registered with set/premium
+// shape, sw.js precaches every id, every file exists on disk as a sane
+// WebP, the picker renders grouped by set, and a Stormrider id survives
+// the same loadProfile / themedOrLetterAvatar validation a Classic does.
+// v544 re-pin: catalog totals moved 14 -> 22 when the Voidsignal set
+// landed (shared-shape pins below follow the catalog; the Stormrider
+// set's own pins are unchanged). The Voidsignal suite carries the new
+// set's own pins, including the corner-pixel check.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
@@ -50,11 +54,11 @@ function webpSize(buf) {
 
   /* ---- registration shape (js/105 DEFAULT_AVATARS + AVATAR_SETS) ---- */
   const avatars = probe('DEFAULT_AVATARS');
-  ok('14 default avatars registered', avatars.length === 14);
-  ok('avatar ids are unique', new Set(avatars.map(a => a.id)).size === 14);
+  ok('22 default avatars registered', avatars.length === 22);
+  ok('avatar ids are unique', new Set(avatars.map(a => a.id)).size === 22);
   ok('avatar ids are lowercase URL-safe', avatars.every(a => /^[a-z]+$/.test(a.id)));
-  ok('AVATAR_SETS declares classics + stormrider',
-    JSON.stringify(probe('AVATAR_SETS.map(s => s.key)')) === '["classics","stormrider"]');
+  ok('AVATAR_SETS declares classics + stormrider + voidsignal',
+    JSON.stringify(probe('AVATAR_SETS.map(s => s.key)')) === '["classics","stormrider","voidsignal"]');
   ok('every avatar belongs to a declared set',
     avatars.every(a => probe('AVATAR_SETS').some(s => s.key === a.set)));
   const byId = Object.fromEntries(avatars.map(a => [a.id, a]));
@@ -79,12 +83,12 @@ function webpSize(buf) {
   ok('every avatar file is a 1600x1600 WebP', dimsOk);
   ok('every avatar file is <= 400 KB', sizesOk);
 
-  /* ---- sw.js precache covers all 14 ---- */
+  /* ---- sw.js precache covers every registered id ---- */
   const sw = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8');
   const m = sw.match(/const AVATARS = \[([^\]]+)\]/);
   const swIds = m ? Array.from(m[1].matchAll(/'([^']+)'/g)).map(x => x[1]) : [];
-  ok('sw.js AVATARS precache lists all 14 ids',
-    swIds.length === 14 && avatars.every(a => swIds.includes(a.id)));
+  ok('sw.js AVATARS precache lists all 22 ids',
+    swIds.length === 22 && avatars.every(a => swIds.includes(a.id)));
 
   /* ---- sync validation: a Stormrider id round-trips like a Classic ---- */
   ok('themedOrLetterAvatar accepts a Stormrider id',
@@ -109,9 +113,9 @@ function webpSize(buf) {
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="profile"]').click(); await tick();
   q('#pf-change').click(); await tick();
-  ok('picker renders both set headings, Classics first',
-    JSON.stringify(qa('#pf-picker .pf-set-label').map(e => e.textContent)) === '["Libram Classics","Stormrider"]');
-  ok('picker offers 14 avatars + upload + initial', qa('#pf-picker [data-av]').length === 16);
+  ok('picker renders all three set headings, Classics first',
+    JSON.stringify(qa('#pf-picker .pf-set-label').map(e => e.textContent)) === '["Libram Classics","Stormrider","Voidsignal"]');
+  ok('picker offers 22 avatars + upload + initial', qa('#pf-picker [data-av]').length === 24);
   const gridOf = (id) => {
     const btn = q('#pf-picker [data-av="' + id + '"]');
     const grid = btn && btn.closest('.pf-grid');
