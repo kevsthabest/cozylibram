@@ -39,8 +39,10 @@ const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '03
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown', 'onyxdragon', 'golddragon', 'egg', 'daggers', 'goggles', 'parapet', 'ring', 'tabby', 'darknet', 'visor', 'daemon', 'cornsignal', 'drone', 'circuitkey', 'strands', 'silo'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v554: vendored webfonts (assets/fonts/). Precached like the rest of the
 // shell: type is the first thing a reader sees, and a first offline paint in
-// fallback fonts would be a visible regression. 12 subset files, ~331 KB.
-const FONTS = ['inter-400-latin.woff2', 'inter-400-latin-ext.woff2', 'inter-500-latin.woff2', 'inter-500-latin-ext.woff2', 'inter-600-latin.woff2', 'inter-600-latin-ext.woff2', 'playfair-display-500-latin.woff2', 'playfair-display-500-latin-ext.woff2', 'playfair-display-700-latin.woff2', 'playfair-display-700-latin-ext.woff2', 'playfair-display-500-italic-latin.woff2', 'playfair-display-500-italic-latin-ext.woff2'].map(f => './assets/fonts/' + f);
+// fallback fonts would be a visible regression. 6 files, ~225 KB — the css2
+// API serves one variable font per family/style/subset, so the per-weight
+// @font-face rules in styles.css share a file per subset.
+const FONTS = ['inter-latin.woff2', 'inter-latin-ext.woff2', 'playfair-display-latin.woff2', 'playfair-display-latin-ext.woff2', 'playfair-display-italic-latin.woff2', 'playfair-display-italic-latin-ext.woff2'].map(f => './assets/fonts/' + f);
 // v194 (security): vendored third-party libs, precached like first-party code.
 // (The zxing decoder is the exception — runtime-cached, see ZXING_CACHE.)
 const VENDOR = ['supabase.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
