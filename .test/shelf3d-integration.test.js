@@ -1,10 +1,20 @@
 // v405: 3D shelf tab integration tests.
 // Verifies: view-mode persistence, book mapping (palette + caps), theme
-// application, WebGL-failure fallback, and file/index.html/sw.js wiring.
+// application, decoration catalog/presets, camera fit/pan helpers, and
+// file/index.html/sw.js wiring.
+// Section 12 (QA Scout item 3) adds the orchestration coverage an earlier
+// version of this header claimed but never performed: shelf3DCapable
+// (URL / stored-preference / WebGL branches), renderShelf3D's structural
+// DOM and mount contract against a stubbed scene layer, shelf3dGoCase
+// clamping, and the WebGL-failure fallback (mount rejection AND
+// Shelf3D-absent both land in the 2D render). Still unexecuted: the real
+// THREE scene itself — mount internals, showCase rendering, cover
+// painting against live canvases. jsdom has no WebGL; the engine stays
+// device-verified, and section 12 stops at the stub seam on purpose.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
-const ROOT = '/home/hatch/workspace/booktok';
+const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
@@ -269,5 +279,132 @@ ok('218 loads before 215 in index.html',
     srcFix.includes('zoomFactor < 0.99') && srcFix.includes('!bookAt(e)'));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+/* ---- 12. orchestration: capability gate, render, case walking, fallback ----
+   QA Scout item 3: the functions below had ZERO executions while this
+   suite's header claimed fallback coverage. The scene layer (Shelf3D)
+   is stubbed — the same pattern section 3 uses for theme application —
+   and every assertion is on js/217's own behaviour: the gate's boolean,
+   the DOM renderShelf3D builds, the mount contract, the case walk. */
+const tick12 = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
+const section12 = (async () => {
+  const doc = window.document;
+
+  /* (a) shelf3DCapable: URL override > stored preference > WebGL probe */
+  run(`localStorage.removeItem('shelfViewMode')`);
+  ok('capable: stock jsdom has no WebGL context -> gate closed', run(`shelf3DCapable()`) === false);
+  run(`
+    window.__origCreate = document.createElement.bind(document);
+    document.createElement = function (tag) {
+      if (String(tag).toLowerCase() === 'canvas') {
+        return { getContext: function (kind) { return kind ? { __gl: kind } : null; } };
+      }
+      return window.__origCreate(tag);
+    };
+  `);
+  ok('capable: WebGL present but a 2-core device -> gate closed (hardware-concurrency check)',
+    run(`shelf3DCapable()`) === false);
+  run(`Object.defineProperty(window.navigator, 'hardwareConcurrency', { value: 8, configurable: true })`);
+  ok('capable: WebGL present + sufficient cores, no contrary preference -> gate open', run(`shelf3DCapable()`) === true);
+  run(`localStorage.setItem('shelfViewMode', '2d')`);
+  ok('capable: stored 2d preference closes the gate even with WebGL', run(`shelf3DCapable()`) === false);
+  run(`localStorage.setItem('shelfViewMode', '3d')`);
+  ok('capable: stored 3d opt-in opens the gate', run(`shelf3DCapable()`) === true);
+  dom.reconfigure({ url: 'http://localhost:8000/?shelf=2d' });
+  ok('capable: ?shelf=2d overrides a stored 3d', run(`shelf3DCapable()`) === false);
+  dom.reconfigure({ url: 'http://localhost:8000/?shelf=3d' });
+  run(`localStorage.setItem('shelfViewMode', '2d')`);
+  ok('capable: ?shelf=3d overrides a stored 2d', run(`shelf3DCapable()`) === true);
+  dom.reconfigure({ url: 'http://localhost:8000/' });
+  run(`document.createElement = window.__origCreate; delete window.__origCreate;`);
+  run(`delete window.navigator.hardwareConcurrency;`);
+  run(`localStorage.setItem('shelfViewMode', '3d')`);
+  ok('capable: stored 3d opt-in is respected even without WebGL', run(`shelf3DCapable()`) === true);
+  run(`localStorage.removeItem('shelfViewMode')`);
+
+  /* (b) renderShelf3D: structural DOM + mount contract, stubbed scene */
+  run(`
+    window.__mounts = [];
+    window.__shows = [];
+    window.Shelf3D = {
+      mount: function (container, opts) { window.__mounts.push({ id: container && container.id, opts: opts }); return Promise.resolve(); },
+      showCase: function () { window.__shows.push(Array.prototype.slice.call(arguments)); },
+      highlightBook: function () {},
+      setNeighbours: function () {},
+      unmount: function () {}
+    };
+    library = Array.from({ length: 130 }, function (_, i) { return { id: 'bk' + i, title: 'Book ' + i, status: 'read' }; });
+    shelfGroup = 'read';
+  `);
+  run(`renderShelf3D()`);
+  ok('render: one chip per shelf group', doc.querySelectorAll('.shelfview .sv-chip').length === run(`SHELF_GROUPS.length`));
+  const readChip = [...doc.querySelectorAll('.sv-chip')].find(c => c.dataset.g === 'read');
+  ok('render: read chip carries the live count (130) and is active',
+    !!readChip && readChip.querySelector('.n').textContent === '130' && readChip.classList.contains('active'));
+  ok('render: case bar + mount container present', !!doc.getElementById('s3dCaseBar') && !!doc.getElementById('shelf3d'));
+  ok('render: loading placeholder up until mount resolves', !!doc.querySelector('#shelf3d .s3d-loading'));
+  await tick12(5);
+  const mounts = JSON.parse(run(`JSON.stringify(window.__mounts.map(function (m) {
+    return { id: m.id, caseKey: m.opts.caseKey, books: m.opts.initialBooks.length,
+      prevIsNull: m.opts.initialNeighbours.prev === null,
+      nextN: m.opts.initialNeighbours.next ? m.opts.initialNeighbours.next.length : -1 };
+  }))`));
+  const caseBooks0 = run(`shelf3dCaseBooks(shelf3dRoom(), 0).length`);
+  const case1Len = run(`shelf3dRoom().cases[1].length`);
+  const nCases = run(`shelf3dRoom().cases.length`);
+  ok('render: mount called once, on #shelf3d', mounts.length === 1 && mounts[0].id === 'shelf3d');
+  ok('render: mount opens at case read:0 with case+reservoir books and a next neighbour only',
+    mounts.length === 1 && mounts[0].caseKey === 'read:0' && mounts[0].books === caseBooks0 &&
+    mounts[0].prevIsNull === true && mounts[0].nextN === case1Len);
+  ok('render: mounted flag set once mount resolves', run(`_shelf3dMounted`) === true);
+  ok('render: loading placeholder removed after mount', !doc.querySelector('#shelf3d .s3d-loading'));
+  ok('render: 130 books span at least 3 cases', nCases >= 3);
+  ok('render: case bar reads Case 1 of N with matching dots',
+    doc.getElementById('cbLabel').textContent === 'Case 1 of ' + nCases &&
+    doc.querySelectorAll('.cb-dot').length === nCases && doc.querySelector('.cb-dot').classList.contains('on'));
+  ok('render: prev disabled on the first case, next enabled',
+    doc.getElementById('cbPrev').disabled === true && doc.getElementById('cbNext').disabled === false);
+
+  /* (c) shelf3dGoCase: clamping at both ends, far jumps slide.
+     The implemented semantic is CLAMP, not wrap — the bar buttons
+     disable at the ends instead (asserted in (b) and below). */
+  const last = nCases - 1;
+  const showKeys = () => JSON.parse(run(`JSON.stringify(window.__shows.map(a => [a[0], a[2]]))`));
+  run(`window.__shows.length = 0`);
+  run(`shelf3dGoCase(999, 1)`);
+  ok('goCase: overshoot clamps to the last case', run(`_shelf3dCaseIdx['read']`) === last);
+  ok('goCase: engine is shown the clamped case', JSON.stringify(showKeys()) === JSON.stringify([['read:' + last, 2]]));
+  ok('goCase: bar follows to the last case (next disabled)',
+    doc.getElementById('cbLabel').textContent === 'Case ' + nCases + ' of ' + nCases &&
+    doc.getElementById('cbNext').disabled === true && doc.getElementById('cbPrev').disabled === false);
+  run(`window.__shows.length = 0`);
+  run(`shelf3dGoCase(-4, -1)`);
+  ok('goCase: undershoot clamps to the first case', run(`_shelf3dCaseIdx['read']`) === 0);
+  ok('goCase: engine is shown case read:0', JSON.stringify(showKeys()) === JSON.stringify([['read:0', -2]]));
+  run(`window.__shows.length = 0`);
+  run(`shelf3dGoCase(` + last + `, 1)`);
+  ok('goCase: a far jump slides (dir becomes 2) instead of gliding',
+    JSON.stringify(showKeys()) === JSON.stringify([['read:' + last, 2]]));
+  run(`shelf3dGoCase(0, 0)`);
+
+  /* (d) WebGL-failure fallback — the claim the old header made.
+     Both failure shapes must land in the 2D render with ONLY the
+     session flag set (v408: the stored preference is never flipped). */
+  run(`
+    window.Shelf3D = { mount: function () { return Promise.reject(new Error('webgl unavailable')); }, unmount: function () {} };
+    renderShelf3D();
+  `);
+  await tick12(6);
+  ok('fallback: mount rejection sets the session WebGL-failed flag', run(`_shelf3dWebGLFailed`) === true);
+  ok('fallback: mount rejection leaves the 3D view (2D render took over)', !doc.getElementById('shelf3d'));
+  ok('fallback: stored view preference untouched by the failure', run(`localStorage.getItem('shelfViewMode')`) === null);
+  run(`_shelf3dWebGLFailed = false; delete window.Shelf3D;`);
+  run(`renderShelf3D()`);
+  ok('fallback: Shelf3D absent -> same session-flag fallback, synchronously',
+    run(`_shelf3dWebGLFailed`) === true && !doc.getElementById('shelf3d'));
+  run(`library = []; shelfGroup = 'tbr';`);
+})();
+
+section12.then(() => {
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+}).catch(e => { console.error('HARNESS ERROR', e); process.exit(2); });
