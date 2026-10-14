@@ -301,7 +301,7 @@ function drawPortraitHearthside(x, W, H, d, t) {
   dnaSpaced(x, 'MY READER PORTRAIT', W / 2, 225, 14);
 
   x.fillStyle = t.muted; x.font = 'italic 34px ' + SERIF;
-  x.fillText(d.n + ' books analyzed', W / 2, 290);
+  x.fillText(d.n + (d.n === 1 ? ' book' : ' books') + ' analyzed', W / 2, 290); // v536 (UX P3-14): was "1 books"
 
   x.strokeStyle = t.gold; x.lineWidth = 2;
   x.beginPath(); x.moveTo(210, 350); x.lineTo(W - 210, 350); x.stroke();
@@ -445,7 +445,7 @@ function dnaSectionHTML() {
     (d.avgSpice > 0 ? '<p><b>' + d.spiceLabel + '</b> · avg ' + d.avgSpice.toFixed(1) + '/5</p>' : '') +
     '<div class="chip-row">' + tropeChips + '</div>' +
     '<div class="chip-row" style="margin-top:8px">' + genreChips + '</div>' +
-    '<p class="note">' + d.n + ' books · ' + d.totalPages.toLocaleString() + ' pages' +
+    '<p class="note">' + d.n + (d.n === 1 ? ' book' : ' books') + ' · ' + d.totalPages.toLocaleString() + ' pages' + // v536 (UX P3-14): was "1 books"
     (d.topAuthor ? ' · top author: ' + esc(d.topAuthor[0]) : '') + '</p>' +
     '<button class="btn" id="dna-share-btn" style="margin-top:12px">Share my portrait 📖</button>' +
     '</div>';

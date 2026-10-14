@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -141,9 +141,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v535',
-    /APP_VERSION = 'v535'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v535"));
+  ok('version pairing is v536',
+    /APP_VERSION = 'v536'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v536"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -175,6 +175,35 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     /add column if not exists privacy_state jsonb not null default '\{\}'::jsonb/.test(sql524));
   ok('v524 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql524) && !/alter table (public\.)?profiles/.test(sql524));
+
+  /* ---------- v536 milestone-pin migration shape ---------- */
+  const sql536Path = path.join(ROOT, 'supabase/migrations/v536_user_state_milestone.sql');
+  ok('v536 migration file exists', fs.existsSync(sql536Path));
+  const sql536 = fs.readFileSync(sql536Path, 'utf8');
+  ok('v536 adds milestone_state jsonb with {} default',
+    /add column if not exists milestone_state jsonb not null default '\{\}'::jsonb/.test(sql536));
+  ok('v536 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql536) && !/alter table (public\.)?profiles/.test(sql536));
+
+  /* ---------- v536 milestone pin section: collect/apply ---------- */
+  clearState();
+  ok('milestone pin collect is null when unset',
+    window.userStateCollectMilestonePin().value === null);
+  ls.setItem('cozylibram.milestonePin.v1', 'first-book');
+  ok('milestone pin collect reads the device key',
+    window.userStateCollectMilestonePin().value === 'first-book');
+  window.userStateApplyMilestonePin({ value: 'series-finished-dune' });
+  ok('milestone pin apply writes the device key',
+    ls.getItem('cozylibram.milestonePin.v1') === 'series-finished-dune');
+  window.userStateApplyMilestonePin({ value: null });
+  ok('milestone pin apply with null clears the pin',
+    ls.getItem('cozylibram.milestonePin.v1') === null);
+  window.userStateApplyMilestonePin({ value: 42 });
+  ok('milestone pin apply rejects a non-string value (clears instead)',
+    ls.getItem('cozylibram.milestonePin.v1') === null);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no milestone key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.milestonePin.v1'));
 
   /* ---------- collect: scope is exact ---------- */
   clearState();

@@ -42,6 +42,7 @@ const EVENT_DEFS = {
   release_discovery_opened: { c: 'discovery', p: [] },
   release_auto_check:      { c: 'discovery', p: ['book_count'] }, // v149: silent weekly sweep
   recommendation_opened:    { c: 'discovery', p: ['source'] },
+  reco_viewed:              { c: 'discovery', p: ['count', 'embedded'] }, // v530/v536 (audit #15): Recommended list rendered
   book_preview_opened:     { c: 'discovery', p: ['source', 'kind'] }, // v219: read-only preview modal
   preview_tbr:             { c: 'discovery', p: ['source'] }, // v219: +TBR from the preview
   preview_wishlist:        { c: 'discovery', p: ['source'] }, // v219: wishlist from the preview
@@ -65,11 +66,21 @@ const EVENT_DEFS = {
   friend_request_accepted:    { c: 'social', p: [] },
   invite_link_shared:         { c: 'social', p: [] }, // v240: invite link shared via sheet/clipboard
   shared_shelf_viewed:        { c: 'social', p: [] },
-  // NOTE: the spec's buddy_read_created/buddy_read_joined are intentionally
-  // absent — buddy reads in this app are a computed display (shared TBRs),
-  // not an actionable create/join flow, and the spec says not to invent
-  // events for workflows that don't exist.
+  // v536 (audit #15): the v525–v528 social stack's events were emitted
+  // from day one but never allowlisted, so track() dropped every one.
+  // (The stale note that used to sit here claimed buddy reads were
+  // only a display, with no create/join flow — untrue since v528 made
+  // them a real invite/accept/end flow.)
+  toy_compose_opened:         { c: 'social', p: [] }, // v527: Thought of you
+  toy_sent:                   { c: 'social', p: [] },
+  buddy_invite_sent:          { c: 'social', p: [] }, // v528: buddy reads
+  buddy_accepted:             { c: 'social', p: [] },
+  buddy_ended:                { c: 'social', p: [] },
+  reader_blocked:             { c: 'social', p: [] }, // v526: block
   friend_recommendation_used: { c: 'social', p: [] },
+  // v536 (audit #15): sharing events, same silent-drop story.
+  milestone_shared:           { c: 'library', p: ['id'] }, // id is a static milestone-catalog key, never book content
+  shelfie_shared:             { c: 'library', p: ['books'] },
   // onboarding
   account_created:       { c: 'onboarding', p: [] },
   library_opened:        { c: 'onboarding', p: [] },

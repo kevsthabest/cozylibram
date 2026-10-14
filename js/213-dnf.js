@@ -71,16 +71,27 @@ function saveDnfReason(b, reasonKey) {
   if (progressPct != null) b.dnfProgressPct = progressPct;
   saveLibrary();
 
-  // Supabase: log to dnf_reasons table for aggregate insights
-  if (typeof supa !== 'undefined' && supa) {
+  // Supabase: log to dnf_reasons table for aggregate insights.
+  // v536 (audit #12): the insert never carried user_id, but the column
+  // is NOT NULL and the insert policy checks auth.uid() = user_id — so
+  // every insert since v398 violated NOT NULL before RLS even ran and
+  // the "aggregate insights" half of this feature silently never
+  // landed. Send the signed-in user's id, and surface failures through
+  // AppLog (the app's error path) instead of a lone console.warn nobody
+  // reads. Signed out, there is no id the policy would accept — skip.
+  const uid = (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) || null;
+  if (uid && typeof supa !== 'undefined' && supa) {
     supa.from('dnf_reasons').insert({
+      user_id: uid,
       book_id: b.id,
       reason: reasonKey,
       progress_pct: progressPct,
     }).then(({ error }) => {
-      if (error) console.warn('[dnf] Supabase log failed:', error.message);
+      if (error) {
+        try { AppLog.error('dnf', 'reason log insert failed: ' + error.message); } catch (_) {}
+      }
     }).catch((err) => {
-      console.warn('[dnf] Supabase log network failure:', err && err.message);
+      try { AppLog.error('dnf', 'reason log network failure: ' + (err && err.message)); } catch (_) {}
     });
   }
 
