@@ -69,8 +69,11 @@ ok('enrichment block lists the series siblings',
 // --- full-series fill without a Hardcover token ---
 runInWindow(`openBookFromEl(null, 's1');`);
 setTimeout(() => {
-  ok('full-series box shows the Hardcover connect note without a token',
-    q('#m-series-more') && q('#m-series-more').textContent.includes('Connect Hardcover'));
+  // v535 (audit #19): the note no longer points at the removed
+  // "Settings → Hardcover" section — Hardcover is configured
+  // server-side, so the box just says it's unavailable.
+  ok('full-series box shows the Hardcover unavailable note without a token',
+    q('#m-series-more') && q('#m-series-more').textContent.includes('isn’t available'));
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail) process.exitCode = 1;
 }, 400);

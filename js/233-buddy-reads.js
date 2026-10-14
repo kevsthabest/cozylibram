@@ -121,12 +121,6 @@ function buddyName(uid) {
 function buddyFirstName(uid) {
   return String(buddyName(uid)).split(' ')[0];
 }
-function buddyAvatar(uid) {
-  const p = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[uid] : null;
-  if (p && typeof circAvatarHTML === 'function') return circAvatarHTML(p, 'c-avatar');
-  const initial = esc(String(buddyName(uid)).trim().charAt(0).toUpperCase() || '?');
-  return '<span class="c-avatar letter" aria-hidden="true">' + initial + '</span>';
-}
 /* A row I can see for (friend, key) — actives in both directions,
  * plus pendings addressed to me. (My own pendings are not readable,
  * by design; buddyInvitedLocal covers this device's memory of them.) */

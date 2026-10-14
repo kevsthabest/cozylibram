@@ -10,11 +10,6 @@ function hcReady() {
   try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcover)); }
   catch (e) { return false; }
 }
-function hcStatusText() {
-  if (hcReady()) return icon('owned') + ' Using server-side Hardcover key ✓';
-  return 'No key set — add HARDCOVER_TOKEN (Pages env) or hardcover_token (server-config.json).';
-}
-
 async function hcGraphQL(query) {
   if (!hcReady()) return null;
   // v77: every failure mode throws a specific, human-readable error instead of
@@ -336,10 +331,47 @@ function hcDetailHTML(b) {
       if (!key || !Array.isArray(tc[key]) || !tc[key].length) return '';
       return ' <span class="warn-chaps">Ch. ' + tc[key].map(n => esc(String(n))).join(', ') + '</span>';
     };
-    h += '<details class="warnings"><summary>' + icon('warn') + ' Content warnings (' + b.contentWarnings.length + ')</summary><div class="warn-tags">' +
-      b.contentWarnings.map(w => '<span class="warn-tag">' + esc(w) + chapLabel(w) + '</span>').join('') + '</div></details>';
+    // v535 (audit #1): warning preferences apply in the modal too.
+    // 'gentle' (the default) renders exactly the pre-v535 block;
+    // prominent warnings come first + emphasised; 'detailed' opens the
+    // section and adds taxonomy descriptions; 'on-request' holds the
+    // names behind a reveal button (session-only reveal, js/226).
+    const wprefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null;
+    const wdetail = wprefs ? wprefs.detail : 'gentle';
+    if (wdetail === 'on-request' && !(typeof warnIsRevealed === 'function' && warnIsRevealed(b))) {
+      if (typeof warnRegisterRevealBook === 'function') warnRegisterRevealBook(b);
+      const rkey = (typeof warnRevealKey === 'function') ? warnRevealKey(b) : String((b && b.id) || '');
+      h += '<div class="warnings-onreq"><button type="button" class="btn ghost sm" data-warnreveal="' +
+        esc(rkey) + '">' + icon('warn') + ' Content warnings — tap to view</button></div>';
+    } else {
+      const ordered = (wprefs && typeof warnOrderProminent === 'function')
+        ? warnOrderProminent(b.contentWarnings, wprefs) : b.contentWarnings;
+      h += '<details class="warnings"' + (wdetail === 'detailed' ? ' open' : '') + '><summary>' + icon('warn') + ' Content warnings (' + b.contentWarnings.length + ')</summary><div class="warn-tags">' +
+        ordered.map(w => {
+          const prom = wprefs && typeof warnIsProminent === 'function' && warnIsProminent(w, wprefs);
+          const desc = (wdetail === 'detailed' && typeof warnDescFor === 'function') ? warnDescFor(w) : '';
+          return '<span class="warn-tag' + (prom ? ' warn-tag-prom' : '') + '">' + esc(w) + chapLabel(w) + '</span>' +
+            (desc ? ' <span class="warn-desc">' + esc(desc) + '</span>' : '');
+        }).join('') + '</div></details>';
+    }
   }
   return h;
+}
+
+// v535: on-request warning reveal in the book modal. One delegated
+// listener: reveal is session-only (js/226), the repaint is just the
+// gentle hcDetailHTML for the registered book.
+if (typeof document !== 'undefined' && document.addEventListener && !window.__warnRevealWired) {
+  window.__warnRevealWired = true;
+  document.addEventListener('click', function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest('[data-warnreveal]') : null;
+    if (!btn) return;
+    const book = (typeof warnBookForReveal === 'function') ? warnBookForReveal(btn.getAttribute('data-warnreveal')) : null;
+    if (!book) return;
+    if (typeof warnReveal === 'function') warnReveal(book);
+    const wrap = btn.closest('.warnings-onreq');
+    if (wrap) wrap.outerHTML = hcDetailHTML(book);
+  });
 }
 
 // Second public-rating signal from Open Library (free, no key), merged with the

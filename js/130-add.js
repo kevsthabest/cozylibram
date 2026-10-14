@@ -476,7 +476,7 @@ async function bulkLookupISBNs(isbns, onStep) {
 
 // Add a batch of books at once: one save, one render, one toast.
 // Skips background enrichment/page-count fetch — lookupISBN already fills
-// page counts, and Settings → Hardcover → "Enrich all" backfills the rest.
+// page counts, and automatic Hardcover enrichment backfills the rest.
 function bulkAddBooks(books, source) {
   let n = 0;
   const added = [];
@@ -502,7 +502,7 @@ function renderBulkInto(body) {
     'placeholder="978125031…&#10;9780593…&#10;one ISBN per line"></textarea>' +
     '<button class="btn block" id="b-go">Look up all</button>' +
     '<p class="note" id="b-progress"></p><div id="b-results"></div>' +
-    '<p class="note">Tip: series &amp; moods fill in later via Settings → Hardcover → “Enrich all books”.</p>';
+    '<p class="note">Tip: series &amp; moods fill in automatically as Hardcover enrichment runs.</p>';
   document.getElementById('b-go').addEventListener('click', async () => {
     const isbns = parseISBNList(document.getElementById('b-isbns').value);
     const prog = document.getElementById('b-progress');

@@ -1303,15 +1303,6 @@ function dbTropeChipsHTML(tropes, origin, votes, userTagSet) {
    rows). Votes never rewrite the stored LLM confidence — they only nudge
    what's displayed, bounded so a pile-on can't flip a result. */
 
-/* Display-time confidence: base LLM confidence nudged ±0.04 per net vote,
-   clamped to [0.05, 0.99]. Safe because the stored value is untouched and
-   the nudge saturates — ten extra downvotes can't push a 0.9 below 0.5. */
-function tropeDisplayConfidence(base, votes) {
-  const b = typeof base === 'number' && isFinite(base) ? base : 0.5;
-  const net = ((votes && votes.up) || 0) - ((votes && votes.down) || 0);
-  return Math.min(0.99, Math.max(0.05, b + 0.04 * net));
-}
-
 const TropeVotes = {
   _getClient: null, // async () -> supabase client (injected)
   _cache: {},       // book_key -> { tropeId: { up, down, mine } }

@@ -23,6 +23,7 @@ function setSub(t) {
    app-wide and opens the detail sheet; closing without "Use theme" reverts. */
 let tsSnapshot = null;   // { theme, accent } captured before previewing
 let tsPreviewTheme = null;
+let tsToken = null;      // v535: overlay-history token for the theme sheet
 let tsPreviewAccent = null; // null = theme's designed default
 
 /* Social section name shown on theme cards. User's call (2026-10-11):
@@ -183,8 +184,20 @@ function tsOpenSheet(th) {
     b.addEventListener('click', () => pick(b.dataset.a)));
   document.querySelectorAll('#tsSwatches .sw').forEach(b =>
     b.addEventListener('click', () => pick(b.dataset.a)));
+  // v535 (audit #8): the standing sheet rule — swipe-down-to-dismiss
+  // via wireSheetDrag + overlay history, like every other sheet.
+  // Dismissal reverts the preview, exactly like the scrim tap; the
+  // history back gesture lands on the same path via the token's
+  // domCloser.
+  if (typeof overlayOpened === 'function') tsToken = overlayOpened('theme-sheet', tsRevert);
+  const tsSheetEl = document.querySelector('#tsSheetWrap .tsheet');
+  if (tsSheetEl && typeof wireSheetDrag === 'function') wireSheetDrag(tsSheetEl, tsRevert);
 }
 function tsCloseSheet() {
+  if (tsToken != null) {
+    const t = tsToken; tsToken = null;
+    if (typeof overlayClosed === 'function') overlayClosed(t);
+  }
   const w = document.getElementById('tsSheetWrap');
   if (w) w.remove();
 }
@@ -209,16 +222,6 @@ function tsRevert() {
 }
 /* S1 (settings review): slim sync-status line for the Settings header --
    answers "is my library safe?" -- reuses the last-sync timestamp from 090-sync. */
-function syncAgo(ts) {
-  if (!ts) return 'never';
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return 'just now';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + 'h ago';
-  return Math.floor(h / 24) + 'd ago';
-}
 function syncStatusLine() {
   try {
     const n = (typeof library !== 'undefined' && library) ? library.length : 0;
@@ -327,7 +330,10 @@ function renderSettings() {
 
   /* ---- Reading ---- */
   const htmlReadLog =
-    '<div class="field"><label>Log cleanup button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
+    // v535 (UX P2-7): the label was the feature's internal name, shouted
+    // by the uppercase field-label CSS — it names the actual button it
+    // controls, matching the note below.
+    '<div class="field"><label>Remove today&rsquo;s entry button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
     ['off', 'on'].map(t =>
       '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
       (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
@@ -343,7 +349,24 @@ function renderSettings() {
     'Reading nudges<span class="chk-hint">Occasional one-question prompts while reading (max 2 per book). Never for content warnings.</span></label>' +
     '<div class="field" style="margin-top:10px"><label>Content warning preferences</label>' +
     '<button class="btn ghost block" id="st-warnprefs">' + icon('eye') + ' Set warning preferences</button>' +
-    '<p class="note">Choose warnings to surface prominently and how much detail you want. Private to this device.</p></div>';
+    '<p class="note">Choose warnings to surface prominently and how much detail you want. Private to your account — syncs across your devices, never shared with anyone.</p></div>' +
+    // v535 (audit #7): the trope-source control has been WIRED in
+    // Settings since v141 (see the #trope-srcseg handler below), but
+    // its segment lived in the Metadata/Hardcover group removed in
+    // v476 — anyone who set it before v476 was frozen with no UI. The
+    // machinery (js/062) never stopped working; the control lives here
+    // now, with the other reading-data preferences.
+    ((function () {
+      try {
+        if (typeof tropeSource !== 'function' || typeof TROPE_SOURCES === 'undefined') return '';
+        return '<div class="field" style="margin-top:10px"><label>Trope suggestions</label><div class="seg" id="trope-srcseg" style="grid-template-columns:repeat(4,1fr)">' +
+          TROPE_SOURCES.map(t =>
+            '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '">' +
+            ((typeof TROPE_SRC_LABELS !== 'undefined' && TROPE_SRC_LABELS[t]) || t) + '</button>').join('') +
+          '</div></div>' +
+          '<p class="note">Where a book&rsquo;s trope tags come from: the story&rsquo;s own keywords, Hardcover&rsquo;s community tags, both, or off entirely.</p>';
+      } catch (e) { return ''; }
+    })());
 
   /* ---- Metadata (v476: section hidden — enrichment is automatic now) ---- */
   // htmlHardcover / htmlMetaCheck / htmlPageCounts / htmlCovers removed.

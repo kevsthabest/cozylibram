@@ -24,10 +24,11 @@ const runInWindow = (js) => {
 };
 
 (async () => {
-  // 1. not configured: flag false, status text explains
+  // 1. not configured: flag false
+  // (v535: gbKeyStatusText was dead code — its only caller was the
+  // Settings group removed in v476 — and was removed with its pins.)
   runInWindow(`delete window.SPICY_CONFIG;`);
   ok('gbReady false with no config', window.gbReady() === false);
-  ok('status text with no key', window.gbKeyStatusText().indexOf('No key set') === 0);
 
   // 2. gbProxyUrl rewrites Google URLs to the same-origin proxy
   ok('gbProxyUrl rewrites to /api/gbooks',
@@ -36,10 +37,9 @@ const runInWindow = (js) => {
   ok('gbProxyUrl strips a client-supplied key',
     window.gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=test&key=ABC').indexOf('key=') === -1);
 
-  // 3. configured: flag true, status text says server-side
+  // 3. configured: flag true
   runInWindow(`window.SPICY_CONFIG = { gbooks: true };`);
   ok('gbReady true when configured', window.gbReady() === true);
-  ok('status text mentions server-side', window.gbKeyStatusText().indexOf('server-side') !== -1);
 
   // 4. searchBooks goes through the proxy, key never in the URL
   seenUrls.length = 0;

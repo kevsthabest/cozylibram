@@ -86,12 +86,6 @@ function shelfApplyOrder(books, orderIds) {
   return out;
 }
 
-function shelfChunk(books, n) {
-  const rows = [];
-  for (let i = 0; i < books.length; i += n) rows.push(books.slice(i, i + n));
-  return rows;
-}
-
 // Center-crop rect cutting a spine-aspect (1:5.2) strip out of a photo.
 function spineCropRect(w, h) {
   const aspect = 1 / 5.2;

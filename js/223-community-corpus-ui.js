@@ -18,10 +18,6 @@ function cc() {
   if (!CC && typeof window.CommunityCorpus !== 'undefined') CC = window.CommunityCorpus;
   return CC;
 }
-function escHtml(s) {
-  try { return (typeof esc === 'function') ? esc(s) : String(s); }
-  catch (e) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-}
 
 /* ---------- generic bottom sheet ---------- */
 // v496 (#136): module-scoped overlay token — closeCcSheet passes it to
@@ -34,7 +30,7 @@ function ccSheet(title, bodyHTML, onMount) {
   scrim.className = 'sv-scrim'; scrim.id = 'ccScrim';
   var sheet = document.createElement('div');
   sheet.className = 'sv-sheet'; sheet.id = 'ccSheet';
-  sheet.innerHTML = '<div class="tc-inner"><p class="tc-title">' + escHtml(title) + '</p>' + bodyHTML + '</div>';
+  sheet.innerHTML = '<div class="tc-inner"><p class="tc-title">' + esc(title) + '</p>' + bodyHTML + '</div>';
   document.body.appendChild(scrim);
   document.body.appendChild(sheet);
   requestAnimationFrame(function () { sheet.classList.add('open'); });
@@ -83,7 +79,7 @@ function openTropePicker(book) {
           return !q || t.name.toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0;
         }).slice(0, 60);
         sheet.querySelector('#ccTropeList').innerHTML = shown.map(function (t) {
-          return '<button class="chip" data-ctid="' + escHtml(t.id) + '">' + escHtml(t.name) + '</button>';
+          return '<button class="chip" data-ctid="' + esc(t.id) + '">' + esc(t.name) + '</button>';
         }).join('') || '<p class="note">No matches.</p>';
         sheet.querySelectorAll('[data-ctid]').forEach(function (b) {
           b.addEventListener('click', function () {
@@ -149,7 +145,7 @@ function openCharacterSuggestStep2(book, name) {
   var mod = cc();
   if (!mod) return;
   ccSheet('Who did we miss?',
-    '<p class="note" style="margin-bottom:12px">Adding <b>' + escHtml(name) + '</b> — anything more? <button class="taplink" id="ccChBack">&larr; edit name</button></p>' +
+    '<p class="note" style="margin-bottom:12px">Adding <b>' + esc(name) + '</b> — anything more? <button class="taplink" id="ccChBack">&larr; edit name</button></p>' +
     '<label class="cc-label">What kind of role? (optional)</label>' +
     '<select id="ccChRole" class="text-input" style="width:100%;margin:6px 0">' +
     '<option value="">Pick a role&hellip;</option>' +
@@ -158,7 +154,7 @@ function openCharacterSuggestStep2(book, name) {
     '<option value="supporting">Supporting</option>' +
     '<option value="minor">Minor</option></select>' +
     '<textarea id="ccChDesc" class="text-input" rows="3" placeholder="Who are they? (a sentence or two)" style="width:100%"></textarea>' +
-    '<p style="margin-top:12px"><button class="btn" id="ccChSend" style="width:100%">Suggest ' + escHtml(name) + ' &rarr;</button></p>' +
+    '<p style="margin-top:12px"><button class="btn" id="ccChSend" style="width:100%">Suggest ' + esc(name) + ' &rarr;</button></p>' +
     '<p class="cc-trust">Goes to the curator for review. Never auto-added.</p>',
     function (sheet, close) {
       sheet.querySelector('#ccChBack').addEventListener('click', function () { openCharacterSuggest(book); });
@@ -182,22 +178,22 @@ function openMergeProposal(book, charAName, charARef, candidates) {
   if (!candidates.length) { toast('Need at least two characters to propose a merge'); return; }
   var avatarFor = function (name) {
     var ch = String(name || '?').trim().charAt(0).toUpperCase() || '?';
-    return '<div class="cc-merge-avatar">' + escHtml(ch) + '</div>';
+    return '<div class="cc-merge-avatar">' + esc(ch) + '</div>';
   };
   var cardsHTML = function (bName) {
     return '<div class="cc-merge-cards">' +
       '<div class="cc-merge-card">' + avatarFor(charAName) +
-      '<div class="cc-merge-name">' + escHtml(charAName) + '</div></div>' +
+      '<div class="cc-merge-name">' + esc(charAName) + '</div></div>' +
       '<div class="cc-merge-vs">is</div>' +
       '<div class="cc-merge-card">' + avatarFor(bName) +
-      '<div class="cc-merge-name">' + escHtml(bName) + '</div></div>' +
+      '<div class="cc-merge-name">' + esc(bName) + '</div></div>' +
       '</div>';
   };
   ccSheet('Are these the same person?',
     '<div id="ccMgCards">' + cardsHTML(candidates[0].name) + '</div>' +
     '<label class="cc-label">The same person as&hellip;</label>' +
     '<select id="ccMgB" class="text-input" style="width:100%;margin:6px 0">' +
-    candidates.map(function (c) { return '<option value="' + escHtml(c.ref) + '">' + escHtml(c.name) + '</option>'; }).join('') +
+    candidates.map(function (c) { return '<option value="' + esc(c.ref) + '">' + esc(c.name) + '</option>'; }).join('') +
     '</select>' +
     '<label class="cc-label">Evidence (required)</label>' +
     '<textarea id="ccMgEv" class="text-input" rows="3" placeholder="Where did you see this? e.g. both appear in Chapter 12" style="width:100%"></textarea>' +
@@ -244,9 +240,9 @@ function openTriggerPicker(book) {
             return !q || t.label.toLowerCase().indexOf(q) >= 0 || t.id.indexOf(q) >= 0;
           });
           if (!shown.length) return;
-          html += '<p class="note" style="margin:8px 0 4px;text-transform:capitalize">' + escHtml(cat.replace(/-/g, ' ')) + '</p>' +
+          html += '<p class="note" style="margin:8px 0 4px;text-transform:capitalize">' + esc(cat.replace(/-/g, ' ')) + '</p>' +
             shown.map(function (t) {
-              return '<button class="chip" data-cgid="' + escHtml(t.id) + '" title="' + escHtml(t.description || '') + '">' + escHtml(t.label) + '</button>';
+              return '<button class="chip" data-cgid="' + esc(t.id) + '" title="' + esc(t.description || '') + '">' + esc(t.label) + '</button>';
             }).join(' ');
         });
         sheet.querySelector('#ccTgList').innerHTML = html || '<p class="note">No matches.</p>';
@@ -304,13 +300,6 @@ async function ccEnrichWarnings(b) {
   return b;
 }
 
-/* Patch the two PR #87 call sites: enrich before the check. */
-function ccPatchTriggerCheck() {
-  try {
-    var s1 = document.getElementById('f-tropedb');
-    void s1;
-  } catch (e) {}
-}
 /* Expose enrichment for the patched call sites (see edits in
    150-modal-discovery.js and 160-roulette.js). */
 window.ccEnrichWarnings = ccEnrichWarnings;

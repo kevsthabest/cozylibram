@@ -17,10 +17,6 @@
 
 var charCache = {}; // workId -> {count, top:[{name, role}]} (memory only)
 
-function escH(s) {
-  try { return (typeof esc === 'function') ? esc(s) : String(s); }
-  catch (e) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-}
 function findBook(id) {
   try {
     var lib = (typeof library !== 'undefined') ? library : [];
@@ -147,7 +143,7 @@ function warningsState(warns, b) {
 function tropeChipsHTML(tropes, bookId, votes) {
   if (!tropes.length) {
     return '<span class="note">No tropes mapped yet — </span>' +
-      '<button class="taplink" data-pt="suggest-tropes" data-book="' + escH(bookId) + '">what kind of story is this?</button>';
+      '<button class="taplink" data-pt="suggest-tropes" data-book="' + esc(bookId) + '">what kind of story is this?</button>';
   }
   // v473: provenance labels (Part 1, item 1). votes optional — without them
   // every auto trope reads "from the text", which is correct pre-fetch.
@@ -158,9 +154,9 @@ function tropeChipsHTML(tropes, bookId, votes) {
       : { key: 'text', label: 'from the text' };
     var tappable = votable && t.id && prov.key === 'text';
     return '<span class="chip" data-tprov="' + prov.key + '"' +
-      (t.id ? ' data-tid="' + escH(t.id) + '"' : '') +
-      (tappable ? ' tabindex="0" role="button" aria-label="' + escH(t.name) + ' — ' + escH(prov.label) + '. Tap to confirm or dispute."' : '') +
-      '>' + escH(t.name) + '<span class="tprov">' + escH(prov.label) + '</span></span>';
+      (t.id ? ' data-tid="' + esc(t.id) + '"' : '') +
+      (tappable ? ' tabindex="0" role="button" aria-label="' + esc(t.name) + ' — ' + esc(prov.label) + '. Tap to confirm or dispute."' : '') +
+      '>' + esc(t.name) + '<span class="tprov">' + esc(prov.label) + '</span></span>';
   }).join(' ');
   if (tropes.length > 2) shown += ' <button class="chip ghost" data-pt="gotab" data-tab="tropes">+' + (tropes.length - 2) + '</button>';
   return shown;
@@ -173,15 +169,27 @@ function warnChipsHTML(warns, b, bookId) {
       return '<span class="note">✓ Readers found nothing to flag</span>';
     }
     var html = '<span class="note">Not reviewed yet. </span>' +
-      '<button class="taplink" data-pt="suggest-warn" data-book="' + escH(bookId) + '">Flag one</button>';
+      '<button class="taplink" data-pt="suggest-warn" data-book="' + esc(bookId) + '">Flag one</button>';
     if (b && b.status === 'read') {
-      html += ' <button class="taplink" data-pt="warn-none" data-book="' + escH(bookId) + '">Nothing to flag</button>';
+      html += ' <button class="taplink" data-pt="warn-none" data-book="' + esc(bookId) + '">Nothing to flag</button>';
     }
     return html;
   }
-  return warns.slice(0, 3).map(function (w) {
-    return '<span class="warn-tag">' + escH(w) + '</span>';
-  }).join(' ') + (warns.length > 3 ? ' <span class="note">+' + (warns.length - 3) + '</span>' : '');
+  // v535 (audit #1): warning preferences apply — prominent first +
+  // emphasised; 'detailed' lifts the +N truncation; 'on-request'
+  // holds the names behind a tap (session-only reveal, js/226).
+  var prefs = null;
+  try { prefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null; } catch (e) {}
+  if (prefs && prefs.detail === 'on-request' && b &&
+      !(typeof warnIsRevealed === 'function' && warnIsRevealed(b))) {
+    return '<button class="taplink" data-pt="warn-reveal" data-book="' + esc(bookId) + '">Content warnings — tap to view</button>';
+  }
+  var ordered = (prefs && typeof warnOrderProminent === 'function') ? warnOrderProminent(warns, prefs) : warns;
+  var limit = (prefs && prefs.detail === 'detailed') ? ordered.length : 3;
+  return ordered.slice(0, limit).map(function (w) {
+    var prom = prefs && typeof warnIsProminent === 'function' && warnIsProminent(w, prefs);
+    return '<span class="warn-tag' + (prom ? ' warn-tag-prom' : '') + '">' + esc(w) + '</span>';
+  }).join(' ') + (ordered.length > limit ? ' <span class="note">+' + (ordered.length - limit) + '</span>' : '');
 }
 
 function portraitCardHTML(b) {
@@ -192,7 +200,7 @@ function portraitCardHTML(b) {
   var flavor = flavorLine(b);
   var pct = portraitScore(b, 0);
   var html =
-    '<div class="portrait-card" id="portraitCard" data-book="' + escH(bookId) + '">' +
+    '<div class="portrait-card" id="portraitCard" data-book="' + esc(bookId) + '">' +
     '<div class="portrait-head"><span style="width:22px;height:22px;color:var(--accent);flex-shrink:0;vertical-align:middle;margin-right:10px;display:inline-flex;align-items:center">' + icon('portrait') + '</span>' +
     '<span class="serif portrait-title">Book Portrait</span> ' +
     '<span class="note" id="ptPct">' + pct + '% mapped</span></div>' +
@@ -202,7 +210,7 @@ function portraitCardHTML(b) {
     warnChipsHTML(warns, b, bookId) + '</div></div>' +
     '<div class="portrait-sec"><div class="portrait-label">Characters</div><div id="ptChars">' +
     '<span class="note">Loading cast…</span></div></div>' +
-    (flavor ? '<div class="portrait-flavor">' + escH(flavor) + '</div>' : '') +
+    (flavor ? '<div class="portrait-flavor">' + esc(flavor) + '</div>' : '') +
     '<button class="taplink portrait-more" data-pt="more">See full breakdown ↓</button>' +
     '<div class="portrait-full" id="ptFull" hidden></div>' +
     '</div>';
@@ -222,9 +230,9 @@ async function portraitEnhance(b) {
     if (chEl && card.isConnected) {
       if (!cd.count) {
         chEl.innerHTML = '<span class="note">No characters recorded — </span>' +
-          '<button class="taplink" data-pt="suggest-chars" data-book="' + escH(fresh.id || '') + '">who\u2019s in this story?</button>';
+          '<button class="taplink" data-pt="suggest-chars" data-book="' + esc(fresh.id || '') + '">who\u2019s in this story?</button>';
       } else {
-        chEl.innerHTML = cd.top.map(function (c) { return '<span class="chip">' + escH(c.name) + '</span>'; }).join(' ') +
+        chEl.innerHTML = cd.top.map(function (c) { return '<span class="chip">' + esc(c.name) + '</span>'; }).join(' ') +
           (cd.count > 2 ? ' <button class="chip ghost" data-pt="gotab" data-tab="characters">+' + (cd.count - 2) + '</button>' : '');
       }
       card._ptChars = cd;
@@ -274,16 +282,26 @@ function portraitBreakdownHTML(b) {
   var srcLabel = { you: 'your list', auto: 'auto-detected', community: 'community ✓' };
   var h = '<div class="portrait-bsec"><div class="portrait-label">All tropes</div>';
   h += tropes.length ? tropes.map(function (t) {
-    return '<div class="portrait-brow"><span class="chip">' + escH(t.name) + '</span> <span class="note">' + escH(srcLabel[t.source] || t.source || '') + '</span></div>';
+    return '<div class="portrait-brow"><span class="chip">' + esc(t.name) + '</span> <span class="note">' + esc(srcLabel[t.source] || t.source || '') + '</span></div>';
   }).join('') : '<p class="note">None mapped yet.</p>';
   h += '</div><div class="portrait-bsec"><div class="portrait-label">All warnings</div>';
-  h += warns.length ? warns.map(function (w) {
-    var comm = /\(community\)\s*$/.test(w);
-    return '<div class="portrait-brow"><span class="warn-tag">' + escH(w) + '</span> <span class="note">' + (comm ? 'community ✓' : 'catalog') + '</span></div>';
-  }).join('') : '<p class="note">' + (warningsState(null, b) === 'none-confirmed' ? 'Readers found nothing to flag.' : 'Not reviewed yet.') + '</p>';
+  // v535 (audit #1): prominent-first + emphasised, descriptions at the
+  // 'detailed' level. The breakdown is itself an explicit "show me
+  // everything" view, so 'on-request' does not hide rows here.
+  h += warns.length ? (function () {
+    var bp = null;
+    try { bp = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null; } catch (e) {}
+    var ow = (bp && typeof warnOrderProminent === 'function') ? warnOrderProminent(warns, bp) : warns;
+    return ow.map(function (w) {
+      var comm = /\(community\)\s*$/.test(w);
+      var prom = bp && typeof warnIsProminent === 'function' && warnIsProminent(w, bp);
+      var desc = (bp && bp.detail === 'detailed' && typeof warnDescFor === 'function') ? warnDescFor(w) : '';
+      return '<div class="portrait-brow"><span class="warn-tag' + (prom ? ' warn-tag-prom' : '') + '">' + esc(w) + '</span> <span class="note">' + (comm ? 'community ✓' : 'catalog') + (desc ? ' — ' + esc(desc) : '') + '</span></div>';
+    }).join('');
+  })() : '<p class="note">' + (warningsState(null, b) === 'none-confirmed' ? 'Readers found nothing to flag.' : 'Not reviewed yet.') + '</p>';
   h += '</div><div class="portrait-bsec"><div class="portrait-label">All characters</div>';
   h += chars.length ? chars.map(function (c) {
-    return '<div class="portrait-brow"><b>' + escH(c.name) + '</b> <span class="note">' + escH(c.role || '') + '</span></div>';
+    return '<div class="portrait-brow"><b>' + esc(c.name) + '</b> <span class="note">' + esc(c.role || '') + '</span></div>';
   }).join('') : '<p class="note">None recorded yet.</p>';
   h += '</div>';
   return h;
@@ -348,6 +366,15 @@ if (typeof document !== 'undefined') {
     } else if (kind === 'suggest-tropes') suggestVia('tropes', el.getAttribute('data-book'));
     else if (kind === 'suggest-chars') suggestVia('chars', el.getAttribute('data-book'));
     else if (kind === 'suggest-warn') suggestVia('warn', el.getAttribute('data-book'));
+    // v535: 'on-request' reveal for the portrait warning chips.
+    else if (kind === 'warn-reveal') {
+      var rv = findBook(el.getAttribute('data-book'));
+      if (rv && typeof warnReveal === 'function') {
+        warnReveal(rv);
+        var wEl3 = document.getElementById('ptWarns');
+        if (wEl3) wEl3.innerHTML = warnChipsHTML(localWarnings(rv), rv, rv.id || '');
+      }
+    }
     // v473: "Nothing to flag" (Part 2, items 5-6) — Read books only; the
     // book object + saveLibrary() is the offline story (rides library sync).
     else if (kind === 'warn-none') {

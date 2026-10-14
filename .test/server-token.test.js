@@ -18,13 +18,13 @@ const q = (s) => window.document.querySelector(s);
 delete window.SPICY_CONFIG;
 ok('not ready when nothing configured', window.hcReady() === false);
 ok('gbooks not ready when nothing configured', window.gbReady() === false);
-ok('status says none set', window.hcStatusText().indexOf('No key') === 0);
+// (v535: hcStatusText was dead code — its only caller was the Settings
+// group removed in v476 — and was removed with its pins.)
 
 // 2. Server flags set — ready, but no secret is exposed to the client
 window.SPICY_CONFIG = { hardcover: true, gbooks: true };
 ok('hcReady true from flag', window.hcReady() === true);
 ok('gbReady true from flag', window.gbReady() === true);
-ok('status mentions server-side', window.hcStatusText().includes('server-side'));
 ok('no secret anywhere on the client config',
   JSON.stringify(window.SPICY_CONFIG).indexOf('srv_token') === -1);
 

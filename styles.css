@@ -1430,6 +1430,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   background: rgba(255, 120, 120, 0.1); border: 1px solid rgba(255, 120, 120, 0.35); }
 /* v402: chapter labels in warning tags (progressive disclosure) */
 .warn-chaps { opacity: 0.75; font-size: 0.9em; }
+/* v535: warning preferences — prominent tags, taxonomy descriptions,
+   the trigger check's per-warning item, and the on-request hold block */
+.warn-tag-prom { border: 2px solid var(--accent, #b4552d); background: rgba(255, 120, 120, 0.22); font-weight: 700; }
+.warn-desc { font-size: 0.82em; opacity: 0.85; }
+.tc-warn-item { display: inline-flex; align-items: center; gap: 6px; }
+.warnings-onreq { margin: 10px 0 2px; }
 /* v402: chapter metadata rows (Spice Forecast + dialogue ratio) */
 .chaptermeta-row { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 8px 0; border-top: 1px solid var(--line, rgba(128,128,128,.18)); }
@@ -3549,6 +3555,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     transform: translateY(105%); transition: transform .28s cubic-bezier(.2,.9,.3,1.1); overflow-y: auto; }
   #shelf3d #s3dInvPanel.open { transform: translateY(0); }
   #shelf3d #s3dInvPanel h3 { margin: 0 0 4px; font-size: 15px; color: #f6eff8; font-family: system-ui, sans-serif; }
+  /* v535 (UX P2-8): visible inventory close control (mirrors js/215) */
+  #shelf3d .s3d-inv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  #shelf3d #s3dInvClose { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 999px; border: 1px solid rgba(229,184,106,.35);
+    background: rgba(40,30,52,.9); color: #f6eff8; font-size: 17px; line-height: 1; cursor: pointer; font-family: system-ui, sans-serif; }
+  #shelf3d #s3dInvClose:active { transform: scale(.93); border-color: #e5b86a; }
+  #shelf3d .inv-item:disabled { opacity: .45; cursor: default; }
+  #shelf3d .inv-item:focus-visible { outline: 2px solid #e5b86a; outline-offset: 2px; }
   #shelf3d #s3dInvPanel .sub { font-size: 11px; color: #b9a8c6; font-family: system-ui, sans-serif; margin-bottom: 10px; }
   #shelf3d #s3dInvGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   #shelf3d .inv-item { background: rgba(40,30,52,.9); border: 1px solid rgba(229,184,106,.25); border-radius: 12px;

@@ -12,10 +12,6 @@ function gbReady() {
   try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.gbooks)); }
   catch (e) { return false; }
 }
-function gbKeyStatusText() {
-  if (gbReady()) return icon('owned') + ' Using server-side Google Books key ✓';
-  return 'No key set — add GOOGLE_BOOKS_KEY (Pages env) or google_books_key (server-config.json).';
-}
 // Rewrite a Google Books API URL to the same-origin proxy. Any client-side
 // `key` param is stripped — the server attaches its own (or forwards the
 // request anonymously when it has none).
@@ -34,11 +30,23 @@ function trackProvider(provider, context) {
   try { track('provider_used', { provider: provider, context: context }); } catch (e) {}
 }
 
+// v535 (UX P2-5): junk ISBNs — a "barcode" of one repeated digit
+// (0000000000000 and friends). All-zeros even PASSES the ISBN-13
+// checksum, and Google Books' loose q=isbn: match happily returns an
+// unrelated classic for it ("The Robbers / Wallenstein"). No real
+// ISBN is a single repeated digit, so these never reach the network
+// or the shared cache: the lookup simply finds nothing.
+function isJunkIsbn(clean) {
+  const d = String(clean || '').replace(/[^0-9X]/gi, '');
+  return d.length >= 10 && /^(\d)\1+$/.test(d);
+}
+
 // ISBN lookup with the shared metadata cache in front: a cache hit returns
 // instantly with zero API calls; a miss runs the normal API path and stores
 // the result so the next user gets it from Supabase.
 async function lookupISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
+  if (isJunkIsbn(clean)) return null;
   const snap = await metaCacheGet(clean);
   if (snap) { trackProvider('cache', 'isbn'); return bookFromMeta(snap, clean); }
   const book = await lookupISBNFromAPIs(clean);
@@ -56,6 +64,7 @@ async function lookupISBN(isbn) {
 
 async function lookupISBNFromAPIs(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
+  if (isJunkIsbn(clean)) return null;
   try {
     const r = await apiFetch(gbProxyUrl('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(clean) + '&langRestrict=en'));
     const d = await r.json();

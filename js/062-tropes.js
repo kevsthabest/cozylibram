@@ -2,7 +2,8 @@
 // of the book's blurb, and community tags from Hardcover. Suggestions land in
 // book.tropesAuto and are shown as tappable chips in the book editor; they
 // never overwrite book.tropes (her hand-picked list). The source is chosen in
-// Settings → Hardcover → "Trope suggestions".
+// Settings → Library → Reading log → "Trope suggestions" (the control
+// moved there in v535 after its original section was removed in v476).
 
 const TROPE_SRC_KEY = 'spicyshelves.tropesrc';
 const TROPE_SOURCES = ['off', 'keywords', 'hardcover', 'both'];

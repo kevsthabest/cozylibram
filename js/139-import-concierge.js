@@ -9,6 +9,7 @@
 
 // Per-run state. Reset every time the concierge opens.
 var IC = null;
+var icToken = null; // v535: overlay-history token for the concierge sheet
 function icReset() {
   IC = {
     step: 'source',       // source | file | working | report | covers | coverreport | done
@@ -63,11 +64,21 @@ function icOpen() {
   document.body.appendChild(ov);
   icEl('ic-close').addEventListener('click', icClose);
   ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') icClose(); });
+  // v535 (audit #8): the standing sheet rule — swipe-down-to-dismiss
+  // via wireSheetDrag + overlay history, like every other sheet. The
+  // back gesture closes the concierge through the token's domCloser.
+  if (typeof overlayOpened === 'function') icToken = overlayOpened('import-concierge', icClose);
+  const icSheetEl = ov.querySelector('.ic-sheet');
+  if (icSheetEl && typeof wireSheetDrag === 'function') wireSheetDrag(icSheetEl, icClose);
   icTrack('import_concierge_opened', {});
   icRender();
 }
 function openImportConcierge() { icOpen(); }
 function icClose() {
+  if (icToken != null) {
+    const t = icToken; icToken = null;
+    if (typeof overlayClosed === 'function') overlayClosed(t);
+  }
   const ov = icEl('ic-overlay');
   if (ov) ov.remove();
   IC = null;

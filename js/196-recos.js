@@ -73,12 +73,23 @@ async function loadRecos() {
     fetched.forEach(r => { if (r) (r.books || []).forEach(b => all.push(b)); });
     try { spiceMap = await shieldSpiceMapFor(all); } catch (e) { spiceMap = {}; }
   }
+  // v535 (audit #1): warning preferences — "Filter from discovery"
+  // finally applies. Friend copies carry their own contentWarnings
+  // (exact, owner-side data), so no enrichment is needed here; a book
+  // matching an excluded warning never enters the list.
+  const wprefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null;
+  const wfilter = !!(wprefs && wprefs.excluded && wprefs.excluded.length &&
+    typeof warnBookExcluded === 'function');
+  if (wfilter && typeof primeWarningTaxonomy === 'function') {
+    try { await primeWarningTaxonomy(); } catch (e) { /* labels still resolve by slug */ }
+  }
   for (const r of fetched) {
     if (!r) continue;
     const f = r.f;
     const books = r.books;
     books.forEach(b => {
       if (shielded && typeof shieldIsHighSpice === 'function' && shieldIsHighSpice(b, spiceMap)) return;
+      if (wfilter && warnBookExcluded(b, wprefs)) return;
       const r = Number(b.myRating) || 0;
       if (r < 4) return; // v97: only 4★+ earns a recommendation
       const k = recoKey(b);
@@ -157,6 +168,12 @@ function covenCleanCopy(src) {
     cover: src.cover || '',
     coverColor: src.coverColor || '',
     status: 'tbr',
+    // v535 (audit #18): align with addRecoBook (js/198) — a book added
+    // from someone else's shelf isn't in hand yet, so the ownership
+    // facet is 'tobuy' (status carries the shelf, owned is purely the
+    // ownership facet since v529; migrateBook's 'owned' default was
+    // skewing Purchase Ledger / to-buy counts).
+    owned: 'tobuy',
     series: (src.series && typeof src.series === 'object') ? src.series : null,
     seriesPos: src.seriesPos || '',
     genres: (src.genres || []).slice(),

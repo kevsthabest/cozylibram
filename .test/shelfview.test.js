@@ -58,9 +58,8 @@ ok('saved order respected, dead ids dropped, new appended',
 ok('empty order keeps library order',
   run(`shelfApplyOrder([{id:'a'},{id:'b'}], []).map(b=>b.id).join(',')`) === 'a,b');
 
-/* ---- 5. shelfChunk ---- */
-ok('chunk splits rows', run(`JSON.stringify(shelfChunk([1,2,3,4,5],2))`) === '[[1,2],[3,4],[5]]');
-ok('chunk empty', run(`shelfChunk([],8).length`) === 0);
+/* ---- 5. shelfChunk (v535: dead code — no production caller since the
+   2D shelf moved to CSS layout; removed with its pins, audit #20) ---- */
 
 /* ---- 6. spineCropRect: 1:5.2 center crop ---- */
 // Landscape photo (1200x800): height-constrained -> full-height narrow strip.

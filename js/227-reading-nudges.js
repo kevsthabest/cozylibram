@@ -15,10 +15,6 @@
 (function () {
 'use strict';
 
-function escH(s) {
-  try { return (typeof esc === 'function') ? esc(s) : String(s); }
-  catch (e) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-}
 function dnaNudgesOff() {
   try { return localStorage.getItem('cozylibram.dnaNudgesOff') === '1'; } catch (e) { return false; }
 }
@@ -104,16 +100,16 @@ function renderNudge(slot, b, sig) {
   if (sig.kind === 'chars') {
     inner =
       '<div class="portrait-label">A quick question</div>' +
-      '<p><b>' + escH(b.title || 'This book') + '</b> — met anyone worth naming?</p>' +
+      '<p><b>' + esc(b.title || 'This book') + '</b> — met anyone worth naming?</p>' +
       '<div class="survey-row"><input id="nudgeName" class="text-input" placeholder="Character name" style="flex:1">' +
       '<button class="btn sm" id="nudgeSend">Send</button></div>';
   } else {
     inner =
       '<div class="portrait-label">A quick question</div>' +
-      '<p><b>' + escH(b.title || 'This book') + '</b> — spotted any of these yet?</p>' +
+      '<p><b>' + esc(b.title || 'This book') + '</b> — spotted any of these yet?</p>' +
       '<div class="survey-chips" id="nudgeChips">' +
       nudgeTropePicks().map(function (t) {
-        return '<button class="chip nudge-chip" data-ntid="' + escH(t.id) + '">' + escH(t.name) + '</button>';
+        return '<button class="chip nudge-chip" data-ntid="' + esc(t.id) + '">' + esc(t.name) + '</button>';
       }).join('') + '</div>' +
       '<p class="note">Tap the ones you\u2019ve noticed — or skip.</p>' +
       '<button class="btn sm" id="nudgeSend">Send</button>';

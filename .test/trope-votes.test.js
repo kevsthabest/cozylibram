@@ -1,5 +1,6 @@
-/* v154 community-vote tests: tropeDisplayConfidence, TropeVotes
+/* v154 community-vote tests: TropeVotes
    aggregation/cast/toggle, and vote buttons in dbTropeChipsHTML.
+   (tropeDisplayConfidence was removed as dead code in v535.)
    Run: node .test/trope-votes.test.js */
 'use strict';
 const fs = require('fs');
@@ -70,18 +71,9 @@ function ok(name, cond) {
     probe('TropeVotes.invalidate()');
   }
 
-  /* ---- 1. safe confidence recomputation ---- */
-  {
-    ok('no votes -> base unchanged', probe('tropeDisplayConfidence(0.8)') === 0.8);
-    ok('net +3 nudges +0.12',
-      Math.abs(probe('tropeDisplayConfidence(0.8, { up: 4, down: 1 })') - 0.92) < 1e-9);
-    ok('clamps at the top', probe('tropeDisplayConfidence(0.95, { up: 10, down: 0 })') === 0.99);
-    ok('clamps at the bottom', probe('tropeDisplayConfidence(0.1, { up: 0, down: 10 })') === 0.05);
-    ok('bad base defaults to 0.5', probe('tropeDisplayConfidence("x", { up: 1, down: 0 })') === 0.54);
-    ok('votes saturate: pile-on cannot flip',
-      probe('tropeDisplayConfidence(0.9, { up: 0, down: 100 })') === 0.05 &&
-      probe('tropeDisplayConfidence(0.9, { up: 0, down: 9 })') > 0.5);
-  }
+  /* ---- 1. (v535: tropeDisplayConfidence was dead code — no production
+     caller; TropeVotes below is the live surface. Function and pins
+     removed, audit #20.) ---- */
 
   /* ---- 2. aggregation ---- */
   {

@@ -501,18 +501,6 @@ function previewTransient(src, kind) {
   };
 }
 
-// Which sections the preview renders for a transient — pure, unit-tested.
-// The ONLY writers are the +TBR / Wishlist buttons, via opts callbacks.
-function previewSections(t) {
-  return {
-    description: !!t.description,
-    tropes: (t.tropes || []).length > 0,
-    genres: bookGenres(t).length > 0,
-    series: !!(t.series && t.series.name),
-    actions: true
-  };
-}
-
 let previewOpenId = null; // guards the async enrichment against a closed modal
 
 // opts: { why: [html chips], contextNote, source, onAddTBR: () => book|null }
@@ -695,7 +683,7 @@ async function fillMoreSection(kind, name, fromId, box, bare) {
       const r = await fetchSeriesBooks(name, from && from.authors[0]);
       if (r.needsToken) {
         box.innerHTML = headingHTML +
-          '<p class="note">' + icon('bulb') + ' Connect Hardcover in Settings to see every book in this series.</p>';
+          '<p class="note">' + icon('bulb') + ' Hardcover isn’t available right now, so the full series can’t be shown.</p>';
         return;
       }
       rows = r.rows;

@@ -24,10 +24,6 @@
 (function () {
 'use strict';
 
-function escHtml(s) {
-  try { return (typeof esc === 'function') ? esc(s) : String(s); }
-  catch (e) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-}
 async function cqClient() {
   try { return await cloudClient().catch(function () { return null; }); }
   catch (e) { return null; }
@@ -269,10 +265,10 @@ async function renderCqList(sb) {
       '<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">' +
       '<input type="checkbox" class="cq-check" data-cqid="' + it.id + '"' + (cqSelected[it.id] ? ' checked' : '') + ' style="margin-top:4px">' +
       '<span style="flex:1">' +
-      '<span class="chip">' + escHtml(typeBadge[it.ptype] || it.ptype) + '</span> ' +
-      '<b>' + escHtml(it.title) + '</b><br>' +
-      (it.detail ? '<span class="note">' + escHtml(String(it.detail).slice(0, 220)) + '</span><br>' : '') +
-      '<span class="note">' + escHtml(it.bookKey || '') + ' · by ' + escHtml(who) + ' · ' + escHtml(when) + '</span><br>' + con +
+      '<span class="chip">' + esc(typeBadge[it.ptype] || it.ptype) + '</span> ' +
+      '<b>' + esc(it.title) + '</b><br>' +
+      (it.detail ? '<span class="note">' + esc(String(it.detail).slice(0, 220)) + '</span><br>' : '') +
+      '<span class="note">' + esc(it.bookKey || '') + ' · by ' + esc(who) + ' · ' + esc(when) + '</span><br>' + con +
       '</span></label>' +
       '<p style="margin:6px 0 0"><button class="btn sm" data-cq-ok="' + it.id + '">Approve</button> ' +
       '<button class="btn sm ghost" data-cq-no="' + it.id + '">Reject</button>' +
