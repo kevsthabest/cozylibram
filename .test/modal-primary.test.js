@@ -30,8 +30,13 @@ const q = (sel) => window.document.querySelector(sel);
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 function seed(status) {
+  // v559: the seed carries owned: 'owned' — every real book does (the
+  // facet is backfilled by migrateBook at load). Without it the modal
+  // draft defaults a missing facet to 'tobuy' (js/150), which under
+  // the unified model makes a plain TBR seed a wishlist book and its
+  // primary the acquisition action instead of the status primary.
   run(`library = [
-    { id: 'b1', title: 'Test Book', authors: ['Author'], status: '${status}',
+    { id: 'b1', title: 'Test Book', authors: ['Author'], status: '${status}', owned: 'owned',
       progress: 0, pageCount: 200, cover: '', tropes: [], genres: [],
       myRating: 0, ratings: {}, axes: [], favorite: false, notes: '' }
   ]; openDetail('b1');`);
@@ -85,6 +90,20 @@ ok('primary: in the hero before the tabs',
   !!q('.d-hero #m-primary') && !q('.modal-actions #m-primary'));
 ok('bar: save remains alone; ⋮ lives in the top-right cluster',
   !!q('.d-topactions #m-more') && !!q('.modal-actions #m-save') && !q('.modal-actions #m-more'));
+
+// --- 7. v559: a wishlist book's primary is the acquisition action ---
+run(`library = [
+  { id: 'b1', title: 'Test Book', authors: ['Author'], status: 'tbr', owned: 'tobuy',
+    progress: 0, pageCount: 200, cover: '', tropes: [], genres: [],
+    myRating: 0, ratings: {}, axes: [], favorite: false, notes: '' }
+]; openDetail('b1');`);
+await tick();
+ok('wishlist book: primary is Mark owned', primaryLabel().includes('Mark owned'));
+q('#m-primary').click();
+await tick();
+ok('wishlist book: primary marks owned, status stays tbr',
+  run(`library[0].owned`) === 'owned' && run(`library[0].status`) === 'tbr');
+ok('wishlist book: primary repaints to Start Reading', primaryLabel().includes('Start Reading'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

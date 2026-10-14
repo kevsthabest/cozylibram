@@ -47,6 +47,11 @@ ok('tbr group', run(`shelfGroupBooks(__books,'tbr').map(b=>b.id).join(',')`) ===
 ok('reading group', run(`shelfGroupBooks(__books,'reading').map(b=>b.id).join(',')`) === '2');
 ok('read group', run(`shelfGroupBooks(__books,'read').map(b=>b.id).join(',')`) === '3');
 ok('missing status defaults to tbr', run(`shelfGroupBooks([{}],'tbr').length`) === 1);
+run(`__books.push({id:'6', title:'F', status:'tbr', owned:'tobuy'});`);
+ok('wishlist group is the derived tbr + tobuy set (v559)',
+  run(`shelfGroupBooks(__books,'wishlist').map(b=>b.id).join(',')`) === '6');
+ok('tbr group includes the wishlist book (subset view, v559)',
+  run(`shelfGroupBooks(__books,'tbr').map(b=>b.id).join(',')`) === '1,5,6');
 
 /* ---- 4. shelfApplyOrder ---- */
 run(`var __ordered = shelfApplyOrder(

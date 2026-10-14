@@ -84,9 +84,9 @@ q('[data-of="all"]').click();
 ok('all restores all three', qa('.book-card').length === 3);
 
 // 7. wishlist (reached from the Library toolbar): the Wishlist shelf
-// only. v529: wishlist-ness is the status — o2 is shelved there (its
-// to-buy facet alone no longer puts a book on this view).
-runInWindow(`library.find(b => b.id === 'o2').status = 'wishlist'; go('library')`);
+// only. v559: wishlist-ness derives from the pair (tbr + tobuy) —
+// o2 was born exactly that, so it is on this view with no poking.
+runInWindow(`go('library')`);
 ok('library toolbar links to wishlist', !!q('#lib-wishlist'));
 q('#lib-wishlist').click();
 ok('wishlist view renders', !!q('.wish-head'));
@@ -97,7 +97,7 @@ q('#view .book-card').click();
 ok('wishlist card opens detail', !!q('#f-owned'));
 window.document.getElementById('m-x').click();
 
-// 8. empty wishlist state (v529: empty = nobody on the Wishlist shelf)
+// 8. empty wishlist state (v559: empty = no tbr + tobuy books)
 runInWindow(`library.forEach(b => { b.owned = 'owned'; b.status = 'tbr'; }); renderWishlist();`);
 ok('empty wishlist message', q('#view .empty').textContent.includes('Nothing on the wishlist'));
 

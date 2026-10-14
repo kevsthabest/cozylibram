@@ -4,7 +4,10 @@
 function filteredBooks() {
   const q = query.trim().toLowerCase();
   const out = library.filter(b => {
-    if (filter !== 'all' && b.status !== filter) return false;
+    // v559: the 'wishlist' filter is the derived shelf (tbr + tobuy),
+    // not a status match.
+    if (filter === 'wishlist') { if (!isWishlistBook(b)) return false; }
+    else if (filter !== 'all' && b.status !== filter) return false;
     if (ownFilter === 'owned' && b.owned !== 'owned') return false;
     if (ownFilter === 'tobuy' && b.owned !== 'tobuy') return false;
     if (ownFilter === 'borrowed' && b.owned !== 'borrowed') return false;
@@ -33,7 +36,7 @@ const STATUS_BADGE = {
   reading: ['bmreading', 'Reading'],
   read: ['bmread', 'Read'],
   dnf: ['bmdnf', 'Did not finish'],
-  wishlist: ['bmwishlist', 'Wishlist'] // v534: the fifth status gets its chip too
+  wishlist: ['bmwishlist', 'Wishlist'] // v559: not a status — the derived wishlist book's chip (see bookTile)
 };
 
 /* v125: glanceable cards — favorite heart overlaid on the cover, status strip
@@ -84,9 +87,12 @@ function bookTile(b, i) {
   // TBR/DNF text badges retire; the reading % stays text as a pill tucked
   // left of the chip (a number can't be an icon). The reading glyph's
   // half-fill is a fixed state cue, never the real percentage.
-  const sb = STATUS_BADGE[b.status];
+  // v559: a wishlist book's bookmark is the wishlist glyph — wishlist-
+  // ness is derived (tbr + tobuy), so the badge key derives with it.
+  const badgeKey = isWishlistBook(b) ? 'wishlist' : b.status;
+  const sb = STATUS_BADGE[badgeKey];
   const stateBadge = sb
-    ? '<span class="tile-badge st-' + b.status + '" title="' + sb[1] + '" aria-label="' + sb[1] + '">' + icon(sb[0]) + '</span>' : '';
+    ? '<span class="tile-badge st-' + badgeKey + '" title="' + sb[1] + '" aria-label="' + sb[1] + '">' + icon(sb[0]) + '</span>' : '';
   let pctPill = '';
   if (b.status === 'reading' && b.pageCount) {
     const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));

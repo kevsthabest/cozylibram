@@ -117,6 +117,15 @@ function migrateBook(b) {
   // so stripping anything else only ever mangles attacker-controlled values.
   if (typeof b.id !== 'string' || !b.id) b.id = uid();
   else { const clean = b.id.replace(/[^A-Za-z0-9_-]/g, ''); b.id = clean || uid(); }
+  // v559: this is also the legacy-status degradation — a stored or
+  // sync-pushed status 'wishlist' (pre-v559 clients) is not in STATUS,
+  // so it coerces to 'tbr' here. Ruling: the ownership facet is left
+  // exactly as stored; the read path never invents ownership. A
+  // wishlist-born pair (tbr + tobuy after coercion) is wishlist-
+  // visible by derivation; a wishlist row stored with another facet
+  // lands as a plain TBR book. The one-time transform above is the
+  // only place the facet is set, and it runs on raw stored rows
+  // before this coercion can erase the evidence.
   if (!Object.prototype.hasOwnProperty.call(STATUS, b.status)) b.status = 'tbr';
   // v449: backfill readCount for books finished before reread tracking existed
   if (b.status === 'read' && (b.readCount == null || b.readCount < 1)) b.readCount = 1;
@@ -183,6 +192,32 @@ function wishlistShelfTransform(books) {
     if (!b || b.owned !== 'tobuy') continue;
     if (b.status === 'read' || b.status === 'reading') { b.owned = 'owned'; b._mtime = now; n++; }
     else if (b.status !== 'wishlist') { b.status = 'wishlist'; b._mtime = now; n++; }
+  }
+  return n;
+}
+
+/* v559: one-time wishlist unification — the pure transform. The
+   Wishlist stops being a status (v529) and becomes the to-buy part of
+   TBR (isWishlistBook, js/000). Every stored book still carrying
+   status 'wishlist' — written by a pre-v559 client — becomes
+   status 'tbr' with owned 'tobuy': exactly the pair the derivation
+   reads as a wishlist book, so nothing the reader shelved there is
+   lost. This transform is the ONE place a stored facet may be set:
+   the read path (migrateBook) only coerces the status and never
+   invents ownership. Runs ONCE per library partition (flagged by the
+   load paths in js/040, its own flags beside the v529 ones above,
+   which stay untouched) — it must never re-run, because afterwards a
+   status-'wishlist' row can only be a stale write from an old client,
+   and re-running would falsify that row's ownership facet. Changed
+   books get a fresh _mtime so they win the next cloud merge and push
+   once; the load paths persist them through the dirty-flag machinery.
+   Returns the number of books changed. Idempotent on its own output. */
+function wishlistUnifyTransform(books) {
+  let n = 0;
+  const now = Date.now();
+  for (const b of (books || [])) {
+    if (!b || b.status !== 'wishlist') continue;
+    b.status = 'tbr'; b.owned = 'tobuy'; b._mtime = now; n++;
   }
   return n;
 }

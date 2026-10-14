@@ -136,7 +136,7 @@ const recoSrc = () => ({
   q('#p-wish').click();
   await tick(10);
   const added = probe(`library.find(b => b.title === 'Wish Me')`);
-  ok('wishlist adds the book as not-owned', !!added && added.owned === 'tobuy' && added.status === 'wishlist');
+  ok('wishlist adds the book as not-owned (v559: born tbr + tobuy)', !!added && added.owned === 'tobuy' && added.status === 'tbr');
   ok('wishlist button becomes a confirmation', !q('#p-wish') &&
     window.document.body.textContent.includes('In your wishlist'));
   q('#p-x').click();

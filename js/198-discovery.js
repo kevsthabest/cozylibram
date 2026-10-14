@@ -195,10 +195,9 @@ function addReleaseBook(c) {
     title: c.title, authors: c.authors, cover: c.cover, description: c.description,
     pageCount: c.pages, publishedDate: '', releaseDate: c.releaseDate,
     categories: [], publicRating: null, ratingsCount: 0,
-    // v529: an unreleased find goes straight onto the Wishlist shelf
-    // (a status of its own now — the tobuy facet alone no longer
-    // makes a book a wishlist book). owned stays 'tobuy': not in hand.
-    status: 'wishlist', owned: 'tobuy', ratings: {}, myRating: 0,
+    // v559: an unreleased find is born tbr + tobuy — on the Wishlist
+    // by derivation (the to-buy part of TBR). owned 'tobuy': not in hand.
+    status: 'tbr', owned: 'tobuy', ratings: {}, myRating: 0,
     tropes: [], tropesAuto: [], progress: 0,
     dateAdded: new Date().toISOString(), dateFinished: null, notes: '',
     hcId: c.hcId, hcEnriched: true // already holds this Hardcover doc's data

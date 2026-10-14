@@ -173,6 +173,9 @@ function covenCleanCopy(src) {
     // facet is 'tobuy' (status carries the shelf, owned is purely the
     // ownership facet since v529; migrateBook's 'owned' default was
     // skewing Purchase Ledger / to-buy counts).
+    // v559: unchanged mechanically — and the born pair (tbr + tobuy)
+    // is wishlist-visible by derivation, which is the unified model
+    // working as decided, not a side effect.
     owned: 'tobuy',
     series: (src.series && typeof src.series === 'object') ? src.series : null,
     seriesPos: src.seriesPos || '',
