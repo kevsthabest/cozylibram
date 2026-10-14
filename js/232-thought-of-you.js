@@ -148,7 +148,8 @@ function toySnapshotBook(raw) {
 function toySenderName(senderId, profs) {
   const p = (profs && profs[senderId]) || circProfiles[senderId];
   if (p) {
-    const n = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
+    // v550: the one display helper (js/237) — @handle when set.
+    const n = friendDisplayName(p, '');
     if (n) return n;
   }
   return 'A friend';

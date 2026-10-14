@@ -206,7 +206,8 @@ function momentRowHTML(m) {
 function rxGiverName(giverId) {
   const pr = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[giverId] : null;
   if (pr) {
-    const n = ((pr.first_name || '') + ' ' + (pr.last_name || '')).trim();
+    // v550: the one display helper (js/237) — @handle when set.
+    const n = friendDisplayName(pr, '');
     if (n) return n;
   }
   return 'A friend';

@@ -81,7 +81,8 @@ function sentDayLabel(ts) {
 function sentName(id, rpcName) {
   const p = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[id] : null;
   if (p) {
-    const n = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
+    // v550: the one display helper (js/237) — @handle when set.
+    const n = friendDisplayName(p, '');
     if (n) return n;
   }
   if (rpcName) return String(rpcName);

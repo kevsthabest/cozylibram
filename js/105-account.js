@@ -47,7 +47,11 @@ function profileKey() {
 function blankProfile() {
   // v522: bio + favGenres — the shareable profile content the Circle &
   // privacy "bio & favourite genres" toggle governs.
-  return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0, bio: '', favGenres: [] };
+  // v550: handle (the chosen public identity; written ONLY by the
+  // claim_handle RPC, never by this sync) + findable (the separate
+  // opt-in to being looked up by it; a plain posture flag that rides
+  // the sync ladder like share_bio).
+  return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0, bio: '', favGenres: [], handle: '', findable: false };
 }
 function loadProfile() {
   let p = null;
@@ -62,6 +66,8 @@ function loadProfile() {
   base.bio = String(p.bio || '').slice(0, 240);
   base.favGenres = Array.isArray(p.favGenres)
     ? p.favGenres.map(g => String(g || '').trim()).filter(Boolean).slice(0, 8) : [];
+  base.handle = (typeof p.handle === 'string' && /^[a-z0-9_]{3,20}$/.test(p.handle)) ? p.handle : '';
+  base.findable = p.findable === true;
   if (p.avatar && typeof p.avatar === 'object') {
     if (p.avatar.type === 'default' && DEFAULT_AVATARS.some(a => a.id === p.avatar.id)) base.avatar = { type: 'default', id: p.avatar.id };
     else if (p.avatar.type === 'sticker' && stickerAvatarValid(p.avatar.id)) base.avatar = { type: 'sticker', id: p.avatar.id };
@@ -127,7 +133,7 @@ function isMissingColumn(err) {
 // per user, overwritten in place); the row just stores its path.
 async function pushCloudProfile(p) {
   const sb = await cloudClient().catch(() => null);
-  if (!sb || !cloudUser) return;
+  if (!sb || !cloudUser) return { ok: false, error: null };
   try {
     let cloudPath = p.avatarCloudPath || '';
     if (p.avatar.type === 'upload' && p.avatar.dataUrl && sb.storage) {
@@ -164,8 +170,11 @@ async function pushCloudProfile(p) {
     // v522: three-tier upsert — full row (bio/genres included), then
     // without bio/genres, then the bare row — so a database missing any
     // of the newer columns still syncs names/avatars (the v178 pattern).
+    // v550: findable rides the full tier only — and the handle NEVER
+    // rides any tier: claim_handle is its only write path (a database
+    // guard rejects handle writes from anywhere else).
     let up = await sb.from('profiles').upsert(
-      Object.assign({ gender: p.gender || '', bio: p.bio || '', fav_genres: p.favGenres || [] }, baseRow()), { onConflict: 'user_id' });
+      Object.assign({ gender: p.gender || '', bio: p.bio || '', fav_genres: p.favGenres || [], findable: p.findable === true }, baseRow()), { onConflict: 'user_id' });
     if (up.error && isMissingColumn(up.error)) {
       up = await sb.from('profiles').upsert(
         Object.assign({ gender: p.gender || '' }, baseRow()), { onConflict: 'user_id' });
@@ -174,7 +183,18 @@ async function pushCloudProfile(p) {
       up = await sb.from('profiles').upsert(baseRow(), { onConflict: 'user_id' });
     }
     if (up.error) throw up.error;
-  } catch (e) { /* offline — local copy is the source of truth */ }
+    return { ok: true };
+  } catch (e) {
+    // v550: a server content-screen rejection (23514, from the v550
+    // profiles_content_screen trigger) is NOT an offline blip — the
+    // name or bio on the row was refused. Surface it honestly and
+    // report the failure to the caller; every other error keeps the
+    // quiet offline semantics (local copy is the source of truth).
+    if (/profile content screened/i.test(String((e && e.message) || e || ''))) {
+      toast('That name or bio can’t be used — please adjust it and save again.');
+    }
+    return { ok: false, error: e };
+  }
 }
 /* ---- sticker avatars (v546): the Reader Portrait sticker library
    (js/228's PS_STICKER_SETS catalog) doubles as profile pictures.
@@ -276,7 +296,7 @@ async function syncCloudProfile() {
     // v178: prefer the gender column, fall back to the old column set when
     // the database hasn't been migrated yet. v522: bio/fav_genres ride the
     // fullest tier, with the same missing-column fallback ladder.
-    const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender,bio,fav_genres';
+    const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender,bio,fav_genres,handle,findable';
     const COLS_MID = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender';
     const COLS_BASIC = 'first_name,last_name,avatar_id,avatar_path,updated_at';
     let res = await sb.from('profiles').select(COLS_FULL).eq('user_id', cloudUser.id).maybeSingle();
@@ -299,6 +319,12 @@ async function syncCloudProfile() {
       if (Array.isArray(row.fav_genres)) {
         p.favGenres = row.fav_genres.map(g => String(g || '').trim()).filter(Boolean).slice(0, 8);
       }
+      // v550: only the full tier carries these keys — a lesser tier
+      // (pre-v550 database) leaves the local values untouched.
+      if ('handle' in row) {
+        p.handle = (typeof row.handle === 'string' && /^[a-z0-9_]{3,20}$/.test(row.handle)) ? row.handle : '';
+      }
+      if ('findable' in row) p.findable = row.findable === true;
       await adoptCloudPhoto(sb, p, row);
       p.updatedAt = remoteTs;
       saveProfile(p);
@@ -483,6 +509,18 @@ function renderProfile() {
       '<div class="field"><label>Favourite genres</label>' +
       '<input id="pf-genres" class="text-input" value="' + esc((p.favGenres || []).join(', ')) + '" maxlength="200" placeholder="Romantasy, Gothic horror, Space opera">' +
       '<p class="note" style="margin:6px 0 0">Comma-separated, up to 8.</p></div>' +
+      // v550: the handle — claimed/changed/cleared through its own
+      // buttons (the claim RPC is the only write path), NOT through
+      // Save profile. The block is built and wired by js/237.
+      '<div class="field"><label>Handle</label>' +
+      '<div id="pf-handle-box">' + (typeof handleEditorHTML === 'function' ? handleEditorHTML(p) : '') + '</div></div>' +
+      '<div class="field" id="pf-findable-field"><label>Findable by handle</label>' +
+      '<div class="seg" id="pf-findable" data-disabled="' + (p.handle ? '0' : '1') + '" style="grid-template-columns:1fr 1fr">' +
+      '<button type="button" data-f="1" class="' + (p.findable ? 'active' : '') + '"' + (p.handle ? '' : ' disabled') + '>On</button>' +
+      '<button type="button" data-f="0" class="' + (!p.findable ? 'active' : '') + '"' + (p.handle ? '' : ' disabled') + '>Off</button></div>' +
+      '<p class="note" style="margin:6px 0 0">' + (p.handle
+        ? 'When on, anyone who knows your exact handle (@' + esc(p.handle) + ') can find you and send a connection request — which you can accept or decline. There’s no browsing and no partial search: the exact handle only. Off is the default.'
+        : 'Set a handle first — then you can choose whether people who know it can find you by it.') + '</p></div>' +
       '<div class="field"><label>Email</label>' +
       '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
       '<button class="btn block" id="pf-save">Save profile</button>' +
@@ -504,6 +542,24 @@ function renderProfile() {
     if (bioEl) np.bio = bioEl.value.trim().slice(0, 240);
     const genEl = document.getElementById('pf-genres');
     if (genEl) np.favGenres = genEl.value.split(',').map(g => g.trim()).filter(Boolean).slice(0, 8);
+    // v550: findable rides this save (it is a posture flag on the
+    // profile); the handle itself never does — js/237's claim buttons
+    // own it. No handle → findable is meaningless and forced off.
+    const fsel = document.querySelector('#pf-findable button.active');
+    if (fsel) np.findable = fsel.dataset.f === '1';
+    if (!np.handle) np.findable = false;
+    // v550: screen the name fields + bio BEFORE anything persists —
+    // the server trigger (migration v550) is the backstop, this is
+    // the immediate, honest answer.
+    if (typeof profileContentScreenHit === 'function') {
+      const hitField = profileContentScreenHit(np);
+      if (hitField) {
+        toast(hitField === 'bio'
+          ? 'That bio can’t be used — please adjust it and save again.'
+          : 'That name can’t be used — please adjust it and save again.');
+        return;
+      }
+    }
     touchProfile(np);
     pushCloudProfile(np);
     // v524: age band saves through js/230 (user_state), not the
@@ -514,6 +570,14 @@ function renderProfile() {
     renderTopbar();
     toast('Profile saved ✨');
   });
+  // v550: the handle editor block + the findable seg (radio behaviour,
+  // like the band picker; disabled buttons stay inert).
+  if (typeof wireHandleEditor === 'function') wireHandleEditor();
+  const fbtns = Array.from(document.querySelectorAll('#pf-findable button'));
+  fbtns.forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return;
+    fbtns.forEach(x => x.classList.toggle('active', x === b));
+  }));
   // v524: band picker — radio behavior (tap to select; no clear-to-unset,
   // "unset" only ever means "never declared").
   const bbtns = Array.from(document.querySelectorAll('#pf-band button'));

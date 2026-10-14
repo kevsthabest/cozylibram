@@ -264,11 +264,15 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p></div>';
 
+  // v550 dedupe: the signed-in card above is the identity block (name
+  // + email) — this row no longer repeats the name. Its line is the
+  // handle: @handle when set, else the prompt to set one.
   const htmlProfile =
     '<div class="pf-row">' + avatarHTML(prof, 'st-avatar') +
-    '<div><div class="st-pname">' + (profName ? esc(profName) : 'Your profile') + '</div>' +
+    '<div><div class="st-pname">' + (prof.handle ? esc('@' + prof.handle) : 'Set a handle') + '</div>' +
     '<button class="btn ghost sm" id="st-edit-profile">Edit profile</button></div></div>' +
-    '<p class="note">Your name and picture show up for your ' + esc(covenName().toLowerCase()) + '.</p>';
+    '<p class="note">Your picture shows up for your ' + esc(covenName().toLowerCase()) +
+    ' — and your handle instead of your name, when you set one.</p>';
 
   /* ---- Library ---- */
   const htmlBackup =
