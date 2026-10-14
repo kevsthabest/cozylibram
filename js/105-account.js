@@ -3,13 +3,30 @@
 /* ---------------- profile + account menu (v37) ---------------- */
 
 // Default avatar choices — dark romance / romantasy / BookTok themed.
+// v542: avatars ship in SETS. Registration here is the allowlist — profile
+// sync validates ids against this list, so an id is choosable (and syncable)
+// only once it lands here. `premium` is an internal catalog flag only during
+// alpha: premium sets are flagged, never locked. Ids are never reused.
+const AVATAR_SETS = [
+  { key: 'classics', name: 'Libram Classics' },
+  { key: 'stormrider', name: 'Stormrider' },
+];
 const DEFAULT_AVATARS = [
-  { id: 'rose', label: 'Dark Rose', src: 'img/avatars/avatar-rose.webp' },
-  { id: 'moon', label: 'Moon & Dagger', src: 'img/avatars/avatar-moon.webp' },
-  { id: 'dragon', label: 'Dragon', src: 'img/avatars/avatar-dragon.webp' },
-  { id: 'raven', label: 'Raven', src: 'img/avatars/avatar-raven.webp' },
-  { id: 'book', label: 'Spellbook', src: 'img/avatars/avatar-book.webp' },
-  { id: 'crown', label: 'Thorn Crown', src: 'img/avatars/avatar-crown.webp' },
+  { id: 'rose', label: 'Dark Rose', src: 'img/avatars/avatar-rose.webp', set: 'classics' },
+  { id: 'moon', label: 'Moon & Dagger', src: 'img/avatars/avatar-moon.webp', set: 'classics' },
+  { id: 'dragon', label: 'Dragon', src: 'img/avatars/avatar-dragon.webp', set: 'classics' },
+  { id: 'raven', label: 'Raven', src: 'img/avatars/avatar-raven.webp', set: 'classics' },
+  { id: 'book', label: 'Spellbook', src: 'img/avatars/avatar-book.webp', set: 'classics' },
+  { id: 'crown', label: 'Thorn Crown', src: 'img/avatars/avatar-crown.webp', set: 'classics' },
+  // v542: Stormrider — original dragon-rider art, inspired-by only.
+  { id: 'onyxdragon', label: 'Black Dragon', src: 'img/avatars/avatar-onyxdragon.webp', set: 'stormrider', premium: true },
+  { id: 'golddragon', label: 'Gold Dragon', src: 'img/avatars/avatar-golddragon.webp', set: 'stormrider', premium: true },
+  { id: 'egg', label: 'Dragon Egg', src: 'img/avatars/avatar-egg.webp', set: 'stormrider', premium: true },
+  { id: 'daggers', label: 'Crossed Daggers', src: 'img/avatars/avatar-daggers.webp', set: 'stormrider', premium: true },
+  { id: 'goggles', label: 'Flight Goggles', src: 'img/avatars/avatar-goggles.webp', set: 'stormrider', premium: true },
+  { id: 'parapet', label: 'Parapet at Dusk', src: 'img/avatars/avatar-parapet.webp', set: 'stormrider', premium: true },
+  { id: 'ring', label: 'Signet Ring', src: 'img/avatars/avatar-ring.webp', set: 'stormrider', premium: true },
+  { id: 'tabby', label: "Rider's Tabby", src: 'img/avatars/avatar-tabby.webp', set: 'stormrider', premium: true },
 ];
 
 // Profile storage: one slot per user id ('offline' when not signed in).
@@ -334,10 +351,16 @@ function renderProfile() {
       '<div><button class="btn ghost sm" id="pf-change">Change picture</button>' +
       '<p class="note" style="margin:6px 0 0">Pick a themed avatar or upload your own.</p></div></div>' +
       '<div id="pf-picker" class="pf-picker" hidden>' +
-        '<div class="pf-grid">' +
-        DEFAULT_AVATARS.map(a =>
-          '<button class="pf-pick' + pickSel(a.id) + '" data-av="' + a.id + '" title="' + esc(a.label) + '" aria-label="' + esc(a.label) + '">' +
-          '<img src="' + a.src + '" alt="' + esc(a.label) + '"></button>').join('') +
+        // v542: picker is grouped by avatar set (AVATAR_SETS order); the
+        // upload / initial tiles trail the sets as their own quiet row.
+        AVATAR_SETS.map(s =>
+          '<div class="pf-set-label">' + esc(s.name) + '</div>' +
+          '<div class="pf-grid">' +
+          DEFAULT_AVATARS.filter(a => a.set === s.key).map(a =>
+            '<button class="pf-pick' + pickSel(a.id) + '" data-av="' + a.id + '" title="' + esc(a.label) + '" aria-label="' + esc(a.label) + '">' +
+            '<img src="' + a.src + '" alt="' + esc(a.label) + '"></button>').join('') +
+          '</div>').join('') +
+        '<div class="pf-grid" style="margin-top:10px">' +
         '<button class="pf-pick' + (p.avatar.type === 'upload' ? ' sel' : '') + '" data-av="__upload" title="Upload your own" aria-label="Upload your own">' +
           '<span class="pf-upload">' + icon('camera') + '</span></button>' +
         '<button class="pf-pick' + (p.avatar.type === 'letter' ? ' sel' : '') + '" data-av="__letter" title="Just my initial" aria-label="Just my initial">' +
