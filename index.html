@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-512.png">
-<!-- v559: fonts are vendored (assets/fonts/ + @font-face in styles.css) —
+<!-- v560: fonts are vendored (assets/fonts/ + @font-face in styles.css) —
      no runtime font CDN. -->
 <script>
 /* v543: pre-paint theme boot. styles.css's :root defaults ARE the Dark theme
@@ -165,7 +165,7 @@
 <script src="js/237-handles.js"></script>
 <script src="js/214-wrapped.js"></script>
 <script>
-/* v559: service worker gate. Inside a native shell (Capacitor) the shell
+/* v560: service worker gate. Inside a native shell (Capacitor) the shell
    owns the app lifecycle and update path, so the PWA service worker must
    not register there. The marker is the shell's own bridge: window.Capacitor
    present and reporting a native platform. Capacitor present but lacking

@@ -349,7 +349,7 @@ var NET_TIMEOUT_MS = 30000;
    calls it at runtime, so script load order doesn't matter. Never throws:
    any failure (not configured, no session, offline) falls back to a plain
    fetch and lets the endpoint answer 401. */
-/* v559: share-first file hand-off. Given { blob } or { file } plus a
+/* v560: share-first file hand-off. Given { blob } or { file } plus a
    filename, open the platform share sheet when file sharing is supported —
    on mobile that sends the file straight into Messenger etc., instead of
    the download-then-find-it-then-attach dance. Where file sharing is not

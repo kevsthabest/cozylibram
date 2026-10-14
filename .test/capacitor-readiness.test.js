@@ -1,4 +1,4 @@
-// Tests for v559 — Capacitor readiness, three items:
+// Tests for v560 — Capacitor readiness, three items:
 //   1. Fonts are vendored (no Google Fonts runtime dependency).
 //   2. File hand-offs are share-first (js/050 shareOrDownloadFile), with the
 //      plain anchor download as the fallback.
