@@ -296,13 +296,18 @@ function paceHTML() {
   })() : null;
   const streak = readingStreak(), best = longestStreak();
 
+  // v536 (UX P3-14): round ONCE to pages/day, then derive week and
+  // month from that rounded figure. Rounding each tile independently
+  // disagreed by construction ("33 pages/day" beside "233 pages/week"
+  // — 33 × 7 = 231); derived from one rounded day they cannot drift.
+  const dayPace = Math.round(perDay);
   let html = '<div class="stat-sub">Reading pace</div>';
   html += p30 > 0
-    ? '<p class="pace-hero">Your average pace is <b>' + Math.round(perDay) + ' pages/day</b></p>' +
+    ? '<p class="pace-hero">Your average pace is <b>' + dayPace + ' pages/day</b></p>' +
       '<div class="pace-grid">' +
-      '<div class="pace"><div class="n">' + Math.round(perDay) + '</div><div class="l">pages / day</div></div>' +
-      '<div class="pace"><div class="n">' + Math.round(perDay * 7).toLocaleString() + '</div><div class="l">pages / week</div></div>' +
-      '<div class="pace"><div class="n">' + Math.round(perDay * 30.44).toLocaleString() + '</div><div class="l">pages / month</div></div>' +
+      '<div class="pace"><div class="n">' + dayPace + '</div><div class="l">pages / day</div></div>' +
+      '<div class="pace"><div class="n">' + (dayPace * 7).toLocaleString() + '</div><div class="l">pages / week</div></div>' +
+      '<div class="pace"><div class="n">' + Math.round(dayPace * 30.44).toLocaleString() + '</div><div class="l">pages / month</div></div>' +
       '</div>'
     : '<p class="note">Log pages for a few days and your pace will show up here.</p>';
   const kv = (label, val) =>
@@ -311,7 +316,9 @@ function paceHTML() {
     (avgLen != null ? kv(icon('reading') + ' Average book', Math.round(avgLen) + ' pages') : '') +
     (avgDaysLabel != null ? kv(icon('hourglass') + ' Average time to finish', avgDaysLabel) : '') +
     kv(icon('flame') + ' Current streak', streak > 0 ? streak + '-day' : '0 days — log pages today to start a streak') +
-    kv(icon('medal') + ' Longest streak', best > 0 ? best + '-day' : '–') +
+    // v536 (UX P3-15): honest empty state, matching the Current streak
+    // row above — a bare '–' read as a blank/broken tile.
+    kv(icon('medal') + ' Longest streak', best > 0 ? best + '-day' : 'No streak yet') +
     '</div>';
   return html;
 }
@@ -705,6 +712,13 @@ function recordsHTML() {
       b.myRating - a.myRating || String(b.dateFinished || '').localeCompare(String(a.dateFinished || '')));
     card(icon('heart'), 'Highest rated', s[0], '♥ ' + s[0].myRating.toFixed(1) + ' / 5');
     card(icon('heart'), 'Lowest rated', s[s.length - 1], '♥ ' + s[s.length - 1].myRating.toFixed(1) + ' / 5');
+  } else if (read.length) {
+    // v536 (UX P3-15): read books exist but none are rated — the rated
+    // pair used to vanish silently while its sibling cards rendered,
+    // reading as blank tiles. Say so honestly instead.
+    cards.push('<div class="record-row"><div class="rmeta"><div class="rlbl">' + icon('heart') + ' Highest &amp; lowest rated</div>' +
+      '<div class="rtitle">No ratings yet</div>' +
+      '<div class="rstat">Rate a finished book and your highest and lowest will land here.</div></div></div>');
   }
   if (spiced.length) {
     const s = spiced.slice().sort((a, b) => b.ratings.spice - a.ratings.spice);
@@ -1445,6 +1459,27 @@ function renderMilestones() {
   let html = '<button class="btn ghost sm" id="ms-back" style="margin-bottom:10px">\u2190 Chronicles</button>' +
     '<h2 class="section serif">Milestones</h2>' +
     '<p class="note" style="margin-bottom:16px">Moments from your reading life, kept quietly.</p>';
+  // v536: the pinned milestone (one earned milestone, chosen by the
+  // reader) rides at the top; every earned row carries the pin toggle.
+  const pinId = typeof milestonePin === 'function' ? milestonePin() : null;
+  const pinBtn = (id) => '<button class="ms-pin' + (pinId === id ? ' pinned' : '') + '" data-ms="' + esc(id) +
+    '" aria-label="' + (pinId === id ? 'Unpin this milestone' : 'Pin this milestone') + '" title="' +
+    (pinId === id ? 'Pinned \u2014 tap to unpin' : 'Pin this milestone') + '">' + icon('medal') + '</button>';
+  if (pinId && store[pinId] && typeof milestoneDef === 'function') {
+    const pdef = milestoneDef(pinId, store[pinId]);
+    if (pdef) {
+      const pst = store[pinId];
+      const pdate = pst.achievedAt
+        ? 'Earned ' + new Date(pst.achievedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+        : 'Earned before milestones launched';
+      html += '<div class="milestone-row pinned-row"><div class="micon">' + icon(pdef.icon || 'sparkles') + '</div>' +
+        '<div class="minfo"><div class="mname">' + esc(pdef.title) + '</div>' +
+        '<div class="mdate">' + esc(pdate) + ' \u00b7 Pinned</div></div>' +
+        pinBtn(pinId) +
+        '<button class="ms-share" data-ms="' + esc(pinId) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
+        '<div class="mcheck">\u2713</div></div>';
+    }
+  }
   cats.forEach(cat => {
     const items = MILESTONE_CATALOG.filter(m => m.cat === cat.id);
     const earned = items.filter(m => store[m.id]);
@@ -1468,6 +1503,7 @@ function renderMilestones() {
         dynHtml += '<div class="milestone-row"><div class="micon">' + icon(def.icon) + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          pinBtn(id) +
           '<button class="ms-share" data-ms="' + esc(id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       });
@@ -1488,6 +1524,7 @@ function renderMilestones() {
         html += '<div class="milestone-row"><div class="micon">' + icon(def.icon || 'sparkles') + '</div>' +
           '<div class="minfo"><div class="mname">' + esc(def.title) + '</div>' +
           '<div class="mdate">' + esc(dateStr) + '</div></div>' +
+          pinBtn(m.id) +
           '<button class="ms-share" data-ms="' + esc(m.id) + '" aria-label="Share this milestone" title="Share">' + icon('share') + '</button>' +
           '<div class="mcheck">\u2713</div></div>';
       } else {
@@ -1507,5 +1544,13 @@ function renderMilestones() {
     renderStats();
   });
   if (typeof wireMilestoneShare === 'function') wireMilestoneShare();
+  // v536: pin toggles — set or clear the one pin, then repaint so the
+  // banner and every toggle agree.
+  document.querySelectorAll('.ms-pin').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.getAttribute('data-ms');
+    if (typeof milestoneSetPin !== 'function' || !id) return;
+    milestoneSetPin(milestonePin() === id ? null : id);
+    renderMilestones();
+  }));
 }
 

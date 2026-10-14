@@ -279,6 +279,17 @@ function renderSettings() {
     '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
     importHubHTML('im');
 
+  // v536 (audit #9): manual door for the library metadata check
+  // (js/134 runMetadataCheck — the tested check that had no entry
+  // point). Missing details fill in on their own; differences wait for
+  // per-field review behind the book modal's badge, as built in v476.
+  const htmlMetaCheck =
+    '<p class="note">Compare every book with an ISBN against the metadata source. ' +
+    'Missing details (page counts, covers, years) fill in automatically; where your copy ' +
+    'differs, the book gets a quiet badge in its detail view so you can pick which value wins.</p>' +
+    '<button class="btn ghost block" id="bk-metacheck">' + icon('search') + ' Check library metadata</button>' +
+    '<div id="bk-metacheck-out" aria-live="polite"></div>';
+
   const htmlData =
     '<p class="note">Delete everything on this device and in your cloud account. <b>This cannot be undone</b> — export a backup first.</p>' +
     '<button class="btn danger block" id="bk-wipe">Delete everything</button>' +
@@ -464,7 +475,7 @@ function renderSettings() {
     ['user', 'Account', 'Sign in, profile & sync',
       '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin + setSub('Profile & avatar') + htmlProfile],
     ['covers', 'Library', 'Backups, imports & data',
-      setSub('Backup & export') + htmlBackup + setSub('Reading log') + htmlReadLog + setSub('Data management') + htmlData],
+      setSub('Backup & export') + htmlBackup + setSub('Metadata check') + htmlMetaCheck + setSub('Reading log') + htmlReadLog + setSub('Data management') + htmlData],
     ['tobuy', 'Purchase Ledger', 'Spending & collection value',
       setSub('Ledger') + htmlLedger],
     ['sparkles', 'Appearance', 'Theme & display',
@@ -557,6 +568,34 @@ function renderSettings() {
         .forEach(k => localStorage.removeItem(k));
     } catch (e) {}
     toast('Shelf reset — reload to see the default layout.');
+  });
+
+  // v536 (audit #9): run the metadata check on demand. Progress rides
+  // the check's own callback; the summary names what was filled and
+  // where differences wait for review (the book modal's quiet badge).
+  document.getElementById('bk-metacheck').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const out = document.getElementById('bk-metacheck-out');
+    btn.disabled = true;
+    try {
+      const s = await runMetadataCheck((done, total) => {
+        if (out) out.innerHTML = '<p class="note">Checking ' + done + ' of ' + total + '…</p>';
+      });
+      if (out) {
+        if (!s.checked) out.innerHTML = '<p class="note">No books with an ISBN to check yet.</p>';
+        else {
+          const parts = ['Checked ' + s.checked + ' book' + (s.checked === 1 ? '' : 's')];
+          if (s.filled) parts.push(s.filled + ' filled in');
+          if (s.differ) parts.push(s.differ + ' differ' + (s.differ === 1 ? 's' : '') + ' — open a flagged book to review');
+          if (s.notFound) parts.push(s.notFound + ' not found');
+          if (!s.filled && !s.differ) parts.push('everything matches');
+          out.innerHTML = '<p class="note">' + parts.join(' · ') + '</p>';
+        }
+      }
+    } catch (err) {
+      if (out) out.innerHTML = '<p class="note">The check hiccuped — try again in a bit.</p>';
+    }
+    btn.disabled = false;
   });
 
   document.getElementById('bk-export').addEventListener('click', () => {

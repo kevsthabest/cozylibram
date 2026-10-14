@@ -68,6 +68,11 @@ const GENRE_NORM = {
   'dragons & mythical creatures': 'Dragons & Mythical Creatures',
   'dragons et créatures mythiques': 'Dragons & Mythical Creatures',
   'dragões e criaturas míticas': 'Dragons & Mythical Creatures',
+  // v536 (UX P3-15): German labels observed on a TBR Roulette genre chip
+  // ("Action & Abenteuer" among English chips) — display-time only, the
+  // stored category strings are never rewritten.
+  'action & abenteuer': 'Action & Adventure',
+  'abenteuer': 'Adventure',
 };
 function bookGenres(b) {
   const out = [];
@@ -115,6 +120,15 @@ function migrateBook(b) {
   if (!Object.prototype.hasOwnProperty.call(STATUS, b.status)) b.status = 'tbr';
   // v449: backfill readCount for books finished before reread tracking existed
   if (b.status === 'read' && (b.readCount == null || b.readCount < 1)) b.readCount = 1;
+  // v536 (UX P3-15): a finished book with progress 0 reads as untouched
+  // ("0/416 pages" in the modal opened from the Room). Marking a book
+  // read in the modal writes progress = pageCount (js/150), but books
+  // that arrived finished — imports, sync, older data — bypass that
+  // path. Backfill the same convention here: only a falsy progress is
+  // completed (a partial value is the reader's own record and stays),
+  // and previouslyRead is exempt — read-before-tracking books have no
+  // page record by design.
+  if (b.status === 'read' && !b.previouslyRead && b.pageCount > 0 && !(b.progress > 0)) b.progress = b.pageCount;
   if (!Array.isArray(b.authors)) b.authors = [];
   if (!Array.isArray(b.tropes)) b.tropes = [];
   if (!Array.isArray(b.tropesAuto)) b.tropesAuto = []; // v81

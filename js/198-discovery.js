@@ -1525,7 +1525,7 @@ function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
     '<p class="note" style="text-align:center"><button class="btn ghost small" id="reco-refresh">\u21BB Refresh</button></p>';
   wireRecoResults(box);
   const rf = document.getElementById('reco-refresh');
-  if (rf) rf.addEventListener('click', () => refreshRecommendations());
+  if (rf) rf.addEventListener('click', () => refreshRecommendations(true)); // v536: the Refresh button is an explicit re-sweep, bypassing the memo
   track('reco_viewed', { count: ranked.length, embedded: !!embedded });
 }
 
@@ -1534,10 +1534,28 @@ function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
 function recoHeadHTML() {
   return '<h3 class="wish-section">' + icon('crystal') + ' Recommended for you</h3>';
 }
-async function refreshRecommendations() {
+// v536 (UX P3-9): session memo for the ranked Recommended list. Every
+// call used to re-run the whole pipeline -- work-id resolution, taste
+// embeddings, the per-author Hardcover sweep (with its 700ms pacing),
+// candidate embeddings -- so the list visibly collapsed and re-scanned
+// after every add and on every revisit. The memo keeps the finished
+// ranking for the session, keyed by a fingerprint of everything that
+// shapes it (loved authors, the profile books with their ratings /
+// favorite flags, the shield state). A render from the memo re-filters
+// against the CURRENT library and dismissals, so a book just added (or
+// dismissed elsewhere) drops out without a re-sweep, and any change
+// that could move the ranking itself (a new finish, a re-rate, a new
+// favorite) changes the fingerprint and sweeps fresh. The Refresh
+// button passes force=true and always sweeps.
+let _recoMemo = null;
+function recoTasteFingerprint(authors, profBooks) {
+  const shieldBit = (typeof shieldOn === 'function' && shieldOn()) ? '1' : '0';
+  return (authors || []).join('\u01c2') + '#' + shieldBit + '#' +
+    (profBooks || []).map(b => b.id + ':' + (b.myRating || 0) + (b.favorite ? 'f' : '')).join(',');
+}
+async function refreshRecommendations(force) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
-  box.innerHTML = recoHeadHTML() + '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
   try {
     // v214: profile books are finished reads AND favorites (favorites anchor
     // the profile at top weight, so a thin rating history still works).
@@ -1551,10 +1569,18 @@ async function refreshRecommendations() {
       box.innerHTML = recoHeadHTML() + '<p class="note">Rate a few finished books 4\u2605 or higher and I\u2019ll find your next obsession.</p>';
       return;
     }
+    if (!force && _recoMemo && _recoMemo.fp === recoTasteFingerprint(authors, profBooks)) {
+      const dismissedNow = await recoDismissedSet();
+      const rankedNow = _recoMemo.ranked.filter(r => r && r.c &&
+        !releaseInLibrary(r.c) && !dismissedNow.has('hc:' + r.c.hcId));
+      renderRecoResults(rankedNow, recoLovedTropeIds(), _recoMemo.embedded, _recoMemo.spiceMap);
+      return;
+    }
     if (!hcReady()) {
       box.innerHTML = recoHeadHTML() + '<p class="note">Hardcover isn\u2019t available right now \u2014 recommendations need it. Try again later.</p>';
       return;
     }
+  box.innerHTML = recoHeadHTML() + '<p class="note">' + icon('hourglass') + ' Reading your taste\u2026</p>';
     // Taste profile: weighted mean of her read books' and favorites'
     // work embeddings (v214: favorites included at top weight).
     // v496 (#141): resolve work ids in bounded-concurrency chunks instead of
@@ -1613,7 +1639,9 @@ async function refreshRecommendations() {
     if (typeof shieldOn === 'function' && shieldOn() && typeof shieldSpiceMapFor === 'function') {
       try { spiceMap = await shieldSpiceMapFor(ranked.map(r => r.c)); } catch (e) { spiceMap = {}; }
     }
-    renderRecoResults(ranked, lovedIds, !!profile && ranked[0] && ranked[0].sim != null, spiceMap);
+    const embeddedNow = !!profile && ranked[0] && ranked[0].sim != null;
+    _recoMemo = { fp: recoTasteFingerprint(authors, profBooks), ranked: ranked, embedded: embeddedNow, spiceMap: spiceMap };
+    renderRecoResults(ranked, lovedIds, embeddedNow, spiceMap);
   } catch (e) {
     box.innerHTML = '<p class="note">Recommendations hiccuped \u2014 try again in a bit.</p>';
   }

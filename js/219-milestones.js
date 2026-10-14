@@ -1035,6 +1035,38 @@ function markMilestoneSeen(id) {
   const store = loadMilestones();
   if (store[id]) { store[id].seen = true; saveMilestones(store); }
 }
+/* ---- v536: the pinned milestone (Strategist S3, built small) ----
+   ONE earned milestone the reader chooses to wear. The pin is a user
+   preference, so it roams: it lives in its own user_state section
+   (milestone_state, js/229) — never in the settings snapshot, whose
+   key list is frozen at its v518 shape. On-device it is a single id in
+   localStorage; the milestones store itself stays the only record of
+   what is earned, and a milestone can never be un-earned, so a stored
+   pin can only ever point at an earned milestone. Display: the
+   Milestones surface in Chronicles (js/170). user_state is
+   own-rows-only, so friends cannot read the pin — no friend-visible
+   projection is built on it. */
+const MILESTONE_PIN_KEY = 'cozylibram.milestonePin.v1';
+function milestonePin() {
+  try {
+    const id = localStorage.getItem(MILESTONE_PIN_KEY);
+    if (!id) return null;
+    return loadMilestones()[id] ? id : null; // unearned ids read as no pin
+  } catch (e) { return null; }
+}
+function milestoneSetPin(id) {
+  try {
+    if (!id) {
+      localStorage.removeItem(MILESTONE_PIN_KEY);
+    } else {
+      if (!loadMilestones()[id]) return false; // cannot pin what isn't earned
+      localStorage.setItem(MILESTONE_PIN_KEY, id);
+    }
+  } catch (e) { return false; }
+  // Roam it (hash-gated inside userStatePush; a no-op signed out).
+  try { if (typeof userStatePush === 'function') userStatePush(); } catch (e) {}
+  return true;
+}
 /* Resolve a milestone ID to its definition, including dynamic series ones. */
 function milestoneDef(id, state) {
   const def = MILESTONE_CATALOG.find(m => m.id === id);

@@ -1195,6 +1195,13 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   color: var(--faint); padding: 8px; border-radius: 10px; line-height: 0; }
 .milestone-row .ms-share:hover { color: var(--accent); background: rgba(255,255,255,.06); }
 .milestone-row .ms-share svg { width: 18px; height: 18px; }
+/* v536: pin toggle on earned milestone rows + the pinned banner row */
+.milestone-row .ms-pin { flex: none; background: none; border: none; cursor: pointer;
+  color: var(--faint); padding: 8px; border-radius: 10px; line-height: 0; }
+.milestone-row .ms-pin:hover { color: var(--accent); background: rgba(255,255,255,.06); }
+.milestone-row .ms-pin svg { width: 18px; height: 18px; }
+.milestone-row .ms-pin.pinned { color: var(--gold); }
+.milestone-row.pinned-row { border: 1px solid var(--gold); }
 /* v447: stats detail section navigation */
 .stat-nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 /* v454 Part 2: sticky jump chips */

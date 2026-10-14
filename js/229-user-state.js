@@ -233,8 +233,34 @@ function userStateApplyPrivacy(payload) {
   } catch (e) {}
 }
 
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy'];
+/* ---------------- roaming milestone pin (v536) ---------------- */
+// The sixth section: the pinned milestone (js/219), in its own column
+// (milestone_state, supabase/migrations/v536_user_state_milestone.sql),
+// payload { _at, value } — value is the pinned milestone id (a catalog
+// key from js/219's MILESTONE_CATALOG or a dynamic id) or null,
+// warning/privacy-style. Placement, per the roaming rules: the pin is
+// a user preference, so it roams; it does NOT join the settings
+// snapshot (that key list is frozen at its v518 shape, and a
+// full-snapshot apply from an older client must never delete a pin),
+// and it does NOT live in profiles (circle friends project those rows;
+// user_state is own-rows-only, so the pin stays the reader's own).
+const MILESTONE_PIN_STATE_KEY = 'cozylibram.milestonePin.v1';
+function userStateCollectMilestonePin() {
+  try {
+    const v = localStorage.getItem(MILESTONE_PIN_STATE_KEY);
+    return { value: (typeof v === 'string' && v) ? v : null };
+  } catch (e) { return { value: null }; }
+}
+function userStateApplyMilestonePin(payload) {
+  try {
+    const v = payload ? payload.value : null;
+    if (typeof v === 'string' && v && v.length <= 128) localStorage.setItem(MILESTONE_PIN_STATE_KEY, v);
+    else localStorage.removeItem(MILESTONE_PIN_STATE_KEY);
+  } catch (e) {}
+}
+
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -429,6 +455,7 @@ const USER_STATE_SECTION_FNS = {
   release: { collect: userStateCollectRelease, apply: userStateApplyRelease },
   shelf: { collect: userStateCollectShelf, apply: userStateApplyShelf },
   privacy: { collect: userStateCollectPrivacy, apply: userStateApplyPrivacy },
+  milestone: { collect: userStateCollectMilestonePin, apply: userStateApplyMilestonePin },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
@@ -449,7 +476,7 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     const meta = userStateMeta(uid);
     let changed = false;

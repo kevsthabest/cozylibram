@@ -209,6 +209,36 @@ async function checkLibraryMetadata(paceMs, onProgress) {
 // fixes") is replaced by the compare sheet (openMetaCompareSheet) below.
 // Blanks auto-fill in runMetaCompareSweep; conflicts get per-field review.
 
+// v536 (audit #9): the check above has been tested since v398 but had
+// NO entry point anywhere in the UI — the background sweep is the only
+// thing that ever ran it, silently, at most once a day. This runner is
+// the manual door (Settings → Library → Metadata check): it drives the
+// same checkLibraryMetadata and lands its results in the same v476
+// presentation model — blanks auto-fill exactly as the sweep fills
+// them, conflicts are stored for the compare sheet behind the book
+// modal's quiet badge — then reports counts. It also stamps the sweep
+// timestamp, so a manual run satisfies the 24h background gate.
+async function runMetadataCheck(onProgress) {
+  const targets = library.filter(b => cleanISBN(b.isbn));
+  const targetIds = new Set(targets.map(b => b.id));
+  const found = await checkLibraryMetadata(350, onProgress);
+  const flaggedIds = new Set();
+  let filled = 0, differ = 0;
+  for (const r of found.results) {
+    flaggedIds.add(r.book.id);
+    const blanks = r.flags.filter(isBlankFillFlag);
+    const conflicts = r.flags.filter(f => !isBlankFillFlag(f));
+    if (blanks.length) { await applyVerifyFix(r.book, r.meta, blanks); filled++; }
+    if (conflicts.length) { metaConflicts[r.book.id] = { meta: r.meta, flags: conflicts }; differ++; }
+    else delete metaConflicts[r.book.id];
+  }
+  // Checked and clean: any stored conflict for that book is stale.
+  targetIds.forEach(id => { if (!flaggedIds.has(id)) delete metaConflicts[id]; });
+  metaConflictsSave();
+  try { localStorage.setItem(META_COMPARE_KEY, String(Date.now())); } catch (e) {}
+  return { checked: found.checked, filled: filled, differ: differ, notFound: found.notFound };
+}
+
 function verifyFlagHTML(f) {
   return '<span class="vf"><b>' + esc(f.label) + ':</b> <s>' + esc(f.from) +
     '</s> → <b>' + esc(f.to) + '</b></span>';
