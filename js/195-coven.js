@@ -130,7 +130,7 @@ async function resolveInviteToken(raw) {
   let prof = null, nm = 'A reader';
   try {
     prof = await circleFriendProfile(them);
-    if (prof) nm = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || 'A reader';
+    if (prof) nm = friendDisplayName(prof, 'A reader');
   } catch (e) { /* name stays generic */ }
   // v532: the projection only covers readers already LINKED to the
   // viewer (accepted/pending), so a fresh inviter — the normal
@@ -285,6 +285,10 @@ async function renderBlockedReaders(box) {
  * the app. A user's OWN profile is still read from the base table (see
  * circlePrivacy / js/105) and keeps every field. */
 const CIRCLE_PROFILE_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path,share_library,share_bio,share_activity,bio,fav_genres';
+// v550: the handle rides the projection as an identity column. A
+// pre-v550 view has no such column — the fetchers below retry with
+// the v522 set on that specific error (the missing-column ladder).
+const CIRCLE_PROFILE_COLS_V550 = CIRCLE_PROFILE_COLS + ',handle';
 const CIRCLE_IDENTITY_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path';
 function circleProjectRow(p) {
   if (!p) return null;
@@ -295,6 +299,10 @@ function circleProjectRow(p) {
     share_library: p.share_library !== false,
     share_bio: p.share_bio !== false,
     share_activity: p.share_activity === true,
+    // v550: the chosen public identity ('' until claimed). Display
+    // goes through friendDisplayName (js/237) — never read this raw
+    // for rendering a friend's name.
+    handle: p.handle || '',
   };
   if (out.share_bio) {
     if (p.bio) out.bio = String(p.bio);
@@ -313,7 +321,10 @@ function circleViewMissing(e) {
 async function circleFetchProfiles(ids) {
   const sb = await cloudClient();
   if (!ids.length) return [];
-  const q = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS).in('user_id', ids);
+  let q = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS_V550).in('user_id', ids);
+  if (q.error && typeof isMissingColumn === 'function' && isMissingColumn(q.error)) {
+    q = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS).in('user_id', ids);
+  }
   if (!q.error) return (q.data || []).map(circleProjectRow);
   if (!circleViewMissing(q.error)) throw q.error;
   const legacy = await sb.from('profiles').select(CIRCLE_IDENTITY_COLS).in('user_id', ids);
@@ -342,7 +353,11 @@ async function circleLists() {
     rows.forEach(p => { circProfiles[p.user_id] = p; });
   }
   const prof = id => circProfiles[id] || { user_id: id, first_name: '', last_name: '', avatar_id: '', avatar_path: '' };
-  const name = p => ((p.first_name || '') + ' ' + (p.last_name || '')).trim() || 'A reader';
+  // v550: the one display helper (js/237) — @handle when set, else
+  // the name as before. Every list built here (friends, requests)
+  // inherits the choice, and with it the stats/recos surfaces that
+  // consume f.name.
+  const name = p => friendDisplayName(p, 'A reader');
   const seen = {}, friends = [];
   const addFriend = id => {
     if (id && !seen[id]) { seen[id] = 1; friends.push({ id: id, profile: prof(id), name: name(prof(id)) }); }
@@ -572,8 +587,12 @@ async function maybeAskShelfShare(friendName) {
 /* ---------- friend shelves (read-only) ---------- */
 async function circleFriendProfile(friendId) {
   const sb = await cloudClient();
-  const r = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS)
+  let r = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS_V550)
     .eq('user_id', friendId).maybeSingle();
+  if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
+    r = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS)
+      .eq('user_id', friendId).maybeSingle();
+  }
   if (!r.error) return r.data ? circleProjectRow(r.data) : null;
   if (!circleViewMissing(r.error)) throw r.error;
   // Pre-migration fallback: identity columns only, as before v522.
@@ -831,7 +850,7 @@ function renderCovenFriend() {
   document.getElementById('cf-back').addEventListener('click', () => go('coven'));
   Promise.all([circleFriendProfile(f.id), circleFriendBooks(f.id)])
     .then(([prof, books]) => {
-      if (prof) { circProfiles[f.id] = prof; f.name = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || f.name; }
+      if (prof) { circProfiles[f.id] = prof; f.name = friendDisplayName(prof, f.name); }
       circBooks = books.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
       // v524: content shield — resolve work-level spice for the grid in
       // the background (the avatar-upgrade pattern); record-rated books
@@ -841,6 +860,7 @@ function renderCovenFriend() {
         shieldSpiceMapFor(circBooks).then(m => { circSpiceMap = m || {}; markShieldedCovers(); }).catch(() => {});
       }
       renderCovenFriendMain();
+      if (typeof fillFriendFormerly === 'function') fillFriendFormerly(f.id);
     })
     .catch(e => {
       setView('<div class="view-head"><button class="btn ghost sm" id="cf-back2">← Back</button>' +
@@ -867,7 +887,11 @@ function renderCovenFriendMain() {
       // friend shares them (share_bio) — absent keys render as nothing.
       (prof.bio ? '<p class="cf-bio">' + esc(prof.bio) + '</p>' : '') +
       (prof.fav_genres && prof.fav_genres.length
-        ? '<div class="cf-genres">' + prof.fav_genres.map(g => '<span class="chip">' + esc(g) + '</span>').join('') + '</div>' : '') : '') +
+        ? '<div class="cf-genres">' + prof.fav_genres.map(g => '<span class="chip">' + esc(g) + '</span>').join('') + '</div>' : '') +
+      // v550: "formerly @…" — filled by js/237 (friend_formerly is
+      // linkage-gated server-side) while the previous handle's
+      // 90-day quarantine runs; stays hidden otherwise.
+      '<p class="note" id="cf-formerly" hidden></p>' : '') +
     // v529: the gift shelf rides right after All (adapted from the
     // superseded facet build) — as a plain status chip: the books
     // policy + circle_book_visible already gate it by the owner's
@@ -1009,6 +1033,15 @@ function openInviteSheet(code, opener, friends) {
       'autocapitalize="none" autocomplete="off" spellcheck="false">' +
       '<button class="btn" id="cc-send">Continue</button></div>' +
     '<p class="note" id="cc-msg"></p></div>' +
+    // v550: add by handle — exact-match lookup (js/237 wires it). The
+    // card it renders carries no real name and no user id; sending a
+    // request creates a pending link the other side answers.
+    '<div class="field"><label>Add by handle</label>' +
+      '<div class="search-row"><input id="cc-handle" class="text-input" placeholder="@handle" ' +
+      'autocapitalize="none" autocomplete="off" spellcheck="false">' +
+      '<button class="btn" id="cc-handle-find">Find</button></div>' +
+    '<p class="note">Only readers who turned on “Findable by handle” appear here — the exact handle, no browsing.</p>' +
+    '<div id="cc-handle-slot"></div></div>' +
     '<div id="cc-accept-slot"></div>' +
     '<div class="field" style="margin-top:16px"><label>Manage friends' + (friends && friends.length ? ' (' + friends.length + ')' : '') + '</label>' +
     ((friends && friends.length) ?
@@ -1042,6 +1075,7 @@ function openInviteSheet(code, opener, friends) {
       renderInviteAccept(slot, await resolveInviteToken(input.value));
     } catch (e) { msg.textContent = (e && e.message) || e; }
   });
+  if (typeof wireHandleAdd === 'function') wireHandleAdd();
   // Wire Manage friends buttons (same handlers as the old list)
   ref.sheet.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
     ref.close();
