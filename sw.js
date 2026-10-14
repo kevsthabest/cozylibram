@@ -3,7 +3,7 @@
 
 
 
-const CACHE = 'cozy-libram-v539';
+const CACHE = 'cozy-libram-v540';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v500: Reader Portrait sticker artwork (assets/stickers/cut-webp/) is
@@ -28,7 +28,7 @@ const VENDOR = ['supabase.min.js', 'quagga.min.js', 'three.module.js'].map(f => 
 // Batch 4 (issue #144): precache exactly the theme SVGs styles.css references
 // (15 themes × divider/moon = 30). The 9 vine-*.svg entries and
 // Asset/floral-right.svg were precached but referenced nowhere — dropped.
-const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight', 'midnight', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'].flatMap(t => ['divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
+const THEME_ART = ['twilight', 'verdant', 'velvet', 'abyss', 'frost', 'dark', 'light', 'hearthside', 'candlelight', 'midnight', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night', 'haunt', 'yuletide', 'fete', 'amour', 'shamrock', 'pastel', 'harvest', 'solstice'].flatMap(t => ['divider', 'moon'].map(k => './Asset/themes/' + k + '-' + t + '.svg'));
 const ASSETS = ['./', './index.html', './styles.css', './manifest.json', './icon.svg', './icon-512.png', './icon-maskable-512.png'].concat(JS, VENDOR, AVATARS, THEME_ART);
 
 self.addEventListener('install', (e) => {

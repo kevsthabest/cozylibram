@@ -58,7 +58,7 @@ ok('sw.js precaches THEME_ART', sw.includes('THEME_ART'));
 const themeArt = eval(sw.match(/const THEME_ART = (.*?);/s)[1]);
 ok('precache has no vine-*.svg dead entries', !themeArt.some(e => /vine-/.test(e)));
 ok('precache has no floral-right.svg dead entry', !themeArt.some(e => /floral-right/.test(e)));
-ok('precache covers all 30 theme files', themeArt.length === 30);
+ok('precache covers all 46 theme files', themeArt.length === 46);
 const appversion = fs.readFileSync(path.join(ROOT, 'js', '181-appversion.js'), 'utf8');
 const m = appversion.match(/APP_VERSION = '(v\d+)'/);
 ok('APP_VERSION parsed', !!m);

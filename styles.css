@@ -2341,11 +2341,27 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 [data-theme="voidsignal"] .disc-moon { background-image: url("Asset/themes/moon-voidsignal.svg"); }
 [data-theme="wisp"] .disc-moon { background-image: url("Asset/themes/moon-wisp.svg"); }
 [data-theme="wisp-night"] .disc-moon { background-image: url("Asset/themes/moon-wisp-night.svg"); }
+[data-theme="haunt"] .disc-moon { background-image: url("Asset/themes/moon-haunt.svg"); }
+[data-theme="solstice"] .disc-moon { background-image: url("Asset/themes/moon-solstice.svg"); }
+[data-theme="harvest"] .disc-moon { background-image: url("Asset/themes/moon-harvest.svg"); }
+[data-theme="pastel"] .disc-moon { background-image: url("Asset/themes/moon-pastel.svg"); }
+[data-theme="shamrock"] .disc-moon { background-image: url("Asset/themes/moon-shamrock.svg"); }
+[data-theme="amour"] .disc-moon { background-image: url("Asset/themes/moon-amour.svg"); }
+[data-theme="fete"] .disc-moon { background-image: url("Asset/themes/moon-fete.svg"); }
+[data-theme="yuletide"] .disc-moon { background-image: url("Asset/themes/moon-yuletide.svg"); }
 [data-theme="stormrider"] .empty-div { background-image: url("Asset/themes/divider-stormrider.svg"); }
 [data-theme="briarthrone"] .empty-div { background-image: url("Asset/themes/divider-briarthrone.svg"); }
 [data-theme="voidsignal"] .empty-div { background-image: url("Asset/themes/divider-voidsignal.svg"); }
 [data-theme="wisp"] .empty-div { background-image: url("Asset/themes/divider-wisp.svg"); }
 [data-theme="wisp-night"] .empty-div { background-image: url("Asset/themes/divider-wisp-night.svg"); }
+[data-theme="haunt"] .empty-div { background-image: url("Asset/themes/divider-haunt.svg"); }
+[data-theme="solstice"] .empty-div { background-image: url("Asset/themes/divider-solstice.svg"); }
+[data-theme="harvest"] .empty-div { background-image: url("Asset/themes/divider-harvest.svg"); }
+[data-theme="pastel"] .empty-div { background-image: url("Asset/themes/divider-pastel.svg"); }
+[data-theme="shamrock"] .empty-div { background-image: url("Asset/themes/divider-shamrock.svg"); }
+[data-theme="amour"] .empty-div { background-image: url("Asset/themes/divider-amour.svg"); }
+[data-theme="fete"] .empty-div { background-image: url("Asset/themes/divider-fete.svg"); }
+[data-theme="yuletide"] .empty-div { background-image: url("Asset/themes/divider-yuletide.svg"); }
 
 /* ================= v127: onboarding ================= */
 #onb-overlay {
