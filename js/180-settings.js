@@ -602,15 +602,17 @@ function renderSettings() {
     btn.disabled = false;
   });
 
-  document.getElementById('bk-export').addEventListener('click', () => {
+  document.getElementById('bk-export').addEventListener('click', async () => {
     const blob = new Blob([JSON.stringify({ app: 'cozy-libram', version: 1, exported: new Date().toISOString(), books: library }, null, 2)],
       { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'cozy-libram-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast('Backup downloaded 💾');
+    // v554: share-first (js/050 shareOrDownloadFile) — on mobile the backup
+    // goes straight to a share target; on desktop it downloads as before.
+    const how = await shareOrDownloadFile({
+      blob: blob,
+      filename: 'cozy-libram-backup-' + new Date().toISOString().slice(0, 10) + '.json',
+      title: 'Cozy Libram backup',
+    });
+    if (how === 'downloaded') toast('Backup downloaded 💾');
   });
   document.getElementById('bk-import').addEventListener('click', () =>
     document.getElementById('bk-file').click());

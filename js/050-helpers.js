@@ -349,6 +349,39 @@ var NET_TIMEOUT_MS = 30000;
    calls it at runtime, so script load order doesn't matter. Never throws:
    any failure (not configured, no session, offline) falls back to a plain
    fetch and lets the endpoint answer 401. */
+/* v554: share-first file hand-off. Given { blob } or { file } plus a
+   filename, open the platform share sheet when file sharing is supported —
+   on mobile that sends the file straight into Messenger etc., instead of
+   the download-then-find-it-then-attach dance. Where file sharing is not
+   supported (desktop browsers), fall back to the plain anchor download,
+   byte-for-byte the behaviour these flows always had.
+   Resolves 'shared' | 'aborted' | 'downloaded' so callers can toast only
+   where the old flow did. A dismissed sheet (AbortError) is a silent
+   success — the user made their choice; any other share failure falls back
+   to the download rather than stranding the file. */
+async function shareOrDownloadFile(opts) {
+  opts = opts || {};
+  const name = opts.filename || 'cozy-libram-file';
+  const file = opts.file || new File([opts.blob], name, { type: (opts.blob && opts.blob.type) || '' });
+  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: opts.title || name });
+      return 'shared';
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'aborted';
+      /* any other share failure: fall through to the download */
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return 'downloaded';
+}
+
 async function apiFetch(path, options) {
   options = options || {};
   let token = null;
