@@ -2943,6 +2943,31 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   .bottom-nav button span { font-size: 11px; }
 }
 
+/* v539: phone bar goes seven-across — Settings joins the bar and Add takes
+   the true centre (4th of 7) instead of sitting a half-column left of it.
+   Scoped to max-width:759px so the tablet top nav (>=760px) and the desktop
+   sidebar (>=1024px) keep their current structure and DOM order untouched;
+   the reorder is pure flex order, markup unchanged. */
+@media (max-width: 759px) {
+  .bottom-nav .nav-settings { display: flex; }
+  .bottom-nav button { min-width: 0; }
+  .bottom-nav button[data-nav="library"] { order: 1; }
+  .bottom-nav button[data-nav="discover"] { order: 2; }
+  .bottom-nav button[data-nav="stats"] { order: 3; }
+  .bottom-nav button[data-nav="add"] { order: 4; }
+  .bottom-nav button[data-nav="shelf"] { order: 5; }
+  .bottom-nav button[data-nav="coven"] { order: 6; }
+  .bottom-nav button[data-nav="settings"] { order: 7; }
+  /* seven columns leave ~46-51px per label: drop the letter-spacing and
+     scale the label with the viewport (8px at 320px wide, 9px at 360px,
+     10px from 400px up) so the longest labels ("My Shelves", "The Hearth",
+     "Chronicles") fit their column without wrapping or touching neighbours */
+  .bottom-nav button span {
+    white-space: nowrap; letter-spacing: 0;
+    font-size: clamp(8px, 2.5vw, 10px);
+  }
+}
+
 /* ---------- Shelf tab: poses & decorations (v252) ---------- */
 .sv-head-btns { display: flex; gap: 10px; position: relative; }
 /* v411: overflow menu dropdown */
