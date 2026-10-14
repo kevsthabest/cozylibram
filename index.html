@@ -15,6 +15,32 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+/* v543: pre-paint theme boot. styles.css's :root defaults ARE the Dark theme
+   (violet accent), and data-theme is only set when js/010-theming.js runs at
+   end-of-body — so every non-Dark theme flashed purple for the first frame(s)
+   on load/refresh. This inline mirror resolves the stored theme + accent
+   exactly as js/010's getTheme()/applyTheme() do and sets the attributes
+   before first paint. js/010 remains authoritative and re-applies when it
+   loads; this script only removes the flash. Keep THEME_KEYS in sync with
+   THEMES in js/010-theming.js (pinned by .test/boot-theme.test.js). Any
+   failure (storage unavailable, private mode) leaves today's behaviour. */
+(function () {
+  try {
+    var THEME_KEYS = ['dark', 'light', 'hearthside', 'candlelight', 'twilight', 'verdant', 'midnight', 'velvet', 'abyss', 'frost', 'haunt', 'yuletide', 'fete', 'amour', 'shamrock', 'pastel', 'harvest', 'solstice', 'stormrider', 'briarthrone', 'voidsignal', 'wisp', 'wisp-night'];
+    var t = localStorage.getItem('theme');
+    /* js/010: an unknown/missing theme falls back to Dark, and an unset
+       data-theme IS Dark (styles.css :root == [data-theme="dark"]) — so
+       only a validated stored key is set here. */
+    if (t && THEME_KEYS.indexOf(t) !== -1) document.documentElement.dataset.theme = t;
+    /* js/010 applyTheme(): a stored accent pick is mirrored raw into
+       data-accent (CSS [data-accent] blocks consume it); none stored ->
+       no attribute, and the theme's own designed --accent wins. */
+    var a = localStorage.getItem('accent');
+    if (a) document.documentElement.dataset.accent = a;
+  } catch (e) { /* storage unavailable — js/010's defaults apply, as before */ }
+})();
+</script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
