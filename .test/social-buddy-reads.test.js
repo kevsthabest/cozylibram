@@ -84,6 +84,31 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
     (sql.match(/grant execute on function public\.buddy_(invite|respond|end|states)/g) || []).length === 4);
 }
 
+/* ---- v531: the wishlist rung (v528 ladder × v529 status) ----
+ * v529 made 'wishlist' a real status, but the v528 ladder had no
+ * rung for it, so a buddy read whose matching copy sits on the
+ * Wishlist answered null (blank presence chip) where the same book
+ * pre-remodel (tbr + tobuy) answered 'not_started'. v531 joins
+ * 'wishlist' to the not_started rung — the Wishlist is the
+ * pre-reading shelf by definition. v528 stays historical; the
+ * CURRENT shape lives in the v531 migration + schema.sql. */
+const mig531 = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v531_buddy_wishlist_rung.sql'), 'utf8');
+for (const [label, sql] of [['v531 migration', mig531], ['schema.sql', schema]]) {
+  const fnBody = (sql.split('function public.buddy_reading_state')[1] || '').split('$$;')[0];
+  ok(label + ': buddy_reading_state maps wishlist WITH tbr to not_started (v531 rung)',
+    /b\.data ->> 'status' in \('tbr', 'wishlist'\)[\s\S]{0,1200}then 'not_started'/.test(fnBody) &&
+    !/b\.data ->> 'status' = 'tbr'/.test(fnBody));
+  ok(label + ': the other rungs are unchanged (read/reading/dnf, same order of checks)',
+    /b\.data ->> 'status' = 'read'[\s\S]{0,1200}then 'finished'/.test(fnBody) &&
+    /b\.data ->> 'status' = 'reading'[\s\S]{0,1200}then 'reading'/.test(fnBody) &&
+    /b\.data ->> 'status' = 'dnf'[\s\S]{0,1200}then 'set_aside'/.test(fnBody) &&
+    fnBody.indexOf("then 'finished'") < fnBody.indexOf("then 'not_started'") &&
+    fnBody.indexOf("then 'not_started'") < fnBody.indexOf("then 'set_aside'"));
+  ok(label + ': buddy_reading_state stays private machinery (revoked, never granted)',
+    /revoke all on function public\.buddy_reading_state\(uuid, text\) from public/.test(sql) &&
+    !/grant execute on function public\.buddy_reading_state/.test(sql));
+}
+
 /* ---------- registration ---------- */
 const indexHtml = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 const swText = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8');
@@ -165,7 +190,7 @@ const mkStub = () => {
     const have = (s) => db.books.some(b => b.user_id === user && b.data.status === s && keyOfRow(b) === key);
     if (have('read')) return 'finished';
     if (have('reading')) return 'reading';
-    if (have('tbr')) return 'not_started';
+    if (have('tbr') || have('wishlist')) return 'not_started'; // v531: wishlist shares the tbr rung
     if (have('dnf')) return 'set_aside';
     return null;
   };
@@ -453,6 +478,13 @@ const CLIENT_BOOKS = {
   db.books.find(b => b.book_id === 'pal-dragon').data.status = 'dnf';
   st = await rpc('buddy_states', { p_id: db.buddy_reads[0].id });
   ok('states: DNF is its own honest state (set_aside), not a lie', st.data.theirs === 'set_aside');
+  // PAL moves their copy onto the Wishlist shelf mid-read (a real
+  // status since v529): presence must answer not_started — NOT the
+  // blank null the v528 ladder gave a status it had no rung for (v531).
+  db.books.find(b => b.book_id === 'pal-dragon').data.status = 'wishlist';
+  st = await rpc('buddy_states', { p_id: db.buddy_reads[0].id });
+  ok('states: a Wishlist copy reads not_started (v531 rung), not a blank null',
+    st.data.theirs === 'not_started' && st.data.mine === 'reading');
   // Both finished → the payoff line.
   db.books.find(b => b.book_id === 'pal-dragon').data.status = 'read';
   db.books.find(b => b.book_id === 'me-dragon').data.status = 'read';

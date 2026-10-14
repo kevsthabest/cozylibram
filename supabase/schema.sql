@@ -1145,7 +1145,7 @@ as $$
     ) then 'reading'
     when exists (
       select 1 from public.books b
-      where b.user_id = p_user and b.data ->> 'status' = 'tbr'
+      where b.user_id = p_user and b.data ->> 'status' in ('tbr', 'wishlist')
         and public.toy_book_key(
               case when length(upper(regexp_replace(coalesce(nullif(b.data ->> 'isbn', ''), b.isbn, ''), '[^0-9Xx]', '', 'g'))) in (10, 13)
                    then upper(regexp_replace(coalesce(nullif(b.data ->> 'isbn', ''), b.isbn, ''), '[^0-9Xx]', '', 'g'))
