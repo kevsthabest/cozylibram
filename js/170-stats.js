@@ -1008,7 +1008,7 @@ function shareCanvasFile(cv, name, title) {
   if (!cv || !cv.toBlob) { toast('Image export isn’t supported on this device'); return; }
   cv.toBlob(async (blob) => {
     if (!blob) { toast('Could not create the image'); return; }
-    // v554: the hand-off itself lives in shareOrDownloadFile (js/050);
+    // v559: the hand-off itself lives in shareOrDownloadFile (js/050);
     // the 'Image saved' toast belongs to the download outcome only, as before.
     const how = await shareOrDownloadFile({ blob: blob, filename: name, title: title });
     if (how === 'downloaded') toast('Image saved 📥');

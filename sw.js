@@ -37,7 +37,7 @@ const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '03
 // keep in step with DEFAULT_AVATARS in js/105-account.js; the avatars suites
 // pin the match.
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown', 'onyxdragon', 'golddragon', 'egg', 'daggers', 'goggles', 'parapet', 'ring', 'tabby', 'darknet', 'visor', 'daemon', 'cornsignal', 'drone', 'circuitkey', 'strands', 'silo'].map(id => './img/avatars/avatar-' + id + '.webp');
-// v554: vendored webfonts (assets/fonts/). Precached like the rest of the
+// v559: vendored webfonts (assets/fonts/). Precached like the rest of the
 // shell: type is the first thing a reader sees, and a first offline paint in
 // fallback fonts would be a visible regression. 6 files, ~225 KB — the css2
 // API serves one variable font per family/style/subset, so the per-weight

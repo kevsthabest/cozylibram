@@ -605,7 +605,7 @@ function renderSettings() {
   document.getElementById('bk-export').addEventListener('click', async () => {
     const blob = new Blob([JSON.stringify({ app: 'cozy-libram', version: 1, exported: new Date().toISOString(), books: library }, null, 2)],
       { type: 'application/json' });
-    // v554: share-first (js/050 shareOrDownloadFile) — on mobile the backup
+    // v559: share-first (js/050 shareOrDownloadFile) — on mobile the backup
     // goes straight to a share target; on desktop it downloads as before.
     const how = await shareOrDownloadFile({
       blob: blob,

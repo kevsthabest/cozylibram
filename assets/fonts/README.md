@@ -1,6 +1,6 @@
 # Vendored webfonts
 
-Vendored 2026-10-14 (v554) from the Google Fonts css2 API — the exact
+Vendored 2026-10-14 (v559) from the Google Fonts css2 API — the exact
 families, weights, styles and unicode-range subsets the app previously
 requested at runtime via a `fonts.googleapis.com` stylesheet link:
 
