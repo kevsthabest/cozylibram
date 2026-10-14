@@ -87,10 +87,10 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('profile view renders', !!q('#pf-first') && !!q('#pf-last'));
   ok('email field is read-only', !!q('#pf-last') && !!q('input[disabled]'));
   ok('email shows the account address', Array.from(qa('input')).some(i => i.value === 'wife@example.com'));
-  ok('six themed default avatars offered', probe('DEFAULT_AVATARS.length') === 6);
+  ok('fourteen themed default avatars offered (6 Classics + 8 Stormrider, v542)', probe('DEFAULT_AVATARS.length') === 14);
   q('#pf-change').click(); await tick();
-  ok('picker opens with six defaults + upload + initial',
-    qa('#pf-picker [data-av]').length === 8);
+  ok('picker opens with fourteen defaults + upload + initial',
+    qa('#pf-picker [data-av]').length === 16);
   ok('avatar image files exist', probe("DEFAULT_AVATARS.every(a => a.src.indexOf('img/avatars/avatar-') === 0)"));
 
   // Save names.
