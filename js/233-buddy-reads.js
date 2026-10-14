@@ -74,11 +74,16 @@ async function buddySupported() {
     const r = await sb.from('buddy_reads').select('id').limit(1);
     if (r.error) {
       if (buddyMissingErr(r.error)) { buddyTableMissing = true; buddySupportKnown = false; }
+      // v532 (RC3): a NON-missing probe error used to fail just as
+      // silently as a missing table — every offer button hid and
+      // nothing anywhere said why. Log it; the surface still fails
+      // quiet, but the failure is now diagnosable.
+      else buddyLog('support probe failed:', (r.error && r.error.message) || r.error);
       return buddySupportKnown === true;
     }
     buddySupportKnown = true;
     return true;
-  } catch (e) { return false; }
+  } catch (e) { buddyLog('support probe threw', e); return false; }
 }
 
 /* ---------- rows ---------- */
@@ -205,27 +210,33 @@ async function buddyStates(id) {
 
 /* ---------- offers ---------- */
 
+/* The pre-reading shelves (v532): TBR and Wishlist. The v531
+ * presence ladder and the server's buddy_invite gate already
+ * treat a Wishlist copy as a valid pre-reading copy — this offer
+ * gate was the only piece still insisting on TBR alone. */
+function buddyPreReading(status) { return status === 'tbr' || status === 'wishlist'; }
+
 /* My book id if I can invite this friend to buddy-read their book:
- * the shared-TBR rule (their copy and mine both sit on TBR) and no
- * row I can see already stands for the pair + book. Used by the
- * Buddy tab's match rows and by the friend-shelf preview modal
- * (js/195 openCovenBook). */
+ * the shared pre-reading rule (their copy and mine both sit on a
+ * pre-reading shelf — TBR or Wishlist) and no row I can see already
+ * stands for the pair + book. Used by the Buddy tab's match rows
+ * and by the friend-shelf preview modal (js/195 openCovenBook). */
 function buddyOfferBookId(friendId, theirBook) {
-  if (!theirBook || theirBook.status !== 'tbr') return '';
+  if (!theirBook || !buddyPreReading(theirBook.status)) return '';
   if (typeof recoKey !== 'function') return '';
   const key = recoKey(theirBook);
   if (!key) return '';
   if (buddyRowFor(friendId, key)) return '';
   if (buddyInvitedLocal.has(friendId + '|' + key)) return '';
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
-  const mine = lib.find(b => recoKey(b) === key && b.status === 'tbr');
+  const mine = lib.find(b => recoKey(b) === key && buddyPreReading(b.status));
   return mine ? mine.id : '';
 }
 
 async function buddySendInvite(friendId, key, btn) {
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
-  const mine = lib.find(b => (typeof recoKey === 'function') && recoKey(b) === key && b.status === 'tbr');
-  if (!mine) { toast('That book isn’t on your TBR'); return; }
+  const mine = lib.find(b => (typeof recoKey === 'function') && recoKey(b) === key && buddyPreReading(b.status));
+  if (!mine) { toast('That book isn’t on your TBR or Wishlist'); return; }
   if (btn) btn.disabled = true;
   const res = await buddyInvite(friendId, mine);
   const name = buddyFirstName(friendId);
@@ -359,6 +370,9 @@ async function wireBuddyReads(root) {
     panel.insertBefore(host, panel.firstChild);
   }
   host.innerHTML = html;
+  // v532 (RC2): live sections exist → js/197's empty-state note
+  // has done its job.
+  if (html) { const note = panel.querySelector('#buddy-empty-note'); if (note) note.remove(); }
 
   /* Match-row buttons: label per the rows that stand. */
   panel.querySelectorAll('[data-buddy-invite]').forEach(btn => {

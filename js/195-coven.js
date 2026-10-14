@@ -132,6 +132,19 @@ async function resolveInviteToken(raw) {
     prof = await circleFriendProfile(them);
     if (prof) nm = ((prof.first_name || '') + ' ' + (prof.last_name || '')).trim() || 'A reader';
   } catch (e) { /* name stays generic */ }
+  // v532: the projection only covers readers already LINKED to the
+  // viewer (accepted/pending), so a fresh inviter — the normal
+  // case here — resolved to "A reader" and the dialog couldn't say
+  // who invited you. The token is the inviter's own consent
+  // artifact: invite_inviter_name() returns just their display
+  // name for it (null for a dead code or a blocked pair, so this
+  // learns nothing the redemption itself wouldn't).
+  if (nm === 'A reader') {
+    try {
+      const nr = await sb.rpc('invite_inviter_name', { p_token: token });
+      if (!nr.error && nr.data) nm = String(nr.data);
+    } catch (e) { /* pre-migration: the generic name stands */ }
+  }
   return { token: token, userId: them, profile: prof, name: nm };
 }
 // One-sided accept: the token proves the inviter's consent, so this creates
@@ -638,6 +651,7 @@ function renderCoven() {
       renderCovenMain(code, lists, priv);
       circleUpgradeAvatars(document.getElementById('view'));
       if (typeof refreshThoughtOfYou === 'function') refreshThoughtOfYou();
+      if (typeof refreshSentOutbox === 'function') refreshSentOutbox();
       if (typeof refreshRecos === 'function') refreshRecos();
       if (typeof refreshCovenStats === 'function') refreshCovenStats();
       consumePendingInvite(code, lists.friends);
@@ -673,12 +687,16 @@ function renderInviteAccept(slot, inv) {
       maybeAskShelfShare(inv.name); // v476: private-by-default consent, once
     } catch (e) {
       // v526: a refused redemption (a block stands between the pair)
-      // raises the same server error as a dead token — answer with the
-      // same words the paste flow uses for a dead link, never the raw
-      // shape, so the two stay indistinguishable.
+      // raises the same server error as a dead token, so the two
+      // must be answered with the same words, never the raw shape.
+      // v532: those words no longer advise asking for a fresh link
+      // (UX wave P3-12) — for a blocked pair a fresh link can never
+      // succeed, and the advice sent the user on an endless loop.
+      // Neutral copy, no reason given, identical for every refusal
+      // this server shape covers.
       const raw = (e && e.message) || String(e || '');
       toast(/invite not found/i.test(raw)
-        ? 'Couldn’t accept — this invite link is no longer valid. Ask for a fresh one.'
+        ? 'Couldn’t accept — this invite is no longer usable.'
         : 'Couldn’t accept: ' + raw);
     }
   });
@@ -732,6 +750,7 @@ function renderCovenMain(code, lists, priv) {
     '</div>';
 
   html += '<div id="toy-slot"></div>';
+  html += '<div id="sent-slot"></div>';
   html += '<div id="stats-slot"></div>';
 
   // Requests

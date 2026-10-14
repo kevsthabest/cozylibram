@@ -184,10 +184,14 @@ function momentDayLabel(day) {
 function momentRowHTML(m) {
   const p = m.person || { name: 'A reader', profile: null };
   const mine = typeof cloudUser !== 'undefined' && cloudUser && m.ownerId === cloudUser.id;
+  // v532: the finisher reads as part of the sentence ("Mira
+  // finished …"), not just as the row's bare heading — the UX wave
+  // found rows scanning as anonymous "finished <title>".
+  const who = mine ? 'You' : (String(p.name || 'A reader').trim().split(/\s+/)[0] || 'A reader');
   return '<div class="moment" data-moment="' + esc(m.key) + '">' +
     '<div class="circle-row">' + statAvatar(p) +
     '<div class="circle-meta"><b>' + esc(mine ? 'You' : (p.name || 'A reader')) + '</b>' +
-    '<span class="note">finished <i>' + esc(m.title) + '</i> · ' + esc(momentDayLabel(m.day)) + '</span></div>' +
+    '<span class="note">' + esc(who) + ' finished <i>' + esc(m.title) + '</i> · ' + esc(momentDayLabel(m.day)) + '</span></div>' +
     (mine ? '' : '<div class="circle-actions"><button class="btn ghost sm" data-react="' + esc(m.key) + '">React</button></div>') +
     '</div>' +
     '<div class="moment-strip" data-mstrip="' + esc(m.key) + '"></div>' +

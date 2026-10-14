@@ -11,6 +11,13 @@
  *   from the sender's row. The sender has no read surface here at
  *   all — no sent list, no counts, no receipts — so this module also
  *   never renders anything for the sender.
+ *   v532 amends exactly one clause of that: the sender gains a
+ *   private record of their own sends (js/234's outbox, served by
+ *   caller-scoped definer RPCs — still no counts anywhere, still
+ *   no recipient-side state) and an unsend wired to
+ *   recall_thought_of_you below. This module still renders nothing
+ *   for the sender; the helpers live here because the inbox rows
+ *   and the recall are this feature's machinery.
  * - Inbox reads are a plain select: RLS does the whole job (the row
  *   is visible only to its recipient, only while the friendship
  *   stands, only for 60 days).
@@ -165,6 +172,41 @@ async function toyFetchMine() {
     }
     return Array.isArray(r.data) ? r.data : [];
   } catch (e) { toyLog('inbox read threw', e); return []; }
+}
+
+/* The reco keys of the viewer's current inbox — js/196 uses them
+ * to keep a book a friend already sent from ALSO headlining
+ * "You'd love this" while the card lives (v532, Strategist #2).
+ * Same rows the inbox section renders (RLS: mine, ≤60 days); any
+ * failure resolves to an empty set, never an error. */
+async function toyInboxKeys() {
+  const keys = new Set();
+  try {
+    const rows = await toyFetchMine();
+    (rows || []).forEach(row => {
+      const k = (typeof recoKey === 'function') ? recoKey(toySnapshotBook(row.book)) : '';
+      if (k) keys.add(k);
+    });
+  } catch (e) { /* suppression is a courtesy, not a gate */ }
+  return keys;
+}
+
+/* Unsend (v532): recall_thought_of_you has existed server-side
+ * since v527 with no client caller (audit #6); the sender outbox
+ * (js/234) wires it here. The RPC always answers 'ok' — whether or
+ * not a row still stood — so the caller learns nothing about the
+ * card's fate, the same discipline as the send. Returns true when
+ * the call itself landed. */
+async function toyRecall(recipientId, senderBookId) {
+  const sb = await cloudClient();
+  if (!sb || !cloudUser) return false;
+  const r = await sb.rpc('recall_thought_of_you', { p_recipient: recipientId, p_book_id: senderBookId });
+  if (r.error) {
+    if (toyRpcMissingErr(r.error)) { toyTableMissing = true; return false; }
+    toyLog('recall failed:', (r.error && r.error.message) || r.error);
+    return false;
+  }
+  return true;
 }
 
 async function toyDeleteRow(id) {

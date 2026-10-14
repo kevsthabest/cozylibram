@@ -232,7 +232,18 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   const stOff = (stats.people || []).find(p => p.id === FOFF);
   ok('stats include the opted-in friend\u2019s finished book', stOn && stOn.stats.finished === 1);
   ok('stats exclude the opted-out friend entirely', stOff && stOff.stats.finished === 0 && stOff.stats.books.length === 0);
-  ok('digest has no trace of the opted-out friend\u2019s book', JSON.stringify(stats).indexOf('Off Book') === -1);
+  // v532 (RC1) rescoped this pin: the friend's books ARE fetched
+  // now — for buddy matching only (shelf-browsing, not activity) —
+  // so the payload legitimately carries a shelf view (shelfStats)
+  // and a whole-object stringify would find the title there. What
+  // must stay clean is every ACTIVITY surface: the activity stats
+  // (asserted above), moments, digest, now-reading, trending,
+  // soulmates, awards — and the buddy list too here, since a 'read'
+  // book can never be a TBR match.
+  ok('activity surfaces carry no trace of the opted-out friend\u2019s book',
+    JSON.stringify({ moments: stats.moments, digest: stats.digest, nowReading: stats.nowReading,
+      trending: stats.trending, soulmates: stats.soulmates, awards: stats.awards, buddies: stats.buddies })
+      .indexOf('Off Book') === -1);
   const recos = await probe('loadRecos()'); await tick();
   ok('recos include the opted-in friend\u2019s 5-star book', recos.some(r => r.book.title === 'On Book'));
   ok('recos exclude the opted-out friend\u2019s 5-star book', !recos.some(r => r.book.title === 'Off Book'));

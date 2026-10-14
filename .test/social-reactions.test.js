@@ -86,7 +86,19 @@ const mkStub = () => {
   // a row is visible/writable only as its policies allow for the
   // CURRENT user (window.__uid, set by useAs below).
   const asUser = () => window.__uid;
-  const rxVisible = (r) => r.giver_id === asUser() || r.owner_id === asUser();
+  // v532: the giver branch additionally requires the owner's CURRENT
+  // sharing posture, mirroring moment_owner_sharing() —
+  // share_activity on AND circle_book_visible(owner, 'read')
+  // (emulated: owner shares their library and doesn't hide 'read').
+  // The owner branch stays ungated; third parties never see a row.
+  const rxVisible = (r) => {
+    if (r.owner_id === asUser()) return true;
+    if (r.giver_id !== asUser()) return false;
+    const owner = db.profiles[r.owner_id] || {};
+    return owner.share_activity === true &&
+      owner.share_library !== false &&
+      !(Array.isArray(owner.hidden_shelves) && owner.hidden_shelves.indexOf('read') !== -1);
+  };
   const rxLinked = (a, b) => db.circle_links.some(l => l.status === 'accepted' &&
     ((l.requester_id === a && l.addressee_id === b) || (l.requester_id === b && l.addressee_id === a)));
   const table = (name) => ({
@@ -348,6 +360,37 @@ const finishBook = { id: 'book-dune', title: 'Dune', authors: ['Frank Herbert'],
     stub.db.moment_reactions.some(r => r.moment_key === fayMoment.key && r.giver_id === ME && r.kind === 'trophy') &&
     slot.querySelector('[data-mstrip="' + fayMoment.key + '"]').innerHTML.indexOf('You') !== -1);
 
+  /* ---------- v532: the read posture follows the owner's CURRENT sharing ----------
+     The giver's row still EXISTS in the table throughout — what
+     changes is whether RLS hands it to the giver. The owner reads
+     it in every state. */
+  useAs(ME);
+  ok('v532: giver reads their reaction while the owner is sharing',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 1);
+  stub.db.profiles[FAY].share_activity = false;
+  ok('v532: owner turns activity OFF → the giver reads nothing (the row still exists)',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 0 &&
+    stub.db.moment_reactions.some(r => r.moment_key === fayMoment.key && r.giver_id === ME));
+  useAs(FAY);
+  ok('v532: the owner still reads every reaction while activity is off',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 2);
+  useAs(ME);
+  stub.db.profiles[FAY].share_activity = true;
+  stub.db.profiles[FAY].hidden_shelves = ['read'];
+  ok('v532: owner hides the Read shelf → the giver reads nothing',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 0);
+  useAs(FAY);
+  ok('v532: the owner still reads every reaction while the Read shelf is hidden',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 2);
+  stub.db.profiles[FAY].hidden_shelves = [];
+  useAs(ME);
+  ok('v532: posture restored → the giver reads their reaction again',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 1);
+  useAs(NOVA);
+  ok('v532: a third party reads nothing in every posture',
+    (await probe('reactionsFetch([' + JSON.stringify(fayMoment.key) + '])')).length === 0);
+  useAs(ME);
+
   /* ---------- pre-migration tolerance ---------- */
   const realRpc = stub.rpc;
   stub.rpc = () => Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.react_to_moment' } });
@@ -397,6 +440,24 @@ const finishBook = { id: 'book-dune', title: 'Dune', authors: ['Frank Herbert'],
   const schema = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
   ok('schema.sql mirrors the table + its policies',
     schema.indexOf('moment_reactions') !== -1 && /giver or owner reads reactions/.test(schema));
+
+  /* ---------- v532 migration shape (read posture) ---------- */
+  const sql532 = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v532_reactions_read_posture.sql'), 'utf8');
+  ok('v532: the posture helper is a definer function composing both facts',
+    /create or replace function public\.moment_owner_sharing\(p_owner uuid\)/.test(sql532) &&
+    /security definer/.test(sql532) &&
+    /p\.share_activity/.test(sql532) &&
+    /circle_book_visible\(p_owner, 'read'\)/.test(sql532));
+  ok('v532: the helper is granted to authenticated only',
+    /revoke all on function public\.moment_owner_sharing\(uuid\) from public/.test(sql532) &&
+    /grant execute on function public\.moment_owner_sharing\(uuid\) to authenticated/.test(sql532));
+  ok('v532: the SELECT policy gates only the giver branch on the helper',
+    /auth\.uid\(\) = owner_id\s+or \(auth\.uid\(\) = giver_id and public\.moment_owner_sharing\(owner_id\)\)/.test(sql532));
+  ok('v532: the DELETE policy is untouched by the migration',
+    !/for delete/.test(sql532));
+  ok('v532: schema.sql mirrors the helper + restated policy in place',
+    /create or replace function public\.moment_owner_sharing\(p_owner uuid\)/.test(schema) &&
+    /auth\.uid\(\) = giver_id and public\.moment_owner_sharing\(owner_id\)/.test(schema));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
