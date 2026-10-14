@@ -43,7 +43,9 @@ const mkStub = () => {
     const out = { user_id: p.user_id, first_name: p.first_name || '', last_name: p.last_name || '',
       avatar_id: p.avatar_id || '', avatar_path: p.avatar_path || '',
       share_library: p.share_library !== false, share_bio: p.share_bio !== false,
-      share_activity: p.share_activity === true };
+      share_activity: p.share_activity === true,
+      // v550: the handle is a projected identity column (null until set)
+      handle: p.handle || null };
     if (out.share_bio) {
       if (p.bio) out.bio = p.bio;
       if (Array.isArray(p.fav_genres) && p.fav_genres.length) out.fav_genres = p.fav_genres.slice();
@@ -138,6 +140,7 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   stub.db.profiles[FON] = { user_id: FON, first_name: 'Ona', last_name: 'Optin', gender: 'f',
     avatar_id: 'moon', avatar_path: '', share_library: true, hidden_shelves: ['dnf'],
     bio: 'Ona reads gothic everything', fav_genres: ['Gothic', 'Horror'], share_bio: true, share_activity: true,
+    handle: 'ona_reads',
     updated_at: '2026-10-01T00:00:00Z' };
   stub.db.profiles[FOFF] = { user_id: FOFF, first_name: 'Pam', last_name: 'Private', gender: 'm',
     avatar_id: '', avatar_path: '', share_library: true, hidden_shelves: ['read'],
@@ -160,6 +163,7 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   ok('opted-in friend: toggled-on bio present', pOn.bio === 'Ona reads gothic everything');
   ok('opted-in friend: toggled-on genres present', Array.isArray(pOn.fav_genres) && pOn.fav_genres.join(',') === 'Gothic,Horror');
   ok('opted-in friend: activity flag reads on', pOn.share_activity === true);
+  ok('v550: a set handle rides the projection', pOn.handle === 'ona_reads');
   ok('payload has NO gender', !('gender' in pOn));
   ok('payload has NO hidden_shelves', !('hidden_shelves' in pOn));
   ok('payload has NO updated_at', !('updated_at' in pOn));
@@ -348,11 +352,19 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
     // forbidden columns to say they are excluded — that is prose, not SQL.
     return raw.split('\n').filter(l => !/^\s*--/.test(l)).join('\n');
   };
+  // NAMED PIN UPDATE (v550, CONSTRAINTS rule 4): the expected projection
+  // gains exactly one column — 'p.handle', appended last by migration
+  // v550_handles.sql (the handle is the owner's chosen public identity,
+  // projected like the other identity columns; the share_bio CASE gates
+  // and every other column are unchanged, and the gate-index assertions
+  // below (items 8/9) still target bio/fav_genres). The stub's
+  // projectPublic above mirrors the column so behaviour tests see it.
   const EXPECTED_PROJECTION = [
     'p.user_id', 'p.first_name', 'p.last_name', 'p.avatar_id', 'p.avatar_path',
     'p.share_library', 'p.share_bio', 'p.share_activity',
     'case when p.share_bio then p.bio end as bio',
     'case when p.share_bio then p.fav_genres end as fav_genres',
+    'p.handle',
   ];
   const projectionHolds = (items) =>
     Array.isArray(items) && JSON.stringify(items) === JSON.stringify(EXPECTED_PROJECTION);
@@ -419,7 +431,8 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
     ['p.user_id', 'p.first_name', 'p.last_name'].concat(widened ? ['p.gender'] : [],
       ['p.avatar_id', 'p.avatar_path', 'p.share_library', 'p.share_bio', 'p.share_activity',
        'case when p.share_bio then p.bio end as bio',
-       'case when p.share_bio then p.fav_genres end as fav_genres']).join(',\n         ') +
+       'case when p.share_bio then p.fav_genres end as fav_genres',
+       'p.handle']).join(',\n         ') +
     '\n  from public.profiles p\n';
   const scanWidened = pickLastViewDef([
     { name: 'v900_earlier.sql', text: mkView(false) },
