@@ -4,7 +4,13 @@
    + synced via existing book sync. Also logged to Supabase dnf_reasons
    table for aggregate insights. ---- */
 
-const DNF_REASONS = [
+/* ES MODULE (fork/es-modules experiment): this is the first converted
+   leaf — loaded via <script type="module"> in index.html. Its public
+   surface is exported below and republished on window by the
+   compatibility bridge at the bottom of this file, so classic scripts
+   keep resolving the same globals. See FORK.md for the pattern. */
+
+export const DNF_REASONS = [
   { key: 'too_slow', label: 'Too slow', icon: '🐢' },
   { key: 'hated_trope', label: 'Hated the trope', icon: '🚫' },
   { key: 'wrong_mood', label: 'Wrong mood', icon: '🌧️' },
@@ -13,7 +19,7 @@ const DNF_REASONS = [
   { key: 'too_long', label: 'Too long', icon: '📏' },
 ];
 
-function openDnfReasonSheet(b) {
+export function openDnfReasonSheet(b) {
   // Dedup: don't stack sheets if one is already open
   if (document.querySelector('.dnf-bottom-sheet')) return;
   const reasonBtns = DNF_REASONS.map(r =>
@@ -58,7 +64,7 @@ function openDnfReasonSheet(b) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
-function saveDnfReason(b, reasonKey) {
+export function saveDnfReason(b, reasonKey) {
   const reason = DNF_REASONS.find(r => r.key === reasonKey);
   if (!reason) return;
   // Guard: user may have changed status away from DNF during the sheet delay
@@ -100,7 +106,7 @@ function saveDnfReason(b, reasonKey) {
 }
 
 /* ---- DNF insights: "You DNF 80% of books with X" ---- */
-function dnfInsightsHTML() {
+export function dnfInsightsHTML() {
   const dnfs = library.filter(b => b.status === 'dnf' && b.dnfReason);
   if (dnfs.length < 3) return '';
 
@@ -123,3 +129,20 @@ function dnfInsightsHTML() {
   html += '</div>';
   return html;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see FORK.md) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. Classic scripts still resolve this leaf's public
+   API as globals — js/150-modal-discovery.js calls openDnfReasonSheet
+   and js/170-stats.js calls dnfInsightsHTML (both typeof-guarded) — so
+   the bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups in classic scripts and window.eval resolve
+   through the global object, so callers need no changes. Two ordering
+   facts make this safe here: module scripts are deferred (this file
+   evaluates after every classic script), and both call sites run at
+   interaction/render time, never during initial parse. Remove a name
+   from this bridge only when its last classic caller is gone. */
+window.DNF_REASONS = DNF_REASONS;
+window.openDnfReasonSheet = openDnfReasonSheet;
+window.saveDnfReason = saveDnfReason;
+window.dnfInsightsHTML = dnfInsightsHTML;

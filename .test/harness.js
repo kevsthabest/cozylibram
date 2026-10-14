@@ -12,6 +12,20 @@ function jsFiles() {
     .map(f => path.join(APP_DIR, 'js', f));
 }
 
+// fork/es-modules ONLY: jsdom cannot execute <script type="module">, so a
+// converted leaf is emulated here — strip the ESM-only markers and inject
+// the identical body as a classic script. Sound only while converted
+// modules carry no imports (phase-1 rule, see FORK.md): the module's own
+// window bridge then reproduces its public surface exactly as production.
+// Files without export/import syntax pass through untouched.
+function classicize(src) {
+  if (!/^\s*(export|import)\s/m.test(src)) return src;
+  return src
+    .replace(/^export\s+(?=(const|let|var|function|async\s+function|class)\s)/gm, '')
+    .replace(/^export\s*\{[^}]*\};?\s*$/gm, '')
+    .replace(/^import\s[^;]*;?\s*$/gm, '');
+}
+
 function loadApp(window) {
   // jsdom doesn't provide requestAnimationFrame; the app uses it for
   // animations. Polyfill with setTimeout so tests don't crash.
@@ -21,7 +35,7 @@ function loadApp(window) {
   }
   for (const file of jsFiles()) {
     const el = window.document.createElement('script');
-    el.textContent = fs.readFileSync(file, 'utf8');
+    el.textContent = classicize(fs.readFileSync(file, 'utf8'));
     window.document.body.appendChild(el);
   }
 }
