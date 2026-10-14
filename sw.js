@@ -13,6 +13,15 @@ const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bum
 const STICKER_CACHE = 'cozy-libram-stickers';
 const STICKER_CACHE_MAX = 96;
 const STICKERS_PATH = '/assets/stickers/cut-webp/';
+// v553 (Decision on PR #225): the ZXing barcode-decoder files under
+// js/vendor/zxing/ (~1 MB incl. the .wasm) are runtime-cached on first
+// fallback use, NEVER precached — installs stay lean; the first scan on
+// a browser without BarcodeDetector fetches them once over the network,
+// later scans run offline. Survives version bumps like the cover and
+// sticker caches. The path is a closed set of three files (share.js,
+// es/reader.js, zxing_reader.wasm), so no eviction cap is needed.
+const ZXING_CACHE = 'cozy-libram-zxing';
+const ZXING_PATH = '/js/vendor/zxing/';
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
 // objects are CORS-clean with real Content-Length, so size-based eviction
 // finally works.
@@ -26,7 +35,8 @@ const JS = ['000-core.js', '002-log.js', '010-theming.js', '020-ratings.js', '03
 // pin the match.
 const AVATARS = ['rose', 'moon', 'dragon', 'raven', 'book', 'crown', 'onyxdragon', 'golddragon', 'egg', 'daggers', 'goggles', 'parapet', 'ring', 'tabby', 'darknet', 'visor', 'daemon', 'cornsignal', 'drone', 'circuitkey', 'strands', 'silo'].map(id => './img/avatars/avatar-' + id + '.webp');
 // v194 (security): vendored third-party libs, precached like first-party code.
-const VENDOR = ['supabase.min.js', 'zxing/share.js', 'zxing/es/reader.js', 'zxing/zxing_reader.wasm', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
+// (The zxing decoder is the exception — runtime-cached, see ZXING_CACHE.)
+const VENDOR = ['supabase.min.js', 'three.module.js'].map(f => './js/vendor/' + f).concat(['./vendor/d3.min.js']);
 // v184: bespoke per-theme modal artwork, complete set (all ten themes)
 // Batch 4 (issue #144): precache exactly the theme SVGs styles.css references
 // (15 themes × divider/moon = 30). The 9 vine-*.svg entries and
@@ -40,7 +50,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE && k !== STICKER_CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE && k !== STICKER_CACHE && k !== ZXING_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -121,6 +131,29 @@ self.addEventListener('fetch', (e) => {
           if (keys.length > STICKER_CACHE_MAX) {
             await Promise.all(keys.slice(0, keys.length - STICKER_CACHE_MAX).map(k => cache.delete(k)));
           }
+        }
+        return res;
+      } catch (err) {
+        return Response.error();
+      }
+    })());
+    return;
+  }
+  // v553: ZXing decoder files — cache-first with runtime fill, same
+  // pattern as stickers. Both request shapes land here as same-origin
+  // GETs under ZXING_PATH: the dynamic import() of es/reader.js (and its
+  // share.js dependency) and the locateFile fetch of the .wasm. The
+  // generic same-origin branch below only matches, never stores, so
+  // without this rule the decoder would re-download on every scan.
+  if (url.origin === location.origin && e.request.method === 'GET' && url.pathname.indexOf(ZXING_PATH) === 0) {
+    e.respondWith((async () => {
+      const cache = await caches.open(ZXING_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && res.ok) {
+          await cache.put(e.request, res.clone());
         }
         return res;
       } catch (err) {
