@@ -1088,6 +1088,7 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .modal-backdrop {
   position: fixed; inset: 0;
   background: rgba(8, 5, 12, 0.7);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   z-index: 50;
   display: flex; align-items: flex-end; justify-content: center;
@@ -4087,7 +4088,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #shelf3d #s3dHud .btns { display: flex; gap: 8px; pointer-events: auto; }
   #shelf3d .pill { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; border: 1px solid rgba(229,184,106,.45);
     background: rgba(20,14,26,.72); color: #e5b86a; border-radius: 999px; padding: 8px 14px; cursor: pointer;
-    backdrop-filter: blur(6px); }
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   #shelf3d .pill:active { transform: scale(.96); }
   #shelf3d #s3dHint { position: absolute; bottom: calc(86px + env(safe-area-inset-bottom)); left: 0; right: 0;
     text-align: center; font-family: system-ui, sans-serif; font-size: 12.5px; color: #f6eff8;
@@ -4096,12 +4097,12 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #shelf3d #s3dHint.show { opacity: 1; transform: translateY(0); }
   #shelf3d #s3dHint span { background: rgba(20,14,26,.82); border: 1px solid rgba(229,184,106,.4);
     border-radius: 999px; padding: 8px 16px; display: inline-block;
-    box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+    box-shadow: 0 4px 14px rgba(0,0,0,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   #shelf3d .pill.dim { opacity: .45; }
   /* confirm dialog */
   #shelf3d #s3dConfirmOv { position: absolute; inset: 0; z-index: 30; display: none;
     align-items: center; justify-content: center; background: rgba(8,5,12,.6);
-    backdrop-filter: blur(3px); padding: 24px; }
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); padding: 24px; }
   #shelf3d #s3dConfirmOv.show { display: flex; }
   #shelf3d #s3dConfirmOv .box { background: rgba(26,19,34,.97); border: 1px solid rgba(229,184,106,.5);
     border-radius: 16px; padding: 20px; max-width: 320px; text-align: center;
@@ -4116,7 +4117,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   #shelf3d #s3dInvBtn { position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 6;
     width: 58px; height: 58px; border-radius: 50%; border: 1px solid rgba(229,184,106,.55);
     background: rgba(32,24,40,.92); color: #e5b86a; font-size: 24px; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0,0,0,.5); backdrop-filter: blur(6px); }
+    box-shadow: 0 4px 16px rgba(0,0,0,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   #shelf3d #s3dInvBtn:active { transform: scale(.93); }
   #shelf3d #s3dInvPanel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; max-height: 62%;
     background: rgba(18,13,24,.97); border-top: 1px solid rgba(229,184,106,.35);
