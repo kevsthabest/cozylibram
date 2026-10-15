@@ -186,5 +186,104 @@ const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js precaches 238-book-candle.js', swSrc.indexOf('238-book-candle.js') !== -1);
 ok('spec doc committed in repo', fs.existsSync(path.join(ROOT, 'docs/book-candle-spec.md')));
 
+// ---------- cover tint (v567): wax colour follows the book's cover ----------
+// The tint reads ONLY the spine sampler's cache (spicyshelves.spinecolors,
+// global spineColorCache) with the same validity guard the 3D spines use
+// (entry's cover must equal the book's current cover). No cache -> the
+// house default wax. Scent derivation must not notice the tint at all.
+function lumOf(hex) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+function makeCtx(rec) {
+  const grad = kind => {
+    const g = { kind, stops: [], addColorStop(s, c) { this.stops.push([s, c]); } };
+    rec.gradients.push(g); return g;
+  };
+  return {
+    textAlign: '', fillStyle: '', strokeStyle: '', lineWidth: 1, font: '',
+    createRadialGradient: () => grad('radial'),
+    createLinearGradient: () => grad('linear'),
+    fillRect() {}, save() {}, restore() {}, clip() {}, fill() {}, stroke() {},
+    beginPath() {}, rect() {}, moveTo() {}, lineTo() {}, arc() {}, ellipse() {},
+    fillText() {},
+  };
+}
+const cacheStub = { bkT: { hex: '#7a1f1f', cover: 'https://x/cover-a.jpg' } };
+const ccRec = { gradients: [] };
+const tintSbx = loadJS('js/238-book-candle.js', {
+  esc: s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+  icon: () => '<svg></svg>',
+  bookGenres: b => (b.categories || []).slice(),
+  tropeResolveId: tropeResolveId,
+  spineColorCache: cacheStub,
+  cardCanvas: () => ({ cv: {}, x: makeCtx(ccRec), W: 1080, H: 1920, C: { ink: '#f6eff8', mut: '#b8a8c8', gold: '#e5b86a' } }),
+});
+const TM = tintSbx.module.exports;
+ok('candleTint exported', !!TM && typeof TM.candleTint === 'function');
+const tintBook = {
+  id: 'bkT', title: 'Tinted', authors: ['C. Writer'], cover: 'https://x/cover-a.jpg',
+  tropes: ['Enemies to Lovers', 'Small Town'], tropesAI: [], categories: ['Fantasy'], moods: [],
+};
+const tint = TM.candleTint(tintBook);
+ok('tint: derived from cached palette', !!tint);
+ok('tint: hex shape', !!tint && /^#[0-9a-f]{6}$/.test(tint.hex) && /^#[0-9a-f]{6}$/.test(tint.top) && /^#[0-9a-f]{6}$/.test(tint.base));
+ok('tint: top lighter than base', !!tint && lumOf(tint.top) > lumOf(tint.base));
+ok('tint: hue follows the cover (red-dominant stays red-dominant)',
+  !!tint && parseInt(tint.hex.slice(1, 3), 16) > parseInt(tint.hex.slice(5, 7), 16));
+// determinism with a palette present
+let tdet = true;
+const tFirst = JSON.stringify(TM.candleTint(tintBook));
+for (let i = 0; i < 50; i++) if (JSON.stringify(TM.candleTint(tintBook)) !== tFirst) tdet = false;
+ok('tint: deterministic across 50 calls', tdet);
+const th1 = TM.candleCardHTML(tintBook), th2 = TM.candleCardHTML(tintBook);
+eq('tint: card HTML identical across renders', th1, th2);
+ok('tint: modal wax carries the tint gradient',
+  th1.indexOf('candle-fig-wax') !== -1 && th1.indexOf(tint.top) !== -1 && th1.indexOf(tint.base) !== -1);
+ok('tint: no text sits on the tint (name carries no background)',
+  !/candle-name[^>]*style=/.test(th1));
+// scent output identical with and without a palette/cover
+const scentFields = { id: 'bkT', title: 'Tinted', authors: ['C. Writer'], tropes: tintBook.tropes, tropesAI: [], categories: ['Fantasy'], moods: [] };
+eq('tint: scent derivation unchanged by palette',
+  JSON.stringify(TM.bookCandle(tintBook)), JSON.stringify(bookCandle(scentFields)));
+// stale cache entry (cover changed since sampling) -> no tint
+eq('tint: cache for a previous cover is ignored',
+  TM.candleTint({ ...tintBook, cover: 'https://x/cover-b.jpg' }), null);
+// ...and once the sampler caches the new cover, the tint follows the edition
+cacheStub.bkT = { hex: '#1f3a7a', cover: 'https://x/cover-b.jpg' };
+const tintB = TM.candleTint({ ...tintBook, cover: 'https://x/cover-b.jpg' });
+ok('tint: follows the new cover once sampled', !!tintB && tintB.hex !== tint.hex &&
+  parseInt(tintB.hex.slice(5, 7), 16) > parseInt(tintB.hex.slice(1, 3), 16));
+cacheStub.bkT = { hex: '#7a1f1f', cover: 'https://x/cover-a.jpg' };
+// absent palette shapes -> null (house default takes over)
+eq('tint: unknown book -> null', TM.candleTint({ id: 'nope', cover: 'https://x/c.jpg' }), null);
+eq('tint: book without cover -> null', TM.candleTint({ id: 'bkT' }), null);
+cacheStub.bkBad = { hex: 'not-a-color', cover: 'https://x/bad.jpg' };
+eq('tint: malformed cached hex -> null', TM.candleTint({ id: 'bkBad', cover: 'https://x/bad.jpg' }), null);
+// no palette at all (main sandbox has no cache) -> house default wax in the card
+ok('tint: default wax gradient in modal card when no palette',
+  fullHTML.indexOf('candle-fig-wax') !== -1 && fullHTML.indexOf('#e5b86a') !== -1 && fullHTML.indexOf('#9a6224') !== -1);
+// extreme luminance palettes are pulled into the wax band
+cacheStub.bkW = { hex: '#f7f3ea', cover: 'https://x/w.jpg' };
+const tintW = TM.candleTint({ id: 'bkW', cover: 'https://x/w.jpg' });
+ok('tint: near-white cover pulled down (base not washed out)', !!tintW && lumOf(tintW.base) <= 0.5);
+cacheStub.bkK = { hex: '#07070a', cover: 'https://x/k.jpg' };
+const tintK = TM.candleTint({ id: 'bkK', cover: 'https://x/k.jpg' });
+ok('tint: near-black cover lifted (top still reads as wax)', !!tintK && lumOf(tintK.top) >= 0.25);
+// share card: wax gradient takes the tint; flame stays the constant gold
+ccRec.gradients = [];
+TM.drawCandleCard(tintBook);
+const waxGrad = ccRec.gradients.find(g => g.kind === 'linear');
+ok('share: wax gradient uses the tint stops',
+  !!waxGrad && JSON.stringify(waxGrad.stops) === JSON.stringify([[0, tint.top], [1, tint.base]]));
+const flameGrad = ccRec.gradients.filter(g => g.kind === 'radial').pop();
+ok('share: flame gradient unchanged (constant)',
+  !!flameGrad && flameGrad.stops.some(s => s[1] === 'rgba(255,244,204,.95)'));
+ccRec.gradients = [];
+TM.drawCandleCard({ id: 'nope', title: 'Plain', authors: [], cover: 'https://x/c.jpg', tropes: [], tropesAI: [], categories: [], moods: [] });
+const waxDef = ccRec.gradients.find(g => g.kind === 'linear');
+ok('share: no palette -> house default wax stops',
+  !!waxDef && JSON.stringify(waxDef.stops) === JSON.stringify([[0, '#e5b86a'], [1, '#9a6224']]));
+
 console.log('\n' + _pass + ' passed, ' + _fail + ' failed');
 process.exit(_fail ? 1 : 0);

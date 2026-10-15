@@ -17,6 +17,17 @@
    The name comes from ONE swappable function (candleName) with three
    patterns; CANDLE_NAME_PATTERN picks the shipped one (the User's veto
    pick at presentation — the three patterns are listed in the PR).
+
+   Cover tint (v567): the wax colour follows the book's cover, read from
+   the spine sampler's cache (spineColorCache, js/120 — the same values
+   the 3D spines use), with the same validity guard as js/217's
+   shelf3dCoverHex: the cached entry's cover must equal the book's
+   CURRENT cover, so the tint follows the owned edition and a stale
+   sample never paints. Cache-only — this module never samples a cover
+   itself. No entry yet (no cover, unsampled, sampler failure) -> the
+   house default wax. The tint is derived at render from the cache, so
+   for a given book + cover it is identical on every render and device.
+   Scent derivation never reads the tint.
 */
 (function () {
 'use strict';
@@ -280,6 +291,66 @@ function candleName(candle, pattern) {
   return heads.length ? heads.join(' & ') : CANDLE_THIN_NAME;
 }
 
+/* ---------- cover tint: the wax follows the book's cover ----------
+   House default wax gradient (the pre-tint colours) — used whenever
+   the sampler has no palette for the book's current cover. */
+var CANDLE_WAX_DEFAULT = ['#e5b86a', '#9a6224'];
+function _candleRgb(hex) {
+  return [1, 3, 5].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
+}
+function _candleHex(rgb) {
+  return '#' + rgb.map(function (v) { return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'); }).join('');
+}
+function _candleLum(rgb) {
+  return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+}
+function _candleMix(rgb, target, k) {
+  return rgb.map(function (v, i) { return v + (target[i] - v) * k; });
+}
+/* The sampler's cached dominant hex for the book's CURRENT cover, or
+   null. Mirrors js/217 shelf3dCoverHex's guard exactly: cache entry
+   must exist, its cover must equal b.cover (a cover change invalidates
+   the tint until the new cover is sampled), hex must be #rrggbb. */
+function candleCoverHex(b) {
+  try {
+    if (!b || !b.cover || typeof spineColorCache === 'undefined') return null;
+    var c = spineColorCache[b.id];
+    return (c && c.cover === b.cover && /^#[0-9a-f]{6}$/i.test(c.hex || '')) ? String(c.hex).toLowerCase() : null;
+  } catch (e) { return null; }
+}
+/* Pull a cover colour into the wax band: luminance clamped to
+   [0.18, 0.42] — the cap mirrors shelf3dSpineTone's light-cover
+   pull-down; the floor lifts near-black covers by mixing toward white.
+   Inside the band the colour passes through untouched, hue preserved. */
+function candleTone(hex) {
+  var rgb = _candleRgb(hex);
+  var lum = _candleLum(rgb);
+  if (lum > 0.42) { var k = 0.42 / lum; rgb = rgb.map(function (v) { return v * k; }); }
+  else if (lum < 0.18) { rgb = _candleMix(rgb, [255, 255, 255], (0.18 - lum) / (1 - lum)); }
+  return rgb;
+}
+/* The candle's colours for a book: { hex, top, base } (the wax gradient
+   stops), or null when the book has no sampled palette yet. Pure in
+   (book, cache): same inputs -> same tint, every render, every device.
+   Legibility guard is structural: the tint only ever paints the wax —
+   on both surfaces every label sits on the card background, never on
+   the wax — and the band clamp keeps the wax a mid-tone, so the jar
+   outline and flame read against it at either extreme. */
+function candleTint(b) {
+  var hex = candleCoverHex(b);
+  if (!hex) return null;
+  var tone = candleTone(hex);
+  return {
+    hex: _candleHex(tone),
+    top: _candleHex(_candleMix(tone, [255, 255, 255], 0.38)),
+    base: _candleHex(_candleMix(tone, [0, 0, 0], 0.32)),
+  };
+}
+function candleWaxStops(b) {
+  var t = candleTint(b);
+  return t ? [t.top, t.base] : CANDLE_WAX_DEFAULT;
+}
+
 /* ---------- the card (sync, mirrors Book Portrait) ---------- */
 function noteRowHTML(label, layer) {
   return '<div class="portrait-sec"><div class="portrait-label">' + label + '</div>' +
@@ -289,11 +360,14 @@ function noteRowHTML(label, layer) {
 function candleCardHTML(b) {
   if (!b) return '';
   var c = bookCandle(b);
+  var stops = candleWaxStops(b);
   var html =
     '<div class="candle-card" id="candleCard" data-book="' + esc(b.id || '') + '">' +
     '<div class="portrait-head"><span style="width:22px;height:22px;color:var(--accent);flex-shrink:0;vertical-align:middle;margin-right:10px;display:inline-flex;align-items:center">' + icon('flame') + '</span>' +
     '<span class="serif portrait-title">Your Book as a Candle</span>' +
     '<button class="taplink candle-share" data-candle="share" data-book="' + esc(b.id || '') + '">Share</button></div>' +
+    '<div class="candle-fig" aria-hidden="true"><span class="candle-fig-flame"></span>' +
+    '<span class="candle-fig-wax" style="background:linear-gradient(180deg,' + stops[0] + ',' + stops[1] + ')"></span></div>' +
     '<div class="candle-name serif">&ldquo;' + esc(c.name) + '&rdquo;</div>';
   if (c.notes.top) html += noteRowHTML('Top notes', c.notes.top);
   if (c.notes.heart) html += noteRowHTML('Heart notes', c.notes.heart);
@@ -343,8 +417,9 @@ function drawCandleCard(b) {
   x.fillStyle = 'rgba(255,255,255,.06)'; x.fill();
   x.strokeStyle = 'rgba(246,239,248,.4)'; x.lineWidth = 3; x.stroke();
   x.clip();
+  var stops = candleWaxStops(b);
   var wax = x.createLinearGradient(0, jarY + 110, 0, jarY + jarH);
-  wax.addColorStop(0, '#e5b86a'); wax.addColorStop(1, '#9a6224');
+  wax.addColorStop(0, stops[0]); wax.addColorStop(1, stops[1]);
   x.fillStyle = wax;
   x.fillRect(jarX, jarY + 110, jarW, jarH - 110);
   x.restore();
@@ -421,6 +496,7 @@ if (typeof document !== 'undefined') {
 if (typeof window !== 'undefined') {
   window.bookCandle = bookCandle;
   window.candleName = candleName;
+  window.candleTint = candleTint;
   window.candleCardHTML = candleCardHTML;
   window.drawCandleCard = drawCandleCard;
   window.shareCandleCard = shareCandleCard;
@@ -428,7 +504,7 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined') {
   module.exports = {
     bookCandle: bookCandle, candleName: candleName, candleCardHTML: candleCardHTML,
-    drawCandleCard: drawCandleCard,
+    drawCandleCard: drawCandleCard, candleTint: candleTint,
     CANDLE_TABLE: CANDLE_TABLE, CANDLE_TABLE_VERSION: CANDLE_TABLE_VERSION,
     CANDLE_NAME_PATTERN: CANDLE_NAME_PATTERN,
   };
