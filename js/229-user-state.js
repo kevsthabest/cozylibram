@@ -204,7 +204,10 @@ function applyRoamedViewState() {
 // pinned milestone id, warning-style { _at, value }. v537 adds a
 // seventh, prefs (column prefs_state): the analytics opt-out and the
 // reading-log remove-entry visibility keys, release-style
-// { _at, values }. See their blocks below.
+// { _at, values }. v575 adds a ninth, reco (column reco_state): the
+// Discover dismissal set, warning-style { _at, value } — but UNION-
+// merged instead of last-writer-wins (see the reco block below). See
+// their blocks below.
 /* ---------------- roaming privacy state (v524) ---------------- */
 // The fifth section: age band + content shield (js/230-privacy.js), in
 // its own column (privacy_state, supabase/migrations/
@@ -360,8 +363,58 @@ function userStateApplyFinale(payload) {
   } catch (e) {}
 }
 
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state', prefs: 'prefs_state', finale: 'finale_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone', 'prefs', 'finale'];
+/* ---------------- roaming reco dismissals (v575) ---------------- */
+// The ninth section: the Discover dismissal set ('hc:<id>' keys,
+// js/198), in its own column (reco_state, supabase/migrations/
+// v575_user_state_reco.sql), payload { _at, value } — value is the key
+// array as-is, warning/upnext-style. The dismissals were the one piece
+// of user data with no cloud copy (IDB kv + a localStorage fallback,
+// per-device); per the standing rule that all user details roam, they
+// sync now. They are NOT settings keys (the v518 list stays frozen)
+// and never touch profiles (user_state is own-rows-only).
+//
+// MERGE SEMANTICS — this section is not last-writer-wins. Dismissals
+// are append-only, so the merge is a UNION of both sides' key sets,
+// capped to the newest 200 after merging (js/198's recoUnionDismissals,
+// matching recoDismiss's slice(-200)). The union runs in both
+// directions: apply (pull) merges the server set into the local store,
+// and the push read-merges the current server value before upserting,
+// so a device pushing an older local set cannot drop dismissals
+// another device already synced. When a pull-merge leaves the local
+// set holding keys the server payload lacked, apply reports it and
+// the section's bookkeeping hash is left null — the next push owes
+// the server the union.
+//
+// The local store stays the working copy: js/198 reads/writes it
+// exactly as before (offline, instant). Collect reads js/198's
+// in-memory mirror (or its localStorage fallback before the set has
+// been loaded); pull and push preload the set through
+// recoDismissedSet() first, so a seed push always carries the current
+// local set, never an empty array.
+function userStateCollectReco() {
+  try {
+    if (typeof recoDismissedKeys === 'function') return { value: recoDismissedKeys() };
+  } catch (e) {}
+  return { value: [] };
+}
+// Returns true when the merged local set holds keys the payload did
+// not (see the merge note above); undefined like the other applies
+// when there is nothing to report.
+function userStateApplyReco(payload) {
+  try {
+    if (typeof recoMergeRoamedDismissals !== 'function') return undefined;
+    const keys = (payload && Array.isArray(payload.value)) ? payload.value : [];
+    return recoMergeRoamedDismissals(keys) === true;
+  } catch (e) { return undefined; }
+}
+// Load the dismissal set into js/198's mirror from the working store,
+// so collect sees the true local set (IDB is async; collect is not).
+async function userStatePreloadReco() {
+  try { if (typeof recoDismissedSet === 'function') await recoDismissedSet(); } catch (e) {}
+}
+
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state', prefs: 'prefs_state', finale: 'finale_state', reco: 'reco_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone', 'prefs', 'finale', 'reco'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -559,6 +612,7 @@ const USER_STATE_SECTION_FNS = {
   milestone: { collect: userStateCollectMilestonePin, apply: userStateApplyMilestonePin },
   prefs: { collect: userStateCollectPrefs, apply: userStateApplyPrefs },
   finale: { collect: userStateCollectFinale, apply: userStateApplyFinale },
+  reco: { collect: userStateCollectReco, apply: userStateApplyReco },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
@@ -579,8 +633,9 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state,finale_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state,finale_state,reco_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
+    await userStatePreloadReco(); // collect/apply for reco read the loaded set
     const meta = userStateMeta(uid);
     let changed = false;
     for (const key of USER_STATE_SECTION_ORDER) {
@@ -589,9 +644,12 @@ async function userStatePullSections(deviceOwner) {
       if (userStateSectionPresent(remote)) {
         const remoteAt = Number(remote._at);
         if (!sm || remoteAt > sm.at) {
-          USER_STATE_SECTION_FNS[key].apply(remote);
+          const applyOwesPush = USER_STATE_SECTION_FNS[key].apply(remote) === true;
           const secPatch = {};
-          secPatch[key] = { at: remoteAt, hash: userStateHash(USER_STATE_SECTION_FNS[key].collect()) };
+          // An apply that merged local-only state in (reco's union)
+          // leaves the hash null: the next push owes the server the
+          // merged set so it propagates.
+          secPatch[key] = { at: remoteAt, hash: applyOwesPush ? null : userStateHash(USER_STATE_SECTION_FNS[key].collect()) };
           userStatePatchMeta(uid, { sections: secPatch });
           userStateClaimOwner(uid);
           changed = true;
@@ -701,6 +759,7 @@ async function userStatePush() {
       await userStatePull();
       meta = userStateMeta(uid);
     }
+    await userStatePreloadReco(); // a seed push carries the true local set
     const values = userStateCollect();
     const hash = userStateHash(values);
     const settingsDirty = !(meta && meta.hash === hash);
@@ -734,18 +793,47 @@ async function userStatePush() {
       // so a settings push above still counts, and the section
       // bookkeeping stays un-advanced so the next cycle retries.
       try {
-        const row = { user_id: uid, updated_at: new Date(at).toISOString() };
-        for (const key of dirtySections) {
-          row[USER_STATE_SECTION_COLS[key]] = Object.assign({ _at: at }, sectionPayloads[key]);
+        let recoReadFailed = false;
+        if (dirtySections.indexOf('reco') !== -1) {
+          // Read-merge-write (v575): union the server's current reco set
+          // into the payload — and adopt it locally — before upserting,
+          // so this push can never drop dismissals another device
+          // synced after this device last pulled. If the re-read itself
+          // errors, the server's current set is unknown: skip the reco
+          // column in this upsert entirely and leave its bookkeeping
+          // un-advanced (the same failure pattern as a failed section
+          // upsert below), so the next cycle retries the
+          // read-merge-write instead of overwriting the server copy
+          // with the local-only set.
+          try {
+            const cur = await sb.from('user_state').select('reco_state').eq('user_id', uid).maybeSingle();
+            if (cur.error) throw cur.error;
+            const remote = cur.data ? cur.data.reco_state : null;
+            if (userStateSectionPresent(remote) && typeof recoUnionDismissals === 'function') {
+              const merged = recoUnionDismissals(sectionPayloads.reco.value, remote.value);
+              sectionPayloads.reco = { value: merged };
+              if (typeof recoMergeRoamedDismissals === 'function') recoMergeRoamedDismissals(merged);
+            }
+          } catch (e) {
+            recoReadFailed = true;
+            try { AppLog.warn('sync', 'roaming reco push skipped (server copy unreadable); will retry next cycle'); } catch (_) {}
+          }
         }
-        const { error } = await sb.from('user_state').upsert(row, { onConflict: 'user_id' });
-        if (error) throw error;
-        const secPatch = {};
-        for (const key of dirtySections) secPatch[key] = { at: at, hash: userStateHash(sectionPayloads[key]) };
-        userStatePatchMeta(uid, { sections: secPatch });
-        userStateClaimOwner(uid);
-        AppLog.info('sync', 'roaming sections pushed: ' + dirtySections.join(', '));
-        pushed = true;
+        const pushSections = recoReadFailed ? dirtySections.filter(k => k !== 'reco') : dirtySections;
+        if (pushSections.length) {
+          const row = { user_id: uid, updated_at: new Date(at).toISOString() };
+          for (const key of pushSections) {
+            row[USER_STATE_SECTION_COLS[key]] = Object.assign({ _at: at }, sectionPayloads[key]);
+          }
+          const { error } = await sb.from('user_state').upsert(row, { onConflict: 'user_id' });
+          if (error) throw error;
+          const secPatch = {};
+          for (const key of pushSections) secPatch[key] = { at: at, hash: userStateHash(sectionPayloads[key]) };
+          userStatePatchMeta(uid, { sections: secPatch });
+          userStateClaimOwner(uid);
+          AppLog.info('sync', 'roaming sections pushed: ' + pushSections.join(', '));
+          pushed = true;
+        }
       } catch (e) {
         try { AppLog.warn('sync', 'roaming sections push failed: ' + ((e && e.message) || e)); } catch (_) {}
       }

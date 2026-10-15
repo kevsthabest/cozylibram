@@ -992,22 +992,34 @@ function recoSharedTropes(text, lovedIds) {
 }
 
 /* Dismissals: 'hc:<id>' keys in the IDB kv store, localStorage fallback
-   (same split-brain rule as the release dismissals, per-device). */
+   (same split-brain rule as the release dismissals). The local store is
+   the working copy: dismissing works offline and instantly against it.
+   Since v575 the set also roams through the user_state reco_state
+   section (js/229-user-state.js), union-merged on pull and on push —
+   dismissals are append-only, so a dismissal made on any signed-in
+   device propagates and none is lost to another device's older set. */
 const RECO_DISMISS_KEY = 'reco_dismissed';
+const RECO_DISMISS_CAP = 200;
+let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
+
 async function recoDismissedSet() {
   try {
     if (typeof currentDb !== 'undefined' && currentDb) {
       const v = await idbKvGet(currentDb, RECO_DISMISS_KEY);
-      if (Array.isArray(v)) return new Set(v);
+      if (Array.isArray(v)) { recoDismissedMirror = v.slice(); return new Set(v); }
     }
   } catch (e) {}
-  try { return new Set(JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]')); }
-  catch (e) { return new Set(); }
+  try {
+    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
+    recoDismissedMirror = Array.isArray(arr) ? arr.slice() : [];
+  } catch (e) { recoDismissedMirror = []; }
+  return new Set(recoDismissedMirror);
 }
-async function recoDismiss(key) {
-  const s = await recoDismissedSet();
-  s.add(key);
-  const arr = Array.from(s).slice(-200);
+
+// The one write path for the dismissal set (IDB kv primary, localStorage
+// fallback) — recoDismiss and the roaming merge both persist through it,
+// so an adopted dismissal lands exactly where a local one does.
+async function recoPersistDismissals(arr) {
   let saved = false;
   try {
     if (typeof currentDb !== 'undefined' && currentDb) {
@@ -1018,6 +1030,53 @@ async function recoDismiss(key) {
   if (!saved) {
     try { localStorage.setItem('spicyshelves.' + RECO_DISMISS_KEY, JSON.stringify(arr)); } catch (e) {}
   }
+}
+
+async function recoDismiss(key) {
+  const s = await recoDismissedSet();
+  s.add(key);
+  const arr = Array.from(s).slice(-RECO_DISMISS_CAP);
+  recoDismissedMirror = arr.slice();
+  await recoPersistDismissals(arr);
+}
+
+// Union of two dismissal key lists, deduped in first-seen order and
+// capped to the newest RECO_DISMISS_CAP (recoDismiss's slice(-200)
+// semantics) — the roaming merge operation.
+function recoUnionDismissals(a, b) {
+  const seen = new Set();
+  const out = [];
+  for (const list of [a, b]) {
+    if (!Array.isArray(list)) continue;
+    for (const k of list) {
+      if (typeof k === 'string' && k && !seen.has(k)) { seen.add(k); out.push(k); }
+    }
+  }
+  return out.slice(-RECO_DISMISS_CAP);
+}
+
+// Synchronous snapshot of the local dismissal keys for js/229's
+// collect: the mirror when the set has been loaded this session,
+// otherwise the localStorage fallback copy.
+function recoDismissedKeys() {
+  if (Array.isArray(recoDismissedMirror)) return recoDismissedMirror.slice();
+  try {
+    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
+    return Array.isArray(arr) ? arr.filter(k => typeof k === 'string' && k) : [];
+  } catch (e) { return []; }
+}
+
+// Merge a roamed dismissal set into the local store (js/229's apply and
+// its push read-merge): union with the local keys, persisted through
+// the same write path as a local dismissal. Returns true when the
+// merged local set holds keys the incoming set did not — the caller
+// then owes the server a push so the union propagates.
+function recoMergeRoamedDismissals(keys) {
+  const merged = recoUnionDismissals(recoDismissedKeys(), keys);
+  recoDismissedMirror = merged.slice();
+  recoPersistDismissals(merged); // fire-and-forget, like the other roaming applies
+  const incoming = new Set(Array.isArray(keys) ? keys : []);
+  return merged.some(k => !incoming.has(k));
 }
 
 // Work embeddings for her read books. RLS: "works: read for signed-in"
