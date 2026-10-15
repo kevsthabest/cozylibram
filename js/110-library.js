@@ -11,6 +11,7 @@ function filteredBooks() {
     if (ownFilter === 'owned' && b.owned !== 'owned') return false;
     if (ownFilter === 'tobuy' && b.owned !== 'tobuy') return false;
     if (ownFilter === 'borrowed' && b.owned !== 'borrowed') return false;
+    if (ownFilter === 'subscription' && b.owned !== 'subscription') return false; // v563
     if (!q) return true;
     return (b.title + ' ' + b.authors.join(' ') + ' ' + b.tropes.join(' '))
       .toLowerCase().includes(q);

@@ -841,7 +841,15 @@ function renderDetailModal(b, viaBook) {
     owned:    { label: 'Owned',    ic: 'owned' },
     tobuy:    { label: 'To buy',   ic: 'tobuy' },
     borrowed: { label: 'Borrowed', ic: 'borrowed' },
+    // v563 (Decision): subscription access (KU / Kobo Plus) — held,
+    // not owned; its own facet value, never a tobuy in disguise.
+    subscription: { label: 'Subscription', ic: 'subscription' },
   };
+  // v563: the ownership row's label COMPOSES facet + format —
+  // "Owned · Ebook", "Subscription · Ebook", "Borrowed · Physical" —
+  // with the format segment omitted when the format is unset.
+  const ownedLabel = (d) => (OWNED_META[d.owned] || OWNED_META.tobuy).label +
+    (FORMAT_META[d.format] ? ' · ' + FORMAT_META[d.format].label : '');
   // v182: the description appears twice per the mockup — in the hero
   // (desktop only) and under "About this book" on the Details tab.
   const descHTML = (idpfx, cls) =>
@@ -867,7 +875,14 @@ function renderDetailModal(b, viaBook) {
   else if (draft.owned === false) draft.owned = 'tobuy';
   // v453: ensure a valid ownership value — undefined/null would render with
   // no active option and could clobber b.owned on save.
-  if (!['owned', 'tobuy', 'borrowed'].includes(draft.owned)) draft.owned = 'tobuy';
+  // v563: 'subscription' joins the list DELIBERATELY — without it the
+  // sanitizer silently coerced every subscription book to 'tobuy'.
+  if (!['owned', 'tobuy', 'borrowed', 'subscription'].includes(draft.owned)) draft.owned = 'tobuy';
+  // v563: same discipline for the format pair — an invalid draft value
+  // unsets (never guesses), and a want naming the current format is not
+  // a want. The pickers below are the only draft writers after this.
+  if (!BOOK_FORMATS.includes(draft.format)) draft.format = '';
+  if (!BOOK_FORMATS.includes(draft.wantFormat) || draft.wantFormat === draft.format) draft.wantFormat = '';
   // v182: option buttons for the tappable shelf/ownership rows (needs the draft).
   const statusOpts = Object.keys(STATUS_META).map(s =>
     '<button data-s="' + s + '" class="' + (draft.status === s ? 'active' : '') + '">' +
@@ -875,6 +890,10 @@ function renderDetailModal(b, viaBook) {
   const ownedOpts = Object.keys(OWNED_META).map(o =>
     '<button data-o="' + o + '" class="' + (draft.owned === o ? 'active' : '') + '">' +
     icon(OWNED_META[o].ic) + ' ' + OWNED_META[o].label + '</button>').join('');
+  // v563: format options — the five bindings plus an explicit Not set.
+  const formatOpts = [''].concat(BOOK_FORMATS).map(f =>
+    '<button data-f="' + f + '" class="' + ((draft.format || '') === f ? 'active' : '') + '">' +
+    (f ? icon(FORMAT_META[f].ic) + ' ' + FORMAT_META[f].label : 'Not set') + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
   // v313: work-level spice baseline (pipeline-detected or manual override).
@@ -1102,13 +1121,23 @@ function renderDetailModal(b, viaBook) {
     // v405 (M2): Ownership collapses into an accordion — secondary section,
     // keeps Details/Your rating/Shelf-Status expanded per the design review.
     '<details class="m-collapsible"><summary><span>' + icon('covers') + ' Ownership' +
-    ' <span class="note-inline">· ' + esc((OWNED_META[draft.owned] || OWNED_META.tobuy).label) + '</span>' +
+    ' <span class="note-inline" id="f-owned-sum">· ' + esc(ownedLabel(draft)) + '</span>' +
     '</span></summary>' +
     '<div class="field"><label>Ownership</label>' +
     '<div class="mselect" id="f-owned">' +
     '<button class="mrow" data-mrow="owned"><span class="mrow-ic" id="f-owned-ic">' + icon((OWNED_META[draft.owned] || OWNED_META.tobuy).ic) + '</span>' +
-    '<span class="mrow-val" id="f-owned-val">' + (OWNED_META[draft.owned] || OWNED_META.tobuy).label + '</span><span class="mrow-chev">›</span></button>' +
-    '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div></details>' +
+    '<span class="mrow-val" id="f-owned-val">' + esc(ownedLabel(draft)) + '</span><span class="mrow-chev">›</span></button>' +
+    '<div class="mrow-opts" hidden>' + ownedOpts + '</div></div></div>' +
+    // v563: format — its own picker beside ownership, in the same
+    // section; and the trophy want ("want another format") below it.
+    '<div class="field"><label>Format</label>' +
+    '<div class="mselect" id="f-format">' +
+    '<button class="mrow" data-mrow="format"><span class="mrow-ic" id="f-format-ic">' + icon(FORMAT_META[draft.format] ? FORMAT_META[draft.format].ic : 'help') + '</span>' +
+    '<span class="mrow-val" id="f-format-val">' + (FORMAT_META[draft.format] ? FORMAT_META[draft.format].label : 'Not set') + '</span><span class="mrow-chev">›</span></button>' +
+    '<div class="mrow-opts" hidden>' + formatOpts + '</div></div></div>' +
+    '<div class="field" id="f-wantwrap"><label>Want another format</label>' +
+    '<div class="want-opts" id="f-want-opts"></div>' +
+    '<p class="note" id="f-want-note" style="margin:6px 0 0"></p></div></details>' +
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     // v559: membership legibility — a TBR book marked To buy IS on the
     // Wishlist (derived, js/000); say so where the reader is looking.
@@ -1451,11 +1480,52 @@ function renderDetailModal(b, viaBook) {
     const m = OWNED_META[draft.owned] || OWNED_META.tobuy;
     const v = document.getElementById('f-owned-val');
     const ic = document.getElementById('f-owned-ic');
-    if (v) v.textContent = m.label;
+    const sum = document.getElementById('f-owned-sum');
+    // v563: the row label and the section summary both show the
+    // composed facet · format label.
+    if (v) v.textContent = ownedLabel(draft);
+    if (sum) sum.textContent = '· ' + ownedLabel(draft);
     if (ic) ic.innerHTML = icon(m.ic);
     paintWishNote();
     paintPrimary(); // v559: the acquisition primary follows the facet too
   };
+  // v563: format + trophy-want painters. The want pick offers every
+  // format EXCEPT the record's current one (want != format is refused
+  // by construction — the chip is never rendered), and tapping the
+  // active chip toggles the want off. With no format set there is
+  // nothing to want a second of, so the pick shows a hint instead.
+  const paintWantRow = () => {
+    const box = document.getElementById('f-want-opts');
+    const note = document.getElementById('f-want-note');
+    if (!box) return;
+    if (!FORMAT_META[draft.format]) {
+      box.innerHTML = '';
+      if (note) note.textContent = 'Set a format first — a trophy want is a second copy of a book you already have in one format.';
+      return;
+    }
+    box.innerHTML = BOOK_FORMATS.filter(f => f !== draft.format).map(f =>
+      '<button data-w="' + f + '" class="' + (draft.wantFormat === f ? 'active' : '') + '">' +
+      icon(FORMAT_META[f].ic) + ' ' + FORMAT_META[f].label + '</button>').join('');
+    box.querySelectorAll('[data-w]').forEach(btn => btn.addEventListener('click', () => {
+      draft.wantFormat = draft.wantFormat === btn.dataset.w ? '' : btn.dataset.w;
+      paintWantRow();
+    }));
+    if (note) note.textContent = draft.wantFormat
+      ? 'Trophy want — this book sits in your Wishlist\u2019s Trophy wants until you mark it Got it. You have the ' + FORMAT_META[draft.format].label + ' copy.'
+      : 'Tap a format to add this book to your Wishlist\u2019s Trophy wants — a second copy you\u2019re hunting.';
+  };
+  const paintFormatRow = () => {
+    const fm = FORMAT_META[draft.format];
+    const v = document.getElementById('f-format-val');
+    const ic = document.getElementById('f-format-ic');
+    if (v) v.textContent = fm ? fm.label : 'Not set';
+    if (ic) ic.innerHTML = icon(fm ? fm.ic : 'help');
+    root.querySelectorAll('#f-format [data-f]').forEach(x =>
+      x.classList.toggle('active', x.dataset.f === (draft.format || '')));
+    paintWantRow();
+    paintOwnedRow(); // the composed label carries the format segment
+  };
+  paintWantRow();
   root.querySelectorAll('[data-mrow]').forEach(t => t.addEventListener('click', (e) => {
     e.stopPropagation();
     const opts = t.parentElement.querySelector('.mrow-opts');
@@ -1549,6 +1619,20 @@ function renderDetailModal(b, viaBook) {
       if (chev) chev.textContent = '›';
       const bw = document.getElementById('m-buywrap');
       if (bw) bw.style.display = draft.owned === 'owned' ? 'none' : '';
+    }));
+
+  // v563: format picker — same pick/collapse shape as ownership.
+  root.querySelectorAll('#f-format [data-f]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      draft.format = btn.dataset.f;
+      // v563: the want != format guard, enforced at pick time — taking
+      // the wanted format as the primary resolves the want.
+      if (draft.wantFormat && draft.wantFormat === draft.format) draft.wantFormat = '';
+      paintFormatRow();
+      const opts = btn.closest('.mrow-opts');
+      if (opts) { opts.hidden = true; }
+      const chev = btn.closest('.mselect').querySelector('.mrow-chev');
+      if (chev) chev.textContent = '›';
     }));
 
   const wirePicker = (sel, key) => {
@@ -1954,9 +2038,16 @@ function renderDetailModal(b, viaBook) {
     // v453: same for owned — if the draft's value is missing/invalid (e.g. the
     // ownership row never rendered its options before Save), keep the book's
     // live value instead of clobbering it with undefined.
-    if (!['owned', 'tobuy', 'borrowed'].includes(draft.owned)) {
-      draft.owned = ['owned', 'tobuy', 'borrowed'].includes(b.owned) ? b.owned : 'tobuy';
+    if (!['owned', 'tobuy', 'borrowed', 'subscription'].includes(draft.owned)) {
+      draft.owned = ['owned', 'tobuy', 'borrowed', 'subscription'].includes(b.owned) ? b.owned : 'tobuy';
     }
+    // v563: same for the format pair — an invalid draft format keeps
+    // the book's live value; a want that names the (possibly just
+    // changed) primary format is not a want and unsets.
+    if (!BOOK_FORMATS.includes(draft.format)) {
+      draft.format = BOOK_FORMATS.includes(b.format) ? b.format : '';
+    }
+    if (!BOOK_FORMATS.includes(draft.wantFormat) || draft.wantFormat === draft.format) draft.wantFormat = '';
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
