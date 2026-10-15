@@ -1238,17 +1238,20 @@ function charLabRender(body, works, chars) {
         esc(b.name) + '</button></p>').join('') +
       '<p class="note" id="ch-merge-msg"></p></div>' : '') +
     (mergedChars.length ? '<div class="ob-card">' +
-      '<h4 class="serif">' + icon('friends') + ' Merged characters (' + mergedChars.length + ')</h4>' +
+      '<h4 class="serif">' + icon('friends') + ' Merged characters</h4>' +
+      // v578 (spec §1): the count line counts RESTORABLE merges only —
+      // the UI never implies a restorable total it can't deliver.
+      '<p class="note">' + mergedChars.filter(c => c.mergeSnapshot).length + ' can be restored</p>' +
       mergedChars.map(c => {
         const w = chars.find(x => x.id === c.duplicateOf);
         return '<p><b>' + esc(c.name) + '</b> <span class="note">merged into <b>' +
           esc(w ? w.name : 'a character no longer in this work') + '</b></span><br>' +
           (c.mergeSnapshot
-            ? '<button class="btn sm" data-chunmerge="' + esc(c.id) + '">Unmerge</button>'
-            : '<span class="note">No merge snapshot — this merge predates reversible merges and cannot be unmerged.</span>') +
+            ? '<span class="note">' + esc(charMergeHistoryLine(c)) + '</span><br>' +
+              '<button class="btn sm" data-chrestore="' + esc(c.id) + '">Review restore…</button>'
+            : '<span class="note">No snapshot — can\'t be restored</span>') +
           '</p>';
-      }).join('') +
-      '<p class="note" id="ch-unmerge-msg"></p></div>' : '') +
+      }).join('') + '</div>' : '') +
     '<p class="note">' +
     '<button class="btn sm' + (!rf ? '' : ' ghost') + '" data-chrole="">All (' + chars.length + ')</button> ' +
     CHAR_ROLES.map(r =>
@@ -1369,25 +1372,11 @@ function charLabRender(body, works, chars) {
     charLabRender(body, works, chars);
   }));
 
-  // v577: Unmerge — restore from the merge snapshot (legacy merges have
-  // no button; charUnmerge refuses them again server-side regardless).
-  body.querySelectorAll('[data-chunmerge]').forEach(b => b.addEventListener('click', async () => {
-    const loserId = b.getAttribute('data-chunmerge');
-    const loser = chars.find(c => c.id === loserId);
-    const winner = loser ? chars.find(c => c.id === loser.duplicateOf) : null;
-    const msg = document.getElementById('ch-unmerge-msg');
-    // v352: in-app confirm
-    if (!await confirmModal('Unmerge "' + (loser ? loser.name : '') + '" from "' +
-        (winner ? winner.name : '') + '"? Relationships repointed by the merge will be restored from the merge snapshot.', { okLabel: 'Unmerge' })) return;
-    b.disabled = true;
-    if (msg) msg.textContent = 'Unmerging…';
-    const err = await charUnmerge(loserId, chars);
-    if (err) {
-      if (msg) msg.textContent = 'Unmerge failed: ' + err;
-      b.disabled = false;
-      return;
-    }
-    charLabRender(body, works, chars);
+  // v578: restore always starts from the preview sheet (spec §1/§2) —
+  // nothing restores from the list itself. Legacy merges have no button;
+  // charUnmerge refuses them again server-side regardless.
+  body.querySelectorAll('[data-chrestore]').forEach(b => b.addEventListener('click', () => {
+    openCharRestoreSheet(b.getAttribute('data-chrestore'), { body, works, chars });
   }));
   document.querySelectorAll('[data-chrole]').forEach(b => b.addEventListener('click', () => {
     charLabRoleFilter = b.getAttribute('data-chrole');
@@ -1452,6 +1441,16 @@ function charLabDetail(chars) {
       : '') +
     '<div id="ch-link-ui"></div>';
   if (c.description) html += '<p>' + esc(c.description) + '</p>';
+
+  // v578 (spec §4): merge history — one line per snapshot-backed merge
+  // into this character. A restored merge's line leaves with it: the
+  // loser is no longer status='merged' and its snapshot is cleared.
+  const mergesIn = chars.filter(x =>
+    x.status === 'merged' && x.duplicateOf === c.id && x.mergeSnapshot);
+  if (mergesIn.length) {
+    html += '<h4 class="serif">Merge history</h4>' + mergesIn.map(l =>
+      '<p class="note">' + esc(charMergeHistoryLine(l)) + '</p>').join('');
+  }
 
   // Outgoing relationships
   const types = Object.keys(byType).sort();
@@ -1774,4 +1773,370 @@ async function charUnmerge(loserId, chars) {
     loser.mergeSnapshot = null;
     return null;
   } catch (e) { return (e && e.message) || 'unknown error'; }
+}
+
+/* ================= v578: Unmerge companions — preview + history =====
+   Presentation over the v577 restore core above; charUnmerge's
+   semantics are untouched. Design record:
+   docs/../prototypes character-unmerge-ui-spec (Designer, 2026-10-15) —
+   the card counts restorable merges only, restore always starts from
+   the preview sheet, results report in counts, and the winner's
+   curation view carries the merge-history lines. The derivations are
+   pure functions over the in-memory Lab list + the snapshot, so the
+   counts the sheet shows are the counts the restore will perform.
+   One copy deviation from the spec, forced by the shipped semantics:
+   charUnmerge restores the rewritten relationship lists VERBATIM, so
+   entries added to those lists after the merge are rewound, not kept —
+   section C therefore enumerates the winner's own snapshot
+   relationships as the stays and discloses the rewind, rather than
+   claiming post-merge additions to those lists survive. */
+
+function charUnmergeNameEq(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+function charUnmergeRelKey(r) {
+  return String((r && r.to) || '').trim().toLowerCase() + '|' + charNormRelType(r && r.type);
+}
+
+/* The fold set, built exactly as charMerge builds its `seen`: the
+   winner's pre-merge relationships with loser-pointing entries
+   REPOINTED to the winner's name first, then keyed. charMerge folds a
+   loser entry into the winner only when the entry's key is absent from
+   this set — so in a mutual same-type pair (winner and loser pointing
+   at each other with the same type) the loser's entry keys IN via the
+   repoint, never folds, and stays on the loser's own array, which
+   merge and unmerge both leave untouched. */
+function charUnmergePostRepointKeys(winnerRels, winnerName, loserName) {
+  return new Set((Array.isArray(winnerRels) ? winnerRels : []).map(r =>
+    charUnmergeRelKey(charUnmergeNameEq(r.to, loserName)
+      ? { to: winnerName, type: r.type } : r)));
+}
+
+/* The preview model for restoring `loser` from `winner`: who comes
+   back, every move named with its landing place, what stays, and what
+   a verbatim restore rewinds. */
+function charUnmergePreview(loser, winner, chars) {
+  const snap = (loser && loser.mergeSnapshot) || {};
+  const loserName = loser ? loser.name : '';
+  const winnerName = winner ? winner.name : '';
+  const winnerRels = Array.isArray(snap.winnerRels) ? snap.winnerRels : [];
+  const repoints = Array.isArray(snap.repoints) ? snap.repoints : [];
+  const loserRels = (loser && Array.isArray(loser.relationships)) ? loser.relationships : [];
+  const winnerNow = (winner && Array.isArray(winner.relationships)) ? winner.relationships : [];
+  const winnerKeys = new Set(winnerRels.map(charUnmergeRelKey));
+  const loserKeys = new Set(loserRels.map(charUnmergeRelKey));
+  const postRepointKeys = charUnmergePostRepointKeys(winnerRels, winnerName, loserName);
+
+  // Links back: third-party pointers the merge repointed at the winner.
+  const linksBack = [];
+  repoints.forEach(rp => {
+    const owner = (chars || []).find(c => c.id === rp.id);
+    (Array.isArray(rp.rels) ? rp.rels : []).forEach(r => {
+      if (charUnmergeNameEq(r.to, loserName)) {
+        linksBack.push({ name: owner ? owner.name : '(a character)', type: charNormRelType(r.type) });
+      }
+    });
+  });
+  // Relationships back, winner side: the winner's own pointers at the
+  // loser, plus the loser entries the merge folded into the winner.
+  const relsBack = [];
+  winnerRels.forEach(r => {
+    if (charUnmergeNameEq(r.to, loserName)) {
+      relsBack.push({ name: winnerName, type: charNormRelType(r.type) });
+    }
+  });
+  // Folded-in loser entries — tested against the POST-REPOINT set
+  // (charMerge's `seen`), not the raw snapshot keys: against the raw
+  // keys a mutual same-type entry would be listed as moving back when
+  // it never folded and never moves.
+  loserRels.forEach(r => {
+    if (!postRepointKeys.has(charUnmergeRelKey(r))) {
+      relsBack.push({ name: String(r.to || ''), type: charNormRelType(r.type) });
+    }
+  });
+  // Stays: the winner's own pre-merge relationships that never involved
+  // the loser — the winner's throughout, before and after the restore.
+  const staysList = [];
+  winnerRels.forEach(r => {
+    if (!charUnmergeNameEq(r.to, loserName)) {
+      staysList.push({ name: String(r.to || ''), type: charNormRelType(r.type) });
+    }
+  });
+  // Rewound: entries on the winner NOW that the snapshot does not know
+  // (added after the merge). Verbatim restore takes them off again.
+  const rewound = [];
+  winnerNow.forEach(e => {
+    const k = charUnmergeRelKey(e);
+    if (winnerKeys.has(k) || loserKeys.has(k)) return;
+    const isRepointedOwn = winnerRels.some(w =>
+      charNormRelType(w.type) === charNormRelType(e.type) &&
+      charUnmergeNameEq(w.to, loserName) && charUnmergeNameEq(e.to, winnerName));
+    if (!isRepointedOwn) rewound.push({ name: String(e.to || ''), type: charNormRelType(e.type) });
+  });
+  return {
+    loserId: loser ? loser.id : null, loserName,
+    winnerId: winner ? winner.id : null, winnerName,
+    returnsAs: snap.loserStatus || 'candidate',
+    linksBack, relsBack,
+    movesBack: linksBack.concat(relsBack),
+    staysList, rewound,
+    counts: { links: linksBack.length, relationships: relsBack.length, stays: staysList.length },
+    // internals for charUnmergeOutcome's post-hoc count
+    winnerRels, repoints, loserRels,
+  };
+}
+
+/* Long-list window for the preview sections: first 8, then "+N more"
+   expanding in place (spec §2). */
+function charUnmergeListWindow(items, expanded) {
+  const list = Array.isArray(items) ? items : [];
+  if (expanded || list.length <= 8) return { shown: list.slice(), moreCount: 0 };
+  return { shown: list.slice(0, 8), moreCount: list.length - 8 };
+}
+
+/* Post-hoc movement count against a freshly read Lab list — how the
+   partial-failure result reports what actually landed. An entry counts
+   as back when the state charUnmerge writes verbatim is present: a
+   third-party pointer naming the loser again, a winner pointer back in
+   the snapshot array, a folded-in copy gone from the winner. */
+function charUnmergeOutcome(preview, charsAfter) {
+  const chars = Array.isArray(charsAfter) ? charsAfter : [];
+  const byId = id => chars.find(c => c.id === id);
+  let linksMoved = 0;
+  (preview.repoints || []).forEach(rp => {
+    const now = byId(rp.id);
+    if (!now || !Array.isArray(now.relationships)) return;
+    const avail = now.relationships.filter(r => charUnmergeNameEq(r.to, preview.loserName));
+    (Array.isArray(rp.rels) ? rp.rels : []).forEach(r => {
+      if (!charUnmergeNameEq(r.to, preview.loserName)) return;
+      const i = avail.findIndex(x => charNormRelType(x.type) === charNormRelType(r.type));
+      if (i >= 0) { linksMoved++; avail.splice(i, 1); }
+    });
+  });
+  let relsMoved = 0;
+  const w = byId(preview.winnerId);
+  if (w && Array.isArray(w.relationships)) {
+    const wKeys = new Set(w.relationships.map(charUnmergeRelKey));
+    const postRepointKeys = charUnmergePostRepointKeys(
+      preview.winnerRels, preview.winnerName, preview.loserName);
+    (preview.winnerRels || []).forEach(r => {
+      if (charUnmergeNameEq(r.to, preview.loserName) && wKeys.has(charUnmergeRelKey(r))) relsMoved++;
+    });
+    (preview.loserRels || []).forEach(r => {
+      const k = charUnmergeRelKey(r);
+      if (!postRepointKeys.has(k) && !wKeys.has(k)) relsMoved++;
+    });
+  }
+  const loserAfter = byId(preview.loserId);
+  return {
+    linksMoved, relsMoved,
+    finished: !!loserAfter && loserAfter.status !== 'merged',
+  };
+}
+
+function charUnmergeCounted(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+/* The result-state text model (spec §3): counts, never a bare "Done";
+   a partial failure gets its own heading and of-total counts. */
+function charUnmergeResultModel(preview, outcome) {
+  const p = preview;
+  if (!outcome || outcome.finished) {
+    const links = outcome ? outcome.linksMoved : p.counts.links;
+    const rels = outcome ? outcome.relsMoved : p.counts.relationships;
+    return {
+      done: true,
+      heading: p.loserName + ' is back.',
+      countsLine: charUnmergeCounted(links, 'link', 'links') + ' moved back · ' +
+        charUnmergeCounted(rels, 'relationship', 'relationships') + ' restored',
+      staysLine: p.counts.stays
+        ? charUnmergeCounted(p.counts.stays, 'item', 'items') + ' stayed with ' + p.winnerName
+        : null,
+      statusLine: p.loserName + ' returns as ' + p.returnsAs + '.',
+    };
+  }
+  return {
+    done: false,
+    heading: "Restore didn't finish",
+    countsLine: outcome.linksMoved + ' of ' + charUnmergeCounted(p.counts.links, 'link', 'links') +
+      ' moved back · ' + outcome.relsMoved + ' of ' +
+      charUnmergeCounted(p.counts.relationships, 'relationship', 'relationships') + ' restored',
+    staysLine: null,
+    statusLine: null,
+  };
+}
+
+/* Spec §4: "Merged from {loser} · by {by} · {when}". The snapshot
+   carries `at`; a snapshot without one reads "date not recorded" —
+   never an invented date. Returns null for snapshot-less merges. */
+function charMergeHistoryLine(loser) {
+  const snap = loser && loser.mergeSnapshot;
+  if (!snap) return null;
+  const when = snap.at ? (fmtDate(snap.at) || 'date not recorded') : 'date not recorded';
+  return 'Merged from ' + (loser.name || '') + ' · by ' + (snap.by || 'unknown') + ' · ' + when;
+}
+
+/* ---- the preview / result sheet ---- */
+let chRestoreState = null; // { ctx, loserId, preview, expandedB, expandedC, phase, outcome, err, busy }
+let chRestoreToken = null;
+
+function openCharRestoreSheet(loserId, ctx) {
+  const loser = ctx.chars.find(c => c.id === loserId);
+  const winner = loser ? ctx.chars.find(c => c.id === loser.duplicateOf) : null;
+  if (!loser || !loser.mergeSnapshot) return;
+  if (!winner) { // same refusal charUnmerge would give — say it, don't swallow the click
+    if (typeof toast === 'function') toast('Winner no longer in this work — cannot restore');
+    return;
+  }
+  closeCharRestoreSheet();
+  chRestoreState = {
+    ctx, loserId,
+    preview: charUnmergePreview(loser, winner, ctx.chars),
+    expandedB: false, expandedC: false,
+    phase: 'preview', outcome: null, err: null, busy: false,
+  };
+  const ov = document.createElement('div');
+  ov.className = 'modal-backdrop';
+  ov.id = 'ch-restore-back';
+  ov.innerHTML =
+    '<div class="modal" id="ch-restore-sheet" role="dialog" aria-modal="true" ' +
+    'aria-label="Restore ' + esc(loser.name) + '">' +
+    '<div class="sheet-grabber"></div><div id="ch-restore-body"></div></div>';
+  document.body.appendChild(ov);
+  if (typeof overlayOpened === 'function') {
+    chRestoreToken = overlayOpened('char-restore', closeCharRestoreSheet);
+  }
+  // App rule: every sheet ships swipe-down-to-dismiss (js/055).
+  if (typeof wireSheetDrag === 'function') {
+    wireSheetDrag(ov.querySelector('#ch-restore-sheet'), closeCharRestoreSheet);
+  }
+  ov.addEventListener('click', e => { if (e.target === ov) closeCharRestoreSheet(); });
+  ov.addEventListener('keydown', e => { if (e.key === 'Escape') closeCharRestoreSheet(); });
+  chRestoreRender();
+}
+
+function closeCharRestoreSheet() {
+  if (chRestoreToken != null) {
+    const t = chRestoreToken; chRestoreToken = null;
+    if (typeof overlayClosed === 'function') overlayClosed(t);
+  }
+  const ov = document.getElementById('ch-restore-back');
+  if (ov) ov.remove();
+  chRestoreState = null;
+}
+
+function chRestoreItemLines(items, lands, tail) {
+  return items.map(it =>
+    '<p>' + esc(it.name) + ' — ' + esc(it.type) + ' ' + tail + ' ' + esc(lands) + '</p>').join('');
+}
+
+function chRestorePreviewHtml(st) {
+  const p = st.preview;
+  const winB = charUnmergeListWindow(p.movesBack, st.expandedB);
+  const winC = charUnmergeListWindow(p.staysList, st.expandedC);
+  return '<h3 class="serif">Restore ' + esc(p.loserName) + '?</h3>' +
+    '<h4 class="serif">Who comes back</h4>' +
+    '<p><b>' + esc(p.loserName) + '</b> returns as its own character.<br>' +
+    'Returns as: ' + esc(p.returnsAs) + '.</p>' +
+    '<h4 class="serif">What moves back</h4>' +
+    (winB.shown.length
+      ? chRestoreItemLines(winB.shown, p.loserName, 'returns to')
+      : '<p class="note">Nothing to move — the merge rewrote no relationships.</p>') +
+    (winB.moreCount
+      ? '<p><button class="taplink" data-chmore="b">+ ' + winB.moreCount + ' more</button></p>' : '') +
+    '<h4 class="serif">Stays with ' + esc(p.winnerName) + '</h4>' +
+    '<p class="note">Everything on ' + esc(p.winnerName) + ' that isn\'t listed above stays with ' +
+    esc(p.winnerName) + '. Its relationship list returns to the merge snapshot, so changes made to ' +
+    'the rewritten lists since the merge are rewound.</p>' +
+    (winC.shown.length ? chRestoreItemLines(winC.shown, p.winnerName, 'stays with') : '') +
+    (winC.moreCount
+      ? '<p><button class="taplink" data-chmore="c">+ ' + winC.moreCount + ' more</button></p>' : '') +
+    (p.rewound.length
+      ? '<p class="note">Added to ' + esc(p.winnerName) + ' since the merge — these come off when ' +
+        'the snapshot is restored:</p>' +
+        p.rewound.map(it => '<p>' + esc(it.name) + ' — ' + esc(it.type) + '</p>').join('')
+      : '') +
+    (st.err ? '<p class="note" style="color:var(--danger,red)">' + esc(st.err) + '</p>' : '') +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="ch-restore-keep"' + (st.busy ? ' disabled' : '') + '>Keep merged</button>' +
+    '<button class="btn" id="ch-restore-commit"' + (st.busy ? ' disabled' : '') + '>' +
+    (st.busy ? 'Restoring…' : 'Restore ' + esc(p.loserName)) + '</button></div>';
+}
+
+function chRestoreResultHtml(st) {
+  const p = st.preview;
+  const m = charUnmergeResultModel(p, st.outcome);
+  if (m.done) {
+    return '<h3 class="serif">' + esc(m.heading) + '</h3>' +
+      '<p>' + esc(m.countsLine) + '</p>' +
+      (m.staysLine ? '<p>' + esc(m.staysLine) + '</p>' : '') +
+      '<p>' + esc(m.statusLine) + '</p>' +
+      '<div class="modal-actions">' +
+      '<button class="btn ghost" id="ch-restore-done">Done</button>' +
+      '<button class="btn" id="ch-restore-view">View ' + esc(p.loserName) + '</button></div>';
+  }
+  return '<h3 class="serif">' + esc(m.heading) + '</h3>' +
+    (st.outcome
+      ? '<p>' + esc(m.countsLine) + '</p>'
+      : '<p class="note">Couldn\'t re-check what moved — reopen the Character Lab to see the current state.</p>') +
+    (st.err ? '<p class="note" style="color:var(--danger,red)">' + esc(st.err) + '</p>' : '') +
+    '<p class="note">Nothing is lost — the merge snapshot is still recorded, and restoring again is safe.</p>' +
+    '<div class="modal-actions">' +
+    '<button class="btn ghost" id="ch-restore-done">Close</button>' +
+    '<button class="btn" id="ch-restore-retry">Try again</button></div>';
+}
+
+function chRestoreRender() {
+  const st = chRestoreState;
+  if (!st) return;
+  const host = document.getElementById('ch-restore-body');
+  if (!host) return;
+  host.innerHTML = st.phase === 'preview' ? chRestorePreviewHtml(st) : chRestoreResultHtml(st);
+  host.querySelectorAll('[data-chmore]').forEach(b => b.addEventListener('click', () => {
+    if (b.getAttribute('data-chmore') === 'b') st.expandedB = true; else st.expandedC = true;
+    chRestoreRender();
+  }));
+  const keep = document.getElementById('ch-restore-keep');
+  if (keep) keep.addEventListener('click', closeCharRestoreSheet);
+  const commit = document.getElementById('ch-restore-commit');
+  if (commit) commit.addEventListener('click', chRestoreCommit);
+  const done = document.getElementById('ch-restore-done');
+  if (done) done.addEventListener('click', closeCharRestoreSheet);
+  const view = document.getElementById('ch-restore-view');
+  if (view) view.addEventListener('click', () => {
+    const ctx = st.ctx, loserId = st.loserId;
+    closeCharRestoreSheet();
+    charLabSelectedId = loserId;
+    charLabRender(ctx.body, ctx.works, ctx.chars);
+    const detail = document.getElementById('ch-detail');
+    if (detail && detail.scrollIntoView) detail.scrollIntoView({ behavior: 'smooth' });
+  });
+  const retry = document.getElementById('ch-restore-retry');
+  if (retry) retry.addEventListener('click', () => {
+    const loser = st.ctx.chars.find(c => c.id === st.loserId);
+    const winner = loser ? st.ctx.chars.find(c => c.id === loser.duplicateOf) : null;
+    if (!loser || !winner || !loser.mergeSnapshot) { closeCharRestoreSheet(); return; }
+    st.preview = charUnmergePreview(loser, winner, st.ctx.chars);
+    st.phase = 'preview'; st.outcome = null; st.err = null;
+    st.expandedB = false; st.expandedC = false;
+    chRestoreRender();
+  });
+}
+
+async function chRestoreCommit() {
+  const st = chRestoreState;
+  if (!st || st.busy) return;
+  st.busy = true;
+  chRestoreRender();
+  const err = await charUnmerge(st.loserId, st.ctx.chars);
+  // Re-read the work so the Lab behind the sheet (card count, grid) and
+  // the movement count reflect the server, not the pre-restore copy.
+  let fresh = null;
+  try { fresh = await CharacterStore.listForWork(charLabWorkId); } catch (e) { fresh = null; }
+  if (fresh) st.ctx.chars = fresh;
+  charLabRender(st.ctx.body, st.ctx.works, st.ctx.chars);
+  st.phase = 'result';
+  st.err = err;
+  st.outcome = err ? (fresh ? charUnmergeOutcome(st.preview, fresh) : null) : null;
+  st.busy = false;
+  chRestoreRender();
 }
