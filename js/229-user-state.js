@@ -307,8 +307,38 @@ function userStateApplyPrefs(payload) {
   } catch (e) {}
 }
 
-const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state', prefs: 'prefs_state' };
-const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone', 'prefs'];
+/* ---------------- roaming finale keepsakes (v567) ---------------- */
+// The eighth section: The Finale's per-series records (js/239), in
+// their own column (finale_state, supabase/migrations/
+// v567_user_state_finale.sql), payload { _at, value } — value is the
+// finale record map (series key -> record), warning-style. Placement,
+// per the roaming rules: a keepsake is a reader detail, so it roams;
+// it does NOT join the settings snapshot (that key list is frozen at
+// its v518 shape) and never lives in profiles (user_state is
+// own-rows-only, so friends can't read a finale). The on-device key
+// is read live by js/238 at point of use, so apply writing localStorage
+// IS the live apply, same as the release pieces. Normalization is
+// js/239's finaleNormalize — one validator for every surface the map
+// crosses; js/229 never interprets a record itself.
+const FINALE_STATE_KEY = 'cozylibram.finale.v1';
+function userStateCollectFinale() {
+  try {
+    const raw = localStorage.getItem(FINALE_STATE_KEY);
+    if (raw == null) return { value: null };
+    const v = JSON.parse(raw);
+    return { value: (typeof finaleNormalize === 'function') ? finaleNormalize(v) : null };
+  } catch (e) { return { value: null }; }
+}
+function userStateApplyFinale(payload) {
+  try {
+    const v = (typeof finaleNormalize === 'function') ? finaleNormalize(payload ? payload.value : null) : null;
+    if (v && Object.keys(v).length) localStorage.setItem(FINALE_STATE_KEY, JSON.stringify(v));
+    else localStorage.removeItem(FINALE_STATE_KEY);
+  } catch (e) {}
+}
+
+const USER_STATE_SECTION_COLS = { warning: 'warning_prefs', upnext: 'up_next', release: 'release_state', shelf: 'shelf_state', privacy: 'privacy_state', milestone: 'milestone_state', prefs: 'prefs_state', finale: 'finale_state' };
+const USER_STATE_SECTION_ORDER = ['warning', 'upnext', 'release', 'shelf', 'privacy', 'milestone', 'prefs', 'finale'];
 const WARNING_PREFS_KEY = 'cozylibram.warningPrefs.v1';
 const RELEASE_STATE_KEYS = [
   'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
@@ -505,6 +535,7 @@ const USER_STATE_SECTION_FNS = {
   privacy: { collect: userStateCollectPrivacy, apply: userStateApplyPrivacy },
   milestone: { collect: userStateCollectMilestonePin, apply: userStateApplyMilestonePin },
   prefs: { collect: userStateCollectPrefs, apply: userStateApplyPrefs },
+  finale: { collect: userStateCollectFinale, apply: userStateApplyFinale },
 };
 function userStateSectionPresent(remote) {
   return !!remote && typeof remote === 'object' && !Array.isArray(remote) && Number(remote._at) > 0;
@@ -525,7 +556,7 @@ async function userStatePullSections(deviceOwner) {
     if (!sb) return false;
     const uid = cloudUser.id;
     const { data, error } = await sb.from('user_state')
-      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state').eq('user_id', uid).maybeSingle();
+      .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state,finale_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     const meta = userStateMeta(uid);
     let changed = false;

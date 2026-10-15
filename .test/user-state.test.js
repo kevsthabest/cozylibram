@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state', 'finale_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {}, finale_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -86,6 +86,7 @@ function clearState() {
         'cozylibram.dnaSurveyOff', 'cozylibram.dnaNudgesOff', 'spicyshelves.onboarded',
         'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
         'cozylibram.warningPrefs.v1',
+        'cozylibram.finale.v1',
         'cozylibram.privacy.v1',
         'spicyshelves.analytics', 'spicyshelves.logremove',
         'shelfViewMode',
@@ -142,9 +143,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v566',
-    /APP_VERSION = 'v566'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v566"));
+  ok('version pairing is v567',
+    /APP_VERSION = 'v567'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v567"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -195,6 +196,15 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v537 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql537) && !/alter table (public\.)?profiles/.test(sql537));
 
+  /* ---------- v567 finale migration shape ---------- */
+  const sql567Path = path.join(ROOT, 'supabase/migrations/v567_user_state_finale.sql');
+  ok('v567 migration file exists', fs.existsSync(sql567Path));
+  const sql567 = fs.readFileSync(sql567Path, 'utf8');
+  ok('v567 adds finale_state jsonb with {} default',
+    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql567));
+  ok('v567 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql567) && !/alter table (public\.)?profiles/.test(sql567));
+
   /* ---------- v536 milestone pin section: collect/apply ---------- */
   clearState();
   ok('milestone pin collect is null when unset',
@@ -240,6 +250,27 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
+  /* ---------- v567 finale section: collect/apply ---------- */
+  clearState();
+  ok('finale collect is null when unset',
+    window.userStateCollectFinale().value === null);
+  const finRec = { kind: 'complete', at: 1750000000000, name: 'The Test Saga', count: 3, pages: 960, first: '2025-01-10T00:00:00.000Z', last: '2025-06-10T00:00:00.000Z', ratings: [5, 4, 0], favChar: null, override: false, seen: true };
+  ls.setItem('cozylibram.finale.v1', JSON.stringify({ 'the test saga': finRec, bogus: { kind: 'everything' } }));
+  ok('finale collect reads the device key and normalizes (bad kinds dropped)',
+    !!window.userStateCollectFinale().value['the test saga'] &&
+    !('bogus' in window.userStateCollectFinale().value));
+  window.userStateApplyFinale({ value: { 'the test saga': { ...finRec, kind: 'caughtup' } } });
+  ok('finale apply writes the device key',
+    JSON.parse(ls.getItem('cozylibram.finale.v1'))['the test saga'].kind === 'caughtup');
+  window.userStateApplyFinale({ value: null });
+  ok('finale apply with null clears the key',
+    ls.getItem('cozylibram.finale.v1') === null);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no finale key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.finale.v1'));
+  ok('settings snapshot never collects the finale key',
+    !('cozylibram.finale.v1' in window.userStateCollect()));
+
   // Local-first: an opt-out already on the device is the live read at
   // boot, with no pull having run (analyticsEnabled reads localStorage).
   ls.setItem('spicyshelves.analytics', '0');

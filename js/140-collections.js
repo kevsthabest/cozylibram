@@ -100,6 +100,10 @@ function renderSeries() {
   } else {
     html += '<div class="sr-list">' + shown.map(s => {
       const key = String(s.name).trim().toLowerCase();
+      // The Finale (js/239): a recorded finale renders its keepsake in
+      // the card, the wax seal rides the header for complete series
+      // only, and a series with no record offers the manual override.
+      const fin = (typeof finaleRecordFor === 'function') ? finaleRecordFor(key) : null;
       const pct = Math.round(s.read / s.books.length * 100);
       const covers = s.books.slice(0, 6).map(b =>
         '<button class="sr-cover" data-id="' + esc(b.id) + '" aria-label="' + esc(b.title) + '">' +
@@ -107,7 +111,9 @@ function renderSeries() {
                  : '<span class="sr-nocover">' + icon('covers') + '</span>') + '</button>').join('');
       const posTag = (s.next && s.next.series && s.next.series.position != null && s.next.series.position !== '')
         ? ' <span class="note-inline">#' + esc(String(s.next.series.position)) + '</span>' : '';
-      return '<div class="sr-card" data-skey="' + esc(key) + '"><div class="sr-head"><div><div class="sr-name">' + esc(s.name) + '</div>' +
+      return '<div class="sr-card" data-skey="' + esc(key) + '"><div class="sr-head"><div><div class="sr-name">' + esc(s.name) +
+        (fin && typeof finaleHasSeal === 'function' && finaleHasSeal(fin) && typeof finaleSealHTML === 'function'
+          ? ' ' + finaleSealHTML('finale-seal-xs') : '') + '</div>' +
         (s.authorLine ? '<div class="sr-author">' + esc(s.authorLine) + '</div>' : '') + '</div>' +
         '<div class="sr-nums"><span class="sr-count">' + s.read + ' / ' + s.books.length + ' read</span>' +
         '<span class="sr-total" data-stotal="' + esc(key) + '"></span></div></div>' +
@@ -120,6 +126,9 @@ function renderSeries() {
           : (s.read === s.books.length
               ? '<div class="sr-done">' + icon('read') + ' Everything you own is read</div>'
               : '<div class="sr-done">' + icon('dnf') + ' The rest are DNF</div>')) +
+        (fin
+          ? ((typeof finaleKeepsakeHTML === 'function') ? finaleKeepsakeHTML(key, fin) : '')
+          : '<button class="btn ghost sm finale-mark" data-finale-mark="' + esc(key) + '">Mark as finished</button>') +
         '</div>';
     }).join('') + '</div>';
   }
@@ -138,6 +147,15 @@ function renderSeries() {
     btn.addEventListener('click', () => openDetail(btn.dataset.id)));
   document.querySelectorAll('.sr-next').forEach(btn =>
     btn.addEventListener('click', () => openDetail(btn.dataset.id)));
+  // The Finale (js/239): override + keepsake share wiring.
+  document.querySelectorAll('[data-finale-mark]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      if (typeof finaleMarkFinished === 'function') finaleMarkFinished(btn.getAttribute('data-finale-mark'));
+    }));
+  document.querySelectorAll('[data-finale-share]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      if (typeof shareFinaleCard === 'function') shareFinaleCard(btn.getAttribute('data-finale-share'));
+    }));
   // v108: fill "owns X of Y" totals from Hardcover's full series listing
   // (cached per series). Shown only when the series runs beyond her shelf.
   if (typeof hcReady === 'function' && hcReady()) (async () => {

@@ -101,7 +101,7 @@ async function backfillCovers(rows) {
 async function fetchSeriesBooks(seriesName, authorName) {
   const key = String(seriesName).trim().toLowerCase();
   if (seriesCache.has(key)) return seriesCache.get(key);
-  if (!hcReady()) { const r = { needsToken: true, rows: [] }; seriesCache.set(key, r); return r; }
+  if (!hcReady()) { const r = { needsToken: true, rows: [], found: false }; seriesCache.set(key, r); return r; }
   const fullFields = 'id name author { name }' +
     ' book_series(distinct_on: position, order_by: [{position: asc}, {book: {users_count: desc}}],' +
     ' where: {compilation: {_eq: false}, book: {canonical_id: {_is_null: true}, is_partial_book: {_eq: false}}}) {' +
@@ -156,7 +156,10 @@ async function fetchSeriesBooks(seriesName, authorName) {
       };
     }).filter(x => x.title && !inLibrary(x)));
   }
-  const out = { rows };
+  // `found` says the listing itself resolved (vs. the series simply not
+  // being on Hardcover): the Finale (js/239) may only call a series total
+  // "known" when the listing was actually found.
+  const out = { rows, found: !!hit };
   seriesCache.set(key, out);
   return out;
 }
@@ -2083,6 +2086,10 @@ function renderDetailModal(b, viaBook) {
     toast('Saved ✨');
     // v468: post-completion portrait survey (save-flow path to 'read').
     if (_becameRead) { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
+    // The Finale: if this save finished a series, mark the moment
+    // (js/238 decides — library-complete + honest total — and presents
+    // at most once per series). Fire-and-forget; never blocks the save.
+    if (_becameRead) { try { if (typeof maybeFinaleCeremony === 'function') maybeFinaleCeremony(b); } catch (e) {} }
     // v534: DNF Autopsy prompt — follows the now-staged shelf pick, so
     // it fires on Save when the book newly lands on DNF (the pick-time
     // prompt went away with the picker's immediate save: an unsaved
