@@ -125,7 +125,7 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   (v && typeof v === 'object' && !Array.isArray(v))
     ? Object.keys(v).sort().reduce((a, key) => { a[key] = v[key]; return a; }, {})
     : v);
-// v559: the local Discover dismissal set, read back through js/198's own
+// v575: the local Discover dismissal set, read back through js/198's own
 // reader (IDB in production; the localStorage fallback in this env).
 const probeDismissals = async () => Array.from(await window.recoDismissedSet());
 const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
@@ -149,9 +149,9 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v559',
-    /APP_VERSION = 'v559'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v559"));
+  ok('version pairing is v575',
+    /APP_VERSION = 'v575'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v575"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -912,14 +912,14 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     window.eval('analyticsEnabled()') === false);
   runInWindow('setAnalyticsEnabled(true);');
 
-  /* ---------- v559 reco migration shape ---------- */
-  const sql559Path = path.join(ROOT, 'supabase/migrations/v559_user_state_reco.sql');
-  ok('v559 migration file exists', fs.existsSync(sql559Path));
-  const sql559 = fs.readFileSync(sql559Path, 'utf8');
-  ok('v559 adds reco_state jsonb with {} default',
-    /add column if not exists reco_state jsonb not null default '\{\}'::jsonb/.test(sql559));
-  ok('v559 migration touches only user_state (no policies, no other tables)',
-    !/create policy|drop policy|create table/.test(sql559) && !/alter table (public\.)?profiles/.test(sql559));
+  /* ---------- v575 reco migration shape ---------- */
+  const sql575Path = path.join(ROOT, 'supabase/migrations/v575_user_state_reco.sql');
+  ok('v575 migration file exists', fs.existsSync(sql575Path));
+  const sql575 = fs.readFileSync(sql575Path, 'utf8');
+  ok('v575 adds reco_state jsonb with {} default',
+    /add column if not exists reco_state jsonb not null default '\{\}'::jsonb/.test(sql575));
+  ok('v575 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql575) && !/alter table (public\.)?profiles/.test(sql575));
   runInWindow('window.__probeRecoCol = USER_STATE_SECTION_COLS.reco;' +
     ' window.__probeRecoFns = typeof USER_STATE_SECTION_FNS.reco.collect === "function" &&' +
     ' typeof USER_STATE_SECTION_FNS.reco.apply === "function";');
@@ -930,7 +930,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     !window.__probeKeys.includes('reco_dismissed') &&
     !('spicyshelves.reco_dismissed' in window.userStateCollect()));
 
-  /* ---------- v559 reco section: collect / union-apply units ---------- */
+  /* ---------- v575 reco section: collect / union-apply units ---------- */
   clearState();
   ok('reco collect is empty when nothing was dismissed',
     JSON.stringify(window.userStateCollectReco()) === '{"value":[]}');
@@ -961,7 +961,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     capped.length === 200 && capped[0] === 'hc:a100' &&
     capped[capped.length - 1] === 'hc:b149' && !capped.includes('hc:a99'));
 
-  /* ---------- v559 reco: first push seeds from the local set ---------- */
+  /* ---------- v575 reco: first push seeds from the local set ---------- */
   const fakeR1 = makeFake();
   window.__sbStub = fakeR1;
   clearState();
@@ -975,7 +975,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     recoSeeded === true && !!recoRow1.reco_state && recoRow1.reco_state._at > 0 &&
     setEq(recoRow1.reco_state.value, ['hc:a1', 'hc:a2']));
 
-  /* ---------- v559 reco: two-device union merge ---------- */
+  /* ---------- v575 reco: two-device union merge ---------- */
   // Device B: fresh local state, one dismissal made before its first
   // pull (offline). The pull must union, not overwrite; B's push must
   // carry the union up; A then adopts B's dismissal on its next pull.
@@ -1001,7 +1001,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
   ok('two-device: overlap dedupes (re-dismissing a roamed key changes nothing)',
     (await probeDismissals()).length === 3);
 
-  /* ---------- v559 reco: a stale device's push cannot drop newer dismissals ---------- */
+  /* ---------- v575 reco: a stale device's push cannot drop newer dismissals ---------- */
   // This device last synced when the server held the same single local
   // dismissal; since then another device pushed two more. This device
   // dismisses one of its own and pushes — the push must read-merge the
@@ -1028,7 +1028,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
   ok('stale push adopts the server dismissals locally',
     setEq(await probeDismissals(), ['hc:l1', 'hc:l2', 'hc:s1', 'hc:s2']));
 
-  /* ---------- v559: pre-migration database fails open for reco ---------- */
+  /* ---------- v575: pre-migration database fails open for reco ---------- */
   const fakeR3 = makeFake();
   fakeR3.missingColumns = true;
   window.__sbStub = fakeR3;
@@ -1045,7 +1045,7 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     pushR === true && !!rowR3.settings && !('reco_state' in rowR3) &&
     setEq(await probeDismissals(), ['hc:keep']));
 
-  /* ---------- v559 reco: a failed push re-read skips the column, retries next cycle ---------- */
+  /* ---------- v575 reco: a failed push re-read skips the column, retries next cycle ---------- */
   // The server gains a dismissal from another device after this device's
   // last pull. This device's push then cannot re-read reco_state (the
   // read errors): it must NOT upsert its local-only set over the server

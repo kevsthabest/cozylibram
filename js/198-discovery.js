@@ -994,7 +994,7 @@ function recoSharedTropes(text, lovedIds) {
 /* Dismissals: 'hc:<id>' keys in the IDB kv store, localStorage fallback
    (same split-brain rule as the release dismissals). The local store is
    the working copy: dismissing works offline and instantly against it.
-   Since v559 the set also roams through the user_state reco_state
+   Since v575 the set also roams through the user_state reco_state
    section (js/229-user-state.js), union-merged on pull and on push —
    dismissals are append-only, so a dismissal made on any signed-in
    device propagates and none is lost to another device's older set. */

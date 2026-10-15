@@ -1,4 +1,4 @@
--- v559: user_state eighth section — Discover recommendation dismissals
+-- v575: user_state ninth section — Discover recommendation dismissals
 -- (js/229): the 'hc:<id>' keys a reader has dismissed in Discover
 -- (js/198), previously the one piece of user data with no cloud copy
 -- (per-slot IDB kv + a localStorage fallback, per-device only).

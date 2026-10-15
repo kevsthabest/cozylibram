@@ -204,7 +204,7 @@ function applyRoamedViewState() {
 // pinned milestone id, warning-style { _at, value }. v537 adds a
 // seventh, prefs (column prefs_state): the analytics opt-out and the
 // reading-log remove-entry visibility keys, release-style
-// { _at, values }. v559 adds an eighth, reco (column reco_state): the
+// { _at, values }. v575 adds a ninth, reco (column reco_state): the
 // Discover dismissal set, warning-style { _at, value } — but UNION-
 // merged instead of last-writer-wins (see the reco block below). See
 // their blocks below.
@@ -363,10 +363,10 @@ function userStateApplyFinale(payload) {
   } catch (e) {}
 }
 
-/* ---------------- roaming reco dismissals (v559) ---------------- */
-// The eighth section: the Discover dismissal set ('hc:<id>' keys,
+/* ---------------- roaming reco dismissals (v575) ---------------- */
+// The ninth section: the Discover dismissal set ('hc:<id>' keys,
 // js/198), in its own column (reco_state, supabase/migrations/
-// v559_user_state_reco.sql), payload { _at, value } — value is the key
+// v575_user_state_reco.sql), payload { _at, value } — value is the key
 // array as-is, warning/upnext-style. The dismissals were the one piece
 // of user data with no cloud copy (IDB kv + a localStorage fallback,
 // per-device); per the standing rule that all user details roam, they
@@ -795,7 +795,7 @@ async function userStatePush() {
       try {
         let recoReadFailed = false;
         if (dirtySections.indexOf('reco') !== -1) {
-          // Read-merge-write (v559): union the server's current reco set
+          // Read-merge-write (v575): union the server's current reco set
           // into the payload — and adopt it locally — before upserting,
           // so this push can never drop dismissals another device
           // synced after this device last pulled. If the re-read itself
