@@ -163,7 +163,15 @@ function migrateBook(b) {
   if (!Array.isArray(b.quotes)) b.quotes = []; // v75: saved quotes { t, p, at }
   b.favorite = !!b.favorite; // pinned to the favorites bookshelf
   if (b.owned === undefined || b.owned === true) b.owned = 'owned'; // v148: ownership is now
-  else if (b.owned === false) b.owned = 'tobuy'; // 'owned' | 'tobuy' | 'borrowed' (legacy booleans migrate)
+  else if (b.owned === false) b.owned = 'tobuy'; // 'owned' | 'tobuy' | 'borrowed' | 'subscription' (legacy booleans migrate)
+  // v563 (Decision): format / wantFormat coercion — the read path only
+  // ever UNSETS. A value outside BOOK_FORMATS, or a want that names the
+  // book's own format, is meaningless and coerces to ''. Valid values
+  // pass through untouched, and nothing here (or in any transform) ever
+  // WRITES a format: values are set only by the modal pickers, the scan
+  // funnel's stated-binding rule, and the import binding maps.
+  if (b.format && !BOOK_FORMATS.includes(b.format)) b.format = '';
+  if (b.wantFormat && (!BOOK_FORMATS.includes(b.wantFormat) || b.wantFormat === b.format)) b.wantFormat = '';
   if (b._mtime == null) b._mtime = 0; // last-modified stamp, used for cloud conflict resolution
   return trackBook(b); // v495 (#125): wrap for dirty-flag change tracking (idempotent)
 }
@@ -222,10 +230,11 @@ function wishlistUnifyTransform(books) {
   return n;
 }
 
-// Ownership badge: line-art home vs cart vs lent-out book (v84, v148)
+// Ownership badge: line-art home vs cart vs lent-out book vs renew (v84, v148, v563)
 function ownedBadge(b) {
   if (b.owned === 'tobuy') return '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';
   if (b.owned === 'borrowed') return '<span class="badge borrowed">' + icon('borrowed') + ' Borrowed</span>';
+  if (b.owned === 'subscription') return '<span class="badge subscription">' + icon('subscription') + ' Subscription</span>';
   return '<span class="badge owned">' + icon('owned') + ' Owned</span>';
 }
 

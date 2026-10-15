@@ -889,6 +889,11 @@ function renderCovenFriendMain() {
   const books = circShelf === 'all' ? circBooks
     : circShelf === 'wishlist' ? circBooks.filter(isWishlistBook)
     : circBooks.filter(b => b.status === circShelf);
+  // v563 (Decision): a friend's trophy wants ride along on their
+  // Wishlist shelf, labelled as their own group (below) — the want
+  // sits on a record already shared under its own shelf, so no new
+  // book is exposed; the chip count above stays the plain set.
+  const trophyBooks = circShelf === 'wishlist' ? circBooks.filter(isTrophyWant) : [];
   const chip = (v, label) =>
     '<button class="chip' + (circShelf === v ? ' active' : '') + '" data-cf="' + v + '">' + label +
     (counts[v] ? ' · ' + counts[v] : '') + '</button>';
@@ -913,7 +918,7 @@ function renderCovenFriendMain() {
   if (!circBooks.length) {
     html += '<div class="empty"><div class="big">' + icon('covers') + '</div>' +
       '<h2 class="serif">Nothing shared</h2><p>' + esc(f.name) + ' isn’t sharing any shelves with you right now.</p></div>';
-  } else if (!books.length) {
+  } else if (!books.length && !trophyBooks.length) {
     html += '<p class="note" style="text-align:center">Nothing on this shelf.</p>';
   } else {
     const map = {};
@@ -934,7 +939,16 @@ function renderCovenFriendMain() {
       const c = shieldCopy(b);
       return (c && c.favorite) ? Object.assign({}, c, { favorite: false }) : c;
     };
-    html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
+    if (books.length) html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
+    // v563: the friend's trophy wants, in their own labelled group —
+    // same pill language as the owner's Wishlist (js/190).
+    if (trophyBooks.length) {
+      html += '<h3 class="wish-section">' + icon('trophy') + ' Trophy wants</h3>' +
+        '<div class="grid">' + trophyBooks.map((b, i) =>
+          '<div class="up-wrap"><div class="up-pill trophy-pill">' + icon('trophy') + ' Trophy · want ' +
+          esc(FORMAT_META[b.wantFormat].label) + '</div>' +
+          bookCard(cardBook(b), i) + '</div>').join('') + '</div>';
+    }
   }
   setView(html);
   document.getElementById('cf-back').addEventListener('click', () => go('coven'));

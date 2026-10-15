@@ -84,7 +84,7 @@ ok('modal shelf buttons use line icons', qa('#f-status .ticon').length === 5); /
 ok('no emoji left in shelf buttons',
   !['📖','📘','✅','🚫'].some(e => q('#f-status').textContent.includes(e)));
 ok('up next button uses line icon', !!q('#m-upnext .ticon'));
-ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 4); // v182: 3 options + the row icon
+ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 5); // v182: 3 options + the row icon; v563: 4 options (Subscription added) + the row icon
 ok('axis rows use line icons', qa('#f-axrows .axlab .ticon').length === qa('#f-axrows .axrow').length && qa('#f-axrows .axrow').length > 0);
 ok('header rating hearts use line icons', qa('#f-myrating .ticon').length === 5);
 ok('favorite button uses line icon', !!q('#f-fav2 .ticon'));

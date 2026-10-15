@@ -374,6 +374,13 @@ async function isbnLookupUI(isbn, mount, source) {
   try {
     const book = await lookupISBN(isbn);
     if (book) {
+      // v563 (Decision): an ISBN scan/lookup is a physical object in
+      // hand — prefill the format from any binding the looked-up
+      // edition states, else 'physical' (the unspecified-print
+      // bucket). No provider in the current waterfall threads a
+      // binding field onto the book; the probe is where it lands
+      // when one does.
+      book.format = formatFromBindingText(book.binding || book.physical_format || '') || 'physical';
       mount.innerHTML = '<div class="result-card">' + coverHTML(book) +
         '<div class="book-meta"><h3>' + esc(book.title) + '</h3>' +
         '<p class="author">' + esc(displayAuthors(book.authors)) + '</p>' +
@@ -409,6 +416,7 @@ async function isbnLookupUI(isbn, mount, source) {
         '</div></div></div>';
       document.getElementById('rc-manual').addEventListener('click', () => {
         const shell = normalizeVolume({ volumeInfo: { title: '', authors: [] } }, isbn);
+        shell.format = 'physical'; // v563: the failed scan was still an in-hand object
         const b = addBook(shell, false, src); if (b) openDetail(b.id);
       });
       const rescan = document.getElementById('rc-rescan');

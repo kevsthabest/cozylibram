@@ -77,6 +77,9 @@ function parseGoodreadsCSV(text) {
       progress: status === 'read' && pages ? pages : 0,
       myRating: rating,
       owned: (parseInt(r['Owned Copies'], 10) || 0) > 0 ? 'owned' : 'tobuy',
+      // v563: Goodreads states a Binding column — map it when it is
+      // unambiguous, else the format stays unset (never guessed).
+      format: formatFromBindingText(r['Binding'] || ''),
       dateFinished: parseLooseDate(r['Date Read']),
       dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
       notes: notes,
@@ -99,6 +102,8 @@ function parseStoryGraphCSV(text) {
       status: status,
       myRating: rating,
       owned: /^(yes|true|1|y)$/i.test(String(r['Owned?'] || '').trim()) ? 'owned' : 'tobuy',
+      // v563: StoryGraph states a Format column — same stated-binding rule.
+      format: formatFromBindingText(r['Format'] || ''),
       dateFinished: parseLooseDate(r['Last Date Read']),
       dateAdded: parseLooseDate(r['Date Added']) || new Date().toISOString(),
       notes: r['Review'] || '',

@@ -220,6 +220,9 @@ function paintShelfResults() {
       const e = shelfResults[Number(card.dataset.i)];
       if (!e || !e.book || e._added || alreadyHave(e.book)) return;
       const enriched = Object.assign({}, e.book, { id: uid() });
+      // v563 (Decision): a spine scan photographs physical books on a
+      // shelf — the identified copy is print, binding unstated.
+      if (!enriched.format) enriched.format = 'physical';
       const photo = await shelfScanSpinePhoto(e); // v253: auto spine photo
       if (photo) { enriched.spinePhoto = photo; spinePhotoShare(enriched, photo, true); } // v259: AI-box crop, anonymous
       if (!enriched._olKey) await enrichRatings(enriched);

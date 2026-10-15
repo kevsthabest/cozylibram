@@ -2007,6 +2007,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .badge.owned { background: rgba(123, 201, 138, .16); border-color: rgba(123, 201, 138, .45); }
 .badge.tobuy { background: rgba(212, 162, 78, .16); border-color: rgba(212, 162, 78, .5); }
 .badge.borrowed { background: rgba(126, 166, 214, .16); border-color: rgba(126, 166, 214, .5); }
+.badge.subscription { background: rgba(178, 132, 214, .16); border-color: rgba(178, 132, 214, .5); }
 .tile-buy { position: absolute; top: 6px; right: 6px; font-size: 15px;
   background: rgba(10, 6, 14, .72); border-radius: 8px; padding: 2px 5px; }
 
@@ -2358,6 +2359,14 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v113: upcoming releases */
 .release-line { color: var(--accent, #e8a0bf); font-weight: 600; }
 .wish-section { display: flex; align-items: center; gap: 8px; font-size: 18px; margin: 18px 0 10px; }
+/* v563: trophy wants — the Got it action under a trophy card */
+.trophy-got { margin-top: 6px; width: 100%; }
+/* v563: the modal's trophy-want picker — toggle chips in the ownership section */
+.want-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.want-opts button { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--line); color: inherit; font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 999px; cursor: pointer; }
+.want-opts button svg { width: 15px; height: 15px; color: var(--muted); }
+.want-opts button.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.want-opts button.active svg { color: var(--accent); }
 .up-wrap { position: relative; }
 .up-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-deep); border-radius: 999px; padding: 4px 10px; margin-bottom: 6px; }
 .up-pill svg { width: 13px; height: 13px; }

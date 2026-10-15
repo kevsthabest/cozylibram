@@ -242,6 +242,18 @@ const ICONS = {
   help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
   // hourglass (time to finish)
   hourglass: '<path d="M6 3.5h12"/><path d="M6 20.5h12"/><path d="M7.5 3.5c0 5 4 6.5 4 8.5s-4 3.5-4 8.5M16.5 3.5c0 5-4 6.5-4 8.5s4 3.5 4 8.5"/>',
+  // v563: subscription (KU / Kobo Plus-style access) — the renew motif:
+  // two chasing arrows say "access that renews", distinct from owned's
+  // home and borrowed's lent-out book.
+  subscription: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21.2 3.4v5.4h-5.4"/>',
+  // v563: format glyphs. The three print bindings share the plain-book
+  // 'physical' glyph (see FORMAT_META, js/000): at chip size the label
+  // carries the binding — three near-identical book outlines would be
+  // false precision. Ebook (a reader) and audio (headphones) differ in
+  // silhouette, so they get their own.
+  physical: '<path d="M6 3.5h11.5A1.5 1.5 0 0 1 19 5v14.5a1.5 1.5 0 0 1-1.5 1.5H6z"/><path d="M6 3.5v17.5"/>',
+  ebook: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M9.5 7.5h5M9.5 11h5"/><line x1="10.5" y1="17.5" x2="13.5" y2="17.5"/>',
+  audio: '<path d="M4 16v-3.5a8 8 0 0 1 16 0V16"/><rect x="3" y="15" width="4" height="6.5" rx="1.8"/><rect x="17" y="15" width="4" height="6.5" rx="1.8"/>',
   // tag (trope badges — icon sweep: replaces the emoji prefix in js/160)
   tag: '<path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0L3.5 13.5V3.5h10L20.6 10.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/>',
   // leaf (season nudge: stpatrick / thanksgiving — icon sweep, js/010)
