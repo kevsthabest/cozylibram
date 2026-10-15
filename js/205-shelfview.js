@@ -1081,6 +1081,11 @@ function shelfOpenPhotoSheet(id) {
         if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
         close();
         renderShelf();
+        // The Finale (js/239): moving a book onto the Read shelf is a
+        // mark-read path too — if it finished a series, mark the moment.
+        if (ns === 'read' && fromStatus !== 'read') {
+          try { if (typeof maybeFinaleCeremony === 'function') maybeFinaleCeremony(book); } catch (e) {}
+        }
       }
     }));
   document.getElementById('svSheetCancel').addEventListener('click', close);

@@ -24,8 +24,8 @@ const runInWindow = (js) => {
 const ls = window.localStorage;
 
 function makeFake() {
-  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state'];
-  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {} };
+  const SECTION_COLS = ['warning_prefs', 'up_next', 'release_state', 'shelf_state', 'privacy_state', 'milestone_state', 'prefs_state', 'finale_state'];
+  const COL_DEFAULTS = { settings: {}, warning_prefs: {}, up_next: [], release_state: {}, shelf_state: {}, privacy_state: {}, milestone_state: {}, prefs_state: {}, finale_state: {} };
   const fake = {
     rows: new Map(), // user_id -> { user_id, settings, warning_prefs, up_next, release_state, shelf_state, updated_at }
     upserts: [],
@@ -86,6 +86,7 @@ function clearState() {
         'cozylibram.dnaSurveyOff', 'cozylibram.dnaNudgesOff', 'spicyshelves.onboarded',
         'spicyshelves.storeRegion', 'spicyshelves.sortby', 'spicyshelves.seriesfilter',
         'cozylibram.warningPrefs.v1',
+        'cozylibram.finale.v1',
         'cozylibram.privacy.v1',
         'spicyshelves.analytics', 'spicyshelves.logremove',
         'shelfViewMode',
@@ -195,6 +196,15 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v537 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql537) && !/alter table (public\.)?profiles/.test(sql537));
 
+  /* ---------- v565 finale migration shape ---------- */
+  const sql565Path = path.join(ROOT, 'supabase/migrations/v565_user_state_finale.sql');
+  ok('v565 migration file exists', fs.existsSync(sql565Path));
+  const sql565 = fs.readFileSync(sql565Path, 'utf8');
+  ok('v565 adds finale_state jsonb with {} default',
+    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql565));
+  ok('v565 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql565) && !/alter table (public\.)?profiles/.test(sql565));
+
   /* ---------- v536 milestone pin section: collect/apply ---------- */
   clearState();
   ok('milestone pin collect is null when unset',
@@ -240,6 +250,27 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
+  /* ---------- v565 finale section: collect/apply ---------- */
+  clearState();
+  ok('finale collect is null when unset',
+    window.userStateCollectFinale().value === null);
+  const finRec = { kind: 'complete', at: 1750000000000, name: 'The Test Saga', count: 3, pages: 960, first: '2025-01-10T00:00:00.000Z', last: '2025-06-10T00:00:00.000Z', ratings: [5, 4, 0], favChar: null, override: false, seen: true };
+  ls.setItem('cozylibram.finale.v1', JSON.stringify({ 'the test saga': finRec, bogus: { kind: 'everything' } }));
+  ok('finale collect reads the device key and normalizes (bad kinds dropped)',
+    !!window.userStateCollectFinale().value['the test saga'] &&
+    !('bogus' in window.userStateCollectFinale().value));
+  window.userStateApplyFinale({ value: { 'the test saga': { ...finRec, kind: 'caughtup' } } });
+  ok('finale apply writes the device key',
+    JSON.parse(ls.getItem('cozylibram.finale.v1'))['the test saga'].kind === 'caughtup');
+  window.userStateApplyFinale({ value: null });
+  ok('finale apply with null clears the key',
+    ls.getItem('cozylibram.finale.v1') === null);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no finale key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.finale.v1'));
+  ok('settings snapshot never collects the finale key',
+    !('cozylibram.finale.v1' in window.userStateCollect()));
+
   // Local-first: an opt-out already on the device is the live read at
   // boot, with no pull having run (analyticsEnabled reads localStorage).
   ls.setItem('spicyshelves.analytics', '0');

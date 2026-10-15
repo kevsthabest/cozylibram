@@ -4351,3 +4351,30 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   transform: translate(-50%, -50%); transition: background .2s, width .2s, height .2s; }
 .pshare-dot.on::after { background: var(--gold); width: 10px; height: 10px; }
 .pshare-name { text-align: center; font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 14px; }
+
+/* ---- The Finale (js/239): ceremony sheet, keepsake, wax seal ---- */
+.finale-inner { padding: 10px 4px 8px; text-align: center; }
+.finale-card { padding: 8px 6px 2px; }
+.finale-seal { display: inline-block; line-height: 0; vertical-align: middle; }
+.finale-seal svg { width: 100%; height: 100%; display: block; }
+.finale-seal .fs-wax { fill: #7d1d2c; }
+.finale-seal .fs-ring { fill: none; stroke: rgba(243,217,164,.55); stroke-width: 1.1; }
+.finale-seal .fs-star { fill: #f3d9a4; font-size: 15px; }
+.finale-seal-lg { width: 84px; height: 84px; margin-bottom: 10px; }
+.finale-seal-sm { width: 34px; height: 34px; flex: none; }
+.finale-seal-xs { width: 22px; height: 22px; }
+.finale-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--gold); margin-bottom: 6px; }
+.finale-name { font-size: 24px; margin: 0 0 6px; }
+.finale-span { color: var(--muted); font-size: 13px; margin: 0 0 2px; }
+.finale-stats { font-size: 14px; margin: 0 0 6px; }
+.finale-arc { color: var(--gold); font-size: 13px; letter-spacing: 1px; margin: 0 0 8px; }
+.finale-fav { font-family: Georgia, serif; font-style: italic; color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+.finale-copy { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+.finale-share-btn { width: 100%; margin-bottom: 8px; }
+.finale-done-btn { width: 100%; }
+.finale-keep { display: flex; gap: 10px; align-items: center; margin-top: 10px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.finale-keep-main { flex: 1; min-width: 0; }
+.finale-keep-title { font-size: 13px; font-weight: 600; }
+.finale-keep-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.finale-mark { margin-top: 10px; }
