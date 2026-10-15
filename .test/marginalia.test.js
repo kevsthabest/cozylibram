@@ -24,6 +24,13 @@ const tick = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
 /* ================= SQL shape: the real enforcement ================= */
 const mig = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v574_marginalia.sql'), 'utf8');
 const schema = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
+// v578 restates marginalia_for_book (issue #232 parity): the migration arm's
+// read-composition pin targets the LAST migration defining the function,
+// not the founding v574 text (the PR #218 last-definition pattern).
+const migRead = fs.readdirSync(path.join(APP_DIR, 'supabase/migrations'))
+  .filter(f => f.endsWith('.sql')).sort()
+  .map(f => fs.readFileSync(path.join(APP_DIR, 'supabase/migrations', f), 'utf8'))
+  .filter(s => s.includes('function public.marginalia_for_book')).pop() || mig;
 for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
   ok(label + ': profiles gains marginalia_enabled, default true',
     /add column if not exists marginalia_enabled boolean not null default true/.test(sql));
@@ -66,11 +73,11 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
     />= 20/.test(addFn) &&
     /pin outside your progress/.test(addFn) &&
     /page count needed/.test(addFn));
-  const readFn = (sql.split('function public.marginalia_for_book')[1] || '').split('$$;')[0];
+  const readFn = ((label === 'migration' ? migRead : sql).split('function public.marginalia_for_book')[1] || '').split('$$;')[0];
   ok(label + ': read — fraction gate + author switch + shelf visibility + blocks composed',
     /n\.frac <= v_frac/.test(readFn) &&
     /marginalia_enabled/.test(readFn) &&
-    /public\.circle_book_visible\(n\.author_id, ab\.data ->> 'status'\)/.test(readFn) &&
+    /public\.circle_book_visible\(n\.author_id, ab\.data ->> 'status', ab\.data ->> 'owned'\)/.test(readFn) &&
     /from public\.blocks bl/.test(readFn) &&
     /limit 500/.test(readFn) &&
     /n\.author_id = v_uid/.test(readFn));
