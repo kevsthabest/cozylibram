@@ -319,6 +319,77 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
       /select p\.share_library\s+and not \(coalesce\(p_status, ''\) = any \(coalesce\(p\.hidden_shelves/.test(body));
   });
 
+  // ---------- v578: derived-wishlist server parity (issue #232) ----------
+  // Since v559 the Wishlist is a DERIVED shelf (status 'tbr' + owned
+  // 'tobuy'), but the 2-arg helper gated on the raw status alone, so a
+  // hidden 'wishlist' key withheld nothing server-side — derived books
+  // reached accepted friends as ordinary TBR rows. v578 adds a 3-arg
+  // overload that delegates every 2-arg gate and withholds exactly the
+  // derived set, restates the books policy to pass the row's owned
+  // facet, and restates marginalia_for_book to pass the author copy's
+  // facet (Advisor ruling 2026-10-15: marginalia IN, buddy reads OUT —
+  // buddy visibility flows from the pair's per-book accept, not shelf
+  // posture, so v528 keeps the 2-arg call by decision, not oversight).
+  // Negative control (PR #185 pattern): run this file with BOOKTOK_DIR
+  // at a pre-v578 checkout and exactly this section's pins must FAIL —
+  // the migration file is absent there and schema.sql carries none of
+  // it — while every earlier section still passes. readSql turns a
+  // missing file into '' so the failure surfaces as named FAIL lines,
+  // not a harness error.
+  const readSql = (rel) => {
+    try { return fs.readFileSync(path.join(APP_DIR, rel), 'utf8'); } catch (e) { return ''; }
+  };
+  const fnBySig = (sql, sig) => {
+    const i = sql.indexOf('create or replace function public.' + sig);
+    if (i < 0) return '';
+    const j = sql.indexOf('$$;', i);
+    return j < 0 ? '' : sql.slice(i, j + 3);
+  };
+  const mig578 = readSql('supabase/migrations/v578_wishlist_server_parity.sql');
+  const schema578 = readSql('supabase/schema.sql');
+  const OVERLOAD_SIG = 'circle_book_visible(p_owner uuid, p_status text, p_owned text)';
+  const migOver = fnBySig(mig578, OVERLOAD_SIG);
+  const schemaOver = fnBySig(schema578, OVERLOAD_SIG);
+  ok('v578 sql: wishlist-parity migration file exists', mig578.length > 0);
+  [['migration', migOver, mig578], ['schema.sql', schemaOver, schema578]].forEach(([label, body, whole]) => {
+    ok('v578 sql (' + label + '): 3-arg overload defined', body.length > 0);
+    ok('v578 sql (' + label + '): overload delegates every gate to the 2-arg helper',
+      /select public\.circle_book_visible\(p_owner, p_status\)/.test(body));
+    ok('v578 sql (' + label + '): withhold clause is exactly the derived set (tbr + tobuy + hidden wishlist)',
+      /not \(\s*coalesce\(p_status, ''\) = 'tbr'\s+and coalesce\(p_owned, ''\) = 'tobuy'\s+and exists \(\s*select 1 from public\.profiles p\s+where p\.user_id = p_owner\s+and 'wishlist' = any \(coalesce\(p\.hidden_shelves/.test(body));
+    ok('v578 sql (' + label + '): facet EXISTS keeps hidden indistinguishable from no-such-book',
+      /and exists \(\s*select 1 from public\.books b\s+where b\.user_id = p_owner\s+and coalesce\(b\.data ->> 'status', ''\) = coalesce\(p_status, ''\)\s+and coalesce\(b\.data ->> 'owned', ''\) = coalesce\(p_owned, ''\)/.test(body));
+    ok('v578 sql (' + label + '): overload EXECUTE is authenticated-only',
+      whole.includes('revoke all on function public.circle_book_visible(uuid, text, text) from public;') &&
+      whole.includes('grant execute on function public.circle_book_visible(uuid, text, text) to authenticated;'));
+    ok('v578 sql (' + label + '): books policy passes the row facet into the check',
+      whole.includes("public.circle_book_visible(books.user_id, books.data->>'status', books.data->>'owned')"));
+  });
+  ok('v578 sql: migration and schema.sql overload definitions agree',
+    migOver.length > 0 && migOver.replace(/\s+/g, ' ') === schemaOver.replace(/\s+/g, ' '));
+  // Marginalia identity: the v578 restatement must be the v574 function
+  // VERBATIM apart from the one expression gaining the owned facet
+  // (Advisor condition: a pin, not trust). Normalise the known
+  // difference away in the v578 copy, then require byte equality.
+  const MARG_2ARG = "public.circle_book_visible(n.author_id, ab.data ->> 'status')";
+  const MARG_3ARG = "public.circle_book_visible(n.author_id, ab.data ->> 'status', ab.data ->> 'owned')";
+  const margV574 = fnBySig(readSql('supabase/migrations/v574_marginalia.sql'), 'marginalia_for_book');
+  const margV578 = fnBySig(mig578, 'marginalia_for_book');
+  const margSchema = fnBySig(schema578, 'marginalia_for_book');
+  ok('v578 sql: marginalia_for_book defined in v574, v578, and schema.sql',
+    margV574.length > 0 && margV578.length > 0 && margSchema.length > 0);
+  ok('v578 sql: restated marginalia calls the 3-arg overload exactly once, and never the 2-arg form',
+    margV578.split(MARG_3ARG).length - 1 === 1 && !margV578.includes(MARG_2ARG));
+  ok('v578 sql: marginalia restatement is byte-identical to v574 once the one expression is normalised back',
+    margV578.length > 0 && margV578.replace(MARG_3ARG, MARG_2ARG) === margV574);
+  ok('v578 sql: schema.sql marginalia_for_book matches the v578 restatement byte-for-byte',
+    margSchema.length > 0 && margSchema === margV578);
+  // Drift proof: a restatement drifted by a single space in the changed
+  // expression must fail the identity pin (in-test string only).
+  const margDrift = margV578.replace(MARG_3ARG, MARG_3ARG.replace(", ab.data", ",  ab.data"));
+  ok('v578 pin drift proof: a one-space drift in the restated expression breaks the identity pin',
+    margV578.length > 0 && margDrift.replace(MARG_3ARG, MARG_2ARG) !== margV574);
+
   // ---------- circle_profiles projection shape-pin (QA Scout item 1) ----------
   // The behaviour tests above drive a hand-written JS mirror of the view
   // (projectPublic). Until now NOTHING pinned the mirror to the SQL: add
