@@ -4312,7 +4312,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
    portrait card; reuses the portrait's sections, adds the candle name,
    the note rows, and the honest thin-data line. ---- */
 .candle-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-  padding: 14px 16px 10px; margin: 0 0 14px; }
+  padding: 14px 16px 10px; margin: 0 0 14px; overflow: hidden; }
+/* the candle figure: flame is the constant house flame; the wax takes
+   the book's cover tint (or the default gradient) via inline style.
+   Text never sits on the wax — name + notes stay on the card ground. */
+.candle-fig { float: right; display: flex; flex-direction: column; align-items: center;
+  margin: 0 2px 4px 12px; }
+.candle-fig-flame { width: 11px; height: 17px; margin-bottom: -2px;
+  background: radial-gradient(circle at 50% 75%, #fff6c8 0%, #ffd76a 35%, #ff9d3c 65%, rgba(255,120,40,0) 100%);
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; }
+.candle-fig-wax { width: 24px; height: 38px; border-radius: 5px 5px 3px 3px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.14), 2px 2px 5px rgba(0,0,0,.3); }
 .candle-card .portrait-head { margin-bottom: 2px; }
 .candle-name { font-size: 22px; font-weight: 600; margin: 2px 0 6px; }
 .candle-share { margin-left: auto; }
