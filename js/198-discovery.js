@@ -698,6 +698,10 @@ function renderDiscover() {
     '<div class="serif stage-headline">Let the shelf decide.</div>' +
     '<p class="stage-sub">' + tbrLine + '</p>' +
     '<button class="btn stage-btn" data-dtile="pick">' + icon('dice') + ' Surprise Me</button>' +
+    // v564: Blind Date rides the same stage as a secondary action —
+    // it opens the roulette with the wrapped mode on (spec §7: no new
+    // tile, no new doorway).
+    '<div><button class="taplink" id="disc-blind-date">or go on a blind date →</button></div>' +
     '<div><button class="taplink" id="disc-browse-tbr">or browse your TBR →</button></div></div>' +
 
     '<div class="disc-job-row"><span>Find new books</span><i></i></div>' +
@@ -743,6 +747,11 @@ function renderDiscover() {
   const browse = document.getElementById('disc-browse-tbr');
   if (browse) browse.addEventListener('click', () => {
     filter = 'tbr'; ownFilter = 'all'; query = ''; go('library');
+  });
+  const bdLink = document.getElementById('disc-blind-date');
+  if (bdLink) bdLink.addEventListener('click', () => {
+    if (typeof setBlindDate === 'function') setBlindDate(true);
+    go('pick');
   });
   document.querySelectorAll('.seed-chip').forEach(chip => chip.addEventListener('click', async () => {
     const seed = library.find(b => b.id === chip.dataset.seed);

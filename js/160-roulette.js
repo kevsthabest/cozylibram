@@ -58,6 +58,105 @@ function pickCandidates() {
   });
 }
 
+/* ---------------- Blind Date (v564) ----------------
+   A wrapped mode of the roulette above (spec: docs/blind-date-spec.md).
+   The pick logic is untouched — blindPool() is pickCandidates() minus
+   this session's passes. The wrapped state is presentational only: no
+   book data changes until Start Reading, and Pass writes nothing at
+   all (the passed set lives in module memory, so a later session can
+   offer the book again). */
+let blindDate = { on: false };
+let blindPassed = {}; // session-only: bookId -> true
+
+function setBlindDate(on) { blindDate.on = !!on; }
+
+function blindPool() {
+  const c = pickCandidates();
+  let left = c.filter(b => !blindPassed[b.id]);
+  if (!left.length && c.length) { blindPassed = {}; left = c; } // spent pile: everyone back in
+  return left;
+}
+
+/* The clues a wrapped book may show — existing fields only (spec §1).
+   Tropes follow the decided precedence (v547) as far as local data
+   reaches: pipeline (tropesAI) first, then the reader's own, deduped,
+   capped at 3. Spice is the app's own axis display (ratingBadges).
+   First line: a record either carries one verbatim (firstLine) or the
+   clue is omitted — the corpus stores no opening lines today, and the
+   description / saved quotes are never substituted for one. */
+function blindDateClues(b) {
+  const seen = {}, tropes = [];
+  const push = list => (list || []).forEach(t => {
+    const name = String(t || '').trim();
+    if (!name) return;
+    const k = name.toLowerCase();
+    if (!seen[k]) { seen[k] = 1; tropes.push(name); }
+  });
+  push(b.tropesAI);
+  push(b.tropes);
+  const genres = (typeof bookGenres === 'function') ? bookGenres(b) : [];
+  return {
+    tropes: tropes.slice(0, 3),
+    spiceHTML: (typeof ratingBadges === 'function') ? ratingBadges(b) : '',
+    pages: (b.pageCount > 0) ? b.pageCount : null,
+    genres: genres.slice(0, 2),
+    firstLine: (typeof b.firstLine === 'string' && b.firstLine.trim()) ? b.firstLine.trim() : null,
+  };
+}
+
+/* The wrapped card. Title, author, cover, description and series are
+   never read here — nothing identifying reaches the DOM until the
+   reader unwraps (showWinner) or starts the book. */
+function blindDateHTML(b) {
+  const c = blindDateClues(b);
+  const meta = c.genres.map(g => esc(g));
+  if (c.pages) meta.push(c.pages + ' pages');
+  return '<div class="winner bd-wrapped">' +
+    '<div class="stat-sub" style="margin-top:0">A blind date ' + icon('gift') + '</div>' +
+    '<div class="bd-wrap" aria-hidden="true"><span class="bd-wrap-ic">' + icon('gift') + '</span></div>' +
+    '<p class="bd-tagline">Wrapped — so the cover can\'t sway you.</p>' +
+    (c.tropes.length
+      ? '<div class="badges" style="justify-content:center">' +
+        c.tropes.map(t => '<span class="badge bd-chip">' + icon('tag') + ' ' + esc(t) + '</span>').join('') + '</div>'
+      : '') +
+    (c.spiceHTML ? '<div class="bd-spice">' + c.spiceHTML + '</div>' : '') +
+    (meta.length ? '<p class="bd-meta">' + meta.join(' · ') + '</p>' : '') +
+    (c.firstLine
+      ? '<blockquote class="bd-firstline"><span class="stat-sub">First line</span>\u201C' +
+        esc(c.firstLine) + '\u201D</blockquote>'
+      : '') +
+    '<div class="winner-actions">' +
+    '<button class="btn" id="bd-start">' + icon('reading') + ' Start reading</button>' +
+    '<button class="btn ghost" id="bd-unwrap">' + icon('gift') + ' Unwrap</button>' +
+    '<button class="btn ghost" id="bd-pass">' + icon('dice') + ' Pass</button>' +
+    '</div></div>';
+}
+
+function runBlindDate() {
+  const pool = blindPool();
+  const box = document.getElementById('roulette-result');
+  if (!pool.length) { toast('No matching books 🎲'); return; }
+  track('blind_date_dealt');
+  const b = pool[Math.floor(Math.random() * pool.length)];
+  box.innerHTML = blindDateHTML(b);
+  document.getElementById('bd-pass').addEventListener('click', () => {
+    blindPassed[b.id] = true; // memory only — the book itself is untouched
+    track('blind_date_pass');
+    runBlindDate();
+  });
+  document.getElementById('bd-unwrap').addEventListener('click', () => {
+    track('blind_date_unwrap');
+    showWinner(b); // reveal only — status unchanged
+  });
+  document.getElementById('bd-start').addEventListener('click', () => {
+    track('blind_date_start');
+    showWinner(b); // Start reading unwraps first (spec §1)
+    startRouletteBook(b);
+  });
+}
+
+function spinPick() { if (blindDate.on) runBlindDate(); else runRoulette(); }
+
 // v236: dismiss trope suggestions on outside tap (module scope — runs once,
 // not per render; the box is re-created by each renderPick).
 document.addEventListener('click', e => {
@@ -112,11 +211,18 @@ function renderPick() {
     '<button class="chip' + (pickState.upNextOnly ? ' active' : '') + '" id="pk-upnext">' + icon('upnext') + ' Up Next only (' + upNext.length + ')</button></div>';
   html += '</div>';
 
+  // v564: Blind Date mode toggle — a mode of this surface, not a new
+  // destination. Face up is the classic roulette; Blind date deals the
+  // same pick wrapped (blindDateHTML).
+  html += '<div class="stat-sub">Pick style</div><div class="chips pk-modes">' +
+    '<button class="chip' + (blindDate.on ? '' : ' active') + '" data-bdmode="open">' + icon('covers') + ' Face up</button>' +
+    '<button class="chip' + (blindDate.on ? ' active' : '') + '" data-bdmode="blind">' + icon('gift') + ' Blind date</button></div>';
+
   html += '<p class="note" id="pick-count"></p>' +
     // v359: matching-books preview strip (UX backlog #1 — visual payoff for filters)
     '<div id="pk-preview" class="pk-preview"></div>' +
     '<div class="pk-cta-row">' +
-    '<button class="btn pick-btn" id="pk-spin">' + icon('dice') + ' Pick my next read</button>' +
+    '<button class="btn pick-btn" id="pk-spin">' + icon('dice') + (blindDate.on ? ' Pick my blind date' : ' Pick my next read') + '</button>' +
     // v359: reset as secondary button next to CTA (was detached floating link)
     '<button class="btn ghost" id="pk-reset">Reset</button>' +
     '</div>' +
@@ -180,7 +286,11 @@ function renderPick() {
     pickState.upNextOnly = false;
     renderPick();
   });
-  document.getElementById('pk-spin').addEventListener('click', runRoulette);
+  document.querySelectorAll('#view [data-bdmode]').forEach(c => c.addEventListener('click', () => {
+    setBlindDate(c.dataset.bdmode === 'blind');
+    renderPick();
+  }));
+  document.getElementById('pk-spin').addEventListener('click', spinPick);
 }
 
 function updatePickCount() {
@@ -196,16 +306,24 @@ function updatePickCount() {
   // v359: preview strip of matching books
   const prev = document.getElementById('pk-preview');
   if (prev) {
-    prev.innerHTML = candidates.slice(0, 6).map(b =>
-      '<button class="pk-prev-book" data-pkprev="' + esc(b.id) + '" title="' + esc(b.title) + '">' +
-      // v360: gradient tile with title (consistent with v357 character pages)
-      (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<span class="pk-nocover">' + esc(b.title || '?') + '</span>') +
-      '</button>').join('') +
-      (n > 6 ? '<span class="note">+' + (n - 6) + ' more</span>' : '');
-    prev.querySelectorAll('[data-pkprev]').forEach(im => im.addEventListener('click', () => {
-      const book = (typeof library !== 'undefined' ? library : []).find(x => x.id === im.dataset.pkprev);
-      if (book && typeof openPreviewModal === 'function') openPreviewModal(book);
-    }));
+    // v564: in Blind Date mode the strip must not leak what it's
+    // previewing — wrapped tiles, no covers, no titles, no tap-through.
+    if (blindDate.on) {
+      prev.innerHTML = candidates.slice(0, 6).map(() =>
+        '<span class="pk-prev-book pk-prev-wrapped">' + icon('gift') + '</span>').join('') +
+        (n > 6 ? '<span class="note">+' + (n - 6) + ' more</span>' : '');
+    } else {
+      prev.innerHTML = candidates.slice(0, 6).map(b =>
+        '<button class="pk-prev-book" data-pkprev="' + esc(b.id) + '" title="' + esc(b.title) + '">' +
+        // v360: gradient tile with title (consistent with v357 character pages)
+        (b.cover ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy">' : '<span class="pk-nocover">' + esc(b.title || '?') + '</span>') +
+        '</button>').join('') +
+        (n > 6 ? '<span class="note">+' + (n - 6) + ' more</span>' : '');
+      prev.querySelectorAll('[data-pkprev]').forEach(im => im.addEventListener('click', () => {
+        const book = (typeof library !== 'undefined' ? library : []).find(x => x.id === im.dataset.pkprev);
+        if (book && typeof openPreviewModal === 'function') openPreviewModal(book);
+      }));
+    }
   }
   // v359: reset button disabled state
   const reset = document.getElementById('pk-reset');
@@ -254,6 +372,30 @@ function runRoulette() {
   }, 90);
 }
 
+/* The winner card's Start Reading flow, shared with Blind Date's
+   Start (v564): mark reading, with the one-time trigger-check heads-up
+   in front of it exactly as the modal's Start behaves. */
+function startRouletteBook(b) {
+  const doStart = () => {
+    b.status = 'reading';
+    saveLibrary();
+    track('roulette_book_started');
+    toast('Happy reading! 📖');
+    filter = 'reading';
+    go('library');
+  };
+  // v455: trigger check — same one-time heads-up as the modal's Start Reading
+  // v459: enrich with accepted community trigger warnings first (flywheel).
+  (async () => {
+    try { if (typeof window.ccEnrichWarnings === 'function') await window.ccEnrichWarnings(b); } catch (e) {}
+    if (typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
+      openTriggerCheckSheet(b, doStart);
+      return;
+    }
+    doStart();
+  })();
+}
+
 function showWinner(b) {
   const box = document.getElementById('roulette-result');
   const genres = bookGenres(b);
@@ -276,27 +418,8 @@ function showWinner(b) {
     '<button class="btn ghost" id="w-detail">' + icon('search') + ' Details</button>' +
     '</div></div>';
 
-  const rouletteStartReading = () => {
-    b.status = 'reading';
-    saveLibrary();
-    track('roulette_book_started');
-    toast('Happy reading! 📖');
-    filter = 'reading';
-    go('library');
-  };
-  document.getElementById('w-start').addEventListener('click', () => {
-    // v455: trigger check — same one-time heads-up as the modal's Start Reading
-    // v459: enrich with accepted community trigger warnings first (flywheel).
-    (async () => {
-      try { if (typeof window.ccEnrichWarnings === 'function') await window.ccEnrichWarnings(b); } catch (e) {}
-      if (typeof triggerCheckNeeded === 'function' && triggerCheckNeeded(b)) {
-        openTriggerCheckSheet(b, rouletteStartReading);
-        return;
-      }
-      rouletteStartReading();
-    })();
-  });
-  document.getElementById('w-again').addEventListener('click', runRoulette);
+  document.getElementById('w-start').addEventListener('click', () => startRouletteBook(b));
+  document.getElementById('w-again').addEventListener('click', spinPick);
   document.getElementById('w-detail').addEventListener('click', e => {
     track('roulette_book_opened');
     openDetail(b.id, { fromEl: e.currentTarget });

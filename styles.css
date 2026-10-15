@@ -1715,6 +1715,42 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .winner-actions { display: flex; gap: 8px; margin-top: 14px; }
 .winner-actions .btn { flex: 1; padding: 12px 6px; font-size: 14px; }
 
+/* v564: Blind Date — the wrapped card (js/160). Paper + a ribbon cross
+   in theme colours at winner-cover size; the two bands and the seal
+   are the whole decoration. */
+.bd-wrap {
+  width: 120px; aspect-ratio: 2/3; margin: 6px auto 10px;
+  border-radius: 4px 10px 10px 4px; position: relative; overflow: hidden;
+  background: linear-gradient(150deg, var(--card2), var(--bg2) 65%, var(--card2));
+  box-shadow: 0 10px 26px var(--shadow-c), inset 3px 0 6px rgba(255,255,255,.08);
+  display: flex; align-items: center; justify-content: center;
+}
+.bd-wrap::before, .bd-wrap::after {
+  content: ''; position: absolute; background: var(--gold); opacity: .8;
+}
+.bd-wrap::before { top: 0; bottom: 0; left: 50%; width: 13px; transform: translateX(-50%); }
+.bd-wrap::after { left: 0; right: 0; top: 50%; height: 13px; transform: translateY(-50%); }
+.bd-wrap-ic {
+  position: relative; z-index: 1; width: 42px; height: 42px; border-radius: 50%;
+  background: var(--gold); color: #241a08;
+  display: flex; align-items: center; justify-content: center;
+}
+.bd-wrap-ic .ticon { width: 23px; height: 23px; }
+.bd-tagline { color: var(--muted); margin: 0 0 10px; }
+.bd-spice { margin-top: 9px; }
+.bd-meta { color: var(--muted); margin: 9px 0 0; }
+.bd-firstline {
+  margin: 14px auto 2px; max-width: 340px;
+  font-family: 'Playfair Display', serif; font-style: italic;
+  font-size: 15.5px; line-height: 1.5; color: var(--ink);
+}
+.bd-firstline .stat-sub { display: block; font-style: normal; margin-bottom: 4px; }
+.pk-prev-wrapped {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--gold); cursor: default;
+}
+.pk-prev-wrapped .ticon { width: 20px; height: 20px; }
+
 /* v131: header rating + segmented mood bars in the book modal */
 .hrate { margin-top: 10px; }
 .hrate-label {
