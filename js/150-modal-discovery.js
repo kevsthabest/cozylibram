@@ -1081,6 +1081,8 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-rittoo"></div>' +
     // v468: Book Portrait card — pinned under the hero, above the tabs.
     (typeof portraitCardHTML === 'function' ? portraitCardHTML(b) : '') +
+    // v564: Your Book as a Candle — directly beside (below) Book Portrait.
+    (typeof candleCardHTML === 'function' ? candleCardHTML(b) : '') +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
     // collapsible sections; every control keeps its id). v182: mockup tab icons.
     '<div class="d-tabs" role="tablist">' +
