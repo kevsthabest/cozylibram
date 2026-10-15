@@ -293,7 +293,13 @@ function userStateApplyMilestonePin(payload) {
 // read live at every resolve (bookDressingEnabled), and the apply hook
 // below re-resolves the dressing so a roamed OFF undresses this device
 // the moment it lands.
-const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress'];
+// v572: a fourth key joins the same way — cozylibram.ambience.volume,
+// the ambience player's volume (js/241). Same reasoning as the original
+// pair: a reader detail set on one device and expected on the others;
+// it joins THIS section, never the frozen v518 settings snapshot. The
+// ambience module reads it live from localStorage at point of use, so
+// apply writing localStorage is the live apply.
+const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress', 'cozylibram.ambience.volume'];
 function userStateCollectPrefs() {
   const values = {};
   try {
