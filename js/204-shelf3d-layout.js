@@ -11,7 +11,8 @@
    Globals: SHELF_W, MAX_BOOKS (the two case constants the packer reads;
    js/215's remaining dimensions stay in js/215), DECO_FOOTPRINTS,
    shelf3dDecoFootprint, shelf3dPackCase, shelf3dFitDistance,
-   shelf3dClampPan. */
+   shelf3dClampPan, shelf3dFaceWidth, shelf3dFaceDepth, shelf3dFaceZ,
+   shelf3dCoverCrop. */
 
 var SHELF_W = 10;                          // bookcase width (world units)
 var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
@@ -51,7 +52,11 @@ function s3dDim(v, lo, hi, fb) {
    in the rest of a level — shelf end or the next obstacle — retries on the
    next level; a book that fits nowhere in the case overflows (the caller
    flows it into the next case). Returns { placed: [{i, li, x, w, h}],
-   overflow: [indices] }. Pure: no THREE, no DOM. */
+   overflow: [indices] }. Pure: no THREE, no DOM.
+   Face-out picks (b.faceOut) pack at their cover width (b.faceW) instead
+   of the spine width — the ONLY special case. They wrap, jump decoration
+   intervals, and overflow exactly like any other book, so js/217's case
+   slicing (which simulates this packer) stays in agreement by construction. */
 function shelf3dPackCase(books, obstacles, cap) {
   var order = [2, 1, 0];
   var startX = -SHELF_W / 2 + 0.35, limit = startX + (SHELF_W - 0.7);
@@ -65,7 +70,7 @@ function shelf3dPackCase(books, obstacles, cap) {
   (books || []).forEach(function (b, i) {
     if (!b) { overflow.push(i); return; }
     if (placed.length >= maxN) { overflow.push(i); return; }
-    var w = s3dDim(b.spineW, 0.3, 0.72, 0.44);
+    var w = b.faceOut ? s3dDim(b.faceW, 0.9, 1.75, 1.25) : s3dDim(b.spineW, 0.3, 0.72, 0.44);
     var h = s3dDim(b.spineH, 1.4, 2.7, 2.0);
     var done = false;
     while (li < 3 && !done) {
@@ -107,4 +112,42 @@ function shelf3dClampPan(px, py, halfW, baseY, topY) {
   var cx = Math.max(-halfW, Math.min(halfW, px));
   var cy = Math.max(1.2 - baseY, Math.min(topY - 1.2 - baseY, py));
   return [cx, cy];
+}
+
+/* ---------- face-out display picks ----------
+   A picked book turns its cover to the room. Its shelf footprint is the
+   cover's width, derived from the book's height (real covers run about
+   0.62–0.70 of their height; 0.68 is the middle of that range and matches
+   the approved mockup's proportions). Pure, like everything in this file:
+   the engine (js/215) supplies the THREE work. */
+/* Cover width for a face-out book of the given spine height. */
+function shelf3dFaceWidth(spineH) {
+  var h = Number(spineH);
+  if (!isFinite(h)) h = 2.0;
+  return Math.min(1.6, Math.max(0.95, h * 0.68));
+}
+/* A face-out book's thickness: its own spine width, clamped as the packer
+   clamps spines. Also the depth of its 3D box. */
+function shelf3dFaceDepth(spineW) {
+  return s3dDim(spineW, 0.3, 0.72, 0.44);
+}
+/* Z position for a face-out mesh (spine books sit at z = 0 with depth
+   1.75, so their fronts plane at z = 0.875). A face-out stands pulled
+   forward, bookshop-style: its front sits 0.06 behind the spine fronts,
+   its thin back floating off the case back. */
+function shelf3dFaceZ(spineW) {
+  return 0.875 - 0.06 - shelf3dFaceDepth(spineW) / 2;
+}
+/* Crop-to-fill UV window for a cover image on a face of aspect `aspect`
+   (w/h): returns {rx, ry, ox, oy} for texture.repeat / texture.offset,
+   centre-cropped like the mockup's object-fit: cover. */
+function shelf3dCoverCrop(imgW, imgH, aspect) {
+  var iw = Number(imgW), ih = Number(imgH), a = Number(aspect);
+  if (!isFinite(iw) || !isFinite(ih) || !isFinite(a) || iw <= 0 || ih <= 0 || a <= 0) {
+    return { rx: 1, ry: 1, ox: 0, oy: 0 };
+  }
+  var ia = iw / ih;
+  if (ia > a) { var rx = a / ia; return { rx: rx, ry: 1, ox: (1 - rx) / 2, oy: 0 }; }
+  var ry = ia / a;
+  return { rx: 1, ry: ry, ox: 0, oy: (1 - ry) / 2 };
 }
