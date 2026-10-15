@@ -1201,6 +1201,9 @@ function charLabRender(body, works, chars) {
   const roleCounts = {};
   CHAR_ROLES.forEach(r => { roleCounts[r] = visible.filter(c => c.role === r).length; });
 
+  // v577: merged characters (hidden from the grid) surface here for unmerge
+  const mergedChars = chars.filter(c => c.status === 'merged');
+
   // Duplicate detection
   const dupes = charFindDuplicates(visible);
   const dupeIds = new Set();
@@ -1234,6 +1237,18 @@ function charLabRender(body, works, chars) {
         '<button class="btn sm ghost" data-chmerge="' + i + '" data-keep="' + esc(b.id) + '">Keep ' +
         esc(b.name) + '</button></p>').join('') +
       '<p class="note" id="ch-merge-msg"></p></div>' : '') +
+    (mergedChars.length ? '<div class="ob-card">' +
+      '<h4 class="serif">' + icon('friends') + ' Merged characters (' + mergedChars.length + ')</h4>' +
+      mergedChars.map(c => {
+        const w = chars.find(x => x.id === c.duplicateOf);
+        return '<p><b>' + esc(c.name) + '</b> <span class="note">merged into <b>' +
+          esc(w ? w.name : 'a character no longer in this work') + '</b></span><br>' +
+          (c.mergeSnapshot
+            ? '<button class="btn sm" data-chunmerge="' + esc(c.id) + '">Unmerge</button>'
+            : '<span class="note">No merge snapshot — this merge predates reversible merges and cannot be unmerged.</span>') +
+          '</p>';
+      }).join('') +
+      '<p class="note" id="ch-unmerge-msg"></p></div>' : '') +
     '<p class="note">' +
     '<button class="btn sm' + (!rf ? '' : ' ghost') + '" data-chrole="">All (' + chars.length + ')</button> ' +
     CHAR_ROLES.map(r =>
@@ -1351,6 +1366,27 @@ function charLabRender(body, works, chars) {
       return;
     }
     if (charLabSelectedId === loserId) charLabSelectedId = keepId;
+    charLabRender(body, works, chars);
+  }));
+
+  // v577: Unmerge — restore from the merge snapshot (legacy merges have
+  // no button; charUnmerge refuses them again server-side regardless).
+  body.querySelectorAll('[data-chunmerge]').forEach(b => b.addEventListener('click', async () => {
+    const loserId = b.getAttribute('data-chunmerge');
+    const loser = chars.find(c => c.id === loserId);
+    const winner = loser ? chars.find(c => c.id === loser.duplicateOf) : null;
+    const msg = document.getElementById('ch-unmerge-msg');
+    // v352: in-app confirm
+    if (!await confirmModal('Unmerge "' + (loser ? loser.name : '') + '" from "' +
+        (winner ? winner.name : '') + '"? Relationships repointed by the merge will be restored from the merge snapshot.', { okLabel: 'Unmerge' })) return;
+    b.disabled = true;
+    if (msg) msg.textContent = 'Unmerging…';
+    const err = await charUnmerge(loserId, chars);
+    if (err) {
+      if (msg) msg.textContent = 'Unmerge failed: ' + err;
+      b.disabled = false;
+      return;
+    }
     charLabRender(body, works, chars);
   }));
   document.querySelectorAll('[data-chrole]').forEach(b => b.addEventListener('click', () => {
@@ -1603,6 +1639,14 @@ function charLabDetail(chars) {
 /* Merge two duplicate characters: repoint relationships, soft-merge the loser.
    v321: loser is marked status='merged' with duplicate_of pointing at the
    winner — NOT deleted. Unmerge restores it. Reversible human errors only.
+   v577: the repoints are lossy (nothing recorded which relationships the
+   merge rewrote), so the merge first computes every write, then stores
+   ONE snapshot on the loser row (merge_snapshot) BEFORE any repoint
+   lands — pre-merge relationship arrays for the winner and for every
+   other character the merge rewrites, plus the loser's pre-merge
+   status. The snapshot write is fail-closed: if it errors, the merge
+   aborts untouched, so this code can never mint a fresh irreversible
+   merge. charUnmerge restores from the snapshot only.
    Never throws — returns error string on failure. */
 async function charMerge(winnerId, loserId, chars) {
   try {
@@ -1612,7 +1656,12 @@ async function charMerge(winnerId, loserId, chars) {
     const loser = chars.find(c => c.id === loserId);
     if (!winner || !loser) return 'character not found';
     const loserName = String(loser.name).trim().toLowerCase();
-    // Repoint: in every character's relationships, replace loser name with winner name
+    const deepCopy = (v) => JSON.parse(JSON.stringify(Array.isArray(v) ? v : []));
+    // Compute every write first (pure): the repointed relationship array
+    // for each character the merge changes, remembering the pre-merge
+    // array of every non-winner it touches.
+    const updates = [];
+    const repoints = [];
     for (const c of chars) {
       if (c.id === loserId) continue; // don't touch the loser's own rels
       let changed = false;
@@ -1634,10 +1683,31 @@ async function charMerge(winnerId, loserId, chars) {
         changed = true;
       }
       if (changed) {
-        const { error } = await sb.from('book_characters')
-          .update({ relationships: rels }).eq('id', c.id);
-        if (error) return 'repoint failed: ' + error.message;
+        updates.push({ id: c.id, rels });
+        if (c.id !== winnerId) repoints.push({ id: c.id, rels: deepCopy(c.relationships) });
       }
+    }
+    // Record the snapshot on the loser row before any repoint lands.
+    let by = null;
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      by = user ? user.id : null;
+    } catch (e) { /* provenance is best-effort, as in character_links */ }
+    const snap = {
+      v: 1, at: new Date().toISOString(), by,
+      winnerId, loserId,
+      loserStatus: loser.status || 'candidate',
+      winnerRels: deepCopy(winner.relationships),
+      repoints,
+    };
+    const { error: sErr } = await sb.from('book_characters')
+      .update({ merge_snapshot: snap }).eq('id', loserId);
+    if (sErr) return 'snapshot failed: ' + sErr.message;
+    // Apply the repoints (same order and failure behaviour as pre-v577).
+    for (const u of updates) {
+      const { error } = await sb.from('book_characters')
+        .update({ relationships: u.rels }).eq('id', u.id);
+      if (error) return 'repoint failed: ' + error.message;
     }
     // Soft-merge: mark loser, point at winner (reversible)
     const { error: mErr } = await sb.from('book_characters')
@@ -1645,8 +1715,63 @@ async function charMerge(winnerId, loserId, chars) {
     if (mErr) return 'merge failed: ' + mErr.message;
     loser.status = 'merged';
     loser.duplicateOf = winnerId;
+    loser.mergeSnapshot = snap;
     return null;
   } catch (e) { return (e && e.message) || 'unknown error'; }
 }
 
-/* Unmerge: restore a soft-merged character. */
+/* Unmerge: restore a soft-merged character.
+   v577: restores ONLY from the merge_snapshot charMerge recorded on the
+   loser row — the winner's and every repointed character's relationship
+   arrays come back verbatim (original entries, direction and evidence
+   keys included), and the loser returns to its exact pre-merge status
+   (a confirmed character is restored confirmed, a rejected one stays
+   rejected — unmerge never launders or resurrects a review state).
+   Legacy merges (pre-v577) recorded no snapshot and REFUSE: nothing is
+   reconstructed by inference. The loser row is written LAST and the
+   snapshot is cleared only in that final write, so a failed unmerge
+   leaves the loser still merged with its snapshot intact — every
+   restore write is a verbatim snapshot value, so retrying is safe and
+   a second unmerge after success refuses as "not merged" instead of
+   duplicating anything. Never throws — returns error string on
+   failure, null on success. */
+async function charUnmerge(loserId, chars) {
+  try {
+    const sb = await CharacterStore._sb();
+    if (!sb) return 'cloud unavailable';
+    const loser = chars.find(c => c.id === loserId);
+    if (!loser) return 'character not found';
+    // Decide on the server's record, not the possibly stale in-memory copy.
+    const { data: row, error: fErr } = await sb.from('book_characters')
+      .select('id, status, duplicate_of, merge_snapshot').eq('id', loserId).maybeSingle();
+    if (fErr) return 'unmerge failed: ' + fErr.message;
+    if (!row) return 'character not found';
+    if (row.status !== 'merged') return 'not merged — nothing to restore';
+    const snap = row.merge_snapshot;
+    if (!snap || !Array.isArray(snap.winnerRels) || !Array.isArray(snap.repoints)) {
+      return 'no merge snapshot — cannot restore (this merge predates reversible merges)';
+    }
+    if (snap.winnerId !== row.duplicate_of || snap.loserId !== loserId) {
+      return 'merge snapshot mismatch — cannot restore';
+    }
+    const winner = chars.find(c => c.id === snap.winnerId);
+    if (!winner) return 'winner no longer in this work — cannot restore';
+    const deepCopy = (v) => JSON.parse(JSON.stringify(v));
+    for (const rp of snap.repoints) {
+      const { error } = await sb.from('book_characters')
+        .update({ relationships: deepCopy(rp.rels) }).eq('id', rp.id);
+      if (error) return 'unmerge failed: ' + error.message;
+    }
+    const { error: wErr } = await sb.from('book_characters')
+      .update({ relationships: deepCopy(snap.winnerRels) }).eq('id', snap.winnerId);
+    if (wErr) return 'unmerge failed: ' + wErr.message;
+    const { error: lErr } = await sb.from('book_characters')
+      .update({ status: snap.loserStatus || 'candidate', duplicate_of: null, merge_snapshot: null })
+      .eq('id', loserId);
+    if (lErr) return 'unmerge failed: ' + lErr.message;
+    loser.status = snap.loserStatus || 'candidate';
+    loser.duplicateOf = null;
+    loser.mergeSnapshot = null;
+    return null;
+  } catch (e) { return (e && e.message) || 'unknown error'; }
+}

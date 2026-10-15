@@ -253,7 +253,8 @@ function ev(uid, name, cat, props, created) {
       'character_id, book_characters!inner(work_id, works(title))',
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, works(title))',
       'book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, source_type, works(title, series))', // v488: source_type added
-      'id, name, role, description, relationships, confidence, status, suggested_character_id, duplicate_of, first_appearance_chapter, character_links(character_id)', // v488: first_appearance_chapter added
+      'id, name, role, description, relationships, confidence, status, suggested_character_id, duplicate_of, merge_snapshot, first_appearance_chapter, character_links(character_id)', // v488: first_appearance_chapter added; v577: merge_snapshot added (Character Unmerge — curator merge metadata, same fiction-metadata class)
+      'id, status, duplicate_of, merge_snapshot', // v577: charUnmerge's single-row refetch (status + snapshot only)
       'user_id', // v488: standalone user_id projection
       'user_id,event_name,event_category,properties,app_version,created_at', // v488: analytics events
       'id, name, work_id, works!inner(authors, series)',

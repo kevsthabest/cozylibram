@@ -1,0 +1,26 @@
+-- v577: Character Unmerge — merge snapshot on book_characters.
+-- charMerge (js/199-admin.js) soft-merges a loser row (status='merged',
+-- duplicate_of=winner, v321) after repointing every relationship that
+-- named the loser at the winner and folding the loser's relationships
+-- into the winner's. Those repoints are LOSSY: without a record, the
+-- pre-merge relationship arrays cannot be reconstructed, so v321's
+-- promised unmerge could never be built faithfully.
+-- From v577, charMerge first computes every write, then stores ONE
+-- snapshot object on the loser row BEFORE any repoint lands:
+--   { v: 1, at: <ISO>, by: <curator uuid|null>, winnerId, loserId,
+--     loserStatus: <status before merge>,
+--     winnerRels: [ ...winner relationships before merge ],
+--     repoints: [ { id, rels: [...before] } for each OTHER character
+--                 whose relationships the merge rewrites ] }
+-- charUnmerge restores those arrays verbatim (third parties, then the
+-- winner, then the loser last: status/duplicate_of/merge_snapshot), so
+-- a failed unmerge is retryable and a completed one leaves this column
+-- null again. Merges made before this column existed have
+-- merge_snapshot = null and REFUSE unmerge — no inferred reconstruction.
+-- The snapshot write is fail-closed: if it errors (e.g. this migration
+-- has not applied yet), the merge aborts before any repoint, so new
+-- code can never mint a fresh irreversible merge.
+-- Additive and nullable; own-table column, no policy changes (the
+-- existing book_characters RLS governs it unchanged).
+alter table public.book_characters
+  add column if not exists merge_snapshot jsonb;
