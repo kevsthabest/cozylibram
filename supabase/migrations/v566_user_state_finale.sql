@@ -1,4 +1,4 @@
--- v565: user_state eighth section — The Finale keepsakes (js/238).
+-- v566: user_state eighth section — The Finale keepsakes (js/239).
 -- One additive column, same pattern as v520 (sections), v521 (shelf),
 -- v524 (privacy), v536 (milestone pin), v537 (prefs). Payload shape
 -- { _at: <ms epoch>, value: <series key -> finale record map> } — the

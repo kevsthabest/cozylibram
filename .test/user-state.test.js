@@ -196,14 +196,14 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v537 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql537) && !/alter table (public\.)?profiles/.test(sql537));
 
-  /* ---------- v565 finale migration shape ---------- */
-  const sql565Path = path.join(ROOT, 'supabase/migrations/v565_user_state_finale.sql');
-  ok('v565 migration file exists', fs.existsSync(sql565Path));
-  const sql565 = fs.readFileSync(sql565Path, 'utf8');
-  ok('v565 adds finale_state jsonb with {} default',
-    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql565));
-  ok('v565 migration touches only user_state (no policies, no other tables)',
-    !/create policy|drop policy|create table/.test(sql565) && !/alter table (public\.)?profiles/.test(sql565));
+  /* ---------- v566 finale migration shape ---------- */
+  const sql566Path = path.join(ROOT, 'supabase/migrations/v566_user_state_finale.sql');
+  ok('v566 migration file exists', fs.existsSync(sql566Path));
+  const sql566 = fs.readFileSync(sql566Path, 'utf8');
+  ok('v566 adds finale_state jsonb with {} default',
+    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql566));
+  ok('v566 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql566) && !/alter table (public\.)?profiles/.test(sql566));
 
   /* ---------- v536 milestone pin section: collect/apply ---------- */
   clearState();
@@ -250,7 +250,7 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
-  /* ---------- v565 finale section: collect/apply ---------- */
+  /* ---------- v566 finale section: collect/apply ---------- */
   clearState();
   ok('finale collect is null when unset',
     window.userStateCollectFinale().value === null);
