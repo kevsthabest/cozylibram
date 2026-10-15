@@ -22,9 +22,13 @@
  *      wishlist book is the acquisition action (mark owned).
  *   7. friend view: a friend's wishlist is their tbr+tobuy set; the
  *      'wishlist' shelf identity persists for hiding (hideableShelves).
- *   8. the database contract from v529 stands: circle_book_visible is
- *      the TWO-arg (owner, status) function; no 3-arg overload; no
- *      v529 SQL migration exists.
+ *   8. the database contract: from v529 the helper was the TWO-arg
+ *      (owner, status) function with no SQL migration — superseded in
+ *      exactly that point by v578 (issue #232): the books policy now
+ *      routes through a 3-arg overload (owner, status, owned) so a
+ *      hidden 'wishlist' key withholds the derived shelf server-side.
+ *      The 2-arg helper itself stands for its other callers, and the
+ *      v529/v559 no-migration facts stand.
  * js/040 cannot load under jsdom (no indexedDB), so storage end-to-end
  * is verified through the load functions on the legacy backend plus
  * source pins for the slot-path wiring. */
@@ -280,12 +284,22 @@ const book = (id, status, owned, extra) => Object.assign({
   ok('both privacy surfaces build their shelf list from hideableShelves()',
     /hideableShelves\(\)/.test(src180) && /hideableShelves\(\)/.test(src195));
 
-  /* ============ 8. database contract (unchanged from v529) ============ */
+  /* ============ 8. database contract (v529 shape; policy form superseded by v578 / #232) ============ */
   const booksPolicy = read('supabase/schema.sql');
-  ok('schema: books select routes visibility through the 2-arg circle_book_visible(owner, status)',
-    /circle_book_visible\(\s*books\.user_id\s*,\s*books\.data\s*->>\s*'status'\s*\)/.test(booksPolicy));
-  ok('schema: no 3-arg circle_book_visible overload is introduced',
-    !/function\s+circle_book_visible\s*\([^)]*,[^)]*,/i.test(booksPolicy));
+  // NAMED PIN MOVEMENT (v578, CONSTRAINTS rule 4): this pin asserted the
+  // 2-arg policy call — the exact shape issue #232's approved design
+  // replaces, because the 2-arg check cannot see the owned facet the
+  // derived shelf is made of. The pin now asserts the 3-arg form with
+  // the same strength (the policy must route through the helper, with
+  // the facet). The old 'no 3-arg overload' pin is replaced too: its
+  // regex never matched the public.-qualified definition text (it
+  // passed both before and after the overload existed — vacuous), so
+  // it is succeeded by real existence pins for both overloads.
+  ok('schema: books select routes visibility through the 3-arg circle_book_visible(owner, status, owned) — v578 / #232',
+    /circle_book_visible\(\s*books\.user_id\s*,\s*books\.data\s*->>\s*'status'\s*,\s*books\.data\s*->>\s*'owned'\s*\)/.test(booksPolicy));
+  ok('schema: the 3-arg overload is defined, and the 2-arg helper remains for its other callers',
+    /function\s+public\.circle_book_visible\(p_owner uuid, p_status text, p_owned text\)/.test(booksPolicy) &&
+    /function\s+public\.circle_book_visible\(p_owner uuid, p_status text\)/.test(booksPolicy));
   ok('no v529 SQL migration exists (the shelf split was client-side)',
     !fs.existsSync(path.join(ROOT, 'supabase/migrations/v529_wishlist_shelf.sql')));
   ok('no v559 SQL migration (the unification is client-side)',
