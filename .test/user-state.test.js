@@ -89,7 +89,7 @@ function clearState() {
         'cozylibram.finale.v1',
         'cozylibram.privacy.v1',
         'spicyshelves.analytics', 'spicyshelves.logremove',
-        'cozylibram.ambience.volume',
+        'cozylibram.bookdress', 'cozylibram.ambience.volume',
         'shelfViewMode',
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
@@ -144,9 +144,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v571',
-    /APP_VERSION = 'v571'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v571"));
+  ok('version pairing is v572',
+    /APP_VERSION = 'v572'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v572"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -251,7 +251,7 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
-  /* ---------- v571: the ambience volume joins the prefs inventory ----------
+  /* ---------- v572: the ambience volume joins the prefs inventory ----------
      A new key in THIS section (never the frozen settings snapshot):
      collect reads it, apply writes it, and it stays out of
      USER_STATE_KEYS like the other prefs keys. */
@@ -267,6 +267,35 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
     !window.__probeKeys.includes('cozylibram.ambience.volume'));
   ok('settings snapshot never collects the ambience volume key',
     !('cozylibram.ambience.volume' in window.userStateCollect()));
+  clearState();
+  /* ---------- v572: the prefs inventory is the composed union ----------
+     The book-dressing (v571) and ambience (v572) branches each added a
+     key to this section from parallel bases; the merge composes
+     PREFS_STATE_KEYS to the union of all four — the original pair, the
+     dressing toggle, and the ambience volume. This block pins the
+     composed list behaviourally: all four keys collect and apply
+     through the one prefs section, and none joins USER_STATE_KEYS. */
+  clearState();
+  ls.setItem('spicyshelves.analytics', '0');
+  ls.setItem('spicyshelves.logremove', 'on');
+  ls.setItem('cozylibram.bookdress', 'off');
+  ls.setItem('cozylibram.ambience.volume', '0.5');
+  const composedPrefs = window.userStateCollectPrefs().values;
+  ok('prefs collect reads the composed four-key inventory',
+    composedPrefs['spicyshelves.analytics'] === '0' &&
+    composedPrefs['spicyshelves.logremove'] === 'on' &&
+    composedPrefs['cozylibram.bookdress'] === 'off' &&
+    composedPrefs['cozylibram.ambience.volume'] === '0.5');
+  window.userStateApplyPrefs({ values: { 'spicyshelves.analytics': '1', 'spicyshelves.logremove': 'off', 'cozylibram.bookdress': 'on', 'cozylibram.ambience.volume': '0.75' } });
+  ok('prefs apply writes the composed four-key inventory',
+    ls.getItem('spicyshelves.analytics') === '1' &&
+    ls.getItem('spicyshelves.logremove') === 'off' &&
+    ls.getItem('cozylibram.bookdress') === 'on' &&
+    ls.getItem('cozylibram.ambience.volume') === '0.75');
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no composed prefs key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.bookdress') &&
+    !window.__probeKeys.includes('cozylibram.ambience.volume'));
   clearState();
   /* ---------- v567 finale section: collect/apply ---------- */
   clearState();

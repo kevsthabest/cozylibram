@@ -1254,7 +1254,7 @@ function renderDetailModal(b, viaBook) {
     // (composition at the Variant A rebase: below the portrait slim bar,
     // same header-zone position the candle shipped in).
     (typeof candleCardHTML === 'function' ? candleCardHTML(b) : '') +
-    // v571: Ambience — one entry on the book page, directly below the
+    // v572: Ambience — one entry on the book page, directly below the
     // Candle (same header zone): a slim bar naming the matched recipe
     // (or the house sounds) + its own play control. The player sheet
     // and mini-control are js/241's own.

@@ -4342,7 +4342,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .candle-row { font-size: 15px; padding: 2px 0 6px; }
 .candle-thin { margin: 2px 0 8px; font-style: italic; }
 
-/* ---- Ambience (v571, js/241): book-page entry, player sheet, mini-control ---- */
+/* ---- Ambience (v572, js/241): book-page entry, player sheet, mini-control ---- */
 .amb-entry { display: flex; align-items: stretch; gap: 8px; margin: 0 0 14px; }
 .amb-entry .amb-open { flex: 1; min-width: 0; }
 .amb-entry-play { flex: none; width: 46px; display: inline-flex; align-items: center; justify-content: center;

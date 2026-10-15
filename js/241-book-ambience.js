@@ -1,4 +1,4 @@
-/* ---- Ambience That Matches the Book (v571): a procedural WebAudio
+/* ---- Ambience That Matches the Book (v572): a procedural WebAudio
    soundscape matched to the book on its page. Spec:
    docs/book-ambience-spec.md.
 
