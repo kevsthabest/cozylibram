@@ -1,4 +1,4 @@
--- v581: Gift a Book v1 — wishlist purchasing & gifting (spec:
+-- v582: Gift a Book v1 — wishlist purchasing & gifting (spec:
 -- docs/gift-purchase-spec.md, approved 2026-10-15). Tagless retailer deep
 -- links are client-side; everything in this migration is the coordination
 -- and PII layer: per-friend gifting grants, secret claims, and the
@@ -457,6 +457,33 @@ end;
 $$;
 revoke all on function public.gift_claim(uuid, text) from public, anon;
 grant execute on function public.gift_claim(uuid, text) to authenticated;
+
+-- The friend-side surface signal: may this caller gift this recipient
+-- at all right now? Composes the same base predicates as every other
+-- surface (grant, link, no block, wishlist open) and answers only a
+-- boolean about the caller's OWN standing — it reveals nothing about
+-- the recipient beyond what the rendered action itself would.
+create or replace function public.gift_can_gift(p_recipient uuid)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null or p_recipient is null or p_recipient = v_uid then
+    return false;
+  end if;
+  return public.gift_has_grant(p_recipient, v_uid)
+     and public.gift_pair_linked(p_recipient, v_uid)
+     and not public.gift_pair_blocked(p_recipient, v_uid)
+     and public.gift_wishlist_open(p_recipient);
+end;
+$$;
+revoke all on function public.gift_can_gift(uuid) from public, anon;
+grant execute on function public.gift_can_gift(uuid) to authenticated;
 
 -- The granted friends' anonymous view of a recipient's wishlist claims.
 -- Refuses the owner by construction; serves nothing at all without the

@@ -32,7 +32,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const DAY = 86400000, HOUR = 3600000;
 
 /* ================= SQL shape: the real enforcement ================= */
-const mig = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v581_gift_a_book.sql'), 'utf8');
+const mig = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v582_gift_a_book.sql'), 'utf8');
 const schema = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
 const fnBody = (sql, name) => (sql.split('function public.' + name + '(')[1] || '').split('$$;')[0];
 
@@ -133,8 +133,8 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
      'gift_wishlist_open(uuid)', 'gift_book_format_kind(uuid, text)',
      'gift_claim_is_live(uuid)', 'gift_claim_state(uuid)'].every(sig =>
       sql.includes('revoke all on function public.' + sig.split('(')[0] + '(' + sig.split('(')[1] + ' from public, anon, authenticated')));
-  ok(label + ': the twelve RPCs are granted to authenticated only',
-    ['gift_claim(uuid, text)', 'gift_claim_states_for(uuid)', 'gift_claims_mine()',
+  ok(label + ': the thirteen RPCs are granted to authenticated only',
+    ['gift_can_gift(uuid)', 'gift_claim(uuid, text)', 'gift_claim_states_for(uuid)', 'gift_claims_mine()',
      'gift_claims_for_recipient()', 'gift_mark_purchased(uuid)', 'gift_release(uuid)',
      'gift_address_upsert(text, text, text, text, text, text, text, text)',
      'gift_address_mine()', 'gift_address_set_sharing(boolean)', 'gift_address_delete()',
