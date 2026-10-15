@@ -4195,6 +4195,17 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   color: var(--muted); margin-bottom: 4px; }
 .portrait-flavor { margin-top: 8px; font-size: 13px; color: var(--muted); }
 .portrait-more { margin-top: 6px; font-size: 13px; }
+
+/* ---- Your Book as a Candle card v564 (js/238): sits directly below the
+   portrait card; reuses the portrait's sections, adds the candle name,
+   the note rows, and the honest thin-data line. ---- */
+.candle-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px 10px; margin: 0 0 14px; }
+.candle-card .portrait-head { margin-bottom: 2px; }
+.candle-name { font-size: 22px; font-weight: 600; margin: 2px 0 6px; }
+.candle-share { margin-left: auto; }
+.candle-row { font-size: 15px; padding: 2px 0 6px; }
+.candle-thin { margin: 2px 0 8px; font-style: italic; }
 .portrait-full { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
 .portrait-bsec { margin-bottom: 10px; }
 .portrait-brow { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
