@@ -379,7 +379,7 @@ async function circleLists() {
  * exposure), activity off (opt-in for everyone). */
 async function circlePrivacy() {
   const sb = await cloudClient();
-  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites,marginalia_enabled').eq('user_id', cloudUser.id).maybeSingle();
+  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites,marginalia_enabled,gift_claims_visible').eq('user_id', cloudUser.id).maybeSingle();
   if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
     // Pre-v522 database: the new toggle columns don't exist yet — fall back
     // to the legacy columns and report the migration defaults for the rest.
@@ -400,8 +400,18 @@ async function circlePrivacy() {
     // v574: Marginalia — the same posture again (default ON,
     // server-authoritative for serving; js/242 owns the semantics).
     marginalia: r.data ? r.data.marginalia_enabled !== false : true,
+    // v582: Gift a Book — recipient claim visibility. DIFFERENT
+    // default: strictly === true, so pre-migration/absent reads as
+    // OFF (surprise protection is opt-in; js/243 owns the rest).
+    giftClaims: r.data ? r.data.gift_claims_visible === true : false,
   };
 }
+/* v582: the Gift a Book opt-in (profiles.gift_claims_visible) rides
+ * this same save through a module slot that wireCirclePrivacyPanel
+ * keeps in step with its panel state: the seven-parameter signature
+ * below is pinned by the marginalia suite, so the value travels
+ * beside it — same optional-key write, same column-drop retry. */
+let circleGiftClaimsValue;
 async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, marginalia) {
   const sb = await cloudClient();
   const row = {
@@ -417,12 +427,13 @@ async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, mar
   if (typeof recos !== 'undefined') row.receive_recos = !!recos;
   if (typeof buddy !== 'undefined') row.receive_buddy_invites = !!buddy;
   if (typeof marginalia !== 'undefined') row.marginalia_enabled = !!marginalia;
+  if (typeof circleGiftClaimsValue !== 'undefined') row.gift_claims_visible = !!circleGiftClaimsValue;
   let up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   if (up.error && typeof isMissingColumn === 'function' && isMissingColumn(up.error) &&
-      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row || 'receive_buddy_invites' in row || 'marginalia_enabled' in row)) {
+      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row || 'receive_buddy_invites' in row || 'marginalia_enabled' in row || 'gift_claims_visible' in row)) {
     // Pre-migration database: persist what exists; the new toggles
     // land with their defaults when the migration is applied.
-    delete row.share_bio; delete row.share_activity; delete row.receive_recos; delete row.receive_buddy_invites; delete row.marginalia_enabled;
+    delete row.share_bio; delete row.share_activity; delete row.receive_recos; delete row.receive_buddy_invites; delete row.marginalia_enabled; delete row.gift_claims_visible;
     up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   }
   if (up.error) throw up.error;
@@ -478,7 +489,17 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     // and stops yours being shown. profiles is authoritative for
     // serving; js/242 mirrors it into the roamed prefs key.
     '<div class="field"><label>Marginalia</label>' + seg(p + '-marginalia', priv.marginalia !== false) +
-    '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>';
+    '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>' +
+    // v582: Gift a Book — the recipient claim-visibility opt-in
+    // plus the slot the async gift sections (per-friend grants,
+    // gift address + sharing, claim views) fill from js/243. The
+    // wrapper starts hidden and is only revealed once js/243
+    // confirms the server supports gifts (fail closed: pre-migration
+    // it never appears, and nothing gift-related renders anywhere).
+    '<div id="' + p + '-giftwrap" hidden>' +
+    '<div class="field"><label>See claims on my wishlist</label>' + seg(p + '-giftclaims', priv.giftClaims === true) +
+    '<p class="note">When on, you can see which of your wishlist books friends have claimed — and who claimed them — right here. Off (the default) keeps gifts a complete surprise: you see nothing about claims, anywhere.</p></div>' +
+    '<div id="' + p + '-gift-slot"></div></div>';
   // v524: the content shield — the one INCOMING control in this panel
   // (what the viewer sees, not what they send). Its state lives in
   // user_state (js/230-privacy.js), never in profiles, so it is read
@@ -495,14 +516,21 @@ function wireCirclePrivacyPanel(root, priv, p) {
     bio: priv.bio !== false, activity: priv.activity === true,
     recos: priv.recos !== false, buddy: priv.buddy !== false,
     marginalia: priv.marginalia !== false,
+    // v582: strictly opt-in (default OFF) — never coerced on.
+    giftClaims: priv.giftClaims === true,
   };
-  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos, state.buddy, state.marginalia)
-    .then(() => {
-      // v574: keep the roamed local key (js/242's UI state) in step
-      // with the authoritative profiles flag the save just landed.
-      if (typeof marginaliaSetLocal === 'function') marginaliaSetLocal(state.marginalia);
-    });
-  const segWire = (id, key, msgOn, msgOff) => {
+  const save = () => {
+    // v582: publish the panel's gift opt-in for circleSavePrivacy
+    // to fold into the row (see circleGiftClaimsValue above).
+    circleGiftClaimsValue = state.giftClaims;
+    return circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos, state.buddy, state.marginalia)
+      .then(() => {
+        // v574: keep the roamed local key (js/242's UI state) in step
+        // with the authoritative profiles flag the save just landed.
+        if (typeof marginaliaSetLocal === 'function') marginaliaSetLocal(state.marginalia);
+      });
+  };
+  const segWire = (id, key, msgOn, msgOff, after) => {
     root.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', async () => {
       const v = b.dataset.v === '1';
       if (state[key] === v) return;
@@ -512,6 +540,7 @@ function wireCirclePrivacyPanel(root, priv, p) {
         await save();
         root.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b));
         toast(v ? msgOn : msgOff);
+        if (after) after(v);
       } catch (e) {
         state[key] = prev;
         toast('Couldn’t save: ' + ((e && e.message) || e));
@@ -537,6 +566,31 @@ function wireCirclePrivacyPanel(root, priv, p) {
   segWire(p + '-marginalia', 'marginalia',
     'Marginalia is on — margin notes are shared with your ' + circle,
     'Marginalia is off — your margin notes stop being shown');
+  // v582: Gift a Book recipient opt-in. Toggling re-fills the gift
+  // slot so the claims list appears/disappears with the setting.
+  segWire(p + '-giftclaims', 'giftClaims',
+    'You can now see claims on your wishlist',
+    'Claims on your wishlist are hidden again',
+    () => {
+      const slot = root.querySelector('#' + p + '-gift-slot');
+      if (slot && typeof fillGiftSettings === 'function') fillGiftSettings(slot);
+    });
+  // v582: the gift block stays hidden unless js/243 confirms the
+  // server supports gifts (fail closed pre-migration); once
+  // confirmed, reveal it and let js/243 fill the async sections.
+  const gwrap = root.querySelector('#' + p + '-giftwrap');
+  if (gwrap) {
+    if (typeof giftSupported === 'function') {
+      giftSupported().then(ok => {
+        if (!document.body.contains(gwrap)) return;
+        if (ok) {
+          gwrap.hidden = false;
+          const slot = root.querySelector('#' + p + '-gift-slot');
+          if (slot && typeof fillGiftSettings === 'function') fillGiftSettings(slot);
+        } else gwrap.remove();
+      }).catch(() => { try { gwrap.remove(); } catch (e) {} });
+    } else gwrap.remove();
+  }
   // v524: the shield seg saves through js/230 (user_state) — deliberately
   // NOT through circleSavePrivacy, so shield state can never land in
   // the profiles row a friend projects.
@@ -707,6 +761,7 @@ function renderCoven() {
       if (typeof refreshSentOutbox === 'function') refreshSentOutbox();
       if (typeof refreshRecos === 'function') refreshRecos();
       if (typeof refreshCovenStats === 'function') refreshCovenStats();
+      if (typeof fillGiftGivingEntry === 'function') fillGiftGivingEntry(document.getElementById('gift-giving-slot'));
       consumePendingInvite(code, lists.friends);
     })
     .catch(e => {
@@ -806,6 +861,9 @@ function renderCovenMain(code, lists, priv) {
   html += '<div id="toy-slot"></div>';
   html += '<div id="sent-slot"></div>';
   html += '<div id="stats-slot"></div>';
+  // v582: "Gifts you're giving" entry — filled by js/243 only when
+  // the server supports gifts (fail closed; empty otherwise).
+  html += '<div id="gift-giving-slot"></div>';
 
   // Requests
   if (lists.received.length || lists.sent.length) {
@@ -960,7 +1018,13 @@ function renderCovenFriendMain() {
       const c = shieldCopy(b);
       return (c && c.favorite) ? Object.assign({}, c, { favorite: false }) : c;
     };
-    if (books.length) html += '<div class="grid">' + books.map((b, i) => bookCard(cardBook(b), i)).join('') + '</div>';
+    if (books.length) html += '<div class="grid">' + books.map((b, i) =>
+      // v582: on the Wishlist shelf each card carries a gift slot
+      // js/243 fills (Gift / Claimed), gated server-side per pair;
+      // every other shelf renders exactly as before.
+      circShelf === 'wishlist'
+        ? '<div class="up-wrap">' + bookCard(cardBook(b), i) + '<div data-gift-slot="' + esc(b.id) + '"></div></div>'
+        : bookCard(cardBook(b), i)).join('') + '</div>';
     // v563: the friend's trophy wants, in their own labelled group —
     // same pill language as the owner's Wishlist (js/190).
     if (trophyBooks.length) {
@@ -968,7 +1032,7 @@ function renderCovenFriendMain() {
         '<div class="grid">' + trophyBooks.map((b, i) =>
           '<div class="up-wrap"><div class="up-pill trophy-pill">' + icon('trophy') + ' Trophy · want ' +
           esc(FORMAT_META[b.wantFormat].label) + '</div>' +
-          bookCard(cardBook(b), i) + '</div>').join('') + '</div>';
+          bookCard(cardBook(b), i) + '<div data-gift-slot="' + esc(b.id) + '"></div></div>').join('') + '</div>';
     }
   }
   setView(html);
@@ -988,6 +1052,9 @@ function renderCovenFriendMain() {
   }));
   markShieldedCovers();
   circleUpgradeAvatars(document.getElementById('view'));
+  // v582: Gift / Claimed actions on the Wishlist shelf (js/243) —
+  // only when this pair may gift; silent in every other world.
+  if (circShelf === 'wishlist' && typeof fillGiftShelfActions === 'function') fillGiftShelfActions();
 }
 let circBookMap = {};
 let circSpiceMap = {}; // v524: work-spice map for the open friend's books
@@ -1058,6 +1125,9 @@ function openPrivacySheet(priv, shelves, opener) {
     // them, any save from this sheet would reset a Settings choice
     // (recos had this latent gap; buddy must not inherit it).
     recos: priv.recos !== false, buddy: priv.buddy !== false,
+    // v582: the gift opt-in rides the rebuild too — and its default
+    // is OFF, so it must never be coerced on by an undefined.
+    giftClaims: priv.giftClaims === true,
   };
   const body =
     '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +
