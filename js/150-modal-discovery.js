@@ -1316,7 +1316,10 @@ function renderDetailModal(b, viaBook) {
     '<div class="mrow-opts" hidden>' + formatOpts + '</div></div></div>' +
     '<div class="field" id="f-wantwrap"><label>Want another format</label>' +
     '<div class="want-opts" id="f-want-opts"></div>' +
-    '<p class="note" id="f-want-note" style="margin:6px 0 0"></p></div>' +
+    '<p class="note" id="f-want-note" style="margin:6px 0 0"></p>' +
+    // v582: trophy wants get a Buy slot js/243 fills (the minimal
+    // retailer sheet) — one conditional, nothing else moves.
+    (isTrophyWant(b) ? '<div id="f-giftbuy" style="margin-top:8px"></div>' : '') + '</div>' +
     // v564: face-out display pick — on the book record (faceOut), so it
     // rides library sync and survives shelf re-sorts. The 3D shelf reads
     // it. (Composition at the Variant A rebase: inside this card, where
@@ -1952,6 +1955,10 @@ function renderDetailModal(b, viaBook) {
   // v574: Marginalia (js/242) — fills #m-marginalia with the
   // progress-gated circle notes for this book; silent otherwise.
   if (typeof fillMarginalia === 'function') fillMarginalia(b);
+  // v582: Gift a Book (js/243) — fills #f-giftbuy with the Buy
+  // button when this is your own trophy want; silent otherwise.
+  const giftBuySlot = document.getElementById('f-giftbuy');
+  if (giftBuySlot && typeof giftModalBuySlot === 'function') giftModalBuySlot(giftBuySlot, b);
   document.getElementById('m-changecover').addEventListener('click', () => { coverTools.hidden = true; openCoverPicker(id); });
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => { coverTools.hidden = true; ecStartScan(id); });
