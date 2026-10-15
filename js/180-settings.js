@@ -335,6 +335,12 @@ function renderSettings() {
       (m === '3d' ? icon('cube') + ' 3D' : icon('shelf') + ' 2D') + '</button>').join('') +
     '</div></div>' +
     '<p class="note">Switch between the 3D bookshelf and the classic 2D view.</p>' +
+    // v571: book dressing — accents follow the currently-reading book's
+    // cover (spec: docs/book-dressing-spec.md). Default ON; the stored
+    // value is only ever 'off', in the v537 prefs section (roams).
+    '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-bookdress" ' +
+    ((function () { try { return typeof bookDressingEnabled !== 'function' || bookDressingEnabled(); } catch (e) { return true; } })() ? 'checked' : '') + '> ' +
+    'Dress for my current book<span class="chk-hint">The app&rsquo;s accent colours follow the cover of the book you&rsquo;re reading. Backgrounds and text never change. Synced across your devices.</span></label>' +
     '<div class="field"><button class="btn ghost" id="th-shelfreset">Reset shelf layout</button></div>' +
     '<p class="note">Clears decoration placements and the shelf view preference — a safety net for shelf weirdness.</p>' +
     // v476: moved from the removed Metadata section — it's a capture
@@ -715,6 +721,17 @@ function renderSettings() {
   if (yoloTgl) yoloTgl.addEventListener('change', e => {
     if (typeof ecSetYoloEnabled === 'function') ecSetYoloEnabled(e.target.checked);
     toast(e.target.checked ? 'AI crop on' : 'AI crop off — using edge detection only');
+  });
+  var dressTgl = document.getElementById('st-bookdress');
+  if (dressTgl) dressTgl.addEventListener('change', e => {
+    // ON is the default and is encoded by REMOVING the key (the prefs
+    // section's full-snapshot semantics: absent = default); OFF stores it.
+    try {
+      if (e.target.checked) localStorage.removeItem('cozylibram.bookdress');
+      else localStorage.setItem('cozylibram.bookdress', 'off');
+    } catch (err) {}
+    try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (err) {}
+    toast(e.target.checked ? 'Dressing for your current book' : 'Book dressing off — your theme\u2019s accents apply');
   });
   document.getElementById('st-analytics-what').addEventListener('click', e => {
     e.preventDefault();

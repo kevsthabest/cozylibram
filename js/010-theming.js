@@ -212,6 +212,8 @@ function applyTheme() {
     // v418: re-apply modal flairs — motif follows the theme.
     if (typeof ModalFlairs !== 'undefined' && typeof ModalFlairs.refresh === 'function') ModalFlairs.refresh();
   } catch (e) {}
+  // v571: book dressing gates against the (possibly new) theme's surfaces.
+  try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
 }
 
 /* ---------------- theme schema validation (startup assertion) ----------------

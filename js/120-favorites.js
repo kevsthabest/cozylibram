@@ -180,6 +180,10 @@ function loadSpineColorCache() {
 }
 function saveSpineColorCache() {
   try { localStorage.setItem('spicyshelves.spinecolors', JSON.stringify(spineColorCache)); } catch (e) {}
+  // v571: book dressing reads this cache — a fresh palette can start (or
+  // change) a dressing. Re-resolve so it lands without waiting for a
+  // library write.
+  try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
 }
 loadSpineColorCache();
 // Hosts verified (2026-09-26) to send `Access-Control-Allow-Origin: *` on

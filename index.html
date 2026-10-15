@@ -37,6 +37,25 @@
        no attribute, and the theme's own designed --accent wins. */
     var a = localStorage.getItem('accent');
     if (a) document.documentElement.dataset.accent = a;
+    /* v571: book-dressing mirror (js/240). The library can't be read
+       synchronously pre-paint, so js/240 stores its last resolved dressed
+       accent in localStorage; re-apply it here as inline --accent /
+       --accent-deep so a dressed reader never flashes the undressed
+       theme. js/240 re-resolves authoritatively once the library loads
+       (enterApp) and corrects or clears a stale mirror. Skipped entirely
+       when the dressing toggle is off. */
+    if (localStorage.getItem('cozylibram.bookdress') !== 'off') {
+      var bda = localStorage.getItem('cozylibram.bookdress.applied');
+      if (bda) {
+        var bdp = JSON.parse(bda);
+        var de = document.documentElement;
+        if (bdp && /^#[0-9a-f]{6}$/i.test(bdp.accent || '') && de.style && de.style.setProperty) {
+          de.style.setProperty('--accent', bdp.accent);
+          if (/^#[0-9a-f]{6}$/i.test(bdp.deep || '')) de.style.setProperty('--accent-deep', bdp.deep);
+          de.dataset.dressed = 'boot';
+        }
+      }
+    }
   } catch (e) { /* storage unavailable — js/010's defaults apply, as before */ }
 })();
 </script>
@@ -165,6 +184,7 @@
 <script src="js/237-handles.js"></script>
 <script src="js/238-book-candle.js"></script>
 <script src="js/239-finale.js"></script>
+<script src="js/240-book-dressing.js"></script>
 <script src="js/214-wrapped.js"></script>
 <script>
 /* v560: service worker gate. Inside a native shell (Capacitor) the shell

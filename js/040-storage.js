@@ -533,6 +533,9 @@ function saveLibrary(opts) {
   stampMtimes();
   persistBooks();
   if (!opts.noCloud) scheduleCloudPush();
+  // v571: a status/progress/cover change can change what the app dresses
+  // for (or end the dressing) — re-resolve. Cheap + idempotent.
+  try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
 }
 function saveTombstones() { persistTombstones(); }
 function saveTombFloor() { persistTombFloor(); }
