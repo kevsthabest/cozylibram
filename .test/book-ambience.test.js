@@ -80,8 +80,8 @@ function loadModule(shared) {
   sandbox.window = { AudioContext: FakeAudioContext };
   sandbox.window.window = sandbox.window;
   vm.createContext(sandbox);
-  const src = fs.readFileSync(path.join(ROOT, 'js/240-book-ambience.js'), 'utf8');
-  vm.runInContext(src, sandbox, { filename: 'js/240-book-ambience.js' });
+  const src = fs.readFileSync(path.join(ROOT, 'js/241-book-ambience.js'), 'utf8');
+  vm.runInContext(src, sandbox, { filename: 'js/241-book-ambience.js' });
   return sandbox;
 }
 
@@ -251,16 +251,16 @@ const sbx2 = loadModule(shared);
 eq('volume survives a fresh module load (persistence round-trip)', sbx2.module.exports.ambienceVolume(), 0.5);
 
 /* ---------- source-level pins: no assets, no fetch, no timer ---------- */
-const src = fs.readFileSync(path.join(ROOT, 'js/240-book-ambience.js'), 'utf8');
+const src = fs.readFileSync(path.join(ROOT, 'js/241-book-ambience.js'), 'utf8');
 ok('module never fetches audio', !/fetch\s*\(|XMLHttpRequest|\.(mp3|wav|ogg|m4a|flac)\b|new Audio\s*\(/.test(src));
 ok('module ships no sleep-timer UI (deliberate, per spec)', !/sleep/i.test(src) && !/ambienceTimer|setTimer/.test(src));
 ok('AudioContext is constructed lazily, exactly one construction site',
   (src.match(/new\s+AC\s*\(/g) || []).length === 1 || (src.match(/AudioContext\s*\(/g) || []).length <= 2);
 const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-ok('sw.js precaches the module (three-touchpoint rule)', swSrc.includes('240-book-ambience.js'));
+ok('sw.js precaches the module (three-touchpoint rule)', swSrc.includes('241-book-ambience.js'));
 ok('sw.js gains NO audio assets', !/\.(mp3|wav|ogg|m4a|flac)/.test(swSrc));
 const indexSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-ok('index.html loads the module', indexSrc.includes('js/240-book-ambience.js'));
+ok('index.html loads the module', indexSrc.includes('js/241-book-ambience.js'));
 
 /* ---------- version pairing (generic: survives renumbering) ---------- */
 const appSrc = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');

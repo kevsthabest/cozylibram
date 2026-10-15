@@ -1257,7 +1257,7 @@ function renderDetailModal(b, viaBook) {
     // v571: Ambience — one entry on the book page, directly below the
     // Candle (same header zone): a slim bar naming the matched recipe
     // (or the house sounds) + its own play control. The player sheet
-    // and mini-control are js/240's own.
+    // and mini-control are js/241's own.
     (typeof ambienceEntryHTML === 'function' ? ambienceEntryHTML(b) : '') +
     // Variant A: the series strip — header zone, immediately above the tabs.
     '<div id="m-series-wrap">' + seriesStripHTML(b, id) + '</div>' +
