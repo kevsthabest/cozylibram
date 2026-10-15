@@ -149,6 +149,9 @@ function ok(name, cond) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '157-trope-inference.js'), 'utf8'), ctx,
     { filename: '157-trope-inference.js' });
+  // architecture candidate 6: tropeModelList/tropeModelListCache moved to js/161.
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '161-tropelab.js'), 'utf8'), ctx,
+    { filename: '161-tropelab.js' });
   const probe = src => vm.runInContext(src, ctx);
   // v225: tropeModelList now calls apiFetch (js/050-helpers.js, not loaded
   // here) — stub it as a pass-through to the test fetch.

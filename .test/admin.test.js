@@ -192,9 +192,11 @@ function ev(uid, name, cat, props, created) {
   /* ---- 8. structural: the dashboard can only read safe columns ---- */
   {
     // CharacterStore moved to js/154-characterstore.js (architecture
-    // candidate 3); the select census covers the same code as before by
-    // reading both homes, in load order, with identical assertions.
+    // candidate 3) and the Trope Lab to js/161-tropelab.js (candidate 6);
+    // the select census covers the same code as before by reading all
+    // three homes, in load order, with identical assertions.
     const src = fs.readFileSync(path.join(ROOT, 'js/154-characterstore.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/161-tropelab.js'), 'utf8') +
       '\n' + fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
     const sels = [...src.matchAll(/\.select\('([^']+)'\)/g)].map(m => m[1]);
     // The third select is Trope Lab's coverage scan: book_key (a cache key,
@@ -259,6 +261,7 @@ function ev(uid, name, cat, props, created) {
       'id, character_a_id, character_b_id, relationship_type, review_status', // v395: edge dedup fetch
       'id, character_a_id, character_b_id, relationship_type, importance, tags, created_by', // v395: user-suggested pending edges
       'book_character_id',
+      'provider, model', // v160: Trope Lab provider override read — config names only, never the API key; entered the census when the override moved from js/157 into js/161 (candidate 6)
       'book_characters!inner(work_id, works!inner(authors, series))',
       'id',
       'name',
