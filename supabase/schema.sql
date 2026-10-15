@@ -2973,9 +2973,12 @@ revoke all on function public.gift_book_format_kind(uuid, text) from public, ano
 
 -- Serve-time liveness for a stored claim (spec A7). A claim is live
 -- only while ALL of these hold right now: stored state still 'active';
--- younger than 45 days; the recipient's grant to the claimer stands;
--- the pair is still linked; no block either way; the wishlist is not
--- hidden; and the recipient still holds the book as a giftable want.
+-- younger than 45 days; the recipient's grant to the claimer stands
+-- AND is the same grant instance the claim was made under (a grant
+-- row created after the claim is a re-grant, and re-granting never
+-- resurrects a claim — the friend claims again); the pair is still
+-- linked; no block either way; the wishlist is not hidden; and the
+-- recipient still holds the book as a giftable want.
 create or replace function public.gift_claim_is_live(p_claim uuid)
 returns boolean
 language plpgsql
@@ -2989,7 +2992,11 @@ begin
   select * into c from public.gift_claims where id = p_claim;
   if not found or c.state <> 'active' then return false; end if;
   if now() >= c.created_at + interval '45 days' then return false; end if;
-  if not public.gift_has_grant(c.recipient_id, c.claimer_id) then return false; end if;
+  if not exists (
+    select 1 from public.gift_grants g
+    where g.recipient_id = c.recipient_id and g.friend_id = c.claimer_id
+      and g.created_at <= c.created_at
+  ) then return false; end if;
   if not public.gift_pair_linked(c.recipient_id, c.claimer_id) then return false; end if;
   if public.gift_pair_blocked(c.recipient_id, c.claimer_id) then return false; end if;
   if not public.gift_wishlist_open(c.recipient_id) then return false; end if;
