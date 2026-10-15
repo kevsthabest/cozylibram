@@ -41,13 +41,38 @@ var AMBIENCE_TABLE_VERSION = 1;
 var AMBIENCE_VOLUME_KEY = 'cozylibram.ambience.volume';
 var AMBIENCE_DEFAULT_VOLUME = 0.8;
 
+/* ---------- drift limits: movement, never pulse ----------
+   The v572 ship throbbed on a real device ("wub wub wub" in every
+   recipe): the noise loop was 2 s (its loudness contour repeating at
+   0.5 Hz in the brown bed every recipe carries), and gain LFOs swept
+   down to base*(1-2*amount) — through zero at amount >= 0.5 — at
+   depths to 0.55. The bounds below are the fix, enforced twice: the
+   catalogue declares within them, and ambienceLFO() clamps any
+   descriptor to them at build time, so no future recipe can emit a
+   throb either. Continuous movement is DRIFT (period >= 20 s, gain
+   depth <= 0.30 around a centre that keeps the sweep inside
+   [base*(1-depth), base]). The one exception is a square-wave LFO,
+   which is not movement but an event GATE (fire crackle, crickets,
+   birdsong chirps) and is allowed full on/off depth only on whisper
+   layers (gain <= gateMaxLayerGain); anywhere else it is demoted
+   to drift like everything else. */
+var AMBIENCE_LIMITS = {
+  minBufferSeconds: 8,   // noise loop length; the contour must not repeat audibly
+  fadeSeconds: 2,        // loop crossfade: the wrap is a step like any other
+  driftMaxRate: 0.05,    // Hz — continuous LFOs are slower than 20 s per cycle
+  driftGainMaxDepth: 0.3,
+  driftFreqMaxDepth: 0.35,
+  gateMaxLayerGain: 0.05,
+};
+
 /* ---------- the recipe catalogue (v1: eight, per spec) ----------
    Each recipe is a stack of procedural layers:
      { src:'noise', color:'white'|'brown', filter:{type, freq, q},
        gain, lfo? }
      { src:'tone', wave, freq, gain, lfo? }
    lfo: { rate (Hz), amount (0..1 of the base value), wave?,
-          target:'gain'|'freq' } — slow movement so no bed sits still.
+          target:'gain'|'freq' } — drift within AMBIENCE_LIMITS, so
+          no bed sits still and no bed pulses.
    Layers are data; ambienceBuildGraph interprets them against any
    WebAudio-like context, which is what the test suite drives. */
 var AMBIENCE_RECIPES = {
@@ -55,16 +80,16 @@ var AMBIENCE_RECIPES = {
     name: 'Rain on the Windows',
     blurb: 'Steady rain on glass and stone, swelling and easing.',
     layers: [
-      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 820 }, gain: 0.50, lfo: { rate: 0.07, amount: 0.25, target: 'gain' } },
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 1900, q: 0.4 }, gain: 0.11, lfo: { rate: 0.11, amount: 0.4, target: 'gain' } },
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 3400, q: 0.8 }, gain: 0.035, lfo: { rate: 0.05, amount: 0.5, target: 'freq' } },
+      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 820 }, gain: 0.50, lfo: { rate: 0.03, amount: 0.25, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 1900, q: 0.4 }, gain: 0.11, lfo: { rate: 0.045, amount: 0.25, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 3400, q: 0.8 }, gain: 0.035, lfo: { rate: 0.04, amount: 0.3, target: 'freq' } },
     ],
   },
   fireplace: {
     name: 'By the Fireplace',
     blurb: 'A low fire bed with soft, irregular crackle.',
     layers: [
-      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 420 }, gain: 0.52, lfo: { rate: 0.13, amount: 0.3, target: 'gain' } },
+      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 420 }, gain: 0.52, lfo: { rate: 0.04, amount: 0.25, target: 'gain' } },
       { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 2600, q: 1.2 }, gain: 0.045, lfo: { rate: 6.3, amount: 1, wave: 'square', target: 'gain' } },
       { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 1800, q: 1.6 }, gain: 0.03, lfo: { rate: 2.7, amount: 1, wave: 'square', target: 'gain' } },
     ],
@@ -73,15 +98,15 @@ var AMBIENCE_RECIPES = {
     name: 'Waves on the Shore',
     blurb: 'Slow surf swells rolling in and drawing back.',
     layers: [
-      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 480 }, gain: 0.52, lfo: { rate: 0.08, amount: 0.55, target: 'gain' } },
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 760, q: 0.5 }, gain: 0.14, lfo: { rate: 0.055, amount: 0.5, target: 'freq' } },
+      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 480 }, gain: 0.52, lfo: { rate: 0.035, amount: 0.3, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 760, q: 0.5 }, gain: 0.14, lfo: { rate: 0.045, amount: 0.3, target: 'freq' } },
     ],
   },
   forest: {
     name: 'Forest Air',
     blurb: 'Leaves in a light wind, distant birds now and then.',
     layers: [
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 2400, q: 0.35 }, gain: 0.07, lfo: { rate: 0.09, amount: 0.45, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 2400, q: 0.35 }, gain: 0.07, lfo: { rate: 0.04, amount: 0.25, target: 'gain' } },
       { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 300 }, gain: 0.22 },
       { src: 'tone', wave: 'sine', freq: 2900, gain: 0.011, lfo: { rate: 0.31, amount: 1, wave: 'square', target: 'gain' } },
       { src: 'tone', wave: 'sine', freq: 3400, gain: 0.008, lfo: { rate: 0.17, amount: 1, wave: 'square', target: 'gain' } },
@@ -100,8 +125,8 @@ var AMBIENCE_RECIPES = {
     name: 'Café Murmur',
     blurb: 'The low wash of a busy room, no voice quite distinct.',
     layers: [
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 520, q: 0.7 }, gain: 0.20, lfo: { rate: 0.07, amount: 0.35, target: 'gain' } },
-      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 880, q: 0.9 }, gain: 0.10, lfo: { rate: 0.113, amount: 0.4, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 520, q: 0.7 }, gain: 0.20, lfo: { rate: 0.028, amount: 0.22, target: 'gain' } },
+      { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 880, q: 0.9 }, gain: 0.10, lfo: { rate: 0.041, amount: 0.25, target: 'gain' } },
       { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 240 }, gain: 0.18 },
     ],
   },
@@ -109,16 +134,16 @@ var AMBIENCE_RECIPES = {
     name: 'Low Ship Hum',
     blurb: 'Engines through the hull, and air moving somewhere.',
     layers: [
-      { src: 'tone', wave: 'sine', freq: 55, gain: 0.17, lfo: { rate: 0.05, amount: 0.2, target: 'gain' } },
+      { src: 'tone', wave: 'sine', freq: 55, gain: 0.17, lfo: { rate: 0.03, amount: 0.2, target: 'gain' } },
       { src: 'tone', wave: 'sine', freq: 110, gain: 0.06 },
-      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 240 }, gain: 0.13, lfo: { rate: 0.09, amount: 0.3, target: 'gain' } },
+      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 240 }, gain: 0.13, lfo: { rate: 0.035, amount: 0.25, target: 'gain' } },
     ],
   },
   library: {
     name: 'Library Quiet',
     blurb: 'Barely there: room tone and the hush of a big quiet room.',
     layers: [
-      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 210 }, gain: 0.11, lfo: { rate: 0.06, amount: 0.2, target: 'gain' } },
+      { src: 'noise', color: 'brown', filter: { type: 'lowpass', freq: 210 }, gain: 0.11, lfo: { rate: 0.025, amount: 0.2, target: 'gain' } },
       { src: 'noise', color: 'white', filter: { type: 'highpass', freq: 6200 }, gain: 0.004 },
     ],
   },
@@ -281,21 +306,54 @@ function ambienceSetVolume(v) {
    Interprets the layer descriptors against any WebAudio-like
    context. Every sound source is a generated buffer or an
    oscillator — there is no load path at all. */
+/* Noise loops are LONG (AMBIENCE_LIMITS.minBufferSeconds) and
+   seamless: the process is generated past the end of the buffer and
+   the head crossfades into its own continuation, so the wrap point is
+   a step like any other instead of a state jump. The v572 buffer was
+   2 s looped raw: its loudness contour repeated at 0.5 Hz in the
+   brown bed of every recipe — half of the shipped throb. */
 function noiseBuffer(ctx, color) {
-  var len = Math.floor(2 * ctx.sampleRate);
+  var len = Math.floor(AMBIENCE_LIMITS.minBufferSeconds * ctx.sampleRate);
+  var fade = Math.floor(AMBIENCE_LIMITS.fadeSeconds * ctx.sampleRate);
   var buf = ctx.createBuffer(1, len, ctx.sampleRate);
   var d = buf.getChannelData(0);
+  var total = len + fade;
+  var gen = new Float32Array(total);
   var s = 22222, last = 0;
   function rnd() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x40000000 - 1; }
-  for (var i = 0; i < len; i++) {
+  for (var i = 0; i < total; i++) {
     var w = rnd();
-    if (color === 'brown') { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2; }
-    else d[i] = w * 0.7;
+    if (color === 'brown') { last = (last + 0.02 * w) / 1.02; gen[i] = last * 3.2; }
+    else gen[i] = w * 0.7;
+  }
+  for (i = 0; i < len; i++) {
+    if (i < fade) { var t = i / fade; d[i] = gen[len + i] * (1 - t) + gen[i] * t; }
+    else d[i] = gen[i];
   }
   return buf;
 }
+/* The one place a descriptor's LFO becomes an emitted LFO. A square
+   wave on a whisper layer is an event gate and keeps full depth;
+   anything else is clamped to drift: rate and depth inside
+   AMBIENCE_LIMITS, wave forced to sine. */
+function ambienceLFO(layer) {
+  var lfo = layer.lfo;
+  if (!lfo) return null;
+  var wave = lfo.wave || 'sine';
+  if (wave === 'square' && lfo.target !== 'freq' &&
+      layer.gain <= AMBIENCE_LIMITS.gateMaxLayerGain) {
+    return { rate: lfo.rate, amount: 1, wave: 'square', target: lfo.target, gate: true };
+  }
+  return {
+    rate: Math.min(Math.max(0.001, lfo.rate || 0), AMBIENCE_LIMITS.driftMaxRate),
+    amount: Math.min(Math.max(0, lfo.amount || 0),
+      lfo.target === 'freq' ? AMBIENCE_LIMITS.driftFreqMaxDepth : AMBIENCE_LIMITS.driftGainMaxDepth),
+    wave: 'sine', target: lfo.target, gate: false,
+  };
+}
 function ambienceBuildGraph(ctx, recipe) {
   var buffers = {};
+  var noiseStarts = 0;
   var master = ctx.createGain();
   master.gain.value = 0; // the engine ramps it in (no click, no blast)
   master.connect(ctx.destination);
@@ -310,8 +368,12 @@ function ambienceBuildGraph(ctx, recipe) {
     if (lfo.target === 'freq') {
       depth.gain.value = base * amount;
     } else {
-      param.value = base * (1 - amount);
-      depth.gain.value = base * amount;
+      // Centre the sweep on base*(1 - amount/2) so gain moves inside
+      // [base*(1-amount), base]: it can breathe but never cross zero
+      // (the v572 wiring centred on base*(1-amount) and swept a full
+      // +/- base*amount, dipping to base*(1-2*amount)).
+      param.value = base * (1 - amount / 2);
+      depth.gain.value = base * amount / 2;
     }
     osc.connect(depth);
     depth.connect(param);
@@ -335,7 +397,9 @@ function ambienceBuildGraph(ctx, recipe) {
       src.connect(f); f.connect(g);
       nodes.push(src, f); sources.push(src);
       head = f;
-      src.start();
+      // Layers sharing one colour buffer start at spread offsets, so
+      // the same loop never runs sample-identical in two layers.
+      src.start(0, (noiseStarts++ * 2.93) % AMBIENCE_LIMITS.minBufferSeconds);
     } else { // tone
       var osc = ctx.createOscillator();
       osc.type = layer.wave || 'sine';
@@ -348,8 +412,11 @@ function ambienceBuildGraph(ctx, recipe) {
     g.connect(master);
     nodes.push(g);
     if (layer.lfo) {
-      if (layer.lfo.target === 'freq' && layer.src === 'noise') wireLFO(head.frequency, layer.filter.freq, layer.lfo);
-      else wireLFO(g.gain, layer.gain, layer.lfo);
+      var lfo = ambienceLFO(layer);
+      if (lfo) {
+        if (lfo.target === 'freq' && layer.src === 'noise') wireLFO(head.frequency, layer.filter.freq, lfo);
+        else wireLFO(g.gain, layer.gain, lfo);
+      }
     }
   });
 
@@ -680,6 +747,7 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined') {
   module.exports = {
     AMBIENCE_RECIPES: AMBIENCE_RECIPES, AMBIENCE_HOUSE: AMBIENCE_HOUSE,
+    AMBIENCE_LIMITS: AMBIENCE_LIMITS,
     AMBIENCE_TABLE_VERSION: AMBIENCE_TABLE_VERSION,
     AMBIENCE_VOLUME_KEY: AMBIENCE_VOLUME_KEY,
     ambienceSelect: ambienceSelect, ambienceEntryHTML: ambienceEntryHTML,

@@ -268,5 +268,159 @@ const vApp = /APP_VERSION = '(v\d+)'/.exec(appSrc)[1];
 const vSw = /cozy-libram-(v\d+)/.exec(swSrc)[1];
 eq('APP_VERSION and sw CACHE are paired', vApp, vSw);
 
+/* ---------- drift, not pulse: the wobble regression pins ----------
+   The v572 ship throbbed on the User's phone ("wub wub wub", every
+   recipe). Diagnosis (numbers in the fix PR): (1) the noise buffer was
+   2.0 s, looped raw — its loudness contour repeats at 0.5 Hz in the
+   brown bed layer every recipe carries at the highest gain; (2) the
+   gain-LFO wiring swept param.value = base*(1-amount) +/- base*amount,
+   i.e. down to base*(1-2*amount) and through zero outright at
+   amount >= 0.5 (ocean 0.55), at rates 0.05-0.13 Hz with depths to
+   0.55; (3) near-rate LFO pairs (rain 0.07/0.11, cafe 0.07/0.113)
+   beat against each other. These pins bound what the builder may
+   emit so movement stays DRIFT: slow, shallow, never periodic at
+   audible depth, and a gain sweep never crosses zero. */
+const LIMITS = M.AMBIENCE_LIMITS || {};
+ok('module exports the drift limits',
+  typeof LIMITS.driftMaxRate === 'number' && typeof LIMITS.driftGainMaxDepth === 'number' &&
+  typeof LIMITS.driftFreqMaxDepth === 'number' && typeof LIMITS.minBufferSeconds === 'number' &&
+  typeof LIMITS.gateMaxLayerGain === 'number');
+
+/* descriptor bounds: everything the catalogue declares is drift or a gate */
+ok('every declared continuous LFO rate is within the drift ceiling',
+  recipeIds.every(id => AMBIENCE_RECIPES[id].layers.every(l =>
+    !l.lfo || l.lfo.wave === 'square' || l.lfo.rate <= LIMITS.driftMaxRate + 1e-9)));
+ok('every declared continuous gain LFO depth is within the drift ceiling',
+  recipeIds.every(id => AMBIENCE_RECIPES[id].layers.every(l =>
+    !l.lfo || l.lfo.wave === 'square' || l.lfo.target === 'freq' ||
+    l.lfo.amount <= LIMITS.driftGainMaxDepth + 1e-9)));
+ok('every declared freq LFO depth is within the freq ceiling',
+  recipeIds.every(id => AMBIENCE_RECIPES[id].layers.every(l =>
+    !l.lfo || l.lfo.target !== 'freq' || l.lfo.amount <= LIMITS.driftFreqMaxDepth + 1e-9)));
+ok('square-wave LFOs exist only as gates on whisper layers',
+  recipeIds.every(id => AMBIENCE_RECIPES[id].layers.every(l =>
+    !l.lfo || l.lfo.wave !== 'square' || l.gain <= LIMITS.gateMaxLayerGain + 1e-9)));
+
+/* data stub: buffers carry real sample data, starts record offsets */
+function makeDataCtx() {
+  const rec = { created: [], connections: [], starts: [], buffersMade: [] };
+  function param() {
+    return { __isParam: true, value: 0,
+      setValueAtTime() {}, linearRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues() {} };
+  }
+  function node(kind) {
+    const n = { kind: kind, gain: param(), frequency: param(), Q: param(), type: '', buffer: null, loop: false,
+      connect(dst) { rec.connections.push({ from: n, to: dst }); },
+      disconnect() {},
+      start(when, offset) { rec.starts.push({ node: n, offset: offset || 0 }); },
+      stop() {} };
+    rec.created.push(n);
+    return n;
+  }
+  const ctx = {
+    currentTime: 0, sampleRate: 44100, state: 'running',
+    destination: { kind: 'destination' },
+    createBuffer(ch, len, rate) {
+      const arr = new Float32Array(len);
+      const b = { duration: len / rate, getChannelData() { return arr; }, _arr: arr };
+      rec.buffersMade.push(b);
+      return b;
+    },
+    createBufferSource() { return node('bufferSource'); },
+    createOscillator() { return node('oscillator'); },
+    createBiquadFilter() { return node('filter'); },
+    createGain() { return node('gain'); },
+    suspend() { return Promise.resolve(); },
+    resume() { return Promise.resolve(); },
+    close() { return Promise.resolve(); },
+  };
+  return { ctx: ctx, rec: rec };
+}
+/* gain nodes whose output lands on an AudioParam are LFO depth gains;
+   the param's owner node carries the sweep centre in the same param. */
+function depthSweeps(rec) {
+  const owners = new Map();
+  rec.created.forEach(n => { owners.set(n.gain, n); owners.set(n.frequency, n); });
+  const out = [];
+  rec.connections.forEach(c => {
+    if (c.from.kind === 'gain' && c.to && c.to.__isParam) {
+      const owner = owners.get(c.to);
+      out.push({ depth: c.from.gain.value, centre: owner ? c.to.value : NaN });
+    }
+  });
+  return out;
+}
+
+/* buffer: long loops, decorrelated starts */
+{
+  const g = makeDataCtx();
+  const gr = ambienceBuildGraph(g.ctx, AMBIENCE_RECIPES.rain);
+  ok('every generated noise buffer is at least the minimum loop length',
+    g.rec.buffersMade.length >= 1 &&
+    g.rec.buffersMade.every(b => b._arr.length >= LIMITS.minBufferSeconds * g.ctx.sampleRate - 1));
+  const noiseStarts = g.rec.starts.filter(s => s.node.kind === 'bufferSource');
+  ok('noise layers sharing a buffer start at decorrelated offsets',
+    noiseStarts.length >= 2 &&
+    new Set(noiseStarts.map(s => s.offset)).size === noiseStarts.length);
+  gr.stop();
+}
+
+/* no built graph sweeps a gain (or filter) below zero — ever */
+for (const id of recipeIds) {
+  const g = makeDataCtx();
+  const gr = ambienceBuildGraph(g.ctx, AMBIENCE_RECIPES[id]);
+  const sweeps = depthSweeps(g.rec);
+  ok('recipe ' + id + ': no LFO sweep crosses zero',
+    sweeps.length >= 1 && sweeps.every(s => s.centre - s.depth >= -1e-9));
+  gr.stop();
+}
+
+/* the builder clamps a hostile descriptor instead of emitting a throb */
+{
+  const hostile = { layers: [
+    { src: 'noise', color: 'white', filter: { type: 'lowpass', freq: 900 }, gain: 0.5,
+      lfo: { rate: 2, amount: 1, target: 'gain' } },
+  ] };
+  const g = makeDataCtx();
+  const gr = ambienceBuildGraph(g.ctx, hostile);
+  const lfoOscs = g.rec.created.filter(n => n.kind === 'oscillator');
+  ok('builder clamps a 2 Hz LFO down to the drift ceiling',
+    lfoOscs.length === 1 && lfoOscs[0].frequency.value <= LIMITS.driftMaxRate + 1e-9);
+  const sweeps = depthSweeps(g.rec);
+  ok('builder clamps LFO depth so the sweep stays shallow and positive',
+    sweeps.length === 1 &&
+    sweeps[0].depth <= 0.5 * LIMITS.driftGainMaxDepth / 2 + 1e-9 &&
+    sweeps[0].centre - sweeps[0].depth >= 0.5 * (1 - LIMITS.driftGainMaxDepth) - 1e-9);
+  gr.stop();
+}
+/* a square gate declared on a LOUD layer is demoted to drift */
+{
+  const loudGate = { layers: [
+    { src: 'noise', color: 'white', filter: { type: 'lowpass', freq: 900 }, gain: 0.5,
+      lfo: { rate: 5, amount: 1, wave: 'square', target: 'gain' } },
+  ] };
+  const g = makeDataCtx();
+  const gr = ambienceBuildGraph(g.ctx, loudGate);
+  const lfoOscs = g.rec.created.filter(n => n.kind === 'oscillator');
+  ok('a square LFO on a loud layer does not survive as a fast gate',
+    lfoOscs.length === 1 &&
+    (lfoOscs[0].type !== 'square' || lfoOscs[0].frequency.value <= LIMITS.driftMaxRate + 1e-9));
+  gr.stop();
+}
+/* a square gate on a whisper layer stays a gate, centred [0, base] */
+{
+  const gate = { layers: [
+    { src: 'noise', color: 'white', filter: { type: 'bandpass', freq: 2600, q: 1.2 }, gain: 0.04,
+      lfo: { rate: 5, amount: 1, wave: 'square', target: 'gain' } },
+  ] };
+  const g = makeDataCtx();
+  const gr = ambienceBuildGraph(g.ctx, gate);
+  const sweeps = depthSweeps(g.rec);
+  ok('whisper-layer gate sweeps exactly [0, base] and never negative',
+    sweeps.length === 1 &&
+    Math.abs(sweeps[0].centre - 0.02) < 1e-9 && Math.abs(sweeps[0].depth - 0.02) < 1e-9);
+  gr.stop();
+}
+
 console.log('book-ambience: ' + _pass + ' passed, ' + _fail + ' failed');
 process.exit(_fail ? 1 : 0);
