@@ -144,9 +144,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v573',
-    /APP_VERSION = 'v573'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v573"));
+  ok('version pairing is v574',
+    /APP_VERSION = 'v574'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v574"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -296,6 +296,27 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings key list stays frozen (no composed prefs key in USER_STATE_KEYS)',
     !window.__probeKeys.includes('cozylibram.bookdress') &&
     !window.__probeKeys.includes('cozylibram.ambience.volume'));
+  clearState();
+  /* ---------- v574: the Marginalia off switch joins the prefs inventory ----------
+     A fifth key in THIS section (never the frozen settings
+     snapshot): collect reads it, apply writes it, and it stays out
+     of USER_STATE_KEYS like the other prefs keys. (profiles is
+     authoritative for serving — this key is js/242's UI state.) */
+  clearState();
+  ls.setItem('cozylibram.marginalia', 'off');
+  ok('prefs collect reads the marginalia key',
+    window.userStateCollectPrefs().values['cozylibram.marginalia'] === 'off');
+  window.userStateApplyPrefs({ values: { 'cozylibram.marginalia': 'off' } });
+  ok('prefs apply writes the marginalia key',
+    ls.getItem('cozylibram.marginalia') === 'off');
+  window.userStateApplyPrefs({ values: {} });
+  ok('prefs apply full-snapshot: an absent marginalia key is removed (back to default ON)',
+    ls.getItem('cozylibram.marginalia') === null);
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no marginalia key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.marginalia'));
+  ok('settings snapshot never collects the marginalia key',
+    !('cozylibram.marginalia' in window.userStateCollect()));
   clearState();
   /* ---------- v567 finale section: collect/apply ---------- */
   clearState();

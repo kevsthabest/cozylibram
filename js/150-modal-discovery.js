@@ -1240,6 +1240,9 @@ function renderDetailModal(b, viaBook) {
     // v541: "Reading it too" presence slot (js/235 fills it async;
     // stays empty unless a circle friend is visibly reading this).
     '<div id="m-rittoo"></div>' +
+    // v574: Marginalia slot (js/242 fills it async; stays empty
+    // unless the feature is live for this reader and this book).
+    '<div id="m-marginalia"></div>' +
     // Variant A: Book Portrait is a one-line slim bar in the header
     // zone; the full v468 card renders inside it, collapsed.
     (typeof portraitCardHTML === 'function'
@@ -1946,6 +1949,9 @@ function renderDetailModal(b, viaBook) {
   // v541: shared-reading presence (js/235) — fills #m-rittoo when a
   // circle friend is visibly reading this book; silent otherwise.
   if (typeof fillReadingItToo === 'function') fillReadingItToo(b);
+  // v574: Marginalia (js/242) — fills #m-marginalia with the
+  // progress-gated circle notes for this book; silent otherwise.
+  if (typeof fillMarginalia === 'function') fillMarginalia(b);
   document.getElementById('m-changecover').addEventListener('click', () => { coverTools.hidden = true; openCoverPicker(id); });
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
   document.getElementById('m-scanfaces').addEventListener('click', () => { coverTools.hidden = true; ecStartScan(id); });

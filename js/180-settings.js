@@ -787,6 +787,15 @@ function renderSettings() {
         box.appendChild(bwrap);
         renderBlockedReaders(bwrap).catch(() => {});
       }
+      // v574: "My margin notes" (js/242) — the author's own notes
+      // list, under the same panel; renders nothing when the
+      // feature isn't live or the list is empty.
+      if (typeof renderMarginaliaMine === 'function') {
+        const mwrap = document.createElement('div');
+        mwrap.id = 'st-marginalia-mine';
+        box.appendChild(mwrap);
+        renderMarginaliaMine(mwrap).catch(() => {});
+      }
     } catch (e) {
       box.innerHTML = '<p class="note">Couldn\'t load sharing settings.</p>';
     }

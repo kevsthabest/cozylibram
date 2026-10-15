@@ -4382,6 +4382,24 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   background: none; border: none; color: var(--accent); font-size: 16px; cursor: pointer; }
 .amb-mini-btn svg { width: 19px; height: 19px; }
 
+/* ---- Marginalia (v574, js/242): progress-gated circle notes on the
+   book page. Margin-note styling: a quiet card, each note ruled by
+   a gold margin line, the body in the serif the margin deserves. ---- */
+.marg-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px 10px; margin: 0 0 14px; overflow: hidden; }
+.marg-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.marg-note { border-left: 3px solid var(--gold, #c9a227); padding: 2px 0 2px 10px; }
+.marg-meta { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.marg-meta b { font-size: 13px; }
+.marg-pos { color: var(--muted); font-size: 12px; }
+.marg-body { font-family: Georgia, 'Times New Roman', serif; font-size: 15px;
+  line-height: 1.45; margin: 2px 0 0; overflow-wrap: break-word; }
+.marg-actions { display: flex; gap: 14px; margin-top: 2px; }
+.marg-compose { margin: 2px 0 6px; }
+.marg-quote { font-family: Georgia, 'Times New Roman', serif; font-style: italic;
+  border-left: 3px solid var(--gold, #c9a227); margin: 0 0 12px; padding: 2px 0 2px 10px; }
+.marg-mine { display: flex; flex-direction: column; gap: 10px; }
+
 .portrait-full { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
 .portrait-bsec { margin-bottom: 10px; }
 .portrait-brow { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }

@@ -299,7 +299,15 @@ function userStateApplyMilestonePin(payload) {
 // it joins THIS section, never the frozen v518 settings snapshot. The
 // ambience module reads it live from localStorage at point of use, so
 // apply writing localStorage is the live apply.
-const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress', 'cozylibram.ambience.volume'];
+// v574: a fifth key — cozylibram.marginalia, the Marginalia off
+// switch (js/242). Same reasoning again: a user preference (default
+// ON; only an explicit 'off' is ever stored) that must roam without
+// joining the frozen v518 settings list. One asymmetry, stated:
+// profiles.marginalia_enabled is authoritative for SERVING (the
+// server reads it); this roamed key is the client's UI state and
+// js/242 reconciles it from profiles — the roam carries the
+// preference between devices, profiles carries the enforcement.
+const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress', 'cozylibram.ambience.volume', 'cozylibram.marginalia'];
 function userStateCollectPrefs() {
   const values = {};
   try {

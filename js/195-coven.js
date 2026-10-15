@@ -379,7 +379,7 @@ async function circleLists() {
  * exposure), activity off (opt-in for everyone). */
 async function circlePrivacy() {
   const sb = await cloudClient();
-  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites').eq('user_id', cloudUser.id).maybeSingle();
+  let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites,marginalia_enabled').eq('user_id', cloudUser.id).maybeSingle();
   if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
     // Pre-v522 database: the new toggle columns don't exist yet — fall back
     // to the legacy columns and report the migration defaults for the rest.
@@ -397,27 +397,32 @@ async function circlePrivacy() {
     recos: r.data ? r.data.receive_recos !== false : true,
     // v528: buddy read invitations — the same posture as recos.
     buddy: r.data ? r.data.receive_buddy_invites !== false : true,
+    // v574: Marginalia — the same posture again (default ON,
+    // server-authoritative for serving; js/242 owns the semantics).
+    marginalia: r.data ? r.data.marginalia_enabled !== false : true,
   };
 }
-async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy) {
+async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, marginalia) {
   const sb = await cloudClient();
   const row = {
     user_id: cloudUser.id, share_library: !!share, hidden_shelves: hidden,
     updated_at: new Date().toISOString(),
   };
-  // bio/activity/recos/buddy are optional params: two-arg callers (the
-  // shelf-share consent) must not clobber toggles they don't know
-  // about, so the keys are only written when the caller passes them.
+  // bio/activity/recos/buddy/marginalia are optional params: two-arg
+  // callers (the shelf-share consent) must not clobber toggles they
+  // don't know about, so the keys are only written when the caller
+  // passes them.
   if (typeof bio !== 'undefined') row.share_bio = !!bio;
   if (typeof activity !== 'undefined') row.share_activity = !!activity;
   if (typeof recos !== 'undefined') row.receive_recos = !!recos;
   if (typeof buddy !== 'undefined') row.receive_buddy_invites = !!buddy;
+  if (typeof marginalia !== 'undefined') row.marginalia_enabled = !!marginalia;
   let up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   if (up.error && typeof isMissingColumn === 'function' && isMissingColumn(up.error) &&
-      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row || 'receive_buddy_invites' in row)) {
+      ('share_bio' in row || 'share_activity' in row || 'receive_recos' in row || 'receive_buddy_invites' in row || 'marginalia_enabled' in row)) {
     // Pre-migration database: persist what exists; the new toggles
     // land with their defaults when the migration is applied.
-    delete row.share_bio; delete row.share_activity; delete row.receive_recos; delete row.receive_buddy_invites;
+    delete row.share_bio; delete row.share_activity; delete row.receive_recos; delete row.receive_buddy_invites; delete row.marginalia_enabled;
     up = await sb.from('profiles').upsert(row, { onConflict: 'user_id' });
   }
   if (up.error) throw up.error;
@@ -466,7 +471,14 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     // v528: the buddy-read counterpart — whether friends may invite
     // this reader to read a book together.
     '<div class="field"><label>Buddy read invitations</label>' + seg(p + '-buddyinv', priv.buddy !== false) +
-    '<p class="note">Friends in your ' + covenNameBare().toLowerCase() + ' can invite you to read a book together. Off stops new invitations from arriving.</p></div>';
+    '<p class="note">Friends in your ' + covenNameBare().toLowerCase() + ' can invite you to read a book together. Off stops new invitations from arriving.</p></div>' +
+    // v574: Marginalia — margin notes on books you're both reading.
+    // Unlike recos/buddy (inbound-only), this switch is the feature
+    // itself: off stops you seeing notes, stops you leaving them,
+    // and stops yours being shown. profiles is authoritative for
+    // serving; js/242 mirrors it into the roamed prefs key.
+    '<div class="field"><label>Marginalia</label>' + seg(p + '-marginalia', priv.marginalia !== false) +
+    '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>';
   // v524: the content shield — the one INCOMING control in this panel
   // (what the viewer sees, not what they send). Its state lives in
   // user_state (js/230-privacy.js), never in profiles, so it is read
@@ -482,8 +494,14 @@ function wireCirclePrivacyPanel(root, priv, p) {
     share: priv.share, hidden: (priv.hidden || []).slice(),
     bio: priv.bio !== false, activity: priv.activity === true,
     recos: priv.recos !== false, buddy: priv.buddy !== false,
+    marginalia: priv.marginalia !== false,
   };
-  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos, state.buddy);
+  const save = () => circleSavePrivacy(state.share, state.hidden, state.bio, state.activity, state.recos, state.buddy, state.marginalia)
+    .then(() => {
+      // v574: keep the roamed local key (js/242's UI state) in step
+      // with the authoritative profiles flag the save just landed.
+      if (typeof marginaliaSetLocal === 'function') marginaliaSetLocal(state.marginalia);
+    });
   const segWire = (id, key, msgOn, msgOff) => {
     root.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', async () => {
       const v = b.dataset.v === '1';
@@ -516,6 +534,9 @@ function wireCirclePrivacyPanel(root, priv, p) {
   segWire(p + '-buddyinv', 'buddy',
     'Friends can invite you to buddy reads',
     'Friends can no longer invite you to buddy reads');
+  segWire(p + '-marginalia', 'marginalia',
+    'Marginalia is on — margin notes are shared with your ' + circle,
+    'Marginalia is off — your margin notes stop being shown');
   // v524: the shield seg saves through js/230 (user_state) — deliberately
   // NOT through circleSavePrivacy, so shield state can never land in
   // the profiles row a friend projects.
