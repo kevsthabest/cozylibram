@@ -693,12 +693,15 @@
        cover pipeline (js/120 coverColorSources — the same ordered,
        pixel-readable list the spine sampler uses), so a texture is only
        ever built from a CORS-clean image: a tainted upload would throw
-       inside the render loop. Every failure keeps the placeholder. */
+       inside the render loop. Every failure keeps the placeholder. The
+       no-pipeline fallback admits only data:/blob:/same-origin paths —
+       \/(?!\/) keeps a protocol-relative URL (//host/…) out: it starts
+       with a slash but is a cross-origin fetch. */
     function faceCoverMaterial(b, w, h) {
       var mat = new THREE.MeshStandardMaterial({ map: facePlaceholderTexture(b), roughness: 0.8 });
       if (!b.cover) return mat;
       var sources = (typeof coverColorSources === 'function') ? coverColorSources(b.cover)
-        : (/^(data:|blob:|\/)/.test(b.cover) ? [[b.cover, false]] : []);
+        : (/^(data:|blob:|\/(?!\/))/.test(b.cover) ? [[b.cover, false]] : []);
       var aspect = h > 0 ? w / h : 0.66;
       var step = function (i) {
         if (i >= sources.length) return;

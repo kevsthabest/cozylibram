@@ -128,6 +128,33 @@ const GOLD_OBS = [[0, 2, -2.975, 0.4, 2], [1, 2, -2.55, 0.5, 1.8], [2, 2, -2.025
   ok('view maps the pick from the book record', src217.includes('faceOut: !!b.faceOut'));
 }
 
+/* ---- 4b. the no-pipeline cover fallback's contract (Advisor LOW, PR #237) ----
+   When coverColorSources is absent, faceCoverMaterial falls back to a bare
+   shape check on the cover URL. That check admits only same-device sources —
+   data:, blob:, and same-origin absolute paths. A protocol-relative URL
+   (//host/…) starts with a slash but is a cross-origin fetch, so it must be
+   rejected; a plain https: URL is also rejected HERE — remote covers are
+   coverColorSources' job (CORS-clean ordering), never the fallback's. */
+{
+  const src = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
+  const line = src.split('\n').find(l => l.includes('.test(b.cover)') && l.includes('? [[b.cover, false]]'));
+  ok('defensive cover fallback exists (no-pipeline path)', !!line);
+  ok('pipeline stays first: coverColorSources is the ternary\u2019s taken branch',
+    src.includes('? coverColorSources(b.cover)') &&
+    src.indexOf('? coverColorSources(b.cover)') < src.indexOf('.test(b.cover)'));
+  const m = line && line.match(/\(\/(\^.*?)\/\.test/);
+  const fallback = m ? new RegExp(m[1]) : null;
+  ok('fallback regex extracts from source', !!fallback);
+  if (fallback) {
+    ok('fallback accepts a data: cover', fallback.test('data:image/webp;base64,UklGRg=='));
+    ok('fallback accepts a blob: cover', fallback.test('blob:https://cozylibram.pages.dev/9f2c'));
+    ok('fallback accepts a same-origin absolute path', fallback.test('/covers/abc.webp'));
+    ok('fallback rejects a protocol-relative URL', !fallback.test('//evil.example/x.jpg'));
+    ok('fallback rejects a plain https: URL (coverColorSources\u2019 job)', !fallback.test('https://img.example/x.jpg'));
+    ok('fallback rejects a plain http: URL too', !fallback.test('http://img.example/x.jpg'));
+  }
+}
+
 /* ---- 5. sync round-trip: the pick rides the whole-record row ---- */
 {
   const row = JSON.parse(run(`JSON.stringify(bookToRow({ id: 's1', title: 'T', faceOut: true }, 'u1'))`));
