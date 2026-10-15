@@ -330,6 +330,9 @@ async function enterApp(user) {
   const mb = document.getElementById('menu-btn');
   if (mb) mb.style.display = ''; // v242: restore the menu button hidden by renderGate()
   renderTopbar();
+  // v571: the library is in — resolve book dressing authoritatively
+  // (corrects or clears whatever the boot mirror painted pre-paint).
+  try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
   analyticsSessionBoot(); // v118: session_started + onboarding funnel events
   adoptLegacyMetadata(user);
   await syncCloudProfile();

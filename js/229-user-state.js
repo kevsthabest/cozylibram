@@ -286,7 +286,14 @@ function userStateApplyMilestonePin(payload) {
 // — no restyle hook needed, same as the release pieces. And because
 // the live read is local, an opt-out set on this device is honoured
 // from boot, before any pull runs.
-const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove'];
+// v571: the prefs section gains a third key — cozylibram.bookdress, the
+// book-dressing toggle (js/240). Same reasoning as the original pair: a
+// user preference (default ON; only an explicit 'off' is ever stored)
+// that must roam without joining the frozen v518 settings list. It is
+// read live at every resolve (bookDressingEnabled), and the apply hook
+// below re-resolves the dressing so a roamed OFF undresses this device
+// the moment it lands.
+const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress'];
 function userStateCollectPrefs() {
   const values = {};
   try {
@@ -305,6 +312,8 @@ function userStateApplyPrefs(payload) {
       else localStorage.removeItem(k);
     }
   } catch (e) {}
+  // v571: a roamed dressing toggle applies live, not on next boot.
+  try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
 }
 
 /* ---------------- roaming finale keepsakes (v567) ---------------- */
