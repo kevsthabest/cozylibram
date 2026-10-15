@@ -307,10 +307,10 @@ function userStateApplyPrefs(payload) {
   } catch (e) {}
 }
 
-/* ---------------- roaming finale keepsakes (v566) ---------------- */
+/* ---------------- roaming finale keepsakes (v567) ---------------- */
 // The eighth section: The Finale's per-series records (js/239), in
 // their own column (finale_state, supabase/migrations/
-// v566_user_state_finale.sql), payload { _at, value } — value is the
+// v567_user_state_finale.sql), payload { _at, value } — value is the
 // finale record map (series key -> record), warning-style. Placement,
 // per the roaming rules: a keepsake is a reader detail, so it roams;
 // it does NOT join the settings snapshot (that key list is frozen at

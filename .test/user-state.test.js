@@ -143,9 +143,9 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('index.html registers js/229-user-state.js', html.includes('<script src="js/229-user-state.js"></script>'));
   const swText = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   ok('sw.js precaches 229-user-state.js', swText.includes("'229-user-state.js'"));
-  ok('version pairing is v566',
-    /APP_VERSION = 'v566'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
-    swText.includes("cozy-libram-v566"));
+  ok('version pairing is v567',
+    /APP_VERSION = 'v567'/.test(fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8')) &&
+    swText.includes("cozy-libram-v567"));
 
   /* ---------- v520 sections migration shape ---------- */
   const sql520Path = path.join(ROOT, 'supabase/migrations/v520_user_state_sections.sql');
@@ -196,14 +196,14 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('v537 migration touches only user_state (no policies, no other tables)',
     !/create policy|drop policy|create table/.test(sql537) && !/alter table (public\.)?profiles/.test(sql537));
 
-  /* ---------- v566 finale migration shape ---------- */
-  const sql566Path = path.join(ROOT, 'supabase/migrations/v566_user_state_finale.sql');
-  ok('v566 migration file exists', fs.existsSync(sql566Path));
-  const sql566 = fs.readFileSync(sql566Path, 'utf8');
-  ok('v566 adds finale_state jsonb with {} default',
-    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql566));
-  ok('v566 migration touches only user_state (no policies, no other tables)',
-    !/create policy|drop policy|create table/.test(sql566) && !/alter table (public\.)?profiles/.test(sql566));
+  /* ---------- v567 finale migration shape ---------- */
+  const sql567Path = path.join(ROOT, 'supabase/migrations/v567_user_state_finale.sql');
+  ok('v567 migration file exists', fs.existsSync(sql567Path));
+  const sql567 = fs.readFileSync(sql567Path, 'utf8');
+  ok('v567 adds finale_state jsonb with {} default',
+    /add column if not exists finale_state jsonb not null default '\{\}'::jsonb/.test(sql567));
+  ok('v567 migration touches only user_state (no policies, no other tables)',
+    !/create policy|drop policy|create table/.test(sql567) && !/alter table (public\.)?profiles/.test(sql567));
 
   /* ---------- v536 milestone pin section: collect/apply ---------- */
   clearState();
@@ -250,7 +250,7 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
-  /* ---------- v566 finale section: collect/apply ---------- */
+  /* ---------- v567 finale section: collect/apply ---------- */
   clearState();
   ok('finale collect is null when unset',
     window.userStateCollectFinale().value === null);
