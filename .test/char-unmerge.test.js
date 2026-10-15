@@ -1,5 +1,5 @@
 /* Character Unmerge tests (v577) — tests the real charMerge / charUnmerge
-   from js/199-admin.js against an in-memory book_characters fake, with
+   from js/162-charlab.js against an in-memory book_characters fake, with
    FULL-SUBGRAPH diffs (every stored row of the work + character_links)
    before merge vs after unmerge. Legacy merges (no snapshot) must refuse.
    Run: node .test/char-unmerge.test.js */

@@ -144,9 +144,9 @@ const ALLOW = [
   // js/198 — ✨ lives in empty-state NOTE PROSE (ruled prose, leave).
   { file: 'js/198-discovery.js', key: 'No new releases found', why: NOTE_PROSE },
   { file: 'js/198-discovery.js', key: 'All caught up ✨', why: NOTE_PROSE },
-  // js/199 — curation source legend dots (colour is the signal).
-  { file: 'js/199-admin.js', key: 'title="Reader suggestion"', why: LEGEND },
-  { file: 'js/199-admin.js', key: 'title="Pipeline suggestion"', why: LEGEND },
+  // js/162 — curation source legend dots (colour is the signal).
+  { file: 'js/162-charlab.js', key: 'title="Reader suggestion"', why: LEGEND },
+  { file: 'js/162-charlab.js', key: 'title="Pipeline suggestion"', why: LEGEND },
   // js/205 — the decor system itself: ornament html + season icon data.
   { file: 'js/205-shelfview.js', key: 'title="Pumpkin"', why: DECOR },
   { file: 'js/205-shelfview.js', key: 'title="Ghost"', why: DECOR },
@@ -304,8 +304,8 @@ const s217 = read('js/217-shelf3d-view.js');
 const shelfieLine = s217.split('\n').find(l => l.includes('id="svMenuShelfie"')) || '';
 ok('shelfie menu item uses icon(camera)', shelfieLine.includes("icon('camera')"));
 
-const s199 = read('js/199-admin.js');
-const dupesLine = s199.split('\n').find(l => l.includes('Possible duplicates')) || '';
+const s162 = read('js/162-charlab.js');
+const dupesLine = s162.split('\n').find(l => l.includes('Possible duplicates')) || '';
 ok('duplicates heading uses icon(warn)', dupesLine.includes("icon('warn')"));
 
 /* ---------------- 3. DNF reasons carry glyph names ---------------- */
