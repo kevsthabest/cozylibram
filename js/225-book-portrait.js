@@ -96,6 +96,20 @@ function portraitScore(b, charCount) {
   return s;
 }
 
+/* Modal Variant A: the one-line summary the slim bar shows while the
+   full card is collapsed — same sources the card itself uses, so the
+   line can't drift from the breakdown behind it. The character count
+   is async (portraitCharData); until it lands the line omits it, and
+   portraitEnhance re-paints the line when the cast arrives. */
+function portraitSlimLine(b, charCount) {
+  if (!b) return '';
+  var parts = [portraitScore(b, charCount || 0) + '% mapped',
+    localTropes(b).length + ' tropes',
+    localWarnings(b).length + ' warnings'];
+  if (charCount) parts.push(charCount + ' characters');
+  return parts.join(' · ');
+}
+
 /* ---------- async: characters ---------- */
 var ROLE_W = { protagonist: 3, supporting: 2, minor: 1 };
 function roleWeight(r) { return ROLE_W[String(r || '').toLowerCase()] || 1; }
@@ -268,6 +282,10 @@ async function portraitEnhance(b) {
     }
     var pctEl = document.getElementById('ptPct');
     if (pctEl && card.isConnected) pctEl.textContent = portraitScore(fresh, cd.count) + '% mapped';
+    // Modal Variant A: keep the slim bar's summary line in step —
+    // the character count only exists from here on.
+    var slimEl = document.getElementById('ptSlimSum');
+    if (slimEl && card.isConnected) slimEl.textContent = portraitSlimLine(fresh, cd.count);
   } catch (e) {}
   // community tropes (prepend) + enriched warnings
   // v473: resolve trope ids + fetch votes for provenance labels (Part 1)
@@ -424,6 +442,7 @@ if (typeof window !== 'undefined') {
   window.portraitEnhance = portraitEnhance;
   window.portraitCharCount = portraitCharCount;
   window.portraitScore = portraitScore;
+  window.portraitSlimLine = portraitSlimLine;
   window.portraitLocalTropes = localTropes;
 }
 if (typeof module !== 'undefined') {

@@ -40,8 +40,9 @@ runInWindow(`localStorage.clear();
 ok('author buttons rendered', qa('#modal-root [data-author]').length === 2);
 ok('first author is Jane Doe', qa('#modal-root [data-author]')[0].textContent === 'Jane Doe');
 
-// 2. series renders as display-only text in the inline block (v133: no tap-through)
-ok('series name shown as text', q('#modal-root #m-series label').textContent.includes('The Saga'));
+// 2. series renders as display-only text in the strip (v133: no tap-through;
+// Variant A movement: the inline block is the header-zone strip, label is .lbl)
+ok('series name shown as text', q('#modal-root #m-series .lbl').textContent.includes('The Saga'));
 ok('no series tap button anymore', !q('#modal-root [data-series]'));
 
 // 3. tap author -> collection overlay with other books by her, current excluded
@@ -60,8 +61,8 @@ ok('book detail opens', q('#modal-root h2').textContent === 'Beta');
 const order = qa('#m-series [data-book]').map(el => el.dataset.book);
 ok('series sorted by position', JSON.stringify(order) === JSON.stringify(['c1', 'c3']));
 
-// 6. rows show series position info
-ok('row shows position', q('#m-series .crow small').textContent.includes('#2'));
+// 6. figures show series position info (Variant A: strip figcaption, was .crow small)
+ok('figure shows position', q('#m-series [data-book="c1"] figcaption').textContent.includes('#2'));
 
 // 7. close overlay via X, book modal still underneath
 qa('#modal-root [data-author]')[0].click();

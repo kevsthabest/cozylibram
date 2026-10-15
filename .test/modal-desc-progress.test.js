@@ -1,6 +1,10 @@
 // Tests for v130/v182 — modal description + page tracker:
 // v182 mockup alignment: the description lives in the desktop hero AND under
 // "About this book" on the Details tab, each with a read-more toggle.
+// MOVEMENT (Variant A modal rebuild, named in its PR): the blurb now
+// renders EXACTLY ONCE — the header "About this book" slim bar. The
+// Details-tab copy and the m-desc-hero copy are deleted; pins below
+// were retargeted to the single header copy.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -35,15 +39,15 @@ const seed = (id, over) => {
 
 const DESC = 'A tale of two cities. It was the best of times.\n\nIt was the worst of times.';
 
-// --- description: hero copy (desktop, per the v182 mockup) + Details tab copy ---
+// --- description: ONE copy, in the header "About this book" row ---
 seed('d1', { description: DESC });
-ok('description renders on the Details tab', !!q('#dtab-details #m-desc'));
-ok('hero carries the mockup description copy', !!q('.d-hero #m-desc-hero') &&
-  q('#m-desc-hero').textContent.includes('best of times'));
-ok('hero description toggle exists', !!q('#m-desc-hero-toggle'));
-ok('details description toggle exists', !!q('#m-desc-toggle'));
+ok('description does NOT render on the Details tab', !q('#dtab-details #m-desc'));
+ok('header About row carries the description copy', !!q('.d-about #m-desc') &&
+  q('#m-desc').textContent.includes('best of times'));
+ok('no hero duplicate copy', !q('#m-desc-hero'));
+ok('description toggle exists', !!q('#m-desc-toggle'));
 ok('description text present', q('#m-desc').textContent.includes('best of times'));
-ok('description rendered exactly once', qa('#m-desc').length === 1);
+ok('description rendered exactly once', qa('.m-desc').length === 1);
 ok('read-more toggle exists', !!q('#m-desc-toggle'));
 q('#m-desc-toggle').click();
 ok('toggle expands (open class)', q('#m-desc').classList.contains('open'));

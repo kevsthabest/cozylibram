@@ -57,7 +57,7 @@ ok('desktop panel CSS uses the approved mockup hero grid', (() => {
     css.includes('grid-template-rows: auto auto auto') &&
     css.includes('.d-primary-row') &&
     css.includes('grid-row: 1 / span 3') &&
-    css.includes('.d-hero-desc') &&
+    css.includes('.d-about') && // Variant A movement: the About slim bar takes the old .d-hero-desc slot
     css.includes('padding: 26px 120px 26px 34px');
 })());
 
@@ -85,10 +85,15 @@ ok('hero order: cover, then title, then primary', (() => {
   return h.indexOf('d-cover') < h.indexOf('d-hero-text') &&
     h.indexOf('d-hero-text') < h.indexOf('id="m-primary"');
 })());
-ok('details order: description, rating, progress, shelf, ownership, moods, log, series, metadata', (() => {
+// MOVEMENT (Variant A modal rebuild, named in its PR): the Details form
+// order is the decided design's — Rating card (stars + axes) first, then
+// Status & Ownership, progress, the quiet Details card (warnings, log,
+// title), More details (pages) last; the blurb and the series strip left
+// the panel for the header zone entirely.
+ok('details order: rating (stars+axes), shelf, ownership, progress, warnings, log, title, metadata', (() => {
   const h = q('#dtab-details').innerHTML;
-  const order = ['id="m-desc"', 'id="f-myrating"', 'id="m-progress"', 'id="f-status"',
-    'id="f-owned"', 'id="f-axrows"', 'id="m-loglist"', 'id="m-series-wrap"', 'id="f-pagecount"'];
+  const order = ['id="f-myrating"', 'id="f-axrows"', 'id="f-status"',
+    'id="f-owned"', 'id="m-progress"', 'id="m-hc"', 'id="m-loglist"', 'id="f-title"', 'id="f-pagecount"'];
   let last = -1;
   return order.every(id => { const i = h.indexOf(id); const good = i > last; last = i; return good; });
 })());
