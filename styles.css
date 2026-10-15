@@ -3867,7 +3867,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 /* v455: Trigger check bottom sheet — gentle heads-up, never a gate */
 .tc-sheet { max-height: 75vh; overflow-y: auto; }
 .tc-inner { padding: 6px 4px 8px; text-align: center; }
-.tc-emoji { font-size: 30px; margin-bottom: 6px; }
+.tc-glyph { margin-bottom: 6px; }
+.tc-glyph .ticon { width: 30px; height: 30px; }
 .tc-title { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; margin: 0 0 6px; }
 .tc-sub { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
 .tc-sub b { color: var(--ink); }

@@ -1112,7 +1112,7 @@ function renderDetailModal(b, viaBook) {
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     // v559: membership legibility — a TBR book marked To buy IS on the
     // Wishlist (derived, js/000); say so where the reader is looking.
-    '<p class="note" id="m-wishnote" style="margin:0 0 6px"' + (isWishlistBook(draft) ? '' : ' hidden') + '>🎁 On your Wishlist — books on your TBR marked To buy live on the Wishlist.</p>' +
+    '<p class="note" id="m-wishnote" style="margin:0 0 6px"' + (isWishlistBook(draft) ? '' : ' hidden') + '>' + icon('gift') + ' On your Wishlist — books on your TBR marked To buy live on the Wishlist.</p>' +
     '<label>Where to buy <span class="note-inline">· ' + esc(STORE_REGIONS[detectStoreRegion()].label) + '</span></label>' +
     '<div class="buy-row">' + storeLinks(draft).map(l =>
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +

@@ -240,6 +240,10 @@ const ICONS = {
   help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
   // hourglass (time to finish)
   hourglass: '<path d="M6 3.5h12"/><path d="M6 20.5h12"/><path d="M7.5 3.5c0 5 4 6.5 4 8.5s-4 3.5-4 8.5M16.5 3.5c0 5-4 6.5-4 8.5s4 3.5 4 8.5"/>',
+  // tag (trope badges — icon sweep: replaces the emoji prefix in js/160)
+  tag: '<path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0L3.5 13.5V3.5h10L20.6 10.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/>',
+  // leaf (season nudge: stpatrick / thanksgiving — icon sweep, js/010)
+  leaf: '<path d="M5.5 19.5C5.5 10 11.5 4.8 20 4.5c.3 8.5-4.5 14.5-14 14.5z"/><path d="M5.5 19.5c2.8-6.2 6.8-10 11.5-12"/>',
 };
 function icon(name) {
   const body = ICONS[name] || ICONS.covers;
