@@ -79,7 +79,8 @@ const ALLOW = [
   { file: 'js/080-pagecount.js', key: "say('📄 Found '", why: SAY },
   // js/090 — toasts only.
   { file: 'js/090-sync.js', key: '☁️ Library updated', why: TOAST },
-  { file: 'js/090-sync.js', key: "toast('🧹 Removed '", why: TOAST },
+  // (the 🧹 "Removed friend books" toast entry was removed with the
+  // depollute repair it justified — named movement, retire-depollute PR)
   { file: 'js/090-sync.js', key: "toast('☁️ Account created", why: TOAST },
   // js/095 / js/105 / js/130 / js/155 — toasts only.
   { file: 'js/095-gate.js', key: "toast('Password updated", why: TOAST },

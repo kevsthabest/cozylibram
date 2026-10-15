@@ -187,42 +187,52 @@ function makeFake() {
   await waitFor('__pulled');
   ok('pull scoped to own user_id', JSON.stringify(window.__pulled) === '["own1"]');
 
-  // 5c. v101: one-time repair removes books leaked from friends' shelves.
-  // A polluted book shares its id with a friend's book; genuine copies
-  // (+ TBR, manual adds) always get fresh ids, so same-title books survive.
+  // 5c. REGRESSION — depollute repair retired (Decision, 2026-10-15).
+  // The v101 repairFriendPollution ran at the end of every cloudFirstSync
+  // and removeBook()d any local book whose id also appeared in a friend's
+  // visible library — tombstoning it, which deleted the cloud row on the
+  // next push and propagated the loss to the account's other devices. It
+  // could not distinguish a genuine pre-fix leak from the same record
+  // legitimately present in two friended accounts (seeded fixtures,
+  // shared backup imports). Production incident 2026-10-15: the UX test
+  // account lost exactly the 4 books whose ids collide with its accepted
+  // friend's library (Dune, Book Lovers, Modern Classic, Fourth Wing
+  // Bonus) in one same-millisecond tombstone batch. The repair is
+  // retired: a first sync must lose NOTHING over an id collision.
   runInWindow(`(async () => {
     try {
       window.__origCircleLists = circleLists;
       window.__origCircleFriendBooks = circleFriendBooks;
+      // the friend's visible library holds a book with id 'shared1'
       circleLists = async () => ({ friends: [{ id: 'friend-1', name: 'Pal' }] });
-      circleFriendBooks = async () => [{ id: 'f1', title: 'Friend Book', _mtime: 5 }];
+      circleFriendBooks = async () => [{ id: 'shared1', title: 'Shared Fixture', _mtime: 5 }];
+      window.__sbStub.store.length = 0;
+      window.__sbStub.deleted.length = 0;
+      // fresh context: no depollute flag (the incident device had none;
+      // after retirement nothing reads this key — it stays orphaned)
       localStorage.removeItem('spicyshelves.depollute.v1');
       library = [
-        { id: 'f1', title: 'Friend Book', _mtime: 5 },
+        { id: 'shared1', title: 'Shared Fixture', _mtime: 5 },
         { id: 'mine1', title: 'My Only Book', _mtime: 50 },
-        { id: 'mine2', title: 'Friend Book', _mtime: 60 },
       ];
       tombstones = [];
-      await repairFriendPollution();
-      window.__repairLib = library.map(b => b.id);
-      window.__repairTomb = tombstones.map(t => t.id);
-      window.__repairFlag = localStorage.getItem('spicyshelves.depollute.v1');
-      // second run is a no-op even with a new leaked id present
-      library.push({ id: 'f2', title: 'Another Leak', _mtime: 5 });
-      await repairFriendPollution();
-      window.__repairLib2 = library.map(b => b.id);
+      await cloudFirstSync();
+      window.__keepLib = library.map(b => b.id);
+      window.__keepTomb = tombstones.map(t => t.id);
+      window.__keepStore = window.__sbStub.store.filter(r => r.user_id === 'user-1').map(r => r.book_id);
+      window.__keepRepairType = typeof repairFriendPollution;
       circleLists = window.__origCircleLists;
       circleFriendBooks = window.__origCircleFriendBooks;
       library = []; saveLibrary({ noCloud: true });
-    } catch (e) { window.__repairErr = String((e && e.stack) || e); }
+    } catch (e) { window.__keepErr = String((e && e.stack) || e); }
   })();`);
-  await waitFor('__repairLib2');
-  ok('repair ran without errors', !window.__repairErr);
-  if (window.__repairErr) console.log('   ' + window.__repairErr);
-  ok('repair removes leaked friend book', JSON.stringify(window.__repairLib) === '["mine1","mine2"]');
-  ok('repair tombstones the removal', JSON.stringify(window.__repairTomb) === '["f1"]');
-  ok('repair sets the done flag', window.__repairFlag === '1');
-  ok('repair runs only once', JSON.stringify(window.__repairLib2) === '["mine1","mine2","f2"]');
+  await waitFor('__keepLib');
+  ok('regression sync ran without errors', !window.__keepErr);
+  if (window.__keepErr) console.log('   ' + window.__keepErr);
+  ok('first sync keeps id-colliding book (no removal)', JSON.stringify(window.__keepLib) === '["shared1","mine1"]');
+  ok('first sync creates no tombstone for id collision', JSON.stringify(window.__keepTomb) === '[]');
+  ok('id-colliding book row survives in cloud store', window.__keepStore.includes('shared1') && window.__keepStore.includes('mine1'));
+  ok('depollute repair retired (function gone)', window.__keepRepairType === 'undefined');
 
   // 6. account UI states
   window.isSecureContext = true; // jsdom lacks webcrypto; real localhost browsers are secure contexts

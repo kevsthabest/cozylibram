@@ -336,7 +336,6 @@ async function cloudFirstSync(opts) {
     // v474: merge milestone achievements across devices (fire-and-forget —
     // the milestone pull never blocks the library sync).
     try { if (typeof syncMilestonesFromCloud === 'function') syncMilestonesFromCloud().catch(function () {}); } catch (e) {}
-    await repairFriendPollution();
     if (announce) toast(changed ? '☁️ Library updated' : '☁️ Already up to date');
     AppLog.info('sync', 'first sync done' + (changed ? ' (library changed)' : ''));
   } catch (e) {
@@ -438,34 +437,16 @@ async function cloudRealtimePull() {
     syncEnd(changed);
   } catch (e) { syncEnd(false); /* transient — the next event or boot retries */ }
 }
-// v101: one-time repair for libraries polluted by the pre-fix unfiltered
-// pull (v96–v100). Once RLS let friends read each other's books, a sync after
-// adding a friend merged their shared books into your local library and then
-// pushed them back as your own rows. A polluted book is identifiable by its id:
-// it's identical to a book id in a friend's shared library, and genuine copies
-// (the + TBR button, manual adds) always get fresh ids via uid().
-async function repairFriendPollution() {
-  const FLAG = 'spicyshelves.depollute.v1';
-  try { if (localStorage.getItem(FLAG) === '1') return; } catch (e) { return; }
-  const done = () => { try { localStorage.setItem(FLAG, '1'); } catch (e) {} };
-  if (!cloudUser || typeof circleLists !== 'function' || typeof circleFriendBooks !== 'function') { done(); return; }
-  let friends = [];
-  try { friends = ((await circleLists()).friends) || []; } catch (e) { done(); return; }
-  if (!friends.length) { done(); return; }
-  const friendIds = new Set();
-  for (const f of friends) {
-    try { (await circleFriendBooks(f.id)).forEach(b => { if (b && b.id) friendIds.add(b.id); }); }
-    catch (e) { /* one friend's shelves failing shouldn't block the repair */ }
-  }
-  const polluted = (typeof library !== 'undefined' ? library : []).filter(b => b && friendIds.has(b.id));
-  if (polluted.length) {
-    polluted.forEach(b => { try { removeBook(b.id); } catch (e) {} });
-    render();
-    toast('🧹 Removed ' + polluted.length + ' friend ' + (polluted.length === 1 ? 'book' : 'books') +
-      ' that had leaked into your library');
-  }
-  done();
-}
+// The v101 depollute repair (repairFriendPollution) was retired by decision
+// on 2026-10-15. It removed any local book whose id also appeared in a
+// friend's visible library, tombstoning it — which deleted the cloud row
+// and propagated the loss to every device. An id collision cannot
+// distinguish a genuine pre-fix leak from the same record legitimately
+// present in two friended accounts (seeded fixtures, shared backup
+// imports); production lost real books to exactly that false positive.
+// The leak era it cleaned up (v96–v100) is long past. The
+// 'spicyshelves.depollute.v1' localStorage flag is deliberately left in
+// place on devices that hold it — orphaned and unread, it is harmless.
 async function cloudWipe() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
