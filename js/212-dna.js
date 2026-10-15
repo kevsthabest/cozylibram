@@ -276,9 +276,8 @@ function drawPortraitMidnight(x, W, H, d, t) {
   x.strokeStyle = dnaAlpha(t.ink, 0.25); x.lineWidth = 2;
   [405, 675].forEach(dx => { x.beginPath(); x.moveTo(dx, y + 8); x.lineTo(dx, y + 118); x.stroke(); });
 
-  // Footer — minimal, keeps the BookTok-native emoji
-  x.fillStyle = t.muted; x.font = '32px ' + SANS;
-  dnaSpaced(x, 'tracked with cozy libram 🌶️🖤', W / 2, 1865, 4);
+  // Footer — standard branding (shared cardFooter: mark + wordmark)
+  cardFooter(x, W, { y: 1865, color: t.muted });
 }
 
 /* v487: Variant A (Hearthside) — light, bookplate. Used on light themes. */
@@ -396,8 +395,7 @@ function drawPortraitHearthside(x, W, H, d, t) {
   // Footer
   x.strokeStyle = t.gold; x.lineWidth = 2;
   x.beginPath(); x.moveTo(290, 1760); x.lineTo(W - 290, 1760); x.stroke();
-  x.fillStyle = t.muted; x.font = '32px ' + SANS;
-  dnaSpaced(x, 'TRACKED WITH COZY LIBRAM', W / 2, 1820, 6);
+  cardFooter(x, W, { y: 1820, color: t.muted });
 }
 
 /* v487: theme-aware entry. Dark themes → Midnight (B); light → Hearthside (A).

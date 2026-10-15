@@ -144,22 +144,11 @@ function psStars(x, cx, y, size, color) {
   x.restore();
 }
 /* Footer branding: icon + wordmark, sized so a link element can join the
-   slot later. No emoji, no URL (spec branding rules). */
+   slot later. No emoji, no URL (spec branding rules). Adapter over the
+   one shared cardFooter (js/050) — it only translates this card family's
+   palette token, baseline, and preloaded icon into cardFooter options. */
 function psFooter(x, W, y, t, icon) {
-  const word = 'Cozy Libram';
-  x.save();
-  x.font = '600 34px ' + PS_SERIF;
-  let tw = 0;
-  try { tw = x.measureText(word).width; } catch (e) {}
-  const iw = icon ? 46 : 0, gap = icon ? 16 : 0;
-  let sx = W / 2 - (iw + gap + tw) / 2;
-  if (icon) {
-    try { x.drawImage(icon, sx, y - 38, 46, 46); } catch (e) {}
-    sx += iw + gap;
-  }
-  x.fillStyle = t.muted; x.textAlign = 'left'; x.textBaseline = 'alphabetic';
-  x.fillText(word, sx, y);
-  x.restore();
+  cardFooter(x, W, { y: y, color: t && t.muted, icon: icon });
 }
 function psDrawCoverFit(x, img, cx, cy, w, h, r) {
   x.save();
