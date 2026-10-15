@@ -1,6 +1,6 @@
 /* Character Unmerge COMPANIONS tests (v578) — the preview + history
    surfaces over PR #248's shipped restore core. Unit-tests the pure
-   derivations from js/199-admin.js (charUnmergePreview /
+   derivations from js/162-charlab.js (charUnmergePreview /
    charUnmergeListWindow / charUnmergeOutcome / charMergeHistoryLine /
    charUnmergeResultModel) against fixture snapshots, then drives the
    real card -> preview sheet -> commit -> result flow in jsdom against
