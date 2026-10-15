@@ -1138,6 +1138,11 @@ function renderDetailModal(b, viaBook) {
     '<div class="field" id="f-wantwrap"><label>Want another format</label>' +
     '<div class="want-opts" id="f-want-opts"></div>' +
     '<p class="note" id="f-want-note" style="margin:6px 0 0"></p></div></details>' +
+    // Face-out display pick: on the book record (faceOut), so it rides
+    // library sync and survives shelf re-sorts. The 3D shelf reads it.
+    '<div class="field"><label>' + icon('shelf') + ' 3D shelf</label>' +
+    '<label class="checkline"><input type="checkbox" id="f-faceout"' + (draft.faceOut ? ' checked' : '') + '> Display face-out' +
+    '<span class="chk-hint">show the cover on the 3D shelf instead of the spine</span></label></div>' +
     '<div class="field" id="m-buywrap" style="display:' + (draft.owned === 'owned' ? 'none' : '') + '">' +
     // v559: membership legibility — a TBR book marked To buy IS on the
     // Wishlist (derived, js/000); say so where the reader is looking.
@@ -1592,6 +1597,10 @@ function renderDetailModal(b, viaBook) {
   if (pd) pd.addEventListener('change', e => {
     draft.purchaseDate = e.target.value || null;
   });
+  const _faceoutEl = document.getElementById('f-faceout');
+  if (_faceoutEl) _faceoutEl.addEventListener('change', e => {
+    draft.faceOut = e.target.checked;
+  });
   document.getElementById('f-prevread').addEventListener('change', e => {
     draft.previouslyRead = e.target.checked;
     const pi = document.getElementById('f-progress');
@@ -2017,6 +2026,8 @@ function renderDetailModal(b, viaBook) {
       draft.seriesManual = false;
     }
     draft.previouslyRead = document.getElementById('f-prevread').checked;
+    const _foSave = document.getElementById('f-faceout');
+    if (_foSave) draft.faceOut = _foSave.checked;
     const totalEl = document.getElementById('f-pagecount');
     draft.pageCount = Math.max(0, Number(totalEl.value) || 0) || null;
     const prog = document.getElementById('f-progress');

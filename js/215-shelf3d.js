@@ -648,6 +648,100 @@
       m.userData.bookId = b.id;
       return m;
     }
+    /* Face-out display picks: a picked book turns its cover to the room.
+       The cloth placeholder (the book's own spine palette, title + author)
+       is what a picked book wears until — and unless — its cover loads;
+       a missing or unreadable cover therefore never leaves a hole, and a
+       cover that arrives later replaces it (the mesh rebuilds when the
+       book's cover changes: see layoutCurrentBooks' mode/coverKey check). */
+    function facePlaceholderTexture(b) {
+      var c = document.createElement('canvas'); c.width = 256; c.height = 384;
+      var g = c.getContext('2d');
+      g.fillStyle = b.spineC1 || '#5b4a72'; g.fillRect(0, 0, 256, 384);
+      var grad = g.createLinearGradient(0, 0, 256, 0);
+      grad.addColorStop(0, 'rgba(0,0,0,.28)'); grad.addColorStop(0.14, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.88, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,.28)');
+      g.fillStyle = grad; g.fillRect(0, 0, 256, 384);
+      g.strokeStyle = b.spineC2 || '#e5b86a'; g.lineWidth = 3;
+      g.strokeRect(14, 14, 228, 356);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '600 25px Georgia, serif';
+      var words = String(b.title || 'Untitled').split(/\s+/), lines = [], line = '';
+      words.forEach(function (wd) {
+        var t = line ? line + ' ' + wd : wd;
+        if (g.measureText(t).width > 192 && line) { lines.push(line); line = wd; } else line = t;
+      });
+      if (line) lines.push(line);
+      lines = lines.slice(0, 4);
+      var y = 192 - ((lines.length - 1) * 30) / 2 - (b.author ? 14 : 0);
+      g.fillStyle = 'rgba(246,239,248,.95)';
+      lines.forEach(function (ln, i) { g.fillText(ln, 128, y + i * 30); });
+      if (b.author) {
+        g.font = '600 13px Georgia, serif';
+        g.fillStyle = 'rgba(246,239,248,.66)';
+        var au = String(b.author).toUpperCase();
+        while (g.measureText(au).width > 192 && au.length > 4) au = au.slice(0, -2);
+        g.fillText(au, 128, y + lines.length * 30 + 8);
+      }
+      var tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      return tex;
+    }
+    /* The cover material for a face-out book. Starts as the placeholder;
+       swaps in the real cover when it loads. Sources come from the shared
+       cover pipeline (js/120 coverColorSources — the same ordered,
+       pixel-readable list the spine sampler uses), so a texture is only
+       ever built from a CORS-clean image: a tainted upload would throw
+       inside the render loop. Every failure keeps the placeholder. */
+    function faceCoverMaterial(b, w, h) {
+      var mat = new THREE.MeshStandardMaterial({ map: facePlaceholderTexture(b), roughness: 0.8 });
+      if (!b.cover) return mat;
+      var sources = (typeof coverColorSources === 'function') ? coverColorSources(b.cover)
+        : (/^(data:|blob:|\/)/.test(b.cover) ? [[b.cover, false]] : []);
+      var aspect = h > 0 ? w / h : 0.66;
+      var step = function (i) {
+        if (i >= sources.length) return;
+        var img = new Image();
+        if (sources[i][1]) img.crossOrigin = 'anonymous';
+        img.onload = function () {
+          try {
+            var tex = new THREE.Texture(img);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 4;
+            var crop = shelf3dCoverCrop(img.naturalWidth || img.width, img.naturalHeight || img.height, aspect);
+            tex.repeat.set(crop.rx, crop.ry);
+            tex.offset.set(crop.ox, crop.oy);
+            tex.needsUpdate = true;
+            var old = mat.map;
+            mat.map = tex; mat.needsUpdate = true;
+            if (old && old !== tex) old.dispose();
+            markDirty();
+          } catch (e) { step(i + 1); }
+        };
+        img.onerror = function () { step(i + 1); };
+        img.src = sources[i][0];
+      };
+      step(0);
+      return mat;
+    }
+    function makeFaceBook(b, w, h) {
+      var css = b.spineC1 || '#5a4a6a';
+      var accent = b.spineC2 || '#e5b86a';
+      var col = safeColor(THREE, css, '#5a4a6a');
+      var spine = new THREE.MeshStandardMaterial({ map: spineTexture(b.title, css, accent), roughness: 0.75 });
+      var cloth = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.82), roughness: 0.85 });
+      var back = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.6), roughness: 0.9 });
+      var pages = new THREE.MeshStandardMaterial({ color: 0xe6dabd, roughness: 0.95 });
+      var cover = faceCoverMaterial(b, w, h);
+      // Box faces: fore-edge pages, spine, top pages, cloth, cover, back.
+      var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, shelf3dFaceDepth(b.spineW)),
+        [pages, spine, pages, cloth, cover, back]);
+      m.castShadow = true; m.receiveShadow = true;
+      m.userData.bookId = b.id;
+      m.userData.zOff = shelf3dFaceZ(b.spineW);
+      return m;
+    }
     function clearBooks() {
       shelfBooks.forEach(function (sb) {
         scene.remove(sb.mesh);
@@ -695,13 +789,23 @@
         var rec = [pl.x, pl.x + pl.w];
         occupied[pl.li].push(rec);
         var sb = byId[b.id];
+        var mode = b.faceOut ? 'F' : 'S';
+        var coverKey = b.faceOut ? (b.cover || '') : '';
+        if (sb && (sb.mode !== mode || sb.coverKey !== coverKey)) {
+          // Pick toggled, or a picked book's cover arrived/changed: the
+          // mesh's shape is wrong now — rebuild it below at the new spot.
+          delete byId[b.id];
+          scene.remove(sb.mesh);
+          disposeDeep(sb.mesh);
+          sb = null;
+        }
         if (sb) {
           delete byId[b.id];
           sb.li = pl.li; sb.rec = rec;
           var tx = pl.x + pl.w / 2, ty = LEVELS[pl.li] + pl.h / 2;
           var sx = sb.mesh.position.x, sy = sb.mesh.position.y;
           if (!slide || (Math.abs(sx - tx) < 0.001 && Math.abs(sy - ty) < 0.001)) {
-            sb.mesh.position.set(tx, ty, 0);
+            sb.mesh.position.set(tx, ty, sb.mesh.userData.zOff || 0);
           } else {
             (function (mesh) {
               tween(260, function (k) {
@@ -711,10 +815,10 @@
             })(sb.mesh);
           }
         } else {
-          var mesh = makeBook(b, pl.w, pl.h, 1.75);
-          mesh.position.set(pl.x + pl.w / 2, LEVELS[pl.li] + pl.h / 2, 0);
+          var mesh = b.faceOut ? makeFaceBook(b, pl.w, pl.h) : makeBook(b, pl.w, pl.h, 1.75);
+          mesh.position.set(pl.x + pl.w / 2, LEVELS[pl.li] + pl.h / 2, mesh.userData.zOff || 0);
           scene.add(mesh);
-          sb = { mesh: mesh, li: pl.li, rec: rec };
+          sb = { mesh: mesh, li: pl.li, rec: rec, mode: mode, coverKey: coverKey };
           if (slide) {
             mesh.scale.setScalar(0.01);
             (function (m2) {

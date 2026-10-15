@@ -322,14 +322,22 @@ function shelfBooks3D(books) {
     const spec = (typeof shelfSpineSpec === 'function')
       ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e', w: 36, h: 190 };
     const col = shelf3dSpineColors(b);
+    // Normalize 2.5D px geometry to 3D world units (prototype scale).
+    const spineH = Math.max(1.5, Math.min(2.6, spec.h / 100));
     return {
       id: b.id,
       title: b.title || 'Untitled',
+      author: _s3dAuthor(b),
+      cover: b.cover || '',
+      // Face-out display pick (book.faceOut, set in the book modal): the
+      // packer and the engine both read these; unpicked books render
+      // exactly as before.
+      faceOut: !!b.faceOut,
+      faceW: (typeof shelf3dFaceWidth === 'function') ? shelf3dFaceWidth(spineH) : 1.25,
       spineC1: col.c1,
       spineC2: col.c2,
-      // Normalize 2.5D px geometry to 3D world units (prototype scale).
       spineW: Math.max(0.3, Math.min(0.7, spec.w / 70)),
-      spineH: Math.max(1.5, Math.min(2.6, spec.h / 100)),
+      spineH: spineH,
     };
   });
 }
