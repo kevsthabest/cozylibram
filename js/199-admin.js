@@ -1798,6 +1798,20 @@ function charUnmergeRelKey(r) {
   return String((r && r.to) || '').trim().toLowerCase() + '|' + charNormRelType(r && r.type);
 }
 
+/* The fold set, built exactly as charMerge builds its `seen`: the
+   winner's pre-merge relationships with loser-pointing entries
+   REPOINTED to the winner's name first, then keyed. charMerge folds a
+   loser entry into the winner only when the entry's key is absent from
+   this set — so in a mutual same-type pair (winner and loser pointing
+   at each other with the same type) the loser's entry keys IN via the
+   repoint, never folds, and stays on the loser's own array, which
+   merge and unmerge both leave untouched. */
+function charUnmergePostRepointKeys(winnerRels, winnerName, loserName) {
+  return new Set((Array.isArray(winnerRels) ? winnerRels : []).map(r =>
+    charUnmergeRelKey(charUnmergeNameEq(r.to, loserName)
+      ? { to: winnerName, type: r.type } : r)));
+}
+
 /* The preview model for restoring `loser` from `winner`: who comes
    back, every move named with its landing place, what stays, and what
    a verbatim restore rewinds. */
@@ -1811,6 +1825,7 @@ function charUnmergePreview(loser, winner, chars) {
   const winnerNow = (winner && Array.isArray(winner.relationships)) ? winner.relationships : [];
   const winnerKeys = new Set(winnerRels.map(charUnmergeRelKey));
   const loserKeys = new Set(loserRels.map(charUnmergeRelKey));
+  const postRepointKeys = charUnmergePostRepointKeys(winnerRels, winnerName, loserName);
 
   // Links back: third-party pointers the merge repointed at the winner.
   const linksBack = [];
@@ -1830,8 +1845,12 @@ function charUnmergePreview(loser, winner, chars) {
       relsBack.push({ name: winnerName, type: charNormRelType(r.type) });
     }
   });
+  // Folded-in loser entries — tested against the POST-REPOINT set
+  // (charMerge's `seen`), not the raw snapshot keys: against the raw
+  // keys a mutual same-type entry would be listed as moving back when
+  // it never folded and never moves.
   loserRels.forEach(r => {
-    if (!winnerKeys.has(charUnmergeRelKey(r))) {
+    if (!postRepointKeys.has(charUnmergeRelKey(r))) {
       relsBack.push({ name: String(r.to || ''), type: charNormRelType(r.type) });
     }
   });
@@ -1898,13 +1917,14 @@ function charUnmergeOutcome(preview, charsAfter) {
   const w = byId(preview.winnerId);
   if (w && Array.isArray(w.relationships)) {
     const wKeys = new Set(w.relationships.map(charUnmergeRelKey));
-    const snapKeys = new Set((preview.winnerRels || []).map(charUnmergeRelKey));
+    const postRepointKeys = charUnmergePostRepointKeys(
+      preview.winnerRels, preview.winnerName, preview.loserName);
     (preview.winnerRels || []).forEach(r => {
       if (charUnmergeNameEq(r.to, preview.loserName) && wKeys.has(charUnmergeRelKey(r))) relsMoved++;
     });
     (preview.loserRels || []).forEach(r => {
       const k = charUnmergeRelKey(r);
-      if (!snapKeys.has(k) && !wKeys.has(k)) relsMoved++;
+      if (!postRepointKeys.has(k) && !wKeys.has(k)) relsMoved++;
     });
   }
   const loserAfter = byId(preview.loserId);

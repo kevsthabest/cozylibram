@@ -173,6 +173,62 @@ const callPreview = (chars) => {
   ok('outcome: loser-write failure — all movement counted, still unfinished',
     oPartL.finished === false && oPartL.linksMoved === 1 && oPartL.relsMoved === 3);
 
+  /* ===== 5B. mutual same-type winner<->loser pair (Advisor finding) =====
+     Both rows carry 'spouse' toward each other pre-merge. charMerge
+     repoints the winner's spouse entry at the winner's own name BEFORE
+     building its fold set (`seen`), so the loser's spouse entry keys
+     INTO that set and is never folded — the loser's own relationships
+     array is untouched by merge and unmerge alike. The preview/result
+     derivation must therefore not list or count that entry as moving
+     back: exactly 2 entries change state in this shape, not 3. */
+  function mutualChars() {
+    const snap = {
+      v: 1, at: '2026-10-15T18:22:00.000Z', by: 'curator-1',
+      winnerId: 'cW', loserId: 'cL', loserStatus: 'confirmed',
+      winnerRels: [rel('Liam Locke', 'spouse'), rel('Thea Thorn', 'mentor')],
+      repoints: [],
+    };
+    return [
+      { id: 'cW', name: 'Willa Wynn', role: 'protagonist', description: 'lead',
+        confidence: 0.9, status: 'confirmed', suggestedCharacterId: null,
+        duplicateOf: null, mergeSnapshot: null, characterId: null,
+        relationships: [rel('Willa Wynn', 'spouse'), rel('Thea Thorn', 'mentor'),
+          rel('Thea Thorn', 'friend')] },
+      { id: 'cL', name: 'Liam Locke', role: 'supporting', description: 'the double',
+        confidence: 0.8, status: 'merged', suggestedCharacterId: null,
+        duplicateOf: 'cW', mergeSnapshot: snap, characterId: null,
+        relationships: [rel('Willa Wynn', 'spouse'), rel('Thea Thorn', 'friend')] },
+      { id: 'cT', name: 'Thea Thorn', role: 'antagonist', description: 'rival',
+        confidence: 0.7, status: 'confirmed', suggestedCharacterId: null,
+        duplicateOf: null, mergeSnapshot: null, characterId: null,
+        relationships: [] },
+    ];
+  }
+  const mp = callPreview(mutualChars());
+  ok('mutual pair: relationships back lists each moving entry once — no duplicate winner-side line',
+    deepEq(mp.relsBack, [
+      { name: 'Willa Wynn', type: 'spouse' },
+      { name: 'Thea Thorn', type: 'friend' },
+    ]));
+  ok('mutual pair: the loser\'s own mutual entry is not listed as moving — it never folded',
+    mp.relsBack.filter(x => x.type === 'spouse').length === 1);
+  ok('mutual pair: counts say 2 relationships move back, not 3',
+    mp.counts.relationships === 2 && mp.counts.links === 0 && mp.movesBack.length === 2);
+  ok('mutual pair: stays still names the winner\'s uninvolved entries',
+    deepEq(mp.staysList, [{ name: 'Thea Thorn', type: 'mentor' }]) && mp.counts.stays === 1);
+  // fully restored state for the mutual shape (winner array verbatim
+  // from the snapshot, loser active again, its own array as it always was)
+  const mAfter = mutualChars();
+  mAfter.find(c => c.id === 'cW').relationships =
+    [rel('Liam Locke', 'spouse'), rel('Thea Thorn', 'mentor')];
+  const mLoser = mAfter.find(c => c.id === 'cL');
+  mLoser.status = 'confirmed'; mLoser.duplicateOf = null; mLoser.mergeSnapshot = null;
+  window.__fxAfterM = mAfter;
+  window.__fxPrevM = mp;
+  const oMutual = JSON.parse(run(`JSON.stringify(charUnmergeOutcome(__fxPrevM, __fxAfterM))`));
+  ok('mutual pair: outcome counts exactly the 2 entries that changed state',
+    oMutual.finished === true && oMutual.linksMoved === 0 && oMutual.relsMoved === 2);
+
   /* ================= 6. result model ================= */
   const mOk = JSON.parse(run(`JSON.stringify(charUnmergeResultModel(${JSON.stringify(p)}, null))`));
   ok('result: success heading + counted lines + stays + status',
