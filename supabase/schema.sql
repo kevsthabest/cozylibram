@@ -443,6 +443,41 @@ $$;
 revoke all on function public.circle_book_visible(uuid, text) from public;
 grant execute on function public.circle_book_visible(uuid, text) to authenticated;
 
+-- v578 (issue #232): the derived-wishlist overload. Since v559 the
+-- Wishlist is derived (status 'tbr' + owned 'tobuy'), so the 2-arg
+-- helper — gating on the raw status alone — cannot withhold it when a
+-- reader hid only the 'wishlist' shelf key. This overload delegates
+-- every existing gate to the 2-arg function, withholds exactly the
+-- derived set when 'wishlist' is hidden, and requires a book matching
+-- BOTH status and facet, so hidden / no-such-book / not-linked /
+-- blocked / not-sharing stay one indistinguishable false.
+create or replace function public.circle_book_visible(p_owner uuid, p_status text, p_owned text)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select public.circle_book_visible(p_owner, p_status)
+     and not (
+       coalesce(p_status, '') = 'tbr'
+       and coalesce(p_owned, '') = 'tobuy'
+       and exists (
+         select 1 from public.profiles p
+         where p.user_id = p_owner
+           and 'wishlist' = any (coalesce(p.hidden_shelves, '{}'::text[]))
+       )
+     )
+     and exists (
+       select 1 from public.books b
+       where b.user_id = p_owner
+         and coalesce(b.data ->> 'status', '') = coalesce(p_status, '')
+         and coalesce(b.data ->> 'owned', '') = coalesce(p_owned, '')
+     );
+$$;
+revoke all on function public.circle_book_visible(uuid, text, text) from public;
+grant execute on function public.circle_book_visible(uuid, text, text) to authenticated;
+
 -- Friends can read each other's books, minus hidden shelves and only when
 -- the owner shares with the circle. Write access stays owner-only.
 drop policy if exists "circle reads shared shelves" on books;
@@ -457,7 +492,7 @@ create policy "circle reads shared shelves" on books
           and ((cl.requester_id = books.user_id and cl.addressee_id = auth.uid())
             or (cl.addressee_id = books.user_id and cl.requester_id = auth.uid()))
       )
-      and public.circle_book_visible(books.user_id, books.data->>'status')
+      and public.circle_book_visible(books.user_id, books.data->>'status', books.data->>'owned')
     )
   );
 
@@ -2521,7 +2556,7 @@ begin
                select 1 from public.books ab
                 where ab.user_id = n.author_id
                   and public.marginalia_book_key(ab.data, ab.isbn) = v_key
-                  and public.circle_book_visible(n.author_id, ab.data ->> 'status')
+                  and public.circle_book_visible(n.author_id, ab.data ->> 'status', ab.data ->> 'owned')
              )
              -- No block in either direction (belt over the link
              -- sever + the visibility helper's own blocked branch).
