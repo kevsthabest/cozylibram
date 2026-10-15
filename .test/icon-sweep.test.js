@@ -217,6 +217,10 @@ const ALLOW = [
   { file: 'js/228-portrait-share.js', key: "toast('Read some books first!", why: TOAST },
   { file: 'js/236-sticker-picker.js', key: "cand.kind === 'upload'", why: TOAST },
   { file: 'js/236-sticker-picker.js', key: "cand.kind === 'letter'", why: TOAST },
+  // js/239 (The Finale) — the share-flow toast mirrors js/220's identical
+  // string; the card's ★/☆ arc and ✦ medallion are typographic (outside
+  // the pictograph set by design).
+  { file: 'js/239-finale.js', key: "toast('Making your card…", why: TOAST },
 ];
 
 const emojiLines = {}; // file -> [{n, line}]
