@@ -2110,7 +2110,7 @@ function charLabRender(body, works, chars) {
     (mergedCount ? ' <span class="note">' + mergedCount + ' merged</span>' : '') +
     '</p>' +
     (dupes.length ? '<div class="ob-card" style="border-color:var(--warn,orange)">' +
-      '<h4 class="serif">⚠ Possible duplicates (' + dupes.length + ')</h4>' +
+      '<h4 class="serif">' + icon('warn') + ' Possible duplicates (' + dupes.length + ')</h4>' +
       dupes.map(([a, b, kind], i) =>
         '<p><b>' + esc(a.name) + '</b> ↔ <b>' + esc(b.name) + '</b> ' +
         '<span class="note">(' + esc(kind) + ' match)</span><br>' +

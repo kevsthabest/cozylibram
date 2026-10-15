@@ -370,7 +370,7 @@ function renderShelf3D() {
     '<div class="sv-menu" id="svMenuDropdown3D" hidden>' +
     '<button class="sv-menu-item" id="svMenuView3D">' + ((typeof icon === 'function') ? icon('shelf') : '') + '<span>Switch to classic 2D view</span></button>' +
     '<button class="sv-menu-item" id="svMenuDecor3D">' + ((typeof icon === 'function') ? icon('sparkles') : '') + '<span>Decorations</span></button>' +
-    '<button class="sv-menu-item" id="svMenuShelfie">' + ((typeof icon === 'function') ? icon('camera') : '📸') + '<span>Share shelfie</span></button>' +
+    '<button class="sv-menu-item" id="svMenuShelfie">' + ((typeof icon === 'function') ? icon('camera') : '') + '<span>Share shelfie</span></button>' +
     '</div></div></div>' +
     '<div class="sv-chips">' + SHELF_GROUPS.map(function (g) {
       return '<button class="sv-chip' + (g === shelfGroup ? ' active' : '') + '" data-g="' + g + '">' +

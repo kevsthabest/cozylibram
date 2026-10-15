@@ -94,7 +94,7 @@ function openDnaSurvey(b) {
     '<div id="svWarnChips"><p class="note">Loading warnings…</p></div>' +
     '<p class="note" style="margin-top:4px">If you\u2019re not sure, flag it — a wrong warning is easier to remove than a missing one is to forgive.</p></div>' +
     '<div class="survey-actions">' +
-    '<button class="btn" id="svSend">Send — thank you 🤎</button> ' +
+    '<button class="btn" id="svSend">Send — thank you ' + icon('heart') + '</button> ' +
     '<button class="btn ghost" id="svSkip">Skip</button></div>' +
     '<button class="taplink" id="svNever" style="margin-top:8px">Don\u2019t ask me about this book again</button>' +
     '</div>';
