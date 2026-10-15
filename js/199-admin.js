@@ -14,11 +14,6 @@
    right size for tens to hundreds of users, with no extra SQL surface. */
 
 let isAppAdmin = false; // per-session; resolved by refreshAdminStatus()
-let adminRange = '7d'; // today | 7d | 30d | all | custom
-let adminCustomFrom = '';
-let adminCustomTo = '';
-let adminRowsCache = {}; // rangeKey -> rows
-let adminAggCache = {}; // rangeKey -> aggregate
 let adminTab = 'analytics'; // analytics | tropes | curation | logs | spine | assets | characters
 
 async function refreshAdminStatus() {
@@ -33,180 +28,12 @@ async function refreshAdminStatus() {
   } catch (e) { isAppAdmin = false; }
 }
 
-function adminRangeKey() {
-  return adminRange === 'custom' ? 'custom:' + adminCustomFrom + ':' + adminCustomTo : adminRange;
-}
-
-function adminRangeSince() {
-  const now = new Date();
-  if (adminRange === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString(); }
-  if (adminRange === '7d') return new Date(now.getTime() - 7 * 864e5).toISOString();
-  if (adminRange === '30d') return new Date(now.getTime() - 30 * 864e5).toISOString();
-  if (adminRange === 'custom' && adminCustomFrom) return new Date(adminCustomFrom + 'T00:00:00').toISOString();
-  return null;
-}
-
-function adminRangeUntil() {
-  if (adminRange === 'custom' && adminCustomTo) return new Date(adminCustomTo + 'T23:59:59').toISOString();
-  return null;
-}
-
-async function fetchAnalyticsRows() {
-  const key = adminRangeKey();
-  if (adminRowsCache[key]) return adminRowsCache[key];
-  const sb = await cloudClient().catch(() => null);
-  if (!sb) throw new Error('offline');
-  let q = sb.from('analytics_events')
-    .select('user_id,event_name,event_category,properties,app_version,created_at')
-    .order('created_at', { ascending: false })
-    .limit(20000);
-  const since = adminRangeSince(), until = adminRangeUntil();
-  if (since) q = q.gte('created_at', since);
-  if (until) q = q.lte('created_at', until);
-  const { data, error } = await q;
-  if (error) throw error;
-  adminRowsCache[key] = data || [];
-  return adminRowsCache[key];
-}
-
-/* Pure: rows -> dashboard aggregates. No DOM, no network — fully testable. */
-function aggregateAnalytics(rows) {
-  rows = rows || [];
-  const users = {}; // uid -> { events, last, cats:{} }
-  const byEvent = {}; // name -> { uses, users:{} }
-  const byCat = {}; // category -> uses
-  rows.forEach(r => {
-    const u = String(r.user_id || '');
-    if (!u) return;
-    const us = (users[u] = users[u] || { events: 0, last: '', cats: {} });
-    us.events++;
-    if (!us.last || r.created_at > us.last) us.last = r.created_at;
-    const c = r.event_category || 'other';
-    us.cats[c] = (us.cats[c] || 0) + 1;
-    byCat[c] = (byCat[c] || 0) + 1;
-    const e = (byEvent[r.event_name] = byEvent[r.event_name] || { uses: 0, users: {} });
-    e.uses++;
-    e.users[u] = 1;
-  });
-  const uids = Object.keys(users);
-  const uniq = name => byEvent[name] ? Object.keys(byEvent[name].users).length : 0;
-  const uses = name => byEvent[name] ? byEvent[name].uses : 0;
-
-  const funnel = stages => stages.map(s => ({ event: s, users: uniq(s) }));
-
-  // Import sources: started/completed/failed + books, per source.
-  const sources = {};
-  ['import_started', 'import_completed', 'import_failed'].forEach(ev => {
-    (rows || []).forEach(r => {
-      if (r.event_name !== ev) return;
-      const s = (r.properties && r.properties.source) || 'unknown';
-      const o = (sources[s] = sources[s] || { started: 0, completed: 0, failed: 0, books: 0 });
-      if (ev === 'import_started') o.started++;
-      else if (ev === 'import_completed') { o.completed++; o.books += Number((r.properties || {}).book_count) || 0; }
-      else o.failed++;
-    });
-  });
-
-  // Book-add sources.
-  const addSources = {};
-  rows.forEach(r => {
-    if (r.event_name !== 'book_added') return;
-    const s = (r.properties && r.properties.source) || 'unknown';
-    addSources[s] = (addSources[s] || 0) + 1;
-  });
-
-  // v243: metadata provider breakdown — which backend served search/lookup
-  // data (measures Google Books reliance vs the alternatives).
-  // v245: pagecount context added (page-count backfill source order).
-  const providers = {};
-  rows.forEach(r => {
-    if (r.event_name !== 'provider_used') return;
-    const p = (r.properties && r.properties.provider) || 'unknown';
-    const c = (r.properties && r.properties.context) || 'unknown';
-    const o = (providers[p] = providers[p] || { search: 0, isbn: 0, pagecount: 0 });
-    if (c === 'search') o.search++;
-    else if (c === 'isbn') o.isbn++;
-    else if (c === 'pagecount') o.pagecount++;
-  });
-
-  const activity = uids.map(u => {
-    const us = users[u];
-    let topCat = '—', topN = 0;
-    Object.keys(us.cats).forEach(c => { if (us.cats[c] > topN) { topN = us.cats[c]; topCat = c; } });
-    return { uid: u, lastActive: us.last, events: us.events, topCategory: topCat };
-  }).sort((a, b) => (a.lastActive < b.lastActive ? 1 : -1));
-
-  return {
-    totalEvents: rows.length,
-    uniqueUsers: uids.length,
-    capped: rows.length >= 20000,
-    activeUsers: uniq('session_started'),
-    newSignups: uniq('account_created'),
-    booksAdded: uses('book_added'),
-    booksCompleted: uses('book_completed'),
-    booksDnf: uses('book_dnf'),
-    ratings: uses('book_rated'),
-    favorites: uses('book_favorited'),
-    discoveryUses: ['search_performed', 'author_discovery_opened', 'similar_books_opened',
-      'release_discovery_opened', 'recommendation_opened', 'roulette_opened'].reduce((n, e) => n + uses(e), 0),
-    featureUsage: Object.keys(byEvent).map(name => ({
-      event: name,
-      category: (rows.find(r => r.event_name === name) || {}).event_category || 'other',
-      uses: byEvent[name].uses,
-      users: Object.keys(byEvent[name].users).length,
-    })).sort((a, b) => b.uses - a.uses),
-    funnels: {
-      roulette: funnel(['roulette_opened', 'roulette_spun', 'roulette_book_opened', 'roulette_book_started']),
-      onboarding: funnel(['account_created', 'library_opened', 'first_book_added', 'first_book_rated', 'returned_within_7_days']),
-      imports: funnel(['import_started', 'import_completed']),
-      importFailed: uses('import_failed'),
-    },
-    importSources: sources,
-    addSources: addSources,
-    providerUsage: providers,
-    userActivity: activity,
-  };
-}
-
-/* ---- rendering ---- */
-
-function humanEvent(name) {
-  const pretty = {
-    book_added: 'Book added', book_removed: 'Book removed', book_opened: 'Book opened',
-    book_edited: 'Book edited', book_status_changed: 'Status changed', book_rated: 'Book rated',
-    book_favorited: 'Favorited', book_unfavorited: 'Unfavorited',
-    book_completed: 'Book completed', book_dnf: 'Book DNF\u2019d',
-    search_performed: 'Search performed', provider_used: 'Metadata provider used',
-    author_discovery_opened: 'Author discovery',
-    similar_books_opened: 'Similar books', release_discovery_opened: 'Release check',
-    recommendation_opened: 'Recommendations viewed',
-    roulette_opened: 'Roulette opened', roulette_spun: 'Roulette spun',
-    roulette_book_opened: 'Roulette pick opened', roulette_book_started: 'Roulette pick started',
-    import_started: 'Import started', import_completed: 'Import completed', import_failed: 'Import failed',
-    rating_axis_used: 'Axis rating used',
-    coven_opened: 'Coven opened', friend_request_sent: 'Friend request sent',
-    friend_request_accepted: 'Friend request accepted', invite_link_shared: 'Invite link shared',
-    shared_shelf_viewed: 'Shared shelf viewed',
-    friend_recommendation_used: 'Friend recommendation used',
-    account_created: 'Account created', library_opened: 'Library opened',
-    first_book_added: 'First book added', first_book_rated: 'First book rated',
-    returned_within_7_days: 'Returned within 7 days', session_started: 'Session started',
-  };
-  return pretty[name] || String(name).replace(/_/g, ' ');
-}
-
-function adminFunnelHTML(funnelTitle, stages) {
-  const max = Math.max.apply(null, [1].concat(stages.map(s => s.users)));
-  const rows = stages.map((s, i) => {
-    const pct = max ? Math.round(s.users / max * 100) : 0;
-    const conv = i === 0 ? '' : ' <span class="note">(' +
-      (stages[0].users ? Math.round(s.users / stages[0].users * 100) : 0) + '% of step 1)</span>';
-    return '<div class="ob-funnel-row"><span class="ob-funnel-label">' + esc(humanEvent(s.event)) + '</span>' +
-      '<span class="ob-funnel-barwrap"><span class="ob-funnel-bar" style="width:' + pct + '%"></span></span>' +
-      '<b>' + s.users + '</b>' + conv + '</div>';
-  }).join('');
-  return '<div class="ob-card"><h3 class="serif">' + esc(funnelTitle) + '</h3>' + rows + '</div>';
-}
+/* ---------------- Analytics ----------------
+   The Analytics tab (range state + caches, fetch +
+   aggregation, renderers, renderAdminBody) moved to
+   js/163-analytics.js (architecture candidate 6). This file
+   keeps the Observatory shell and the other tabs;
+   renderAdmin() still dispatches to renderAdminBody() there. */
 
 function renderAdmin() {
   if (!signedIn() || !isAppAdmin) {
@@ -261,52 +88,12 @@ function renderAdmin() {
   else renderAdminBody();
 }
 
-/* ---------------- v167: on-device log viewer ----------------
-   Read AppLog (js/002-log.js). On this device only — nothing is uploaded.
-   Reproduce the problem first, then open this tab before clearing site
-   data (clearing wipes the log along with everything else). */
-let adminLogFilter = 'all'; // all | warn | error
-function renderLogsTab() {
-  const body = document.getElementById('ob-body');
-  if (!body) return;
-  const paint = () => {
-    const level = adminLogFilter === 'all' ? 'info' : adminLogFilter;
-    const entries = AppLog.entries(level);
-    const filtBtn = (id, label) =>
-      '<button class="btn sm' + (adminLogFilter === id ? '' : ' ghost') + '" data-logf="' + id + '">' + label + '</button>';
-    const shown = entries.slice(0, 150);
-    const rows = shown.map(e =>
-      '<div class="log-row"><span class="log-time">' + esc(new Date(e.t).toLocaleString()) + '</span>' +
-      '<span class="log-badge ' + e.level + '">' + e.level + '</span>' +
-      '<span class="log-tag">' + esc(e.tag) + '</span>' +
-      '<span class="log-msg">' + esc(e.msg) + '</span></div>').join('');
-    body.innerHTML =
-      '<div class="ob-card"><h3>' + icon('warn') + ' Error &amp; activity log</h3>' +
-      '<p class="note">On this device only — these entries never leave your device. Newest first. ' +
-      'Cover changes, sync pushes, and uncaught errors all land here.</p>' +
-      '<div class="log-tools">' +
-      filtBtn('all', 'All') + filtBtn('warn', 'Warnings+') + filtBtn('error', 'Errors only') +
-      '<button class="btn sm ghost" id="log-refresh">Refresh</button>' +
-      '<button class="btn sm ghost" id="log-clear">Clear log</button>' +
-      '<span class="note">' + entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies') +
-      (entries.length > shown.length ? ' (showing ' + shown.length + ')' : '') + '</span>' +
-      '</div>' +
-      (rows ? '<div class="log-list">' + rows + '</div>'
-            : '<p class="note">No log entries at this level yet.</p>') +
-      '</div>';
-    body.querySelectorAll('[data-logf]').forEach(b => b.addEventListener('click', () => {
-      adminLogFilter = b.dataset.logf;
-      paint();
-    }));
-    const refresh = document.getElementById('log-refresh');
-    if (refresh) refresh.addEventListener('click', paint);
-    const clear = document.getElementById('log-clear');
-    if (clear) clear.addEventListener('click', async () => {
-      if (await confirmModal('Clear the on-device log?', { okLabel: 'Clear' })) { AppLog.clear(); paint(); }
-    });
-  };
-  paint();
-}
+/* ---------------- Logs ----------------
+   The Logs tab (on-device log viewer, renderLogsTab)
+   moved to js/166-logs.js (architecture candidate 6).
+   This file keeps the Observatory shell and the other
+   tabs; renderAdmin() still dispatches adminTab === 'logs'
+   to renderLogsTab() there. */
 
 /* ---------------- User moderation (v246) ----------------
    Abuse reports filed from the coven tab land here, and admins can
@@ -475,92 +262,6 @@ function userActivityRowsHTML(activity, bannedById) {
   }).join('');
 }
 
-async function renderAdminBody() {
-  const body = document.getElementById('ob-body');
-  if (!body) return;
-  const key = adminRangeKey();
-  try {
-    const mod = await fetchModeration();
-    const modHTML = moderationHTML(mod);
-    if (!adminAggCache[key]) {
-      const rows = await fetchAnalyticsRows();
-      adminAggCache[key] = aggregateAnalytics(rows);
-    }
-    const a = adminAggCache[key];
-    if (!a.totalEvents) {
-      body.innerHTML = modHTML +
-        '<div class="empty"><div class="big">' + icon('chart') + '</div>' +
-        '<h2 class="serif">No analytics yet</h2><p>Events appear here once signed-in users start using the app' +
-        (adminRange === 'all' ? '.' : ' in this date range.') + '</p></div>';
-      wireModeration(body);
-      return;
-    }
-    const card = (label, val) =>
-      '<div class="ob-card ob-stat"><div class="ob-stat-val">' + val + '</div><div class="ob-stat-label">' + label + '</div></div>';
-    const featRows = a.featureUsage.map(f => {
-      const adoption = a.activeUsers ? Math.round(f.users / a.activeUsers * 100) : 0;
-      return '<tr><td>' + esc(humanEvent(f.event)) + '</td><td>' + esc(f.category) + '</td>' +
-        '<td class="num">' + f.users + '</td><td class="num">' + f.uses + '</td><td class="num">' + adoption + '%</td></tr>';
-    }).join('');
-    const srcRows = Object.keys(a.importSources).sort().map(s => {
-      const o = a.importSources[s];
-      return '<tr><td>' + esc(s) + '</td><td class="num">' + o.started + '</td><td class="num">' + o.completed +
-        '</td><td class="num">' + o.failed + '</td><td class="num">' + o.books + '</td></tr>';
-    }).join('');
-    const addSrcRows = Object.keys(a.addSources).sort((x, y) => a.addSources[y] - a.addSources[x]).map(s =>
-      '<tr><td>' + esc(s) + '</td><td class="num">' + a.addSources[s] + '</td></tr>').join('');
-    // v243: metadata provider breakdown. v245: pagecount column.
-    const provRows = Object.keys(a.providerUsage).sort((x, y) => {
-      const tot = o => o.search + o.isbn + o.pagecount;
-      return tot(a.providerUsage[y]) - tot(a.providerUsage[x]);
-    }).map(p => {
-      const o = a.providerUsage[p];
-      return '<tr><td>' + esc(p) + '</td><td class="num">' + o.search + '</td><td class="num">' + o.isbn +
-        '</td><td class="num">' + o.pagecount + '</td><td class="num">' + (o.search + o.isbn + o.pagecount) + '</td></tr>';
-    }).join('');
-    const userRows = userActivityRowsHTML(a.userActivity, mod.bannedById);
-    body.innerHTML = modHTML +
-      (a.capped ? '<p class="note">' + icon('warn') + ' Over 20,000 events — showing the most recent 20,000.</p>' : '') +
-      '<div class="ob-grid">' +
-      card('Active users', a.activeUsers) + card('New signups', a.newSignups) +
-      card('Books added', a.booksAdded) + card('Books completed', a.booksCompleted) +
-      card('Books rated', a.ratings) + card('Favorites', a.favorites) +
-      card('Discovery uses', a.discoveryUses) + card('Total events', a.totalEvents) +
-      '</div>' +
-      '<div class="ob-card"><h3 class="serif">Feature usage</h3>' +
-      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Feature</th><th>Category</th>' +
-      '<th class="num">Users</th><th class="num">Uses</th><th class="num">Adoption</th></tr></thead>' +
-      '<tbody>' + featRows + '</tbody></table></div>' +
-      '<p class="note">Adoption = users of the feature ÷ active users in this range.</p></div>' +
-      adminFunnelHTML('Roulette funnel', a.funnels.roulette) +
-      adminFunnelHTML('Onboarding funnel', a.funnels.onboarding) +
-      adminFunnelHTML('Import funnel', a.funnels.imports.concat([{ event: 'import_failed', users: a.funnels.importFailed }])) +
-      '<div class="ob-card"><h3 class="serif">Import sources</h3>' +
-      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Source</th><th class="num">Started</th>' +
-      '<th class="num">Completed</th><th class="num">Failed</th><th class="num">Books</th></tr></thead>' +
-      '<tbody>' + (srcRows || '<tr><td colspan="5" class="note">No imports in this range.</td></tr>') + '</tbody></table></div></div>' +
-      '<div class="ob-card"><h3 class="serif">Book-add sources</h3>' +
-      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Source</th><th class="num">Books</th></tr></thead>' +
-      '<tbody>' + (addSrcRows || '<tr><td colspan="2" class="note">No adds in this range.</td></tr>') + '</tbody></table></div></div>' +
-      '<div class="ob-card"><h3 class="serif">Metadata providers</h3>' +
-      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>Provider</th><th class="num">Search</th>' +
-      '<th class="num">ISBN lookup</th><th class="num">Page count</th><th class="num">Total</th></tr></thead>' +
-      '<tbody>' + (provRows || '<tr><td colspan="5" class="note">No provider data in this range (v243+).</td></tr>') + '</tbody></table></div>' +
-      '<p class="note">Which backend served metadata — measures Google Books reliance vs Open Library / Hardcover / shared cache.</p></div>' +
-      '<div class="ob-card"><h3 class="serif">User activity</h3>' +
-      '<div class="ob-scroll"><table class="ob-table"><thead><tr><th>User</th><th>Last active</th>' +
-      '<th class="num">Events</th><th>Top area</th><th></th></tr></thead>' +
-      '<tbody>' + userRows + '</tbody></table></div>' +
-      '<p class="note">Users identified by email — activity only, never library contents.</p></div>';
-    wireModeration(body);
-  } catch (e) {
-    body.innerHTML = '<div class="empty"><div class="big">' + icon('warn') + '</div>' +
-      '<h2 class="serif">Couldn\u2019t load analytics</h2><p>' +
-      esc((e && e.message) || 'unknown error') + '</p>' +
-      '<p class="note">If the analytics tables are missing, run supabase/analytics.sql in the Supabase SQL editor.</p></div>';
-  }
-}
-
 /* ---------------- Trope Lab ----------------
    The Trope Lab (coverage, review + claim queues, provider picker,
    all-libraries backfill, proposals, renderTropeLab) moved to
@@ -568,168 +269,19 @@ async function renderAdminBody() {
    Observatory shell and the other tabs; renderAdmin() still dispatches
    adminTab === 'tropes' to renderTropeLab() there. */
 
-/* ---------------- v264: Spine Lab ----------------
-   Experiment: can Gemini (web-search grounding) find a book's spine photo?
-   Admin-only diagnostic — results are shown for human judgment, nothing is
-   saved to any library. */
-function spineLabResultHTML(data) {
-  if (!data) return '';
-  const cands = Array.isArray(data.candidates) ? data.candidates : [];
-  const sources = Array.isArray(data.sources) ? data.sources : [];
-  let h = '';
-  if (!cands.length) {
-    h += '<div class="ob-card"><h3 class="serif">No spine found</h3>' +
-      '<p class="note">Gemini could not find a clear spine photo for this book. ' +
-      'Photographing the spine remains the reliable path.</p></div>';
-  } else {
-    h += '<div class="ob-card"><h3 class="serif">Spine candidates (' + cands.length + ')</h3>' +
-      '<div class="spinelab-grid">' + cands.map(c =>
-        '<div class="spinelab-cand">' +
-        '<img src="' + esc(c.image_url) + '" alt="spine candidate" loading="lazy">' +
-        (c.note ? '<p class="note">' + esc(c.note) + '</p>' : '') +
-        (c.page_url ? '<a href="' + esc(c.page_url) + '" target="_blank" rel="noopener">source page</a>' : '') +
-        '</div>').join('') + '</div></div>';
-  }
-  if (sources.length) {
-    h += '<div class="ob-card"><h3 class="serif">Search sources</h3><ul class="ob-list">' +
-      sources.map(s => '<li><a href="' + esc(s.uri) + '" target="_blank" rel="noopener">' +
-        esc(s.title || s.uri) + '</a></li>').join('') + '</ul></div>';
-  }
-  return h;
-}
+/* ---------------- Spine Lab ----------------
+   The Spine Lab (spine search test, renderSpineLab) moved
+   to js/164-spinelab.js (architecture candidate 6). This
+   file keeps the Observatory shell and the other tabs;
+   renderAdmin() still dispatches adminTab === 'spine' to
+   renderSpineLab() there. */
 
-async function renderSpineLab() {
-  const body = document.getElementById('ob-body');
-  if (!body) return;
-  body.innerHTML =
-    '<div class="ob-card"><h3 class="serif">' + icon('camera') + ' Spine search test</h3>' +
-    '<p class="note">Search the web for this book\'s <b>spine</b> photo (Brave image search). ' +
-    'An experiment — nothing is saved. If this works reliably, spine photos could one day come from search instead of the camera.</p>' +
-    '<div class="spinelab-form">' +
-    '<input id="sl-title" class="text-input" placeholder="Book title" autocomplete="off">' +
-    '<input id="sl-author" class="text-input" placeholder="Author (optional)" autocomplete="off">' +
-    '<button class="btn" id="sl-go">Search</button>' +
-    '</div></div>' +
-    '<div id="sl-result"></div>';
-  const go = async () => {
-    const title = document.getElementById('sl-title').value.trim();
-    const author = document.getElementById('sl-author').value.trim();
-    const res = document.getElementById('sl-result');
-    if (!title) { res.innerHTML = '<p class="note">Enter a title first.</p>'; return; }
-    res.innerHTML = '<p class="note">Searching…</p>';
-    try {
-      const r = await apiFetch('/api/spine-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, author }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) { res.innerHTML = '<p class="note">Error: ' + esc(data.error || ('http ' + r.status)) + '</p>'; return; }
-      res.innerHTML = spineLabResultHTML(data);
-    } catch (e) {
-      res.innerHTML = '<p class="note">Request failed: ' + esc((e && e.message) || e) + '</p>';
-    }
-  };
-  document.getElementById('sl-go').addEventListener('click', go);
-}
-
-async function renderEditionAssetLab() {
-  const body = document.getElementById('ob-body');
-  if (!body || !isAppAdmin) return;
-  body.innerHTML =
-    '<div class="ob-card"><h3 class="serif">Edition asset moderation</h3>' +
-    '<p class="note">Review candidate evidence, verify good captures, reject bad ones, or pin an explicit canonical asset. Rejected candidates remain in the database for audit/history but never appear in the public API.</p>' +
-    '<div class="spinelab-form">' +
-    '<input id="eal-isbn" class="text-input" placeholder="ISBN" inputmode="numeric">' +
-    '<select id="eal-face" class="text-input"><option value="">All faces</option><option value="spine">Spine</option><option value="front">Front</option><option value="back">Back</option><option value="fore_edge">Fore-edge</option><option value="top_edge">Top edge</option><option value="bottom_edge">Bottom edge</option></select>' +
-    '<select id="eal-ap" class="text-input"><option value="">All appearances</option><option value="jacket">Jacket</option><option value="board">Board</option><option value="slipcase">Slipcase</option></select>' +
-    '<button class="btn" id="eal-go">Load candidates</button></div></div>' +
-    '<div id="eal-result"><p class="note">Enter an ISBN to review its candidates.</p></div>';
-
-  const result = document.getElementById('eal-result');
-  const load = async () => {
-    const isbn = document.getElementById('eal-isbn').value.trim().replace(/[^0-9Xx]/g, '').toUpperCase();
-    const face = document.getElementById('eal-face').value;
-    const ap = document.getElementById('eal-ap').value;
-    if (!isbn) { result.innerHTML = '<p class="note">Enter an ISBN first.</p>'; return; }
-    result.innerHTML = '<p class="note">Loading…</p>';
-    try {
-      const sb = await cloudClient();
-      const er = await sb.from('editions').select('id,isbn,publisher,format,page_count').eq('isbn', isbn).maybeSingle();
-      if (er.error) throw er.error;
-      if (!er.data) { result.innerHTML = '<p class="note">No edition row for ' + esc(isbn) + '.</p>'; return; }
-      let q = sb.from('edition_assets')
-        .select('id,face,appearance,bucket,path,width,height,quality_score,sharpness_score,exposure_score,perspective_score,coverage_score,glare_score,resolution_score,stability_score,verified,rejected,created_at')
-        .eq('edition_id', er.data.id).order('quality_score', { ascending: false, nullsFirst: false }).limit(200);
-      if (face) q = q.eq('face', face);
-      if (ap) q = q.eq('appearance', ap);
-      const ar = await q;
-      if (ar.error) throw ar.error;
-      const sr = await sb.from('edition_asset_slots').select('face,appearance,canonical_asset_id,selection_method,selected_at').eq('edition_id', er.data.id);
-      const slotMap = {};
-      (sr.data || []).forEach(s => { slotMap[s.appearance + ':' + s.face] = s; });
-      const publicUrl = (a) => {
-        try {
-          return sb.storage.from(a.bucket || 'edition-images').getPublicUrl(a.path || '').data.publicUrl || '';
-        } catch (e) { return ''; }
-      };
-      const cards = (ar.data || []).map(a => {
-        const key = a.appearance + ':' + a.face, slot = slotMap[key];
-        const canonical = slot && slot.canonical_asset_id === a.id;
-        return '<div class="ob-card eal-card">' +
-          '<div class="eal-media"><img src="' + esc(publicUrl(a)) + '" alt="' + esc(a.appearance + ' ' + a.face) + '" loading="lazy"></div>' +
-          '<div class="eal-info"><h3>' + esc(a.appearance + ' · ' + a.face) + '</h3>' +
-          '<p class="note">Quality <b>' + (a.quality_score == null ? '—' : Number(a.quality_score).toFixed(1)) + '</b> · ' +
-          (a.verified ? 'verified' : a.rejected ? 'rejected' : 'unverified') +
-          (canonical ? ' · <b>CANONICAL</b>' : '') + '</p>' +
-          '<p class="note">Sharp ' + (a.sharpness_score == null ? '—' : Number(a.sharpness_score).toFixed(0)) +
-          ' · Exposure ' + (a.exposure_score == null ? '—' : Number(a.exposure_score).toFixed(0)) +
-          ' · Glare ' + (a.glare_score == null ? '—' : Number(a.glare_score).toFixed(0)) +
-          ' · Resolution ' + (a.resolution_score == null ? '—' : Number(a.resolution_score).toFixed(0)) + '</p>' +
-          '<p class="note">' + esc((a.width || '?') + '×' + (a.height || '?') + ' · ' + a.id) + '</p>' +
-          '<div class="ob-ranges">' +
-          '<button class="btn sm" data-eal-verify="' + esc(a.id) + '"' + (a.verified || a.rejected ? ' disabled' : '') + '>Verify</button>' +
-          '<button class="btn sm ghost" data-eal-reject="' + esc(a.id) + '"' + (a.rejected ? ' disabled' : '') + '>Reject</button>' +
-          '<button class="btn sm ghost" data-eal-canon="' + esc(a.id) + '"' + (canonical ? ' disabled' : '') + '>Set canonical</button>' +
-          '</div></div></div>';
-      }).join('');
-      result.innerHTML = '<p class="note">' + (ar.data || []).length + ' candidate(s) for ' + esc(isbn) + '.</p>' +
-        (cards || '<p class="note">No candidates.</p>');
-      result.querySelectorAll('[data-eal-verify]').forEach(btn => btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        await sb.from('edition_assets').update({ verified: true, rejected: false }).eq('id', btn.dataset.ealVerify);
-        await load();
-      }));
-      result.querySelectorAll('[data-eal-reject]').forEach(btn => btn.addEventListener('click', async () => {
-        if (!await confirmModal('Reject this candidate?', { okLabel: 'Reject' })) return;
-        btn.disabled = true;
-        await sb.from('edition_assets').update({ rejected: true, verified: false }).eq('id', btn.dataset.ealReject);
-        await load();
-      }));
-      result.querySelectorAll('[data-eal-canon]').forEach(btn => btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        const asset = (ar.data || []).find(a => a.id === btn.dataset.ealCanon);
-        if (!asset) return;
-        const uidr = await sb.auth.getUser(), uid = uidr && uidr.data && uidr.data.user && uidr.data.user.id;
-        if (!uid) return;
-        await sb.from('edition_asset_slots').upsert({
-          edition_id: er.data.id, isbn: er.data.isbn, face: asset.face, appearance: asset.appearance,
-          canonical_asset_id: asset.id, selection_method: 'admin', selected_by: uid,
-          selected_at: new Date().toISOString(), updated_at: new Date().toISOString()
-        }, { onConflict: 'edition_id,face,appearance' });
-        await sb.from('edition_images').upsert({
-          isbn: er.data.isbn, edition_id: er.data.id, face: asset.face, appearance: asset.appearance,
-          bucket: asset.bucket, path: asset.path, uploaded_by: uid, verified: !!asset.verified,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'isbn,face,appearance' });
-        await load();
-      }));
-    } catch (e) {
-      result.innerHTML = '<p class="note">Could not load candidates: ' + esc((e && e.message) || e) + '</p>';
-    }
-  };
-  document.getElementById('eal-go').addEventListener('click', load);
-}
+/* ---------------- Edition Assets ----------------
+   The Edition Assets tab (asset moderation,
+   renderEditionAssetLab) moved to js/165-editionassets.js
+   (architecture candidate 6). This file keeps the
+   Observatory shell and the other tabs; renderAdmin() still
+   dispatches adminTab === 'assets' to it there. */
 
 /* ---------------- Character Lab ----------------
    The Character Lab (curation views, merge/unmerge and the

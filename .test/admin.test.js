@@ -194,11 +194,17 @@ function ev(uid, name, cat, props, created) {
     // CharacterStore moved to js/154-characterstore.js (architecture
     // candidate 3) and the Trope Lab to js/161-tropelab.js (candidate 6);
     // the Character Lab moved to js/162-charlab.js (candidate 6, second
-    // piece) — the select census covers the same code as before by
-    // reading all four homes, in load order, with identical assertions.
+    // piece); the Analytics, Spine Lab, Edition Assets and Logs tabs
+    // moved to js/163–166 (candidate 6, final piece) — the select census
+    // covers the same code as before by reading all eight homes, in load
+    // order, with identical assertions.
     const src = fs.readFileSync(path.join(ROOT, 'js/154-characterstore.js'), 'utf8') +
       '\n' + fs.readFileSync(path.join(ROOT, 'js/161-tropelab.js'), 'utf8') +
       '\n' + fs.readFileSync(path.join(ROOT, 'js/162-charlab.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/163-analytics.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/164-spinelab.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/165-editionassets.js'), 'utf8') +
+      '\n' + fs.readFileSync(path.join(ROOT, 'js/166-logs.js'), 'utf8') +
       '\n' + fs.readFileSync(path.join(ROOT, 'js/199-admin.js'), 'utf8');
     const sels = [...src.matchAll(/\.select\('([^']+)'\)/g)].map(m => m[1]);
     // The third select is Trope Lab's coverage scan: book_key (a cache key,
