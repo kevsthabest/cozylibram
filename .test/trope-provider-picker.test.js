@@ -71,6 +71,7 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
     fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
   load('156-trope-taxonomy.js');
   load('157-trope-inference.js');
+  load('161-tropelab.js'); // architecture candidate 6: tropeProvider*/tropeModelList moved here
   const probe = src => vm.runInContext(src, ctx);
   const resetProvider = () => {
     probe('tropeProviderCache = null;');

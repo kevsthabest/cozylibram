@@ -52,6 +52,7 @@ function ok(name, cond) {
     fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
   load('156-trope-taxonomy.js');
   load('157-trope-inference.js');
+  load('161-tropelab.js'); // architecture candidate 6: tropeAdminBooks* moved here
 
   const probe = src => vm.runInContext(src, ctx);
   const ADMIN_KEY = 'cozylibram.tropeadminbooks.v1';
