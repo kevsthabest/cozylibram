@@ -67,8 +67,6 @@ const LEGEND = 'curation source legend — the colour fill is the signal; always
 const ALLOW = [
   // js/030 — comment explaining emoji-font rendering; never rendered.
   { file: 'js/030-storefront.js', key: '(notably ⚔️)', why: COMMENT },
-  // js/050 — the app footer's canvas-drawn sign-off (share-card helper).
-  { file: 'js/050-helpers.js', key: "fillText('Tracked with Cozy Libram", why: CANVAS },
   // js/070 — toasts only.
   { file: 'js/070-hardcover.js', key: "toast('✨ Auto-enriched", why: TOAST },
   { file: 'js/070-hardcover.js', key: "toast('Added to To Be Read", why: TOAST },
@@ -121,7 +119,6 @@ const ALLOW = [
   { file: 'js/170-stats.js', key: '⭐ higher than', why: PROSE },
   { file: 'js/170-stats.js', key: 'over the last 6 months', why: PROSE },
   { file: 'js/170-stats.js', key: "'🔥 ' + d.streak", why: PROSE }, // stat value text ('day streak')
-  { file: 'js/170-stats.js', key: "fillText('Tracked with Cozy Libram", why: CANVAS }, // ×2 lines (both share-card footers)
   { file: 'js/170-stats.js', key: "let sl = '📚 '", why: CANVAS },
   { file: 'js/170-stats.js', key: "bits.push('🌶️'.repeat", why: CANVAS },
   { file: 'js/170-stats.js', key: "fillText('📘 '", why: CANVAS },
@@ -135,7 +132,6 @@ const ALLOW = [
   { file: 'js/170-stats.js', key: "'✨ My ' + d.yr", why: SHARETEXT },
   { file: 'js/170-stats.js', key: "'📚 ' + d.n + ' books", why: SHARETEXT },
   { file: 'js/170-stats.js', key: 'Longest streak:', why: SHARETEXT },
-  { file: 'js/170-stats.js', key: "lines.push('Tracked with Cozy Libram", why: SHARETEXT },
   { file: 'js/170-stats.js', key: "toast('Summary copied", why: TOAST },
   // js/180 — toasts only; the Wisp variant buttons are swept.
   { file: 'js/180-settings.js', key: "toast('Accent updated", why: TOAST },
@@ -182,9 +178,7 @@ const ALLOW = [
   { file: 'js/205-shelfview.js', key: "icon: '🎃'", why: DECOR },
   { file: 'js/205-shelfview.js', key: "icon: '🎄'", why: DECOR },
   { file: 'js/205-shelfview.js', key: "icon: '☀️'", why: DECOR },
-  // js/212 — canvas portrait footer (branding-settled) + one toast.
-  // The share BUTTON is swept (see SLOTS).
-  { file: 'js/212-dna.js', key: "dnaSpaced(x, 'tracked with cozy libram", why: CANVAS },
+  // js/212 — one toast. The share BUTTON is swept (see SLOTS).
   { file: 'js/212-dna.js', key: "toast('Read some books first!", why: TOAST },
   // js/214 — canvas share-card text (fillText) is branding-settled image
   // copy, and the fun lines are the Wrapped plain-text share content.

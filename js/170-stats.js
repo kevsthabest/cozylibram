@@ -957,8 +957,7 @@ function drawYearImage(d) {
       x.fillText(t, 90, 1555 + i * 66);
     });
   }
-  x.textAlign = 'center'; x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
+  cardFooter(x, W);
   return cv;
 }
 
@@ -1098,8 +1097,7 @@ async function drawBookCard(b) {
     } else if (b.status === 'dnf') {
       x.fillText('🚫 DNF', W / 2, y); y += 72;
     }
-    x.fillStyle = mut; x.font = '36px system-ui, sans-serif';
-    x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, H - 80);
+    cardFooter(x, W);
   };
   paint(!!img);
   if (img) {
@@ -1135,7 +1133,7 @@ function yearTextSummary(d) {
       lines.push((i + 1) + '. ' + b.title + ' — ' + (b.authors || []).join(', ') + ' ♥' + b.myRating.toFixed(1)));
   }
   if (d.streak > 0) lines.push('🔥 Longest streak: ' + d.streak + ' days');
-  lines.push('Tracked with Cozy Libram 🌶️🖤');
+  lines.push('Cozy Libram');
   return lines.join('\n');
 }
 

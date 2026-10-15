@@ -34,10 +34,48 @@ function cardCanvas(stops) {
   x.fillStyle = bg; x.fillRect(0, 0, W, H);
   return { cv, x, W, H, C };
 }
-/* v399: Standard card footer. */
-function cardFooter(x, W) {
-  x.textAlign = 'center'; x.fillStyle = '#b9a8c6'; x.font = '36px system-ui, sans-serif';
-  x.fillText('Tracked with Cozy Libram 🌶️🖤', W / 2, 1845);
+/* The app mark for card footers: icon.svg (the favicon), loaded lazily
+   on first use and cached for the session. Until it lands (or if it
+   fails), footers draw the wordmark alone — the same tolerance the
+   portrait share cards always had when their icon load failed. */
+let _cardIconImg = null, _cardIconStarted = false;
+function cardFooterIcon() {
+  if (_cardIconImg || _cardIconStarted) return _cardIconImg;
+  _cardIconStarted = true;
+  try {
+    const img = new Image();
+    img.onload = () => { _cardIconImg = img; };
+    img.onerror = () => {};
+    img.src = 'icon.svg';
+  } catch (e) {}
+  return _cardIconImg; // still null unless the load already completed
+}
+/* Standard card footer: the app mark + wordmark ONLY (branding
+   decision — no emoji taglines, no URL/QR until a custom domain
+   exists). Every share card routes here; js/228's psFooter is an
+   adapter over this. opts: { y: baseline (default 1845),
+   color: wordmark colour (default the card palette's muted tone),
+   icon: an Image to draw as the mark — pass null for wordmark-only;
+   when omitted, the cached icon.svg is used once it has loaded }. */
+function cardFooter(x, W, opts) {
+  opts = opts || {};
+  const y = opts.y || 1845;
+  const word = 'Cozy Libram';
+  x.save();
+  x.font = '600 34px Georgia, serif';
+  let tw = 0;
+  try { tw = x.measureText(word).width; } catch (e) {}
+  const icon = ('icon' in opts) ? opts.icon : cardFooterIcon();
+  const iw = icon ? 46 : 0, gap = icon ? 16 : 0;
+  let sx = W / 2 - (iw + gap + tw) / 2;
+  if (icon) {
+    try { x.drawImage(icon, sx, y - 38, 46, 46); } catch (e) {}
+    sx += iw + gap;
+  }
+  x.fillStyle = opts.color || '#b9a8c6';
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+  x.fillText(word, sx, y);
+  x.restore();
 }
 /* v397: Simple case-insensitive normalization for comparisons.
    For full normalization (strip punctuation, articles), use CharacterStore.normName(). */
