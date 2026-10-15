@@ -748,7 +748,7 @@ function renderShelf() {
     '<button class="sv-cam" id="svLayout" aria-label="Shelf layout">' + icon('shelf') + '</button>' +
     '<button class="sv-cam" id="svDecor" aria-label="Shelf decorations">' + icon('sparkles') + '</button>' +
     // v432: undo for decoration moves/deletes.
-    '<button class="sv-cam" id="svUndoDecor" aria-label="Undo decoration change" title="Undo">↩️</button>' +
+    '<button class="sv-cam" id="svUndoDecor" aria-label="Undo decoration change" title="Undo">' + icon('undo') + '</button>' +
     '<button class="sv-cam" id="svCam" aria-label="Photograph a book spine">' + icon('camera') + '</button>' +
     '<button class="sv-cam" id="svMenu" aria-label="Shelf menu" title="Shelf menu">' + icon('dots') + '</button>' +
     '<div class="sv-menu" id="svMenuDropdown" hidden>' +

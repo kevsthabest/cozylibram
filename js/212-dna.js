@@ -447,7 +447,7 @@ function dnaSectionHTML() {
     '<div class="chip-row" style="margin-top:8px">' + genreChips + '</div>' +
     '<p class="note">' + d.n + (d.n === 1 ? ' book' : ' books') + ' · ' + d.totalPages.toLocaleString() + ' pages' + // v536 (UX P3-14): was "1 books"
     (d.topAuthor ? ' · top author: ' + esc(d.topAuthor[0]) : '') + '</p>' +
-    '<button class="btn" id="dna-share-btn" style="margin-top:12px">Share my portrait 📖</button>' +
+    '<button class="btn" id="dna-share-btn" style="margin-top:12px">Share my portrait ' + icon('portrait') + '</button>' +
     '</div>';
 }
 
