@@ -82,8 +82,8 @@ function tsSheetHTML(th) {
   const wispToggle = (th.key === 'wisp' || th.key === 'wisp-night')
     ? '<div class="tgroup-label" style="margin-top:2px">Variant</div>' +
       '<div class="seg" id="tsWispVar" style="grid-template-columns:1fr 1fr">' +
-      '<button data-v="wisp" class="' + (th.key === 'wisp' ? 'active' : '') + '">☀️ Daybreak</button>' +
-      '<button data-v="wisp-night" class="' + (th.key === 'wisp-night' ? 'active' : '') + '">🌙 Firefly Night</button>' +
+      '<button data-v="wisp" class="' + (th.key === 'wisp' ? 'active' : '') + '">' + icon('sun') + ' Daybreak</button>' +
+      '<button data-v="wisp-night" class="' + (th.key === 'wisp-night' ? 'active' : '') + '">' + icon('moon') + ' Firefly Night</button>' +
       '</div>'
     : '';
   return '<div class="tsheet-wrap" id="tsSheetWrap">' +

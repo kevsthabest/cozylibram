@@ -69,14 +69,17 @@ function mergePortraitTropes(community, b) {
 function localWarnings(b) {
   return (b.contentWarnings || []).map(function (w) { return String(w); }).filter(Boolean);
 }
+// Returns HTML: text parts are escaped here (the caller used to esc() the
+// whole line — it no longer can, now that the spice part carries the
+// line-art pepper glyph instead of the emoji. Icon sweep.)
 function flavorLine(b) {
   var parts = [];
   try {
     var g = (typeof bookGenres === 'function') ? bookGenres(b) : [];
-    if (g && g.length) parts.push(g[0]);
+    if (g && g.length) parts.push(esc(g[0]));
   } catch (e) {}
-  if (b.ratings && b.ratings.spice != null && b.ratings.spice !== '') parts.push('🌶️ ' + b.ratings.spice + '/5');
-  if (b.moods && b.moods.length) parts.push(String(b.moods[0]));
+  if (b.ratings && b.ratings.spice != null && b.ratings.spice !== '') parts.push(icon('pepper') + ' ' + esc(String(b.ratings.spice)) + '/5');
+  if (b.moods && b.moods.length) parts.push(esc(String(b.moods[0])));
   return parts.join(' · ');
 }
 
@@ -236,7 +239,7 @@ function portraitCardHTML(b) {
     warnChipsHTML(warns, b, bookId) + '</div></div>' +
     '<div class="portrait-sec"><div class="portrait-label">Characters</div><div id="ptChars">' +
     '<span class="note">Loading cast…</span></div></div>' +
-    (flavor ? '<div class="portrait-flavor">' + esc(flavor) + '</div>' : '') +
+    (flavor ? '<div class="portrait-flavor">' + flavor + '</div>' : '') +
     '<button class="taplink portrait-more" data-pt="more">See full breakdown ↓</button>' +
     '<div class="portrait-full" id="ptFull" hidden></div>' +
     '</div>';

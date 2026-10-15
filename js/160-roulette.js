@@ -259,7 +259,7 @@ function showWinner(b) {
   const genres = bookGenres(b);
   const pills = genres.map(g => '<span class="badge">' + esc(g) + '</span>').join('') +
     ratingBadges(b) +
-    (b.tropes || []).slice(0, 4).map(t => '<span class="badge">🏷️ ' + esc(t) + '</span>').join('');
+    (b.tropes || []).slice(0, 4).map(t => '<span class="badge">' + icon('tag') + ' ' + esc(t) + '</span>').join('');
   box.innerHTML = '<div class="winner">' +
     '<div class="stat-sub" style="margin-top:0">Fate has spoken ' + icon('sparkles') + '</div>' +
     '<div class="winner-cover">' + (b.cover

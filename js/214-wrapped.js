@@ -137,8 +137,8 @@ function maybeShowWrappedBanner() {
   banner.className = 'wrapped-banner';
   banner.innerHTML =
     '<div class="wrapped-banner-inner">' +
-    '<span>✨ Your ' + yr + ' Reading Wrapped is ready!</span>' +
-    '<button class="btn" id="wrapped-banner-btn">View ✨</button>' +
+    '<span>' + icon('sparkles') + ' Your ' + yr + ' Reading Wrapped is ready!</span>' +
+    '<button class="btn" id="wrapped-banner-btn">View ' + icon('sparkles') + '</button>' +
     '<button class="wrapped-dismiss" id="wrapped-banner-x">✕</button>' +
     '</div>';
   document.body.appendChild(banner);
@@ -169,7 +169,7 @@ function openWrappedView(yr) {
       btn.className = 'btn';
       btn.style.margin = '16px auto';
       btn.style.display = 'block';
-      btn.textContent = 'Share my ' + yr + ' Wrapped ✨';
+      btn.innerHTML = 'Share my ' + yr + ' Wrapped ' + icon('sparkles');
       btn.addEventListener('click', () => shareWrappedImage(yr));
       container.appendChild(btn);
     }

@@ -64,7 +64,7 @@ function openTriggerCheckSheet(b, onStart) {
 
   const bodyHTML =
     '<div class="tc-inner">' +
-    '<div class="tc-emoji" aria-hidden="true">🕯️</div>' +
+    '<div class="tc-glyph" aria-hidden="true">' + icon('flame') + '</div>' +
     '<p class="tc-title">A quick heads-up</p>' +
     '<p class="tc-sub">Readers flagged <b>' + esc(b.title || 'this book') + '</b> for:</p>' +
     tagsBlock +

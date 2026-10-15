@@ -4,13 +4,15 @@
    + synced via existing book sync. Also logged to Supabase dnf_reasons
    table for aggregate insights. ---- */
 
+// icon = an ICONS glyph name (js/050), rendered via icon() — the line-art
+// set themes with the UI; the old emoji here did not. (Icon sweep.)
 const DNF_REASONS = [
-  { key: 'too_slow', label: 'Too slow', icon: '🐢' },
-  { key: 'hated_trope', label: 'Hated the trope', icon: '🚫' },
-  { key: 'wrong_mood', label: 'Wrong mood', icon: '🌧️' },
-  { key: 'writing_style', label: "Writing style", icon: '✍️' },
-  { key: 'characters', label: "Didn't connect with characters", icon: '👥' },
-  { key: 'too_long', label: 'Too long', icon: '📏' },
+  { key: 'too_slow', label: 'Too slow', icon: 'hourglass' },
+  { key: 'hated_trope', label: 'Hated the trope', icon: 'dnf' },
+  { key: 'wrong_mood', label: 'Wrong mood', icon: 'cloud' },
+  { key: 'writing_style', label: "Writing style", icon: 'pencil' },
+  { key: 'characters', label: "Didn't connect with characters", icon: 'friends' },
+  { key: 'too_long', label: 'Too long', icon: 'ruler' },
 ];
 
 function openDnfReasonSheet(b) {
@@ -18,7 +20,7 @@ function openDnfReasonSheet(b) {
   if (document.querySelector('.dnf-bottom-sheet')) return;
   const reasonBtns = DNF_REASONS.map(r =>
     '<button class="dnf-reason-btn" data-reason="' + r.key + '">' +
-    '<span class="dnf-icon">' + r.icon + '</span>' +
+    '<span class="dnf-icon">' + icon(r.icon) + '</span>' +
     '<span class="dnf-label">' + r.label + '</span>' +
     '</button>').join('');
 
@@ -96,7 +98,7 @@ function saveDnfReason(b, reasonKey) {
   }
 
   track('dnf_reason', { reason: reasonKey, progress_pct: progressPct });
-  toast('Noted! ' + reason.icon + ' Your recos will learn from this.');
+  toast('Noted! Your recos will learn from this.');
 }
 
 /* ---- DNF insights: "You DNF 80% of books with X" ---- */
@@ -115,7 +117,7 @@ function dnfInsightsHTML() {
   dnfs.forEach(b => (b.tropes || []).forEach(t => { dnfTropeCount[t] = (dnfTropeCount[t] || 0) + 1; }));
   const topDnfTrope = Object.entries(dnfTropeCount).sort((a, b) => b[1] - a[1])[0];
 
-  let html = '<div class="stat-sub">🔬 DNF Autopsy</div><div class="kv">';
+  let html = '<div class="stat-sub">' + icon('search') + ' DNF Autopsy</div><div class="kv">';
   html += '<div class="kv-row"><span>Most common reason</span><b>' + esc(reasonLabel) + ' (' + pct + '%)</b></div>';
   html += '<div class="kv-row"><span>Total DNFs tracked</span><b>' + dnfs.length + '</b></div>';
   if (topDnfTrope && topDnfTrope[1] >= 2)

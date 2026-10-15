@@ -149,15 +149,22 @@ function seasonThemeNudge() {
   } catch (e) {}
   return season;
 }
+// Icon sweep: the nudge's icon slot renders the line-art set (which themes
+// with the UI). SHELF_SEASONS (js/205) keeps its emoji values — they are
+// the decor system's own data/swatch; this map is only for the banner slot.
+const SEASON_NUDGE_ICONS = {
+  none: 'covers', newyear: 'sparkles', valentine: 'heart', stpatrick: 'leaf',
+  easter: 'sun', thanksgiving: 'leaf', halloween: 'ghost', christmas: 'gift',
+  summer: 'sun',
+};
 function seasonThemeNudgeHTML() {
   const season = seasonThemeNudge();
   if (!season) return '';
   const st = SEASON_THEMES[season];
   const th = THEMES.find(t => t.key === st.theme) || { name: st.theme };
-  const icon = (typeof SHELF_SEASONS !== 'undefined' && SHELF_SEASONS[season])
-    ? SHELF_SEASONS[season].icon : '✨';
+  const glyph = SEASON_NUDGE_ICONS[season] || 'sparkles';
   return '<div class="season-nudge" id="seasonNudge">' +
-    '<span class="sn-icon" aria-hidden="true">' + icon + '</span>' +
+    '<span class="sn-icon" aria-hidden="true">' + icon(glyph) + '</span>' +
     '<div class="sn-text"><b>' + esc(st.blurb) + '</b><span>Try the ' + esc(th.name) + ' theme</span></div>' +
     '<button class="btn sm" id="snApply">Try it</button>' +
     '<button class="sn-x" id="snDismiss" aria-label="Dismiss">✕</button></div>';
