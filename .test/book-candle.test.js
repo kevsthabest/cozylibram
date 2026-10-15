@@ -186,7 +186,7 @@ const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 ok('sw.js precaches 238-book-candle.js', swSrc.indexOf('238-book-candle.js') !== -1);
 ok('spec doc committed in repo', fs.existsSync(path.join(ROOT, 'docs/book-candle-spec.md')));
 
-// ---------- cover tint (v566): wax colour follows the book's cover ----------
+// ---------- cover tint (v567): wax colour follows the book's cover ----------
 // The tint reads ONLY the spine sampler's cache (spicyshelves.spinecolors,
 // global spineColorCache) with the same validity guard the 3D spines use
 // (entry's cover must equal the book's current cover). No cache -> the

@@ -18,7 +18,7 @@
    patterns; CANDLE_NAME_PATTERN picks the shipped one (the User's veto
    pick at presentation — the three patterns are listed in the PR).
 
-   Cover tint (v566): the wax colour follows the book's cover, read from
+   Cover tint (v567): the wax colour follows the book's cover, read from
    the spine sampler's cache (spineColorCache, js/120 — the same values
    the 3D spines use), with the same validity guard as js/217's
    shelf3dCoverHex: the cached entry's cover must equal the book's
