@@ -463,5 +463,63 @@ const claimOk = (W, who, key) => rpcClaim(W, who, 'R', key);
     rpcResolve(W, 'A', t.claim_id, 'purchased').ok === true && eq(rpcResolve(W, 'A', t.claim_id, 'purchased'), FAIL));
 }
 
+/* ================= client pins (js/243 + integration) ================= */
+{
+  const fsx = require('fs'), pathx = require('path'), vm = require('vm');
+  const read = p => fsx.readFileSync(pathx.join(APP_DIR, p), 'utf8');
+  const g = read('js/243-gifts.js');
+  ok('client: fail-closed probe is the profiles gift_claims_visible footprint, Marginalia pattern',
+    /from\('profiles'\)\.select\('gift_claims_visible'\)/.test(g) &&
+    /42703/.test(g) && /PGRST202/.test(g) && /giftTableMissing = true/.test(g));
+  ok('client: A10 line is the spec\'s exact text and is the ONLY details fallback',
+    g.includes("Delivery details aren't shared for this gift.") &&
+    (g.match(/GIFT_NO_DETAILS_LINE/g) || []).length >= 3);
+  ok('client: retailer links are the five tagless search URLs — no tags, no tracking, no prices',
+    g.includes('https://www.indigo.ca/en-ca/search?q=') &&
+    g.includes('https://www.amazon.ca/s?k=') &&
+    g.includes('https://www.kobo.com/ca/en/search?query=') &&
+    g.includes('https://libro.fm/search?q=') &&
+    !/[?&](tag|ref|aff|affiliate)=|utm_/i.test(g) &&
+    /GIFT_RETAILER_DEFAULTS = \{ print: 'indigo', ebook: 'kobo', audio: 'libro' \}/.test(g));
+  ok('client: retailer choice is a roamed prefs key, registered in js/229 like bookdress',
+    g.includes("const GIFT_RETAILERS_KEY = 'cozylibram.giftretailers'") &&
+    read('js/229-user-state.js').includes("'cozylibram.giftretailers'"));
+  ok('client: claim flow is can_gift → states → claim; refusal repaints with no sheet and no error text',
+    /giftRpc\('gift_can_gift'/.test(g) && /giftRpc\('gift_claim_states_for'/.test(g) &&
+    /giftRpc\('gift_claim'/.test(g) && /no sheet, no error text/.test(g));
+  ok('client: settings grants ride the gift_grants table directly (recipient-managed RLS), teen band hides the address section',
+    /from\('gift_grants'\)\.insert/.test(g) && /from\('gift_grants'\)\.delete/.test(g) &&
+    /giftTeenBand\(\)/.test(g) && /privacyState\(\)\.band === 'teen'|s\.band === 'teen'/.test(g));
+  ok('client: recipient claims list renders only behind the opt-in and names book + claimer only',
+    /claimsOn = priv\.giftClaims === true/.test(g) && /gift_claims_for_recipient/.test(g));
+  const coven = read('js/195-coven.js');
+  ok('client: coven reads gift_claims_visible with the strict OFF default and folds it into saves with the column-drop retry',
+    /gift_claims_visible === true/.test(coven) &&
+    /row\.gift_claims_visible = !!circleGiftClaimsValue/.test(coven) &&
+    /delete row\.gift_claims_visible/.test(coven));
+  ok('client: module is registered in index.html and the sw.js precache list',
+    read('index.html').includes('js/243-gifts.js') && read('sw.js').includes("'243-gifts.js'"));
+  ok('client: own-shelf and modal Buy slots exist and route to the minimal sheet',
+    /data-gift-buy-slot/.test(read('js/190-wishlist.js')) &&
+    /f-giftbuy/.test(read('js/150-modal-discovery.js')) &&
+    /openGiftBuySheet/.test(g));
+
+  // Functional: the key mirror, extracted and run.
+  const sandbox = { window: {}, console, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} }, navigator: {} };
+  vm.createContext(sandbox);
+  const src = g.split('/* ---------- the claim display cache')[0];
+  vm.runInContext(src + '\n;this.__gift = { giftBookKey, giftRetailerLink, giftIsbn13 };', sandbox);
+  const G = sandbox.__gift;
+  ok('client: giftBookKey matches the server key on vectors (isbn13 passthrough, isbn-10 conversion, ta: fallback, data-wrapped rows)',
+    G.giftBookKey({ isbn: '9780593183649', title: 'X', authors: ['A'] }) === 'isbn:9780593183649' &&
+    G.giftBookKey({ isbn: '0306406152', title: 'X', authors: ['A'] }) === 'isbn:9780306406157' &&
+    G.giftBookKey({ isbn: '', title: ' The Spy ', authors: ['Clive Cussler', 'Grant Blackwood'] }) === 'ta:the spy|clive cussler' &&
+    G.giftBookKey({ isbn: '', title: 'Solo', authors: 'Lone Author' }) === 'ta:solo|lone author' &&
+    G.giftBookKey({ data: { isbn: '9780593183649', title: 'X', authors: ['A'] }, isbn: null }) === 'isbn:9780593183649');
+  ok('client: retailer link uses the ISBN when present and "Title Author" when not',
+    G.giftRetailerLink({ isbn: '9780593183649', title: 'T', authors: ['A'] }, 'print', 'indigo') === 'https://www.indigo.ca/en-ca/search?q=9780593183649' &&
+    G.giftRetailerLink({ isbn: '', title: 'The Spy', authors: ['Clive Cussler'] }, 'ebook', 'kobo') === 'https://www.kobo.com/ca/en/search?query=The%20Spy%20Clive%20Cussler');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
