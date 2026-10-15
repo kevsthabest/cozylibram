@@ -241,6 +241,8 @@ const ICONS = {
   cloud: '<path d="M17.5 18.5a4.2 4.2 0 0 0 .6-8.4A6 6 0 0 0 6.3 11a3.9 3.9 0 0 0 .7 7.5z"/>',
   // pause (off toggle)
   pause: '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>',
+  // play (v571: ambience controls — the pause glyph's counterpart)
+  play: '<path d="M8 5.5v13l11-6.5z"/>',
   // help (not-found status)
   help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
   // hourglass (time to finish)

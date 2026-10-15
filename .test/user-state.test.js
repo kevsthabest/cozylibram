@@ -89,6 +89,7 @@ function clearState() {
         'cozylibram.finale.v1',
         'cozylibram.privacy.v1',
         'spicyshelves.analytics', 'spicyshelves.logremove',
+        'cozylibram.ambience.volume',
         'shelfViewMode',
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
@@ -250,6 +251,23 @@ const canon = (o) => JSON.stringify(o, (k, v) =>
   ok('settings snapshot never collects the prefs keys',
     !('spicyshelves.analytics' in window.userStateCollect()) &&
     !('spicyshelves.logremove' in window.userStateCollect()));
+  /* ---------- v571: the ambience volume joins the prefs inventory ----------
+     A new key in THIS section (never the frozen settings snapshot):
+     collect reads it, apply writes it, and it stays out of
+     USER_STATE_KEYS like the other prefs keys. */
+  clearState();
+  ls.setItem('cozylibram.ambience.volume', '0.5');
+  ok('prefs collect reads the ambience volume key',
+    window.userStateCollectPrefs().values['cozylibram.ambience.volume'] === '0.5');
+  window.userStateApplyPrefs({ values: { 'cozylibram.ambience.volume': '0.25' } });
+  ok('prefs apply writes the ambience volume key',
+    ls.getItem('cozylibram.ambience.volume') === '0.25');
+  runInWindow('window.__probeKeys = USER_STATE_KEYS.slice();');
+  ok('settings key list stays frozen (no ambience key in USER_STATE_KEYS)',
+    !window.__probeKeys.includes('cozylibram.ambience.volume'));
+  ok('settings snapshot never collects the ambience volume key',
+    !('cozylibram.ambience.volume' in window.userStateCollect()));
+  clearState();
   /* ---------- v567 finale section: collect/apply ---------- */
   clearState();
   ok('finale collect is null when unset',
