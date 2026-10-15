@@ -658,37 +658,105 @@ function seriesEditHTML(b, id) {
     ' aria-label="Position in series" value="' + esc(cur.position == null ? '' : String(cur.position)) + '">' +
     '</div>';
 }
-function seriesInlineHTML(b, id) {
+/* ---- Modal Variant A: the series strip lives in the header zone, above
+   the tabs — one horizontal row. Owned books (this one included) render
+   as cover figures captioned "#pos · Status"; missing books join the
+   same row as "+ Wishlist" figures when the full-series lookup lands
+   (fillSeriesStrip) — one tap adds, like the old list's button. ---- */
+const SERIES_STATUS_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', dnf: 'DNF' };
+let stripExtRows = null; // { bookId, rows } — the open modal's missing-books fill
+
+function seriesStripHTML(b, id) {
   if (!(b.series && b.series.name)) return '';
+  stripExtRows = { bookId: id, rows: null };
+  return '<div class="m-series-zone" id="m-series"><div class="lbl">In this series' +
+    '<span class="note-inline"> · ' + esc(b.series.name) + '</span></div>' +
+    '<div class="strip" id="m-strip"></div></div>';
+}
+
+// Paints owned + missing figures merged in position order and wires them.
+// Re-run after the external fill lands and after a wishlist add (the added
+// book is owned then, so it repaints from the library side).
+function paintSeriesStrip(b) {
+  const strip = document.getElementById('m-strip');
+  if (!strip || !(b.series && b.series.name)) return;
   const key = String(b.series.name).trim().toLowerCase();
-  const others = library.filter(x => x.id !== id && x.series && x.series.name &&
-    String(x.series.name).trim().toLowerCase() === key);
-  others.sort((x, y) => {
-    const px = parseFloat(x.series && x.series.position), py = parseFloat(y.series && y.series.position);
-    return (isNaN(px) ? 1e9 : px) - (isNaN(py) ? 1e9 : py);
-  });
-  const pos = (b.series.position != null && b.series.position !== '')
-    ? ' · Book ' + esc(String(b.series.position)) : '';
-  return '<div class="field" id="m-series"><label>' + icon('series') + ' In this series' +
-    '<span class="note-inline"> · ' + esc(b.series.name) + pos + '</span></label>' +
-    (others.length
-      ? '<div class="collection-list">' + others.map(collectionRowHTML).join('') + '</div>'
-      : '<p class="note">The only one on your shelves so far.</p>') +
-    '<div id="m-series-more"><p class="note">Looking for the full series…</p></div></div>';
+  const inSeries = (x) => x.series && x.series.name &&
+    String(x.series.name).trim().toLowerCase() === key;
+  const posOf = (p) => { const n = parseFloat(p); return isNaN(n) ? 1e9 : n; };
+  const entries = library.filter(inSeries).map(bk => ({ bk, ext: null, pos: posOf(bk.series.position) }));
+  if (stripExtRows && stripExtRows.bookId === b.id && stripExtRows.rows) {
+    stripExtRows.rows.forEach(x => entries.push({ bk: null, ext: x, pos: posOf(x.position) }));
+  }
+  entries.sort((a, c) => a.pos - c.pos);
+  const figCover = (cover, title) => cover
+    ? '<img src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+    : '<span class="strip-nocover">' + esc(title || '') + '</span>';
+  strip.innerHTML = entries.map(e => {
+    if (e.ext) {
+      const pos = (e.ext.position != null && e.ext.position !== '') ? '#' + esc(String(e.ext.position)) : '#–';
+      return '<figure class="strip-fig ext" data-extfig="' + entries.indexOf(e) + '" role="button" tabindex="0" ' +
+        'aria-label="Add ' + esc(e.ext.title || '') + ' to the wishlist">' +
+        figCover(e.ext.cover, e.ext.title) +
+        '<figcaption>' + pos + ' · + Wishlist</figcaption></figure>';
+    }
+    const bk = e.bk;
+    const pos = (bk.series.position != null && bk.series.position !== '')
+      ? '#' + esc(String(bk.series.position)) : '#–';
+    const cap = pos + ' · ' + (SERIES_STATUS_LABEL[bk.status] || 'TBR');
+    const cur = bk.id === b.id;
+    return '<figure class="strip-fig' + (cur ? ' cur' : '') + '"' +
+      (cur ? '' : ' data-book="' + esc(bk.id) + '" role="button" tabindex="0" aria-label="' + esc(bk.title || '') + '"') + '>' +
+      figCover(bk.cover, bk.title) + '<figcaption>' + cap + '</figcaption></figure>';
+  }).join('');
+  strip.querySelectorAll('[data-book]').forEach(el =>
+    el.addEventListener('click', () => openDetail(el.dataset.book)));
+  strip.querySelectorAll('[data-extfig]').forEach(fig => fig.addEventListener('click', () => {
+    const e = entries[Number(fig.dataset.extfig)];
+    if (!e || !e.ext) return;
+    addExternalBook(e.ext);
+    toast('Added to wishlist 💝');
+    if (stripExtRows) stripExtRows.rows = (stripExtRows.rows || []).filter(x => x !== e.ext);
+    paintSeriesStrip(b);
+  }));
+}
+
+async function fillSeriesStrip(b) {
+  if (!(b.series && b.series.name) || !document.getElementById('m-strip')) return;
+  try {
+    const r = await fetchSeriesBooks(b.series.name, (b.authors || [])[0]);
+    if (!document.getElementById('m-strip')) return; // modal moved on
+    if (!stripExtRows || stripExtRows.bookId !== b.id) return;
+    if (r.needsToken) {
+      const strip = document.getElementById('m-strip');
+      if (strip && !strip.querySelector('.strip-note')) {
+        strip.insertAdjacentHTML('beforeend',
+          '<span class="strip-note">Hardcover isn’t available right now, so the full series can’t be shown.</span>');
+      }
+      return;
+    }
+    stripExtRows.rows = r.rows;
+    paintSeriesStrip(b);
+  } catch (e) { /* the owned strip stands on its own */ }
 }
 function wireSeriesRows(scope) {
   scope.querySelectorAll('#m-series [data-book]').forEach(el =>
     el.addEventListener('click', () => openDetail(el.dataset.book)));
 }
-// v133: re-render the inline series block when background Hardcover
-// enrichment lands (the block has no inputs, so this never clobbers typing).
+/* js/070 calls this after background enrichment lands more data, so the
+   strip (and the series position in the header) can repaint without a
+   reopen. Modal Variant A: the strip lives in #m-series-wrap. */
 function refreshSeriesInline(book) {
+  if (!book) return;
   const wrap = document.getElementById('m-series-wrap');
-  if (!wrap || !(book.series && book.series.name) || wrap.querySelector('#m-series')) return;
-  wrap.innerHTML = seriesInlineHTML(book, book.id);
-  wireSeriesRows(wrap);
-  const sBox = wrap.querySelector('#m-series-more');
-  if (sBox) fillMoreSection('series', book.series.name, book.id, sBox, true);
+  if (wrap && book.series && book.series.name) {
+    wrap.innerHTML = seriesStripHTML(book, book.id);
+    paintSeriesStrip(book);
+    fillSeriesStrip(book);
+  }
+  const hdrPos = document.getElementById('d-pos');
+  if (hdrPos) hdrPos.textContent = (book.series && book.series.position != null && book.series.position !== '')
+    ? ' · Book ' + book.series.position : '';
 }
 
 function openCollection(kind, name, fromId) {
@@ -822,6 +890,53 @@ function openDetail(id, opts) {
     renderDetailModal(b, false);
   }
 }
+/* ---- Modal Variant A: the save-model seam ------------------------------
+   ModalFormState: dirty-state tracking for the book modal's ONE save
+   model, deliberately decoupled from any UI. Every staged control
+   registers a read() here (draft fields or input values); the tracker
+   diffs reads against the baseline captured at open (arm()). The sticky
+   Save bar is a pure VIEW of count() — it owns no state. Variant B
+   (autosave) can swap the bar's commit trigger for a debounced
+   commitForm() without touching a single field registration: the
+   switch is a behaviour change at this seam, not a restructure.
+   Instant actions (favourite, progress steppers, primary actions) are
+   NOT fields — when one also moves a staged value it blesses exactly
+   its own field via commitValue(), so the bar never double-reports an
+   already-committed change. */
+function createModalFormState() {
+  const fields = new Map();
+  let baseline = {};
+  let armed = false;
+  const subs = [];
+  const clone = (v) => { try { return JSON.parse(JSON.stringify(v == null ? null : v)); } catch (e) { return v; } };
+  const readAll = () => {
+    const o = {};
+    fields.forEach((f, k) => { try { o[k] = clone(f()); } catch (e) { o[k] = null; } });
+    return o;
+  };
+  const api = {
+    register(key, read) { fields.set(key, read); },
+    arm() { baseline = readAll(); armed = true; },
+    current(key) { const f = fields.get(key); if (!f) return null; try { return clone(f()); } catch (e) { return null; } },
+    count() {
+      if (!armed) return 0;
+      const cur = readAll(); let n = 0;
+      fields.forEach((_, k) => { if (JSON.stringify(cur[k]) !== JSON.stringify(baseline[k])) n++; });
+      return n;
+    },
+    isDirty() { return api.count() > 0; },
+    isFieldDirty(key) {
+      if (!armed) return false;
+      return JSON.stringify(api.current(key)) !== JSON.stringify(baseline[key]);
+    },
+    commitValue(key, value) { baseline[key] = clone(value); api.touch(); },
+    markSaved() { baseline = readAll(); api.touch(); },
+    onChange(cb) { subs.push(cb); },
+    touch() { if (!armed) return; const n = api.count(); subs.forEach(cb => { try { cb(n); } catch (e) {} }); }
+  };
+  return api;
+}
+
 function renderDetailModal(b, viaBook) {
   const id = b.id;
   editingId = id;
@@ -853,8 +968,7 @@ function renderDetailModal(b, viaBook) {
   // with the format segment omitted when the format is unset.
   const ownedLabel = (d) => (OWNED_META[d.owned] || OWNED_META.tobuy).label +
     (FORMAT_META[d.format] ? ' · ' + FORMAT_META[d.format].label : '');
-  // v182: the description appears twice per the mockup — in the hero
-  // (desktop only) and under "About this book" on the Details tab.
+  // Variant A: the description renders ONCE — in the header's About bar.
   const descHTML = (idpfx, cls) =>
     (b.description
       ? '<div class="m-desc' + (cls ? ' ' + cls : '') + '" id="' + idpfx + '"><p>' +
@@ -862,8 +976,10 @@ function renderDetailModal(b, viaBook) {
         '<button class="taplink" id="' + idpfx + '-toggle">Read more</button></div>'
       : '');
 
-  const hearts = [1, 2, 3, 4, 5].map(n =>
-    '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '">' + icon('heart') + '</button>').join('');
+  // Variant A: stars, always stars — outline when unlit, filled when lit
+  // (the .on fill comes from CSS). Accessible names per star.
+  const stars5 = [1, 2, 3, 4, 5].map(n =>
+    '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '" aria-label="Rate ' + n + ' star' + (n === 1 ? '' : 's') + '">' + icon('star') + '</button>').join('');
 
   // draft copy the controls edit until Save
   const draft = Object.assign({}, b, {
@@ -899,6 +1015,31 @@ function renderDetailModal(b, viaBook) {
     (f ? icon(FORMAT_META[f].ic) + ' ' + FORMAT_META[f].label : 'Not set') + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
+  // Variant A: register every Save-model field with the tracker. Reads
+  // are lazy (draft fields + live input values), so registration can
+  // happen before the DOM exists; arm() runs once the controls are
+  // wired and painted (see below — the bar subscribes there).
+  const formState = createModalFormState();
+  const elVal = (eid) => { const e = document.getElementById(eid); return e ? e.value : ''; };
+  formState.register('title', () => elVal('f-title').trim());
+  formState.register('authors', () => elVal('f-author'));
+  formState.register('status', () => draft.status);
+  formState.register('owned', () => draft.owned);
+  formState.register('format', () => draft.format || '');
+  formState.register('wantFormat', () => draft.wantFormat || '');
+  formState.register('prevread', () => { const e = document.getElementById('f-prevread'); return !!(e && e.checked); });
+  formState.register('faceOut', () => { const e = document.getElementById('f-faceout'); return !!(e && e.checked); }); // v564, composed at rebase
+  formState.register('myRating', () => draft.myRating || 0);
+  formState.register('ratings', () => draft.ratings || {});
+  formState.register('axes', () => (draft.axes || []).slice());
+  formState.register('tropes', () => elVal('f-tropes').split(',').map(t => t.trim().toLowerCase()).filter(Boolean));
+  formState.register('notes', () => elVal('f-notes'));
+  formState.register('pageCount', () => elVal('f-pagecount'));
+  formState.register('progressInput', () => elVal('f-progress'));
+  formState.register('releaseDate', () => elVal('f-releasedate'));
+  formState.register('series', () => [elVal('f-series').trim(), elVal('f-series-pos').trim()]);
+  formState.register('purchaseSource', () => draft.purchaseSource || '');
+  formState.register('purchaseDate', () => draft.purchaseDate || '');
   // v313: work-level spice baseline (pipeline-detected or manual override).
   // Shown as outline segments until the user rates spice themselves.
   // { value: 0-5, source: 'detected'|'manual' } or null.
@@ -909,8 +1050,8 @@ function renderDetailModal(b, viaBook) {
     const v = spiceBaseline.source === 'manual' ? spiceBaseline.manual : spiceBaseline.detected;
     return (v >= 1 && v <= 5) ? v : 0;
   };
-  // v224 (UX-11): rating/axis taps commit live now, so snapshot the rating
-  // state at open — the Save-time diff still reports what actually changed.
+  // Snapshot the rating state at open — the Save-time diff reports
+  // what actually changed (Variant A: taps stage into the draft).
   const ratingBefore = { myRating: b.myRating || 0, ratings: Object.assign({}, b.ratings || {}) };
 
   // v67: previously-read default from history — a finish older than 60 days
@@ -964,6 +1105,9 @@ function renderDetailModal(b, viaBook) {
     saveLibrary();
     const inp = document.getElementById('f-progress');
     if (inp) inp.value = draft.progress;
+    // Variant A: the stepper committed for real — bless the field it
+    // wrote so the Save bar doesn't double-report it.
+    formState.commitValue('progressInput', String(draft.progress));
     renderProgressSection();
     // v353: refresh log summary after stepper changes
     const summEl = document.getElementById('m-logsummary');
@@ -1052,13 +1196,7 @@ function renderDetailModal(b, viaBook) {
     // v182: mockup hero — desktop is cover left / info right / primary row /
     // description; mobile stacks cover, title, author, rating, meta, action.
     '<div class="d-hero">' +
-    '<div class="d-cover">' + coverHTML(b, 'd-cov') +
-    '<div class="edition-toolbar">' +
-    '<button class="edition-tool" id="m-changecover" title="Change Cover" aria-label="Change Cover">' + icon('image') + '<small>Cover</small></button>' +
-    '<button class="edition-tool" id="m-scanfaces" title="Scan Edition" aria-label="Scan Edition">' + icon('camera') + '<small>Scan</small></button>' +
-    '<button class="edition-tool" id="m-measurethick" title="Measure thickness" aria-label="Measure thickness">' + icon('ruler') + '<small>Size</small></button>' +
-    '<button class="edition-tool" id="m-view3d" title="View in 3D" aria-label="View in 3D">' + icon('cube') + '<small>3D</small></button>' +
-    '</div></div>' +
+    '<div class="d-cover">' + coverHTML(b, 'd-cov') + '</div>' +
     '<div class="d-hero-text">' +
     '<h2 class="serif">' + esc(b.title) + '</h2>' +
     '<p class="author">' + ((b.authors && b.authors.length)
@@ -1076,16 +1214,48 @@ function renderDetailModal(b, viaBook) {
     '</div>' +
     '<div class="d-primary-row"><button class="btn primary d-primary" id="m-primary"></button>' +
     '<button class="fav-btn d-fav2' + (draft.favorite ? ' on' : '') + '" id="f-fav2" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
-    '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button></div>' +
-    descHTML('m-desc-hero', 'd-hero-desc') +
+    '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button>' +
+    // Variant A: cover tools sit behind this "Cover ▾" pill (same ids,
+    // same sheets) instead of the toolbar that sat under the cover.
+    '<div class="more-wrap cover-wrap"><button class="btn ghost" id="m-coverpill" aria-haspopup="true">Cover ▾</button>' +
+    '<div class="more-menu" id="m-covertools" hidden>' +
+    '<button class="more-item" id="m-changecover">' + icon('image') + ' <span>Change Cover</span></button>' +
+    '<button class="more-item" id="m-scanfaces">' + icon('camera') + ' <span>Scan Edition</span></button>' +
+    '<button class="more-item" id="m-measurethick">' + icon('ruler') + ' <span>Measure thickness</span></button>' +
+    '<button class="more-item" id="m-view3d">' + icon('cube') + ' <span>View in 3D</span></button>' +
+    '</div></div></div>' +
+    // Variant A: the blurb lives HERE and only here — the header
+    // "About this book" slim bar (one summary line, tap to expand).
+    // The v182 hero copy and the Details-tab copy are both deleted.
+    (function() {
+      if (!b.description) return '';
+      var txt = String(b.description).replace(/<[^>]*>/g, '').trim();
+      var teaser = txt.length > 110 ? txt.slice(0, 110) + '…' : txt;
+      return '<div class="d-about"><button class="slimbar" id="m-about-toggle" aria-expanded="false">' +
+        '<span class="slimbar-main"><b>About this book</b><small>' + esc(teaser) + '</small></span>' +
+        '<span class="mrow-chev">›</span></button>' +
+        '<div id="m-about-body" hidden>' + descHTML('m-desc') + '</div></div>';
+    })() +
     '</div>' +
     // v541: "Reading it too" presence slot (js/235 fills it async;
     // stays empty unless a circle friend is visibly reading this).
     '<div id="m-rittoo"></div>' +
-    // v468: Book Portrait card — pinned under the hero, above the tabs.
-    (typeof portraitCardHTML === 'function' ? portraitCardHTML(b) : '') +
-    // v564: Your Book as a Candle — directly beside (below) Book Portrait.
+    // Variant A: Book Portrait is a one-line slim bar in the header
+    // zone; the full v468 card renders inside it, collapsed.
+    (typeof portraitCardHTML === 'function'
+      ? '<div class="portrait-slim"><button class="slimbar" id="m-portrait-toggle" aria-expanded="false">' +
+        '<span class="slim-ic">' + icon('portrait') + '</span>' +
+        '<span class="slimbar-main"><b>Book Portrait</b><small id="ptSlimSum">' +
+        (typeof portraitSlimLine === 'function' ? esc(portraitSlimLine(b)) : '') +
+        '</small></span><span class="mrow-chev">›</span></button>' +
+        '<div id="m-portrait-body" hidden>' + portraitCardHTML(b) + '</div></div>'
+      : '') +
+    // v565: Your Book as a Candle — directly beside (below) Book Portrait
+    // (composition at the Variant A rebase: below the portrait slim bar,
+    // same header-zone position the candle shipped in).
     (typeof candleCardHTML === 'function' ? candleCardHTML(b) : '') +
+    // Variant A: the series strip — header zone, immediately above the tabs.
+    '<div id="m-series-wrap">' + seriesStripHTML(b, id) + '</div>' +
     // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
     // collapsible sections; every control keeps its id). v182: mockup tab icons.
     '<div class="d-tabs" role="tablist">' +
@@ -1095,24 +1265,25 @@ function renderDetailModal(b, viaBook) {
     '<button class="d-tab" data-dtab="characters" role="tab" aria-selected="false">' + icon('friends') + 'Characters</button></div>' +
 
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
-    // v354: editable title/author — fixes stranded manual-add data (Advisor: in scope)
-    '<div class="field"><label>' + icon('edit') + ' Title</label>' +
-    '<input class="text-input" id="f-title" value="' + esc(b.title || '') + '" maxlength="300"></div>' +
-    '<div class="field"><label>' + icon('user') + ' Author(s)</label>' +
-    '<input class="text-input" id="f-author" value="' + esc((b.authors || []).join(', ')) + '" maxlength="300" placeholder="Separate multiple with commas"></div>' +
-    // v476: quiet metadata-diff badge — opens the compare sheet, never interrupts
-    (typeof metaConflictFor === 'function' && metaConflictFor(b.id) ?
-      '<div class="field" id="m-metadiff-wrap"><button class="taplink" id="m-metadiff">' +
-      icon('search') + ' We found some differences — which looks right?</button></div>' : '') +
-    // v182: mockup "About this book" section (the hero carries its own copy on desktop).
-    (b.description ? '<div class="field"><label>About this book</label>' + descHTML('m-desc') + '</div>' : '') +
-    // v131: your rating — hearts + word label, now on the Details tab.
-    '<div class="field"><label>Your rating</label>' +
-    '<div class="hrate-row"><div class="picker" id="f-myrating">' + hearts + '</div>' +
+    // Variant A §1: Rating first — stars + axes reunited in ONE card.
+    // The axes lived in a collapsed "Mood" accordion halfway down; the
+    // stars were hearts until now (always stars: outline → filled).
+    '<div class="field m-card"><label>Your rating</label>' +
+    '<div class="hrate-row"><div class="picker" id="f-myrating">' + stars5 + '</div>' +
     '<span class="rate-word' + (b.myRating ? '' : ' plain') + '" id="f-myrating-word">' +
-    (b.myRating ? RATING_WORDS[b.myRating] : 'Unrated') + '</span></div></div>' +
-    '<div id="m-progress"></div>' +
+    (b.myRating ? RATING_WORDS[b.myRating] : 'Unrated') + '</span></div>' +
+    '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
+    // v402: progressive disclosure — Spice Forecast sparkline + dialogue
+    // ratio, populated async when pipeline data exists; hidden otherwise.
+    '<div id="m-chaptermeta"></div>' +
+    '<div class="chips" id="f-axadd">' + axAddHTML() + '</div>' +
+    '<p class="note" style="margin:6px 0 0">Only the axes that fit this book are shown.</p></div>' +
 
+    // Variant A §2: Status & Ownership — one card. The v405 ownership
+    // accordion dissolves; the ownership summary lives in the label row
+    // now (paintOwnedRow still updates #f-owned-sum). The v563 Format
+    // field + trophy want keep their real controls inside this card.
+    '<div class="field m-card"><label>Status & Ownership</label>' +
     // v182: mockup tappable rows — tap to expand, pick, collapse.
     '<div class="field"><label>Shelf / Status</label>' +
     '<div class="mselect" id="f-status">' +
@@ -1123,12 +1294,7 @@ function renderDetailModal(b, viaBook) {
     '<input type="checkbox" id="f-prevread"' + (draft.previouslyRead ? ' checked' : '') + '> ' + icon('history') + ' Previously read' +
     '<span class="chk-hint">read before tracking — no date stamp, no log</span></label></div>' +
 
-    // v405 (M2): Ownership collapses into an accordion — secondary section,
-    // keeps Details/Your rating/Shelf-Status expanded per the design review.
-    '<details class="m-collapsible"><summary><span>' + icon('covers') + ' Ownership' +
-    ' <span class="note-inline" id="f-owned-sum">· ' + esc(ownedLabel(draft)) + '</span>' +
-    '</span></summary>' +
-    '<div class="field"><label>Ownership</label>' +
+    '<div class="field"><label>Ownership <span class="note-inline" id="f-owned-sum">· ' + esc(ownedLabel(draft)) + '</span></label>' +
     '<div class="mselect" id="f-owned">' +
     '<button class="mrow" data-mrow="owned"><span class="mrow-ic" id="f-owned-ic">' + icon((OWNED_META[draft.owned] || OWNED_META.tobuy).ic) + '</span>' +
     '<span class="mrow-val" id="f-owned-val">' + esc(ownedLabel(draft)) + '</span><span class="mrow-chev">›</span></button>' +
@@ -1142,9 +1308,11 @@ function renderDetailModal(b, viaBook) {
     '<div class="mrow-opts" hidden>' + formatOpts + '</div></div></div>' +
     '<div class="field" id="f-wantwrap"><label>Want another format</label>' +
     '<div class="want-opts" id="f-want-opts"></div>' +
-    '<p class="note" id="f-want-note" style="margin:6px 0 0"></p></div></details>' +
-    // Face-out display pick: on the book record (faceOut), so it rides
-    // library sync and survives shelf re-sorts. The 3D shelf reads it.
+    '<p class="note" id="f-want-note" style="margin:6px 0 0"></p></div>' +
+    // v564: face-out display pick — on the book record (faceOut), so it
+    // rides library sync and survives shelf re-sorts. The 3D shelf reads
+    // it. (Composition at the Variant A rebase: inside this card, where
+    // the dissolved ownership accordion used to hold it.)
     '<div class="field"><label>' + icon('shelf') + ' 3D shelf</label>' +
     '<label class="checkline"><input type="checkbox" id="f-faceout"' + (draft.faceOut ? ' checked' : '') + '> Display face-out' +
     '<span class="chk-hint">show the cover on the 3D shelf instead of the spine</span></label></div>' +
@@ -1156,15 +1324,39 @@ function renderDetailModal(b, viaBook) {
     '<div class="buy-row">' + storeLinks(draft).map(l =>
       '<a class="btn ghost" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.name) + ' ' + icon('external') + '</a>').join('') +
     '</div></div>' +
+    '</div>' + // end Status & Ownership card
+    '<div id="m-progress"></div>' +
 
+
+    // Variant A §4: the quiet Details card — content warnings + the
+    // Reading Log as rows (log collapsed by default now, always), then
+    // the editable title/author fields.
+    '<div class="field m-card"><label>Details</label>' +
+    '<div class="field"><label>' + icon('warn') + ' Content warnings</label>' +
+    '<div id="m-hc">' + hcDetailHTML(b) + '</div></div>' +
+    '<details class="m-collapsible"><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
+    '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
+    logSummaryHTML() +
+    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div></details>' +
+    // v354: editable title/author — fixes stranded manual-add data (Advisor: in scope)
+    '<div class="field"><label>' + icon('edit') + ' Title</label>' +
+    '<input class="text-input" id="f-title" value="' + esc(b.title || '') + '" maxlength="300"></div>' +
+    '<div class="field"><label>' + icon('user') + ' Author(s)</label>' +
+    '<input class="text-input" id="f-author" value="' + esc((b.authors || []).join(', ')) + '" maxlength="300" placeholder="Separate multiple with commas"></div>' +
+    // v476: quiet metadata-diff badge — opens the compare sheet, never interrupts
+    (typeof metaConflictFor === 'function' && metaConflictFor(b.id) ?
+      '<div class="field" id="m-metadiff-wrap"><button class="taplink" id="m-metadiff">' +
+      icon('search') + ' We found some differences — which looks right?</button></div>' : '') +
+    '</div>' + // end quiet Details card
+
+    // Variant A §5: More details — Purchase lives inside it now (the
+    // audit's coldest block was a top-level accordion), the series
+    // editor joins it, and the quiet fields follow as before.
+    '<details class="m-more-details"><summary><span>More details</span></summary>' +
     // v312: purchase ledger — what you paid, where, when
-    // v396: collapsible (IA rework)
     // v476: no manual price entry — the value is an automated estimate.
     // purchasePrice is shown read-only when the user previously entered one.
-    '<details class="m-collapsible"><summary><span>' + icon('tobuy') + ' Purchase' +
-    (draft.purchasePrice != null && !isNaN(draft.purchasePrice) ? ' <span class="note-inline">· ' + esc(formatMoney(Number(draft.purchasePrice))) + '</span>' : '') +
-    '</span></summary>' +
-    '<div class="field"><label>Purchase</label>' +
+    '<div class="field secondary"><label>Purchase</label>' +
     (function() {
       var est = (typeof estimateBookValue === 'function') ? estimateBookValue(draft) : null;
       if (draft.purchasePrice != null && !isNaN(draft.purchasePrice))
@@ -1183,38 +1375,8 @@ function renderDetailModal(b, viaBook) {
     '<input type="date" id="f-purchase-date" value="' + (draft.purchaseDate ? esc(draft.purchaseDate) : '') + '" />' +
     '</div>' +
     '<input type="text" id="f-purchase-source-custom" placeholder="Store name (e.g. Blue Heron Books)" value="' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? esc(draft.purchaseSource) : '') + '" style="display:' + (draft.purchaseSource && ['Amazon','Indigo','Walmart'].indexOf(draft.purchaseSource) < 0 ? '' : 'none') + ';margin-top:6px;" />' +
-    '</div></details>' +
-
-    '<details class="m-collapsible"><summary><span>' + icon('sparkles') + ' Mood</span></summary>' +
-    '<div class="field"><label>Mood</label>' +
-    '<div id="f-axrows">' + draft.axes.map(axRowHTML).join('') + '</div>' +
-    // v402: progressive disclosure — Spice Forecast sparkline + dialogue ratio,
-    // populated async when pipeline data exists; hidden otherwise.
-    '<div id="m-chaptermeta"></div>' +
-    '<div class="chips" id="f-axadd">' + axAddHTML() + '</div></div></details>' +
-
-    '<details class="m-collapsible"' + ((b.log || []).length ? ' open' : '') + '><summary><span>' + icon('history') + ' Reading Log</span></summary>' +
-    '<div class="field"><label>' + icon('history') + ' Reading Log</label>' +
-    logSummaryHTML() +
-    '<div id="m-loglist">' + logListHTML + '</div>' + rmLogHTML + '</div></details>' +
-
-    '<div class="field"><label>' + icon('sparkles') + ' Series & Discovery</label>' +
-    '<div id="m-hc">' + hcDetailHTML(b) + '</div>' +
-    seriesEditHTML(b, id) +
-    '<div id="m-series-wrap">' + seriesInlineHTML(b, id) + '</div>' +
-    '<div class="field"><label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
-    (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
-      const sims = similarBooks(b, 6);
-      if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
-      track('similar_books_opened', null, { dedupeKey: 'sim-' + b.id, dedupeMs: 60000 });
-      return '<div class="sim-row">' + sims.map(o =>
-        '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
-        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-                 : '<span class="sim-nocover">' + icon('covers') + '</span>') +
-        '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
-    })() + '</div></div>' +
-
-    '<details class="m-more-details"><summary><span>More details</span></summary>' +
+    '</div>' +
+    '<div class="field secondary"><label>' + icon('series') + ' Series</label>' + seriesEditHTML(b, id) + '</div>' +
     '<div class="field secondary"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
@@ -1224,6 +1386,20 @@ function renderDetailModal(b, viaBook) {
     '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
     '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
     '</details>' +
+    // Variant A: discovery sits BELOW the form under a divider —
+    // outside the edit path entirely.
+    '<div class="field m-explore"><div class="zone-div"><span>Keep exploring</span></div>' +
+    '<label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
+    (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
+      const sims = similarBooks(b, 6);
+      if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
+      track('similar_books_opened', null, { dedupeKey: 'sim-' + b.id, dedupeMs: 60000 });
+      return '<div class="sim-row">' + sims.map(o =>
+        '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
+        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+                 : '<span class="sim-nocover">' + icon('covers') + '</span>') +
+        '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
+    })() + '</div>' +
     '</div>' +
 
     '<div class="d-panel" id="dtab-tropes" role="tabpanel" hidden>' +
@@ -1254,8 +1430,12 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-quotes"></div></div>' +
     '</div>' +
 
-    '<div class="modal-actions">' +
-    '<span class="save-hint" id="m-savehint" hidden>' + icon('warn') + ' Swiping away discards unsaved changes</span>' +
+    // Variant A: the sticky Save bar — a pure VIEW of ModalFormState
+    // (see createModalFormState above). Hidden while the form is clean;
+    // rises with the unsaved-change count when it goes dirty.
+    '<div class="modal-actions m-savebar" id="m-savebar" hidden>' +
+    '<span class="save-count" id="m-savecount" role="status"></span>' +
+    '<button class="btn ghost" id="m-discard">Discard</button>' +
     '<button class="btn" id="m-save">Save</button></div>' +
     '</div></div>';
 
@@ -1310,6 +1490,7 @@ function renderDetailModal(b, viaBook) {
       draft.readCount = b.readCount;
     }
     saveLibrary();
+    formState.commitValue('status', s); // Variant A: instant commit — bless the status field
     track('book_status_changed', { from: from, to: s });
     if (s === 'read') track('book_completed');
     // v468: post-completion portrait survey — fires on completion (User's call).
@@ -1330,6 +1511,7 @@ function renderDetailModal(b, viaBook) {
     if (b.owned === 'owned') return;
     b.owned = 'owned'; draft.owned = 'owned';
     saveLibrary();
+    formState.commitValue('owned', 'owned'); // Variant A: instant commit — bless the owned field
     root.querySelectorAll('#f-owned [data-o]').forEach(x => x.classList.toggle('active', x.dataset.o === 'owned'));
     paintOwnedRow(); // facet row label/icon + buy-wrap note follow
     const bw = document.getElementById('m-buywrap');
@@ -1357,17 +1539,17 @@ function renderDetailModal(b, viaBook) {
   });
   root.addEventListener('click', (e) => {
     if (!moreMenu.hidden && !e.target.closest('.more-wrap')) moreMenu.hidden = true;
+    const ct = document.getElementById('m-covertools');
+    if (ct && !ct.hidden && !e.target.closest('.cover-wrap')) ct.hidden = true;
   });
 
   // wire controls (work on the draft copy until Save)
-  // v224 (UX-11): rating/axis taps commit live — a swipe-to-close can no
-  // longer silently discard them. Text fields still go through Save.
-  const syncRatingLive = () => {
-    b.myRating = draft.myRating;
-    b.axes = draft.axes.slice();
-    b.ratings = Object.assign({}, draft.ratings);
-    saveLibrary();
-  };
+  // Variant A: rating/axis taps STAGE into the draft under the one save
+  // model — this deliberately reverses v224's live-commit (the decided
+  // design: the bar is the single save model for the whole form, so a
+  // rating tap raises the bar like every other edit, and Discard can
+  // undo it). The ratingBefore snapshot still powers trackBookSaveDiff
+  // at Save. Variant B would re-add a commit here — at the seam only.
   const renderAxSection = () => {
     document.getElementById('f-axrows').innerHTML = draft.axes.map(axRowHTML).join('');
     document.getElementById('f-axadd').innerHTML = axAddHTML();
@@ -1396,20 +1578,20 @@ function renderDetailModal(b, viaBook) {
           : detAfter ? esc(a.levels[detAfter - 1]) + ' <span class="axdet-tag">(' +
             (spiceBaseline.source === 'manual' ? 'curated' : 'detected') + ')</span>'
           : 'Tap to rate';
-        syncRatingLive(); // v224 (UX-11)
+        formState.touch(); // Variant A: staged — the bar counts it
       }));
       const rm = row.querySelector('[data-axrm]');
       if (rm) rm.addEventListener('click', () => {
         draft.axes = draft.axes.filter(x => x !== k);
         delete draft.ratings[k];
         renderAxSection();
-        syncRatingLive(); // v224 (UX-11)
+        formState.touch(); // Variant A: staged — the bar counts it
       });
     });
     root.querySelectorAll('#f-axadd [data-axadd]').forEach(c => c.addEventListener('click', () => {
       draft.axes = draft.axes.concat(c.dataset.axadd);
       renderAxSection();
-      syncRatingLive(); // v224 (UX-11)
+      formState.touch(); // Variant A: staged — the bar counts it
     }));
   };
 
@@ -1519,6 +1701,7 @@ function renderDetailModal(b, viaBook) {
     box.querySelectorAll('[data-w]').forEach(btn => btn.addEventListener('click', () => {
       draft.wantFormat = draft.wantFormat === btn.dataset.w ? '' : btn.dataset.w;
       paintWantRow();
+      formState.touch(); // Variant A: staged — the bar counts it
     }));
     if (note) note.textContent = draft.wantFormat
       ? 'Trophy want — this book sits in your Wishlist\u2019s Trophy wants until you mark it Got it. You have the ' + FORMAT_META[draft.format].label + ' copy.'
@@ -1570,7 +1753,7 @@ function renderDetailModal(b, viaBook) {
       if (draft.status === 'read' && draft.pageCount && !draft.previouslyRead) {
         draft.progress = draft.pageCount; // Save logs the completion delta
         const pi = document.getElementById('f-progress');
-        if (pi) pi.value = draft.progress;
+        if (pi) { pi.value = draft.progress; formState.commitValue('progressInput', pi.value); } // the pick wrote it mechanically — bless
       }
       paintShelfRow();
       const opts = btn.closest('.mrow-opts');
@@ -1579,6 +1762,7 @@ function renderDetailModal(b, viaBook) {
       if (chev) chev.textContent = '›';
       renderProgressSection();
       paintPrimary(); // v123: primary action follows the shelf
+      formState.touch(); // Variant A: staged status — the bar counts it
     }));
 
   // v476: no manual price entry — f-purchase-price input removed.
@@ -1594,13 +1778,15 @@ function renderDetailModal(b, viaBook) {
       if (psc) psc.style.display = 'none';
       draft.purchaseSource = v || null;
     }
+    formState.touch(); // Variant A: staged — the bar counts it
   });
   if (psc) psc.addEventListener('input', e => {
-    if (ps && ps.value === '__other') draft.purchaseSource = e.target.value || null;
+    if (ps && ps.value === '__other') { draft.purchaseSource = e.target.value || null; formState.touch(); }
   });
   var pd = document.getElementById('f-purchase-date');
   if (pd) pd.addEventListener('change', e => {
     draft.purchaseDate = e.target.value || null;
+    formState.touch(); // Variant A: staged — the bar counts it
   });
   const _faceoutEl = document.getElementById('f-faceout');
   if (_faceoutEl) _faceoutEl.addEventListener('change', e => {
@@ -1620,6 +1806,10 @@ function renderDetailModal(b, viaBook) {
         if (pi) pi.value = draft.progress;
       }
     }
+    // Variant A: the handler moved the progress input mechanically —
+    // bless that field; the checkbox itself is a tracked field and the
+    // delegated change listener counts it.
+    if (pi) formState.commitValue('progressInput', pi.value);
   });
 
   root.querySelectorAll('#f-owned [data-o]').forEach(btn =>
@@ -1633,6 +1823,7 @@ function renderDetailModal(b, viaBook) {
       if (chev) chev.textContent = '›';
       const bw = document.getElementById('m-buywrap');
       if (bw) bw.style.display = draft.owned === 'owned' ? 'none' : '';
+      formState.touch(); // Variant A: staged — the bar counts it
     }));
 
   // v563: format picker — same pick/collapse shape as ownership.
@@ -1647,6 +1838,7 @@ function renderDetailModal(b, viaBook) {
       if (opts) { opts.hidden = true; }
       const chev = btn.closest('.mselect').querySelector('.mrow-chev');
       if (chev) chev.textContent = '›';
+      formState.touch(); // Variant A: staged — the bar counts it
     }));
 
   const wirePicker = (sel, key) => {
@@ -1663,21 +1855,36 @@ function renderDetailModal(b, viaBook) {
             w.textContent = rv ? RATING_WORDS[rv] : 'Unrated'; // v224 (UX-09)
             w.classList.toggle('plain', !rv);
           }
-          syncRatingLive(); // v224 (UX-11): hearts commit live
+          formState.touch(); // Variant A: staged — the bar counts it
         }
       }));
   };
   wirePicker('#f-myrating', 'myRating');
   wireAxRows();
-  // v224 (UX-01/02): the sticky bar names the unsaved-changes risk, but only
-  // while a text field is focused — ratings/axes commit live (UX-11).
-  const saveHint = document.getElementById('m-savehint');
-  if (saveHint) {
-    root.querySelectorAll('input.text-input, textarea.text-input').forEach(el => {
-      el.addEventListener('focus', () => { saveHint.hidden = false; });
-      el.addEventListener('blur', () => { saveHint.hidden = true; });
-    });
-  }
+  // Variant A: the sticky Save bar — a pure view of ModalFormState.
+  // It subscribes to the tracker and renders count(); it owns no state.
+  // (The v224 focus/blur save-hint is gone: the bar + the dirty-close
+  // prompt below are the legible risk surface now.)
+  const saveBar = document.getElementById('m-savebar');
+  const saveCountEl = document.getElementById('m-savecount');
+  const renderSaveBar = () => {
+    const n = formState.count();
+    if (saveBar) saveBar.hidden = n === 0;
+    if (saveCountEl) saveCountEl.textContent = n ? (n + ' unsaved change' + (n === 1 ? '' : 's')) : '';
+  };
+  formState.onChange(renderSaveBar);
+  // Text inputs and selects report through one delegated pair of
+  // listeners — recompute is idempotent, and inputs that aren't
+  // registered fields (e.g. the quick page box) can't dirty anything.
+  root.addEventListener('input', () => formState.touch());
+  root.addEventListener('change', () => formState.touch());
+  formState.arm();
+  renderSaveBar();
+  // Variant A: Discard = a true reset. Staged fields live only in the
+  // draft + inputs, so a fresh render of the same book IS the reset
+  // (instant commits — favourite, logged pages — stay committed).
+  const discardBtn = document.getElementById('m-discard');
+  if (discardBtn) discardBtn.addEventListener('click', () => renderDetailModal(b, false));
 
   const escClose = e => { if (e.key === 'Escape' && overlayIsTop(ovToken)) close(); }; // v129: escape closes, v220: topmost only
   // v220: DOM-only teardown — the history entry is owned by overlayOpened.
@@ -1687,11 +1894,34 @@ function renderDetailModal(b, viaBook) {
     root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
   };
   const ovToken = overlayOpened('modal-root', closeDom); // v220: back-gesture closes the modal
-  const close = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
+  // Variant A: closing with a dirty form must NOT silently discard —
+  // every user close path (×, backdrop tap, Escape, swipe-down) funnels
+  // through close() and prompts first. Programmatic paths that already
+  // know the answer pass force (the Delete flow; post-Save the tracker
+  // is clean anyway). The Android back gesture goes through closeDom —
+  // the history entry is already consumed by then — and keeps its v220
+  // semantics; in-modal book-to-book navigation likewise stays as-is.
+  let discardPromptOpen = false;
+  const closeNow = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
+  const close = (force) => {
+    if (force || !formState.isDirty()) { closeNow(); return; }
+    if (discardPromptOpen) return;
+    discardPromptOpen = true;
+    // A swipe-down may have already translated the sheet off-screen —
+    // reset it before prompting so the modal is visible behind the ask.
+    const sheet = root.querySelector('#m-back .modal');
+    if (sheet) { sheet.style.transition = ''; sheet.style.transform = ''; }
+    const n = formState.count();
+    confirmModal('You have ' + n + ' unsaved change' + (n === 1 ? '' : 's') + ' to “' + (b.title || 'this book') + '”. Discard them?',
+      { okLabel: 'Discard', cancelLabel: 'Keep editing' })
+      .then(ok => { discardPromptOpen = false; if (ok) closeNow(); });
+  };
   document.addEventListener('keydown', escClose);
   root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
     el.addEventListener('click', () => openDetail(el.dataset.sim)));
-  document.getElementById('m-x').addEventListener('click', close);
+  // NB: never bind close directly as an event listener — the event
+  // object would land in the force parameter and skip the prompt.
+  document.getElementById('m-x').addEventListener('click', () => close());
   // v174: tab switching — Details | Tropes | Notes.
   const showDTab = (name) => {
     root.querySelectorAll('.d-tab').forEach(t => {
@@ -1711,19 +1941,19 @@ function renderDetailModal(b, viaBook) {
   // v541: shared-reading presence (js/235) — fills #m-rittoo when a
   // circle friend is visibly reading this book; silent otherwise.
   if (typeof fillReadingItToo === 'function') fillReadingItToo(b);
-  document.getElementById('m-changecover').addEventListener('click', () => openCoverPicker(id));
+  document.getElementById('m-changecover').addEventListener('click', () => { coverTools.hidden = true; openCoverPicker(id); });
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
-  document.getElementById('m-scanfaces').addEventListener('click', () => ecStartScan(id));
+  document.getElementById('m-scanfaces').addEventListener('click', () => { coverTools.hidden = true; ecStartScan(id); });
   // v287: calibrated physical thickness capture using an ID-1 reference card.
-  document.getElementById('m-measurethick').addEventListener('click', () => editionMeasureThickness(id));
+  document.getElementById('m-measurethick').addEventListener('click', () => { coverTools.hidden = true; editionMeasureThickness(id); });
   // v279: 3D edition viewer (spine/covers/sprayed edges from scanned faces).
-  document.getElementById('m-view3d').addEventListener('click', () => b3dOpenViewer(id));
+  document.getElementById('m-view3d').addEventListener('click', () => { coverTools.hidden = true; b3dOpenViewer(id); });
   // v210: edition picker — change which edition of the book she owns.
   document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   // v215: bottom-sheet drag-to-dismiss (touch only) on the sheet element.
-  wireSheetDrag(root.querySelector('#m-back .modal'), close);
-  // v182: description read-more toggles — hero (desktop) + Details tab.
+  wireSheetDrag(root.querySelector('#m-back .modal'), () => close());
+  // v182: description read-more toggle — the single header copy now.
   // Hidden when the text fits unclamped.
   const wireDescToggle = (wrapId) => {
     const dWrap = document.getElementById(wrapId);
@@ -1738,13 +1968,32 @@ function renderDetailModal(b, viaBook) {
     });
   };
   wireDescToggle('m-desc');
-  wireDescToggle('m-desc-hero');
+  // Variant A: the header slim bars (About / Book Portrait) expand in place.
+  const wireSlimToggle = (btnId, bodyId) => {
+    const btn = document.getElementById(btnId);
+    const body = document.getElementById(bodyId);
+    if (!btn || !body) return;
+    btn.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      btn.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+      btn.classList.toggle('open', !body.hidden);
+    });
+  };
+  wireSlimToggle('m-about-toggle', 'm-about-body');
+  wireSlimToggle('m-portrait-toggle', 'm-portrait-body');
+  // Variant A: the Cover pill opens the cover-tools menu.
+  const coverPill = document.getElementById('m-coverpill');
+  const coverTools = document.getElementById('m-covertools');
+  if (coverPill && coverTools) {
+    coverPill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      coverTools.hidden = !coverTools.hidden;
+    });
+  }
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
-  // v133: series books are inline now — wire their rows + the full-series fill.
-  wireSeriesRows(root);
-  const sBox = root.querySelector('#m-series-more');
-  if (sBox && b.series && b.series.name) fillMoreSection('series', b.series.name, id, sBox, true);
+  // Variant A: the series strip (header zone) — paint owned + missing.
+  if (b.series && b.series.name) { paintSeriesStrip(b); fillSeriesStrip(b); }
   renderProgressSection();
 
   // v182: mockup "Your tropes" — chips with × remove, + Add reveals the
@@ -1784,6 +2033,7 @@ function renderDetailModal(b, viaBook) {
       syncTropeChips();
       renderTropeSuggestions();
     }));
+    formState.touch(); // Variant A: chip edits stage into the save model
   };
   const commitTropeAdd = () => {
     const addEl = document.getElementById('f-tropeadd');
@@ -1857,6 +2107,11 @@ function renderDetailModal(b, viaBook) {
   renderDbTropeChips(b, () => {
     const inp = document.getElementById('f-tropes');
     if (!inp) return;
+    // Variant A: the auto-add is a contribution surface, not a user
+    // edit — if the field was clean before the union, bless the union
+    // so the bar doesn't rise for it. If she already edited, her edit
+    // stays dirty (the union rides along with it to Save).
+    const wasClean = !formState.isFieldDirty('tropes');
     const cur = inp.value.split(',').map(t => t.trim()).filter(Boolean);
     const have = new Set(cur.map(t => t.toLowerCase()));
     for (const t of (b.tropes || [])) {
@@ -1864,6 +2119,7 @@ function renderDetailModal(b, viaBook) {
     }
     inp.value = cur.join(', ');
     syncTropeChips();
+    if (wasClean) formState.commitValue('tropes', formState.current('tropes'));
   });
   // v155: trope proposal UI removed (v401) — tropes are fully automated.
 
@@ -1874,6 +2130,7 @@ function renderDetailModal(b, viaBook) {
     b.notes = v;
     draft.notes = v;
     saveLibrary();
+    formState.commitValue('notes', v); // Variant A: composer committed — bless the notes field
     toast('Note saved 📝');
   });
 
@@ -1955,6 +2212,7 @@ function renderDetailModal(b, viaBook) {
       draft.pageCount = n;
       document.getElementById('f-pagecount').value = n;
       renderProgressSection();
+      formState.touch(); // Variant A: the lookup stages a page-count edit
       toast('📄 Found: ' + n + ' pages');
     } else toast('No page count found for this ISBN');
   });
@@ -1975,6 +2233,7 @@ function renderDetailModal(b, viaBook) {
     const pi = document.getElementById('f-progress');
     if (pi) pi.value = draft.progress;
     saveLibrary();
+    formState.commitValue('progressInput', String(draft.progress)); // Variant A: committed — bless the field
     rmlog.closest('.field').remove();
     renderProgressSection();
     toast('Today’s entry removed 🗑️');
@@ -2009,7 +2268,10 @@ function renderDetailModal(b, viaBook) {
   // v476: quiet metadata-diff badge → compare sheet
   const mdBtn = document.getElementById('m-metadiff');
   if (mdBtn) mdBtn.addEventListener('click', () => openMetaCompareSheet(b.id));
-  document.getElementById('m-save').addEventListener('click', () => {
+  // Variant A: the ONE commit path for the whole form — the bar's Save
+  // button calls it. (Variant B/autosave would call it from a debounce
+  // at the ModalFormState seam instead; no field code changes.)
+  const commitDetailForm = () => {
     // v354: save edited title/author
     const newTitle = document.getElementById('f-title').value.trim();
     const newAuthors = document.getElementById('f-author').value.split(',').map(a => a.trim()).filter(Boolean);
@@ -2067,7 +2329,7 @@ function renderDetailModal(b, viaBook) {
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
       status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
-      pageCount: b.pageCount, ratings: ratingBefore.ratings, // v224 (UX-11): live taps predate Save
+      pageCount: b.pageCount, ratings: ratingBefore.ratings, // open-time snapshot (see ratingBefore)
     };
     Object.assign(b, draft);
     // Batch 4 (issue #148): title/author edits must bust the WorkStore cache —
@@ -2081,6 +2343,7 @@ function renderDetailModal(b, viaBook) {
     // non-TBR statuses still evict.
     if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
     var _becameRead = draft.status === 'read' && _aBefore.status !== 'read';
+    formState.markSaved(); // Variant A: the tracker resets before close
     saveLibrary(); close(); render();
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events
     toast('Saved ✨');
@@ -2097,14 +2360,15 @@ function renderDetailModal(b, viaBook) {
     if (draft.status === 'dnf' && _aBefore.status !== 'dnf' && typeof openDnfReasonSheet === 'function') {
       try { openDnfReasonSheet(b); } catch (e) {}
     }
-  });
+  };
+  document.getElementById('m-save').addEventListener('click', commitDetailForm);
 
   document.getElementById('m-del').addEventListener('click', async () => {
     // v352: in-app confirm (native confirm blocks renderer)
     const ok = await confirmModal('Remove "' + b.title + '" from your shelves?', { okLabel: 'Remove' });
     if (!ok) return;
     removeBook(id);
-    close(); render();
+    close(true); render(); // Variant A: the book is gone — no dirty prompt on top of Remove's own confirm
     toast('Removed');
   });
 

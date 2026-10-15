@@ -1195,6 +1195,83 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 }
 .save-hint[hidden] { display: none; }
 .save-hint svg { width: 14px; height: 14px; flex: none; }
+
+/* ================= Modal Variant A: sticky Save bar + header zone =================
+   The bar is a pure view of ModalFormState (js/150): hidden while the
+   form is clean, rises with the unsaved count when it goes dirty. */
+.modal-actions[hidden] { display: none; }
+.m-savebar { align-items: center; }
+.m-savebar .btn { flex: 0 0 auto; padding-left: 20px; padding-right: 20px; }
+.m-savebar:not([hidden]) { animation: savebar-rise .18s ease; }
+@keyframes savebar-rise { from { transform: translateY(10px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+.save-count { flex: 1; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* Form cards (Rating / Status & Ownership / quiet Details) */
+.m-card {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); padding: 4px 14px 10px; margin: 14px 0;
+}
+.m-card > .field { margin: 12px 0; }
+/* The rating picker is stars now — gold, filled when lit (.picker .on fill). */
+#f-myrating button { color: var(--gold); }
+
+/* Header slim bars (About this book / Book Portrait): one summary line,
+   tap to expand the body under the bar. */
+.slimbar {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 14px; color: inherit; font: inherit; cursor: pointer; text-align: left;
+}
+.slimbar .slim-ic { flex: none; display: inline-flex; color: var(--accent); }
+.slimbar .slim-ic svg { width: 20px; height: 20px; }
+.slimbar-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.slimbar-main b { font-size: 14px; }
+.slimbar-main small {
+  color: var(--muted); font-size: 12px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.slimbar .mrow-chev { flex: none; color: var(--muted); font-size: 18px; transition: transform .15s; }
+.slimbar.open .mrow-chev { transform: rotate(90deg); }
+.d-about { margin-top: 12px; text-align: left; }
+#m-about-body .m-desc { margin: 10px 2px 2px; }
+.portrait-slim { margin-top: 10px; }
+#m-portrait-body { margin-top: 8px; }
+
+/* Cover pill menu opens downward (the base .more-menu opens upward). */
+.cover-wrap { align-self: stretch; display: flex; }
+.cover-wrap .more-menu { bottom: auto; top: calc(100% + 6px); min-width: 190px; }
+
+/* Series strip — one horizontal row in the header zone. */
+.m-series-zone { margin-top: 12px; text-align: left; }
+.m-series-zone .lbl { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.m-series-zone .strip {
+  display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.strip-fig { flex: 0 0 auto; width: 64px; margin: 0; text-align: center; cursor: pointer; }
+.strip-fig.cur { cursor: default; }
+.strip-fig img {
+  width: 64px; height: 96px; object-fit: cover; border-radius: 6px; display: block;
+  box-shadow: 0 4px 10px var(--shadow-c);
+}
+.strip-fig.cur img { outline: 2px solid var(--accent); outline-offset: 1px; }
+.strip-nocover {
+  display: flex; align-items: center; justify-content: center;
+  width: 64px; height: 96px; border-radius: 6px; overflow: hidden;
+  background: var(--bg2); border: 1px solid var(--line);
+  font-size: 9px; line-height: 1.3; padding: 4px; color: var(--muted);
+}
+.strip-fig figcaption { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.strip-fig.cur figcaption { color: var(--ink); font-weight: 700; }
+.strip-note { align-self: center; flex: 0 0 180px; font-size: 12px; color: var(--muted); }
+
+/* "Keep exploring" divider — discovery sits below the form. */
+.zone-div {
+  display: flex; align-items: center; gap: 10px; margin: 20px 0 10px;
+  color: var(--muted); font-size: 12px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+.zone-div::before, .zone-div::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 /* v111: collapsible sections in the book modal */
 .m-collapsible { border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; }
 .m-collapsible > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-weight: 700; cursor: pointer; }
@@ -2958,17 +3035,16 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
     grid-row: 2;
     justify-self: start;
     width: 100%;
-    max-width: 420px;
+    max-width: 480px; /* Variant A: the Cover pill joins this row */
     margin: 0 0 2px;
   }
-  .modal.detail-v174 .d-hero-desc {
-    display: block;
+  /* Variant A: the About slim bar takes the old hero-desc grid slot. */
+  .modal.detail-v174 .d-about {
     grid-column: 2;
     grid-row: 3;
-    color: var(--muted);
-    font-size: 14px;
-    max-width: 62ch;
     margin: 2px 0 0;
+    max-width: 560px;
+    width: 100%;
   }
 
   /* Sticky rails re-anchor to the widened desktop modal padding. */

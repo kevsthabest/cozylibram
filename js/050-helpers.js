@@ -153,6 +153,9 @@ const ICONS = {
   image: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 16.8l4.8-3.8 3.7 2.8 3-2.3 4 3"/>',
   // heart (favorite)
   heart: '<path d="M12 20.3C7.2 16.6 3.8 13.4 3.8 9.7A4.4 4.4 0 0 1 8.2 5.3c1.6 0 3 .8 3.8 2.1a4.6 4.6 0 0 1 3.8-2.1 4.4 4.4 0 0 1 4.4 4.4c0 3.7-3.4 6.9-8.2 10.6z"/>',
+  // rating star (modal Variant A): the rating picker is always stars —
+  // outline when unlit, filled via .on (fill: currentColor) when lit.
+  star: '<path d="M12 3.6l2.55 5.35 5.9.75-4.35 4.05 1.1 5.85L12 16.85l-5.2 2.75 1.1-5.85L3.55 9.7l5.9-.75z"/>',
   // v510: Heart in a Book — the .card-fav chip mark. Open book in soft white
   // (the chip behind it is dark in every theme), filled heart CENTRED on the
   // fold. The heart carries no fill/stroke of its own: it inherits the

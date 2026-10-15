@@ -83,7 +83,11 @@ ok('menu favorite label flips back', q('#m-favmenu').textContent.includes('Add t
 ok('tabs have icons', qa('.d-tab svg').length === 4);
 
 // --- 5. Details: about heading, tappable rows, more-details, log summary ---
-ok('about-this-book heading', qa('#dtab-details .field label').some(l => l.textContent === 'About this book')); // v354: Title/Author fields added above
+// MOVEMENT (Variant A modal rebuild, named in its PR): "About this book"
+// is the header slim bar now — the Details-tab field is deleted (the
+// blurb renders exactly once, in the header).
+ok('about-this-book heading lives in the header About bar',
+  !!q('.d-about #m-about-toggle') && q('#m-about-toggle').textContent.includes('About this book'));
 ok('shelf row shows the current status', q('#f-status-val').textContent === 'Currently Reading');
 ok('shelf options start collapsed', q('#f-status .mrow-opts').hidden === true);
 q('#f-status [data-mrow]').click();
