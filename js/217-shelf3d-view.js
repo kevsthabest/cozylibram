@@ -18,48 +18,55 @@
      changes how the room is ordered (view only: the saved shelf order is
      untouched). */
 
-const SHELF3D_MAX_BOOKS = 60;   // books per bookcase
-const SHELF3D_ARRANGE_KEY = 'cozylibram.s3d.arrange';
-const SHELF3D_ARRANGE_MODES = [
+export const SHELF3D_MAX_BOOKS = 60;   // books per bookcase
+export const SHELF3D_ARRANGE_KEY = 'cozylibram.s3d.arrange';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const SHELF3D_ARRANGE_MODES = [
   ['mine', 'As I placed them'], ['title', 'Title'], ['author', 'Author'], ['series', 'Series'],
   ['colour', 'Colour (a rainbow shelf)']
 ];
-const SHELF3D_SPINES_KEY = 'cozylibram.s3d.spines';   // 'cover' (default) | 'classic'
-let _shelf3dPaintBusy = false, _shelf3dPaintTimer = null;
+export const SHELF3D_SPINES_KEY = 'cozylibram.s3d.spines';   // 'cover' (default) | 'classic'
+export let _shelf3dPaintBusy = false, _shelf3dPaintTimer = null;
 
-function shelf3dSpinesMode() {
+export function shelf3dSpinesMode() {
   try { return localStorage.getItem(SHELF3D_SPINES_KEY) === 'classic' ? 'classic' : 'cover'; }
   catch (e) { return 'cover'; }
 }
-function shelf3dSetSpinesMode(m) {
+export function shelf3dSetSpinesMode(m) {
   try { localStorage.setItem(SHELF3D_SPINES_KEY, m === 'classic' ? 'classic' : 'cover'); } catch (e) {}
 }
 // Cover colour for a book, or null (no cover, not read yet, or cover changed since).
-function shelf3dCoverHex(b) {
+export function shelf3dCoverHex(b) {
   try {
     if (typeof spineColorCache === 'undefined' || !b || !b.cover) return null;
     const c = spineColorCache[b.id];
     return (c && c.cover === b.cover && /^#[0-9a-f]{6}$/i.test(c.hex || '')) ? c.hex : null;
   } catch (e) { return null; }
 }
-function _s3dRgb(hex) {
+export function _s3dRgb(hex) {
   return [1, 3, 5].map(function (i) { return parseInt(hex.slice(i, i + 2), 16); });
 }
-function _s3dHex(rgb) {
+export function _s3dHex(rgb) {
   return '#' + rgb.map(function (v) { return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'); }).join('');
 }
 // Keep spine titles readable: pull very light covers down to a mid-dark tone.
-function shelf3dSpineTone(hex) {
+export function shelf3dSpineTone(hex) {
   const rgb = _s3dRgb(hex);
   const lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
   const k = lum > 0.42 ? 0.42 / lum : 1;
   return _s3dHex(rgb.map(function (v) { return v * k; }));
 }
 // Accent band colour: a soft light tint of the spine colour.
-function shelf3dSpineAccent(hex) {
+export function shelf3dSpineAccent(hex) {
   return _s3dHex(_s3dRgb(hex).map(function (v) { return v + (255 - v) * 0.62; }));
 }
-function shelf3dHue(hex) {
+export function shelf3dHue(hex) {
   const c = _s3dRgb(hex).map(function (v) { return v / 255; });
   const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]), d = mx - mn;
   if (d < 0.04) return -1;   // greys/blacks gather at the start
@@ -67,7 +74,7 @@ function shelf3dHue(hex) {
   h *= 60; return h < 0 ? h + 360 : h;
 }
 // The colour a book's spine will show in the room.
-function shelf3dSpineColors(b) {
+export function shelf3dSpineColors(b) {
   const spec = (typeof shelfSpineSpec === 'function')
     ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e' };
   const hex = shelf3dSpinesMode() === 'cover' ? shelf3dCoverHex(b) : null;
@@ -75,28 +82,28 @@ function shelf3dSpineColors(b) {
   const c1 = shelf3dSpineTone(hex);
   return { c1: c1, c2: shelf3dSpineAccent(c1), fromCover: true };
 }
-let _shelf3dCaseIdx = { tbr: 0, reading: 0, read: 0 };
-let _shelf3dKeysWired = false;
+export let _shelf3dCaseIdx = { tbr: 0, reading: 0, read: 0 };
+export let _shelf3dKeysWired = false;
 
-function shelf3dArrangeMode() {
+export function shelf3dArrangeMode() {
   try {
     const m = localStorage.getItem(SHELF3D_ARRANGE_KEY);
     if (SHELF3D_ARRANGE_MODES.some(function (x) { return x[0] === m; })) return m;
   } catch (e) {}
   return 'mine';
 }
-function shelf3dSetArrangeMode(m) {
+export function shelf3dSetArrangeMode(m) {
   try { localStorage.setItem(SHELF3D_ARRANGE_KEY, m); } catch (e) {}
 }
-function _s3dSortKey(str) {
+export function _s3dSortKey(str) {
   return String(str || '').toLowerCase().replace(/^(the|a|an)\s+/, '').trim();
 }
-function _s3dAuthor(b) {
+export function _s3dAuthor(b) {
   if (b.authors && b.authors.length) return String(b.authors[0] || '');
   return String(b.author || '');
 }
 // Re-order a list of books for the room. Never mutates the input.
-function shelf3dArrange(books, mode) {
+export function shelf3dArrange(books, mode) {
   const list = (books || []).slice();
   const cmp = function (a, b) { return a < b ? -1 : a > b ? 1 : 0; };
   if (mode === 'title') {
@@ -127,14 +134,14 @@ function shelf3dArrange(books, mode) {
   return list;
 }
 // Split a list into bookcases of `size` books. Always returns at least one (empty) case.
-function shelf3dCases(books, size) {
+export function shelf3dCases(books, size) {
   const n = Math.max(1, size || SHELF3D_MAX_BOOKS);
   const out = [];
   for (let i = 0; i < (books || []).length; i += n) out.push(books.slice(i, i + n));
   if (!out.length) out.push([]);
   return out;
 }
-function shelf3dCaseKey(group, idx) { return group + ':' + idx; }
+export function shelf3dCaseKey(group, idx) { return group + ':' + idx; }
 /* v514: decorations displace books, so cases no longer hold a fixed count.
    The saved per-case decoration layouts (the engine's v2 doc) become
    per-level obstacle intervals, and the room is sliced by simulating the
@@ -142,14 +149,14 @@ function shelf3dCaseKey(group, idx) { return group + ':' + idx; }
    case around its decorations and overflow into the next. A case that
    holds decorations but no books still exists (decorations stay anchored
    to their bookcase even when every book has flowed elsewhere). */
-function shelf3dDecoDoc() {
+export function shelf3dDecoDoc() {
   try {
     const d = JSON.parse(localStorage.getItem('cozylibram.s3d.deco.v2') || 'null');
     if (d && d.v === 2 && d.cases && typeof d.cases === 'object') return d;
   } catch (e) {}
   return { v: 2, cases: {} };
 }
-function shelf3dCaseObstacles(group, idx, doc) {
+export function shelf3dCaseObstacles(group, idx, doc) {
   const obs = { 0: [], 1: [], 2: [] };
   const fp = (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.decoFootprint === 'function')
     ? Shelf3D.decoFootprint : null;
@@ -161,7 +168,7 @@ function shelf3dCaseObstacles(group, idx, doc) {
   });
   return obs;
 }
-function shelf3dSliceRoom(all, group) {
+export function shelf3dSliceRoom(all, group) {
   const pack = (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.packCase === 'function')
     ? Shelf3D.packCase : null;
   if (!pack) return shelf3dCases(all, SHELF3D_MAX_BOOKS);   // engine script absent: legacy chunking
@@ -188,7 +195,7 @@ function shelf3dSliceRoom(all, group) {
   return cases;
 }
 // Which case (0-based) holds the book at position `idx` in room.all.
-function shelf3dCaseOf(room, idx) {
+export function shelf3dCaseOf(room, idx) {
   if (!room || !room.starts) return Math.floor(idx / SHELF3D_MAX_BOOKS);
   let c = 0;
   for (let k = 0; k < room.starts.length; k++) { if (room.starts[k] <= idx) c = k; }
@@ -197,11 +204,11 @@ function shelf3dCaseOf(room, idx) {
 // The engine's book list for a case: the case's own books plus the next
 // case's — the engine lays out what fits and keeps the rest as the
 // reservoir a decoration removal can pull books in from.
-function shelf3dCaseBooks(room, i) {
+export function shelf3dCaseBooks(room, i) {
   return shelfBooks3D((room.cases[i] || []).concat(room.cases[i + 1] || []));
 }
 // The arranged books for the current group, split into cases.
-function shelf3dRoom() {
+export function shelf3dRoom() {
   const all = shelf3dArrange((typeof shelfBooks === 'function') ? shelfBooks() : [], shelf3dArrangeMode());
   const cases = shelf3dSliceRoom(all, shelfGroup);
   const starts = [];
@@ -212,7 +219,7 @@ function shelf3dRoom() {
 /* v514: a decoration was placed, moved, or removed in the engine — case
    boundaries may have shifted. Refresh the case bar and the neighbour
    previews; the engine reflows the visible case's books itself. */
-function shelf3dOnDecoChange() {
+export function shelf3dOnDecoChange() {
   try {
     if (!_shelf3dMounted) return;
     const room = shelf3dRoom();
@@ -227,30 +234,30 @@ function shelf3dOnDecoChange() {
 
 // Local mount-state tracking (robust even if the engine's `mounted` flag
 // is missing or the engine is still loading).
-let _shelf3dMounted = false;
+export let _shelf3dMounted = false;
 // v408: session flag for WebGL failure — don't persist '2d', just skip 3D this session.
-let _shelf3dWebGLFailed = false;
+export let _shelf3dWebGLFailed = false;
 // v427: guard for the document-level menu-close listener (added once, not per render).
-let _shelf3dMenuDocWired = false;
+export let _shelf3dMenuDocWired = false;
 // v430 (#56, re-applied v453): robust toggle — set both hidden property and
 // inline display. Belt-and-suspenders against CSS specificity issues.
-function _shelf3dSetMenuVisible(visible) {
+export function _shelf3dSetMenuVisible(visible) {
   var dd = document.getElementById('svMenuDropdown3D');
   if (!dd) return;
   dd.hidden = !visible;
   dd.style.display = visible ? '' : 'none';
 }
-function _shelf3dIsMenuVisible() {
+export function _shelf3dIsMenuVisible() {
   var dd = document.getElementById('svMenuDropdown3D');
   return !!(dd && !dd.hidden && dd.style.display !== 'none');
 }
-function _shelf3dCloseMenu(e) {
+export function _shelf3dCloseMenu(e) {
   const dd = document.getElementById('svMenuDropdown3D');
   const btn = document.getElementById('svMenu3D');
   if (dd && btn && _shelf3dIsMenuVisible() && !dd.contains(e.target) && e.target !== btn) _shelf3dSetMenuVisible(false);
 }
 
-function shelfViewMode() {
+export function shelfViewMode() {
   try {
     // v409: URL override (?shelf=3d or ?shelf=2d) for emergency escape from stuck states.
     // Checked first, before localStorage.
@@ -262,7 +269,7 @@ function shelfViewMode() {
   catch (e) { return '3d'; }
 }
 /* Phase 1: capability gate — check if device can handle 3D, fall back to 2.5D if not */
-function shelf3DCapable() {
+export function shelf3DCapable() {
   try {
     // Explicit user preference overrides the gate
     const params = new URLSearchParams(window.location.search);
@@ -291,7 +298,7 @@ function shelf3DCapable() {
     return true;  // Fail open: if check fails, allow 3D (existing behavior)
   }
 }
-function shelfSetViewMode(m) {
+export function shelfSetViewMode(m) {
   try {
     localStorage.setItem('shelfViewMode', m === '2d' ? '2d' : '3d');
     // v414: clear the ?shelf= URL override — it was preventing the toggle from working
@@ -305,7 +312,7 @@ function shelfSetViewMode(m) {
   catch (e) {}
 }
 // Safe no-op when Shelf3D isn't loaded or isn't mounted.
-function shelfUnmount3D() {
+export function shelfUnmount3D() {
   if (!_shelf3dMounted) return;
   _shelf3dMounted = false;
   try {
@@ -317,7 +324,7 @@ function shelfUnmount3D() {
 
 // Map real books to the 3D engine's book spec. Uses the deterministic
 // 2.5D spine palette so colors stay consistent between views.
-function shelfBooks3D(books) {
+export function shelfBooks3D(books) {
   return (books || []).map(function (b) {
     const spec = (typeof shelfSpineSpec === 'function')
       ? shelfSpineSpec(b) : { c1: '#5e1f2e', c2: '#380f1e', w: 36, h: 190 };
@@ -342,7 +349,7 @@ function shelfBooks3D(books) {
   });
 }
 
-function shelf3DApplyTheme() {
+export function shelf3DApplyTheme() {
   try {
     if (!_shelf3dMounted) return;
     if (typeof Shelf3D === 'undefined' || !Shelf3D) return;
@@ -361,7 +368,7 @@ function shelf3DApplyTheme() {
   } catch (e) {}
 }
 
-function renderShelf3D() {
+export function renderShelf3D() {
   const books = (typeof library !== 'undefined' ? library : []);
   const counts = {};
   SHELF_GROUPS.forEach(function (g) {
@@ -488,13 +495,13 @@ function renderShelf3D() {
 }
 
 /* ---------- the room: case bar, find, arrange ---------- */
-function shelf3dNeighbours(room, i) {
+export function shelf3dNeighbours(room, i) {
   return {
     prev: i > 0 ? shelfBooks3D(room.cases[i - 1]) : null,
     next: i < room.cases.length - 1 ? shelfBooks3D(room.cases[i + 1]) : null
   };
 }
-function shelf3dGoCase(idx, dir, thenFind) {
+export function shelf3dGoCase(idx, dir, thenFind) {
   const room = shelf3dRoom();
   const i = Math.max(0, Math.min(room.cases.length - 1, idx));
   // |dir| > 1 means a far jump (find / dots): slide instead of gliding past cases.
@@ -508,7 +515,7 @@ function shelf3dGoCase(idx, dir, thenFind) {
   } catch (e) {}
   shelf3dUpdateBar();
 }
-function shelf3dUpdateBar() {
+export function shelf3dUpdateBar() {
   const bar = document.getElementById('s3dCaseBar');
   if (!bar) return;
   const room = shelf3dRoom();
@@ -532,7 +539,7 @@ function shelf3dUpdateBar() {
   if (prev) { prev.hidden = n < 2; prev.disabled = i <= 0; }
   if (next) { next.hidden = n < 2; next.disabled = i >= n - 1; }
 }
-function shelf3dRenderSheet(kind) {
+export function shelf3dRenderSheet(kind) {
   const sheet = document.getElementById('s3dSheet');
   if (!sheet) return;
   if (!kind || sheet.dataset.kind === kind && !sheet.hidden) { sheet.hidden = true; sheet.dataset.kind = ''; return; }
@@ -597,7 +604,7 @@ function shelf3dRenderSheet(kind) {
     setTimeout(function () { try { input.focus(); } catch (e) {} }, 30);
   }
 }
-function wireCaseBar() {
+export function wireCaseBar() {
   const q = function (id) { return document.getElementById(id); };
   const step = function (d) { shelf3dGoCase((_shelf3dCaseIdx[shelfGroup] || 0) + d, d); };
   if (q('cbPrev')) q('cbPrev').addEventListener('click', function () { step(-1); });
@@ -638,7 +645,7 @@ function wireCaseBar() {
 /* Read cover colours in the background (the cache is shared with the favourites
    shelf and persists). Current case first; a quiet batch per visit; the room
    refreshes once colours land. Covers that can't be read keep the classic cloth. */
-function shelf3dPaintCovers() {
+export function shelf3dPaintCovers() {
   if (_shelf3dPaintBusy || shelf3dSpinesMode() !== 'cover') return;
   if (typeof coverDominantColor !== 'function' || typeof spineColorCache === 'undefined') return;
   const room = shelf3dRoom();
@@ -673,3 +680,75 @@ function shelf3dPaintCovers() {
     if (done) refresh();
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers — js/205-shelfview.js (the
+   2D shelf branches here via shelfViewMode / renderShelf3D /
+   shelfUnmount3D, reads the WebGL-failure flag on every render, and
+   resets it from its view toggles so 3D is retried) and
+   js/180-settings.js (shelfViewMode / shelfSetViewMode) — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in
+   classic scripts resolve through the global object, so the caller
+   needs no changes. Module scripts are deferred, so the bridge is in
+   place before any consumer can run. Remove a name from this bridge
+   only when its last classic caller is gone.
+   _shelf3dWebGLFailed is republished as an accessor property, not a
+   value copy: this file sets it when a 3D mount fails, and js/205
+   both reads it (the session skip in renderShelf) and reassigns it
+   (the 3D toggles clear it so a failed context is retried). A value
+   copy would freeze the boot value and silently drop those writes;
+   the getter/setter pair forwards every read and write to the module
+   binding, so no consumer expression changes. */
+window.SHELF3D_MAX_BOOKS = SHELF3D_MAX_BOOKS;
+window.SHELF3D_ARRANGE_KEY = SHELF3D_ARRANGE_KEY;
+window.SHELF3D_ARRANGE_MODES = SHELF3D_ARRANGE_MODES;
+window.SHELF3D_SPINES_KEY = SHELF3D_SPINES_KEY;
+window._shelf3dPaintBusy = _shelf3dPaintBusy;
+window._shelf3dPaintTimer = _shelf3dPaintTimer;
+window.shelf3dSpinesMode = shelf3dSpinesMode;
+window.shelf3dSetSpinesMode = shelf3dSetSpinesMode;
+window.shelf3dCoverHex = shelf3dCoverHex;
+window._s3dRgb = _s3dRgb;
+window._s3dHex = _s3dHex;
+window.shelf3dSpineTone = shelf3dSpineTone;
+window.shelf3dSpineAccent = shelf3dSpineAccent;
+window.shelf3dHue = shelf3dHue;
+window.shelf3dSpineColors = shelf3dSpineColors;
+window._shelf3dCaseIdx = _shelf3dCaseIdx;
+window._shelf3dKeysWired = _shelf3dKeysWired;
+window.shelf3dArrangeMode = shelf3dArrangeMode;
+window.shelf3dSetArrangeMode = shelf3dSetArrangeMode;
+window._s3dSortKey = _s3dSortKey;
+window._s3dAuthor = _s3dAuthor;
+window.shelf3dArrange = shelf3dArrange;
+window.shelf3dCases = shelf3dCases;
+window.shelf3dCaseKey = shelf3dCaseKey;
+window.shelf3dDecoDoc = shelf3dDecoDoc;
+window.shelf3dCaseObstacles = shelf3dCaseObstacles;
+window.shelf3dSliceRoom = shelf3dSliceRoom;
+window.shelf3dCaseOf = shelf3dCaseOf;
+window.shelf3dCaseBooks = shelf3dCaseBooks;
+window.shelf3dRoom = shelf3dRoom;
+window.shelf3dOnDecoChange = shelf3dOnDecoChange;
+window._shelf3dMounted = _shelf3dMounted;
+Object.defineProperty(window, '_shelf3dWebGLFailed', { get: () => _shelf3dWebGLFailed, set: (v) => { _shelf3dWebGLFailed = v; }, enumerable: true, configurable: true });
+window._shelf3dMenuDocWired = _shelf3dMenuDocWired;
+window._shelf3dSetMenuVisible = _shelf3dSetMenuVisible;
+window._shelf3dIsMenuVisible = _shelf3dIsMenuVisible;
+window._shelf3dCloseMenu = _shelf3dCloseMenu;
+window.shelfViewMode = shelfViewMode;
+window.shelf3DCapable = shelf3DCapable;
+window.shelfSetViewMode = shelfSetViewMode;
+window.shelfUnmount3D = shelfUnmount3D;
+window.shelfBooks3D = shelfBooks3D;
+window.shelf3DApplyTheme = shelf3DApplyTheme;
+window.renderShelf3D = renderShelf3D;
+window.shelf3dNeighbours = shelf3dNeighbours;
+window.shelf3dGoCase = shelf3dGoCase;
+window.shelf3dUpdateBar = shelf3dUpdateBar;
+window.shelf3dRenderSheet = shelf3dRenderSheet;
+window.wireCaseBar = wireCaseBar;
+window.shelf3dPaintCovers = shelf3dPaintCovers;
