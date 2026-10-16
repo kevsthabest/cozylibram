@@ -36,9 +36,10 @@ ok('update status element exists', !!doc.getElementById('ap-status'));
 ok('cached CSS diagnostic element exists', !!doc.getElementById('ap-css'));
 ok('server CSS diagnostic element exists', !!doc.getElementById('ap-css-srv'));
 
-// Every classic script in index.html must be in the SW precache list
-// (an omission silently breaks offline use and update atomicity).
-const htmlScripts = [...html.matchAll(/<script src="js\/([^"]+\.js)"><\/script>/g)].map(m => m[1]);
+// Every script in index.html (classic or module tag) must be in the SW
+// precache list (an omission silently breaks offline use and update
+// atomicity). R1 repoint: the enumeration covers both tag forms.
+const htmlScripts = [...html.matchAll(/<script(?: type="module")? src="js\/([^"]+\.js)"><\/script>/g)].map(m => m[1]);
 const jsArray = (swText.match(/const JS = \[([^\]]*)\]/) || ['', ''])[1];
 const precached = [...jsArray.matchAll(/'([^']+\.js)'/g)].map(m => m[1]);
 const missing = htmlScripts.filter(s => !precached.includes(s));

@@ -27,6 +27,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { classicize } = require('./harness');
 const APP_DIR = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
@@ -618,7 +619,7 @@ const claimOk = (W, who, key) => rpcClaim(W, who, 'R', key);
   let P = null;
   try {
     const src = g.split('/* ---------- the claim display cache')[0];
-    vm.runInContext(p244 + '\n' + src +
+    vm.runInContext(classicize(p244, 'js/244-gift-postal.js') + '\n' + src +
       '\n;this.__postal = { giftPostalCheck, giftCountryCodeFor, giftFsaCount, giftFsaProvince, GIFT_COUNTRIES, GIFT_POSTAL_FORMATS };',
       sandbox);
     P = sandbox.__postal;

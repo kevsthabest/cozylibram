@@ -22,7 +22,14 @@
  * a miss is a SOFT warning by design — never a block.
  */
 
-const GIFT_COUNTRIES = [
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const GIFT_COUNTRIES = [
   ['CA', 'Canada'], ['US', 'United States'], ['GB', 'United Kingdom'], ['AF', 'Afghanistan'],
   ['AL', 'Albania'], ['DZ', 'Algeria'], ['AS', 'American Samoa'], ['AD', 'Andorra'],
   ['AO', 'Angola'], ['AI', 'Anguilla'], ['AQ', 'Antarctica'], ['AG', 'Antigua and Barbuda'],
@@ -90,7 +97,7 @@ const GIFT_COUNTRIES = [
 
 /* code -> regex source (the validator anchors it). CA and US are
  * special-cased in giftPostalCheck and intentionally absent here. */
-const GIFT_POSTAL_FORMATS = {
+export const GIFT_POSTAL_FORMATS = {
   'AD': 'AD\\d{3}', 'AF': '\\d{4}', 'AL': '\\d{4}', 'AM': '\\d{4}',
   'AR': '([A-Z]\\d{4}[A-Z]{3}|\\d{4})', 'AS': '96799(-\\d{4})?', 'AT': '\\d{4}', 'AU': '\\d{4}',
   'AX': '22\\d{3}', 'AZ': '\\d{4}', 'BA': '\\d{5}', 'BB': '[A-Z]{2}\\d{5}',
@@ -137,7 +144,7 @@ const GIFT_POSTAL_FORMATS = {
 
 /* Countries/territories with NO postal code system: the postal field
  * is optional there and anything entered goes unvalidated. */
-const GIFT_NO_POSTAL = {
+export const GIFT_NO_POSTAL = {
   'AE': true, 'AG': true, 'AI': true, 'AQ': true, 'AW': true, 'BF': true, 'BI': true, 'BJ': true,
   'BQ': true, 'BS': true, 'BW': true, 'BZ': true, 'CF': true, 'CG': true, 'CK': true, 'CM': true,
   'CW': true, 'DJ': true, 'DM': true, 'ER': true, 'FJ': true, 'GA': true, 'GD': true, 'GH': true,
@@ -150,7 +157,7 @@ const GIFT_NO_POSTAL = {
 
 /* Canadian forward sortation areas, grouped by first letter (packed
  * space-joined lists; membership is an exact-token test). */
-const GIFT_FSA_BY_LETTER = {
+export const GIFT_FSA_BY_LETTER = {
   'A': 'A0A A0B A0C A0E A0G A0H A0J A0K A0L A0M A0N A0P ' +
     'A0R A0Z A1A A1B A1C A1E A1G A1H A1K A1L A1M A1N ' +
     'A1S A1V A1W A1X A1Y A2A A2B A2H A2N A2V A5A A8A',
@@ -304,24 +311,24 @@ const GIFT_FSA_BY_LETTER = {
 /* First letter -> province/territory for every district except X
  * (shared: X0A/X0B/X0C are Nunavut, X0E/X0G/X1A the Northwest
  * Territories) — settled per FSA in giftFsaProvince. */
-const GIFT_FSA_PROVINCE = { A: 'NL', B: 'NS', C: 'PE', E: 'NB', G: 'QC', H: 'QC', J: 'QC',
+export const GIFT_FSA_PROVINCE = { A: 'NL', B: 'NS', C: 'PE', E: 'NB', G: 'QC', H: 'QC', J: 'QC',
   K: 'ON', L: 'ON', M: 'ON', N: 'ON', P: 'ON', R: 'MB', S: 'SK', T: 'AB', V: 'BC', Y: 'YT' };
-const GIFT_PROVINCE_NAMES = { NL: 'Newfoundland and Labrador', NS: 'Nova Scotia',
+export const GIFT_PROVINCE_NAMES = { NL: 'Newfoundland and Labrador', NS: 'Nova Scotia',
   PE: 'Prince Edward Island', NB: 'New Brunswick', QC: 'Quebec', ON: 'Ontario',
   MB: 'Manitoba', SK: 'Saskatchewan', AB: 'Alberta', BC: 'British Columbia',
   YT: 'Yukon', NT: 'Northwest Territories', NU: 'Nunavut' };
 
-function giftFsaKnown(fsa) {
+export function giftFsaKnown(fsa) {
   const list = GIFT_FSA_BY_LETTER[String(fsa || '').charAt(0)];
   return !!list && (' ' + list + ' ').indexOf(' ' + fsa + ' ') >= 0;
 }
-function giftFsaCount() {
+export function giftFsaCount() {
   return Object.keys(GIFT_FSA_BY_LETTER).reduce((n, k) => n + GIFT_FSA_BY_LETTER[k].split(' ').length, 0);
 }
 /* Province for an FSA, or null when the FSA is not in the vendored set.
  * K1A is the federal-government district: it legitimately serves both
  * Ontario and Quebec addresses, so it reports 'ON/QC'. */
-function giftFsaProvince(fsa) {
+export function giftFsaProvince(fsa) {
   fsa = String(fsa || '').toUpperCase();
   if (!giftFsaKnown(fsa)) return null;
   if (fsa === 'K1A') return 'ON/QC';
@@ -332,7 +339,7 @@ function giftFsaProvince(fsa) {
 /* Free-text province/state -> province code, or null when unrecognized.
  * Accepts English and French names, postal abbreviations, and loose
  * punctuation/casing — the region field stays free text. */
-function giftRegionProvince(region) {
+export function giftRegionProvince(region) {
   const s = String(region || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z]+/g, ' ').trim().replace(/\s+/g, ' ');
   if (!s) return null;
@@ -354,11 +361,11 @@ function giftRegionProvince(region) {
   return table[s] || null;
 }
 
-const GIFT_COUNTRY_ALIASES = { 'USA': 'US', 'U S A': 'US', 'UNITED STATES OF AMERICA': 'US',
+export const GIFT_COUNTRY_ALIASES = { 'USA': 'US', 'U S A': 'US', 'UNITED STATES OF AMERICA': 'US',
   'UK': 'GB', 'U K': 'GB', 'GREAT BRITAIN': 'GB', 'ENGLAND': 'GB', 'SCOTLAND': 'GB', 'WALES': 'GB' };
 /* Resolve a stored country value (today's rows hold free text like
  * 'Canada' or 'CA') to an ISO code, or '' when it matches nothing. */
-function giftCountryCodeFor(stored) {
+export function giftCountryCodeFor(stored) {
   const raw = String(stored || '').trim();
   if (!raw) return '';
   const upper = raw.toUpperCase();
@@ -370,7 +377,7 @@ function giftCountryCodeFor(stored) {
   return hit ? hit[0] : '';
 }
 
-function giftPostalBlock(message) { return { status: 'block', normalized: '', message }; }
+export function giftPostalBlock(message) { return { status: 'block', normalized: '', message }; }
 
 /* The validator. Returns { status, normalized, message }:
  *  - 'block': malformed for the country's format — cannot be a real
@@ -383,7 +390,7 @@ function giftPostalBlock(message) { return { status: 'block', normalized: '', me
  *  - 'skip' : nothing to check (empty field, no-postal-system country,
  *    or a country with no vendored format) — save proceeds untouched.
  * Advisory UI only: no verdict is ever stored or sent. */
-function giftPostalCheck(countryCode, postalRaw, regionRaw) {
+export function giftPostalCheck(countryCode, postalRaw, regionRaw) {
   const raw = String(postalRaw == null ? '' : postalRaw).trim();
   if (!raw) return { status: 'skip', normalized: raw, message: '' };
   const cc = String(countryCode || '').toUpperCase();
@@ -404,7 +411,7 @@ function giftPostalCheck(countryCode, postalRaw, regionRaw) {
   return giftPostalBlock('That doesn’t look like a postal code for the selected country — please check it and try again.');
 }
 
-function giftPostalCheckCA(raw, regionRaw) {
+export function giftPostalCheckCA(raw, regionRaw) {
   const squashed = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const blockMsg = 'That doesn’t look like a Canadian postal code — it should look like E1C 1A1.';
   if (!/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(squashed)) return giftPostalBlock(blockMsg);
@@ -426,4 +433,33 @@ function giftPostalCheckCA(raw, regionRaw) {
   }
   return { status: 'ok', normalized, message: '' };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/243-gifts.js, reads
+   this table's validators as globals at interaction time (its
+   giftPostalCheck / giftCountryCodeFor / giftFsaCount call sites are
+   typeof-guarded), so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in
+   classic scripts resolve through the global object, so the caller
+   needs no changes. This file is the migration's control case: it
+   references nothing outside itself, and module scripts are deferred,
+   so the bridge is in place before any consumer can run. Remove a
+   name from this bridge only when its last classic caller is gone. */
+window.GIFT_COUNTRIES = GIFT_COUNTRIES;
+window.GIFT_POSTAL_FORMATS = GIFT_POSTAL_FORMATS;
+window.GIFT_NO_POSTAL = GIFT_NO_POSTAL;
+window.GIFT_FSA_BY_LETTER = GIFT_FSA_BY_LETTER;
+window.GIFT_FSA_PROVINCE = GIFT_FSA_PROVINCE;
+window.GIFT_PROVINCE_NAMES = GIFT_PROVINCE_NAMES;
+window.GIFT_COUNTRY_ALIASES = GIFT_COUNTRY_ALIASES;
+window.giftFsaKnown = giftFsaKnown;
+window.giftFsaCount = giftFsaCount;
+window.giftFsaProvince = giftFsaProvince;
+window.giftRegionProvince = giftRegionProvince;
+window.giftCountryCodeFor = giftCountryCodeFor;
+window.giftPostalBlock = giftPostalBlock;
+window.giftPostalCheck = giftPostalCheck;
+window.giftPostalCheckCA = giftPostalCheckCA;
 

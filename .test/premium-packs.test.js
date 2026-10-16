@@ -1,6 +1,7 @@
 // v423: premium theme packs — themes, flairs, decorations, gallery.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const { classicize } = require('./harness');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
@@ -16,7 +17,10 @@ const { window } = dom;
 const run = (js) => window.eval(js);
 function load(f) {
   const scr = window.document.createElement('script');
-  scr.textContent = fs.readFileSync(ROOT + '/' + f, 'utf8');
+  // R3 repoint (migration plan §9.3): js/216 and js/218 are ES modules;
+  // classicize their source at this load site — loading plumbing only,
+  // identity on the classic files loaded here.
+  scr.textContent = classicize(fs.readFileSync(ROOT + '/' + f, 'utf8'), f);
   window.document.body.appendChild(scr);
 }
 load('js/010-theming.js');

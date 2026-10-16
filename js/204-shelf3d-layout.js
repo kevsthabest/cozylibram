@@ -14,8 +14,14 @@
    shelf3dClampPan, shelf3dFaceWidth, shelf3dFaceDepth, shelf3dFaceZ,
    shelf3dCoverCrop. */
 
-var SHELF_W = 10;                          // bookcase width (world units)
-var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export var SHELF_W = 10;                          // bookcase width (world units)
+export var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
 
 /* ---------- decoration footprints + the shared case packer (v514) ----------
    Shelf decorations are anchored (saved per bookcase: level + x) and books
@@ -27,7 +33,7 @@ var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
    .test/shelf-reflow.test.js, which parses the makers). Edge-draped pieces
    (fairy lights, star garland) hang at the plank's front edge in front of
    the books — they never displace books, so their footprint here is 0. */
-var DECO_FOOTPRINTS = {
+export var DECO_FOOTPRINTS = {
   plant: 0.75, candle: 0.55, mug: 0.6, stack: 1.2, clock: 0.6, photo: 0.55,
   succulent: 0.5, lantern: 0.45, globe: 0.62, vase: 0.5, gifts: 0.75,
   eggs: 0.7, coins: 0.42, clover: 0.45, applebowl: 0.85,
@@ -37,11 +43,11 @@ var DECO_FOOTPRINTS = {
   'mushroom-cottage': 0.75, 'firefly-jar': 0.45, 'wisp-lantern': 0.6,
   lights: 0, stargarland: 0
 };
-function shelf3dDecoFootprint(type) {
+export function shelf3dDecoFootprint(type) {
   var fw = DECO_FOOTPRINTS[type];
   return (typeof fw === 'number') ? fw : 0;
 }
-function s3dDim(v, lo, hi, fb) {
+export function s3dDim(v, lo, hi, fb) {
   v = Number(v);
   if (!isFinite(v)) return fb;
   return Math.min(hi, Math.max(lo, v));
@@ -57,7 +63,7 @@ function s3dDim(v, lo, hi, fb) {
    of the spine width — the ONLY special case. They wrap, jump decoration
    intervals, and overflow exactly like any other book, so js/217's case
    slicing (which simulates this packer) stays in agreement by construction. */
-function shelf3dPackCase(books, obstacles, cap) {
+export function shelf3dPackCase(books, obstacles, cap) {
   var order = [2, 1, 0];
   var startX = -SHELF_W / 2 + 0.35, limit = startX + (SHELF_W - 0.7);
   var gap = 0.025;
@@ -99,7 +105,7 @@ function shelf3dPackCase(books, obstacles, cap) {
 /* Distance at which a `fitW` x `fitH` frame (world units, centred on the
    view target) exactly fills a PerspectiveCamera with vertical fov
    `fovDeg` at the given aspect. The binding axis wins. */
-function shelf3dFitDistance(aspect, fovDeg, fitW, fitH) {
+export function shelf3dFitDistance(aspect, fovDeg, fitW, fitH) {
   var t = Math.tan((fovDeg * Math.PI / 180) / 2);
   var dH = (fitH / 2) / t;
   var dW = (fitW / 2) / (t * Math.max(0.05, aspect || 1));
@@ -108,7 +114,7 @@ function shelf3dFitDistance(aspect, fovDeg, fitW, fitH) {
 /* Clamp a pan offset so the panned view target stays in the room:
    x within +/- halfW of the case centre, target y within
    [1.2, topY - 1.2] given the unpanned target height baseY. */
-function shelf3dClampPan(px, py, halfW, baseY, topY) {
+export function shelf3dClampPan(px, py, halfW, baseY, topY) {
   var cx = Math.max(-halfW, Math.min(halfW, px));
   var cy = Math.max(1.2 - baseY, Math.min(topY - 1.2 - baseY, py));
   return [cx, cy];
@@ -121,27 +127,27 @@ function shelf3dClampPan(px, py, halfW, baseY, topY) {
    the approved mockup's proportions). Pure, like everything in this file:
    the engine (js/215) supplies the THREE work. */
 /* Cover width for a face-out book of the given spine height. */
-function shelf3dFaceWidth(spineH) {
+export function shelf3dFaceWidth(spineH) {
   var h = Number(spineH);
   if (!isFinite(h)) h = 2.0;
   return Math.min(1.6, Math.max(0.95, h * 0.68));
 }
 /* A face-out book's thickness: its own spine width, clamped as the packer
    clamps spines. Also the depth of its 3D box. */
-function shelf3dFaceDepth(spineW) {
+export function shelf3dFaceDepth(spineW) {
   return s3dDim(spineW, 0.3, 0.72, 0.44);
 }
 /* Z position for a face-out mesh (spine books sit at z = 0 with depth
    1.75, so their fronts plane at z = 0.875). A face-out stands pulled
    forward, bookshop-style: its front sits 0.06 behind the spine fronts,
    its thin back floating off the case back. */
-function shelf3dFaceZ(spineW) {
+export function shelf3dFaceZ(spineW) {
   return 0.875 - 0.06 - shelf3dFaceDepth(spineW) / 2;
 }
 /* Crop-to-fill UV window for a cover image on a face of aspect `aspect`
    (w/h): returns {rx, ry, ox, oy} for texture.repeat / texture.offset,
    centre-cropped like the mockup's object-fit: cover. */
-function shelf3dCoverCrop(imgW, imgH, aspect) {
+export function shelf3dCoverCrop(imgW, imgH, aspect) {
   var iw = Number(imgW), ih = Number(imgH), a = Number(aspect);
   if (!isFinite(iw) || !isFinite(ih) || !isFinite(a) || iw <= 0 || ih <= 0 || a <= 0) {
     return { rx: 1, ry: 1, ox: 0, oy: 0 };
@@ -151,3 +157,27 @@ function shelf3dCoverCrop(imgW, imgH, aspect) {
   var ry = ia / a;
   return { rx: 1, ry: ry, ox: 0, oy: (1 - ry) / 2 };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (js/215-shelf3d.js,
+   js/217-shelf3d-view.js) read this layout math at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups in classic scripts resolve through the
+   global object, so the callers need no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run.
+   Remove a name from this bridge only when its last classic caller
+   is gone. */
+window.SHELF_W = SHELF_W;
+window.MAX_BOOKS = MAX_BOOKS;
+window.DECO_FOOTPRINTS = DECO_FOOTPRINTS;
+window.shelf3dDecoFootprint = shelf3dDecoFootprint;
+window.s3dDim = s3dDim;
+window.shelf3dPackCase = shelf3dPackCase;
+window.shelf3dFitDistance = shelf3dFitDistance;
+window.shelf3dClampPan = shelf3dClampPan;
+window.shelf3dFaceWidth = shelf3dFaceWidth;
+window.shelf3dFaceDepth = shelf3dFaceDepth;
+window.shelf3dFaceZ = shelf3dFaceZ;
+window.shelf3dCoverCrop = shelf3dCoverCrop;

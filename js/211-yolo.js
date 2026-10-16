@@ -13,25 +13,31 @@
    Detection is class-agnostic: we pick by guide-overlap geometry, not
    the COCO label (a spine is often called 'tie' or 'skateboard'). */
 
-var EC_YOLO_IMG = 640;
-var EC_YOLO_CONF = 0.15;
-var EC_YOLO_NMS_IOU = 0.5;
-var EC_YOLO_MASK_THRESH = 0.65;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export var EC_YOLO_IMG = 640;
+export var EC_YOLO_CONF = 0.15;
+export var EC_YOLO_NMS_IOU = 0.5;
+export var EC_YOLO_MASK_THRESH = 0.65;
 
-var ecYoloSession = null;
-var ecYoloLoading = null;
-var EC_YOLO_OPT_KEY = 'cozylibram.yolo-enabled';
+export var ecYoloSession = null;
+export var ecYoloLoading = null;
+export var EC_YOLO_OPT_KEY = 'cozylibram.yolo-enabled';
 
 /* User toggle (Settings > About). Defaults on. */
-function ecYoloEnabled() {
+export function ecYoloEnabled() {
   try { return localStorage.getItem(EC_YOLO_OPT_KEY) !== '0'; } catch (e) { return true; }
 }
-function ecSetYoloEnabled(on) {
+export function ecSetYoloEnabled(on) {
   try { localStorage.setItem(EC_YOLO_OPT_KEY, on ? '1' : '0'); } catch (e) {}
 }
 
 /* Dynamically load the vendored ort.min.js (lazy, not on app start). */
-function ecYoloLoadOrt() {
+export function ecYoloLoadOrt() {
   if (typeof ort !== 'undefined') return Promise.resolve(true);
   if (typeof document === 'undefined') return Promise.resolve(false);
   return new Promise(function (resolve) {
@@ -44,7 +50,7 @@ function ecYoloLoadOrt() {
 }
 
 /* Lazy-load the model. Returns a promise of the session (or null). */
-function ecYoloLoad() {
+export function ecYoloLoad() {
   if (ecYoloSession) return Promise.resolve(ecYoloSession);
   if (ecYoloLoading) return ecYoloLoading;
   ecYoloLoading = (async function () {
@@ -65,10 +71,10 @@ function ecYoloLoad() {
   return ecYoloLoading;
 }
 
-function ecYoloSigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+export function ecYoloSigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 
 /* Pure: NMS over boxes. Returns indices to keep. */
-function ecYoloNms(boxes, scores) {
+export function ecYoloNms(boxes, scores) {
   var idx = boxes.map(function (_, i) { return i; }).sort(function (a, b) { return scores[b] - scores[a]; });
   var keep = [], sup = new Array(boxes.length).fill(false), i, j;
   for (var ii = 0; ii < idx.length; ii++) {
@@ -93,7 +99,7 @@ function ecYoloNms(boxes, scores) {
    det: Float32Array(116*8400), protos: Float32Array(32*160*160).
    Returns [{ box:[x0,y0,x1,y1], conf, cls, maskBox:[x0,y0,x1,y1]|null }]
    in the 640x640 model coords. */
-function ecYoloDecode(det, protos, w, h, confThresh) {
+export function ecYoloDecode(det, protos, w, h, confThresh) {
   var N = 8400, NM = 32, i, c;
   confThresh = confThresh || EC_YOLO_CONF;
   var boxes = [], scores = [], coeffs = [], classes = [];
@@ -140,7 +146,7 @@ function ecYoloDecode(det, protos, w, h, confThresh) {
 
 /* Pure: pick the detection overlapping the guide ROI best (class ignored).
    Detections and roi are in the same coords. Returns the detection or null. */
-function ecYoloBestForGuide(detections, roi) {
+export function ecYoloBestForGuide(detections, roi) {
   var best = null, bestIoU = 0.15; // minimum overlap to consider
   for (var i = 0; i < detections.length; i++) {
     var b = detections[i].maskBox || detections[i].box;
@@ -155,7 +161,7 @@ function ecYoloBestForGuide(detections, roi) {
 }
 
 /* Pure: IoU between two quads' bounding boxes (for the ensemble vote). */
-function ecQuadIoU(q1, q2) {
+export function ecQuadIoU(q1, q2) {
   function bb(q) {
     var xs = q.map(function (p) { return p[0]; }), ys = q.map(function (p) { return p[1]; });
     return [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)];
@@ -169,7 +175,7 @@ function ecQuadIoU(q1, q2) {
 }
 
 /* Run YOLO on a canvas. Returns detections in the canvas's coords (or []). */
-async function ecYoloDetect(canvas, confOverride) {
+export async function ecYoloDetect(canvas, confOverride) {
   if (!ecYoloEnabled()) return [];
   var session = await ecYoloLoad();
   if (!session || typeof document === 'undefined') return [];
@@ -201,7 +207,7 @@ async function ecYoloDetect(canvas, confOverride) {
 /* Two-stage ensemble: combine the edge-based tighten quad with the YOLO quad.
    Both quads must be in the same coords. Returns the winner, or null.
    Agree (IoU > 0.7): edge is more precise, keep it. Disagree: trust YOLO. */
-function ecEnsembleQuad(edgeQuad, yoloQuad) {
+export function ecEnsembleQuad(edgeQuad, yoloQuad) {
   if (edgeQuad && yoloQuad) {
     return ecQuadIoU(edgeQuad, yoloQuad) > 0.7 ? edgeQuad : yoloQuad;
   }
@@ -209,8 +215,39 @@ function ecEnsembleQuad(edgeQuad, yoloQuad) {
 }
 
 /* Build an axis-aligned quad from a YOLO detection's box. */
-function ecYoloQuad(det) {
+export function ecYoloQuad(det) {
   if (!det) return null;
   var b = det.maskBox || det.box;
   return [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (js/180-settings.js,
+   js/206-editioncapture.js) call these functions at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups in classic scripts resolve through the
+   global object, so the callers need no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run.
+   Remove a name from this bridge only when its last classic caller
+   is gone. */
+window.EC_YOLO_IMG = EC_YOLO_IMG;
+window.EC_YOLO_CONF = EC_YOLO_CONF;
+window.EC_YOLO_NMS_IOU = EC_YOLO_NMS_IOU;
+window.EC_YOLO_MASK_THRESH = EC_YOLO_MASK_THRESH;
+window.EC_YOLO_OPT_KEY = EC_YOLO_OPT_KEY;
+window.ecYoloSession = ecYoloSession;
+window.ecYoloLoading = ecYoloLoading;
+window.ecYoloEnabled = ecYoloEnabled;
+window.ecSetYoloEnabled = ecSetYoloEnabled;
+window.ecYoloLoadOrt = ecYoloLoadOrt;
+window.ecYoloLoad = ecYoloLoad;
+window.ecYoloSigmoid = ecYoloSigmoid;
+window.ecYoloNms = ecYoloNms;
+window.ecYoloDecode = ecYoloDecode;
+window.ecYoloBestForGuide = ecYoloBestForGuide;
+window.ecQuadIoU = ecQuadIoU;
+window.ecYoloDetect = ecYoloDetect;
+window.ecEnsembleQuad = ecEnsembleQuad;
+window.ecYoloQuad = ecYoloQuad;
