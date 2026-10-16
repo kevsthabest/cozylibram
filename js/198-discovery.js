@@ -14,20 +14,26 @@
 // GraphQL docs (books → contributions → author → name, release_date filter,
 // order_by release_date).
 
-const REL_DISMISS_KEY = 'spicyshelves.dismissed_releases';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const REL_DISMISS_KEY = 'spicyshelves.dismissed_releases';
 
-function dismissedReleases() {
+export function dismissedReleases() {
   try { return new Set(JSON.parse(localStorage.getItem(REL_DISMISS_KEY) || '[]')); }
   catch (e) { return new Set(); }
 }
-function dismissRelease(hcId) {
+export function dismissRelease(hcId) {
   try {
     const arr = JSON.parse(localStorage.getItem(REL_DISMISS_KEY) || '[]');
     arr.push('hc:' + hcId);
     localStorage.setItem(REL_DISMISS_KEY, JSON.stringify(arr.slice(-200)));
   } catch (e) {}
 }
-function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId); }
+export function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId); }
 
 // Authors ranked by shelf count, then by her average rating of them.
 // v176: every unique nonblank author in the library, ranked by shelf count
@@ -36,7 +42,7 @@ function isReleaseDismissed(hcId) { return dismissedReleases().has('hc:' + hcId)
 // v483: split into releaseAuthorStats() (ranked {name,n,stars,sn}) so the
 // Library home card can show per-author counts; topReleaseAuthors() keeps
 // its names-only contract for the sweep.
-function releaseAuthorStats() {
+export function releaseAuthorStats() {
   const map = {};
   library.forEach(b => {
     if (b.status !== 'read') return; // v484: read books only — the card labels n "books read"
@@ -59,7 +65,7 @@ function releaseAuthorStats() {
   return Object.values(map)
     .sort((x, y) => (y.n - x.n) || ((y.sn ? y.stars / y.sn : 0) - (x.sn ? x.stars / x.sn : 0)));
 }
-function topReleaseAuthors() {
+export function topReleaseAuthors() {
   return releaseAuthorStats().map(e => e.name);
 }
 
@@ -67,9 +73,9 @@ function topReleaseAuthors() {
 // "Check for new releases" keeps full coverage (User's call, 2026-10-12).
 // Priority: favorited authors first, then most-read, then highest-ranked;
 // authors of recently finished books get an extra boost on top.
-const AUTO_RELEASE_AUTHOR_CAP = 40;
-const AUTO_RELEASE_RECENT_DAYS = 120;
-function priorityReleaseAuthors() {
+export const AUTO_RELEASE_AUTHOR_CAP = 40;
+export const AUTO_RELEASE_RECENT_DAYS = 120;
+export function priorityReleaseAuthors() {
   const fav = {}, recent = {};
   const cutoff = Date.now() - AUTO_RELEASE_RECENT_DAYS * 864e5;
   library.forEach(b => {
@@ -90,7 +96,7 @@ function priorityReleaseAuthors() {
 }
 
 // Already on her shelves? Matches by ISBN first, then title + first author.
-function releaseInLibrary(c) {
+export function releaseInLibrary(c) {
   const isbns = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
   if (isbns.length && library.some(b => b.isbn && isbns.indexOf(b.isbn) !== -1)) return true;
   const t = String(c.title || '').toLowerCase().trim();
@@ -113,7 +119,7 @@ function releaseInLibrary(c) {
   return segs.every(seg => ownedTitle(seg));
 }
 
-function hcBookToCandidate(b) {
+export function hcBookToCandidate(b) {
   const names = (b.contributions || []).map(x => String((((x || {}).author) || {}).name || '')).filter(Boolean);
   const ed = b.default_physical_edition || {};
   const coverEd = b.default_cover_edition || {};
@@ -146,7 +152,7 @@ function hcBookToCandidate(b) {
   };
 }
 
-async function checkNewReleases(onTick, onFound, authorList) {
+export async function checkNewReleases(onTick, onFound, authorList) {
   // authorList: the auto sweep passes a capped, priority-ordered list
   // (batch 4, issue #142); the manual check passes nothing and keeps the
   // full topReleaseAuthors() coverage.
@@ -187,7 +193,7 @@ async function checkNewReleases(onTick, onFound, authorList) {
   return { list: out, failed: failed, total: authors.length };
 }
 
-function addReleaseBook(c) {
+export function addReleaseBook(c) {
   const clean = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
   const book = {
     id: uid(),
@@ -206,7 +212,7 @@ function addReleaseBook(c) {
   return addBook(book, false, 'discovery');
 }
 
-function releaseResultsHTML(list) {
+export function releaseResultsHTML(list) {
   if (!list.length) {
     return '<p class="note">No new releases found — you\'re all caught up ✨</p>';
   }
@@ -227,11 +233,11 @@ function releaseResultsHTML(list) {
 // Cards keep the .rel-card / [data-add] / [data-dis] / .cover-wrap
 // hooks either way, so wireReleaseResults and the shield painter don't
 // care which shape a list took.
-function releaseListHTML(list) {
+export function releaseListHTML(list) {
   if (typeof view !== 'undefined' && view === 'discover') return releaseRailHTML(list);
   return releaseResultsHTML(list);
 }
-function releaseRailHTML(list) {
+export function releaseRailHTML(list) {
   if (!list.length) {
     return '<p class="note">No new releases found — you\u2019re all caught up ✨</p>';
   }
@@ -250,7 +256,7 @@ function releaseRailHTML(list) {
   }).join('') + '</div>';
 }
 
-function wireReleaseResults(box, list) {
+export function wireReleaseResults(box, list) {
   box.querySelectorAll('.rel-card').forEach(card => card.addEventListener('click', e => {
     if (e.target.closest('[data-add]') || e.target.closest('[data-dis]')) return;
     const c = list[Number(card.dataset.i)];
@@ -273,7 +279,7 @@ function wireReleaseResults(box, list) {
   }));
 }
 
-function renderReleaseResults(list) {
+export function renderReleaseResults(list) {
   const box = document.getElementById('release-results');
   if (!box) return;
   box.innerHTML = releaseListHTML(list);
@@ -288,7 +294,7 @@ function renderReleaseResults(list) {
 // lands; release candidates are future-dated books, so work-level
 // spice for them is rare and unknown spice stays visible (the
 // shield's unknown rule).
-function shieldPaintReleaseCovers(box, list) {
+export function shieldPaintReleaseCovers(box, list) {
   if (!box || typeof shieldOn !== 'function' || !shieldOn()) return;
   if (typeof view === 'undefined' || view !== 'discover') return;
   if (typeof shieldSpiceMapFor !== 'function' || typeof shieldIsHighSpice !== 'function') return;
@@ -308,7 +314,7 @@ function shieldPaintReleaseCovers(box, list) {
 // Discover's inline Check now (v175 tile; v538 a text button in the New
 // releases section head). The Discover control shows progress inline in
 // #release-results; the Wishlist button keeps its old label-swap behavior.
-function wireReleaseCheck() {
+export function wireReleaseCheck() {
   const btn = document.querySelector('[data-dtile="releases"]') || document.getElementById('disc-rel-check') || document.getElementById('rel-check');
   if (!btn) return;
   const isTile = btn.hasAttribute('data-dtile') || btn.id === 'disc-rel-check';
@@ -376,29 +382,29 @@ function wireReleaseCheck() {
 // week, silently, on app entry (same pattern as the Hardcover auto-enrich
 // sweep). Fresh finds raise a count badge on the Discover tab; opening
 // Discover (or the Wishlist) renders them inline and clears the badge.
-const AUTO_REL_KEY = 'spicyshelves.auto_releases';          // { at, list }
-const AUTO_REL_SEEN_KEY = 'spicyshelves.auto_releases_seen'; // ms epoch
-const AUTO_REL_DAYS = 7;
+export const AUTO_REL_KEY = 'spicyshelves.auto_releases';          // { at, list }
+export const AUTO_REL_SEEN_KEY = 'spicyshelves.auto_releases_seen'; // ms epoch
+export const AUTO_REL_DAYS = 7;
 
-function autoReleases() {
+export function autoReleases() {
   try {
     const c = JSON.parse(localStorage.getItem(AUTO_REL_KEY) || 'null');
     if (c && typeof c.at === 'number' && Array.isArray(c.list)) return c;
   } catch (e) {}
   return null;
 }
-function saveAutoReleases(list) {
+export function saveAutoReleases(list) {
   try {
     localStorage.setItem(AUTO_REL_KEY,
       JSON.stringify({ at: Date.now(), list: (list || []).slice(0, 40) }));
   } catch (e) {}
 }
-function autoReleasesSeenAt() {
+export function autoReleasesSeenAt() {
   try { return Number(localStorage.getItem(AUTO_REL_SEEN_KEY) || 0) || 0; }
   catch (e) { return 0; }
 }
 // Unseen finds, minus anything dismissed or shelved since the sweep.
-function unseenReleaseList() {
+export function unseenReleaseList() {
   const c = autoReleases();
   if (!c || !c.list.length || c.at <= autoReleasesSeenAt()) return [];
   return c.list.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
@@ -407,12 +413,12 @@ function unseenReleaseList() {
 // seen timestamp. The Library "new from authors you love" card is a
 // persistent coming-soon reminder, not a notification; seen/unseen is for
 // the Discover badge only.
-function cachedReleaseList() {
+export function cachedReleaseList() {
   const c = autoReleases();
   if (!c || !c.list.length) return [];
   return c.list.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
 }
-function updateReleaseBadge() {
+export function updateReleaseBadge() {
   const n = unseenReleaseList().length;
   const el = document.getElementById('nav-rel-badge');
   if (el) {
@@ -422,13 +428,13 @@ function updateReleaseBadge() {
   const btn = document.querySelector('.bottom-nav button[data-nav="discover"]');
   if (btn) btn.setAttribute('aria-label', n > 0 ? 'Discover, ' + n + ' new releases' : 'Discover');
 }
-function markReleasesSeen() {
+export function markReleasesSeen() {
   try { localStorage.setItem(AUTO_REL_SEEN_KEY, String(Date.now())); } catch (e) {}
   updateReleaseBadge();
 }
 // Renders cached auto-check finds into the current view's #release-results
 // box (Discover and Wishlist both have one). Returns true when shown.
-function renderUnseenReleases() {
+export function renderUnseenReleases() {
   const list = unseenReleaseList();
   if (!list.length) return false;
   const box = document.getElementById('release-results');
@@ -441,8 +447,8 @@ function renderUnseenReleases() {
 // v150: the release list currently on screen, whatever its origin (auto
 // cache or manual check). Re-rendered — minus added/dismissed/shelved —
 // whenever the view re-renders, so adding one book never wipes the rest.
-let visibleReleases = [];
-function renderVisibleReleases() {
+export let visibleReleases = [];
+export function renderVisibleReleases() {
   if (!renderUnseenReleases() && visibleReleases.length) {
     const list = visibleReleases.filter(x => x && !isReleaseDismissed(x.hcId) && !releaseInLibrary(x));
     const box = document.getElementById('release-results');
@@ -455,13 +461,13 @@ function renderVisibleReleases() {
 // weekly auto-sweep cache only — never triggers a Hardcover sweep. Rendered
 // below Currently Reading, and only when there is something to show (no
 // empty state).
-var AUTHOR_REL_MAX_AUTHORS = 3;
-var AUTHOR_REL_MAX_PER_AUTHOR = 3;
+export var AUTHOR_REL_MAX_AUTHORS = 3;
+export var AUTHOR_REL_MAX_PER_AUTHOR = 3;
 
 // Group unseen releases by author (case-insensitive name match), ranked by
 // the author's library stats. A co-authored release lands under the
 // highest-ranked matching author only. Pure — takes (list, stats).
-function authorReleaseGroups(list, stats) {
+export function authorReleaseGroups(list, stats) {
   const seen = new Set();
   const groups = [];
   for (const s of stats) {
@@ -491,12 +497,12 @@ function authorReleaseGroups(list, stats) {
 }
 
 // Flat candidate list in card render order, for index-based wiring.
-var authorReleaseFlat = [];
+export var authorReleaseFlat = [];
 
 // Impure wrapper: reads the auto-sweep cache, returns '' when nothing to show.
 // v484: uses cachedReleaseList() (full cache, ignoring seen) so the card
 // persists after a manual "New Releases" check marks everything seen.
-function authorReleasesCard() {
+export function authorReleasesCard() {
   let groups = [], extra = 0;
   try {
     const list = cachedReleaseList();
@@ -509,7 +515,7 @@ function authorReleasesCard() {
 }
 
 // Pure HTML. `flat` parallels the rendered rows for data-i indexing.
-function authorReleasesCardHTML(groups, flat, extra) {
+export function authorReleasesCardHTML(groups, flat, extra) {
   if (!groups.length) return '';
   const cards = groups.map(g => {
     const meta = g.n + (g.n === 1 ? ' book read' : ' books read') +
@@ -533,7 +539,7 @@ function authorReleasesCardHTML(groups, flat, extra) {
     icon('sparkles') + ' New from authors you love</h3>' + cards + more + '</section>';
 }
 
-function wireAuthorReleases() {
+export function wireAuthorReleases() {
   const box = document.getElementById('author-releases');
   if (!box) return;
   box.querySelectorAll('[data-ar-prev]').forEach(btn => btn.addEventListener('click', () => {
@@ -565,7 +571,7 @@ function wireAuthorReleases() {
 }
 // Silent weekly sweep. Skips when Hardcover isn't configured or the library
 // is empty; a fully-failed sweep stamps nothing so it retries next boot.
-async function maybeAutoReleaseCheck() {
+export async function maybeAutoReleaseCheck() {
   try {
     updateReleaseBadge();
     if (!hcReady() || !library.length) return;
@@ -596,7 +602,7 @@ async function maybeAutoReleaseCheck() {
 
 // v538: the seed lens's candidates — her highest-rated books and
 // favorites, best first. Shared by the chips row and the lens itself.
-function similarSeeds() {
+export function similarSeeds() {
   return library.filter(b => b.favorite || (b.myRating || 0) >= 4)
     .sort((a, b) => ((b.myRating || 0) - (a.myRating || 0)) || ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)))
     .slice(0, 6);
@@ -604,7 +610,7 @@ function similarSeeds() {
 
 // v538: "More like:" chips above the Recommended rail. Renders '' when
 // she has no seeds yet (the Recommended empty states carry the guidance).
-function seedLensHTML() {
+export function seedLensHTML() {
   const seeds = similarSeeds();
   if (!seeds.length) return '';
   return '<div class="seed-lens"><span class="seed-lens-label">More like:</span>' +
@@ -618,9 +624,9 @@ function seedLensHTML() {
 // v538: this is now the seed LENS — it re-renders the Recommended rail
 // in place with just the matches, instead of swapping in a separate
 // Similar view. Tapping the active chip again clears it (clearRecoLens).
-let recoLastRender = null;  // last full render's args — the lens restore point
-let recoLensSeedId = null;  // seed id while the lens is applied
-function showSimilarToSeed(seed) {
+export let recoLastRender = null;  // last full render's args — the lens restore point
+export let recoLensSeedId = null;  // seed id while the lens is applied
+export function showSimilarToSeed(seed) {
   const seedAuthors = (seed.authors || []).map(a => String(a).trim().toLowerCase());
   const seedTropes = (seed.tropes || []).map(t => String(t).trim().toLowerCase());
 
@@ -663,13 +669,13 @@ function showSimilarToSeed(seed) {
 }
 
 // v538: drop the seed lens and re-render the full Recommended ranking.
-function clearRecoLens() {
+export function clearRecoLens() {
   recoLensSeedId = null;
   document.querySelectorAll('.seed-chip.on').forEach(c => c.classList.remove('on'));
   if (recoLastRender) renderRecoResults(recoLastRender.ranked, recoLastRender.lovedIds, recoLastRender.embedded, recoLastRender.spiceMap);
 }
 
-function renderDiscover() {
+export function renderDiscover() {
   track('discover_opened', null, { dedupeKey: 'discover-open', dedupeMs: 8000 });
   // v538: the stage shows the TBR book the roulette is about to choose
   // from — prefer one with a cover; fall back to its title treatment.
@@ -773,7 +779,7 @@ function renderDiscover() {
    and the cache the same object, so the rail's indices line up. No
    friend-initial badges on covers (design critique cut): who loved a
    book is a quiet text line under it. */
-function refreshDiscoverHearth() {
+export function refreshDiscoverHearth() {
   const box = document.getElementById('disc-hearth');
   if (!box) return;
   const quiet = '<p class="note">Books your circle rates 4\u2605 or higher will land here.</p>';
@@ -817,7 +823,7 @@ function refreshDiscoverHearth() {
 
 // Pure: embed text for one book. Shared with scripts/backfill-embeddings.js
 // (loaded via vm), so the client and the backfill can never drift.
-function buildEmbedText(b) {
+export function buildEmbedText(b) {
   b = b || {};
   const parts = [];
   const title = String(b.title || '').trim();
@@ -835,7 +841,7 @@ function buildEmbedText(b) {
 }
 
 // Pure: cosine similarity in [-1, 1]; 0 on any malformed input.
-function cosineSim(a, b) {
+export function cosineSim(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || !a.length || a.length !== b.length) return 0;
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
@@ -850,7 +856,7 @@ function cosineSim(a, b) {
 // Pure: profile weight for one book. Favorites anchor the profile (1.0, or
 // max(rating/5, 0.9) when also rated); rated reads use rating/5; unrated
 // reads count neutrally at 0.6.
-function recoItemWeight(it) {
+export function recoItemWeight(it) {
   const r = (it && it.rating) || 0;
   if (it && it.favorite) return it.rating ? Math.max(r / 5, 0.9) : 1.0;
   return (r || 3) / 5;
@@ -859,7 +865,7 @@ function recoItemWeight(it) {
 // Pure: rating-weighted mean of embedding vectors. items: [{vector, rating,
 // favorite}]; weight comes from recoItemWeight. Vectors with a different
 // dimensionality than the first valid one are dropped.
-function tasteProfileVector(items) {
+export function tasteProfileVector(items) {
   const valid = (items || []).filter(it => it && Array.isArray(it.vector) && it.vector.length &&
     it.vector.every(n => typeof n === 'number' && Number.isFinite(n)));
   if (!valid.length) return null;
@@ -878,16 +884,16 @@ function tasteProfileVector(items) {
   return acc.map(v => v / wsum);
 }
 
-const RECO_FINAL_COUNT = 12; // cards shown
-const RECO_AUTHOR_CAP = 3;   // max books per author in the final list
-const RECO_MMR_LAMBDA = 0.7; // similarity vs. diversity trade-off
+export const RECO_FINAL_COUNT = 12; // cards shown
+export const RECO_AUTHOR_CAP = 3;   // max books per author in the final list
+export const RECO_MMR_LAMBDA = 0.7; // similarity vs. diversity trade-off
 
 // Pure: diversity re-ranking over pre-sorted [{c, sim, vector?}] (sim may be
 // null on the non-embedded fallback path). Iteratively picks the candidate
 // maximizing λ·sim − (1−λ)·maxSimToPicked (candidate similarity via cosine
 // of their embeddings), skipping candidates whose primary author already hit
 // RECO_AUTHOR_CAP. Returns up to `limit` items.
-function mmrDiversify(ranked, limit) {
+export function mmrDiversify(ranked, limit) {
   const cap = RECO_AUTHOR_CAP, lambda = RECO_MMR_LAMBDA;
   const key = c => String((c && c.authors && c.authors[0]) || (c && c.loveAuthor) || '').trim().toLowerCase();
   const remaining = (ranked || []).slice();
@@ -921,7 +927,7 @@ function mmrDiversify(ranked, limit) {
 
 // Pure: pgvector comes back from PostgREST as a "[0.1, ...]" string;
 // normalize to a validated number array, or null.
-function parseEmbedding(v) {
+export function parseEmbedding(v) {
   if (Array.isArray(v)) {
     return v.length && v.every(n => typeof n === 'number' && Number.isFinite(n)) ? v.slice() : null;
   }
@@ -935,7 +941,7 @@ function parseEmbedding(v) {
 }
 
 // Authors of her 4★+ read books, most-loved first.
-function topLovedAuthors(limit) {
+export function topLovedAuthors(limit) {
   const map = {};
   library.forEach(b => {
     if (!b || b.status !== 'read' || (b.myRating || 0) < 4) return;
@@ -950,7 +956,7 @@ function topLovedAuthors(limit) {
 // Canonical trope ids across her 4★+ read books (book.tropes holds display
 // names, so resolve each through the taxonomy; v212's AI-added entries
 // qualify too since they live in book.tropes).
-function recoLovedTropeIds() {
+export function recoLovedTropeIds() {
   const ids = [], seen = new Set();
   library.forEach(b => {
     if (!b || b.status !== 'read' || (b.myRating || 0) < 4) return;
@@ -965,7 +971,7 @@ function recoLovedTropeIds() {
 
 // Pure: which of her loved trope ids have a name/alias mentioned in the
 // candidate text (title + description). Returns up to 3 display names.
-function recoSharedTropes(text, lovedIds) {
+export function recoSharedTropes(text, lovedIds) {
   const hay = String(text || '').toLowerCase();
   if (!hay || !(lovedIds || []).length) return [];
   const out = [];
@@ -1004,11 +1010,11 @@ function recoSharedTropes(text, lovedIds) {
    interpret legacy record-only dismissals at work level (adopting the
    derived work key into the stored set), so the collapse can no
    longer promote a sibling edition into the dismissed work's place. */
-const RECO_DISMISS_KEY = 'reco_dismissed';
-const RECO_DISMISS_CAP = 200;
-let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
+export const RECO_DISMISS_KEY = 'reco_dismissed';
+export const RECO_DISMISS_CAP = 200;
+export let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
 
-async function recoDismissedSet() {
+export async function recoDismissedSet() {
   try {
     if (typeof currentDb !== 'undefined' && currentDb) {
       const v = await idbKvGet(currentDb, RECO_DISMISS_KEY);
@@ -1025,7 +1031,7 @@ async function recoDismissedSet() {
 // The one write path for the dismissal set (IDB kv primary, localStorage
 // fallback) — recoDismiss and the roaming merge both persist through it,
 // so an adopted dismissal lands exactly where a local one does.
-async function recoPersistDismissals(arr) {
+export async function recoPersistDismissals(arr) {
   let saved = false;
   try {
     if (typeof currentDb !== 'undefined' && currentDb) {
@@ -1038,7 +1044,7 @@ async function recoPersistDismissals(arr) {
   }
 }
 
-async function recoDismiss(key) {
+export async function recoDismiss(key) {
   const s = await recoDismissedSet();
   s.add(key);
   const arr = Array.from(s).slice(-RECO_DISMISS_CAP);
@@ -1050,7 +1056,7 @@ async function recoDismiss(key) {
 // key (#196), through the one write path each time, so every future
 // sweep — and every other device, via roaming — reads the dismissal at
 // work level directly.
-async function recoDismissCandidate(c) {
+export async function recoDismissCandidate(c) {
   if (!c || c.hcId == null) return;
   await recoDismiss('hc:' + c.hcId);
   const wk = recoWorkKey(c);
@@ -1062,7 +1068,7 @@ async function recoDismissCandidate(c) {
 // roaming merge). A record-only dismissal made before v583 thereby
 // gains its work-level reading permanently, instead of depending on
 // the dismissed edition still appearing in a sweep window.
-async function recoAdoptDismissalKeys(keys) {
+export async function recoAdoptDismissalKeys(keys) {
   const extra = (keys || []).filter(k => typeof k === 'string' && k);
   if (!extra.length) return;
   const s = await recoDismissedSet();
@@ -1076,7 +1082,7 @@ async function recoAdoptDismissalKeys(keys) {
 // Union of two dismissal key lists, deduped in first-seen order and
 // capped to the newest RECO_DISMISS_CAP (recoDismiss's slice(-200)
 // semantics) — the roaming merge operation.
-function recoUnionDismissals(a, b) {
+export function recoUnionDismissals(a, b) {
   const seen = new Set();
   const out = [];
   for (const list of [a, b]) {
@@ -1091,7 +1097,7 @@ function recoUnionDismissals(a, b) {
 // Synchronous snapshot of the local dismissal keys for js/229's
 // collect: the mirror when the set has been loaded this session,
 // otherwise the localStorage fallback copy.
-function recoDismissedKeys() {
+export function recoDismissedKeys() {
   if (Array.isArray(recoDismissedMirror)) return recoDismissedMirror.slice();
   try {
     const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
@@ -1104,7 +1110,7 @@ function recoDismissedKeys() {
 // the same write path as a local dismissal. Returns true when the
 // merged local set holds keys the incoming set did not — the caller
 // then owes the server a push so the union propagates.
-function recoMergeRoamedDismissals(keys) {
+export function recoMergeRoamedDismissals(keys) {
   const merged = recoUnionDismissals(recoDismissedKeys(), keys);
   recoDismissedMirror = merged.slice();
   recoPersistDismissals(merged); // fire-and-forget, like the other roaming applies
@@ -1114,7 +1120,7 @@ function recoMergeRoamedDismissals(keys) {
 
 // Work embeddings for her read books. RLS: "works: read for signed-in"
 // (v205) — returns {} offline or when signed out, and the caller degrades.
-async function fetchWorkEmbeddings(workIds) {
+export async function fetchWorkEmbeddings(workIds) {
   const ids = (workIds || []).filter(Boolean);
   if (!ids.length) return {};
   let sb = null;
@@ -1132,7 +1138,7 @@ async function fetchWorkEmbeddings(workIds) {
   } catch (e) { return {}; }
 }
 
-async function embedTextsClient(texts) {
+export async function embedTextsClient(texts) {
   const res = await apiFetch('/api/embed', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1151,8 +1157,8 @@ async function embedTextsClient(texts) {
 // kills the sweep (same pacing as the release check).
 // v403: filter merchandise (tarot decks, coloring books, etc.) — Hardcover's
 // books table includes non-book formats.
-const RECO_MERCH_RE = /\b(tarot|coloring book|journal|calendar|poster|sticker|notebook|planner|deck|playmat|puzzle)\b/i;
-function isRecoMerch(c) {
+export const RECO_MERCH_RE = /\b(tarot|coloring book|journal|calendar|poster|sticker|notebook|planner|deck|playmat|puzzle)\b/i;
+export function isRecoMerch(c) {
   const t = String((c && c.title) || '');
   return RECO_MERCH_RE.test(t);
 }
@@ -1180,7 +1186,7 @@ function isRecoMerch(c) {
 
 // Pure: the browser's primary language subtag ('en' from 'en-CA'), '' when
 // unavailable — '' disables language exclusion entirely.
-function recoBrowserLang() {
+export function recoBrowserLang() {
   try {
     const l = (typeof navigator !== 'undefined' && navigator && navigator.language) || '';
     return String(l).split('-')[0].trim().toLowerCase();
@@ -1189,7 +1195,7 @@ function recoBrowserLang() {
 
 // Language names (English exonyms + common endonyms) → ISO 639-1, for when
 // Hardcover states a language as a name rather than a code.
-const RECO_LANG_NAME_TO_CODE = {
+export const RECO_LANG_NAME_TO_CODE = {
   english: 'en', french: 'fr', 'français': 'fr', german: 'de', deutsch: 'de',
   spanish: 'es', 'español': 'es', italian: 'it', italiano: 'it',
   portuguese: 'pt', 'português': 'pt', dutch: 'nl', nederlands: 'nl',
@@ -1228,7 +1234,7 @@ const RECO_LANG_NAME_TO_CODE = {
 };
 // ISO 639-2/3 → 639-1 for the common codes (Hardcover names languages, but
 // a code-shaped value is handled too).
-const RECO_LANG_6392_TO_1 = {
+export const RECO_LANG_6392_TO_1 = {
   eng: 'en', fre: 'fr', fra: 'fr', ger: 'de', deu: 'de', spa: 'es', ita: 'it',
   por: 'pt', dut: 'nl', nld: 'nl', rus: 'ru', jpn: 'ja', kor: 'ko', chi: 'zh',
   zho: 'zh', ara: 'ar', hin: 'hi', pol: 'pl', swe: 'sv', nor: 'no', dan: 'da',
@@ -1250,7 +1256,7 @@ const RECO_LANG_6392_TO_1 = {
 // caller fails open). A stated value we cannot map comes back as itself
 // (lowercased): it is KNOWN, and it can never equal a browser subtag, so
 // the record is treated as a language mismatch rather than as unknown.
-function recoLangCode(raw) {
+export function recoLangCode(raw) {
   const s = String(raw || '').trim().toLowerCase().split(/[-_]/)[0];
   if (!s) return null;
   if (/^[a-z]{2}$/.test(s)) return s;
@@ -1277,12 +1283,12 @@ function recoLangCode(raw) {
    unknown. The title is scored on its own first — it is the record's
    own voice, and a clear title verdict stands even when an inherited
    description blurb in another language would outvote it combined. */
-const RECO_DETECT_MIN_HITS = 3;
-const RECO_DETECT_MIN_MARGIN = 2;
+export const RECO_DETECT_MIN_HITS = 3;
+export const RECO_DETECT_MIN_MARGIN = 2;
 // Diacritic-folded forms (één→een, für→fur, não→nao) to match the
 // folded token stream. Genuinely ambiguous words (was, war, will, door,
 // ten) are deliberately absent from every list.
-const RECO_DETECT_STOPWORDS = {
+export const RECO_DETECT_STOPWORDS = {
   en: ['the', 'of', 'and', 'a', 'an', 'in', 'to', 'is', 'are', 'be', 'been', 'it', 'its', 'he', 'she', 'they', 'we', 'you', 'his', 'her', 'their', 'our', 'your', 'my', 'him', 'them', 'this', 'that', 'these', 'those', 'with', 'for', 'on', 'at', 'by', 'from', 'as', 'but', 'not', 'no', 'if', 'or', 'so', 'than', 'then', 'when', 'while', 'who', 'which', 'all', 'any', 'more', 'most', 'other', 'some', 'only', 'over', 'under', 'into', 'about', 'after', 'before', 'between', 'through', 'during', 'out', 'up', 'down', 'here', 'there', 'where', 'how', 'can', 'could', 'would', 'should', 'do', 'does', 'did', 'have', 'has', 'had', 'one', 'two', 'first', 'now', 'just', 'even', 'still', 'also', 'very', 'much', 'many'],
   nl: ['de', 'het', 'een', 'van', 'in', 'is', 'ik', 'hij', 'zij', 'wij', 'dat', 'die', 'dit', 'deze', 'aan', 'met', 'ook', 'maar', 'als', 'bij', 'nog', 'wel', 'niet', 'zijn', 'haar', 'hun', 'mijn', 'naar', 'uit', 'over', 'onder', 'tussen', 'doorheen', 'voor', 'tegen', 'zonder', 'tijdens', 'na', 'tot', 'om', 'op', 'er', 'daar', 'hier', 'waar', 'wanneer', 'waarom', 'hoe', 'wie', 'wat', 'geen', 'werd', 'wordt', 'worden', 'hebben', 'heeft', 'kunnen', 'kan', 'zal', 'zullen', 'zou', 'zouden', 'moeten', 'moet', 'willen', 'wil', 'zelf', 'elkaar', 'samen', 'altijd', 'nooit', 'weer', 'heel', 'erg', 'toch', 'juist', 'eens', 'iets', 'niets', 'iemand', 'niemand', 'alles', 'veel', 'meer', 'andere', 'eigen', 'elke', 'beide', 'zo', 'nu', 'toen', 'omdat', 'zodat', 'terwijl', 'hoewel', 'den', 'des'],
   de: ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines', 'und', 'ist', 'sind', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'sich', 'nicht', 'auch', 'als', 'an', 'am', 'ans', 'im', 'vom', 'von', 'zu', 'zum', 'zur', 'in', 'ins', 'auf', 'aus', 'bei', 'mit', 'nach', 'uber', 'fur', 'um', 'durch', 'gegen', 'ohne', 'unter', 'vor', 'zwischen', 'seit', 'bis', 'wenn', 'aber', 'doch', 'schon', 'noch', 'nur', 'so', 'wie', 'wo', 'wer', 'man', 'mein', 'meine', 'sein', 'seine', 'haben', 'hat', 'hatte', 'werden', 'wird', 'wurde', 'konnen', 'kann', 'mussen', 'muss', 'sollen', 'soll', 'machen', 'gibt', 'am'],
@@ -1291,14 +1297,14 @@ const RECO_DETECT_STOPWORDS = {
   it: ['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'un', 'una', 'uno', 'che', 'e', 'non', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'del', 'della', 'dello', 'dei', 'degli', 'delle', 'nel', 'nella', 'nello', 'nei', 'negli', 'nelle', 'sul', 'sulla', 'sullo', 'al', 'alla', 'allo', 'ai', 'agli', 'alle', 'dal', 'dalla', 'dallo', 'dai', 'dagli', 'dalle', 'questo', 'questa', 'questi', 'queste', 'quello', 'quella', 'quelli', 'quelle', 'anche', 'come', 'ma', 'se', 'piu', 'ci', 'ne', 'si', 'io', 'tu', 'lui', 'lei', 'noi', 'voi', 'loro', 'mio', 'mia', 'miei', 'mie', 'tuo', 'tua', 'suo', 'sua', 'suoi', 'sue', 'nostro', 'nostra', 'sono', 'era', 'erano', 'siamo', 'siete', 'ho', 'hai', 'ha', 'abbiamo', 'avete', 'hanno', 'fatto', 'quando', 'dove', 'molto', 'tutto', 'tutta', 'tutti', 'tutte', 'cosa', 'cosi', 'perche', 'mentre', 'dopo', 'prima', 'senza', 'sotto', 'sopra', 'ancora', 'ogni', 'qualche', 'altro', 'altra', 'altri', 'altre', 'poco', 'quanto', 'gia', 'invece', 'forse', 'pero', 'dunque', 'quindi', 'allora', 'ora', 'stato', 'stata'],
   pt: ['o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'por', 'pelo', 'pela', 'pelos', 'pelas', 'para', 'com', 'sem', 'que', 'e', 'nao', 'se', 'ao', 'aos', 'seu', 'sua', 'seus', 'suas', 'meu', 'minha', 'meus', 'minhas', 'ele', 'ela', 'eles', 'elas', 'voce', 'mais', 'muito', 'ja', 'quando', 'como', 'mas', 'tambem', 'sobre', 'entre', 'depois', 'antes', 'ate', 'so', 'sao', 'era', 'eram', 'foi', 'foram', 'tem', 'tinha', 'vai', 'vao', 'pode', 'podem', 'lhe', 'lhes', 'isso', 'isto', 'aquilo', 'esse', 'essa', 'este', 'esta', 'estes', 'estas', 'aquele', 'aquela', 'tudo', 'todo', 'toda', 'todos', 'todas', 'outro', 'outra', 'cada', 'mesmo', 'mesma', 'onde', 'quem', 'qual', 'quanto', 'pois', 'porque', 'porem', 'ainda', 'sempre', 'nunca', 'talvez', 'aqui', 'bem'],
 };
-const RECO_DETECT_SETS = {};
+export const RECO_DETECT_SETS = {};
 Object.keys(RECO_DETECT_STOPWORDS).forEach(code => {
   RECO_DETECT_SETS[code] = new Set(RECO_DETECT_STOPWORDS[code]);
 });
 
 // Pure: stopword hit counts per language for a text. Tokens are
 // diacritic-folded lowercase letter runs.
-function recoLangScores(text) {
+export function recoLangScores(text) {
   const scores = { en: 0, nl: 0, de: 0, fr: 0, es: 0, it: 0, pt: 0 };
   const toks = String(text || '').toLowerCase()
     .normalize('NFD').replace(/\p{M}/gu, '')
@@ -1313,7 +1319,7 @@ function recoLangScores(text) {
 
 // Pure: the winning language from a score table, or null when the
 // evidence is below the confidence bar (unknown — caller fails open).
-function recoLangFromScores(scores) {
+export function recoLangFromScores(scores) {
   let best = null, bestN = 0, secondN = 0;
   for (const code in scores) {
     const n = scores[code];
@@ -1327,7 +1333,7 @@ function recoLangFromScores(scores) {
 // Pure: detect a candidate's language from its own text (title first,
 // then title + description). null = no confident call. Only meaningful
 // for candidates with no stated language — see recoCandidateLangCode.
-function recoDetectLangCode(c) {
+export function recoDetectLangCode(c) {
   if (!c) return null;
   const fromTitle = recoLangFromScores(recoLangScores(c.title));
   if (fromTitle) return fromTitle;
@@ -1338,7 +1344,7 @@ function recoDetectLangCode(c) {
 // Pure: the language code a candidate is classified by — the catalog's
 // stated language when there is one (it always wins), otherwise the
 // detected language, otherwise null (unknown; ranking fails open).
-function recoCandidateLangCode(c) {
+export function recoCandidateLangCode(c) {
   const stated = recoLangCode(c && c.langName);
   if (stated) return stated;
   return recoDetectLangCode(c);
@@ -1350,8 +1356,8 @@ function recoCandidateLangCode(c) {
 // main record even when an audio edition also exists under it — only an
 // audio-only default set marks the record itself as the audiobook.
 // Title wording and a "Full Cast" dramatized-audio credit supplement.
-const RECO_AUDIO_TITLE_RE = /\b(audiobook|audio book|unabridged|dramatized adaptation|graphic audio)\b/i;
-function recoIsAudioRecord(c) {
+export const RECO_AUDIO_TITLE_RE = /\b(audiobook|audio book|unabridged|dramatized adaptation|graphic audio)\b/i;
+export function recoIsAudioRecord(c) {
   if (!c) return false;
   if (Number(c.audioSeconds) > 0) return true;
   if (c.defAudioId != null && c.defPhysId == null && c.defEbookId == null) return true;
@@ -1367,7 +1373,7 @@ function recoIsAudioRecord(c) {
 // 0 browser-lang print, 1 browser-lang any format, 2 unknown-lang print,
 // 3 unknown-lang any format. With no browser language, everything is
 // "unknown" (tiers 2/3) — print still beats audio, nothing is excluded.
-function recoEditionRank(c, wantLang) {
+export function recoEditionRank(c, wantLang) {
   const want = String(wantLang || '').trim().toLowerCase();
   // v533: stated language wins; unstated records fall back to detection
   // (recoCandidateLangCode) so a confidently foreign record is a KNOWN
@@ -1387,7 +1393,7 @@ function recoEditionRank(c, wantLang) {
 // entries like "Mistborn - The Well of Ascension" must not collapse into
 // "Mistborn - The Final Empire". Only a trailing format phrase is cut.
 // '' when there is no usable title (such candidates never group).
-function recoWorkKey(c) {
+export function recoWorkKey(c) {
   const t = String((c && c.title) || '')
     .replace(/\s*\[[^\]]*\]/g, ' ')
     .replace(/\s*\([^)]*\)/g, ' ')
@@ -1406,7 +1412,7 @@ function recoWorkKey(c) {
 // same granularity as the collapse, so owning any one edition of a
 // work speaks for the work (#196). Recomputed per gate call: the
 // library is small and the gates run per sweep, not per render.
-function recoLibraryWorkKeys() {
+export function recoLibraryWorkKeys() {
   const keys = new Set();
   (typeof library !== 'undefined' ? library : []).forEach(b => {
     const k = recoWorkKey(b);
@@ -1420,7 +1426,7 @@ function recoLibraryWorkKeys() {
 // ('hc:' dismissal, releaseInLibrary) stay with their callers; this is
 // the work-level half of the gate, shared by the sweep intake and the
 // memoized re-filter so both apply #196 identically.
-function recoWorkKeyBlocked(c, dismissed, libWorkKeys) {
+export function recoWorkKeyBlocked(c, dismissed, libWorkKeys) {
   const wk = recoWorkKey(c);
   if (!wk) return false;
   if (dismissed && dismissed.has('wk:' + wk)) return true;
@@ -1436,8 +1442,8 @@ function recoWorkKeyBlocked(c, dismissed, libWorkKeys) {
    count. Fail-open everywhere: no prefs, no taxonomy, a failed lookup,
    or an unverifiable doc all keep the candidate — a filter hiccup
    must never empty the list. Session-cached per work. */
-const recoWarnCache = {};
-async function recoCandidateWarnings(c) {
+export const recoWarnCache = {};
+export async function recoCandidateWarnings(c) {
   const key = recoWorkKey(c);
   if (key && Object.prototype.hasOwnProperty.call(recoWarnCache, key)) return recoWarnCache[key];
   let warns = null;
@@ -1456,7 +1462,7 @@ async function recoCandidateWarnings(c) {
   if (key) recoWarnCache[key] = warns;
   return warns;
 }
-async function recoApplyWarningFilter(ranked) {
+export async function recoApplyWarningFilter(ranked) {
   try {
     const prefs = (typeof getWarningPrefs === 'function') ? getWarningPrefs() : null;
     if (!prefs || !prefs.excluded || !prefs.excluded.length) return ranked;
@@ -1481,7 +1487,7 @@ async function recoApplyWarningFilter(ranked) {
 // newest-first per author, authors in loved order). Output order follows
 // each work's first appearance, so the loved-author fallback ranking in
 // refreshRecommendations keeps its shape on the non-embedded path too.
-function collapseRecoWorks(cands, wantLang) {
+export function collapseRecoWorks(cands, wantLang) {
   const order = [];
   const groups = new Map();
   (cands || []).forEach(c => {
@@ -1510,7 +1516,7 @@ function collapseRecoWorks(cands, wantLang) {
 // longer silent — one AppLog line per affected sweep (visible in the
 // Observatory log viewer), so a production schema change that strips
 // every edition signal leaves a trace instead of shipping blind.
-function recoSweepQuery(author, extended) {
+export function recoSweepQuery(author, extended) {
   const fields = extended
     ? ' { id title description pages audio_seconds default_audio_edition_id' +
       ' default_physical_edition_id default_ebook_edition_id image { url }' +
@@ -1522,7 +1528,7 @@ function recoSweepQuery(author, extended) {
   return 'query { books(where: {contributions: {author: {name: {_eq: ' + JSON.stringify(author) + '}}},' +
     ' canonical_id: {_is_null: true}}, order_by: {release_date: desc}, limit: 12)' + fields;
 }
-async function sweepRecoCandidates(authors, dismissed) {
+export async function sweepRecoCandidates(authors, dismissed) {
   const out = [], seen = new Set();
   const libWorkKeys = recoLibraryWorkKeys();
   const upgradeWorkKeys = new Set();
@@ -1581,7 +1587,7 @@ async function sweepRecoCandidates(authors, dismissed) {
   return collapseRecoWorks(out, recoBrowserLang());
 }
 
-function addRecoBook(c) {
+export function addRecoBook(c) {
   const clean = (c.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean);
   const book = {
     id: uid(),
@@ -1598,14 +1604,14 @@ function addRecoBook(c) {
   return addBook(book, false, 'discovery');
 }
 
-let visibleRecos = []; // ranked [{c, sim}] currently on screen
-let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219)
-let visibleRecoSpice = {}; // v524: work-spice map for the visible candidates (shield)
+export let visibleRecos = []; // ranked [{c, sim}] currently on screen
+export let visibleRecoLoved = []; // loved trope ids, for the preview's why-chips (v219)
+export let visibleRecoSpice = {}; // v524: work-spice map for the visible candidates (shield)
 
 // v219: tapping a recommendation opens the read-only preview modal —
 // description, tropes, genres. The +TBR / dismiss buttons keep their
 // stopPropagation so tapping them never opens the preview.
-function openRecoPreview(r) {
+export function openRecoPreview(r) {
   const c = r.c;
   const why = [];
   if (c.loveAuthor) {
@@ -1628,7 +1634,7 @@ function openRecoPreview(r) {
 }
 
 // v219: same treatment for New Releases results.
-function openReleasePreview(c) {
+export function openReleasePreview(c) {
   const why = [];
   const cd = releaseCountdown(c.releaseDate);
   if (cd) why.push('<span class="why-chip">' + icon('calendar') + ' Releases ' +
@@ -1645,7 +1651,7 @@ function openReleasePreview(c) {
 // shared tropes, match %) still lives in the preview sheet the cover
 // opens. The why line's priority: the shield state (it changes what
 // she sees), then match strength, then the loved author behind the pick.
-function recoCardHTML(r, i, lovedIds) {
+export function recoCardHTML(r, i, lovedIds) {
   const c = r.c;
   // v524: content shield — a candidate whose work is known high-spice
   // gets a blurred cover and a Shielded line (Discover candidates carry
@@ -1669,11 +1675,11 @@ function recoCardHTML(r, i, lovedIds) {
 
 // v538: the Recommended rail — shared by the full ranking and the seed
 // lens subset (both render through wireRecoResults afterwards).
-function recoRailHTML(ranked, lovedIds) {
+export function recoRailHTML(ranked, lovedIds) {
   return '<div class="rail reco-rail">' + ranked.map((r, i) => recoCardHTML(r, i, lovedIds)).join('') + '</div>';
 }
 
-function wireRecoResults(box) {
+export function wireRecoResults(box) {
   // v427 (issue #54): the cover gets an explicit preview handler. Tapping
   // the cover was falling through to +TBR on some devices — the cover now
   // opens the preview directly and never triggers the add button.
@@ -1706,7 +1712,7 @@ function wireRecoResults(box) {
   }));
 }
 
-function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
+export function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
   visibleRecos = ranked;
@@ -1744,13 +1750,13 @@ function renderRecoResults(ranked, lovedIds, embedded, spiceMap) {
 // that could move the ranking itself (a new finish, a re-rate, a new
 // favorite) changes the fingerprint and sweeps fresh. The Refresh
 // button passes force=true and always sweeps.
-let _recoMemo = null;
-function recoTasteFingerprint(authors, profBooks) {
+export let _recoMemo = null;
+export function recoTasteFingerprint(authors, profBooks) {
   const shieldBit = (typeof shieldOn === 'function' && shieldOn()) ? '1' : '0';
   return (authors || []).join('\u01c2') + '#' + shieldBit + '#' +
     (profBooks || []).map(b => b.id + ':' + (b.myRating || 0) + (b.favorite ? 'f' : '')).join(',');
 }
-async function refreshRecommendations(force) {
+export async function refreshRecommendations(force) {
   const box = document.getElementById('disc-reco');
   if (!box) return;
   try {
@@ -1845,3 +1851,127 @@ async function refreshRecommendations(force) {
     box.innerHTML = '<p class="note">Recommendations hiccuped \u2014 try again in a bit.</p>';
   }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/095-gate.js, js/120-favorites.js, js/190-wishlist.js, js/200-boot.js and js/229-user-state.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.REL_DISMISS_KEY = REL_DISMISS_KEY;
+window.dismissedReleases = dismissedReleases;
+window.dismissRelease = dismissRelease;
+window.isReleaseDismissed = isReleaseDismissed;
+window.releaseAuthorStats = releaseAuthorStats;
+window.topReleaseAuthors = topReleaseAuthors;
+window.AUTO_RELEASE_AUTHOR_CAP = AUTO_RELEASE_AUTHOR_CAP;
+window.AUTO_RELEASE_RECENT_DAYS = AUTO_RELEASE_RECENT_DAYS;
+window.priorityReleaseAuthors = priorityReleaseAuthors;
+window.releaseInLibrary = releaseInLibrary;
+window.hcBookToCandidate = hcBookToCandidate;
+window.checkNewReleases = checkNewReleases;
+window.addReleaseBook = addReleaseBook;
+window.releaseResultsHTML = releaseResultsHTML;
+window.releaseListHTML = releaseListHTML;
+window.releaseRailHTML = releaseRailHTML;
+window.wireReleaseResults = wireReleaseResults;
+window.renderReleaseResults = renderReleaseResults;
+window.shieldPaintReleaseCovers = shieldPaintReleaseCovers;
+window.wireReleaseCheck = wireReleaseCheck;
+window.AUTO_REL_KEY = AUTO_REL_KEY;
+window.AUTO_REL_SEEN_KEY = AUTO_REL_SEEN_KEY;
+window.AUTO_REL_DAYS = AUTO_REL_DAYS;
+window.autoReleases = autoReleases;
+window.saveAutoReleases = saveAutoReleases;
+window.autoReleasesSeenAt = autoReleasesSeenAt;
+window.unseenReleaseList = unseenReleaseList;
+window.cachedReleaseList = cachedReleaseList;
+window.updateReleaseBadge = updateReleaseBadge;
+window.markReleasesSeen = markReleasesSeen;
+window.renderUnseenReleases = renderUnseenReleases;
+window.visibleReleases = visibleReleases;
+window.renderVisibleReleases = renderVisibleReleases;
+window.AUTHOR_REL_MAX_AUTHORS = AUTHOR_REL_MAX_AUTHORS;
+window.AUTHOR_REL_MAX_PER_AUTHOR = AUTHOR_REL_MAX_PER_AUTHOR;
+window.authorReleaseGroups = authorReleaseGroups;
+window.authorReleaseFlat = authorReleaseFlat;
+window.authorReleasesCard = authorReleasesCard;
+window.authorReleasesCardHTML = authorReleasesCardHTML;
+window.wireAuthorReleases = wireAuthorReleases;
+window.maybeAutoReleaseCheck = maybeAutoReleaseCheck;
+window.similarSeeds = similarSeeds;
+window.seedLensHTML = seedLensHTML;
+window.recoLastRender = recoLastRender;
+window.recoLensSeedId = recoLensSeedId;
+window.showSimilarToSeed = showSimilarToSeed;
+window.clearRecoLens = clearRecoLens;
+window.renderDiscover = renderDiscover;
+window.refreshDiscoverHearth = refreshDiscoverHearth;
+window.buildEmbedText = buildEmbedText;
+window.cosineSim = cosineSim;
+window.recoItemWeight = recoItemWeight;
+window.tasteProfileVector = tasteProfileVector;
+window.RECO_FINAL_COUNT = RECO_FINAL_COUNT;
+window.RECO_AUTHOR_CAP = RECO_AUTHOR_CAP;
+window.RECO_MMR_LAMBDA = RECO_MMR_LAMBDA;
+window.mmrDiversify = mmrDiversify;
+window.parseEmbedding = parseEmbedding;
+window.topLovedAuthors = topLovedAuthors;
+window.recoLovedTropeIds = recoLovedTropeIds;
+window.recoSharedTropes = recoSharedTropes;
+window.RECO_DISMISS_KEY = RECO_DISMISS_KEY;
+window.RECO_DISMISS_CAP = RECO_DISMISS_CAP;
+window.recoDismissedMirror = recoDismissedMirror;
+window.recoDismissedSet = recoDismissedSet;
+window.recoPersistDismissals = recoPersistDismissals;
+window.recoDismiss = recoDismiss;
+window.recoDismissCandidate = recoDismissCandidate;
+window.recoAdoptDismissalKeys = recoAdoptDismissalKeys;
+window.recoUnionDismissals = recoUnionDismissals;
+window.recoDismissedKeys = recoDismissedKeys;
+window.recoMergeRoamedDismissals = recoMergeRoamedDismissals;
+window.fetchWorkEmbeddings = fetchWorkEmbeddings;
+window.embedTextsClient = embedTextsClient;
+window.RECO_MERCH_RE = RECO_MERCH_RE;
+window.isRecoMerch = isRecoMerch;
+window.recoBrowserLang = recoBrowserLang;
+window.RECO_LANG_NAME_TO_CODE = RECO_LANG_NAME_TO_CODE;
+window.RECO_LANG_6392_TO_1 = RECO_LANG_6392_TO_1;
+window.recoLangCode = recoLangCode;
+window.RECO_DETECT_MIN_HITS = RECO_DETECT_MIN_HITS;
+window.RECO_DETECT_MIN_MARGIN = RECO_DETECT_MIN_MARGIN;
+window.RECO_DETECT_STOPWORDS = RECO_DETECT_STOPWORDS;
+window.RECO_DETECT_SETS = RECO_DETECT_SETS;
+window.recoLangScores = recoLangScores;
+window.recoLangFromScores = recoLangFromScores;
+window.recoDetectLangCode = recoDetectLangCode;
+window.recoCandidateLangCode = recoCandidateLangCode;
+window.RECO_AUDIO_TITLE_RE = RECO_AUDIO_TITLE_RE;
+window.recoIsAudioRecord = recoIsAudioRecord;
+window.recoEditionRank = recoEditionRank;
+window.recoWorkKey = recoWorkKey;
+window.recoLibraryWorkKeys = recoLibraryWorkKeys;
+window.recoWorkKeyBlocked = recoWorkKeyBlocked;
+window.recoWarnCache = recoWarnCache;
+window.recoCandidateWarnings = recoCandidateWarnings;
+window.recoApplyWarningFilter = recoApplyWarningFilter;
+window.collapseRecoWorks = collapseRecoWorks;
+window.recoSweepQuery = recoSweepQuery;
+window.sweepRecoCandidates = sweepRecoCandidates;
+window.addRecoBook = addRecoBook;
+window.visibleRecos = visibleRecos;
+window.visibleRecoLoved = visibleRecoLoved;
+window.visibleRecoSpice = visibleRecoSpice;
+window.openRecoPreview = openRecoPreview;
+window.openReleasePreview = openReleasePreview;
+window.recoCardHTML = recoCardHTML;
+window.recoRailHTML = recoRailHTML;
+window.wireRecoResults = wireRecoResults;
+window.renderRecoResults = renderRecoResults;
+window._recoMemo = _recoMemo;
+window.recoTasteFingerprint = recoTasteFingerprint;
+window.refreshRecommendations = refreshRecommendations;
