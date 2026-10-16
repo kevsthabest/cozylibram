@@ -19,17 +19,24 @@
    through the shared global scope — this file declares
    only its own state at eval time. */
 
-let adminRange = '7d'; // today | 7d | 30d | all | custom
-let adminCustomFrom = '';
-let adminCustomTo = '';
-let adminRowsCache = {}; // rangeKey -> rows
-let adminAggCache = {}; // rangeKey -> aggregate
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-function adminRangeKey() {
+export let adminRange = '7d'; // today | 7d | 30d | all | custom
+export let adminCustomFrom = '';
+export let adminCustomTo = '';
+export let adminRowsCache = {}; // rangeKey -> rows
+export let adminAggCache = {}; // rangeKey -> aggregate
+
+export function adminRangeKey() {
   return adminRange === 'custom' ? 'custom:' + adminCustomFrom + ':' + adminCustomTo : adminRange;
 }
 
-function adminRangeSince() {
+export function adminRangeSince() {
   const now = new Date();
   if (adminRange === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString(); }
   if (adminRange === '7d') return new Date(now.getTime() - 7 * 864e5).toISOString();
@@ -38,12 +45,12 @@ function adminRangeSince() {
   return null;
 }
 
-function adminRangeUntil() {
+export function adminRangeUntil() {
   if (adminRange === 'custom' && adminCustomTo) return new Date(adminCustomTo + 'T23:59:59').toISOString();
   return null;
 }
 
-async function fetchAnalyticsRows() {
+export async function fetchAnalyticsRows() {
   const key = adminRangeKey();
   if (adminRowsCache[key]) return adminRowsCache[key];
   const sb = await cloudClient().catch(() => null);
@@ -62,7 +69,7 @@ async function fetchAnalyticsRows() {
 }
 
 /* Pure: rows -> dashboard aggregates. No DOM, no network — fully testable. */
-function aggregateAnalytics(rows) {
+export function aggregateAnalytics(rows) {
   rows = rows || [];
   const users = {}; // uid -> { events, last, cats:{} }
   const byEvent = {}; // name -> { uses, users:{} }
@@ -162,7 +169,7 @@ function aggregateAnalytics(rows) {
 
 /* ---- rendering ---- */
 
-function humanEvent(name) {
+export function humanEvent(name) {
   const pretty = {
     book_added: 'Book added', book_removed: 'Book removed', book_opened: 'Book opened',
     book_edited: 'Book edited', book_status_changed: 'Status changed', book_rated: 'Book rated',
@@ -187,7 +194,7 @@ function humanEvent(name) {
   return pretty[name] || String(name).replace(/_/g, ' ');
 }
 
-function adminFunnelHTML(funnelTitle, stages) {
+export function adminFunnelHTML(funnelTitle, stages) {
   const max = Math.max.apply(null, [1].concat(stages.map(s => s.users)));
   const rows = stages.map((s, i) => {
     const pct = max ? Math.round(s.users / max * 100) : 0;
@@ -200,7 +207,7 @@ function adminFunnelHTML(funnelTitle, stages) {
   return '<div class="ob-card"><h3 class="serif">' + esc(funnelTitle) + '</h3>' + rows + '</div>';
 }
 
-async function renderAdminBody() {
+export async function renderAdminBody() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   const key = adminRangeKey();
@@ -285,3 +292,36 @@ async function renderAdminBody() {
       '<p class="note">If the analytics tables are missing, run supabase/analytics.sql in the Supabase SQL editor.</p></div>';
   }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers — the Observatory shell in
+   js/199-admin.js and the sign-out path in js/095-gate.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone.
+   The five state bindings are republished as accessor properties, not
+   value copies: js/199-admin.js reassigns adminRange, adminCustomFrom
+   and adminCustomTo from its range controls and resets the two caches,
+   and js/095-gate.js resets the caches on sign-out. A value copy would
+   freeze the initial state and silently drop those writes; the
+   getter/setter pair forwards every read and write to the module
+   binding, so the writers' expressions are unchanged and every reader
+   sees the live value. */
+Object.defineProperty(window, 'adminRange', { get: () => adminRange, set: (v) => { adminRange = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminCustomFrom', { get: () => adminCustomFrom, set: (v) => { adminCustomFrom = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminCustomTo', { get: () => adminCustomTo, set: (v) => { adminCustomTo = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminRowsCache', { get: () => adminRowsCache, set: (v) => { adminRowsCache = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminAggCache', { get: () => adminAggCache, set: (v) => { adminAggCache = v; }, enumerable: true, configurable: true });
+window.adminRangeKey = adminRangeKey;
+window.adminRangeSince = adminRangeSince;
+window.adminRangeUntil = adminRangeUntil;
+window.fetchAnalyticsRows = fetchAnalyticsRows;
+window.aggregateAnalytics = aggregateAnalytics;
+window.humanEvent = humanEvent;
+window.adminFunnelHTML = adminFunnelHTML;
+window.renderAdminBody = renderAdminBody;
