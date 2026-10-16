@@ -2,7 +2,13 @@
    Builds on yearInBooksData() from 170-stats.js, adding spice distribution
    and year-in-tropes. Auto-shows a banner in December/January. ---- */
 
-function wrappedData(yr) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function wrappedData(yr) {
   const base = yearInBooksData(yr);
   if (!base || !base.n) return base;
 
@@ -30,7 +36,7 @@ function wrappedData(yr) {
   return Object.assign({}, base, { avgSpice, spiceDist, yearTropes, hours, dnfs });
 }
 
-function drawWrappedImage(d) {
+export function drawWrappedImage(d) {
   const c = cardCanvas([[0, '#1a0f2e'], [0.5, '#2b1535'], [1, '#100a16']]);
   if (!c) return null;
   const { cv, x, W, H, C } = c;
@@ -114,7 +120,7 @@ function drawWrappedImage(d) {
   return cv;
 }
 
-function shareWrappedImage(yr) {
+export function shareWrappedImage(yr) {
   const d = wrappedData(yr);
   if (!d || !d.n) { toast('No books finished this year yet! 📚'); return; }
   const cv = drawWrappedImage(d);
@@ -125,7 +131,7 @@ function shareWrappedImage(yr) {
 }
 
 /* ---- Wrapped banner: auto-show in Dec/Jan ---- */
-function maybeShowWrappedBanner() {
+export function maybeShowWrappedBanner() {
   const m = new Date().getMonth(); // 0-indexed
   if (m !== 11 && m !== 0) return; // only Dec + Jan
   if (localStorage.getItem('wrapped-banner-' + new Date().getFullYear())) return;
@@ -156,7 +162,7 @@ function maybeShowWrappedBanner() {
   });
 }
 
-function openWrappedView(yr) {
+export function openWrappedView(yr) {
   const d = wrappedData(yr);
   if (!d || !d.n) { toast('No data for ' + yr); return; }
   // Reuse the year-in-books view, then add a share button
@@ -175,3 +181,18 @@ function openWrappedView(yr) {
     }
   }, 100);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/170-stats.js, calls these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.wrappedData = wrappedData;
+window.drawWrappedImage = drawWrappedImage;
+window.shareWrappedImage = shareWrappedImage;
+window.maybeShowWrappedBanner = maybeShowWrappedBanner;
+window.openWrappedView = openWrappedView;

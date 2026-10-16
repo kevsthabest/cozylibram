@@ -36,7 +36,13 @@
  *   loads, and forget it when the view closes.
  */
 
-function ritLog() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function ritLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[rittoo]'].concat([].slice.call(arguments)));
 }
 
@@ -46,7 +52,7 @@ function ritLog() {
  * friend holding a 'reading' copy of the work `key` names:
  * [{ friendId, name, profile, copy }]. Only status is read from a
  * friend's copy — never progress, logs, or dates. */
-function ritMatchesForKey(key, shelves) {
+export function ritMatchesForKey(key, shelves) {
   const out = [];
   if (!key || !Array.isArray(shelves)) return out;
   shelves.forEach(s => {
@@ -68,7 +74,7 @@ function ritMatchesForKey(key, shelves) {
  * Returns [{ book (MY copy), friends: [{ person, copy }] }] in my
  * reading order; a book with no qualifying friend is absent, and a
  * friend with two copies of one work appears once. */
-function ritOverlaps(mine, others) {
+export function ritOverlaps(mine, others) {
   const out = [];
   if (!Array.isArray(mine) || !Array.isArray(others)) return out;
   const seen = new Set();
@@ -92,17 +98,17 @@ function ritOverlaps(mine, others) {
  * Names only, never a count: one friend is "Alyssa is reading this
  * too"; more are listed by first name. The verb agrees with the
  * number of NAMES shown, which is grammar, not a tally. */
-function ritFirstName(name) {
+export function ritFirstName(name) {
   return String(name || 'A friend').split(' ')[0];
 }
-function ritNamesPhrase(matches) {
+export function ritNamesPhrase(matches) {
   const names = (matches || []).map(m => ritFirstName(m.name));
   if (!names.length) return '';
   if (names.length === 1) return names[0] + ' is reading this too';
   if (names.length === 2) return names[0] + ' and ' + names[1] + ' are reading this too';
   return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] + ' are reading this too';
 }
-function ritAvatarsHTML(matches) {
+export function ritAvatarsHTML(matches) {
   return (matches || []).map(m => {
     if (m.profile && typeof circAvatarHTML === 'function') return circAvatarHTML(m.profile, 'c-avatar rit-avatar');
     const initial = esc(ritFirstName(m.name).charAt(0).toUpperCase() || '?');
@@ -112,7 +118,7 @@ function ritAvatarsHTML(matches) {
 /* The modal presence row. Deliberately bare: avatars + the phrase.
  * Nothing else about the friend's copy is rendered — no cover, no
  * edition, no state beyond the presence itself. */
-function ritRowHTML(matches) {
+export function ritRowHTML(matches) {
   if (!matches || !matches.length) return '';
   return '<div class="rit-row"><span class="rit-avatars">' + ritAvatarsHTML(matches) + '</span>' +
     '<span class="rit-text">' + esc(ritNamesPhrase(matches)) + '</span></div>';
@@ -126,9 +132,9 @@ function ritRowHTML(matches) {
  * header. Results are cached briefly so opening several books in a
  * row doesn't refetch the circle's shelves each time; the cache is
  * memory-only and dies with the session. */
-let ritShelvesCache = null; // { at, shelves }
-const RIT_CACHE_MS = 60000;
-async function ritLoadShelves() {
+export let ritShelvesCache = null; // { at, shelves }
+export const RIT_CACHE_MS = 60000;
+export async function ritLoadShelves() {
   if (ritShelvesCache && (Date.now() - ritShelvesCache.at) < RIT_CACHE_MS) return ritShelvesCache.shelves;
   if (typeof cloudUser === 'undefined' || !cloudUser) return [];
   let friends = [];
@@ -147,7 +153,7 @@ async function ritLoadShelves() {
  * no empty state. The shield runs before any HTML is built (the
  * js/196/js/233 discipline): if ANY qualifying copy of the work is
  * known-high-spice, the row is suppressed whole. */
-async function fillReadingItToo(book) {
+export async function fillReadingItToo(book) {
   const slot = document.getElementById('m-rittoo');
   if (!slot || !book || typeof recoKey !== 'function') return;
   const key = recoKey(book);
@@ -177,7 +183,7 @@ async function fillReadingItToo(book) {
  * from the shelf view inside loadCovenStats and hands them here;
  * an empty list renders as no section at all (the v535 coven
  * treatment: never a heading over nothing). */
-function ritHearthCardHTML(overlaps) {
+export function ritHearthCardHTML(overlaps) {
   if (!overlaps || !overlaps.length) return '';
   let html = '<div class="circle-card"><h3 style="margin:0 0 10px">Reading it too</h3><div class="circle-list">';
   overlaps.forEach(o => {
@@ -193,3 +199,25 @@ function ritHearthCardHTML(overlaps) {
   html += '</div></div>';
   return html;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/150-modal-discovery.js and js/197-social-stats.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ritLog = ritLog;
+window.ritMatchesForKey = ritMatchesForKey;
+window.ritOverlaps = ritOverlaps;
+window.ritFirstName = ritFirstName;
+window.ritNamesPhrase = ritNamesPhrase;
+window.ritAvatarsHTML = ritAvatarsHTML;
+window.ritRowHTML = ritRowHTML;
+window.ritShelvesCache = ritShelvesCache;
+window.RIT_CACHE_MS = RIT_CACHE_MS;
+window.ritLoadShelves = ritLoadShelves;
+window.fillReadingItToo = fillReadingItToo;
+window.ritHearthCardHTML = ritHearthCardHTML;

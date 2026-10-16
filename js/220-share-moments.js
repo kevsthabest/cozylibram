@@ -13,20 +13,26 @@
      module only verifies wiring; no duplicate implementation.
 ---- */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* Milestone icon name -> emoji for canvas cards. */
-var MILESTONE_ICON_EMOJI = {
+export var MILESTONE_ICON_EMOJI = {
   sprout: '🌱', covers: '📚', library: '🏛️', trophy: '🏆',
   flame: '🔥', crown: '👑', leaf: '🍂', star: '⭐',
   heart: '💛', compass: '🧭', bookmark: '🔖', quill: '🪶',
   flask: '⚗️', sparkles: '✨'
 };
 
-function milestoneCardEmoji(iconName) {
+export function milestoneCardEmoji(iconName) {
   return MILESTONE_ICON_EMOJI[iconName] || '✨';
 }
 
 /* Resolve a milestone ID to its full definition (catalog or dynamic). */
-function shareableMilestoneDef(id) {
+export function shareableMilestoneDef(id) {
   var store = (typeof loadMilestones === 'function') ? loadMilestones() : {};
   var st = store[id];
   if (!st) return null;
@@ -40,7 +46,7 @@ function shareableMilestoneDef(id) {
 }
 
 /* Draw a 1080x1920 milestone achievement card. Returns canvas or null. */
-function drawMilestoneCard(id) {
+export function drawMilestoneCard(id) {
   var resolved = shareableMilestoneDef(id);
   if (!resolved) return null;
   var def = resolved.def, st = resolved.state;
@@ -109,7 +115,7 @@ function drawMilestoneCard(id) {
   return cv;
 }
 
-function shareMilestoneCard(id) {
+export function shareMilestoneCard(id) {
   var resolved = shareableMilestoneDef(id);
   if (!resolved) { toast('Milestone not found'); return; }
   toast('Making your card… ✨');
@@ -122,7 +128,7 @@ function shareMilestoneCard(id) {
 }
 
 /* Wire share buttons on the Milestones page. Call after renderMilestones(). */
-function wireMilestoneShare() {
+export function wireMilestoneShare() {
   document.querySelectorAll('.ms-share').forEach(function (btn) {
     if (btn.dataset.wired) return;
     btn.dataset.wired = '1';
@@ -136,7 +142,7 @@ function wireMilestoneShare() {
 /* ---- Shelfie: 3D shelf as a shareable image ---- */
 
 /* Compose a Three.js canvas snapshot onto a branded 1080x1920 card. */
-function drawShelfieCard(dataUrl, meta) {
+export function drawShelfieCard(dataUrl, meta) {
   var c = (typeof cardCanvas === 'function')
     ? cardCanvas([[0, '#1d1229'], [0.6, '#150d20'], [1, '#0c0812']])
     : null;
@@ -193,7 +199,7 @@ function drawShelfieCard(dataUrl, meta) {
   });
 }
 
-async function shareShelfie() {
+export async function shareShelfie() {
   if (typeof Shelf3D === 'undefined' || !Shelf3D ||
       typeof Shelf3D.capture !== 'function') {
     toast('Open the 3D shelf first 📚');
@@ -218,3 +224,21 @@ async function shareShelfie() {
   shareCanvasFile(cv, 'my-cozy-shelfie.png', 'My Cozy Shelfie');
   if (typeof track === 'function') track('shelfie_shared', { books: meta.books || 0 });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/170-stats.js and js/217-shelf3d-view.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.MILESTONE_ICON_EMOJI = MILESTONE_ICON_EMOJI;
+window.milestoneCardEmoji = milestoneCardEmoji;
+window.shareableMilestoneDef = shareableMilestoneDef;
+window.drawMilestoneCard = drawMilestoneCard;
+window.shareMilestoneCard = shareMilestoneCard;
+window.wireMilestoneShare = wireMilestoneShare;
+window.drawShelfieCard = drawShelfieCard;
+window.shareShelfie = shareShelfie;

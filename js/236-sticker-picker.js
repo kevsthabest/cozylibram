@@ -17,7 +17,13 @@
 
 /* ================= 1. DATA ================= */
 
-const STICKER_THEME_NAMES = {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const STICKER_THEME_NAMES = {
   abyss: 'Abyss', amour: 'Amour', briarthrone: 'Briarthrone', candlelight: 'Candlelight',
   dark: 'Dark', fete: 'Fête', frost: 'Frost', harvest: 'Harvest', haunt: 'Haunt',
   hearthside: 'Hearthside', light: 'Light', midnight: 'Midnight', pastel: 'Pastel',
@@ -25,10 +31,10 @@ const STICKER_THEME_NAMES = {
   velvet: 'Velvet', verdant: 'Verdant', voidsignal: 'Voidsignal', wisp: 'Wisp',
   wispnight: 'Wisp Night', yuletide: 'Yuletide'
 };
-function stickerThemeName(dir) { return STICKER_THEME_NAMES[dir] || dir; }
+export function stickerThemeName(dir) { return STICKER_THEME_NAMES[dir] || dir; }
 
 /* Sticker themes from the catalog: [{ key (dir), name, count, hero }]. */
-function stickerThemes() {
+export function stickerThemes() {
   const cat = stickerCatalog();
   if (!cat) return [];
   return Object.keys(cat).map(dir => {
@@ -47,14 +53,14 @@ function stickerThemes() {
    runtime-cached by sw.js, never precached). Candidates keep
    .src = the original: the fitting room and every applied render
    evaluate the real file. */
-function avatarThumbSrc(src) {
+export function avatarThumbSrc(src) {
   return typeof src === 'string' && src.indexOf('img/avatars/avatar-') === 0
     ? src.replace('img/avatars/', 'img/avatars/thumb/') : src;
 }
-function stickerIdFor(dir, sheet, num) {
+export function stickerIdFor(dir, sheet, num) {
   return STICKER_AVATAR_PREFIX + dir + '/' + dir + '-' + sheet + '-' + String(num).padStart(2, '0');
 }
-function stickerItemsForTheme(dir) {
+export function stickerItemsForTheme(dir) {
   const cat = stickerCatalog();
   if (!cat || !cat[dir]) return [];
   const out = [];
@@ -71,7 +77,7 @@ function stickerItemsForTheme(dir) {
    contact sheets (prototype data, sheet A of the six sampled themes +
    the motif picks). Everything else falls back to a positional label —
    names are cosmetic; registry completeness is what matters. */
-const STICKER_NAMES = {
+export const STICKER_NAMES = {
   'velvet-a-01': 'Cat on Books', 'velvet-a-02': 'Crescent Moon', 'velvet-a-03': 'Baby Dragon',
   'velvet-a-04': 'Candle', 'velvet-a-05': 'Open Book', 'velvet-a-06': 'Potion',
   'velvet-a-07': 'Teacup', 'velvet-a-08': 'Book Stack', 'velvet-a-09': 'Crystal Ball',
@@ -106,7 +112,7 @@ const STICKER_NAMES = {
   'voidsignal-a-10': 'Chess Knight', 'voidsignal-a-11': 'Cornfield Screen', 'voidsignal-a-12': 'Network Ball',
   'voidsignal-b-02': 'Dome Cat', 'voidsignal-b-03': 'Signal Moon'
 };
-function stickerDisplayName(dir, sheet, num) {
+export function stickerDisplayName(dir, sheet, num) {
   const stem = dir + '-' + sheet + '-' + String(num).padStart(2, '0');
   return STICKER_NAMES[stem] ||
     (stickerThemeName(dir) + ' · ' + sheet.toUpperCase() + '-' + String(num).padStart(2, '0'));
@@ -115,7 +121,7 @@ function stickerDisplayName(dir, sheet, num) {
 /* Motif index — cross-theme grids (the prototype's verified picks;
    every id is pinned against the registry by the sticker-avatars
    suite). Items are 'dir/stem' pairs, namespaced at build time. */
-const STICKER_MOTIFS = [
+export const STICKER_MOTIFS = [
   { key: 'cat', label: 'Cats', items: ['stormrider/stormrider-a-02', 'stormrider/stormrider-b-03', 'velvet/velvet-a-01', 'velvet/velvet-b-03', 'briarthrone/briarthrone-a-02', 'briarthrone/briarthrone-b-03', 'midnight/midnight-a-02', 'midnight/midnight-b-01', 'abyss/abyss-a-01', 'abyss/abyss-b-01', 'voidsignal/voidsignal-a-02', 'voidsignal/voidsignal-b-02'] },
   { key: 'dragon', label: 'Dragons', items: ['stormrider/stormrider-a-01', 'stormrider/stormrider-a-03', 'stormrider/stormrider-b-02', 'stormrider/stormrider-b-10', 'velvet/velvet-a-03', 'velvet/velvet-b-07', 'midnight/midnight-a-01', 'midnight/midnight-b-02', 'briarthrone/briarthrone-a-01', 'voidsignal/voidsignal-a-01', 'abyss/abyss-a-02', 'abyss/abyss-b-04'] },
   { key: 'moon', label: 'Moons', items: ['velvet/velvet-a-02', 'velvet/velvet-b-04', 'stormrider/stormrider-a-06', 'midnight/midnight-a-03', 'abyss/abyss-a-03', 'abyss/abyss-b-02', 'briarthrone/briarthrone-b-01', 'voidsignal/voidsignal-a-03', 'voidsignal/voidsignal-b-03'] },
@@ -123,7 +129,7 @@ const STICKER_MOTIFS = [
   { key: 'potion', label: 'Potions', items: ['velvet/velvet-a-06', 'velvet/velvet-b-06', 'stormrider/stormrider-a-08', 'midnight/midnight-a-06', 'abyss/abyss-a-06', 'briarthrone/briarthrone-a-05', 'voidsignal/voidsignal-a-07'] },
   { key: 'candle', label: 'Candles', items: ['velvet/velvet-a-04', 'velvet/velvet-b-01', 'midnight/midnight-a-04', 'abyss/abyss-a-04', 'briarthrone/briarthrone-a-04'] }
 ];
-function stickerCandidateFromId(id) {
+export function stickerCandidateFromId(id) {
   const parts = parseStickerAvatarId(id);
   const src = stickerAvatarSrc(id);
   if (!parts || !src) return null;
@@ -133,10 +139,10 @@ function stickerCandidateFromId(id) {
     sub: stickerThemeName(parts.theme) + ' · Stickers'
   };
 }
-function pickerMotifItems(motif) {
+export function pickerMotifItems(motif) {
   return motif.items.map(s => stickerCandidateFromId(STICKER_AVATAR_PREFIX + s)).filter(Boolean);
 }
-function pickerMotifIcon(motif) {
+export function pickerMotifIcon(motif) {
   const first = pickerMotifItems(motif)[0];
   return first ? first.src : '';
 }
@@ -144,7 +150,7 @@ function pickerMotifIcon(motif) {
 /* Collections model shared by any skin: painted sets in AVATAR_SETS
    order, then sticker themes A–Z. Sticker items resolve lazily (a
    collection's grid is built only when the collection opens). */
-function pickerCollections() {
+export function pickerCollections() {
   const cols = [];
   AVATAR_SETS.forEach(s => {
     const items = DEFAULT_AVATARS.filter(a => a.set === s.key).map(a => ({
@@ -157,7 +163,7 @@ function pickerCollections() {
   });
   return cols;
 }
-function pickerCollectionItems(col) {
+export function pickerCollectionItems(col) {
   if (col.kind === 'painted') return col.items || [];
   return stickerItemsForTheme(col.theme).map(it => ({
     kind: 'sticker', id: it.id, name: it.name, sub: col.title + ' · Stickers', src: it.src
@@ -166,20 +172,20 @@ function pickerCollectionItems(col) {
 
 /* ================= 2. PLUMBING ================= */
 
-const AVATAR_PICKER_SAVED_KEY = 'spicyshelves.avatarPicker.saved';
-function avatarPickerHasSaved() {
+export const AVATAR_PICKER_SAVED_KEY = 'spicyshelves.avatarPicker.saved';
+export function avatarPickerHasSaved() {
   try { return !!localStorage.getItem(AVATAR_PICKER_SAVED_KEY); }
   catch (e) { return true; } // storage unavailable: never nag
 }
-function markAvatarPickerSaved() {
+export function markAvatarPickerSaved() {
   try { localStorage.setItem(AVATAR_PICKER_SAVED_KEY, '1'); } catch (e) {}
 }
-function avatarSetName(setKey) {
+export function avatarSetName(setKey) {
   const s = AVATAR_SETS.find(x => x.key === setKey);
   return s ? s.name : '';
 }
 /* The profile's current avatar as a candidate (for the now-bar). */
-function candidateForAvatar(av, p) {
+export function candidateForAvatar(av, p) {
   if (av && av.type === 'default') {
     const a = DEFAULT_AVATARS.find(x => x.id === av.id);
     if (a) return { kind: 'painted', id: a.id, name: a.label, sub: avatarSetName(a.set), src: a.src };
@@ -194,20 +200,20 @@ function candidateForAvatar(av, p) {
   const prof = p || loadProfile();
   return { kind: 'letter', name: 'Your initial', sub: 'Just the letter', letter: avatarLetter(prof) };
 }
-function candidateAvatarObject(cand) {
+export function candidateAvatarObject(cand) {
   if (!cand) return { type: 'letter' };
   if (cand.kind === 'painted') return { type: 'default', id: cand.id };
   if (cand.kind === 'sticker') return { type: 'sticker', id: cand.id };
   if (cand.kind === 'upload') return { type: 'upload', dataUrl: cand.dataUrl };
   return { type: 'letter' };
 }
-function sameCandidate(a, b) {
+export function sameCandidate(a, b) {
   if (!a || !b || a.kind !== b.kind) return false;
   if (a.kind === 'painted' || a.kind === 'sticker') return a.id === b.id;
   return true; // upload/letter: one slot each
 }
 /* THE save path — the only function in the picker that writes. */
-function applyAvatarCandidate(cand) {
+export function applyAvatarCandidate(cand) {
   const np = loadProfile();
   np.avatar = candidateAvatarObject(cand);
   if (np.avatar.type === 'upload') np.avatarCloudPath = ''; // new photo → re-upload
@@ -226,40 +232,40 @@ function applyAvatarCandidate(cand) {
    across the trip into a grid. Only one stage's tiles ever exist in the
    DOM — compactness is structural, never the full 468. */
 
-let avatarPickerToken = null; // overlay-history entry for the back-gesture
-let apkCurrent = null;        // candidate of the saved avatar (now-bar)
-let apkCandidate = null;      // candidate being tried on (not saved)
-let apkItems = [];            // candidates in the open grid
-let apkSavedScroll = 0;       // stage-1 scroll position, restored on back
+export let avatarPickerToken = null; // overlay-history entry for the back-gesture
+export let apkCurrent = null;        // candidate of the saved avatar (now-bar)
+export let apkCandidate = null;      // candidate being tried on (not saved)
+export let apkItems = [];            // candidates in the open grid
+export let apkSavedScroll = 0;       // stage-1 scroll position, restored on back
 
-function closeAvatarPickerDom() { // DOM-only teardown (history closer)
+export function closeAvatarPickerDom() { // DOM-only teardown (history closer)
   const ov = document.getElementById('avatar-picker');
   if (ov) ov.remove();
 }
-function closeAvatarPicker() {
+export function closeAvatarPicker() {
   if (avatarPickerToken) { overlayClosed(avatarPickerToken); avatarPickerToken = null; }
   closeAvatarPickerDom();
 }
 
-function apkImgStyle(cand) {
+export function apkImgStyle(cand) {
   return cand && cand.kind === 'sticker' ? 'object-fit:contain;padding:9%' : 'object-fit:cover';
 }
 /* Preview disc content (now-bar, fitting room, size previews). */
-function apkDiscHTML(cand) {
+export function apkDiscHTML(cand) {
   if (!cand) return '';
   if (cand.kind === 'letter') {
     return '<span class="apk-disc letter">' + esc(cand.letter || '•') + '</span>';
   }
   return '<span class="apk-disc"><img src="' + esc(cand.src || '') + '" alt="" style="' + apkImgStyle(cand) + '"></span>';
 }
-function apkRenderCurrent() {
+export function apkRenderCurrent() {
   const cur = document.getElementById('apk-cur');
   if (cur) cur.innerHTML = apkDiscHTML(apkCurrent);
   const sub = document.getElementById('apk-sub');
   if (sub) sub.textContent = 'Currently: ' + (apkCurrent ? apkCurrent.name : '');
 }
 
-function apkCardHTML(c) {
+export function apkCardHTML(c) {
   // Designer critique cut: single hero per card — the mock's 4-image
   // mosaics were the busiest surface in the design; don't ship them.
   const hero = '<span class="apk-card-hero' + (c.kind === 'sticker' ? ' stk' : '') + '">' +
@@ -268,7 +274,7 @@ function apkCardHTML(c) {
   return '<button class="apk-card" data-apk-col="' + esc(c.key) + '">' + hero +
     '<span class="apk-card-meta"><b>' + esc(c.title) + '</b><small>' + c.count + unit + '</small></span></button>';
 }
-function apkStage1HTML() {
+export function apkStage1HTML() {
   const cols = pickerCollections();
   const painted = cols.filter(c => c.kind === 'painted');
   const themes = cols.filter(c => c.kind === 'sticker');
@@ -301,7 +307,7 @@ function apkStage1HTML() {
   return h;
 }
 
-function apkOpenStage2(title) {
+export function apkOpenStage2(title) {
   const sheet = document.getElementById('apk-sheet');
   const s1 = document.getElementById('apk-stage1');
   const s2 = document.getElementById('apk-stage2');
@@ -315,7 +321,7 @@ function apkOpenStage2(title) {
   document.getElementById('apk-title').textContent = title;
   document.getElementById('apk-back').style.visibility = 'visible';
 }
-function apkBack() {
+export function apkBack() {
   apkCloseFitting();
   const sheet = document.getElementById('apk-sheet');
   const s1 = document.getElementById('apk-stage1');
@@ -331,14 +337,14 @@ function apkBack() {
   document.getElementById('apk-back').style.visibility = 'hidden';
 }
 
-function apkTileHTML(cand, i) {
+export function apkTileHTML(cand, i) {
   const sel = sameCandidate(cand, apkCurrent) ? ' sel' : '';
   return '<button class="apk-tile ' + (cand.kind === 'sticker' ? 'stk' : 'painted') + sel + '"' +
     ' data-apk-i="' + i + '" title="' + esc(cand.name) + '" aria-label="' + esc(cand.name) + '">' +
     '<img src="' + esc(cand.thumb || cand.src) + '" alt="" loading="lazy" style="' + apkImgStyle(cand) + '">' +
     '<span class="apk-ring"></span><span class="apk-ck">✓</span></button>';
 }
-function apkRenderGrid(items, title) {
+export function apkRenderGrid(items, title) {
   apkItems = items;
   const s2 = document.getElementById('apk-stage2');
   let h = '<div class="apk-grid">';
@@ -355,7 +361,7 @@ function apkRenderGrid(items, title) {
     }));
   apkOpenStage2(title);
 }
-function apkOpenThemes() {
+export function apkOpenThemes() {
   const themes = stickerThemes().slice().sort((a, b) => a.name.localeCompare(b.name));
   const s2 = document.getElementById('apk-stage2');
   s2.innerHTML = '<div class="apk-trows">' + themes.map(t =>
@@ -370,7 +376,7 @@ function apkOpenThemes() {
     }));
   apkOpenStage2('All themes A–Z');
 }
-function apkOpenYours() {
+export function apkOpenYours() {
   apkItems = [];
   const p = loadProfile();
   const letterCand = { kind: 'letter', name: 'Your initial', sub: 'Just the letter', letter: avatarLetter(p) };
@@ -398,7 +404,7 @@ function apkOpenYours() {
 
 /* Fitting room — a bar inside the sheet, never a nested sheet. Trying
    saves nothing; "Use this picture" is the only save action. */
-function apkTryOn(cand, tileEl) {
+export function apkTryOn(cand, tileEl) {
   apkCandidate = cand;
   document.querySelectorAll('#apk-stage2 .apk-tile').forEach(x => x.classList.remove('try'));
   if (tileEl) tileEl.classList.add('try');
@@ -413,7 +419,7 @@ function apkTryOn(cand, tileEl) {
   const sheet = document.getElementById('apk-sheet');
   if (sheet) sheet.classList.add('fit-open'); // scroll clearance under the pinned bar
 }
-function apkCloseFitting() {
+export function apkCloseFitting() {
   const f = document.getElementById('apk-fitting');
   if (f) f.classList.remove('open');
   const sheet = document.getElementById('apk-sheet');
@@ -421,7 +427,7 @@ function apkCloseFitting() {
   apkCandidate = null;
   document.querySelectorAll('#apk-stage2 .apk-tile.try').forEach(x => x.classList.remove('try'));
 }
-function apkUse() {
+export function apkUse() {
   if (!apkCandidate) return;
   const cand = apkCandidate;
   applyAvatarCandidate(cand);
@@ -440,7 +446,7 @@ function apkUse() {
   if (typeof view !== 'undefined' && view === 'profile' && typeof renderProfile === 'function') renderProfile();
 }
 
-function openAvatarPicker() {
+export function openAvatarPicker() {
   // Defensive re-open adopts the existing history entry (v220 pattern).
   const reopenToken = avatarPickerToken; avatarPickerToken = null;
   closeAvatarPickerDom();
@@ -525,3 +531,57 @@ function openAvatarPicker() {
   if (reopenToken && typeof overlayReplace === 'function') overlayReplace(reopenToken, doOpen);
   else doOpen();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/105-account.js, calls these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.STICKER_THEME_NAMES = STICKER_THEME_NAMES;
+window.stickerThemeName = stickerThemeName;
+window.stickerThemes = stickerThemes;
+window.avatarThumbSrc = avatarThumbSrc;
+window.stickerIdFor = stickerIdFor;
+window.stickerItemsForTheme = stickerItemsForTheme;
+window.STICKER_NAMES = STICKER_NAMES;
+window.stickerDisplayName = stickerDisplayName;
+window.STICKER_MOTIFS = STICKER_MOTIFS;
+window.stickerCandidateFromId = stickerCandidateFromId;
+window.pickerMotifItems = pickerMotifItems;
+window.pickerMotifIcon = pickerMotifIcon;
+window.pickerCollections = pickerCollections;
+window.pickerCollectionItems = pickerCollectionItems;
+window.AVATAR_PICKER_SAVED_KEY = AVATAR_PICKER_SAVED_KEY;
+window.avatarPickerHasSaved = avatarPickerHasSaved;
+window.markAvatarPickerSaved = markAvatarPickerSaved;
+window.avatarSetName = avatarSetName;
+window.candidateForAvatar = candidateForAvatar;
+window.candidateAvatarObject = candidateAvatarObject;
+window.sameCandidate = sameCandidate;
+window.applyAvatarCandidate = applyAvatarCandidate;
+window.avatarPickerToken = avatarPickerToken;
+window.apkCurrent = apkCurrent;
+window.apkCandidate = apkCandidate;
+window.apkItems = apkItems;
+window.apkSavedScroll = apkSavedScroll;
+window.closeAvatarPickerDom = closeAvatarPickerDom;
+window.closeAvatarPicker = closeAvatarPicker;
+window.apkImgStyle = apkImgStyle;
+window.apkDiscHTML = apkDiscHTML;
+window.apkRenderCurrent = apkRenderCurrent;
+window.apkCardHTML = apkCardHTML;
+window.apkStage1HTML = apkStage1HTML;
+window.apkOpenStage2 = apkOpenStage2;
+window.apkBack = apkBack;
+window.apkTileHTML = apkTileHTML;
+window.apkRenderGrid = apkRenderGrid;
+window.apkOpenThemes = apkOpenThemes;
+window.apkOpenYours = apkOpenYours;
+window.apkTryOn = apkTryOn;
+window.apkCloseFitting = apkCloseFitting;
+window.apkUse = apkUse;
+window.openAvatarPicker = openAvatarPicker;

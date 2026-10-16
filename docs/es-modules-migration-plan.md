@@ -927,3 +927,35 @@ classification calls from the batch.
   suite for R2 to attach to, and the suite's output — including its
   one baseline failure, on the identical assertion — is
   byte-identical to the pristine base.
+
+---
+
+## Gate notes — PR #272 (v596)
+
+Recorded from the Security Advisor's gate on the phase-1c batch-2 PR,
+at the program manager's direction. The gate closed PASS_WITH_RISK,
+and ruled on the batch's repoint, provenance, and standing-pattern
+items below.
+
+- **R1 — the editioncapture §10 point tag-pin repoint was ruled
+  sound under CONSTRAINTS rule 4.** The repointed assertion accepts
+  either exact tag literal (the classic script tag or the module
+  tag) and still fails on a missing, renamed, or mis-src'd tag, so
+  the net is not narrower than the pin it replaced. No other suite
+  pins any of the eight files' tags.
+- **Provenance — shipped js/213 is body-identical to the fork
+  slice-1 conversion.** The file that landed matches the fork
+  conversion line for line: 112/112 stripped lines identical.
+- **Low, standing pattern — bridge-published initial values in
+  js/166 and js/206.** js/166's `adminLogFilter` and js/206's `EC`
+  publish their initial values via their bridges, per the standing
+  Low-1 mechanism. The gate graded EC as a var session state (the
+  Low-1 class, not a const namespace) and grep-proved zero
+  production readers for both names, so nothing observable
+  diverges. The two js/206 suites' bare `EC` use runs against the
+  harness's classicized copy, whose scope semantics are unchanged.
+- **Nit — PR #272's body total said 94 names; its per-file counts
+  sum to 96.** Identity was verified exact at 96/96, so the slip
+  was in the body's arithmetic, not in the conversion. The
+  count-check step this produced is now standard in Builder
+  briefs, and was applied in PR 5 (138 names, verified two ways).

@@ -422,8 +422,12 @@ const MY_LIBRARY = [
   ok('schema.sql mirrors all three v532 RPCs',
     schema.indexOf('my_sent_thoughts') !== -1 && schema.indexOf('my_sent_buddy_invites') !== -1 &&
     schema.indexOf('invite_inviter_name') !== -1);
+  // R1 repoint (migration plan §9.3): js/234's tag is a module tag since
+  // its ESM conversion; its position is taken from either tag form — the
+  // same assertion (js/234 registers after js/233), coverage unchanged.
   ok('index.html registers js/234-outbox.js after js/233',
-    html.indexOf('<script src="js/234-outbox.js"></script>') > html.indexOf('<script src="js/233-buddy-reads.js"></script>'));
+    Math.max(html.indexOf('<script src="js/234-outbox.js"></script>'),
+      html.indexOf('<script type="module" src="js/234-outbox.js"></script>')) > html.indexOf('<script src="js/233-buddy-reads.js"></script>'));
   ok('sw.js precaches 234-outbox.js',
     fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8').indexOf("'234-outbox.js'") !== -1);
 

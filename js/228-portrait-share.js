@@ -5,10 +5,16 @@
    the v399 cardCanvas() helper, palette from the active theme's tokens.
    Branding: app icon + wordmark only. No emoji taglines, no URL/QR. ---- */
 
-var PS_SERIF = "Georgia, 'Times New Roman', serif";
-var PS_SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export var PS_SERIF = "Georgia, 'Times New Roman', serif";
+export var PS_SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 
-const PS_STYLES = [
+export const PS_STYLES = [
   { key: 'editorial', name: 'Editorial' },
   { key: 'cover', name: 'Cover Story' },
   { key: 'stickers', name: 'Sticker Pack' }
@@ -20,8 +26,8 @@ const PS_STYLES = [
    few sheets 10-13 instead of 12; twilight's B sheet was excluded at
    cutting by design). Stickers are runtime-cached by the service worker,
    never precached — 13.1 MB must not block app install. ---- */
-const PS_STICKER_DIR = { 'wisp-night': 'wispnight' };
-const PS_STICKER_SETS = {
+export const PS_STICKER_DIR = { 'wisp-night': 'wispnight' };
+export const PS_STICKER_SETS = {
   abyss: [12, 12], amour: [12, 0], briarthrone: [12, 13], candlelight: [12, 12],
   dark: [11, 12], fete: [12, 0], frost: [12, 12], harvest: [12, 0],
   haunt: [12, 0], hearthside: [12, 10], light: [13, 12], midnight: [12, 12],
@@ -32,7 +38,7 @@ const PS_STICKER_SETS = {
 /* Seeded rotation (spec/MANIFEST freshness rule): the theme's full set,
    shuffled by a hash of reader id + month, so repeat shares rotate art
    and a reader's picks are stable within a month. Pure — unit tested. */
-function psStickerPaths(themeKey, readerKey, monthKey) {
+export function psStickerPaths(themeKey, readerKey, monthKey) {
   const dir = PS_STICKER_DIR[themeKey] || themeKey;
   const counts = PS_STICKER_SETS[dir];
   if (!counts) return [];
@@ -55,22 +61,22 @@ function psStickerPaths(themeKey, readerKey, monthKey) {
   }
   return all;
 }
-function psMonthKey(d) {
+export function psMonthKey(d) {
   const dt = d || new Date();
   return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
 }
 
 /* Sticker phrase bank (spec, verbatim). Identity phrases, never data
    claims. BOOKS > PEOPLE is an optional-tier filler — not a default. */
-const PS_PHRASES = [
+export const PS_PHRASES = [
   'BOOKTOK MADE ME DO IT', 'JUST ONE MORE CHAPTER', 'PLOT TWIST MENACE',
   'EMOTIONAL SUPPORT BOOK', 'PROFESSIONAL TBR BUILDER', 'IN MY READING ERA',
   'WARNING: EASILY DISTRACTED BY BOOKS', 'HEAD LIBRARIAN',
   'DO NOT DISTURB: AT THE CLIMAX'
 ];
-const PS_PHRASE_DRAGON = 'MY OTHER RIDE IS A DRAGON'; // fantasy clusters only
-const PS_DRAGON_CLUSTERS = ['fantasy', 'romantasy', 'litrpg', 'paranormal'];
-function psPickPhrases(p, count) {
+export const PS_PHRASE_DRAGON = 'MY OTHER RIDE IS A DRAGON'; // fantasy clusters only
+export const PS_DRAGON_CLUSTERS = ['fantasy', 'romantasy', 'litrpg', 'paranormal'];
+export function psPickPhrases(p, count) {
   const pool = PS_PHRASES.slice();
   if (PS_DRAGON_CLUSTERS.indexOf(p.clusterKey) >= 0) pool.push(PS_PHRASE_DRAGON);
   const rng = portraitRng((p.seed ^ 0x9e3779b9) >>> 0);
@@ -82,7 +88,7 @@ function psPickPhrases(p, count) {
 }
 
 /* ---- image loading (every failure resolves null; cards degrade) ---- */
-function psLoadImage(src, timeoutMs) {
+export function psLoadImage(src, timeoutMs) {
   return new Promise((resolve) => {
     if (!src) { resolve(null); return; }
     let done = false;
@@ -96,11 +102,11 @@ function psLoadImage(src, timeoutMs) {
     } catch (e) { fin(null); }
   });
 }
-function psLoadCover(url) {
+export function psLoadCover(url) {
   if (typeof loadCoverImage === 'function') return loadCoverImage(url);
   return psLoadImage(url, 8000);
 }
-async function psLoadAssets(p, style) {
+export async function psLoadAssets(p, style) {
   const A = { covers: [], polaroid: null, stickers: [], icon: null };
   try {
     const jobs = [psLoadImage('icon.svg').then(img => { A.icon = img; })];
@@ -124,7 +130,7 @@ async function psLoadAssets(p, style) {
 }
 
 /* ---- shared drawing helpers ---- */
-function psWrap(x, text, maxW) {
+export function psWrap(x, text, maxW) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let cur = '';
@@ -137,7 +143,7 @@ function psWrap(x, text, maxW) {
   if (cur) lines.push(cur);
   return lines.length ? lines : [''];
 }
-function psStars(x, cx, y, size, color) {
+export function psStars(x, cx, y, size, color) {
   x.save();
   x.fillStyle = color; x.font = size + 'px ' + PS_SANS; x.textAlign = 'center';
   try { dnaSpaced(x, '★★★★★', cx, y, Math.round(size * 0.35)); } catch (e) { x.fillText('★★★★★', cx, y); }
@@ -147,10 +153,10 @@ function psStars(x, cx, y, size, color) {
    slot later. No emoji, no URL (spec branding rules). Adapter over the
    one shared cardFooter (js/050) — it only translates this card family's
    palette token, baseline, and preloaded icon into cardFooter options. */
-function psFooter(x, W, y, t, icon) {
+export function psFooter(x, W, y, t, icon) {
   cardFooter(x, W, { y: y, color: t && t.muted, icon: icon });
 }
-function psDrawCoverFit(x, img, cx, cy, w, h, r) {
+export function psDrawCoverFit(x, img, cx, cy, w, h, r) {
   x.save();
   try {
     cvRoundRect(x, cx - w / 2, cy - h / 2, w, h, r || 8); x.clip();
@@ -160,7 +166,7 @@ function psDrawCoverFit(x, img, cx, cy, w, h, r) {
   } catch (e) {}
   x.restore();
 }
-function psCoverPlaceholder(x, book, cx, cy, w, h, t) {
+export function psCoverPlaceholder(x, book, cx, cy, w, h, t) {
   x.save();
   cvRoundRect(x, cx - w / 2, cy - h / 2, w, h, 8);
   x.fillStyle = dnaMix(t.bg2, t.accent, 0.25); x.fill();
@@ -177,7 +183,7 @@ function psCoverPlaceholder(x, book, cx, cy, w, h, t) {
 }
 /* Celebration line parts (rule 6): finishing celebrated, longest streak
    only as a memory, top author as a personal fact. No score framing. */
-function psCelebration(p) {
+export function psCelebration(p) {
   const parts = [p.n + (p.n === 1 ? ' story' : ' stories') + ' seen through to their ending'];
   if (p.streak >= 2) parts.push('that one ' + p.streak + '-day reading cocoon');
   if (p.topAuthor) parts.push('most-read: ' + p.topAuthor.name);
@@ -185,7 +191,7 @@ function psCelebration(p) {
 }
 /* Spice appetite as a blurb sentence for B: "a dragonfire palate — no
    regrets" -> "A dragonfire palate. No regrets." */
-function psBlurbSentence(text) {
+export function psBlurbSentence(text) {
   let s = String(text || '').trim();
   if (!s) return s;
   s = s.charAt(0).toUpperCase() + s.slice(1);
@@ -196,7 +202,7 @@ function psBlurbSentence(text) {
 }
 
 /* ================= A — Editorial ================= */
-function drawPortraitEditorial(x, W, H, p, t, A) {
+export function drawPortraitEditorial(x, W, H, p, t, A) {
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
 
   x.fillStyle = t.muted; x.font = '30px ' + PS_SANS;
@@ -285,7 +291,7 @@ function drawPortraitEditorial(x, W, H, p, t, A) {
 }
 
 /* ================= B — Cover Story ================= */
-function drawPortraitCoverStory(x, W, H, p, t, A) {
+export function drawPortraitCoverStory(x, W, H, p, t, A) {
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
 
   // Cover frame: double rule.
@@ -385,7 +391,7 @@ function drawPortraitCoverStory(x, W, H, p, t, A) {
 /* Measure a pill without drawing it: box size + per-line glyph boxes in
    pill-local coords. The collage layout pass uses the glyph boxes as
    protected zones before anything is drawn. */
-function psPillMetrics(x, o) {
+export function psPillMetrics(x, o) {
   const lines = o.lines || [];
   let w = 0;
   lines.forEach(L => {
@@ -405,7 +411,7 @@ function psPillMetrics(x, o) {
   });
   return { w: w + (o.padX || 34) * 2, h: totalH + (o.padY || 20) * 2, lines: lineBoxes, totalH, gap };
 }
-function psPill(x, cx, cy, o) {
+export function psPill(x, cx, cy, o) {
   const m = psPillMetrics(x, o);
   const lines = o.lines || [];
   const bw = m.w, bh = m.h, totalH = m.totalH, gap = m.gap;
@@ -433,7 +439,7 @@ function psPill(x, cx, cy, o) {
   x.restore();
   return { w: bw, h: bh, lines: m.lines };
 }
-function psStarburst(x, cx, cy, r, fill) {
+export function psStarburst(x, cx, cy, r, fill) {
   x.save();
   x.beginPath();
   const points = 16;
@@ -448,7 +454,7 @@ function psStarburst(x, cx, cy, r, fill) {
   x.fillStyle = fill; x.fill();
   x.restore();
 }
-function psIllustrated(x, img, cx, cy, size, rot) {
+export function psIllustrated(x, img, cx, cy, size, rot) {
   if (!img) return;
   x.save();
   x.translate(cx, cy);
@@ -463,19 +469,19 @@ function psIllustrated(x, img, cx, cy, size, rot) {
    without ever covering text. A pill's protected zone is its TEXT lines
    (not the whole pill), so illustrated stickers may kiss pill borders
    exactly like a real sticker-bombed e-reader back. ---- */
-function psBox(cx, cy, w, h, rot) {
+export function psBox(cx, cy, w, h, rot) {
   const a = Math.abs((rot || 0) * Math.PI / 180);
   const c = Math.cos(a), s = Math.sin(a);
   const hw = (w / 2) * c + (h / 2) * s;
   const hh = (w / 2) * s + (h / 2) * c;
   return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
 }
-function psBoxesHit(a, b) {
+export function psBoxesHit(a, b) {
   return !!a && !!b && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 }
 /* Protected zones for a drawn pill: each text line's glyph box, rotated
    into canvas coords and padded by `pad`. Returns canvas-space boxes. */
-function psPillZones(cx, cy, pill, rot, pad) {
+export function psPillZones(cx, cy, pill, rot, pad) {
   const a = (rot || 0) * Math.PI / 180;
   const c = Math.cos(a), s = Math.sin(a);
   const p = pad || 0;
@@ -495,7 +501,7 @@ function psPillZones(cx, cy, pill, rot, pad) {
    contour + drop shadow, no polaroid frame, no caption — the cover
    carries its own title. If the cover image failed to load, a
    title-text sticker with the same contour stands in. */
-function psCoverSticker(x, img, book, cx, cy, w, h, rot, t) {
+export function psCoverSticker(x, img, book, cx, cy, w, h, rot, t) {
   const B = 16; // white contour width at card scale
   x.save();
   x.translate(cx, cy);
@@ -522,7 +528,7 @@ function psCoverSticker(x, img, book, cx, cy, w, h, rot, t) {
   x.restore();
 }
 
-function drawPortraitStickerPack(x, W, H, p, t, A) {
+export function drawPortraitStickerPack(x, W, H, p, t, A) {
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
   const darkInk = '#241a2e';
   const GLYPH_PAD = 10; // protected margin around text glyphs + cover art
@@ -893,7 +899,7 @@ function drawPortraitStickerPack(x, W, H, p, t, A) {
 }
 
 /* ---- render entry: one portrait, three renderers ---- */
-async function renderPortraitCanvas(style) {
+export async function renderPortraitCanvas(style) {
   const p = buildReaderPortrait();
   if (!p) return null;
   const t = portraitTheme();
@@ -909,7 +915,7 @@ async function renderPortraitCanvas(style) {
 }
 
 /* ---- share sheet: swipeable carousel of the three styles ---- */
-function openPortraitShareSheet() {
+export function openPortraitShareSheet() {
   const p = buildReaderPortrait();
   if (!p) { toast('Read some books first! 📚'); return; }
   if (document.querySelector('.pshare-sheet')) return;
@@ -1087,3 +1093,47 @@ function openPortraitShareSheet() {
   overlay.querySelector('.pshare-close').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers, js/105-account.js and js/212-dna.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.PS_SERIF = PS_SERIF;
+window.PS_SANS = PS_SANS;
+window.PS_STYLES = PS_STYLES;
+window.PS_STICKER_DIR = PS_STICKER_DIR;
+window.PS_STICKER_SETS = PS_STICKER_SETS;
+window.psStickerPaths = psStickerPaths;
+window.psMonthKey = psMonthKey;
+window.PS_PHRASES = PS_PHRASES;
+window.PS_PHRASE_DRAGON = PS_PHRASE_DRAGON;
+window.PS_DRAGON_CLUSTERS = PS_DRAGON_CLUSTERS;
+window.psPickPhrases = psPickPhrases;
+window.psLoadImage = psLoadImage;
+window.psLoadCover = psLoadCover;
+window.psLoadAssets = psLoadAssets;
+window.psWrap = psWrap;
+window.psStars = psStars;
+window.psFooter = psFooter;
+window.psDrawCoverFit = psDrawCoverFit;
+window.psCoverPlaceholder = psCoverPlaceholder;
+window.psCelebration = psCelebration;
+window.psBlurbSentence = psBlurbSentence;
+window.drawPortraitEditorial = drawPortraitEditorial;
+window.drawPortraitCoverStory = drawPortraitCoverStory;
+window.psPillMetrics = psPillMetrics;
+window.psPill = psPill;
+window.psStarburst = psStarburst;
+window.psIllustrated = psIllustrated;
+window.psBox = psBox;
+window.psBoxesHit = psBoxesHit;
+window.psPillZones = psPillZones;
+window.psCoverSticker = psCoverSticker;
+window.drawPortraitStickerPack = drawPortraitStickerPack;
+window.renderPortraitCanvas = renderPortraitCanvas;
+window.openPortraitShareSheet = openPortraitShareSheet;
