@@ -3,7 +3,7 @@
 
 
 
-const CACHE = 'cozy-libram-v584';
+const CACHE = 'cozy-libram-v585';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v500: Reader Portrait sticker artwork (assets/stickers/cut-webp/) is
@@ -25,7 +25,7 @@ const STICKERS_PATH = '/assets/stickers/cut-webp/';
 // es/reader.js, zxing_reader.wasm), so no eviction cap is needed.
 const ZXING_CACHE = 'cozy-libram-zxing';
 const ZXING_PATH = '/js/vendor/zxing/';
-// v584 (issue #214): the picker-sized avatar derivatives under
+// v585 (issue #214): the picker-sized avatar derivatives under
 // img/avatars/thumb/ (22 files, ~160 KB) are runtime-cached on first
 // picker use, NEVER precached — the same pattern as stickers and the
 // ZXing decoder: installs stay lean (the 1600x1600 originals, 2,246 KB,
@@ -179,7 +179,7 @@ self.addEventListener('fetch', (e) => {
     })());
     return;
   }
-  // v584 (issue #214): avatar picker derivatives — cache-first with
+  // v585 (issue #214): avatar picker derivatives — cache-first with
   // runtime fill, same pattern as stickers/zxing. The generic
   // same-origin branch below only matches, never stores, so without
   // this rule the thumbs would re-download on every picker open.
