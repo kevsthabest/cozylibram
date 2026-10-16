@@ -5,7 +5,13 @@
 // title, author, or ISBN, and bulk ISBN import tucked behind a disclosure.
 // (The old Scan/Search/ISBN/Bulk tabs are gone; `addTab` survives only as a
 // hint — 'search' focuses the field — for deep links from Discover/onboarding.)
-function renderAdd() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function renderAdd() {
   // v193: the scan panel is stateful across re-renders — addBook's render()
   // used to collapse the panel and kill the camera after every add, forcing
   // the user to start the camera again for the next book.
@@ -134,7 +140,7 @@ function renderAdd() {
 }
 
 // Scanner panel: viewfinder + camera toggle + photo fallback.
-function scanPanelHTML() {
+export function scanPanelHTML() {
   const insecure = !window.isSecureContext;
   return '<div class="scan-box"><video id="scan-video" playsinline muted></video>' +
     '<div class="scan-dim" aria-hidden="true"></div>' +
@@ -149,7 +155,7 @@ function scanPanelHTML() {
     (insecure ? '<p class="note">' + icon('warn') + ' Live camera needs a secure (HTTPS) connection — this page is on plain http://, so the browser blocks it. The photo button above works without it.</p>' : '') +
     '<p class="note">Tip: on a phone, install this as an app (Share → Add to Home Screen) for the full experience.</p>';
 }
-function wireScanPanel(mount) {
+export function wireScanPanel(mount) {
   const toggle = mount.querySelector('#scan-toggle');
   toggle.addEventListener('click', () => {
     if (scanState.active) stopScan();
@@ -173,7 +179,7 @@ function wireScanPanel(mount) {
 
 // Photo fallback: uses the camera app directly (no getUserMedia permission needed,
 // works over plain http://), then decodes the barcode from the snapshot.
-async function decodePhotoFile(file) {
+export async function decodePhotoFile(file) {
   const mount = document.getElementById('scan-result') || document.getElementById('add-scan-mount');
   mount.innerHTML = '<p class="note">Reading barcode…</p>';
   try {
@@ -211,7 +217,7 @@ async function decodePhotoFile(file) {
   }
 }
 
-async function startScan() {
+export async function startScan() {
   const video = document.getElementById('scan-video');
   const toggle = document.getElementById('scan-toggle');
   const result = document.getElementById('scan-result');
@@ -256,7 +262,7 @@ async function startScan() {
   }
 }
 
-function onBarcode(raw, instant) {
+export function onBarcode(raw, instant) {
   const isbn = String(raw).replace(/[^0-9X]/gi, '').toUpperCase();
   if (!/^(\d{13}|\d{12}|\d{9}[\dX])$/.test(isbn)) return false; // partial read — keep scanning
   if (!isbnCheckOk(isbn)) return false; // v193: misread (bad check digit) — keep scanning silently
@@ -276,7 +282,7 @@ function onBarcode(raw, instant) {
 // v193: ISBN/EAN check-digit validation — rejects the garbled first-frame
 // reads that used to fail the lookup and force a manual rescan.
 // ISBN-13 and UPC-A/EAN-12 use mod-10; ISBN-10 uses mod-11 (X = 10).
-function isbnCheckOk(isbn) {
+export function isbnCheckOk(isbn) {
   // A 12-digit UPC-A is an EAN-13 with a leading zero — validate it as one.
   if (/^\d{12}$/.test(isbn)) isbn = '0' + isbn;
   if (/^\d{13}$/.test(isbn)) {
@@ -294,7 +300,7 @@ function isbnCheckOk(isbn) {
   return false;
 }
 
-function stopScan() {
+export function stopScan() {
   scanState.active = false;
   scanState.lastCode = null; scanState.hits = 0; // v193: reset misread consensus
   if (scanState.timer) { clearInterval(scanState.timer); scanState.timer = null; }
@@ -314,7 +320,7 @@ function stopScan() {
 // tears the panel down mid-getUserMedia, leaving a dead "Start camera"
 // button. The data is already saved, so skipping the render loses nothing:
 // the UI picks the enriched data up on the next navigation render.
-function renderKeepScan() {
+export function renderKeepScan() {
   const mount = document.getElementById('add-scan-mount');
   if (mount && mount.dataset.open) return;
   render();
@@ -325,11 +331,11 @@ function renderKeepScan() {
 // BarcodeDetector is absent (Safari, Firefox); the BarcodeDetector path
 // above never loads any of it. Loaded lazily via dynamic import, the
 // same pattern as js/207's vendored three module.
-const ZXING_FORMATS = ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E'];
-let zxingModulePromise = null;
-function loadZXingReader() {
+export const ZXING_FORMATS = ['EAN-13', 'EAN-8', 'UPC-A', 'UPC-E'];
+export let zxingModulePromise = null;
+export function loadZXingReader() {
   if (!zxingModulePromise) {
-    zxingModulePromise = import('./js/vendor/zxing/es/reader.js').then(m => {
+    zxingModulePromise = import('./vendor/zxing/es/reader.js').then(m => {
       // Upstream's default locateFile points the .wasm at a CDN; the
       // explicit override pins it to the vendored same-origin copy.
       m.prepareZXingModule({ overrides: { locateFile: (f) => 'js/vendor/zxing/' + f } });
@@ -338,7 +344,7 @@ function loadZXingReader() {
   }
   return zxingModulePromise;
 }
-function startZXing(video) {
+export function startZXing(video) {
   if (!video) return;
   scanState.zxing = true;
   const canvas = document.createElement('canvas');
@@ -363,12 +369,12 @@ function startZXing(video) {
   };
   tick();
 }
-function stopZXing() {
+export function stopZXing() {
   if (scanState.zxingTimer) { clearTimeout(scanState.zxingTimer); scanState.zxingTimer = null; }
   scanState.zxing = false;
 }
 
-async function isbnLookupUI(isbn, mount, source) {
+export async function isbnLookupUI(isbn, mount, source) {
   const src = source || 'isbn';
   mount.innerHTML = '<p class="note">Looking up ' + esc(isbn) + '…</p>';
   try {
@@ -432,7 +438,7 @@ async function isbnLookupUI(isbn, mount, source) {
 // v150: paints the cached searchResults. Entries already on her shelves — or
 // added during this search session — show a ✓ instead of ＋, so several
 // books by one author can be added from a single search.
-function paintSearchResults(box) {
+export function paintSearchResults(box) {
   box.innerHTML = '<div class="grid">' + searchResults.map((b, i) => {
     const have = b._added || alreadyHave(b);
     return '<div class="book-card" data-i="' + i + '"' + (have ? ' style="opacity:0.4"' : '') + '>' + coverHTML(b) +
@@ -461,7 +467,7 @@ function paintSearchResults(box) {
 
 /* ---------------- bulk ISBN import ---------------- */
 // Split pasted text into clean, deduped ISBN candidates (10 or 13 digits).
-function parseISBNList(text) {
+export function parseISBNList(text) {
   const seen = new Set();
   const out = [];
   String(text || '').split(/[\s,;]+/).forEach(raw => {
@@ -475,7 +481,7 @@ function parseISBNList(text) {
 
 // Look up a list of ISBNs one by one (300ms pacing, metacache-backed).
 // Returns [{ isbn, status: 'found'|'duplicate'|'missing', book }].
-async function bulkLookupISBNs(isbns, onStep) {
+export async function bulkLookupISBNs(isbns, onStep) {
   const results = [];
   for (let i = 0; i < isbns.length; i++) {
     if (onStep) onStep(i + 1, isbns.length);
@@ -492,7 +498,7 @@ async function bulkLookupISBNs(isbns, onStep) {
 // Add a batch of books at once: one save, one render, one toast.
 // Skips background enrichment/page-count fetch — lookupISBN already fills
 // page counts, and automatic Hardcover enrichment backfills the rest.
-function bulkAddBooks(books, source) {
+export function bulkAddBooks(books, source) {
   let n = 0;
   const added = [];
   for (const book of books) {
@@ -511,7 +517,7 @@ function bulkAddBooks(books, source) {
   return n;
 }
 
-function renderBulkInto(body) {
+export function renderBulkInto(body) {
   body.innerHTML =
     '<textarea id="b-isbns" class="text-input" rows="6" inputmode="numeric" ' +
     'placeholder="978125031…&#10;9780593…&#10;one ISBN per line"></textarea>' +
@@ -549,3 +555,34 @@ function renderBulkInto(body) {
     });
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/070-hardcover.js, js/100-nav.js, js/132-import.js, js/135-vision.js, js/137-shelf.js, js/139-import-concierge.js and js/200-boot.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ZXING_FORMATS = ZXING_FORMATS;
+window.bulkAddBooks = bulkAddBooks;
+window.bulkLookupISBNs = bulkLookupISBNs;
+window.decodePhotoFile = decodePhotoFile;
+window.isbnCheckOk = isbnCheckOk;
+window.isbnLookupUI = isbnLookupUI;
+window.loadZXingReader = loadZXingReader;
+window.onBarcode = onBarcode;
+window.paintSearchResults = paintSearchResults;
+window.parseISBNList = parseISBNList;
+window.renderAdd = renderAdd;
+window.renderBulkInto = renderBulkInto;
+window.renderKeepScan = renderKeepScan;
+window.scanPanelHTML = scanPanelHTML;
+window.startScan = startScan;
+window.startZXing = startZXing;
+window.stopScan = stopScan;
+window.stopZXing = stopZXing;
+window.wireScanPanel = wireScanPanel;
+window.zxingModulePromise = zxingModulePromise;
