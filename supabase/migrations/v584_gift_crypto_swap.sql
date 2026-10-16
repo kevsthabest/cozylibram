@@ -1,4 +1,4 @@
--- ================= Gift a Book: crypto primitive swap (v583) =================
+-- ================= Gift a Book: crypto primitive swap (v584) =================
 --
 -- DECISION RECORD. v582 (A8) encrypted the gift address vault with
 -- pgsodium's by-key-id AEAD, which requires the executing role to hold
@@ -71,7 +71,7 @@
 select vault.create_secret(
   encode(extensions.gen_random_bytes(48), 'base64'),
   'gift-address-key-v1',
-  'Gift a Book address-vault encryption key (v583, pgcrypto). Read only by gift_enc/gift_dec via vault.decrypted_secrets.')
+  'Gift a Book address-vault encryption key (v584, pgcrypto). Read only by gift_enc/gift_dec via vault.decrypted_secrets.')
 where not exists (select 1 from vault.secrets where name = 'gift-address-key-v1');
 
 -- ====================== gift_enc / gift_dec (pgcrypto) ======================
