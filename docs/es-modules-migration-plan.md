@@ -959,3 +959,34 @@ items below.
   was in the body's arithmetic, not in the conversion. The
   count-check step this produced is now standard in Builder
   briefs, and was applied in PR 5 (138 names, verified two ways).
+
+---
+
+## Gate notes — PR #273 (v597)
+
+Recorded from the Security Advisor's gate on the phase-1c batch-3 PR,
+at the program manager's direction. The gate closed PASS_WITH_RISK.
+**Phase 1 completed with this PR: 37 files converted at v597.**
+
+- **Low, standing pattern — bridge snapshots of reassigned
+  bindings recurred in disclosed form.** js/231's `rxTableMissing`,
+  js/234's `sentUnsupported`, js/235's `ritShelvesCache`, and
+  js/236's five picker bindings (`avatarPickerToken`,
+  `apkCandidate`, `apkCurrent`, `apkItems`, `apkSavedScroll`)
+  publish their initial values via their bridges, per the standing
+  Low-1 mechanism. The gate grep-proved zero external mentions of
+  any of the eight names, so nothing observable diverges. The
+  caution is unchanged: a future reassigned binding WITH a
+  cross-file reader needs a getter/accessor bridge or a roster
+  hold — the mechanism PR #274 itself establishes for the admin
+  cluster.
+- **Nit, design note — the Math.max-of-two-forms ordering check
+  in social-remediation-a has one theoretical widening.** The
+  repointed ordering assertion (js/234 registers after js/233)
+  would also pass if index.html ever carried BOTH tag forms for
+  js/234 at once, with the classic form before js/233 and the
+  module form after it. That state requires a duplicated script
+  tag, which the series' one-for-one flips never produce and
+  which the per-gate set-equality census (104 = 104 = 104)
+  excludes. For future R1 ordering repoints, prefer
+  single-position derivations where the suite's structure allows.
