@@ -525,6 +525,13 @@ function renderProfile() {
       '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
       '<button class="btn block" id="pf-save">Save profile</button>' +
       '<p class="note">Your name, themed avatar, and profile picture sync to your cloud account when you\'re signed in, so they follow you across devices.</p>' +
+      // v588: the Gift a Book address editor lives here, with the
+      // rest of the user's own details (it moved out of Settings →
+      // Circle & privacy; the access log stayed there). Like the
+      // handle block, it saves through its own buttons, not Save
+      // profile. Built and wired by js/243's fillGiftAddress; the
+      // slot stays empty when signed out, unsupported, or teen-band.
+      '<div id="pf-giftaddr-slot"></div>' +
     '</div>'
   );
   document.getElementById('pf-back').addEventListener('click', () => go('library'));
@@ -573,6 +580,9 @@ function renderProfile() {
   // v550: the handle editor block + the findable seg (radio behaviour,
   // like the band picker; disabled buttons stay inert).
   if (typeof wireHandleEditor === 'function') wireHandleEditor();
+  // v588: the gift address block (js/243) — fills only when signed in,
+  // gifts are supported, and the account is not teen-band.
+  if (typeof fillGiftAddress === 'function') fillGiftAddress(document.getElementById('pf-giftaddr-slot'));
   const fbtns = Array.from(document.querySelectorAll('#pf-findable button'));
   fbtns.forEach(b => b.addEventListener('click', () => {
     if (b.disabled) return;

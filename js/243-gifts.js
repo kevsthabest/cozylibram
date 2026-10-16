@@ -489,7 +489,10 @@ async function openGiftGivingSheet(opener) {
 }
 
 /* ---------- Settings → Circle & privacy (js/195 mounts the
- * slot inside the shared privacy panel; this fills it) ---------- */
+ * slot inside the shared privacy panel; fillGiftSettings fills it
+ * with the grants, the recipient claims, and the address access
+ * log) — and the Profile surface (js/105), where fillGiftAddress
+ * mounts the gift address editor itself ---------- */
 
 /* The teen storage ban (spec §7/A9): the address form is never
  * offered to a teen-band account. The band is device state —
@@ -537,9 +540,7 @@ async function fillGiftSettings(slot) {
     else (g.data || []).forEach(r => { grantSet[r.friend_id] = true; });
   } catch (e) { giftLog('grants read threw', e); }
 
-  /* --- my address + the recipient-side claims (behind its toggle) --- */
-  const teen = giftTeenBand();
-  const mine = teen ? null : await giftRpc('gift_address_mine');
+  /* --- the recipient-side claims (behind its toggle) --- */
   let recipClaims = [];
   let claimsOn = false;
   try {
@@ -581,37 +582,8 @@ async function fillGiftSettings(slot) {
     html += '</div>';
   }
 
-  /* address (never offered to teen-band accounts) */
-  if (!teen) {
-    const a = (mine && mine.exists) ? mine : {};
-    const val = k => esc(a[k] == null ? '' : String(a[k]));
-    html += '<div class="field"><label>Gift address</label>' +
-      '<p class="note" style="margin:0 0 8px">Your delivery details for gifts. They’re stored encrypted, and a friend sees them only while they hold a claim on one of your wishlist books and you’ve switched sharing on.</p>' +
-      '<div class="field"><label for="gift-addr-name">Name</label>' +
-      '<input id="gift-addr-name" class="text-input" autocomplete="name" value="' + val('name') + '"></div>' +
-      '<div class="field"><label for="gift-addr-street">Street</label>' +
-      '<input id="gift-addr-street" class="text-input" autocomplete="street-address" value="' + val('street') + '"></div>' +
-      '<div class="field"><label for="gift-addr-city">City</label>' +
-      '<input id="gift-addr-city" class="text-input" autocomplete="address-level2" value="' + val('city') + '"></div>' +
-      '<div class="field"><label for="gift-addr-region">Province or state</label>' +
-      '<input id="gift-addr-region" class="text-input" autocomplete="address-level1" value="' + val('region') + '"></div>' +
-      '<div class="field"><label for="gift-addr-postal">Postal code</label>' +
-      '<input id="gift-addr-postal" class="text-input" autocomplete="postal-code" value="' + val('postal') + '"></div>' +
-      '<div class="field"><label for="gift-addr-country">Country</label>' +
-      '<input id="gift-addr-country" class="text-input" autocomplete="country-name" value="' + val('country') + '"></div>' +
-      '<div class="field"><label for="gift-addr-phone">Phone (optional)</label>' +
-      '<input id="gift-addr-phone" class="text-input" autocomplete="tel" value="' + val('phone') + '"></div>' +
-      '<div class="field"><label for="gift-addr-email">Gift email</label>' +
-      '<input id="gift-addr-email" class="text-input" autocomplete="email" placeholder="For ebook &amp; audio gifts" value="' + val('email') + '"></div>' +
-      '<div class="modal-actions"><button class="btn" id="gift-addr-save">Save address</button>' +
-      ((mine && mine.exists) ? '<button class="btn ghost" id="gift-addr-delete">Delete address</button>' : '') +
-      '</div></div>' +
-      '<div class="field"><label>Share my gift address with claimers</label>' +
-      giftSegHTML('gift-sharing', !!(mine && mine.sharing_enabled)) +
-      '<p class="note">Friends who claim one of your wishlist books can see this address to ship it to you.</p></div>';
-  }
-
-  /* access log — pull-only disclosure */
+  /* access log — pull-only disclosure (stays here; the address
+   * editor itself moved to the Profile surface) */
   html += '<div class="field"><label>Gift address views</label>' +
     '<button class="btn ghost sm" id="gift-log-open">Show views</button>' +
     '<div id="gift-log-list"></div></div>';
@@ -637,41 +609,6 @@ async function fillGiftSettings(slot) {
       }
     });
   });
-
-  /* address wiring */
-  if (!teen) {
-    const field = id => { const el = slot.querySelector('#' + id); return el ? el.value.trim() : ''; };
-    const saveBtn = slot.querySelector('#gift-addr-save');
-    if (saveBtn) saveBtn.addEventListener('click', async () => {
-      if (saveBtn.disabled) return;
-      saveBtn.disabled = true;
-      const r = await giftRpc('gift_address_upsert', {
-        p_name: field('gift-addr-name'), p_street: field('gift-addr-street'),
-        p_city: field('gift-addr-city'), p_region: field('gift-addr-region'),
-        p_postal: field('gift-addr-postal'), p_country: field('gift-addr-country'),
-        p_phone: field('gift-addr-phone'), p_email: field('gift-addr-email'),
-      });
-      if (r && r.ok === true) { toast('Gift address saved'); fillGiftSettings(slot); }
-      else { saveBtn.disabled = false; toast('Couldn’t save your gift address'); }
-    });
-    const delBtn = slot.querySelector('#gift-addr-delete');
-    if (delBtn) delBtn.addEventListener('click', async () => {
-      if (delBtn.disabled) return;
-      delBtn.disabled = true;
-      const r = await giftRpc('gift_address_delete');
-      if (r && r.ok === true) { toast('Gift address deleted'); fillGiftSettings(slot); }
-      else { delBtn.disabled = false; toast('Couldn’t delete your gift address'); }
-    });
-    giftWireSeg(slot, 'gift-sharing', !!(mine && mine.sharing_enabled), async (v) => {
-      const r = await giftRpc('gift_address_set_sharing', { p_on: v });
-      if (r && r.ok === true) {
-        toast(v ? 'Your gift address can be shared with claimers' : 'Your gift address is no longer shared');
-        return true;
-      }
-      toast('Couldn’t save that setting');
-      return false;
-    });
-  }
 
   /* access log wiring: fetch on open, then just expand/collapse */
   const logBtn = slot.querySelector('#gift-log-open');
@@ -701,5 +638,140 @@ async function fillGiftSettings(slot) {
         : esc(fmtDate(r.revealed_at)) + ' — a friend viewed your gift address';
       return '<div class="circle-row"><div class="circle-meta"><span>' + line + '</span></div></div>';
     }).join('') + '</div>';
+  });
+}
+
+/* ---------- Profile surface: the gift address editor ----------
+ * The address editor lives with the rest of the user's own details
+ * (Profile, js/105 mounts the slot). Same fields, same RPCs, same
+ * fail-closed behaviour as when it sat in Circle & privacy; the
+ * access log did NOT move (it stays in fillGiftSettings above).
+ * The country is a select keyed to js/244's vendored list; the
+ * stored value is the country NAME (e.g. "Canada") — the same
+ * human-readable shape the column has always held, and what the
+ * reveal shows a gift buyer. Postal validation (js/244) runs
+ * on-device before save: malformed blocks, doubtful warns with an
+ * explicit Save anyway, and only the normalized postal value rides
+ * the payload — the verdict itself is never stored or sent. */
+async function fillGiftAddress(slot) {
+  if (!slot || typeof cloudUser === 'undefined' || !cloudUser) return;
+  if (giftTeenBand()) return; // the form is never offered to teen-band accounts
+  if (!(await giftSupported())) return;
+  if (!document.body.contains(slot)) return;
+  const mine = await giftRpc('gift_address_mine');
+  if (!document.body.contains(slot)) return;
+  const a = (mine && mine.exists) ? mine : {};
+  const val = k => esc(a[k] == null ? '' : String(a[k]));
+
+  /* Resolve the stored country (free text historically: "Canada",
+   * "CA", …) to a list entry. An unmatched legacy value keeps its
+   * own option so the saved data is never silently rewritten, and
+   * validates as unknown-country (no checks) until re-picked. */
+  const storedCountry = a.country == null ? '' : String(a.country);
+  const storedCode = (typeof giftCountryCodeFor === 'function') ? giftCountryCodeFor(storedCountry) : '';
+  let options = '';
+  if (storedCountry && !storedCode) {
+    options += '<option value="' + esc(storedCountry) + '" data-code="" selected>' + esc(storedCountry) + '</option>';
+  }
+  options += GIFT_COUNTRIES.map(c =>
+    '<option value="' + esc(c[1]) + '" data-code="' + c[0] + '"' +
+    (c[0] === storedCode || (!storedCountry && c[0] === 'CA') ? ' selected' : '') + '>' + esc(c[1]) + '</option>'
+  ).join('');
+
+  slot.innerHTML =
+    '<div class="field"><label>Gift address</label>' +
+    '<p class="note" style="margin:0 0 8px">Your delivery details for gifts. They’re stored encrypted, and a friend sees them only while they hold a claim on one of your wishlist books and you’ve switched sharing on.</p>' +
+    '<div class="field"><label for="gift-addr-name">Name</label>' +
+    '<input id="gift-addr-name" class="text-input" autocomplete="name" value="' + val('name') + '"></div>' +
+    '<div class="field"><label for="gift-addr-street">Street</label>' +
+    '<input id="gift-addr-street" class="text-input" autocomplete="street-address" value="' + val('street') + '"></div>' +
+    '<div class="field"><label for="gift-addr-city">City</label>' +
+    '<input id="gift-addr-city" class="text-input" autocomplete="address-level2" value="' + val('city') + '"></div>' +
+    '<div class="field"><label for="gift-addr-region">Province or state</label>' +
+    '<input id="gift-addr-region" class="text-input" autocomplete="address-level1" value="' + val('region') + '"></div>' +
+    '<div class="field"><label for="gift-addr-postal">Postal code</label>' +
+    '<input id="gift-addr-postal" class="text-input" autocomplete="postal-code" value="' + val('postal') + '"></div>' +
+    '<div class="field"><label for="gift-addr-country">Country</label>' +
+    '<select id="gift-addr-country" class="text-input" autocomplete="country-name">' + options + '</select></div>' +
+    '<div class="field"><label for="gift-addr-phone">Phone (optional)</label>' +
+    '<input id="gift-addr-phone" class="text-input" autocomplete="tel" value="' + val('phone') + '"></div>' +
+    '<div class="field"><label for="gift-addr-email">Gift email</label>' +
+    '<input id="gift-addr-email" class="text-input" autocomplete="email" placeholder="For ebook &amp; audio gifts" value="' + val('email') + '"></div>' +
+    '<p class="note" id="gift-addr-msg" role="alert" hidden></p>' +
+    '<div class="modal-actions"><button class="btn" id="gift-addr-save">Save address</button>' +
+    '<button class="btn ghost" id="gift-addr-save-anyway" hidden>Save anyway</button>' +
+    ((mine && mine.exists) ? '<button class="btn ghost" id="gift-addr-delete">Delete address</button>' : '') +
+    '</div></div>' +
+    '<div class="field"><label>Share my gift address with claimers</label>' +
+    giftSegHTML('gift-sharing', !!(mine && mine.sharing_enabled)) +
+    '<p class="note">Friends who claim one of your wishlist books can see this address to ship it to you.</p></div>';
+
+  const field = id => { const el = slot.querySelector('#' + id); return el ? el.value.trim() : ''; };
+  const countryEl = slot.querySelector('#gift-addr-country');
+  const msgEl = slot.querySelector('#gift-addr-msg');
+  const saveBtn = slot.querySelector('#gift-addr-save');
+  const anywayBtn = slot.querySelector('#gift-addr-save-anyway');
+
+  /* Any edit after a warning retires the warning: "Save anyway"
+   * only ever applies to the exact values that were warned about. */
+  const resetVerdict = () => {
+    if (msgEl) { msgEl.hidden = true; msgEl.textContent = ''; }
+    if (anywayBtn) anywayBtn.hidden = true;
+  };
+  slot.querySelectorAll('#gift-addr-region, #gift-addr-postal').forEach(el =>
+    el.addEventListener('input', resetVerdict));
+  if (countryEl) countryEl.addEventListener('change', resetVerdict);
+
+  async function doSave() {
+    const opt = countryEl && countryEl.selectedOptions ? countryEl.selectedOptions[0] : null;
+    const code = opt ? (opt.getAttribute('data-code') || '') : '';
+    const check = (typeof giftPostalCheck === 'function')
+      ? giftPostalCheck(code, field('gift-addr-postal'), field('gift-addr-region'))
+      : { status: 'skip', normalized: field('gift-addr-postal'), message: '' };
+    if (check.status === 'block') {
+      if (msgEl) { msgEl.textContent = check.message; msgEl.hidden = false; }
+      if (anywayBtn) anywayBtn.hidden = true;
+      return;
+    }
+    if (check.status === 'warn' && !doSave.force) {
+      if (msgEl) { msgEl.textContent = check.message; msgEl.hidden = false; }
+      if (anywayBtn) anywayBtn.hidden = false;
+      return;
+    }
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+    if (anywayBtn) anywayBtn.disabled = true;
+    const r = await giftRpc('gift_address_upsert', {
+      p_name: field('gift-addr-name'), p_street: field('gift-addr-street'),
+      p_city: field('gift-addr-city'), p_region: field('gift-addr-region'),
+      p_postal: check.normalized, p_country: field('gift-addr-country'),
+      p_phone: field('gift-addr-phone'), p_email: field('gift-addr-email'),
+    });
+    if (r && r.ok === true) { toast('Gift address saved'); fillGiftAddress(slot); }
+    else {
+      saveBtn.disabled = false;
+      if (anywayBtn) anywayBtn.disabled = false;
+      toast('Couldn’t save your gift address');
+    }
+  }
+  if (saveBtn) saveBtn.addEventListener('click', () => { doSave.force = false; doSave(); });
+  if (anywayBtn) anywayBtn.addEventListener('click', () => { doSave.force = true; doSave(); });
+
+  const delBtn = slot.querySelector('#gift-addr-delete');
+  if (delBtn) delBtn.addEventListener('click', async () => {
+    if (delBtn.disabled) return;
+    delBtn.disabled = true;
+    const r = await giftRpc('gift_address_delete');
+    if (r && r.ok === true) { toast('Gift address deleted'); fillGiftAddress(slot); }
+    else { delBtn.disabled = false; toast('Couldn’t delete your gift address'); }
+  });
+  giftWireSeg(slot, 'gift-sharing', !!(mine && mine.sharing_enabled), async (v) => {
+    const r = await giftRpc('gift_address_set_sharing', { p_on: v });
+    if (r && r.ok === true) {
+      toast(v ? 'Your gift address can be shared with claimers' : 'Your gift address is no longer shared');
+      return true;
+    }
+    toast('Couldn’t save that setting');
+    return false;
   });
 }

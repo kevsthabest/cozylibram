@@ -492,7 +492,9 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>' +
     // v582: Gift a Book — the recipient claim-visibility opt-in
     // plus the slot the async gift sections (per-friend grants,
-    // gift address + sharing, claim views) fill from js/243. The
+    // claim views, address access log) fill from js/243. The
+    // gift ADDRESS editor itself lives on the Profile surface
+    // (js/105 slot, filled by js/243's fillGiftAddress). The
     // wrapper starts hidden and is only revealed once js/243
     // confirms the server supports gifts (fail closed: pre-migration
     // it never appears, and nothing gift-related renders anywhere).
