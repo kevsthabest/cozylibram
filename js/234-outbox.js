@@ -30,12 +30,18 @@
  *   surface before it.
  */
 
-let sentUnsupported = false;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export let sentUnsupported = false;
 
-function sentLog() {
+export function sentLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[sent]'].concat([].slice.call(arguments)));
 }
-function sentRpcMissingErr(e) {
+export function sentRpcMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -48,7 +54,7 @@ function sentRpcMissingErr(e) {
  * served (signed out, pre-migration, transient failure) — the
  * section renders nothing for null, and only the missing-function
  * shape latches. */
-async function sentFetch() {
+export async function sentFetch() {
   if (sentUnsupported) return null;
   try {
     const sb = await cloudClient();
@@ -67,8 +73,8 @@ async function sentFetch() {
   } catch (e) { sentLog('fetch threw', e); return null; }
 }
 
-const SENT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function sentDayLabel(ts) {
+export const SENT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function sentDayLabel(ts) {
   const d = new Date(ts);
   if (isNaN(d)) return '';
   const base = SENT_MONTHS[d.getMonth()] + ' ' + d.getDate();
@@ -78,7 +84,7 @@ function sentDayLabel(ts) {
 /* The recipient's name for a sent row: my circle projection first
  * (freshest), then the name the RPC carried (it survives the pair
  * parting — the record of who I sent to is mine), then generic. */
-function sentName(id, rpcName) {
+export function sentName(id, rpcName) {
   const p = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[id] : null;
   if (p) {
     // v550: the one display helper (js/237) — @handle when set.
@@ -89,7 +95,7 @@ function sentName(id, rpcName) {
   return 'A friend';
 }
 
-function sentThoughtRowHTML(e) {
+export function sentThoughtRowHTML(e) {
   const r = e.row;
   const b = toySnapshotBook(r.book);
   const note = String(r.note || '');
@@ -104,7 +110,7 @@ function sentThoughtRowHTML(e) {
     '<div class="circle-actions"><button class="btn ghost sm" data-sent-unsend="' + esc(r.id) + '">Unsend</button></div></div>';
 }
 
-function sentInviteRowHTML(e) {
+export function sentInviteRowHTML(e) {
   const r = e.row;
   const b = (typeof buddyDisplayBook === 'function')
     ? buddyDisplayBook({ book_key: r.book_key })
@@ -118,7 +124,7 @@ function sentInviteRowHTML(e) {
     '</div></div>';
 }
 
-function sentSectionHTML(entries) {
+export function sentSectionHTML(entries) {
   let html = '<div class="circle-card" style="margin-top:14px"><h3 class="serif" style="margin:0 0 4px">' +
     icon('share') + ' Things you\u2019ve sent</h3>' +
     '<p class="note" style="margin:0 0 8px">Only you see this list. It\u2019s a record of sending \u2014 not a window into what happened next.</p><div class="circle-list">';
@@ -126,7 +132,7 @@ function sentSectionHTML(entries) {
   return html + '</div></div>';
 }
 
-function wireSentOutbox(slot, entries) {
+export function wireSentOutbox(slot, entries) {
   const byId = {};
   entries.forEach(e => { if (e.kind === 'toy') byId[e.row.id] = e.row; });
   slot.querySelectorAll('[data-sent-unsend]').forEach(btn => btn.addEventListener('click', async () => {
@@ -147,7 +153,7 @@ function wireSentOutbox(slot, entries) {
  * under the Thought-of-you inbox). Empty or unservable → the slot
  * stays empty; the section exists only when there is something
  * the sender actually sent. */
-async function refreshSentOutbox() {
+export async function refreshSentOutbox() {
   const slot = document.getElementById('sent-slot');
   if (!slot || typeof cloudUser === 'undefined' || !cloudUser) return;
   const data = await sentFetch();
@@ -162,3 +168,25 @@ async function refreshSentOutbox() {
   slot.innerHTML = sentSectionHTML(shown);
   wireSentOutbox(slot, shown);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/195-coven.js, calls these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.sentUnsupported = sentUnsupported;
+window.sentLog = sentLog;
+window.sentRpcMissingErr = sentRpcMissingErr;
+window.sentFetch = sentFetch;
+window.SENT_MONTHS = SENT_MONTHS;
+window.sentDayLabel = sentDayLabel;
+window.sentName = sentName;
+window.sentThoughtRowHTML = sentThoughtRowHTML;
+window.sentInviteRowHTML = sentInviteRowHTML;
+window.sentSectionHTML = sentSectionHTML;
+window.wireSentOutbox = wireSentOutbox;
+window.refreshSentOutbox = refreshSentOutbox;
