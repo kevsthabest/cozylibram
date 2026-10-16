@@ -9,38 +9,44 @@
    or server.py), which sets the identifying User-Agent Inventaire asks for
    (browsers cannot set User-Agent themselves). */
 
-function invProxyUrl(query) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function invProxyUrl(query) {
   return '/api/inventaire/entities?' + query;
 }
 
 // Fetch entities by URI: 'isbn:978...' / 'wd:Q...' / 'inv:...'
 // (pipe-separated for batching). Returns the raw { entities, redirects }.
-async function invByUris(uris) {
+export async function invByUris(uris) {
   const r = await apiFetch(invProxyUrl('action=by-uris&uris=' + encodeURIComponent(uris)));
   return (await r.json()) || {};
 }
 
-function invClaims(entity) {
+export function invClaims(entity) {
   return (entity && entity.claims) || {};
 }
-function invClaim(entity, prop) {
+export function invClaim(entity, prop) {
   const v = invClaims(entity)['wdt:' + prop];
   return v && v.length ? v[0] : null;
 }
 // Edition title: the P1476 (title) claim, else the fromclaims label.
-function invTitle(entity) {
+export function invTitle(entity) {
   return invClaim(entity, 'P1476') ||
     ((entity && entity.labels && entity.labels.fromclaims) || '');
 }
 // Display label for human entities (authors): names don't translate, so
 // prefer French (the project's strong suit), then English, then anything.
-function invLabel(entity) {
+export function invLabel(entity) {
   const labels = (entity && entity.labels) || {};
   if (!labels || typeof labels !== 'object') return '';
   return labels.fr || labels.en || labels.fromclaims ||
     Object.keys(labels).map(k => labels[k]).find(v => typeof v === 'string' && v) || '';
 }
-function invCoverUrl(entity) {
+export function invCoverUrl(entity) {
   const u = entity && entity.image && entity.image.url;
   if (!u) return '';
   return u[0] === '/' ? 'https://inventaire.io' + u : u;
@@ -49,7 +55,7 @@ function invCoverUrl(entity) {
 // Map an Inventaire edition entity (+ resolved author names) to the app's
 // book shape, mirroring olDocToBook. No description or ratings exist on
 // Inventaire — enrichRatings blends Open Library ratings in afterwards.
-function invEditionToBook(edition, authorNames) {
+export function invEditionToBook(edition, authorNames) {
   const rawIsbn = invClaim(edition, 'P212') || '';
   const isbn = String(rawIsbn).replace(/[^0-9X]/gi, '');
   const pages = invClaim(edition, 'P1104');
@@ -81,7 +87,7 @@ function invEditionToBook(edition, authorNames) {
 
 // Resolve author names for a work entity: P50 author URIs → one batched
 // by-uris call → labels.
-async function invAuthorNames(work) {
+export async function invAuthorNames(work) {
   const authorUris = (invClaims(work)['wdt:P50'] || [])
     .filter(u => typeof u === 'string' && u);
   if (!authorUris.length) return [];
@@ -96,7 +102,7 @@ async function invAuthorNames(work) {
 
 // ISBN lookup via Inventaire: edition → work → authors (up to 3 fetches,
 // all through the proxy). Returns a book shell or null.
-async function invLookupISBN(isbn) {
+export async function invLookupISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean) return null;
   const d = await invByUris('isbn:' + clean);
@@ -116,3 +122,23 @@ async function invLookupISBN(isbn) {
   }
   return invEditionToBook(edition, authorNames);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/061-gbooks-key.js and js/080-pagecount.js, call these helpers at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.invProxyUrl = invProxyUrl;
+window.invByUris = invByUris;
+window.invClaims = invClaims;
+window.invClaim = invClaim;
+window.invTitle = invTitle;
+window.invLabel = invLabel;
+window.invCoverUrl = invCoverUrl;
+window.invEditionToBook = invEditionToBook;
+window.invAuthorNames = invAuthorNames;
+window.invLookupISBN = invLookupISBN;

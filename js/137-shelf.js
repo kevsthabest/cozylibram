@@ -14,20 +14,26 @@
 // was invisible ("Reading…" then nothing) — and a stalled upload used to
 // hang forever with no message and nothing in the Logs tab.
 
-let shelfBusy = false;
-let shelfResults = []; // [{spine, book, status}] — status: ready|review|have|missing
-let shelfScanPhoto = null; // v253: the downscaled scan photo, kept so spine
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export let shelfBusy = false;
+export let shelfResults = []; // [{spine, book, status}] — status: ready|review|have|missing
+export let shelfScanPhoto = null; // v253: the downscaled scan photo, kept so spine
 // regions can be cropped from it when books are added (auto spine photos).
 
-const SHELF_MAX_LOOKUPS = 20;
+export const SHELF_MAX_LOOKUPS = 20;
 
 // Normalize for comparison: lowercase alphanumerics only.
-function shelfNorm(s) {
+export function shelfNorm(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 // Significant words (mirrors queryTokens in 061-gbooks-key.js).
-function shelfTokens(s) {
+export function shelfTokens(s) {
   const stop = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'by', 'in', 'on', 'to', 'for', 'with']);
   return shelfNorm(s).split(' ').filter(w => w.length >= 3 && !stop.has(w));
 }
@@ -35,7 +41,7 @@ function shelfTokens(s) {
 // Pick the best catalog result for a spine candidate and say how sure we
 // are. 'confident' needs every significant spine-title word in the result
 // title plus the author surname matching; anything weaker is 'review'.
-function shelfBestMatch(cand, results) {
+export function shelfBestMatch(cand, results) {
   const tToks = shelfTokens(cand.title);
   if (!tToks.length || !results.length) return null;
   const surname = shelfTokens(cand.author).pop() || '';
@@ -55,14 +61,14 @@ function shelfBestMatch(cand, results) {
 
 // Entry point for the "Scan a bookshelf" button: live-camera frame when
 // available, photo picker otherwise.
-function shelfScan() {
+export function shelfScan() {
   if (shelfBusy || visionBusy) return;
   const shot = visionGetImage();
   if (shot) shelfSend(shot);
   else visionPickPhoto(shelfSend); // photo picker feeds shelfSend
 }
 
-async function shelfSend(dataUrl) {
+export async function shelfSend(dataUrl) {
   if (shelfBusy || !dataUrl) return;
   if (!document.getElementById('scan-result')) return;
   shelfBusy = true;
@@ -139,14 +145,14 @@ async function shelfSend(dataUrl) {
   }
 }
 
-function shelfStatusChip(entry) {
+export function shelfStatusChip(entry) {
   if (entry.status === 'have') return '<span class="badge tobuy">' + icon('covers') + ' already on shelves</span>';
   if (entry.status === 'ready') return '<span class="badge owned">' + icon('read') + ' confident match</span>';
   if (entry.status === 'review') return '<span class="badge">' + icon('help') + ' check this one</span>';
   return '<span class="badge">' + icon('help') + ' no match found</span>';
 }
 
-function shelfSpineLabel(entry) {
+export function shelfSpineLabel(entry) {
   return esc([entry.spine.title, entry.spine.author].filter(Boolean).join(' — ')) +
     (entry.spine.confidence && entry.spine.confidence !== 'high'
       ? ' <span class="note">(' + esc(entry.spine.confidence) + ' confidence)</span>' : '');
@@ -158,7 +164,7 @@ function shelfSpineLabel(entry) {
 // Resolves with a small JPEG data URL, or null when the model gave no
 // usable box (older scans, unreadable positions) — the book is still
 // added, just with a generated spine.
-async function shelfScanSpinePhoto(entry) {
+export async function shelfScanSpinePhoto(entry) {
   try {
     if (!shelfScanPhoto || !entry || !entry.spine) return null;
     const x0 = entry.spine.x0, x1 = entry.spine.x1;
@@ -168,7 +174,7 @@ async function shelfScanSpinePhoto(entry) {
   } catch (e) { return null; }
 }
 
-function paintShelfResults() {
+export function paintShelfResults() {
   // v201: grab the live node — the caller may have been awaiting across a
   // re-render. Bail quietly if the user navigated away mid-scan.
   const mount = document.getElementById('scan-result');
@@ -234,3 +240,26 @@ function paintShelfResults() {
       if (m2) paintShelfResults(m2);
     }));
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/130-add.js, calls shelfScan() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.shelfBusy = shelfBusy;
+window.shelfResults = shelfResults;
+window.shelfScanPhoto = shelfScanPhoto;
+window.SHELF_MAX_LOOKUPS = SHELF_MAX_LOOKUPS;
+window.shelfNorm = shelfNorm;
+window.shelfTokens = shelfTokens;
+window.shelfBestMatch = shelfBestMatch;
+window.shelfScan = shelfScan;
+window.shelfSend = shelfSend;
+window.shelfStatusChip = shelfStatusChip;
+window.shelfSpineLabel = shelfSpineLabel;
+window.shelfScanSpinePhoto = shelfScanSpinePhoto;
+window.paintShelfResults = paintShelfResults;

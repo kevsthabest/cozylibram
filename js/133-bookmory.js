@@ -7,8 +7,14 @@
 // a pure-JS inflate (deflate) implementation, and a minimal SQLite reader that
 // understands just enough of the file format to scan the `entry` table.
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* ---- pure-JS inflate (raw deflate stream, RFC 1951) ---- */
-function bmMakeHuffman(lengths) {
+export function bmMakeHuffman(lengths) {
   let maxbits = 0;
   lengths.forEach(l => { if (l > maxbits) maxbits = l; });
   const bl_count = new Array(maxbits + 1).fill(0);
@@ -38,13 +44,13 @@ function bmMakeHuffman(lengths) {
   };
 }
 
-const BM_LBASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
-const BM_LEXT = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
-const BM_DBASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
-const BM_DEXT = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
-const BM_CL_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+export const BM_LBASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+export const BM_LEXT = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+export const BM_DBASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+export const BM_DEXT = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+export const BM_CL_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
 
-function bmInflateRaw(data) {
+export function bmInflateRaw(data) {
   const out = [];
   let pos = 0, hold = 0, bits = 0;
   const need = n => { while (bits < n) { hold |= data[pos++] << bits; bits += 8; } };
@@ -99,7 +105,7 @@ function bmInflateRaw(data) {
 }
 
 /* ---- minimal ZIP reader (just enough to extract named files) ---- */
-function bmZipList(data) {
+export function bmZipList(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const n = data.length;
   let eocd = -1;
@@ -126,7 +132,7 @@ function bmZipList(data) {
   return files;
 }
 
-function bmZipExtract(data, entry) {
+export function bmZipExtract(data, entry) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const p = entry.lhOff;
   if (dv.getUint32(p, true) !== 0x04034b50) throw new Error('bad zip local header');
@@ -143,7 +149,7 @@ function bmZipExtract(data, entry) {
 }
 
 /* ---- minimal SQLite reader (just enough to scan one table) ---- */
-function bmReadVarint(buf, pos) {
+export function bmReadVarint(buf, pos) {
   let v = 0;
   for (let i = 0; i < 8; i++) {
     const b = buf[pos++];
@@ -153,7 +159,7 @@ function bmReadVarint(buf, pos) {
   v = v * 256 + buf[pos++];
   return [v, pos];
 }
-function bmReadInt(buf, p, n) {
+export function bmReadInt(buf, p, n) {
   let v = 0;
   for (let i = 0; i < n; i++) v = v * 256 + buf[p + i];
   const max = Math.pow(2, 8 * n - 1);
@@ -161,7 +167,7 @@ function bmReadInt(buf, p, n) {
 }
 
 // Parse one table-b-tree leaf/interior page set, calling onCell(payload) per row.
-function bmSqliteScanTable(db, rootPage, onCell) {
+export function bmSqliteScanTable(db, rootPage, onCell) {
   const dv = new DataView(db.buffer, db.byteOffset, db.byteLength);
   const pageSize = dv.getUint16(16) || 65536;
   const page = n => db.subarray((n - 1) * pageSize, n * pageSize);
@@ -215,7 +221,7 @@ function bmSqliteScanTable(db, rootPage, onCell) {
   walk(rootPage, rootPage === 1 ? 100 : 0);
 }
 
-function bmSqliteParseRecord(payload, td) {
+export function bmSqliteParseRecord(payload, td) {
   let r = bmReadVarint(payload, 0);
   const hend = r[0]; let p = r[1];
   const types = [];
@@ -237,7 +243,7 @@ function bmSqliteParseRecord(payload, td) {
 }
 
 // Returns [{ store, key, value, deleted }] for every row of the `entry` table.
-function bmSqliteReadEntry(db) {
+export function bmSqliteReadEntry(db) {
   const dv = new DataView(db.buffer, db.byteOffset, db.byteLength);
   let magic = '';
   for (let i = 0; i < 16; i++) magic += String.fromCharCode(db[i]);
@@ -264,15 +270,15 @@ function bmSqliteReadEntry(db) {
 }
 
 /* ---- Bookmory → app field mapping ---- */
-const BM_STATUS = { DONE: 'read', NOT_STARTED: 'tbr', GIVE_UP: 'dnf', READING: 'reading' };
-const BM_FAVORITE_COLLECTION = '1723808016228302'; // the "Favorite" collection id
-function bmHalifaxDate(ms) {
+export const BM_STATUS = { DONE: 'read', NOT_STARTED: 'tbr', GIVE_UP: 'dnf', READING: 'reading' };
+export const BM_FAVORITE_COLLECTION = '1723808016228302'; // the "Favorite" collection id
+export function bmHalifaxDate(ms) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Halifax', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date(ms));
 }
 
-function mapBookmoryBook(key, bm) {
+export function mapBookmoryBook(key, bm) {
   const status = BM_STATUS[(bm.status_list || [])[0]] || 'tbr';
   const total = Math.round(bm.real_total_page || bm.total_page || 0) || null;
   const isPercent = String(bm.page_type || '').toUpperCase() === 'PERCENT';
@@ -327,7 +333,7 @@ function mapBookmoryBook(key, bm) {
 }
 
 // Unzip → SQLite → mapped books. Returns { books, zipData, imageEntries }.
-function parseBookmoryExport(zipData) {
+export function parseBookmoryExport(zipData) {
   const files = bmZipList(zipData);
   const dbEntry = files.find(f => f.name === 'new_bookmory.db' || f.name.endsWith('/new_bookmory.db'));
   if (!dbEntry) throw new Error('new_bookmory.db not found in the export');
@@ -356,7 +362,7 @@ function parseBookmoryExport(zipData) {
 
 // The export ships a few local cover photos; downscale them like profile
 // photos so they stay small in localStorage. Best-effort: failures keep ''.
-function bmDownscaleImageBytes(bytes) {
+export function bmDownscaleImageBytes(bytes) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
     const img = new Image();
@@ -376,7 +382,7 @@ function bmDownscaleImageBytes(bytes) {
   });
 }
 
-async function bmAttachLocalCovers(zipData, imageEntries, books) {
+export async function bmAttachLocalCovers(zipData, imageEntries, books) {
   for (const b of books) {
     const local = b._bmLocalImage;
     delete b._bmLocalImage;
@@ -390,7 +396,7 @@ async function bmAttachLocalCovers(zipData, imageEntries, books) {
 }
 
 /* ---- import flow ---- */
-async function handleBookmoryFile(file, mount) {
+export async function handleBookmoryFile(file, mount) {
   mount.innerHTML = '<p class="note">Reading Bookmory export…</p>';
   track('import_started', { source: 'bookmory' });
   try {
@@ -437,7 +443,7 @@ async function handleBookmoryFile(file, mount) {
 // Add parsed books: stable bm- ids mean a second import of the same file
 // updates the books in place instead of duplicating them. In-app-only data
 // (spice ratings, her notes, Hardcover-enriched series) is never overwritten.
-function importBookmoryBooks(books, skippedTitles, mountId) {
+export function importBookmoryBooks(books, skippedTitles, mountId) {
   let added = 0, updated = 0, skipped = 0;
   const fresh = [];
   const touched = [];
@@ -494,3 +500,36 @@ function importBookmoryBooks(books, skippedTitles, mountId) {
   track('import_completed', { source: 'bookmory', book_count: added });
   return { added: added, updated: updated, skipped: skipped };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/132-import.js, calls these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.bmMakeHuffman = bmMakeHuffman;
+window.BM_LBASE = BM_LBASE;
+window.BM_LEXT = BM_LEXT;
+window.BM_DBASE = BM_DBASE;
+window.BM_DEXT = BM_DEXT;
+window.BM_CL_ORDER = BM_CL_ORDER;
+window.bmInflateRaw = bmInflateRaw;
+window.bmZipList = bmZipList;
+window.bmZipExtract = bmZipExtract;
+window.bmReadVarint = bmReadVarint;
+window.bmReadInt = bmReadInt;
+window.bmSqliteScanTable = bmSqliteScanTable;
+window.bmSqliteParseRecord = bmSqliteParseRecord;
+window.bmSqliteReadEntry = bmSqliteReadEntry;
+window.BM_STATUS = BM_STATUS;
+window.BM_FAVORITE_COLLECTION = BM_FAVORITE_COLLECTION;
+window.bmHalifaxDate = bmHalifaxDate;
+window.mapBookmoryBook = mapBookmoryBook;
+window.parseBookmoryExport = parseBookmoryExport;
+window.bmDownscaleImageBytes = bmDownscaleImageBytes;
+window.bmAttachLocalCovers = bmAttachLocalCovers;
+window.handleBookmoryFile = handleBookmoryFile;
+window.importBookmoryBooks = importBookmoryBooks;

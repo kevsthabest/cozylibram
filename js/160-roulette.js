@@ -1,9 +1,15 @@
 'use strict';
 
 /* ---------------- TBR roulette ---------------- */
-function tbrBooks() { return library.filter(b => b.status === 'tbr'); }
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function tbrBooks() { return library.filter(b => b.status === 'tbr'); }
 
-function allPickGenres() {
+export function allPickGenres() {
   const set = [];
   tbrBooks().forEach(b => bookGenres(b).forEach(g => { if (!set.includes(g)) set.push(g); }));
   return set.sort();
@@ -15,7 +21,7 @@ function allPickGenres() {
 // v236: trope autocomplete for the roulette filter. TBR tropes come first
 // (they guarantee matches), ranked by how many TBR books carry them; the
 // canonical catalog fills the rest. Pure.
-function tropeSuggestions(q, limit) {
+export function tropeSuggestions(q, limit) {
   const qk = tropeNameKey(q);
   const counts = {}; // key -> { name, count }
   tbrBooks().forEach(b => (b.tropes || []).forEach(t => {
@@ -35,7 +41,7 @@ function tropeSuggestions(q, limit) {
   return hits.concat(extra).slice(0, limit || 8);
 }
 
-function dominantPickAxis() {
+export function dominantPickAxis() {
   const counts = {};
   tbrBooks().forEach(b => {
     const k = primaryAxisKey(b);
@@ -46,7 +52,7 @@ function dominantPickAxis() {
   return axisByKey(best);
 }
 
-function pickCandidates() {
+export function pickCandidates() {
   const q = pickState.trope.trim().toLowerCase();
   return tbrBooks().filter(b => {
     if (pickState.upNextOnly && !upNext.includes(b.id)) return false; // v74
@@ -65,12 +71,12 @@ function pickCandidates() {
    book data changes until Start Reading, and Pass writes nothing at
    all (the passed set lives in module memory, so a later session can
    offer the book again). */
-let blindDate = { on: false };
-let blindPassed = {}; // session-only: bookId -> true
+export let blindDate = { on: false };
+export let blindPassed = {}; // session-only: bookId -> true
 
-function setBlindDate(on) { blindDate.on = !!on; }
+export function setBlindDate(on) { blindDate.on = !!on; }
 
-function blindPool() {
+export function blindPool() {
   const c = pickCandidates();
   let left = c.filter(b => !blindPassed[b.id]);
   if (!left.length && c.length) { blindPassed = {}; left = c; } // spent pile: everyone back in
@@ -84,7 +90,7 @@ function blindPool() {
    First line: a record either carries one verbatim (firstLine) or the
    clue is omitted — the corpus stores no opening lines today, and the
    description / saved quotes are never substituted for one. */
-function blindDateClues(b) {
+export function blindDateClues(b) {
   const seen = {}, tropes = [];
   const push = list => (list || []).forEach(t => {
     const name = String(t || '').trim();
@@ -107,7 +113,7 @@ function blindDateClues(b) {
 /* The wrapped card. Title, author, cover, description and series are
    never read here — nothing identifying reaches the DOM until the
    reader unwraps (showWinner) or starts the book. */
-function blindDateHTML(b) {
+export function blindDateHTML(b) {
   const c = blindDateClues(b);
   const meta = c.genres.map(g => esc(g));
   if (c.pages) meta.push(c.pages + ' pages');
@@ -132,7 +138,7 @@ function blindDateHTML(b) {
     '</div></div>';
 }
 
-function runBlindDate() {
+export function runBlindDate() {
   const pool = blindPool();
   const box = document.getElementById('roulette-result');
   if (!pool.length) { toast('No matching books 🎲'); return; }
@@ -155,7 +161,7 @@ function runBlindDate() {
   });
 }
 
-function spinPick() { if (blindDate.on) runBlindDate(); else runRoulette(); }
+export function spinPick() { if (blindDate.on) runBlindDate(); else runRoulette(); }
 
 // v236: dismiss trope suggestions on outside tap (module scope — runs once,
 // not per render; the box is re-created by each renderPick).
@@ -164,7 +170,7 @@ document.addEventListener('click', e => {
   if (box && !box.hidden && !e.target.closest('.pk-trope-wrap')) box.hidden = true;
 });
 
-function renderPick() {
+export function renderPick() {
   const tbr = tbrBooks();
   const genres = allPickGenres();
   // v235 (UX-19): v224 referenced a `domAxis` that was never defined, so
@@ -293,7 +299,7 @@ function renderPick() {
   document.getElementById('pk-spin').addEventListener('click', spinPick);
 }
 
-function updatePickCount() {
+export function updatePickCount() {
   const el = document.getElementById('pick-count');
   if (!el) return;
   const candidates = pickCandidates();
@@ -334,7 +340,7 @@ function updatePickCount() {
   }
 }
 
-function runRoulette() {
+export function runRoulette() {
   const candidates = pickCandidates();
   if (!candidates.length) { toast('No matching books 🎲'); return; }
   track('roulette_spun');
@@ -375,7 +381,7 @@ function runRoulette() {
 /* The winner card's Start Reading flow, shared with Blind Date's
    Start (v564): mark reading, with the one-time trigger-check heads-up
    in front of it exactly as the modal's Start behaves. */
-function startRouletteBook(b) {
+export function startRouletteBook(b) {
   const doStart = () => {
     b.status = 'reading';
     saveLibrary();
@@ -396,7 +402,7 @@ function startRouletteBook(b) {
   })();
 }
 
-function showWinner(b) {
+export function showWinner(b) {
   const box = document.getElementById('roulette-result');
   const genres = bookGenres(b);
   const pills = genres.map(g => '<span class="badge">' + esc(g) + '</span>').join('') +
@@ -426,3 +432,30 @@ function showWinner(b) {
   });
 }
 
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/198-discovery.js and js/200-boot.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.tbrBooks = tbrBooks;
+window.allPickGenres = allPickGenres;
+window.tropeSuggestions = tropeSuggestions;
+window.dominantPickAxis = dominantPickAxis;
+window.pickCandidates = pickCandidates;
+window.blindDate = blindDate;
+window.blindPassed = blindPassed;
+window.setBlindDate = setBlindDate;
+window.blindPool = blindPool;
+window.blindDateClues = blindDateClues;
+window.blindDateHTML = blindDateHTML;
+window.runBlindDate = runBlindDate;
+window.spinPick = spinPick;
+window.renderPick = renderPick;
+window.updatePickCount = updatePickCount;
+window.runRoulette = runRoulette;
+window.startRouletteBook = startRouletteBook;
+window.showWinner = showWinner;

@@ -44,7 +44,14 @@
    - Tinting: containers use color: var(--floral-tint); every asset is
      currentColor-only, so user accent changes can't break a flair. */
 
-window.ModalFlairs = (function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   The catalog's IIFE result is the file's whole public surface: it is
+   exported in place below and republished on window by the
+   compatibility bridge at the bottom of this file, so classic scripts
+   keep resolving the same global. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const ModalFlairs = (function () {
 
 var CATALOG = [
     { id: 'garland-haunt', name: 'Haunt garland', motif: 'haunt', placement: 'garland', signature: true,
@@ -629,3 +636,14 @@ var CATALOG = [
     refresh: refresh,
   };
 })();
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/010-theming.js and js/150-modal-discovery.js, read the ModalFlairs namespace at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ModalFlairs = ModalFlairs;

@@ -5,14 +5,20 @@
 // explain the shelves, make it yours. Skippable at any point, never blocks,
 // never shows again once dismissed — or once the library isn't new.
 
-const ONBOARD_KEY = 'spicyshelves.onboarded';
-function onboarded() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const ONBOARD_KEY = 'spicyshelves.onboarded';
+export function onboarded() {
   try { return localStorage.getItem(ONBOARD_KEY) === '1'; } catch (e) { return true; }
 }
-function setOnboarded() {
+export function setOnboarded() {
   try { localStorage.setItem(ONBOARD_KEY, '1'); } catch (e) {}
 }
-function maybeOnboard() {
+export function maybeOnboard() {
   if (typeof library === 'undefined') return;
   if (onboarded() || document.getElementById('onb-overlay')) return;
   if (library.length) { setOnboarded(); return; } // not new — don't ask again
@@ -21,7 +27,7 @@ function maybeOnboard() {
   showOnbStep(0);
 }
 
-function onbHTML(n) {
+export function onbHTML(n) {
   const dots = '<div class="onb-dots">' + [0, 1, 2].map(i =>
     '<span class="' + (i === n ? 'on' : '') + '"></span>').join('') + '</div>';
   const skip = '<button class="onb-skip" id="onb-skip">Skip tour</button>';
@@ -62,7 +68,7 @@ function onbHTML(n) {
     dots + skip + '</div>';
 }
 
-function showOnbStep(n) {
+export function showOnbStep(n) {
   let ov = document.getElementById('onb-overlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -87,7 +93,7 @@ function showOnbStep(n) {
   });
 }
 
-function onbDone(skipped) {
+export function onbDone(skipped) {
   setOnboarded();
   const ov = document.getElementById('onb-overlay');
   if (ov) ov.remove();
@@ -96,4 +102,22 @@ function onbDone(skipped) {
 }
 
 // v129: escape skips the tour.
-function onbEsc(e) { if (e.key === 'Escape') onbDone(true); }
+export function onbEsc(e) { if (e.key === 'Escape') onbDone(true); }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/095-gate.js, calls maybeOnboard() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ONBOARD_KEY = ONBOARD_KEY;
+window.onboarded = onboarded;
+window.setOnboarded = setOnboarded;
+window.maybeOnboard = maybeOnboard;
+window.onbHTML = onbHTML;
+window.showOnbStep = showOnbStep;
+window.onbDone = onbDone;
+window.onbEsc = onbEsc;
