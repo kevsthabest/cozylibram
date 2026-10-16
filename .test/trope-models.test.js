@@ -18,6 +18,7 @@ const vm = require('vm');
 const { pathToFileURL } = require('url');
 const { JSDOM } = require('jsdom');
 const harness = require('./harness');
+const { classicize } = require('./harness');
 
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
@@ -150,7 +151,10 @@ function ok(name, cond) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '157-trope-inference.js'), 'utf8'), ctx,
     { filename: '157-trope-inference.js' });
   // architecture candidate 6: tropeModelList/tropeModelListCache moved to js/161.
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '161-tropelab.js'), 'utf8'), ctx,
+  // R3 repoint (migration plan §9.3): js/161 is a real ES module since
+  // phase 2 — classicize restores the classic body before evaluation.
+  // Loading plumbing only — assertions untouched.
+  vm.runInContext(classicize(fs.readFileSync(path.join(ROOT, 'js', '161-tropelab.js'), 'utf8'), '161-tropelab.js'), ctx,
     { filename: '161-tropelab.js' });
   const probe = src => vm.runInContext(src, ctx);
   // v225: tropeModelList now calls apiFetch (js/050-helpers.js, not loaded
