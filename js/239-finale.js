@@ -33,18 +33,25 @@
 
 /* ---------------- pure evaluation ---------------- */
 
-function finaleSeriesKey(name) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export function finaleSeriesKey(name) {
   return String(name || '').trim().toLowerCase();
 }
 
-function finalePos(b) {
+export function finalePos(b) {
   const p = parseFloat(b && b.series && b.series.position);
   return isNaN(p) ? null : p;
 }
 
 /* The series' books from a library array, in reading order — the same
    grouping/ordering as seriesData() (js/140). */
-function finaleSeriesBooks(lib, name) {
+export function finaleSeriesBooks(lib, name) {
   const key = finaleSeriesKey(name);
   if (!key || !Array.isArray(lib)) return [];
   return lib.filter(b => b && b.series && finaleSeriesKey(b.series.name) === key)
@@ -57,7 +64,7 @@ function finaleSeriesBooks(lib, name) {
     });
 }
 
-function finaleAllRead(books) {
+export function finaleAllRead(books) {
   return books.length > 0 && books.every(b => b.status === 'read');
 }
 
@@ -66,7 +73,7 @@ function finaleAllRead(books) {
    (positions are metadata garnish, not the reader's fault). When some
    books are positioned and the finished one is not, highest can't be
    verified — no auto finale; the manual override covers that shelf. */
-function finaleIsHighest(books, finishedId) {
+export function finaleIsHighest(books, finishedId) {
   const fin = books.find(b => b.id === finishedId);
   if (!fin) return false;
   const known = books.map(finalePos).filter(p => p != null);
@@ -77,7 +84,7 @@ function finaleIsHighest(books, finishedId) {
 }
 
 /* Last position across the library books and the listing rows. */
-function finaleMaxPos(books, rows) {
+export function finaleMaxPos(books, rows) {
   let m = null;
   const eat = p => { if (p != null && !isNaN(p) && (m == null || p > m)) m = p; };
   (books || []).forEach(b => eat(finalePos(b)));
@@ -92,7 +99,7 @@ function finaleMaxPos(books, rows) {
    a FOUND Hardcover listing. Returns 'complete' | 'caughtup' | null
    (null = no finale: not a series, not library-complete, or the wrong
    book finished last). */
-function finaleKindFor(books, finishedId, listing) {
+export function finaleKindFor(books, finishedId, listing) {
   if (!Array.isArray(books) || books.length < 2) return null;
   const fin = books.find(b => b.id === finishedId);
   if (!fin || fin.status !== 'read') return null;
@@ -107,7 +114,7 @@ function finaleKindFor(books, finishedId, listing) {
 
 /* The seal is a pure function of the record kind — nothing else in the
    app may grant it. */
-function finaleHasSeal(rec) {
+export function finaleHasSeal(rec) {
   return !!rec && rec.kind === 'complete';
 }
 
@@ -119,11 +126,11 @@ function finaleHasSeal(rec) {
    clause is conditional ("if the reader has one favorited"), and an
    absent line beats an invented favourite. Wire a real source here
    when one exists. */
-function finaleFavCharacter(books) {
+export function finaleFavCharacter(books) {
   return null;
 }
 
-function finaleBuildRecord(books, finished, kind, opts) {
+export function finaleBuildRecord(books, finished, kind, opts) {
   const dates = books.map(b => b.dateFinished).filter(Boolean).sort();
   const finDate = (finished && finished.dateFinished) || dates[dates.length - 1] || null;
   return {
@@ -148,7 +155,7 @@ function finaleBuildRecord(books, finished, kind, opts) {
 /* Validate/coerce a stored record; null when it isn't one. The kind is
    the load-bearing field — an unknown kind drops the record rather
    than risk rendering an honour the data doesn't support. */
-function finaleNormalizeRecord(r) {
+export function finaleNormalizeRecord(r) {
   if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
   if (r.kind !== 'complete' && r.kind !== 'caughtup') return null;
   const iso = v => (typeof v === 'string' && v && !isNaN(Date.parse(v))) ? v : null;
@@ -170,7 +177,7 @@ function finaleNormalizeRecord(r) {
   };
 }
 
-function finaleNormalize(v) {
+export function finaleNormalize(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
   const out = {};
   for (const k of Object.keys(v)) {
@@ -183,49 +190,49 @@ function finaleNormalize(v) {
 
 /* ---------------- store ---------------- */
 
-const FINALE_STORE_KEY = 'cozylibram.finale.v1';
+export const FINALE_STORE_KEY = 'cozylibram.finale.v1';
 
-function loadFinales() {
+export function loadFinales() {
   try {
     const raw = localStorage.getItem(FINALE_STORE_KEY);
     return raw ? finaleNormalize(JSON.parse(raw)) : {};
   } catch (e) { return {}; }
 }
 
-function saveFinales(map) {
+export function saveFinales(map) {
   try { localStorage.setItem(FINALE_STORE_KEY, JSON.stringify(finaleNormalize(map))); } catch (e) {}
   // Roam it (hash-gated inside userStatePush; a no-op signed out).
   try { if (typeof userStatePush === 'function') userStatePush(); } catch (e) {}
 }
 
-function finaleRecordFor(key) {
+export function finaleRecordFor(key) {
   return loadFinales()[finaleSeriesKey(key)] || null;
 }
 
 /* ---------------- presentation model ---------------- */
 
-function finaleMonthYear(iso) {
+export function finaleMonthYear(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d)) return '';
   return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
 }
 
-function finaleLongDate(iso) {
+export function finaleLongDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d)) return '';
   return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function finaleStars(r) {
+export function finaleStars(r) {
   const n = Math.max(0, Math.min(5, Math.round(Number(r) || 0)));
   return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
 }
 
 /* Everything the ceremony, keepsake, and share card render — one model
    so the three surfaces can never disagree about the honour. */
-function finaleCardModel(rec) {
+export function finaleCardModel(rec) {
   const complete = finaleHasSeal(rec);
   const bits = [];
   bits.push(rec.count + (rec.count === 1 ? ' book' : ' books'));
@@ -255,7 +262,7 @@ function finaleCardModel(rec) {
    to the Designer with the User's veto — replace finaleSealHTML /
    drawFinaleSeal art without touching the honesty logic. */
 
-function finaleSealHTML(cls) {
+export function finaleSealHTML(cls) {
   let d = '';
   const pts = [];
   for (let i = 0; i < 24; i++) {
@@ -270,7 +277,7 @@ function finaleSealHTML(cls) {
     '<text class="fs-star" x="24" y="30.5" text-anchor="middle">★</text></svg></span>';
 }
 
-function drawFinaleSeal(x, cx, cy, r) {
+export function drawFinaleSeal(x, cx, cy, r) {
   x.save();
   const g = x.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.15, cx, cy, r);
   g.addColorStop(0, '#a63a48');
@@ -297,7 +304,7 @@ function drawFinaleSeal(x, cx, cy, r) {
 
 /* ---------------- ceremony sheet ---------------- */
 
-function finaleCardHTML(rec) {
+export function finaleCardHTML(rec) {
   const m = finaleCardModel(rec);
   return '<div class="finale-card">' +
     (m.seal ? finaleSealHTML('finale-seal-lg') : '') +
@@ -310,9 +317,9 @@ function finaleCardHTML(rec) {
     '<p class="finale-copy">' + esc(m.copy) + '</p></div>';
 }
 
-let finaleCloseFn = null;
+export let finaleCloseFn = null;
 
-function closeFinaleCeremony() {
+export function closeFinaleCeremony() {
   if (finaleCloseFn) {
     const f = finaleCloseFn;
     finaleCloseFn = null;
@@ -323,7 +330,7 @@ function closeFinaleCeremony() {
 /* Presents the ceremony once. If another sheet owns the moment (the
    post-save portrait survey can fire on the same save), retry briefly;
    the keepsake waits in the series view either way. */
-function presentFinaleCeremony(key, tries) {
+export function presentFinaleCeremony(key, tries) {
   tries = tries || 0;
   if (typeof document === 'undefined') return false;
   if (document.querySelector('.finale-sheet')) return true;
@@ -374,7 +381,7 @@ function presentFinaleCeremony(key, tries) {
 
 /* ---------------- keepsake (series view) ---------------- */
 
-function finaleKeepsakeHTML(key, rec) {
+export function finaleKeepsakeHTML(key, rec) {
   const m = finaleCardModel(rec);
   return '<div class="finale-keep">' +
     (m.seal ? finaleSealHTML('finale-seal-sm') : '') +
@@ -387,7 +394,7 @@ function finaleKeepsakeHTML(key, rec) {
 
 /* ---------------- share card ---------------- */
 
-function drawFinaleCard(key) {
+export function drawFinaleCard(key) {
   const rec = finaleRecordFor(key);
   if (!rec) return null;
   const m = finaleCardModel(rec);
@@ -468,7 +475,7 @@ function drawFinaleCard(key) {
   return cv;
 }
 
-function shareFinaleCard(key) {
+export function shareFinaleCard(key) {
   const rec = finaleRecordFor(key);
   if (!rec) { toast('No finale recorded for this series yet'); return; }
   toast('Making your card… ✨');
@@ -484,7 +491,7 @@ function shareFinaleCard(key) {
 /* Resolve the series total from Hardcover's listing. Returns null when
    the total is UNKNOWN (no token, listing not found, fetch failed) —
    unknown must never be dressed up as known. */
-async function finaleResolveListing(books, sample) {
+export async function finaleResolveListing(books, sample) {
   try {
     if (typeof hcReady !== 'function' || !hcReady()) return null;
     if (typeof fetchSeriesBooks !== 'function') return null;
@@ -500,7 +507,7 @@ async function finaleResolveListing(books, sample) {
 
 /* Mark-read hook (book modal save, shelf move). Fire-and-forget: never
    blocks or breaks the save path. Idempotent per series. */
-async function maybeFinaleCeremony(book) {
+export async function maybeFinaleCeremony(book) {
   try {
     if (!book || !book.series || !book.series.name) return null;
     if (typeof library === 'undefined' || !library) return null;
@@ -531,7 +538,7 @@ async function maybeFinaleCeremony(book) {
    ...). Produces the caught-up card — NEVER the seal, even when the
    total is known and met: the override deliberately does not consult
    the listing at all, so no code path here can mint a seal. */
-async function finaleMarkFinished(key) {
+export async function finaleMarkFinished(key) {
   try {
     if (typeof library === 'undefined' || !library) return null;
     const k = finaleSeriesKey(key);
@@ -550,3 +557,46 @@ async function finaleMarkFinished(key) {
     return rec;
   } catch (e) { return null; }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/140-collections.js, js/150-modal-discovery.js, js/205-shelfview.js and js/229-user-state.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.finaleSeriesKey = finaleSeriesKey;
+window.finalePos = finalePos;
+window.finaleSeriesBooks = finaleSeriesBooks;
+window.finaleAllRead = finaleAllRead;
+window.finaleIsHighest = finaleIsHighest;
+window.finaleMaxPos = finaleMaxPos;
+window.finaleKindFor = finaleKindFor;
+window.finaleHasSeal = finaleHasSeal;
+window.finaleFavCharacter = finaleFavCharacter;
+window.finaleBuildRecord = finaleBuildRecord;
+window.finaleNormalizeRecord = finaleNormalizeRecord;
+window.finaleNormalize = finaleNormalize;
+window.FINALE_STORE_KEY = FINALE_STORE_KEY;
+window.loadFinales = loadFinales;
+window.saveFinales = saveFinales;
+window.finaleRecordFor = finaleRecordFor;
+window.finaleMonthYear = finaleMonthYear;
+window.finaleLongDate = finaleLongDate;
+window.finaleStars = finaleStars;
+window.finaleCardModel = finaleCardModel;
+window.finaleSealHTML = finaleSealHTML;
+window.drawFinaleSeal = drawFinaleSeal;
+window.finaleCardHTML = finaleCardHTML;
+window.finaleCloseFn = finaleCloseFn;
+window.closeFinaleCeremony = closeFinaleCeremony;
+window.presentFinaleCeremony = presentFinaleCeremony;
+window.finaleKeepsakeHTML = finaleKeepsakeHTML;
+window.drawFinaleCard = drawFinaleCard;
+window.shareFinaleCard = shareFinaleCard;
+window.finaleResolveListing = finaleResolveListing;
+window.maybeFinaleCeremony = maybeFinaleCeremony;
+window.finaleMarkFinished = finaleMarkFinished;
