@@ -151,11 +151,11 @@ function renderGateSignup() {
     '<div style="text-align:left;margin:2px 0 4px">' +
     '<div class="search-row"><span class="note" style="align-self:center">@</span>' +
     '<input id="gs-handle" type="text" class="text-input" placeholder="Handle" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="24"></div>' +
-    '<p class="note" style="margin:6px 0 0">Your public name on Cozy Libram — friends see your @handle instead of your real name. 3–20 characters: lowercase letters, numbers, underscores. It’s confirmed when your account is created; if it’s been taken by then, you’ll pick another in Settings.</p></div>' +
+    '<p class="note" style="margin:6px 0 0">Your public name on Cozy Libram — friends see your @handle instead of your real name. 3–20 characters: lowercase letters, numbers, underscores. It’s confirmed when your account is created; if it’s been taken by then, you’ll pick another in Profile.</p></div>' +
     // v524: age band — self-declared at signup, stated 13+ floor. The
     // band only sets starting positions for the privacy + shield
     // toggles (js/230-privacy.js); it is stored privately (user_state),
-    // never displayed, and can be changed later in Settings.
+    // never displayed, and can be changed later in Profile.
     '<div class="field" style="text-align:left;margin:2px 0 10px"><label>Your age group</label>' +
     '<div class="seg" id="gs-band" style="grid-template-columns:1fr 1fr">' +
     '<button type="button" data-b="teen">13–17</button>' +
@@ -337,7 +337,7 @@ async function enterApp(user) {
   adoptLegacyMetadata(user);
   await syncCloudProfile();
   // v524: adopt the signup age band from user_metadata (one-time seed —
-  // a band later changed in Settings is never stomped), then land any
+  // a band later changed in Profile is never stomped), then land any
   // teen starting positions still pending (declared at signup before
   // email confirmation, when no session existed to write them with).
   try { if (typeof adoptSignupBand === 'function') await adoptSignupBand(user); } catch (e) {}

@@ -502,15 +502,14 @@ async function claimSignupHandle(user) {
   }
   if (res && ['taken', 'quarantined', 'screened', 'reserved', 'cooldown', 'invalid'].indexOf(res.error) !== -1) {
     // A typed refusal is final for this stash: clear it, say honestly
-    // what happened, and put the reader in Settings → Account to pick
+    // what happened, and put the reader on the Profile view to pick
     // another — the claim race they lost was real (account created,
     // email confirmed, handle gone in the meantime).
     await clearSignupHandleStash();
     toast(res.error === 'taken'
-      ? 'The handle @' + stash + ' was just taken — pick yours in Settings.'
-      : handleClaimErrorMessage(res) + ' Pick yours in Settings.');
-    if (typeof openSettingsAccount === 'function') openSettingsAccount();
-    else if (typeof go === 'function') go('settings');
+      ? 'The handle @' + stash + ' was just taken — pick yours in Profile.'
+      : handleClaimErrorMessage(res) + ' Pick yours in Profile.');
+    if (typeof go === 'function') go('profile');
     return;
   }
   // 'unsupported' (a pre-v550 database) or a transient failure: leave

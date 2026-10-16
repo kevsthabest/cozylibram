@@ -501,11 +501,12 @@ function wireShieldSeg(root, id) {
  * the two surfaces can never drift. Name & avatar are identity, not a
  * toggle: they're always shared, and the panel says so instead of
  * offering a switch that couldn't keep its promise.
- * v590: the gift block (See claims + the js/243 slot) is built by
- * js/243's giftClusterHTML and mounted beside the panel — in Settings
- * it lives in the Account group with the rest of the gift cluster; in
- * the Hearth sheet it follows the panel as before. The shield moved to
- * Settings → Reading (shieldSegHTML above). */
+ * The gift block (See claims + the js/243 slot) is built by js/243's
+ * giftClusterHTML and mounted beside the panel's wire path — on the
+ * Profile view it sits under the identity form (hybrid; js/105 wires
+ * it with this same function, prefix 'pf'); in the Hearth sheet it
+ * follows the panel as before. The shield moved to Settings → Reading
+ * (shieldSegHTML above). */
 function circlePrivacyPanelHTML(priv, p, shelves) {
   const seg = circleSegHTML;
   let html =
@@ -1156,8 +1157,9 @@ function openPrivacySheet(priv, shelves, opener) {
   const body =
     circlePrivacyIntroHTML() +
     circlePrivacyPanelHTML(full, 'cc', shelves) +
-    // v590: the gift cluster (js/243) follows the panel here; in Settings
-    // it renders in the Account group instead. One builder, one wire path.
+    // The gift cluster (js/243) follows the panel here; on the Profile
+    // view it mounts under the identity form instead (hybrid). One
+    // builder, one wire path.
     (typeof giftClusterHTML === 'function' ? giftClusterHTML('cc', full.giftClaims) : '');
   covenOpenSheet('Privacy', body, opener);
   wireCirclePrivacyPanel(document, full, 'cc');
