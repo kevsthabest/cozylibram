@@ -9,7 +9,14 @@
 // edition), every other store searches by title + author (forgiving). No APIs
 // or keys needed. (Kobo was dropped in v146 — unverifiable behind its bot
 // check, and Indigo covers the Canadian market.)
-const STORE_REGIONS = {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const STORE_REGIONS = {
   CA: { label: 'Canada', stores: [
     { name: 'Amazon', mode: 'isbn', url: q => 'https://www.amazon.ca/s?k=' + encodeURIComponent(q) },
     { name: 'Indigo', url: q => 'https://www.indigo.ca/search?q=' + encodeURIComponent(q) },
@@ -32,14 +39,14 @@ const STORE_REGIONS = {
     { name: 'Booktopia', url: q => 'https://www.booktopia.com.au/search?keywords=' + encodeURIComponent(q) + '&productType=917504&pn=1' },
   ] },
 };
-const STORE_REGION_KEYS = Object.keys(STORE_REGIONS);
+export const STORE_REGION_KEYS = Object.keys(STORE_REGIONS);
 
-function storeRegionSetting() {
+export function storeRegionSetting() {
   try { return localStorage.getItem('spicyshelves.storeRegion') || 'auto'; }
   catch (e) { return 'auto'; }
 }
 
-function detectStoreRegion() {
+export function detectStoreRegion() {
   const s = storeRegionSetting();
   if (STORE_REGIONS[s]) return s;
   // auto: device language first (en-CA -> CA), then timezone, then US
@@ -64,18 +71,18 @@ function detectStoreRegion() {
 // landing, verified); every other store gets title + author, which proved
 // far more reliable live. storeQuery falls back to title + author when there
 // is no ISBN, so Amazon degrades gracefully too.
-function storeQuery(b) {
+export function storeQuery(b) {
   const isbn = String(b.isbn || '').replace(/[^0-9X]/gi, '');
   if (isbn) return isbn;
   return storeTitleQuery(b);
 }
 
 // Title + author query — the reliable default for every non-Amazon store.
-function storeTitleQuery(b) {
+export function storeTitleQuery(b) {
   return [b.title, (b.authors || [])[0]].filter(Boolean).join(' ');
 }
 
-function storeLinks(b) {
+export function storeLinks(b) {
   const isbnQ = storeQuery(b);
   const titleQ = storeTitleQuery(b);
   return STORE_REGIONS[detectStoreRegion()].stores.map(s => ({
@@ -87,7 +94,7 @@ function storeLinks(b) {
 // Badges for every rated axis — line-art glyphs (v102). The axis emoji
 // (notably ⚔️) render near-black on some Android emoji fonts, making them
 // invisible on dark themes; the icons inherit the badge's accent color.
-function ratingBadges(b) {
+export function ratingBadges(b) {
   return (b.axes || []).map(k => {
     const v = (b.ratings || {})[k] || 0;
     const a = axisByKey(k);
@@ -96,8 +103,28 @@ function ratingBadges(b) {
 }
 
 // The book's "main" axis: first one with a rating, else first enabled axis.
-function primaryAxisKey(b) {
+export function primaryAxisKey(b) {
   const axes = (b.axes && b.axes.length) ? b.axes : ['spice'];
   return axes.find(k => ((b.ratings || {})[k] || 0) > 0) || axes[0];
 }
 
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/110-library.js, js/150-modal-discovery.js,
+   js/160-roulette.js and js/180-settings.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.STORE_REGIONS = STORE_REGIONS;
+window.STORE_REGION_KEYS = STORE_REGION_KEYS;
+window.storeRegionSetting = storeRegionSetting;
+window.detectStoreRegion = detectStoreRegion;
+window.storeQuery = storeQuery;
+window.storeTitleQuery = storeTitleQuery;
+window.storeLinks = storeLinks;
+window.ratingBadges = ratingBadges;
+window.primaryAxisKey = primaryAxisKey;
