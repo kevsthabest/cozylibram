@@ -7,12 +7,18 @@
  * share-library toggle are enforced by Supabase RLS before we ever see them.
  */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 // Candidates for the "+ TBR" buttons, rebuilt by loadRecos().
-let recoCache = [];
+export let recoCache = [];
 
 // v454: cover fallback chain — stored cover -> coverColor placeholder with
 // title initial -> line-art icon. Never an empty dark square.
-function recoCoverHTML(b) {
+export function recoCoverHTML(b) {
   if (b.cover) {
     return '<div class="cover-wrap reco-cover"><img src="' + esc(b.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()"></div>';
   }
@@ -22,7 +28,7 @@ function recoCoverHTML(b) {
 }
 
 // Stable dedupe key: ISBN when we have one, else normalized title + author.
-function recoKey(b) {
+export function recoKey(b) {
   const isbn = String(b.isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
   if (isbn) return 'isbn:' + isbn;
   const t = String(b.title || '').trim().toLowerCase();
@@ -33,7 +39,7 @@ function recoKey(b) {
 
 // Load and aggregate recommendations across all friends.
 // Returns [{ book, ratings: [{friendId, name, rating}], count, avg }]
-async function loadRecos() {
+export async function loadRecos() {
   recoCache = [];
   if (!cloudUser) return [];
   let friends = [];
@@ -110,7 +116,7 @@ async function loadRecos() {
   return recos;
 }
 
-function recoSectionHTML(recos) {
+export function recoSectionHTML(recos) {
   let html = '<div class="circle-card"><h3 style="margin:0 0 4px">You\u2019d love this</h3>' +
     '<p class="note" style="margin:0 0 10px">Books your friends rated 4\u2605 or higher that aren\u2019t on your shelves yet.</p>' +
     '<div class="circle-list">';
@@ -127,7 +133,7 @@ function recoSectionHTML(recos) {
 }
 
 // Fill the #reco-slot left by renderCovenMain; safe to call repeatedly.
-function refreshRecos() {
+export function refreshRecos() {
   const slot = document.getElementById('reco-slot');
   if (!slot) return;
   loadRecos().then(recos => {
@@ -159,7 +165,7 @@ function refreshRecos() {
 // along — just the book, per the v97 rule.
 // v492: run through migrateBook() so the copy has the full book shape
 // (tropes, ratings, log, etc.) like every other ingestion path.
-function covenCleanCopy(src) {
+export function covenCleanCopy(src) {
   return migrateBook({
     id: uid(),
     title: src.title || 'Untitled',
@@ -190,7 +196,7 @@ function covenCleanCopy(src) {
 
 // Add a recommendation to the TBR shelf. Returns the new book's id (v219),
 // or null when the add didn't happen (already on her shelves).
-function recoAddToTBR(idx) {
+export function recoAddToTBR(idx) {
   const r = recoCache[idx];
   if (!r) return null;
   const added = addBook(covenCleanCopy(r.book), false, 'recommendation');
@@ -201,7 +207,7 @@ function recoAddToTBR(idx) {
 }
 
 // v219: tapping a friend recommendation opens the read-only preview modal.
-function openCovenRecoPreview(r, idx) {
+export function openCovenRecoPreview(r, idx) {
   const names = r.ratings.map(x => esc(String(x.name).split(' ')[0])).join(', ');
   const why = ['<span class="why-chip">' + icon('heart') + ' loved by ' + names + '</span>'];
   if (r.avg) why.push('<span class="why-chip">' + stars(r.avg) + '</span>');
@@ -214,3 +220,23 @@ function openCovenRecoPreview(r, idx) {
     }
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/195-coven.js, js/197-social-stats.js, js/198-discovery.js, js/232-thought-of-you.js, js/233-buddy-reads.js, js/234-outbox.js, js/235-reading-it-too.js and js/242-marginalia.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.recoCache = recoCache;
+window.recoCoverHTML = recoCoverHTML;
+window.recoKey = recoKey;
+window.loadRecos = loadRecos;
+window.recoSectionHTML = recoSectionHTML;
+window.refreshRecos = refreshRecos;
+window.covenCleanCopy = covenCleanCopy;
+window.recoAddToTBR = recoAddToTBR;
+window.openCovenRecoPreview = openCovenRecoPreview;
