@@ -13,8 +13,13 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 // ---- load modules in a sandbox ----
 const fs = require('fs');
 const vm = require('vm');
+const { classicize } = require('./harness');
 function loadJS(path, extra) {
-  const src = fs.readFileSync(path, 'utf8');
+  // R3 repoint (migration plan §9.3): js/225 is a real ES module since
+  // phase 2 batch 4. classicize restores the classic body before
+  // evaluation (identity on classic files). Loading plumbing only —
+  // assertions untouched.
+  const src = classicize(fs.readFileSync(path, 'utf8'), path);
   const sandbox = {
     console: console,
     document: undefined,

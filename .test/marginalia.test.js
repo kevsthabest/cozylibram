@@ -97,8 +97,14 @@ for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
 /* ================= registration ================= */
 const indexHtml = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 const swText = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8');
+// R1 repoint (migration plan §9.3): js/242's tag is a module tag since
+// its ESM conversion; the registration assertion accepts either exact
+// tag form — the same assertion, coverage unchanged. (The position
+// comparison already keys on the bare filename, which either form
+// contains.)
 ok('index.html registers js/242-marginalia.js after js/241',
-  indexHtml.includes('<script src="js/242-marginalia.js"></script>') &&
+  (indexHtml.includes('<script src="js/242-marginalia.js"></script>') ||
+   indexHtml.includes('<script type="module" src="js/242-marginalia.js"></script>')) &&
   indexHtml.indexOf('js/242-marginalia.js') > indexHtml.indexOf('js/241-book-ambience.js'));
 ok('sw.js precaches 242-marginalia.js', swText.includes("'242-marginalia.js'"));
 ok('version pairing is v600',
