@@ -40,6 +40,17 @@ function stickerThemes() {
     };
   }).filter(t => t.count > 0);
 }
+/* Issue #214: picker-sized derivative of a painted avatar. The catalog
+   originals are 1600x1600 (2,246 KB across 22 files) but grid tiles
+   render <=84px and collection heroes 52px, so picker chrome paints
+   the 256px thumbs from img/avatars/thumb/ (scripts/avatar-thumbs.py;
+   runtime-cached by sw.js, never precached). Candidates keep
+   .src = the original: the fitting room and every applied render
+   evaluate the real file. */
+function avatarThumbSrc(src) {
+  return typeof src === 'string' && src.indexOf('img/avatars/avatar-') === 0
+    ? src.replace('img/avatars/', 'img/avatars/thumb/') : src;
+}
 function stickerIdFor(dir, sheet, num) {
   return STICKER_AVATAR_PREFIX + dir + '/' + dir + '-' + sheet + '-' + String(num).padStart(2, '0');
 }
@@ -137,9 +148,9 @@ function pickerCollections() {
   const cols = [];
   AVATAR_SETS.forEach(s => {
     const items = DEFAULT_AVATARS.filter(a => a.set === s.key).map(a => ({
-      kind: 'painted', id: a.id, name: a.label, sub: s.name, src: a.src
+      kind: 'painted', id: a.id, name: a.label, sub: s.name, src: a.src, thumb: avatarThumbSrc(a.src)
     }));
-    cols.push({ key: 'painted:' + s.key, title: s.name, kind: 'painted', hero: items.length ? items[0].src : '', count: items.length, items: items });
+    cols.push({ key: 'painted:' + s.key, title: s.name, kind: 'painted', hero: items.length ? (items[0].thumb || items[0].src) : '', count: items.length, items: items });
   });
   stickerThemes().forEach(t => {
     cols.push({ key: 'stickers:' + t.key, title: t.name, kind: 'sticker', hero: t.hero, count: t.count, theme: t.key });
@@ -324,7 +335,7 @@ function apkTileHTML(cand, i) {
   const sel = sameCandidate(cand, apkCurrent) ? ' sel' : '';
   return '<button class="apk-tile ' + (cand.kind === 'sticker' ? 'stk' : 'painted') + sel + '"' +
     ' data-apk-i="' + i + '" title="' + esc(cand.name) + '" aria-label="' + esc(cand.name) + '">' +
-    '<img src="' + esc(cand.src) + '" alt="" loading="lazy" style="' + apkImgStyle(cand) + '">' +
+    '<img src="' + esc(cand.thumb || cand.src) + '" alt="" loading="lazy" style="' + apkImgStyle(cand) + '">' +
     '<span class="apk-ring"></span><span class="apk-ck">✓</span></button>';
 }
 function apkRenderGrid(items, title) {

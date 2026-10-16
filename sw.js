@@ -25,6 +25,14 @@ const STICKERS_PATH = '/assets/stickers/cut-webp/';
 // es/reader.js, zxing_reader.wasm), so no eviction cap is needed.
 const ZXING_CACHE = 'cozy-libram-zxing';
 const ZXING_PATH = '/js/vendor/zxing/';
+// v584 (issue #214): the picker-sized avatar derivatives under
+// img/avatars/thumb/ (22 files, ~160 KB) are runtime-cached on first
+// picker use, NEVER precached — the same pattern as stickers and the
+// ZXing decoder: installs stay lean (the 1600x1600 originals, 2,246 KB,
+// are already the precache cost), and the closed file set needs no
+// eviction cap. Survives version bumps like the other runtime caches.
+const AVATAR_THUMB_CACHE = 'cozy-libram-avatar-thumbs';
+const AVATAR_THUMBS_PATH = '/img/avatars/thumb/';
 // v216: byte budget for the cover cache (was: 600-entry count cap). Bucket
 // objects are CORS-clean with real Content-Length, so size-based eviction
 // finally works.
@@ -59,7 +67,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE && k !== STICKER_CACHE && k !== ZXING_CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE && k !== STICKER_CACHE && k !== ZXING_CACHE && k !== AVATAR_THUMB_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -157,6 +165,27 @@ self.addEventListener('fetch', (e) => {
   if (url.origin === location.origin && e.request.method === 'GET' && url.pathname.indexOf(ZXING_PATH) === 0) {
     e.respondWith((async () => {
       const cache = await caches.open(ZXING_CACHE);
+      const hit = await cache.match(e.request);
+      if (hit) return hit;
+      try {
+        const res = await fetch(e.request);
+        if (res && res.ok) {
+          await cache.put(e.request, res.clone());
+        }
+        return res;
+      } catch (err) {
+        return Response.error();
+      }
+    })());
+    return;
+  }
+  // v584 (issue #214): avatar picker derivatives — cache-first with
+  // runtime fill, same pattern as stickers/zxing. The generic
+  // same-origin branch below only matches, never stores, so without
+  // this rule the thumbs would re-download on every picker open.
+  if (url.origin === location.origin && e.request.method === 'GET' && url.pathname.indexOf(AVATAR_THUMBS_PATH) === 0) {
+    e.respondWith((async () => {
+      const cache = await caches.open(AVATAR_THUMB_CACHE);
       const hit = await cache.match(e.request);
       if (hit) return hit;
       try {
