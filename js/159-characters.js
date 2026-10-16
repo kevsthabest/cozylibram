@@ -11,11 +11,18 @@
    (no character index exists yet to return to) */
 /* v342: character breadcrumb stack. When navigating character→character,
    push the current view so Back walks the chain. Empty stack → origin. */
-let charNavStack = [];
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export let charNavStack = [];
 /* v353: modal return target — when opening a character from a book modal,
    stash the book ID so Back can restore the modal (triage #9) */
-let charModalReturn = null;
-function charPushNav(targetId) {
+export let charModalReturn = null;
+export function charPushNav(targetId) {
   // v343: clear stale crumbs on fresh entry (Advisor HIGH)
   if (view === 'character' && characterViewId) {
     // v343 LOW: skip self-push (tapping link to current character)
@@ -29,7 +36,7 @@ function charPushNav(targetId) {
   }
   if (charNavStack.length > 30) charNavStack = charNavStack.slice(-30);
 }
-function charPopNav() {
+export function charPopNav() {
   const prev = charNavStack.pop();
   if (!prev) return false;
   if (prev.type === 'canonical') {
@@ -43,9 +50,9 @@ function charPopNav() {
   render();
   return true;
 }
-function charClearNav() { charNavStack = []; }
+export function charClearNav() { charNavStack = []; }
 
-function goBack() {
+export function goBack() {
   // v342: walk the character breadcrumb first
   try { if (charPopNav()) return; } catch (e) {}
   // v353: restore book modal if we came from one (triage #9)
@@ -61,9 +68,9 @@ function goBack() {
   try { go('library'); } catch (e) { try { history.back(); } catch (err) {} }
 }
 
-let characterViewId = null;
+export let characterViewId = null;
 
-const CharacterWiki = {
+export const CharacterWiki = {
   _sb() { return cloudClient().catch(() => null); },
 
   /* Full character page data: canonical + instances + notes. */
@@ -199,7 +206,7 @@ const CharacterWiki = {
   },
 };
 
-function openCharacter(charId) {
+export function openCharacter(charId) {
   // v353: stash modal return target before closing (triage #9)
   try {
     if (typeof previewOpenId !== 'undefined' && previewOpenId) {
@@ -223,7 +230,7 @@ function openCharacter(charId) {
 
 /* Role-themed avatar medallion. Returns HTML for a circular badge with
    the character's initials, colored by their primary role. */
-function charAvatar(name, role, size) {
+export function charAvatar(name, role, size) {
   size = parseInt(size, 10) || 64;
   const initials = String(name || '?').trim().split(/\s+/)
     .map(w => [...w][0]).join('').slice(0, 2).toUpperCase() || '?';
@@ -240,7 +247,7 @@ function charAvatar(name, role, size) {
 
 /* Determine a character's primary role across all instances
    (protagonist > antagonist > supporting > minor). */
-function charPrimaryRole(instances) {
+export function charPrimaryRole(instances) {
   const order = { protagonist: 0, antagonist: 1, supporting: 2, minor: 3 };
   let best = 'minor', bestRank = 4;
   (instances || []).forEach(inst => {
@@ -251,7 +258,7 @@ function charPrimaryRole(instances) {
 }
 
 /* v336: render pull quotes section. Returns HTML (empty string if none). */
-function charQuotesHTML(quotes) {
+export function charQuotesHTML(quotes) {
   if (!quotes || !quotes.length) return '';
   let h = '<h3 class="serif">Memorable quotes</h3><div class="ch-quotes">';
   quotes.slice(0, 5).forEach(q => {
@@ -266,19 +273,19 @@ function charQuotesHTML(quotes) {
 
 /* v346: spoiler protection. Spoiler-gated content is blurred by default
    (per-device setting, default ON). Tap to reveal. */
-function spoilersHidden() {
+export function spoilersHidden() {
   try {
     const v = localStorage.getItem('cl_hide_spoilers');
     return v === null ? true : v === '1'; // default ON
   } catch (e) { return true; }
 }
-function setSpoilersHidden(hide) {
+export function setSpoilersHidden(hide) {
   try { localStorage.setItem('cl_hide_spoilers', hide ? '1' : '0'); } catch (e) {}
 }
 /* v469: provenance pills — wiki rework Variant A (quiet badges).
    Color is always paired with text, never color alone (a11y).
    States: pipeline ("from the books"), community, pending. */
-function provPill(source) {
+export function provPill(source) {
   var s = String(source || '').toLowerCase();
   var cls, label;
   if (s === 'community') { cls = 'prov-community'; label = 'community'; }
@@ -287,7 +294,7 @@ function provPill(source) {
   return '<span class="prov-pill ' + cls + '">' + esc(label) + '</span>';
 }
 /* Wrap spoilerish HTML. When hidden, shows a blur + tap-to-reveal. */
-function spoilerWrap(html, label) {  if (!spoilersHidden()) return html;
+export function spoilerWrap(html, label) {  if (!spoilersHidden()) return html;
   // v347: aria-hidden on blur so screen readers don't announce spoilers (Advisor MEDIUM)
   // v357: hint is eye icon + "Tap to reveal" (aria-label carries the context)
   return '<span class="spoiler" tabindex="0" role="button" aria-label="' + esc(label || 'Spoiler') + ' (hidden)">' +
@@ -296,7 +303,7 @@ function spoilerWrap(html, label) {  if (!spoilersHidden()) return html;
     '</span>';
 }
 /* Wire spoiler tap-to-reveal (event delegation, works for dynamic content) */
-function spoilerToggle(sp, reveal) {
+export function spoilerToggle(sp, reveal) {
   const blur = sp.querySelector('.spoiler-blur');
   if (reveal) {
     sp.classList.add('revealed');
@@ -328,7 +335,7 @@ document.addEventListener('keydown', function(e) {
 /* v341: Phase D — story timeline. Horizontal journey across books showing
    the character's role evolution and key relationships per book.
    Instances are ordered by series position when available, else by title. */
-function charTimelineHTML(instances, workCharsByWorkId) {
+export function charTimelineHTML(instances, workCharsByWorkId) {
   if (!instances || instances.length < 2) return ''; // timeline needs 2+ books
   // Sort by series position if available, else alphabetically
   // v344: normalize positions (handles range strings like "0.1-0.5" via parseFloat)
@@ -383,7 +390,7 @@ function charTimelineHTML(instances, workCharsByWorkId) {
 /* v378: Merge edge table relationships over JSON.
    v380: Filter to center character only (Advisor HIGH).
    Confirmed edges from character_relationships take precedence. */
-async function getMergedRelationships(workChars, centerInstances) {
+export async function getMergedRelationships(workChars, centerInstances) {
   const merged = [];
   const seen = new Set();
 
@@ -440,7 +447,7 @@ async function getMergedRelationships(workChars, centerInstances) {
   return merged;
 }
 
-function charGraphHTML(grouped, workChars, centerName, centerRole) {
+export function charGraphHTML(grouped, workChars, centerName, centerRole) {
   if (!grouped || !grouped.length) return '';
   // v370: always emit markup — initD3Graph handles lazy-loading D3
 
@@ -521,7 +528,7 @@ function charGraphHTML(grouped, workChars, centerName, centerRole) {
 
 /* v369: Initialize D3 graph after render. Called from renderCharacterPage.
    v370: D3 lazy-loads on first use (not render-blocking). */
-function initD3Graph(box) {
+export function initD3Graph(box) {
   if (!box) return;
   if (typeof d3 === 'undefined') {
     // Lazy-load D3
@@ -929,7 +936,7 @@ function initD3Graph(box) {
 
 /* v333: render a relationship target name as a tappable link when it
    resolves to a known character, plain text otherwise. */
-function charRelLink(name, workChars) {
+export function charRelLink(name, workChars) {
   const escName = esc(String(name || ''));
   if (typeof charResolveTarget === 'undefined' || !workChars) return escName;
   try {
@@ -946,7 +953,7 @@ function charRelLink(name, workChars) {
 }
 
 /* Wire tap handlers for relationship links in a container. */
-function wireCharRelLinks(box, excludeSel) {
+export function wireCharRelLinks(box, excludeSel) {
   if (!box) return;
   box.querySelectorAll('[data-chwiki]').forEach(b => b.addEventListener('click', () => {
     if (excludeSel && b.closest(excludeSel)) return;
@@ -959,8 +966,8 @@ function wireCharRelLinks(box, excludeSel) {
 
 /* v329: detail view for a single book_character row (unlinked characters).
    Shows book-specific description and relationships. */
-let bookCharViewId = null;
-function openBookCharacter(bookCharId) {
+export let bookCharViewId = null;
+export function openBookCharacter(bookCharId) {
   // v332: close the book modal first — click its close button so the
   // overlay token, scroll lock, and history entry are cleaned up properly
   try { const x = document.getElementById('m-x'); if (x) x.click(); } catch (e) {}
@@ -974,7 +981,7 @@ function openBookCharacter(bookCharId) {
   window.scrollTo(0, 0);
 }
 
-async function renderBookCharacterPage() {
+export async function renderBookCharacterPage() {
   const sb = await CharacterWiki._sb();
   if (!sb || !bookCharViewId) {
     setView('<div class="view-head"><h2 class="serif">Not found</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
@@ -1038,7 +1045,7 @@ async function renderBookCharacterPage() {
   }
 }
 
-async function renderCharacterPage() {
+export async function renderCharacterPage() {
   const d = await CharacterWiki.getPage(characterViewId);
   if (!d) {
     setView('<div class="view-head"><h2 class="serif">Character not found</h2>' +
@@ -1269,3 +1276,41 @@ async function renderCharacterPage() {
     btn.disabled = false;
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/150-modal-discovery.js, js/180-settings.js, js/200-boot.js and js/219-milestones.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.charNavStack = charNavStack;
+window.charModalReturn = charModalReturn;
+window.charPushNav = charPushNav;
+window.charPopNav = charPopNav;
+window.charClearNav = charClearNav;
+window.goBack = goBack;
+window.characterViewId = characterViewId;
+window.CharacterWiki = CharacterWiki;
+window.openCharacter = openCharacter;
+window.charAvatar = charAvatar;
+window.charPrimaryRole = charPrimaryRole;
+window.charQuotesHTML = charQuotesHTML;
+window.spoilersHidden = spoilersHidden;
+window.setSpoilersHidden = setSpoilersHidden;
+window.provPill = provPill;
+window.spoilerWrap = spoilerWrap;
+window.spoilerToggle = spoilerToggle;
+window.charTimelineHTML = charTimelineHTML;
+window.getMergedRelationships = getMergedRelationships;
+window.charGraphHTML = charGraphHTML;
+window.initD3Graph = initD3Graph;
+window.charRelLink = charRelLink;
+window.wireCharRelLinks = wireCharRelLinks;
+window.bookCharViewId = bookCharViewId;
+window.openBookCharacter = openBookCharacter;
+window.renderBookCharacterPage = renderBookCharacterPage;
+window.renderCharacterPage = renderCharacterPage;
