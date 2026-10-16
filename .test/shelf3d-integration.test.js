@@ -13,6 +13,7 @@
 // device-verified, and section 12 stops at the stub seam on purpose.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const { classicize } = require('./harness');
 
 const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
@@ -130,7 +131,9 @@ const themeSrc = fs.readFileSync(ROOT + '/js/216-shelf3d-theme.js', 'utf8');
   const vm = require('vm');
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(themeSrc, sandbox);
+  // R3 repoint (migration plan §9.3): js/216 is an ES module; classicize
+  // its source before vm evaluation — loading plumbing only.
+  vm.runInContext(classicize(themeSrc, 'js/216-shelf3d-theme.js'), sandbox);
   const forTheme = sandbox.window.Shelf3DTheme.forTheme;
   const keys = ['dark','light','hearthside','candlelight','twilight','verdant','midnight','velvet','abyss','frost','haunt','yuletide','fete','amour','shamrock','pastel','harvest','solstice'];
   const allOk = keys.every(k => {
