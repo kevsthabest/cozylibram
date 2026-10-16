@@ -7,7 +7,13 @@
    Returns { value, actual }: `actual` is true when the user entered a real
    purchase price (their data is preferred, never discarded); otherwise the
    flat estimate default. Always an estimate — label it as such in UI. */
-function libraryDefaultPrice() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function libraryDefaultPrice() {
   try {
     var v = parseFloat(localStorage.getItem('cozylibram.defaultPrice'));
     if (!isNaN(v) && v >= 0) return Math.round(v * 100) / 100;
@@ -22,7 +28,7 @@ function libraryDefaultPrice() {
    These are static regional averages, NOT live conversion — estimates stay
    estimates. purchasePrice is always in the user's own currency: it is
    formatted, never converted. Default: CAD (home market). */
-var CURRENCY_DEFAULTS = {
+export var CURRENCY_DEFAULTS = {
   USD: 19.99,  // United States
   CAD: 24.99,  // Canada
   EUR: 17.99,  // Eurozone
@@ -38,7 +44,7 @@ var CURRENCY_DEFAULTS = {
   INR: 499,    // India
   JPY: 2800    // Japan
 };
-function userCurrency() {
+export function userCurrency() {
   var lang = '';
   try { lang = String(navigator.language || '').toLowerCase(); } catch (e) {}
   var parts = lang.split(/[-_]/);
@@ -54,12 +60,12 @@ function userCurrency() {
   if (EURO_LANGS.indexOf(parts[0]) >= 0) return 'EUR';
   return 'CAD';
 }
-function userLocale() {
+export function userLocale() {
   try { return navigator.language || 'en-CA'; } catch (e) { return 'en-CA'; }
 }
 /* Format a money amount in the user's currency. opts.digits controls
    decimals (default 2). Falls back to bare $ on ancient engines. */
-function formatMoney(amount, opts) {
+export function formatMoney(amount, opts) {
   opts = opts || {};
   var digits = (opts.digits != null) ? opts.digits : 2;
   try {
@@ -73,21 +79,21 @@ function formatMoney(amount, opts) {
     return '$' + (Number(amount) || 0).toFixed(digits);
   }
 }
-function estimateBookValue(b) {
+export function estimateBookValue(b) {
   if (b && b.purchasePrice != null && !isNaN(b.purchasePrice))
     return { value: b.purchasePrice, actual: true };
   return { value: libraryDefaultPrice(), actual: false };
 }
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 // v128: dashboard-first. 'dash' shows this month's hero numbers + glanceable
 // sections; 'detail' is the full explorer behind one tap.
-let statsMode = 'dash';
-const dayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+export let statsMode = 'dash';
+export const dayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
   '-' + String(d.getDate()).padStart(2, '0');
 
-function dayActivity() {
+export function dayActivity() {
   // dayKey -> [{ b, from, to, finished }]; log entries first, finish dates fill gaps
   const map = {};
   const add = (k, e) => { (map[k] = map[k] || []).push(e); };
@@ -103,7 +109,7 @@ function dayActivity() {
   return map;
 }
 
-function pagesByDayMap() {
+export function pagesByDayMap() {
   const byDay = dayActivity();
   const out = {};
   Object.keys(byDay).forEach(k => {
@@ -114,7 +120,7 @@ function pagesByDayMap() {
   });
   return out;
 }
-function biggestDay() {
+export function biggestDay() {
   const m = pagesByDayMap();
   let best = null;
   Object.keys(m).forEach(k => {
@@ -127,7 +133,7 @@ function biggestDay() {
 // Summing pageCount diverged (e.g. 400 vs 987) when logs didn't match.
 // v454: ONE helper for all log-based page sums — pagesInRange(start, end)
 // takes YYYY-MM-DD strings, sums (to - from) from reading logs only.
-function pagesInRange(start, end) {
+export function pagesInRange(start, end) {
   let total = 0;
   library.forEach(b => {
     (b.log || []).forEach(e => {
@@ -139,13 +145,13 @@ function pagesInRange(start, end) {
   });
   return total;
 }
-function pagesInYear(yr) {
+export function pagesInYear(yr) {
   return pagesInRange(String(yr) + '-01-01', String(yr) + '-12-31');
 }
 
 /* ---- shared activity intensity (v63): pages/day -> level 0..4 from her
    own quartiles, so both the heatmap and the month calendar tint alike ---- */
-function activityLevels() {
+export function activityLevels() {
   const byDay = dayActivity();
   const pmap = pagesByDayMap();
   const vals = Object.keys(pmap).map(k => pmap[k].pages).filter(v => v > 0).sort((a, b) => a - b);
@@ -165,7 +171,7 @@ function activityLevels() {
 }
 
 /* ---- one day-detail renderer shared by the heatmap and the calendar ---- */
-function dayDetailHTML(byDay, k) {
+export function dayDetailHTML(byDay, k) {
   const acts = (byDay[k] || []).slice().sort((x, y) => String(x.b.title).localeCompare(String(y.b.title)));
   const dayPages = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
   const nBooks = new Set(acts.map(a => a.b.id)).size;
@@ -186,8 +192,8 @@ function dayDetailHTML(byDay, k) {
 
 /* ---- reading activity heatmap (v62): GitHub-style, last 22 weeks ----
    Monday-first columns; cell intensity = level() from shared quartiles. */
-const HEAT_WEEKS = 22;
-function heatmapHTML() {
+export const HEAT_WEEKS = 22;
+export function heatmapHTML() {
   const { byDay, level } = activityLevels();
   const today = new Date();
   const todayK = dayKey(today);
@@ -225,7 +231,7 @@ function heatmapHTML() {
 
 /* ---- month calendar (v63): the familiar grid with covers is back, and each
    day cell now also carries the heatmap intensity tint ---- */
-function readingCalHTML() {
+export function readingCalHTML() {
   const { byDay, level } = activityLevels();
   const blanks = new Date(calY, calM, 1).getDay();
   const days = new Date(calY, calM + 1, 0).getDate();
@@ -265,10 +271,10 @@ function readingCalHTML() {
 
 /* ---- reading pace (v62): pages/day from the trailing 30 days of logs,
    plus book-length and streak facts. ---- */
-function fmtBig(n) {
+export function fmtBig(n) {
   return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(n));
 }
-function paceHTML() {
+export function paceHTML() {
   // Batch 4 (issue #145): was 30 days × every book × pagesOnDay — a single
   // pagesInRange() pass sums the same log entries: it counts e.to > e.from
   // entries with d in [start, end], exactly what the loop accumulated
@@ -323,7 +329,7 @@ function paceHTML() {
   return html;
 }
 
-function dailyStatsHTML() {
+export function dailyStatsHTML() {
   const k = dayKey(new Date());
   const rows = [];
   let total = 0;
@@ -356,13 +362,13 @@ function dailyStatsHTML() {
    line about what she reaches for. Descriptive, not judgmental. ---- */
 /* v454: single taste gate — replaces three separate empty-state cards.
    Shows once when fewer than 3 books are rated. */
-function tasteRatedCount() {
+export function tasteRatedCount() {
   return library.filter(b => (b.myRating || 0) > 0).length;
 }
-function tasteGateNeeded() {
+export function tasteGateNeeded() {
   return tasteRatedCount() < 3;
 }
-function tasteGateHTML() {
+export function tasteGateHTML() {
   const n = Math.min(tasteRatedCount(), 3);
   const pct = Math.round(n / 3 * 100);
   return '<div class="stat-sub">Reading profile</div>' +
@@ -372,7 +378,7 @@ function tasteGateHTML() {
     '<div class="note">' + n + ' of 3 rated</div>' +
     '<div style="margin-top:10px"><button class="btn" data-act="rate-book">Rate a book</button></div></div>';
 }
-function spiceProfileHTML() {
+export function spiceProfileHTML() {
   if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const rows = RATING_AXES.map(a => {
@@ -403,7 +409,7 @@ function spiceProfileHTML() {
 /* ---- mood profile (v405): per-axis intensity distribution. Reading
    profile shows the average pull per axis; this shows the spread — how
    many books sit in the high / medium / low band of each axis. ---- */
-function moodProfileHTML() {
+export function moodProfileHTML() {
   if (tasteGateNeeded()) return '';
   const read = library.filter(b => b.status === 'read');
   const axes = RATING_AXES.map(a => {
@@ -441,7 +447,7 @@ function moodProfileHTML() {
 }
 
 /* ---- rating distribution (v65): histogram + the interesting read ---- */
-function ratingDistHTML() {
+export function ratingDistHTML() {
   const read = library.filter(b => b.status === 'read' && (b.myRating || 0) > 0);
   if (!read.length)
     return '<div class="stat-sub">Ratings</div>' +
@@ -474,8 +480,8 @@ function ratingDistHTML() {
 // slightly, verify against real data, iterate upward until it's signal).
 // If real-data review shows this still fires on noise, raise GENRE_GAP_MIN
 // further — it's the one knob.
-const GENRE_GAP_MIN = 0.5;
-function patternObservations() {
+export const GENRE_GAP_MIN = 0.5;
+export function patternObservations() {
   const obs = [];
   const read = library.filter(b => b.status === 'read');
   const rated = read.filter(b => (b.myRating || 0) > 0);
@@ -576,7 +582,7 @@ function patternObservations() {
   if (!obs.length) return [];
   return obs;
 }
-function patternsHTML() {
+export function patternsHTML() {
   if (tasteGateNeeded()) return '';
   const obs = patternObservations();
   if (!obs.length)
@@ -591,7 +597,7 @@ function patternsHTML() {
 /* ---- genre evolution (v69): how her genre mix shifts over time, with
    year / quarter / month views. Stacked shares per period from finish
    dates; one deterministic observation, everything gated on enough data. ---- */
-function genreEvoHTML() {
+export function genreEvoHTML() {
   const gran = genreGran;
   const keyOf = d => gran === 'year' ? String(d.getFullYear())
     : gran === 'quarter' ? d.getFullYear() + '-Q' + (Math.floor(d.getMonth() / 3) + 1)
@@ -688,7 +694,7 @@ function genreEvoHTML() {
 
 /* ---- personal records (v66): the fun achievements wall. Every card taps
    through to the book; Biggest day jumps to that day in the calendar. ---- */
-function recordsHTML() {
+export function recordsHTML() {
   const read = library.filter(b => b.status === 'read');
   const withPages = read.filter(b => (b.pageCount || 0) > 0);
   const rated = read.filter(b => (b.myRating || 0) > 0);
@@ -737,7 +743,7 @@ function recordsHTML() {
 
 /* ---- series statistics (v66): books read per series + next-up from her
    TBR. No totals exist in the metadata, so progress is stated honestly. ---- */
-function seriesHTML() {
+export function seriesHTML() {
   const byName = {};
   library.forEach(b => {
     const sn = b.series && b.series.name;
@@ -785,9 +791,9 @@ function seriesHTML() {
 
 /* ---- Your Year in Books (v70): a Wrapped-style visual summary of the year,
    with share-as-image (1080x1920 story format) and copy-as-text export. ---- */
-let yibYear = new Date().getFullYear();
+export let yibYear = new Date().getFullYear();
 
-function yearInBooksYears() {
+export function yearInBooksYears() {
   const yrs = new Set([new Date().getFullYear()]);
   library.forEach(b => {
     if (b.status === 'read' && b.dateFinished) yrs.add(new Date(b.dateFinished).getFullYear());
@@ -795,7 +801,7 @@ function yearInBooksYears() {
   return [...yrs].sort((a, b) => b - a);
 }
 
-function yearInBooksData(yr) {
+export function yearInBooksData(yr) {
   yr = yr || yibYear;
   const readYr = library.filter(b => b.status === 'read' && b.dateFinished &&
     new Date(b.dateFinished).getFullYear() === yr);
@@ -840,7 +846,7 @@ function yearInBooksData(yr) {
   };
 }
 
-function renderYearInBooks(yr) {
+export function renderYearInBooks(yr) {
   const years = yearInBooksYears();
   yibYear = (yr != null && years.includes(yr)) ? yr : (years.includes(yibYear) ? yibYear : years[0]);
   const d = yearInBooksData();
@@ -898,7 +904,7 @@ function renderYearInBooks(yr) {
     c.addEventListener('click', () => openBookFromEl(c, c.dataset.id)));
 }
 
-function drawYearImage(d) {
+export function drawYearImage(d) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -961,13 +967,13 @@ function drawYearImage(d) {
   return cv;
 }
 
-function shareYearImage() {
+export function shareYearImage() {
   const cv = drawYearImage(yearInBooksData());
   shareCanvasFile(cv, 'my-' + yibYear + '-in-books.png', 'My Year in Books');
 }
 
 /* ---- Shareable book cards (v73): 1080x1920 story-format cards per book. ---- */
-function cvRoundRect(x, X, Y, W, H, R) {
+export function cvRoundRect(x, X, Y, W, H, R) {
   x.beginPath();
   x.moveTo(X + R, Y);
   x.arcTo(X + W, Y, X + W, Y + H, R);
@@ -976,7 +982,7 @@ function cvRoundRect(x, X, Y, W, H, R) {
   x.arcTo(X, Y, X + W, Y, R);
   x.closePath();
 }
-function cvWrap(x, text, maxW) {
+export function cvWrap(x, text, maxW) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let line = '';
@@ -988,7 +994,7 @@ function cvWrap(x, text, maxW) {
   if (line) lines.push(line);
   return lines;
 }
-function loadCoverImage(url) {
+export function loadCoverImage(url) {
   return new Promise(resolve => {
     let done = false;
     const fin = (img) => { if (!done) { done = true; resolve(img); } };
@@ -1003,7 +1009,7 @@ function loadCoverImage(url) {
     } catch (e) { fin(null); }
   });
 }
-function shareCanvasFile(cv, name, title) {
+export function shareCanvasFile(cv, name, title) {
   if (!cv || !cv.toBlob) { toast('Image export isn’t supported on this device'); return; }
   cv.toBlob(async (blob) => {
     if (!blob) { toast('Could not create the image'); return; }
@@ -1013,7 +1019,7 @@ function shareCanvasFile(cv, name, title) {
     if (how === 'downloaded') toast('Image saved 📥');
   }, 'image/png');
 }
-async function drawBookCard(b) {
+export async function drawBookCard(b) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -1109,7 +1115,7 @@ async function drawBookCard(b) {
   }
   return cv;
 }
-async function shareBookCard(id) {
+export async function shareBookCard(id) {
   const b = library.find(x => x.id === id);
   if (!b) return;
   toast('Making your card… ✨');
@@ -1120,7 +1126,7 @@ async function shareBookCard(id) {
   shareCanvasFile(cv, 'cozy-libram-' + safe + '.png', b.title);
 }
 
-function yearTextSummary(d) {
+export function yearTextSummary(d) {
   const lines = [
     '✨ My ' + d.yr + ' in Books ✨',
     '📚 ' + d.n + ' books · 📄 ' + d.pages + ' pages' + (d.avg != null ? ' · ♥ ' + d.avg.toFixed(1) + ' avg' : '')
@@ -1137,14 +1143,14 @@ function yearTextSummary(d) {
   return lines.join('\n');
 }
 
-function copyYearSummary() {
+export function copyYearSummary() {
   const t = yearTextSummary(yearInBooksData());
   const done = () => toast('Summary copied 📋');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(t).then(done, () => fallbackCopy(t, done));
   } else fallbackCopy(t, done);
 }
-function fallbackCopy(t, done) {
+export function fallbackCopy(t, done) {
   const ta = document.createElement('textarea');
   ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
@@ -1152,7 +1158,7 @@ function fallbackCopy(t, done) {
   ta.remove();
 }
 
-function renderStats() {
+export function renderStats() {
   // v448: backfill milestones once (idempotent — no-op after first run)
   try { if (typeof backfillMilestones === 'function') backfillMilestones(); } catch (e) {}
   // v454 Part 2: Overview / Details segmented control
@@ -1438,7 +1444,7 @@ function renderStats() {
 }
 
 /* ---- Milestones page (v448) ---- */
-function renderMilestones() {
+export function renderMilestones() {
   const store = typeof loadMilestones === 'function' ? loadMilestones() : {};
   const cats = [
     { id: 'journey', name: 'Journey', desc: 'The road so far \u2014 books finished, pages turned.' },
@@ -1549,3 +1555,75 @@ function renderMilestones() {
   }));
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/040-storage.js,
+   js/150-modal-discovery.js, js/200-boot.js, js/212-dna.js,
+   js/214-wrapped.js, js/220-share-moments.js, js/228-portrait-share.js,
+   js/238-book-candle.js and js/239-finale.js — reach these names at
+   runtime, so the bridge republishes exactly the pre-conversion public
+   surface on window. Bare-name lookups in classic scripts resolve through
+   the global object, so the caller needs no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run. Remove a
+   name from this bridge only when its last classic caller is gone.
+   yibYear is republished as an accessor property, not a value copy:
+   renderYearInBooks reassigns it as the reader moves between years, and
+   js/214-wrapped.js reads it live (yr || yibYear) when composing the
+   wrapped year card. A value copy would freeze the year the module first
+   loaded with and silently serve the stale one; the getter/setter pair
+   forwards every read and write to the module binding, so the reader’s
+   expression is unchanged and every read sees the live value.
+ */
+window.libraryDefaultPrice = libraryDefaultPrice;
+window.CURRENCY_DEFAULTS = CURRENCY_DEFAULTS;
+window.userCurrency = userCurrency;
+window.userLocale = userLocale;
+window.formatMoney = formatMoney;
+window.estimateBookValue = estimateBookValue;
+window.MONTHS = MONTHS;
+window.statsMode = statsMode;
+window.dayKey = dayKey;
+window.dayActivity = dayActivity;
+window.pagesByDayMap = pagesByDayMap;
+window.biggestDay = biggestDay;
+window.pagesInRange = pagesInRange;
+window.pagesInYear = pagesInYear;
+window.activityLevels = activityLevels;
+window.dayDetailHTML = dayDetailHTML;
+window.HEAT_WEEKS = HEAT_WEEKS;
+window.heatmapHTML = heatmapHTML;
+window.readingCalHTML = readingCalHTML;
+window.fmtBig = fmtBig;
+window.paceHTML = paceHTML;
+window.dailyStatsHTML = dailyStatsHTML;
+window.tasteRatedCount = tasteRatedCount;
+window.tasteGateNeeded = tasteGateNeeded;
+window.tasteGateHTML = tasteGateHTML;
+window.spiceProfileHTML = spiceProfileHTML;
+window.moodProfileHTML = moodProfileHTML;
+window.ratingDistHTML = ratingDistHTML;
+window.GENRE_GAP_MIN = GENRE_GAP_MIN;
+window.patternObservations = patternObservations;
+window.patternsHTML = patternsHTML;
+window.genreEvoHTML = genreEvoHTML;
+window.recordsHTML = recordsHTML;
+window.seriesHTML = seriesHTML;
+Object.defineProperty(window, 'yibYear', { get: () => yibYear, set: (v) => { yibYear = v; }, enumerable: true, configurable: true });
+window.yearInBooksYears = yearInBooksYears;
+window.yearInBooksData = yearInBooksData;
+window.renderYearInBooks = renderYearInBooks;
+window.drawYearImage = drawYearImage;
+window.shareYearImage = shareYearImage;
+window.cvRoundRect = cvRoundRect;
+window.cvWrap = cvWrap;
+window.loadCoverImage = loadCoverImage;
+window.shareCanvasFile = shareCanvasFile;
+window.drawBookCard = drawBookCard;
+window.shareBookCard = shareBookCard;
+window.yearTextSummary = yearTextSummary;
+window.copyYearSummary = copyYearSummary;
+window.fallbackCopy = fallbackCopy;
+window.renderStats = renderStats;
+window.renderMilestones = renderMilestones;
