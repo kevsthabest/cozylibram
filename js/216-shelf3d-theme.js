@@ -11,7 +11,13 @@
    - spooky:  halloween (haunt)
    - festive: celebratory (yuletide, fete, shamrock) */
 
-const SHELF3D_ACCENTS = {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const SHELF3D_ACCENTS = {
   rose: '#e5488f', violet: '#8b5cf6', gold: '#c08a24', teal: '#2fa39a',
   crimson: '#d43a55', ember: '#e0722a', ocean: '#3f8fd6', sage: '#8aa864',
   blush: '#f2a3c0', copper: '#c47b4a', mint: '#6fce9e', lilac: '#b9a3f2',
@@ -20,7 +26,7 @@ const SHELF3D_ACCENTS = {
 // Per-theme 3D params. woodBase/woodDark: shelf timber. lightWarm: key light.
 // lightCool: rim/fill. ambientLevel/exposure: lift for dark themes.
 // accentGlow: fairy-light/decoration glow. floorTint: floor/vignette.
-const SHELF3D_THEMES = {
+export const SHELF3D_THEMES = {
   dark:        { woodBase: '#5a3d24', woodDark: '#33220f', lightWarm: '#ffd9a0', lightCool: '#7a6ac0', ambientLevel: 0.8,  exposure: 1.0,  accentGlow: '#e5488f', floorTint: '#14101a', mood: 'cozy' },
   light:       { woodBase: '#c9a06a', woodDark: '#8a6a3f', lightWarm: '#fff2dc', lightCool: '#ffe9c9', ambientLevel: 1.1,  exposure: 1.15, accentGlow: '#e5488f', floorTint: '#faf5ec', mood: 'bright' },
   hearthside:  { woodBase: '#6b4426', woodDark: '#3d2612', lightWarm: '#ffb86a', lightCool: '#8a5a2a', ambientLevel: 0.8,  exposure: 1.05, accentGlow: '#e0722a', floorTint: '#17100a', mood: 'cozy' },
@@ -51,7 +57,7 @@ const SHELF3D_THEMES = {
    [wall colour, wall pattern, floor colour, floor kind, trim colour]
    wall patterns: plain | wainscot | panel | stripe | starry | grid
    floor kinds:   boards | tile | stone                                    */
-const SHELF3D_SHELLS = {
+export const SHELF3D_SHELLS = {
   dark:        ['#2e2338', 'wainscot', '#33231b', 'boards', '#1f1527'],
   light:       ['#efe2cc', 'wainscot', '#c9a579', 'boards', '#fbf3e4'],
   hearthside:  ['#4a2c1a', 'panel',    '#2f1c10', 'boards', '#2a190e'],
@@ -76,14 +82,14 @@ const SHELF3D_SHELLS = {
   wisp:        ['#fbe6ef', 'stripe',   '#e8c9a8', 'boards', '#fffaf4'],
   'wisp-night':['#2d2150', 'starry',   '#1c1334', 'boards', '#150e28'],
 };
-function shelf3dShellFor(themeKey, base) {
+export function shelf3dShellFor(themeKey, base) {
   const r = SHELF3D_SHELLS[themeKey];
   const light = base.mood === 'bright';
   const a = r || [base.floorTint, 'plain', base.woodDark, 'boards', base.woodDark];
   return { wall: a[0], pattern: a[1], floor: a[2], floorKind: a[3], trim: a[4], light: light };
 }
 
-function shelf3dThemeFor(themeKey, accentKey) {
+export function shelf3dThemeFor(themeKey, accentKey) {
   const base = SHELF3D_THEMES[themeKey] || SHELF3D_THEMES.dark;
   const accent = SHELF3D_ACCENTS[accentKey] || base.accentGlow;
   // Fresh object per call — no shared-reference leaks.
@@ -101,4 +107,21 @@ function shelf3dThemeFor(themeKey, accentKey) {
   };
 }
 
-window.Shelf3DTheme = { forTheme: shelf3dThemeFor };
+export const Shelf3DTheme = { forTheme: shelf3dThemeFor };
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/217-shelf3d-view.js,
+   reads the Shelf3DTheme namespace at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups in classic scripts resolve through the global
+   object, so the caller needs no changes. Module scripts are deferred,
+   so the bridge is in place before any consumer can run. Remove a name
+   from this bridge only when its last classic caller is gone. */
+window.SHELF3D_ACCENTS = SHELF3D_ACCENTS;
+window.SHELF3D_THEMES = SHELF3D_THEMES;
+window.SHELF3D_SHELLS = SHELF3D_SHELLS;
+window.shelf3dShellFor = shelf3dShellFor;
+window.shelf3dThemeFor = shelf3dThemeFor;
+window.Shelf3DTheme = Shelf3DTheme;
