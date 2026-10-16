@@ -6,10 +6,16 @@
    Milestones celebrate agency (checking, choosing, pausing) — see
    js/219-milestones.js aware-* (v467 replaced the old bravery framing). ---- */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* True when the sheet should be shown for this book: it has warnings and
    the reader hasn't seen the heads-up yet. Status-agnostic on purpose —
    callers decide which transitions qualify (Start Reading flows). */
-function triggerCheckNeeded(b) {
+export function triggerCheckNeeded(b) {
   if (!b || b.triggerCheckSeen) return false;
   return Array.isArray(b.contentWarnings) && b.contentWarnings.length > 0;
 }
@@ -18,7 +24,7 @@ function triggerCheckNeeded(b) {
    "Start anyway". "Not now" (or tapping the scrim) just dismisses —
    the book's status is untouched either way. One-time per book: the
    seen flag is set the moment the sheet opens. */
-function openTriggerCheckSheet(b, onStart) {
+export function openTriggerCheckSheet(b, onStart) {
   // Dedup: don't stack sheets if one is already open
   if (document.querySelector('.tc-sheet')) return;
   // One-time: mark seen on open, so even a scrim-tap counts as "shown".
@@ -116,3 +122,15 @@ function openTriggerCheckSheet(b, onStart) {
   });
   scrim.addEventListener('click', close);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers, js/150-modal-discovery.js and js/160-roulette.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.triggerCheckNeeded = triggerCheckNeeded;
+window.openTriggerCheckSheet = openTriggerCheckSheet;
