@@ -40,7 +40,24 @@
 
 'use strict';
 
-(function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and republished on window by the compatibility
+   bridge at the bottom. The Shelf3D namespace (previously a bare
+   window assignment) is held in a module-local binding, Shelf3DEngine,
+   and exported under its public name: a module-scope binding
+   literally named Shelf3D would, under the test harness's classicize
+   transform, land in the shared global lexical scope and shadow
+   window.Shelf3D for classic bare-name readers; production modules
+   never leak their bindings, and the alias keeps name resolution
+   identical in both worlds
+   of this file, so classic scripts keep resolving the same globals.
+   window.THREE stays a lazy window-slot publication inside
+   s3dLoadThreeLocal, exactly as before: it is a shared cache slot
+   co-published with js/207 (plan §2.1 mini-decision), not a binding
+   this module owns at eval time, so there is no THREE export. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
   /* ---------- Three.js lazy load ----------
      Reuses 207's global loader when present; falls back to an identical local
@@ -3504,11 +3521,24 @@
   function highlightBook(id) { return active ? active.highlightBook(id) : false; }
   function currentCase() { return active ? active.currentCase() : null; }
 
-  window.Shelf3D = { showCase: showCase, highlightBook: highlightBook, currentCase: currentCase, mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
+  const Shelf3DEngine = { showCase: showCase, highlightBook: highlightBook, currentCase: currentCase, mount: mount, unmount: unmount, setBooks: setBooks, setTheme: setTheme,
     setThemeParams: setThemeParams, setAppTheme: setAppTheme, capture: capture,
     fitDistance: shelf3dFitDistance, clampPan: shelf3dClampPan,
     /* v514: pure layout math shared with js/217's case slicer. */
     packCase: shelf3dPackCase, decoFootprint: shelf3dDecoFootprint,
     setNeighbours: setNeighbours };
+  export { Shelf3DEngine as Shelf3D };
 
-})();
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/217-shelf3d-view.js and
+   js/220-share-moments.js, read the Shelf3D namespace at runtime, so
+   the bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups in classic scripts resolve through the
+   global object, so the callers need no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run.
+   Remove a name from this bridge only when its last classic caller is
+   gone. (No THREE line here: window.THREE is published lazily by
+   s3dLoadThreeLocal when the library loads, unchanged.) */
+window.Shelf3D = Shelf3DEngine;
