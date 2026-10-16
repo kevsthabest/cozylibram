@@ -6,17 +6,24 @@
    Nothing is overwritten on its own — she reviews each difference and
    applies per book or all at once. Books without an ISBN can't be checked. */
 
-function isbnDigits(isbn) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export function isbnDigits(isbn) {
   return String(isbn || '').replace(/[^0-9X]/gi, '').toUpperCase();
 }
 
-function parseYear(s) {
+export function parseYear(s) {
   const m = String(s || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/);
   return m ? Number(m[1]) : null;
 }
 
 // Comparison form: trailing " (Series, #1)" dropped, case/punctuation ignored.
-function normTitle(t) {
+export function normTitle(t) {
   return String(t || '')
     .replace(/\s*\([^)]*\)\s*$/, '')
     .toLowerCase()
@@ -29,7 +36,7 @@ function normTitle(t) {
 // replaces the old Google Books fallback), then Open Library (no key).
 // The returned doc must actually list the queried ISBN, otherwise a
 // wrong-edition match would flag phantom differences.
-async function fetchMetaByISBN(isbn) {
+export async function fetchMetaByISBN(isbn) {
   const clean = isbnDigits(isbn);
   if (!clean) return null;
   try {
@@ -82,7 +89,7 @@ async function fetchMetaByISBN(isbn) {
 }
 
 // flags: [{field, label, from, to}]
-function compareBookMeta(book, meta) {
+export function compareBookMeta(book, meta) {
   const flags = [];
   if (meta.title && normTitle(book.title) !== normTitle(meta.title)) {
     flags.push({ field: 'title', label: 'Title', from: book.title || '(none)', to: meta.title });
@@ -117,14 +124,14 @@ function compareBookMeta(book, meta) {
 // v476: blanks auto-fill silently (they can never clobber an intentional
 // edit); conflicts go to the compare sheet. Only pageCount/cover/year
 // auto-fill — title/authors blanks are decided by the reader in the sheet.
-var META_BLANK_FILL = { pageCount: 1, cover: 1, year: 1 };
-function isBlankFillFlag(f) {
+export var META_BLANK_FILL = { pageCount: 1, cover: 1, year: 1 };
+export function isBlankFillFlag(f) {
   return !!META_BLANK_FILL[f.field] &&
     (f.from === '(missing)' || f.from === 'No cover');
 }
 
 // Field-scoped apply (v476): the compare sheet applies per-field picks.
-async function applyMetaField(book, meta, field) {
+export async function applyMetaField(book, meta, field) {
   if (field === 'title') book.title = meta.title;
   else if (field === 'authors') book.authors = (meta.authors || []).slice();
   else if (field === 'pageCount') book.pageCount = meta.pageCount;
@@ -134,7 +141,7 @@ async function applyMetaField(book, meta, field) {
   else if (field === 'cover') book.cover = await adoptCoverWebP(meta.cover, book);
 }
 
-async function applyVerifyFix(book, meta, flags) {
+export async function applyVerifyFix(book, meta, flags) {
   for (const f of flags) await applyMetaField(book, meta, f.field);
   book._mtime = Date.now();
   saveLibrary();
@@ -142,26 +149,26 @@ async function applyVerifyFix(book, meta, flags) {
 
 // v476: conflict store — books whose metadata disagrees with the source on
 // both-sides-present fields. Persisted so the quiet badge survives reloads.
-var META_CONFLICTS_KEY = 'spicyshelves.meta_conflicts.v1';
-var metaConflicts = {};
-function metaConflictsLoad() {
+export var META_CONFLICTS_KEY = 'spicyshelves.meta_conflicts.v1';
+export var metaConflicts = {};
+export function metaConflictsLoad() {
   try { metaConflicts = JSON.parse(localStorage.getItem(META_CONFLICTS_KEY)) || {}; }
   catch (e) { metaConflicts = {}; }
 }
-function metaConflictsSave() {
+export function metaConflictsSave() {
   try { localStorage.setItem(META_CONFLICTS_KEY, JSON.stringify(metaConflicts)); }
   catch (e) {}
 }
-function metaConflictFor(bookId) { return metaConflicts[bookId] || null; }
-function metaConflictClear(bookId) { delete metaConflicts[bookId]; metaConflictsSave(); }
+export function metaConflictFor(bookId) { return metaConflicts[bookId] || null; }
+export function metaConflictClear(bookId) { delete metaConflicts[bookId]; metaConflictsSave(); }
 metaConflictsLoad();
 
 // v476: quiet background compare sweep. Runs at most once per 24h, paced,
 // offline-guarded, no toasts. Blanks auto-fill; conflicts are stored for
 // the quiet badge in the book modal. Hardcover-first priority lives in
 // fetchMetaByISBN (v270) — do not regress it.
-var META_COMPARE_KEY = 'spicyshelves.meta_compare_at';
-async function runMetaCompareSweep() {
+export var META_COMPARE_KEY = 'spicyshelves.meta_compare_at';
+export async function runMetaCompareSweep() {
   try {
     const last = Number(localStorage.getItem(META_COMPARE_KEY) || 0);
     if (Date.now() - last < 86400000) return;
@@ -188,7 +195,7 @@ async function runMetaCompareSweep() {
 }
 
 // The check itself, separated from the UI so tests can drive it directly.
-async function checkLibraryMetadata(paceMs, onProgress) {
+export async function checkLibraryMetadata(paceMs, onProgress) {
   const targets = library.filter(b => cleanISBN(b.isbn));
   const results = [];
   let notFound = 0;
@@ -218,7 +225,7 @@ async function checkLibraryMetadata(paceMs, onProgress) {
 // them, conflicts are stored for the compare sheet behind the book
 // modal's quiet badge — then reports counts. It also stamps the sweep
 // timestamp, so a manual run satisfies the 24h background gate.
-async function runMetadataCheck(onProgress) {
+export async function runMetadataCheck(onProgress) {
   const targets = library.filter(b => cleanISBN(b.isbn));
   const targetIds = new Set(targets.map(b => b.id));
   const found = await checkLibraryMetadata(350, onProgress);
@@ -239,7 +246,7 @@ async function runMetadataCheck(onProgress) {
   return { checked: found.checked, filled: filled, differ: differ, notFound: found.notFound };
 }
 
-function verifyFlagHTML(f) {
+export function verifyFlagHTML(f) {
   return '<span class="vf"><b>' + esc(f.label) + ':</b> <s>' + esc(f.from) +
     '</s> → <b>' + esc(f.to) + '</b></span>';
 }
@@ -252,7 +259,7 @@ function verifyFlagHTML(f) {
 /* Per-field compare: "Yours" vs "Found", default Yours (safe). Nothing
    changes until the reader confirms. Uses the app's sheet pattern
    (collection-overlay + modal-backdrop + overlayOpened, wireSheetDrag). */
-function openMetaCompareSheet(bookId) {
+export function openMetaCompareSheet(bookId) {
   const entry = metaConflictFor(bookId);
   if (!entry) return;
   const book = library.find(b => b.id === bookId);
@@ -311,3 +318,35 @@ function openMetaCompareSheet(bookId) {
     toast(fields.length ? 'Updated — thanks for checking \uD83E\uDD0E' : 'Kept yours — no changes');
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/095-gate.js, js/136-coverpicker.js, js/150-modal-discovery.js and js/180-settings.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.isbnDigits = isbnDigits;
+window.parseYear = parseYear;
+window.normTitle = normTitle;
+window.fetchMetaByISBN = fetchMetaByISBN;
+window.compareBookMeta = compareBookMeta;
+window.META_BLANK_FILL = META_BLANK_FILL;
+window.isBlankFillFlag = isBlankFillFlag;
+window.applyMetaField = applyMetaField;
+window.applyVerifyFix = applyVerifyFix;
+window.META_CONFLICTS_KEY = META_CONFLICTS_KEY;
+window.metaConflicts = metaConflicts;
+window.metaConflictsLoad = metaConflictsLoad;
+window.metaConflictsSave = metaConflictsSave;
+window.metaConflictFor = metaConflictFor;
+window.metaConflictClear = metaConflictClear;
+window.META_COMPARE_KEY = META_COMPARE_KEY;
+window.runMetaCompareSweep = runMetaCompareSweep;
+window.checkLibraryMetadata = checkLibraryMetadata;
+window.runMetadataCheck = runMetadataCheck;
+window.verifyFlagHTML = verifyFlagHTML;
+window.openMetaCompareSheet = openMetaCompareSheet;

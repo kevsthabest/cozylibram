@@ -160,8 +160,12 @@ ok('toy_cover_ok: parsed-authority equality, content-addressed bucket shape, cap
   /left\(p_url, 11\) = 'data:image\/' and length\(p_url\) <= 204800/.test(mig) &&
   mig.includes('dvhimjkrroxuatthiizc' + String.fromCharCode(92) + '.supabase' + String.fromCharCode(92) + '.co'));
 /* Client wiring pins. */
+// R1 repoint (migration plan §9.3): js/232's tag is a module tag since
+// its ESM conversion; the registration assertion accepts either exact
+// tag form — the same assertion, coverage unchanged.
 ok('index.html + sw.js register js/232; version pair is v527',
-  fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8').includes('<script src="js/232-thought-of-you.js"></script>') &&
+  (fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8').includes('<script src="js/232-thought-of-you.js"></script>') ||
+   fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8').includes('<script type="module" src="js/232-thought-of-you.js"></script>')) &&
   fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8').includes("'232-thought-of-you.js'"));
 ok('book detail menu carries "Recommend to a friend" (js/150)',
   (() => { const s = fs.readFileSync(path.join(APP_DIR, 'js/150-modal-discovery.js'), 'utf8');
