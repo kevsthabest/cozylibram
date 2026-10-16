@@ -18,14 +18,20 @@
    canonical ids (or veto them); tropeResolveId() is the only entry point
    and returns canonical ids exclusively. */
 
-const TROPE_TAXONOMY_VERSION = 1;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const TROPE_TAXONOMY_VERSION = 1;
 
-const TROPE_GENRES = [
+export const TROPE_GENRES = [
   'romance', 'dark-romance', 'fantasy', 'sci-fi',
   'mystery-thriller', 'horror', 'historical', 'contemporary', 'non-fiction',
 ];
 
-const TROPES = [
+export const TROPES = [
   /* ---- romance / dark romance ---- */
   { id: 'enemies-to-lovers', name: 'Enemies to Lovers',
     description: 'Two characters who start out hostile or opposed fall for each other.',
@@ -325,7 +331,7 @@ const TROPES = [
 ];
 
 /* Pure: look up one trope by id. Returns the trope or null. */
-function tropeById(id) {
+export function tropeById(id) {
   if (!id) return null;
   for (const t of TROPES) if (t.id === id) return t;
   return null;
@@ -344,7 +350,7 @@ function tropeById(id) {
    `aliases`/`exclusions` arrays (added v207); a row-level array, when
    present, overrides the bundled map below for that trope. */
 
-const TROPE_ALIASES = {
+export const TROPE_ALIASES = {
   'enemies-to-lovers': ['enemy to lover', 'enemies to lover'],
   'forced-proximity': ['forced closeness'],
   'grumpy-x-sunshine': ['grumpy sunshine', 'grumpy/sunshine'],
@@ -391,7 +397,7 @@ const TROPE_ALIASES = {
   'coming-of-age': ['bildungsroman'],
 };
 
-const TROPE_EXCLUSIONS = {
+export const TROPE_EXCLUSIONS = {
   /* Terms deliberately never auto-mapped: considered, rejected as too
      generic. Documented here so nobody re-adds them as aliases.
      v314: 'betrayal' removed — now a canonical trope in its own right. */
@@ -400,7 +406,7 @@ const TROPE_EXCLUSIONS = {
 
 /* Pure: normalize a free-text trope term to slug form so "Enemies To
    Lovers", "enemies_to_lovers" and "enemies-to-lovers" all match. */
-function tropeNormTerm(s) {
+export function tropeNormTerm(s) {
   return String(s || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
@@ -412,7 +418,7 @@ function tropeNormTerm(s) {
    canonical ids are ever returned. `pool` defaults to the bundled list;
    pass the merged live list (whose rows may carry aliases/exclusions)
    and row-level arrays take precedence over the bundled maps. */
-function tropeResolveId(term, pool) {
+export function tropeResolveId(term, pool) {
   const n = tropeNormTerm(term);
   if (!n) return null;
   const list = pool || TROPES;
@@ -430,7 +436,7 @@ function tropeResolveId(term, pool) {
 /* Pure: tropes whose genres intersect the book's genres. Used to keep the
    LLM prompt small and genre-relevant. Unknown genres are ignored.
    v157: optional `pool` (live merged taxonomy); defaults to TROPES. */
-function tropesForGenres(genres, pool) {
+export function tropesForGenres(genres, pool) {
   const want = new Set((genres || []).map(g => String(g).toLowerCase()));
   const list = pool || TROPES;
   if (!want.size) return list.slice();
@@ -438,14 +444,14 @@ function tropesForGenres(genres, pool) {
 }
 
 /* Pure: normalize a trope name for dedup ("Forced Proximity!" -> "forcedproximity"). */
-function tropeNameKey(name) {
+export function tropeNameKey(name) {
   return String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
 }
 
 /* Pure: split a name into normalized words for fuzzy matching. */
-function tropeWords(name) {
+export function tropeWords(name) {
   return String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .split(/[^a-z0-9]+/).filter(Boolean);
@@ -458,7 +464,7 @@ function tropeWords(name) {
    otherwise word overlap ratio. */
 /* v157: optional `pool` so callers can fuzzy-match over the live (merged)
    taxonomy instead of just the bundled file. Defaults to TROPES. */
-function findSimilarTrope(name, pool) {
+export function findSimilarTrope(name, pool) {
   const key = tropeNameKey(name);
   if (!key) return null;
   const words = new Set(tropeWords(name));
@@ -483,7 +489,7 @@ function findSimilarTrope(name, pool) {
 /* Pure: build a collision-safe slug from a proposed name. `taken` is a Set
    of ids already in use. "Forced Proximity" -> "forced-proximity",
    "forced-proximity-2" on collision. */
-function tropeSlugFor(name, taken) {
+export function tropeSlugFor(name, taken) {
   const base = String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'trope';
@@ -492,3 +498,27 @@ function tropeSlugFor(name, taken) {
   while (taken.has(base + '-' + n)) n++;
   return base + '-' + n;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/157-trope-inference.js, js/160-roulette.js, js/161-tropelab.js, js/198-discovery.js, js/238-book-candle.js and js/241-book-ambience.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.TROPE_TAXONOMY_VERSION = TROPE_TAXONOMY_VERSION;
+window.TROPE_GENRES = TROPE_GENRES;
+window.TROPES = TROPES;
+window.tropeById = tropeById;
+window.TROPE_ALIASES = TROPE_ALIASES;
+window.TROPE_EXCLUSIONS = TROPE_EXCLUSIONS;
+window.tropeNormTerm = tropeNormTerm;
+window.tropeResolveId = tropeResolveId;
+window.tropesForGenres = tropesForGenres;
+window.tropeNameKey = tropeNameKey;
+window.tropeWords = tropeWords;
+window.findSimilarTrope = findSimilarTrope;
+window.tropeSlugFor = tropeSlugFor;
