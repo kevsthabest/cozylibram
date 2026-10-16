@@ -38,12 +38,19 @@
 // The app's flows are unaffected: the lookup put and the enriched upsert
 // are the same user seconds apart, and stale refreshes transfer ownership
 // to the refresher.
-const META_TTL_MS = 30 * 24 * 3600 * 1000;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const META_TTL_MS = 30 * 24 * 3600 * 1000;
 
 // The fields every user needs from a lookup. User-specific fields (id,
 // status, owned, ratings, myRating, tropes, progress, notes, dates) live in
 // each user's own books rows and are never cached.
-function metaSnapshot(book) {
+export function metaSnapshot(book) {
   return {
     isbn: book.isbn || '',
     title: book.title || 'Unknown title',
@@ -71,7 +78,7 @@ function metaSnapshot(book) {
 // must be captured (via metaSnapshot) BEFORE enrichment runs, while the book
 // is still an untouched API result — a title the user typed in the seconds
 // between add and enrichment landing must never become canonical.
-function enrichedSnapshot(pristine, book) {
+export function enrichedSnapshot(pristine, book) {
   const snap = Object.assign({}, pristine, {
     categories: Array.isArray(book.categories) ? book.categories.slice() : (pristine.categories || []),
     publicRating: book.publicRating == null ? null : book.publicRating,
@@ -95,7 +102,7 @@ function enrichedSnapshot(pristine, book) {
 // lookup's put is awaited before the add flow runs, so this upsert always
 // lands after it and can never lose a write-write race to the
 // pre-enrichment snapshot.
-async function metaCachePutEnriched(pristine, book) {
+export async function metaCachePutEnriched(pristine, book) {
   if (!book || !book.hcEnriched) return;
   const key = book._cacheKey || book.isbn;
   if (!key) return;
@@ -104,7 +111,7 @@ async function metaCachePutEnriched(pristine, book) {
 
 // Rebuild a fresh book-shaped object from a cached snapshot (new id,
 // today's date, derived axes/tropes — same shape lookupISBN returns).
-function bookFromMeta(snap, isbnHint) {
+export function bookFromMeta(snap, isbnHint) {
   const book = normalizeVolume({ volumeInfo: {} }, isbnHint || (snap && snap.isbn));
   if (!snap) return book;
   book.isbn = snap.isbn || book.isbn;
@@ -138,7 +145,7 @@ function bookFromMeta(snap, isbnHint) {
 }
 
 // Fresh cached metadata for this ISBN, or null (miss / stale / offline).
-async function metaCacheGet(isbn) {
+export async function metaCacheGet(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean || !cloudUser) return null;
   const sb = await cloudClient().catch(() => null);
@@ -157,7 +164,7 @@ async function metaCacheGet(isbn) {
 
 // Store a lookup result for future users. Never throws; callers in the add
 // flow await it so the later enriched upsert for the same row lands after it.
-async function metaCachePut(isbn, snap) {
+export async function metaCachePut(isbn, snap) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean || !snap || !cloudUser) return;
   const sb = await cloudClient().catch(() => null);
@@ -168,3 +175,21 @@ async function metaCachePut(isbn, snap) {
       { onConflict: 'isbn' });
   } catch (e) { /* cache is best-effort */ }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/061-gbooks-key.js, js/070-hardcover.js, js/080-pagecount.js and js/134-verify.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.META_TTL_MS = META_TTL_MS;
+window.metaSnapshot = metaSnapshot;
+window.enrichedSnapshot = enrichedSnapshot;
+window.metaCachePutEnriched = metaCachePutEnriched;
+window.bookFromMeta = bookFromMeta;
+window.metaCacheGet = metaCacheGet;
+window.metaCachePut = metaCachePut;
