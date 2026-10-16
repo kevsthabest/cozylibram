@@ -890,3 +890,40 @@ retro-check on the phase-1a files:
   eval-read blind spot (§5 / PR #270's lesson (a)) accounted for
   shows zero cross-file eval-scope reads in any of the eight
   phase-1a files: the blind spot endangers nothing already merged.
+
+---
+
+## Gate notes — PR #271 (v595)
+
+Recorded from the Security Advisor's gate on the phase-1c batch-1 PR,
+at the program manager's direction. No new finding classes: the gate
+closed PASS_WITH_RISK on the standing Low alone, and confirmed two
+classification calls from the batch.
+
+- **Low-1 recurred in disclosed form — and only in that form.**
+  Four of the batch's files export bindings that are reassigned
+  in-module: js/137-shelf (`shelfBusy`, `shelfResults`,
+  `shelfScanPhoto`), js/138-editions (`editionPickerToken`),
+  js/139-import-concierge (`IC`, `icToken`, `icWorkLabel`,
+  `icWorkFrac`), and js/160-roulette (`blindDate`, `blindPassed`).
+  Their bridge lines publish the bindings' initial values, per the
+  standing Low-1 mechanism. The gate grep-verified ZERO mentions of
+  any of the ten names outside their owner files, so nothing
+  observable diverges — the same proof shape as js/182/js/211 in
+  PR #269. The standing caution is unchanged and binds every later
+  batch: a future file whose reassigned exported binding HAS a
+  cross-file reader needs a getter-style bridge or a roster hold,
+  and no remaining file is assumed clear without the same grep.
+- **js/151's IIFE-retained namespace variant was ruled sound.**
+  The catalog IIFE's result is exported in place as a named const
+  rather than unwrapped — the identical shape to the js/218
+  phase-1a precedent, which the gate had already accepted: the
+  namespace object is the same object in both worlds, and the
+  bridge republishes that one object.
+- **The modal-flairs R3 classification was confirmed honest.**
+  PR #271 repointed modal-flairs.test.js as R3-in-substance (its
+  load site classicizes js/151's source) where §9.5 had guessed R2.
+  The gate confirmed no declaration-scan mechanism exists in that
+  suite for R2 to attach to, and the suite's output — including its
+  one baseline failure, on the identical assertion — is
+  byte-identical to the pristine base.
