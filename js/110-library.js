@@ -1,7 +1,14 @@
 'use strict';
 
 /* ---------------- library view ---------------- */
-function filteredBooks() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export function filteredBooks() {
   const q = query.trim().toLowerCase();
   const out = library.filter(b => {
     // v559: the 'wishlist' filter is the derived shelf (tbr + tobuy),
@@ -32,7 +39,7 @@ function filteredBooks() {
 }
 
 /* v510: status -> [bookmark glyph, badge label] for the tile chip family. */
-const STATUS_BADGE = {
+export const STATUS_BADGE = {
   tbr: ['bmtbr', 'To read'],
   reading: ['bmreading', 'Reading'],
   read: ['bmread', 'Read'],
@@ -42,12 +49,12 @@ const STATUS_BADGE = {
 
 /* v125: glanceable cards — favorite heart overlaid on the cover, status strip
    (+ progress for currently-reading) along the tile's bottom edge. */
-function coverFav(b) {
+export function coverFav(b) {
   return b.favorite
     ? '<span class="card-fav" role="img" aria-label="Favorite">' + icon('favbook') + '</span>'
     : '';
 }
-function tileStatusBar(b) {
+export function tileStatusBar(b) {
   let fill = '';
   if (b.status === 'reading' && b.pageCount) {
     const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
@@ -56,7 +63,7 @@ function tileStatusBar(b) {
   return '<span class="bt-statusbar status-' + esc(b.status) + '" title="' + esc(STATUS[b.status]) + '">' + fill + '</span>';
 }
 
-function bookCard(b, i) {
+export function bookCard(b, i) {
   const badges = ['<span class="badge status-' + esc(b.status) + '">' + STATUS[b.status] + '</span>', ownedBadge(b)];
   if (b.publicRating) badges.push('<span class="badge">★ ' + Number(b.publicRating).toFixed(1) + '</span>');
   badges.push(ratingBadges(b));
@@ -78,7 +85,7 @@ function bookCard(b, i) {
 /* Bookmory-style grid tile (v57): tall rounded card, cover up top in a fixed
    2:3 box, title below. The cover img is absolutely positioned so it can never
    stretch the box, no matter the photo's real dimensions. */
-function bookTile(b, i) {
+export function bookTile(b, i) {
   const inner = b.cover
     ? '<img src="' + esc(b.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' /* v217: async decode off the main thread */
     : '<span class="bt-fallback">' + icon('covers') + '</span>';
@@ -104,3 +111,20 @@ function bookTile(b, i) {
     '<div class="bt-title" title="' + esc(b.title) + '">' + esc(b.title) + '</div></div>';
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/120-favorites.js, js/190-wishlist.js and js/195-coven.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.filteredBooks = filteredBooks;
+window.STATUS_BADGE = STATUS_BADGE;
+window.coverFav = coverFav;
+window.tileStatusBar = tileStatusBar;
+window.bookCard = bookCard;
+window.bookTile = bookTile;

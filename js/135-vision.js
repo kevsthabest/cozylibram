@@ -7,11 +7,18 @@
 // The model is never trusted on the ISBN: isbnCheckOk must pass first, so a
 // misread becomes "couldn't read it", never the wrong book.
 
-let visionBusy = false;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export let visionBusy = false;
 
 // A still from the live scan camera, downscaled for upload. Null when the
 // camera isn't running (tests override this for a canned data URL).
-function visionGetImage() {
+export function visionGetImage() {
   try {
     const video = document.getElementById('scan-video');
     if (video && video.videoWidth) {
@@ -31,7 +38,7 @@ function visionGetImage() {
 // onPick defaults to visionSend (single-cover flow); shelf mode passes
 // shelfSend instead. The callback is read off the input at change time so
 // the shared picker always delivers to the flow that opened it.
-function visionPickPhoto(onPick) {
+export function visionPickPhoto(onPick) {
   let input = document.getElementById('vision-file');
   if (!input) {
     input = document.createElement('input');
@@ -63,7 +70,7 @@ function visionPickPhoto(onPick) {
 // otherwise fail instantly (400) or crawl on mobile data. Resolves with
 // the ORIGINAL data URL on any failure (or if decoding takes longer than
 // timeoutMs), so this can never break the flow.
-function visionDownscale(dataUrl, maxDim, timeoutMs) {
+export function visionDownscale(dataUrl, maxDim, timeoutMs) {
   return new Promise((resolve) => {
     let settled = false;
     const safety = setTimeout(() => done(dataUrl), timeoutMs || 8000);
@@ -91,12 +98,12 @@ function visionDownscale(dataUrl, maxDim, timeoutMs) {
 // v201: paint into the LIVE #scan-result node, re-acquired every time. A
 // background render() mid-flow replaces the node; painting into a stale
 // reference would be invisible (the "Reading…" then nothing bug).
-function visionPaint(html) {
+export function visionPaint(html) {
   const m = document.getElementById('scan-result');
   if (m) m.innerHTML = html;
 }
 
-function visionSetBusy(busy) {
+export function visionSetBusy(busy) {
   visionBusy = busy;
   document.querySelectorAll('.vision-btn').forEach(b => {
     b.disabled = busy;
@@ -106,14 +113,14 @@ function visionSetBusy(busy) {
 }
 
 // Entry point for the "Read the cover" buttons.
-function visionReadCover() {
+export function visionReadCover() {
   if (visionBusy) return;
   const shot = visionGetImage();
   if (shot) visionSend(shot);
   else visionPickPhoto(); // no live frame — photo picker feeds visionSend
 }
 
-async function visionSend(dataUrl) {
+export async function visionSend(dataUrl) {
   if (visionBusy || !dataUrl) return;
   if (!document.getElementById('scan-result')) return;
   visionSetBusy(true);
@@ -181,3 +188,28 @@ async function visionSend(dataUrl) {
     visionSetBusy(false);
   }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/130-add.js, js/137-shelf.js and js/205-shelfview.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone.
+   visionBusy is republished as an accessor property, not a value
+   copy: visionSetBusy() flips it as a cover read starts and finishes,
+   and js/137-shelf.js reads it in the shelfScan() guard. A value copy
+   would freeze the initial false and silently drop those flips; the
+   getter/setter pair forwards every read and write to the module
+   binding, so no consumer expression changes. */
+Object.defineProperty(window, 'visionBusy', { get: () => visionBusy, set: (v) => { visionBusy = v; }, enumerable: true, configurable: true });
+window.visionGetImage = visionGetImage;
+window.visionPickPhoto = visionPickPhoto;
+window.visionDownscale = visionDownscale;
+window.visionPaint = visionPaint;
+window.visionSetBusy = visionSetBusy;
+window.visionReadCover = visionReadCover;
+window.visionSend = visionSend;

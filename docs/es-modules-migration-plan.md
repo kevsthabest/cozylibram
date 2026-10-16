@@ -1035,3 +1035,42 @@ manager's direction. The gate closed PASS_WITH_RISK; merged as
 - **Nit — one PR-body sentence initially overstated js/162's
   reassignment state.** The conversion itself was exact; the
   body wording was corrected post-merge.
+
+---
+
+## Gate notes — PR #275 (v599)
+
+Recorded from the Security Advisor's gate on the phase-2
+shelf-3D cluster PR (js/217, js/207), at the program manager's
+direction. The gate closed PASS_WITH_RISK; merged as 4cdacc5.
+Line tally at v599: 54,270 js lines (+1,381 cumulative against
+the 52,889 baseline); 43 of 104 files converted. The PR also
+carried the js/215 header-comment Nit fix from PR #270's gate
+notes — comment-only.
+
+- **The js/205 write pair split by ownership.**
+  `_shelf3dWebGLFailed` is owned by js/217 and written by the
+  still-classic js/205 (at :800/:819, read at :659): it is
+  served by a one-name accessor bridge of the kind PR #274
+  established, and js/205 is byte-identical and untouched.
+  `shelfGroup` is owned by js/205 itself, so it needed no
+  re-expression at all — a module writing to a classic file's
+  lexical binding is sound, proven in the two-realm harness.
+- **Gate verification was independent and mechanical.** The
+  gate reproduced census A.2's whole-tree write inventory
+  exactly, drove js/205's reset statements verbatim against
+  the module realm, and confirmed `window.THREE` stays
+  unexported, unbridged, and lazy — js/207 owns the `three`
+  import and the shared slot exactly as before conversion.
+- **R1 repoint ruled SOUND.** The book3d suite's js/207 tag
+  pin was extended to accept the module tag form; the gate
+  mutation-tested it four ways — missing tag FAIL, wrong src
+  FAIL, attribute-swapped form FAIL, both exact literals
+  PASS.
+- **Low, standing pattern — six value-bridged in-module
+  reassigned bindings** (js/207's `b3dThreePromise`; js/217's
+  five state lets). AST-proven zero cross-file references, so
+  nothing observable diverges. The caution is unchanged.
+- **Nit — PR-body strip sizes were character counts labelled
+  as bytes.** The conversions themselves were exact; the body
+  figures were corrected post-merge.
