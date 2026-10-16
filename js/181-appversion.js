@@ -11,11 +11,18 @@
 
 
 
-const APP_VERSION = 'v599';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const APP_VERSION = 'v599';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
-function parseSwVersion(text) {
+export function parseSwVersion(text) {
   const m = /cozy-libram-(v\d+)/.exec(text || '');
   return m ? m[1] : null;
 }
@@ -23,7 +30,7 @@ function parseSwVersion(text) {
 /* This fetch goes through the controlling service worker (cache-first), so
    the sw.js we read back is the one that installed the running version —
    i.e. the version this device is actually on, not the server's. */
-async function runningAppVersion() {
+export async function runningAppVersion() {
   try {
     const res = await fetch('./sw.js');
     if (!res.ok) return null;
@@ -32,13 +39,13 @@ async function runningAppVersion() {
 }
 
 /* v55 marker: present only in the fixed grid CSS. Checked by cssGridStatus(). */
-function cssHasTileFix(cssText) {
+export function cssHasTileFix(cssText) {
   return /v5[57]-tile/.test(cssText || '');
 }
 
 /* Cached CSS: fetched through the controlling service worker (cache-first),
    so this is the stylesheet the running page actually applied. */
-async function cachedCssStatus() {
+export async function cachedCssStatus() {
   try {
     const res = await fetch('./styles.css');
     if (!res.ok) return 'unreadable';
@@ -50,7 +57,7 @@ async function cachedCssStatus() {
    key has no query string), so the request falls through to the network and
    reveals the stylesheet file currently on the server. If the server copy is
    old while the app is new, the zip was not extracted cleanly on the PC. */
-async function serverCssStatus() {
+export async function serverCssStatus() {
   try {
     const res = await fetch('./styles.css?probe=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return 'unreadable';
@@ -59,7 +66,7 @@ async function serverCssStatus() {
 }
 
 /* Pure: pull 'vNNN' out of js/181-appversion.js text. Covered by appversion.test.js. */
-function parseAppVersion(text) {
+export function parseAppVersion(text) {
   const m = /APP_VERSION\s*=\s*'(v\d+)'/.exec(text || '');
   return m ? m[1] : null;
 }
@@ -70,8 +77,8 @@ function parseAppVersion(text) {
    Shows the existing tap-to-refresh banner; never auto-reloads (the user
    might be mid-action). Runs once per app entry; a failed probe (offline)
    skips silently. */
-let bootVersionChecked = false;
-async function checkBootVersion() {
+export let bootVersionChecked = false;
+export async function checkBootVersion() {
   if (bootVersionChecked) return;
   bootVersionChecked = true;
   try {
@@ -86,7 +93,7 @@ async function checkBootVersion() {
 }
 
 /* Ask the service worker for an update; reload into it when one is ready. */
-async function checkForAppUpdate(statusEl) {
+export async function checkForAppUpdate(statusEl) {
   const say = t => { if (statusEl) statusEl.textContent = t; };
   try {
     if (!('serviceWorker' in navigator)) { say('No service worker in this browser.'); return; }
@@ -125,7 +132,7 @@ async function checkForAppUpdate(statusEl) {
 /* v432: automatic "update available" prompt. When the SW finds a new version
    in the background, show a tap-to-refresh banner instead of silently serving
    stale bundles. Kills the stale-bundle class of bug reports. */
-function _showUpdateBanner() {
+export function _showUpdateBanner() {
   if (document.getElementById('app-update-banner')) return;
   const b = document.createElement('div');
   b.id = 'app-update-banner';
@@ -136,7 +143,7 @@ function _showUpdateBanner() {
   b.querySelector('#app-update-x').addEventListener('click', () => b.remove());
   document.body.appendChild(b);
 }
-async function watchForAppUpdates() {
+export async function watchForAppUpdates() {
   try {
     if (!('serviceWorker' in navigator)) return;
     const reg = await navigator.serviceWorker.getRegistration();
@@ -161,3 +168,26 @@ if (document.readyState === 'loading') {
 } else {
   watchForAppUpdates();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/065-analytics.js, js/095-gate.js and js/180-settings.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.APP_VERSION = APP_VERSION;
+window.parseSwVersion = parseSwVersion;
+window.runningAppVersion = runningAppVersion;
+window.cssHasTileFix = cssHasTileFix;
+window.cachedCssStatus = cachedCssStatus;
+window.serverCssStatus = serverCssStatus;
+window.parseAppVersion = parseAppVersion;
+window.bootVersionChecked = bootVersionChecked;
+window.checkBootVersion = checkBootVersion;
+window.checkForAppUpdate = checkForAppUpdate;
+window._showUpdateBanner = _showUpdateBanner;
+window.watchForAppUpdates = watchForAppUpdates;
