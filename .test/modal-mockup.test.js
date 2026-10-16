@@ -135,7 +135,7 @@ ok('note saves immediately', run(`library[0].notes`) === 'my note');
 
 // --- 8. Save still persists everything through the hidden trope input ---
 q('[data-dtab="details"]').click();
-run(`document.getElementById('m-save').click();`);
+run(`document.getElementById('m-x').click();`);
 ok('save: tropes persisted', JSON.stringify(run(`library[0].tropes`)) === JSON.stringify(['slow burn', 'forced proximity']));
 ok('save: shelf persisted', run(`library[0].status`) === 'read');
 ok('save: ownership persisted', run(`library[0].owned`) === 'borrowed');

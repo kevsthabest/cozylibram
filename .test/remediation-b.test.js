@@ -2,9 +2,12 @@
 //  1. Settings JSON import keeps exported book ids (collision = restore
 //     in place; Up Next queue + manual shelf order survive; re-import
 //     does not duplicate).
-//  2. Book-modal shelf picker stages until Save — an unsaved pick
-//     changes nothing (record, reopened modal, grid tag); the DNF
-//     reason prompt fires on Save, not on pick.
+//  2. Book-modal shelf picker stages until the autosave lands (v589,
+//     Variant B — supersedes the v534/Variant A wording of this pin):
+//     a pick changes nothing synchronously, but the debounced autosave
+//     commits it while the modal stays open and closing commits it too
+//     (there is no discard); the DNF reason prompt fires when the modal
+//     closes after the commit, not on pick.
 //  4. Shelves tab models all five shelf groups (the four statuses +
 //     the derived Wishlist group, 2D here; the Room builds from the
 //     same SHELF_GROUPS constants) and the long-press move sheet
@@ -64,45 +67,51 @@ const setLib = (books) => runInWindow(`library = ${JSON.stringify(books)}; saveL
   ok('wishlist tile renders the badge chip with label (derived tbr + tobuy book)',
     wishCard.includes('tile-badge st-wishlist') && wishCard.includes('aria-label="Wishlist"'));
 
-  /* ---------- 2. modal shelf picker stages until Save ---------- */
+  /* ---------- 2. modal shelf picker stages until the autosave lands ---------- */
   runInWindow(`window.__dnf = []; openDnfReasonSheet = function (b) { window.__dnf.push(b.id); };`);
   setLib([mk('b1', 'Staged Book', 'read', { progress: 200 })]);
   runInWindow(`openDetail('b1')`);
   ok('modal opens on the saved status', q('#f-status [data-s="read"]').classList.contains('active'));
   q('#f-status [data-s="tbr"]').click();
-  ok('unsaved pick does not touch the book', run(`library[0].status`) === 'read');
-  ok('unsaved pick marks no DNF prompt', run(`window.__dnf.length`) === 0);
-  q('#m-x').click(); // close without Save
+  ok('a pick does not touch the book before the autosave lands', run(`library[0].status`) === 'read');
+  ok('a pick marks no DNF prompt', run(`window.__dnf.length`) === 0);
+  q('#m-x').click(); // close commits (Variant B: no discard, no prompt)
+  await tick(30);
+  ok('closing commits the staged pick, with no discard prompt',
+    run(`library[0].status`) === 'tbr' && !q('.confirm-overlay'));
   runInWindow(`openDetail('b1')`);
-  ok('reopened modal shows the saved status, not the unsaved pick',
-    q('#f-status [data-s="read"]').classList.contains('active') &&
-    !q('#f-status [data-s="tbr"]').classList.contains('active'));
+  ok('reopened modal shows the committed status',
+    q('#f-status [data-s="tbr"]').classList.contains('active') &&
+    !q('#f-status [data-s="read"]').classList.contains('active'));
   q('#m-x').click();
   runInWindow(`view = 'library'; render();`);
   const tileBadge = q('.book-tile .tile-badge');
-  ok('grid tag still shows the saved status after a discarded pick',
-    !!tileBadge && tileBadge.getAttribute('aria-label') === 'Read');
-  // Save commits the staged pick
+  ok('grid tag follows the committed status',
+    !!tileBadge && tileBadge.className.includes('st-tbr'));
+  // The debounce also commits while the modal stays open
   runInWindow(`openDetail('b1')`);
-  q('#f-status [data-s="tbr"]').click();
-  q('#m-save').click();
+  q('#f-status [data-s="reading"]').click();
+  await tick(900);
+  ok('autosave commits the pick with the modal still open',
+    run(`library[0].status`) === 'reading' && !!q('#m-back'));
+  q('#m-x').click();
   await tick(30);
-  ok('Save commits the staged pick', run(`library[0].status`) === 'tbr');
-  // DNF prompt fires on Save, not on pick
+  // DNF prompt fires when the modal closes after the commit, not on pick
   runInWindow(`openDetail('b1')`);
   q('#f-status [data-s="dnf"]').click();
   ok('DNF pick alone does not prompt', run(`window.__dnf.length`) === 0);
-  q('#m-save').click();
+  q('#m-x').click();
   await tick(30);
-  ok('DNF prompt fires on Save', JSON.stringify(run(`window.__dnf`)) === '["b1"]' &&
+  ok('DNF prompt fires on close after the commit', JSON.stringify(run(`window.__dnf`)) === '["b1"]' &&
     run(`library[0].status`) === 'dnf');
-  // ...and an unsaved DNF pick prompts nothing and changes nothing
+  // ...and there is no discard path left: a DNF pick closed on commits too
   setLib([mk('b2', 'Second Book', 'read', { progress: 200 })]);
   runInWindow(`openDetail('b2')`);
   q('#f-status [data-s="dnf"]').click();
   q('#m-x').click();
-  ok('discarded DNF pick: no prompt, no change',
-    run(`window.__dnf.length`) === 1 && run(`library[0].status`) === 'read');
+  await tick(30);
+  ok('a closed-on DNF pick commits and prompts (no discard exists)',
+    run(`window.__dnf.length`) === 2 && run(`library[0].status`) === 'dnf');
 
   /* ---------- 4. Shelves tab: five statuses ---------- */
   setLib([mk('t1', 'TBR One', 'tbr'), mk('r1', 'Reading One', 'reading'),

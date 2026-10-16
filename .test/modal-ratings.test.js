@@ -84,7 +84,7 @@ ok('+ chip re-adds the axis', qa('#f-axrows .axrow').length === 2 && !!q('#f-axr
 seed('r3', { myRating: 0, ratings: {}, axes: ['spice'] });
 qa('#f-myrating button')[2].click();
 q('#f-axrows [data-ax="spice"] .segbar').querySelectorAll('i')[1].click();
-runInWindow(`document.getElementById('m-save').click();`);
+runInWindow(`document.getElementById('m-x').click();`);
 ok('save persists header rating', runInWindow2('library[0].myRating') === 3);
 ok('save persists axis rating', runInWindow2('library[0].ratings.spice') === 2);
 

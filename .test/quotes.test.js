@@ -61,7 +61,7 @@ q('#m-qadd').click();
 q('#m-qtext').value = 'Second quote';
 q('#m-qpage').value = '';
 q('#m-qsave').click();
-q('#m-save').click(); // modal Save
+q('#m-x').click(); // modal Save
 ok('modal Save keeps the quote', window.__b1.quotes.length === 1 &&
   window.__b1.quotes[0].t === 'Second quote');
 ok('page-less quote stores null page', window.__b1.quotes[0].p === null);

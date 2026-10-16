@@ -1210,15 +1210,17 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .save-hint[hidden] { display: none; }
 .save-hint svg { width: 14px; height: 14px; flex: none; }
 
-/* ================= Modal Variant A: sticky Save bar + header zone =================
-   The bar is a pure view of ModalFormState (js/150): hidden while the
-   form is clean, rises with the unsaved count when it goes dirty. */
-.modal-actions[hidden] { display: none; }
-.m-savebar { align-items: center; }
-.m-savebar .btn { flex: 0 0 auto; padding-left: 20px; padding-right: 20px; }
-.m-savebar:not([hidden]) { animation: savebar-rise .18s ease; }
-@keyframes savebar-rise { from { transform: translateY(10px); opacity: 0.4; } to { transform: none; opacity: 1; } }
-.save-count { flex: 1; font-size: 13px; font-weight: 600; color: var(--muted); }
+/* ================= Modal header zone + autosave status =================
+   (Variant A's sticky Save bar was retired by Variant B autosave, v589 —
+   its rules went with it, including the [hidden] display guard that only
+   the bar's toggling needed. The generic .modal-actions rules above
+   stay: other sheets still use that class.)
+   .m-savestate is the only save UI left: a quiet header status text —
+   empty while clean, "Saving…" while a commit is pending, "Saved" as a
+   brief acknowledgement, and the failure reason (in --danger) when a
+   commit cannot apply. */
+.m-savestate { font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.m-savestate.err { color: var(--danger); }
 
 /* Form cards (Rating / Status & Ownership / quiet Details) */
 .m-card {

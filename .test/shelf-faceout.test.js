@@ -181,7 +181,7 @@ await tick(6);
   ok('modal shows the face-out toggle', !!cb);
   ok('unpicked book: toggle starts off', !!cb && cb.checked === false);
   if (cb) { cb.checked = true; cb.dispatchEvent(new window.Event('change', { bubbles: true })); }
-  window.document.getElementById('m-save').click();
+  window.document.getElementById('m-x').click();
   await tick(4);
   ok('Save persists the pick on the book', run(`library.find(b => b.id === 'fo1').faceOut`) === true);
   ok('Save keeps the cover (no draft clobber)', run(`library.find(b => b.id === 'fo1').cover`) === 'plain.jpg');
@@ -192,7 +192,7 @@ await tick(6);
   const cb = window.document.getElementById('f-faceout');
   ok('picked book: toggle starts on', !!cb && cb.checked === true);
   if (cb) { cb.checked = false; cb.dispatchEvent(new window.Event('change', { bubbles: true })); }
-  window.document.getElementById('m-save').click();
+  window.document.getElementById('m-x').click();
   await tick(4);
   ok('unpick persists (faceOut false)', run(`library.find(b => b.id === 'fo2').faceOut`) === false);
 }

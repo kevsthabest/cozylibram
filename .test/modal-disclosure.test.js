@@ -120,7 +120,7 @@ run(`document.getElementById('f-notes').value = 'new notes';`);
 q('[data-dtab="tropes"]').click();
 run(`document.getElementById('f-tropes').value = 'forced proximity';`);
 q('[data-dtab="details"]').click();
-run(`document.getElementById('m-save').click();`);
+run(`document.getElementById('m-x').click();`);
 ok('save: notes persisted from the Notes tab', run(`library[0].notes`) === 'new notes');
 ok('save: tropes persisted from the Tropes tab',
   JSON.stringify(run(`library[0].tropes`)) === JSON.stringify(['forced proximity']));

@@ -101,7 +101,8 @@ const ALLOW = [
   { file: 'js/150-modal-discovery.js', key: "'Pinned to favorites", why: TOAST },
   { file: 'js/150-modal-discovery.js', key: "toast('📄 Found:", why: TOAST },
   { file: 'js/150-modal-discovery.js', key: "toast('Today", why: TOAST }, // 'Today’s entry removed 🗑️'
-  { file: 'js/150-modal-discovery.js', key: "toast('Saved ✨')", why: TOAST },
+  // v589: the "toast('Saved ✨')" entry retired with the toast itself —
+  // Variant B autosave shows the header status text instead of a toast.
   // js/160 — toasts only; the trope-badge slot is swept.
   { file: 'js/160-roulette.js', key: "toast('No matching books", why: TOAST },
   { file: 'js/160-roulette.js', key: "toast('Happy reading!", why: TOAST },

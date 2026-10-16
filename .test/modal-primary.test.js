@@ -88,8 +88,8 @@ ok('menu: toggles closed', q('#m-moremenu').hidden === true);
 // top-right cluster in v182 ---
 ok('primary: in the hero before the tabs',
   !!q('.d-hero #m-primary') && !q('.modal-actions #m-primary'));
-ok('bar: save remains alone; ⋮ lives in the top-right cluster',
-  !!q('.d-topactions #m-more') && !!q('.modal-actions #m-save') && !q('.modal-actions #m-more'));
+ok('bar: no save bar under autosave; ⋮ lives in the top-right cluster',
+  !!q('.d-topactions #m-more') && !q('#m-savebar') && !q('#m-save') && !q('.modal-actions #m-more'));
 
 // --- 7. v559: a wishlist book's primary is the acquisition action ---
 run(`library = [

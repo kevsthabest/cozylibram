@@ -78,7 +78,7 @@ ok('modal toggle flips label', q('#m-upnext').textContent.includes('In your Up N
 // 6. saving as reading dequeues the book
 qa('#m-x'); // sanity: modal open
 qa('#modal-root #f-status button').forEach(x => { if (x.dataset.s === 'reading') x.click(); });
-q('#m-save').click();
+q('#m-x').click();
 ok('marking a book reading removes it from Up Next', !queuedIds().includes('a'));
 
 // 7. removeBook cleans the queue

@@ -26,13 +26,14 @@ runInWindow(`library = [
 ];`);
 runInWindow(`openDetail('q1');`);
 
-const actions = window.document.querySelector('.modal-actions');
-ok('action bar still rendered', !!actions);
-ok('Save / Share / Remove buttons intact',
-  !!window.document.getElementById('m-save') &&
-  !!window.document.getElementById('m-share') &&
-  !!window.document.getElementById('m-del'));
-ok('action bar is sticky-bottom via CSS',
+ok('autosave: no save bar in the detail modal',
+  !window.document.getElementById('m-save') &&
+  !window.document.querySelector('#modal-root .modal-actions'));
+ok('Share / Remove stay in the header cluster; save status sits beside them',
+  !!window.document.getElementById('m-savestate') &&
+  !!window.document.querySelector('.d-topactions #m-share') &&
+  !!window.document.querySelector('.d-topactions #m-del'));
+ok('generic modal-actions CSS (other sheets) untouched',
   /\.modal-actions\s*\{[^}]*position:\s*sticky[^}]*bottom:/s.test(css));
 
 const det = null; // v174: the v111 quotes collapsible is gone — quotes live on the Notes tab now.

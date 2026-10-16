@@ -94,7 +94,7 @@ const recoSrc = () => ({
     q('#p-desc').textContent.includes('Dragons return.'));
   ok('preview has the v215 sheet chrome (grabber pill)', !!q('#p-back .sheet-grabber'));
   ok('preview has +TBR and Wishlist actions', !!q('#p-tbr') && !!q('#p-wish'));
-  const LIB_IDS = ['#m-save', '#f-myrating', '#f-notes', '#m-del', '#f-status', '#f-owned',
+  const LIB_IDS = ['#m-savestate', '#f-myrating', '#f-notes', '#m-del', '#f-status', '#f-owned',
     '#f-tropes', '#f-tropeadd', '#m-quotes', '#m-primary', '#m-edition', '#m-changecover',
     '#m-progress', '#f-myrating-word', '.modal-actions'];
   ok('no library-only controls render', LIB_IDS.every(s => !q('#p-back ' + s)));

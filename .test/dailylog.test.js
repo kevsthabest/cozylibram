@@ -47,21 +47,21 @@ ok('second stepper extends same entry', window.__b.log.length === 1 && window.__
 
 // 2. manual save logs the delta without double counting
 q('#f-progress').value = '150';
-q('#m-save').click();
+q('#m-x').click();
 e = window.__b.log;
 ok('save extends entry to new page', e.length === 1 && e[0].from === 100 && e[0].to === 150);
 
 // 3. downward correction doesn't corrupt the entry
 runInWindow(`openDetail('dl1');`);
 q('#f-progress').value = '140';
-q('#m-save').click();
+q('#m-x').click();
 e = window.__b.log;
 ok('downward correction keeps entry sane', e.length === 1 && e[0].from === 100 && e[0].to === 150);
 
 // 4. mark-as-read logs the completion stretch
 runInWindow(`openDetail('dl1');`);
 qa('#f-status button').find(x => x.dataset.s === 'read').click();
-q('#m-save').click();
+q('#m-x').click();
 e = window.__b.log;
 ok('mark-as-read extends log to total', e[0].to === 400);
 ok('book finished', window.__b.status === 'read' && window.__b.progress === 400);

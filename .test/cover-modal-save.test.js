@@ -40,7 +40,7 @@ function ok(cond, name) {
     openDetail('cb1');
   `);
   await tick(6);
-  ok(!!window.document.getElementById('m-save'), 'detail modal opened with a Save button');
+  ok(!!window.document.getElementById('m-savestate'), 'detail modal opened with the header save status');
 
   // Pick a new cover through the real picker path while the modal is open.
   runInWindow(window, `chooseCover('cb1', 'new.jpg');`);
@@ -48,14 +48,15 @@ function ok(cond, name) {
   ok(probe(window, `library.find(b => b.id === 'cb1').cover`) === 'new.jpg',
     'cover picker updates the live book');
 
-  // Now tap the modal's real Save button.
-  window.document.getElementById('m-save').click();
+  // Now close the modal — under autosave (Variant B) the close flushes
+  // any staged form state; the live cover write must survive it.
+  window.document.getElementById('m-x').click();
   await tick(4);
   const after = probe(window, `library.find(b => b.id === 'cb1').cover`);
-  ok(after === 'new.jpg', 'modal Save keeps the picked cover (got ' + after + ')');
+  ok(after === 'new.jpg', 'closing the modal keeps the picked cover (got ' + after + ')');
 
-  // And the modal is closed after saving.
-  ok(!window.document.getElementById('m-save'), 'modal closed after Save');
+  // And the modal is closed after the close.
+  ok(!window.document.getElementById('m-savestate'), 'modal closed after close');
 
   console.log(`\ncover-modal-save: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
