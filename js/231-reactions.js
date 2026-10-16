@@ -38,16 +38,22 @@
    milestone can't be computed truthfully from the books they share
    (hidden shelves distort the counts) — earned, not guessed. */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* The reaction set: five warm, bookish kinds, all from the app's own
    ICONS set, no negatives, no free text anywhere in the feature. */
-const REACTION_KINDS = [
+export const REACTION_KINDS = [
   { id: 'heart',    icon: 'heart',    label: 'Loved it' },
   { id: 'sparkles', icon: 'sparkles', label: 'Pure magic' },
   { id: 'moon',     icon: 'moon',     label: 'Kept me up all night' },
   { id: 'trophy',   icon: 'trophy',   label: 'What a feat' },
   { id: 'smile',    icon: 'smile',    label: 'Made me smile' },
 ];
-function reactionKind(id) {
+export function reactionKind(id) {
   for (let i = 0; i < REACTION_KINDS.length; i++) if (REACTION_KINDS[i].id === id) return REACTION_KINDS[i];
   return null;
 }
@@ -64,24 +70,24 @@ function reactionKind(id) {
    regardless of who computed the key. Editing a finish date re-keys
    the moment (reactions stay with the old key, readable only by
    giver/owner). */
-function momentDayOf(book) {
+export function momentDayOf(book) {
   const d = book && book.dateFinished ? String(book.dateFinished).slice(0, 10) : '';
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
 }
-function momentKeyFor(ownerId, book) {
+export function momentKeyFor(ownerId, book) {
   if (!ownerId || !book || !book.id || book.status !== 'read') return '';
   const day = momentDayOf(book);
   if (!day) return '';
   return ownerId + ':' + book.id + ':' + day;
 }
-const MOMENT_WINDOW_DAYS = 90;
-const MOMENT_FEED_MAX = 30;
-function rxDayKey(d) {
+export const MOMENT_WINDOW_DAYS = 90;
+export const MOMENT_FEED_MAX = 30;
+export function rxDayKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 /* Finished-book moments from one person's (already gate-filtered)
    book list, newest first. */
-function momentsFromBooks(ownerId, books, now) {
+export function momentsFromBooks(ownerId, books, now) {
   const out = [];
   const cutoff = rxDayKey(new Date((now || new Date()).getTime() - MOMENT_WINDOW_DAYS * 864e5));
   (books || []).forEach(b => {
@@ -101,19 +107,19 @@ function momentsFromBooks(ownerId, books, now) {
    renders without reactions rather than breaking. Only the missing
    -object errors are silent; anything else is logged, not swallowed.
    The coordinator applies migration v525 right after merge. */
-let rxTableMissing = false;
-function reactionsMissingErr(e) {
+export let rxTableMissing = false;
+export function reactionsMissingErr(e) {
   const s = String((e && (e.code + ' ' + e.message)) || e || '');
   return /moment_reactions/i.test(s) && /schema cache|could not find|does not exist|not found|PGRST205|404|42P01/i.test(s);
 }
-function reactionsRpcMissing(e) {
+export function reactionsRpcMissing(e) {
   const s = String((e && (e.code + ' ' + e.message)) || e || '');
   return /react_to_moment/i.test(s) || /PGRST202|42883|could not find the function/i.test(s);
 }
-function rxLog(what, e) {
+export function rxLog(what, e) {
   try { if (typeof AppLog !== 'undefined' && AppLog.error) AppLog.error('reactions', what + ': ' + ((e && e.message) || e)); } catch (x) {}
 }
-async function reactionsFetch(keys) {
+export async function reactionsFetch(keys) {
   if (!keys || !keys.length || rxTableMissing) return [];
   try {
     const sb = await cloudClient();
@@ -137,7 +143,7 @@ async function reactionsFetch(keys) {
    and the moment's reality, then computes the key and upserts. A
    kind change arrives here the same way (the function's conflict
    path updates the one row). Returns true when the reaction landed. */
-async function reactionSet(moment, kind) {
+export async function reactionSet(moment, kind) {
   if (rxTableMissing || !moment || !reactionKind(kind)) return false;
   try {
     const sb = await cloudClient();
@@ -153,7 +159,7 @@ async function reactionSet(moment, kind) {
     return true;
   } catch (e) { rxLog('react failed', e); return false; }
 }
-async function reactionRemove(momentKey) {
+export async function reactionRemove(momentKey) {
   if (rxTableMissing || !momentKey) return false;
   try {
     const sb = await cloudClient();
@@ -174,14 +180,14 @@ async function reactionRemove(momentKey) {
    and their kind, never a number. Giver's view of a friend's moment:
    only their own chip ("You · kind"); other givers' reactions are
    not returned by RLS and not rendered. */
-const RX_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function momentDayLabel(day) {
+export const RX_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function momentDayLabel(day) {
   const p = String(day || '').split('-');
   if (p.length !== 3) return '';
   const m = RX_MONTHS[Number(p[1]) - 1] || '';
   return m ? m + ' ' + Number(p[2]) : '';
 }
-function momentRowHTML(m) {
+export function momentRowHTML(m) {
   const p = m.person || { name: 'A reader', profile: null };
   const mine = typeof cloudUser !== 'undefined' && cloudUser && m.ownerId === cloudUser.id;
   // v532: the finisher reads as part of the sentence ("Mira
@@ -203,7 +209,7 @@ function momentRowHTML(m) {
       '</div>') +
     '</div>';
 }
-function rxGiverName(giverId) {
+export function rxGiverName(giverId) {
   const pr = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[giverId] : null;
   if (pr) {
     // v550: the one display helper (js/237) — @handle when set.
@@ -212,7 +218,7 @@ function rxGiverName(giverId) {
   }
   return 'A friend';
 }
-function rxStripHTML(m, rows) {
+export function rxStripHTML(m, rows) {
   const me = (typeof cloudUser !== 'undefined' && cloudUser) ? cloudUser.id : '';
   const mine = m.ownerId === me;
   let html = '';
@@ -233,7 +239,7 @@ function rxStripHTML(m, rows) {
 /* Fetch reactions for exactly the rendered moments and paint the
    strips; wire the React buttons + pickers. Called by js/197 after
    the stats HTML lands (the refreshRecos pattern). */
-async function wireMomentReactions(root, moments) {
+export async function wireMomentReactions(root, moments) {
   if (!root || !moments || !moments.length) return;
   const byKey = {};
   moments.forEach(m => { byKey[m.key] = m; });
@@ -271,3 +277,34 @@ async function wireMomentReactions(root, moments) {
   }));
   await refresh();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/197-social-stats.js, calls these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.REACTION_KINDS = REACTION_KINDS;
+window.reactionKind = reactionKind;
+window.momentDayOf = momentDayOf;
+window.momentKeyFor = momentKeyFor;
+window.MOMENT_WINDOW_DAYS = MOMENT_WINDOW_DAYS;
+window.MOMENT_FEED_MAX = MOMENT_FEED_MAX;
+window.rxDayKey = rxDayKey;
+window.momentsFromBooks = momentsFromBooks;
+window.rxTableMissing = rxTableMissing;
+window.reactionsMissingErr = reactionsMissingErr;
+window.reactionsRpcMissing = reactionsRpcMissing;
+window.rxLog = rxLog;
+window.reactionsFetch = reactionsFetch;
+window.reactionSet = reactionSet;
+window.reactionRemove = reactionRemove;
+window.RX_MONTHS = RX_MONTHS;
+window.momentDayLabel = momentDayLabel;
+window.momentRowHTML = momentRowHTML;
+window.rxGiverName = rxGiverName;
+window.rxStripHTML = rxStripHTML;
+window.wireMomentReactions = wireMomentReactions;
