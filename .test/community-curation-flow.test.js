@@ -324,10 +324,28 @@ const tierBump = (sb, field) => {
     up.length === 1 && up[0].payload.book_key === BOOK.key && up[0].payload.trope_id === 'enemies-to-lovers' &&
     up[0].payload.source === 'community' && up[0].payload.confidence === 0.7 && up[0].payload.taxonomy_version === 1 &&
     typeof up[0].payload.updated_at === 'string' && !!up[0].opts && up[0].opts.onConflict === 'book_key,trope_id');
+  const callOrder = sb.calls.map(c => c.op + ':' + c.table);
+  ok('setStatus trope accept: upsert lands BEFORE the status flip (issue #258 ordering)',
+    callOrder.indexOf('upsert:book_tropes') !== -1 &&
+    callOrder.indexOf('upsert:book_tropes') < callOrder.indexOf('update:trope_proposals'));
   const bump = tierBump(sb, 'accepted_count');
   ok('setStatus trope accept: suggester counters bumped (accepted 2->3, rejected stays 1)',
     !!bump && bump.accepted_count === 3 && bump.rejected_count === 1 && bump.user_id === 'user-a');
   ok('setStatus trope accept: NO admin downvote written', callsTo(sb, 'upsert', 'trope_votes').length === 0);
+}
+{ // trope ACCEPT, the book_tropes upsert itself fails — status stays pending (issue #258)
+  sb = mkSb(Object.assign(seedTiers(), {
+    trope_proposals: [{ id: 'tp-7', status: 'pending' }]
+  }));
+  sb.failTables.add('book_tropes');
+  const item = { ptype: 'trope', id: 'tp-7', bookKey: BOOK.key, by: 'user-a', raw: { trope_id: 'enemies-to-lovers' } };
+  let threw = '';
+  try { await CQ.setStatus(sb, item, true); } catch (e) { threw = e.message || ''; }
+  ok('setStatus trope accept (upsert fails): throws the upsert error',
+    threw.indexOf('stub upsert failure') !== -1);
+  ok('setStatus trope accept (upsert fails): status NOT flipped — proposal stays pending (issue #258)',
+    callsTo(sb, 'update', 'trope_proposals').length === 0 &&
+    sb.tables.trope_proposals[0].status === 'pending');
 }
 { // trope REJECT — stays down via the admin downvote
   sb = mkSb(seedTiers());
