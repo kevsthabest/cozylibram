@@ -36,14 +36,21 @@
  *   module-level "unsupported" flag and every surface fails quiet.
  */
 
-let toyTableMissing = false;   // thought_of_you pre-migration
-let toySupportKnown = null;    // probe cache: true / false / null
-const TOY_NOTE_MAX = 140;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export let toyTableMissing = false;   // thought_of_you pre-migration
+export let toySupportKnown = null;    // probe cache: true / false / null
+export const TOY_NOTE_MAX = 140;
 
 // The cover-provider hosts (union of the cover-hosts.js sets),
 // mirrored for the client-side belt. Pinned EQUAL to
 // functions/_lib/cover-hosts.js and to the SQL allowlist by test.
-const TOY_COVER_HOSTS = [
+export const TOY_COVER_HOSTS = [
   'covers.openlibrary.org', 'books.google.com', 'assets.hardcover.app',
   'img.hardcover.app', 'images-na.ssl-images-amazon.com', 'm.media-amazon.com',
   'archive.org', 'hardcover.app', 'i.gr-assets.com',
@@ -51,10 +58,10 @@ const TOY_COVER_HOSTS = [
   'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com',
 ];
 
-function toyLog() {
+export function toyLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[toy]'].concat([].slice.call(arguments)));
 }
-function toyMissingErr(e) {
+export function toyMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -62,7 +69,7 @@ function toyMissingErr(e) {
     (code === 'PGRST205' || code === '42P01' ||
      /schema cache|does not exist|not found/i.test(msg));
 }
-function toyRpcMissingErr(e) {
+export function toyRpcMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -74,7 +81,7 @@ function toyRpcMissingErr(e) {
 /* Support probe (the v526 pattern): one throwaway select. Error
  * shapes from the missing relation latch "unsupported"; success or a
  * transient error leaves the machinery live/unknown. */
-async function toySupported() {
+export async function toySupported() {
   if (toyTableMissing) return false;
   if (toySupportKnown !== null) return toySupportKnown;
   try {
@@ -96,7 +103,7 @@ async function toySupported() {
  * on this project's content-addressed covers path, or on an
  * allowlisted provider host. Mirrors the server's rule; the server
  * check is the gate, this is the seatbelt. */
-function toyCoverAllowed(url) {
+export function toyCoverAllowed(url) {
   if (!url) return true;
   const u = String(url);
   if (u.indexOf('data:image/') === 0) return u.length <= 204800;
@@ -118,7 +125,7 @@ function toyCoverAllowed(url) {
  * an object or null, and anything malformed degrades to empty rather
  * than reaching the DOM. The output is exactly covenCleanCopy's input
  * shape, so +TBR reuses the v219 clean-copy path. */
-function toySnapshotBook(raw) {
+export function toySnapshotBook(raw) {
   const s = (raw && typeof raw === 'object') ? raw : {};
   const str = (v, cap) => (typeof v === 'string' ? v.slice(0, cap) : '');
   const strList = (v, cap, n) => (Array.isArray(v)
@@ -145,7 +152,7 @@ function toySnapshotBook(raw) {
   };
 }
 
-function toySenderName(senderId, profs) {
+export function toySenderName(senderId, profs) {
   const p = (profs && profs[senderId]) || circProfiles[senderId];
   if (p) {
     // v550: the one display helper (js/237) — @handle when set.
@@ -157,7 +164,7 @@ function toySenderName(senderId, profs) {
 
 /* ---------- receive side ---------- */
 
-async function toyFetchMine() {
+export async function toyFetchMine() {
   if (toyTableMissing) return [];
   try {
     const sb = await cloudClient();
@@ -180,7 +187,7 @@ async function toyFetchMine() {
  * "You'd love this" while the card lives (v532, Strategist #2).
  * Same rows the inbox section renders (RLS: mine, ≤60 days); any
  * failure resolves to an empty set, never an error. */
-async function toyInboxKeys() {
+export async function toyInboxKeys() {
   const keys = new Set();
   try {
     const rows = await toyFetchMine();
@@ -198,7 +205,7 @@ async function toyInboxKeys() {
  * not a row still stood — so the caller learns nothing about the
  * card's fate, the same discipline as the send. Returns true when
  * the call itself landed. */
-async function toyRecall(recipientId, senderBookId) {
+export async function toyRecall(recipientId, senderBookId) {
   const sb = await cloudClient();
   if (!sb || !cloudUser) return false;
   const r = await sb.rpc('recall_thought_of_you', { p_recipient: recipientId, p_book_id: senderBookId });
@@ -210,7 +217,7 @@ async function toyRecall(recipientId, senderBookId) {
   return true;
 }
 
-async function toyDeleteRow(id) {
+export async function toyDeleteRow(id) {
   try {
     const sb = await cloudClient();
     if (!sb || !cloudUser) return;
@@ -218,7 +225,7 @@ async function toyDeleteRow(id) {
   } catch (e) { /* best effort: an undeleted card just re-renders */ }
 }
 
-async function toyDismiss(id) {
+export async function toyDismiss(id) {
   const sb = await cloudClient();
   if (!sb || !cloudUser) return;
   const r = await sb.rpc('dismiss_thought_of_you', { p_id: id });
@@ -228,7 +235,7 @@ async function toyDismiss(id) {
   }
 }
 
-function toySectionHTML(visible, heldAny, profs) {
+export function toySectionHTML(visible, heldAny, profs) {
   let html = '<div class="circle-card" style="margin-top:14px"><h3 class="serif" style="margin:0 0 4px">' +
     icon('gift') + ' Thought of you</h3>' +
     '<p class="note" style="margin:0 0 8px">Books your friends picked out for you.</p><div class="circle-list">';
@@ -255,7 +262,7 @@ function toySectionHTML(visible, heldAny, profs) {
   return html + '</div>';
 }
 
-function wireToyCards(slot, visible, profs) {
+export function wireToyCards(slot, visible, profs) {
   const byId = {};
   visible.forEach(v => { byId[v.row.id] = v; });
   slot.querySelectorAll('[data-toy-add]').forEach(btn => btn.addEventListener('click', async () => {
@@ -296,7 +303,7 @@ function wireToyCards(slot, visible, profs) {
 /* Render the inbox into #toy-slot (renderCovenMain's slot). The
  * spice map is awaited BEFORE any innerHTML is built, and the shield
  * decision is made on the sanitized snapshot — never after DOM. */
-async function refreshThoughtOfYou() {
+export async function refreshThoughtOfYou() {
   const slot = document.getElementById('toy-slot');
   if (!slot || !cloudUser) return;
   const rows = await toyFetchMine();
@@ -339,7 +346,7 @@ async function refreshThoughtOfYou() {
 /* Returns 'ok' (landed, or a refusal the sender must not be able to
  * distinguish), 'slow_down' (the sender's own daily caps), or an
  * error message string for the closed set of honest refusals. */
-async function toySend(recipientId, book, note) {
+export async function toySend(recipientId, book, note) {
   const sb = await cloudClient();
   if (!sb || !cloudUser) return 'not signed in';
   const r = await sb.rpc('send_thought_of_you', {
@@ -356,7 +363,7 @@ async function toySend(recipientId, book, note) {
  * plain text), send. Opened from the book detail "…" menu. The sheet
  * is a covenOpenSheet, so the standing swipe-to-dismiss rule is
  * inherited. */
-async function openToyCompose(book, opener) {
+export async function openToyCompose(book, opener) {
   if (!book) return;
   if (!cloudUser) { toast('Sign in to recommend books to your circle'); return; }
   track('toy_compose_opened');
@@ -435,3 +442,35 @@ async function openToyCompose(book, opener) {
     }
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/150-modal-discovery.js, js/195-coven.js, js/196-recos.js and js/234-outbox.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.toyTableMissing = toyTableMissing;
+window.toySupportKnown = toySupportKnown;
+window.TOY_NOTE_MAX = TOY_NOTE_MAX;
+window.TOY_COVER_HOSTS = TOY_COVER_HOSTS;
+window.toyLog = toyLog;
+window.toyMissingErr = toyMissingErr;
+window.toyRpcMissingErr = toyRpcMissingErr;
+window.toySupported = toySupported;
+window.toyCoverAllowed = toyCoverAllowed;
+window.toySnapshotBook = toySnapshotBook;
+window.toySenderName = toySenderName;
+window.toyFetchMine = toyFetchMine;
+window.toyInboxKeys = toyInboxKeys;
+window.toyRecall = toyRecall;
+window.toyDeleteRow = toyDeleteRow;
+window.toyDismiss = toyDismiss;
+window.toySectionHTML = toySectionHTML;
+window.wireToyCards = wireToyCards;
+window.refreshThoughtOfYou = refreshThoughtOfYou;
+window.toySend = toySend;
+window.openToyCompose = openToyCompose;
