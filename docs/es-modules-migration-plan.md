@@ -288,18 +288,20 @@ reversible (flip the tag back, drop the exports/bridge).
 8. **Leave sw.js untouched.** Precaching is URL-based (§6).
 9. **No version claims on the fork.** Landing on main (post-approval):
    the normal APP_VERSION + sw CACHE pair bump in the same change.
-10. **Comment pass:** bring the converted file's comments up to the
-    comment standard (§13) in the same pass — mechanical comments
-    rewritten as explanations, stale ones deleted, prose headers added
-    to non-trivial functions that lack them. Only the converted file;
-    no other file's comments are touched.
-11. **Verify:** Node's ESM loader imports the converted file directly
+10. **Verify:** Node's ESM loader imports the converted file directly
     (export surface == census public surface; bridge republishes the
     identical objects); the harness evidence in §9.5; census re-run shows
-    no edge changed kind. The diff under verification includes the
-    step-10 comment rewrites: conversions are **not** byte-identical
-    moves, and correctness is carried by this evidence, not by diff
-    purity (§13).
+    no edge changed kind. A conversion is a pure move — nothing changes
+    but the wiring (exports added, bridge appended, tag flipped) — so
+    correctness is carried by that identity evidence, backed by the
+    full-suite baseline discipline (§9.5).
+
+**Comments are carried verbatim.** A conversion touches no comment —
+not even a mechanical or stale one. During migration PRs, a stale or
+mechanical comment in a converted file is carried, not fixed, and is
+**not a finding** at any gate. Comment cleanup is a separate, later
+program (§13) that runs over the finished modular tree; it never rides
+inside a conversion.
 
 ---
 
@@ -540,9 +542,6 @@ tropelab-review, v398-features. The rule for every conversion step, in
 the fork and later in production PRs: a full serial run
 (`BOOKTOK_DIR=<tree>`) must show **exactly those 6 files failing, on the
 same assertions**, plus zero new failures. Anything else is a stop.
-Comment rewrites ride inside conversion diffs (§13): they change no
-behaviour and no assertion, and the baseline-signature requirement above
-is exactly what proves that, step after step.
 What conversion does to each baseline suite, individually:
 
 | Baseline suite | Mechanism | Migration exposure |
@@ -627,12 +626,6 @@ today's code (its consumer set and outbound reads have both grown since).
 5. **SW handling per §6** (fork CACHE suffix or fresh-profile protocol)
    documented in the slice's report, with the stale-cache behaviour
    observed, not assumed.
-6. **Comment before/after (§13):** a deliverable artefact in the slice's
-   evidence package — `docs/es-modules-slice1-comment-before-after.md`
-   on the fork — showing one converted file's comments before and after
-   its comment pass (the file header and at least one function header,
-   excerpted), so the standard's effect is visible as a felt difference,
-   not just asserted as done.
 
 **Fallback:** if the three-file slice hits a snag that isn't quickly
 diagnosable, shrink to js/213-dnf.js alone (the pilot-proven leaf) and
@@ -719,19 +712,20 @@ unaffected — 95 of 104 files are not behind this boundary.
 
 ---
 
-## 13. The comment standard — applied to every file as it converts
+## 13. Successor phase — the comment pass (after the migration)
 
-(User direction, 2026-10-16; the same standard now also stands in
-AGENTS.md for new code everywhere. Here it is a per-conversion
-requirement of this program.)
+(User decision, 2026-10-16, re-sequenced the same day: the comment
+updates apply **after** the migration completes, not during it.
+Conversions in this program are pure moves — comments are carried
+verbatim, and a stale or mechanical comment in a converted file is
+carried, not fixed, and is **not a finding** at any migration gate (§4).
+This section is the seed text for the follow-on program — a comment
+pass over the finished modular tree — whose scope and order are
+specced once the migration completes. The standard itself already
+stands as the convention for **new** code via AGENTS.md; nothing in
+this program applies it retroactively.)
 
-**Scope rule first:** the standard is applied to a file **in the same
-pass that converts it** — it piggybacks on a touch that is already
-happening. It is explicitly **not** a separate repo-wide comment sweep:
-unconverted files keep their existing comments until their conversion
-turn, and no PR in this program exists solely to edit comments.
-
-The standard:
+The standard (the successor phase's seed text):
 
 - **Comments explain WHY, in plain human sentences:** the invariant
   being held, the ordering constraint, the failure mode being
@@ -748,9 +742,9 @@ The standard:
   a named past bug), but the explanation comes first, in words.
 - **Function-level headers for anything non-trivial:** purpose,
   inputs/outputs in prose, and the gotchas a caller must know.
-- **Honest and current:** a converted file's stale or mechanical
-  comments are rewritten or deleted in the same pass. A wrong comment
-  is worse than none.
+- **Honest and current:** a file's stale or mechanical comments are
+  rewritten or deleted in the same pass. A wrong comment is worse
+  than none.
 - **Prose for intent, precision for contracts.** The standard is
   deliberately model-friendly: rationale goes in plain sentences, but
   load-bearing facts — key formats (e.g. the gift book key shape),
@@ -760,21 +754,14 @@ The standard:
   comments as ground truth: a stale why-comment is exactly how a
   future agent talks itself into breaking an invariant.
 
-**The honest cost, stated plainly:** with the comment pass inside it, a
-conversion diff is no longer a pure move. The byte-identity discipline
-the Batch 3 admin splits were verified under does **not** apply to
-migration conversions, and nothing in this program pretends otherwise:
-correctness is carried instead by the harness and suite evidence (§9),
-the surface-identity census (§10.3 item 3), and live verification of the
-converted surface — the same evidence stack, minus diff purity, plus a
-file that explains itself to the next reader.
-
-**Enforcement:** comment quality is a named review line for the whole
-migration PR series. The Security Advisor spot-checks it at the gate —
-a conversion PR whose converted file still carries stale or mechanical
-comments, or whose non-trivial functions lack headers, is not
-gate-clean, the same as a suite regression. Slice 1 proves the
-standard's application with a before/after artefact (§10.3 item 6).
+**Why the sequencing matters:** keeping the comment pass out of the
+conversions preserves this program's evidence discipline — pure moves
+whose surfaces can be diffed and census-verified — while the wiring
+changes underneath the whole tree. The comment pass then runs once,
+coherently, over the tree's final shape, under its own spec and its
+own review, instead of being smeared across hundreds of conversion
+diffs where a wording change and a wiring change would be
+indistinguishable in review.
 
 ---
 
