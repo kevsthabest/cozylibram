@@ -4,26 +4,32 @@
 // No free source serves real spine art (Google Books / Open Library only
 // have front covers), so spines are generated: title + author, colored
 // deterministically, sized by page count.
-let favExpanded = false;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export let favExpanded = false;
 // v61: shelf display style — 'spines' (default) or 'covers'.
-let favStyle = 'spines';
+export let favStyle = 'spines';
 
 // Batch 4 (issue #149): the search input re-rendered the whole library view
 // per keystroke (greeting, hero, shelves, spine-color DOM scan). Debounce the
 // re-render ~150ms; the query var updates immediately so filtering never lags
 // the typed text. Cleared at the top of renderLibrary() so a pending timer
 // never steals focus after a chip/filter tap re-renders first.
-let libSearchTimer = null;
-const LIB_SEARCH_DEBOUNCE_MS = 150;
+export let libSearchTimer = null;
+export const LIB_SEARCH_DEBOUNCE_MS = 150;
 try { favStyle = localStorage.getItem('spicyshelves.favstyle') === 'covers' ? 'covers' : 'spines'; } catch (e) {}
-const SPINE_COLORS = ['#7b2d43', '#2d4a7b', '#3f6b4f', '#8a5a2b', '#5b2d7b', '#a03a2e',
+export const SPINE_COLORS = ['#7b2d43', '#2d4a7b', '#3f6b4f', '#8a5a2b', '#5b2d7b', '#a03a2e',
   '#2e6b6b', '#6b3f2a', '#4a4a6b', '#7b5a2d', '#94425f', '#365a8a'];
-function hashStr(s) {
+export function hashStr(s) {
   let h = 0; s = String(s || '');
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
-function spineHTML(b) {
+export function spineHTML(b) {
   const c = SPINE_COLORS[hashStr(b.title) % SPINE_COLORS.length];
   const w = 34 + Math.min(22, Math.round((b.pageCount || 300) / 35)); // thicker books, thicker spines
   const h = 122 + (hashStr(b.title + '|h') % 38);
@@ -42,7 +48,7 @@ function spineHTML(b) {
     '<span class="spine-rule" aria-hidden="true"></span>' + readBadge + '</div>';
 }
 /* ---- recently added (v173): newest arrivals first, per the home mockup ---- */
-function recentlyAddedHTML() {
+export function recentlyAddedHTML() {
   const rec = library.slice()
     .sort((a, b) => String(b.dateAdded || b._mtime || '')
       .localeCompare(String(a.dateAdded || a._mtime || '')))
@@ -59,7 +65,7 @@ function recentlyAddedHTML() {
     }).join('') + '</div></div></section>';
 }
 
-function favShelfHTML() {
+export function favShelfHTML() {
   const favs = library.filter(b => b.favorite);
   const vw = (document.getElementById('view') || {}).clientWidth || 360;
   const perRow = Math.max(4, Math.floor(vw / 58));
@@ -97,23 +103,23 @@ function favShelfHTML() {
 /* ---------------- "Up Next" queue (v74) ---------------- */
 // Ordered reading shortlist: ids live in `upNext` (040-storage.js, per-user,
 // local-only). Queue ops keep DOM and storage in sync.
-function upNextBooks() {
+export function upNextBooks() {
   const byId = new Map(library.map(b => [b.id, b]));
   return upNext.map(id => byId.get(id)).filter(Boolean);
 }
-function upNextAdd(id) {
+export function upNextAdd(id) {
   if (!upNext.includes(id)) { upNext.push(id); saveUpNext(); }
 }
-function upNextRemove(id) {
+export function upNextRemove(id) {
   if (upNext.includes(id)) { upNext = upNext.filter(x => x !== id); saveUpNext(); }
 }
-function upNextMove(id, dir) {
+export function upNextMove(id, dir) {
   const i = upNext.indexOf(id), j = i + dir;
   if (i < 0 || j < 0 || j >= upNext.length) return;
   const t = upNext[i]; upNext[i] = upNext[j]; upNext[j] = t;
   saveUpNext();
 }
-function upNextShelfHTML() {
+export function upNextShelfHTML() {
   const books = upNextBooks();
   let html = '<div class="un-strip"><div class="recent-head"><h3 class="serif">' + icon('upnext') + ' Up Next</h3>' +
     (books.length ? '<button class="btn ghost sm" id="un-manage">View all ' + books.length + ' \u2192</button>' : '') + '</div>';
@@ -131,7 +137,7 @@ function upNextShelfHTML() {
   }
   return html + '</div>';
 }
-function renderUpNext() {
+export function renderUpNext() {
   const books = upNextBooks();
   let html = '<button class="btn ghost" id="un-back">← Shelves</button>' +
     '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('upnext') + ' Up Next</h2>';
@@ -173,12 +179,12 @@ function renderUpNext() {
 }
 
 /* ---- spine colors from covers + pull-out animation ---- */
-const spineColorCache = {}; // bookId -> { hex, cover }
-const spinePaintInflight = new Set();
-function loadSpineColorCache() {
+export const spineColorCache = {}; // bookId -> { hex, cover }
+export const spinePaintInflight = new Set();
+export function loadSpineColorCache() {
   try { Object.assign(spineColorCache, JSON.parse(localStorage.getItem('spicyshelves.spinecolors') || '{}')); } catch (e) {}
 }
-function saveSpineColorCache() {
+export function saveSpineColorCache() {
   try { localStorage.setItem('spicyshelves.spinecolors', JSON.stringify(spineColorCache)); } catch (e) {}
   // v571: book dressing reads this cache — a fresh palette can start (or
   // change) a dressing. Re-resolve so it lands without waiting for a
@@ -190,7 +196,7 @@ loadSpineColorCache();
 // cover images, so pixel reads work there. Google Books (books.google.com)
 // sends none — requesting CORS there only spams the console, so we load
 // those without it and take the graceful null fallback instead.
-function coverCorsOK(url) {
+export function coverCorsOK(url) {
   if (!url || url.indexOf('data:') === 0 || url.indexOf('blob:') === 0) return true;
   const m = /^https?:\/\/([^/]+)/i.exec(url || '');
   const host = (m && m[1] || '').toLowerCase();
@@ -200,7 +206,7 @@ function coverCorsOK(url) {
 // Same-origin cover proxy (server.py /cover-proxy): lets us read cover pixels
 // from hosts that don't send CORS headers (e.g. Google Books). Only when the
 // app is served over http(s); file:// has no server to proxy through.
-function coverProxyURL(url) {
+export function coverProxyURL(url) {
   try {
     if (!/^https?:/i.test(url || '')) return url; // data:/blob: need no proxy
     if (!/^https?:$/.test(location.protocol)) return url;
@@ -210,7 +216,7 @@ function coverProxyURL(url) {
 // Load one image and read its dominant color. Resolves {hex} when pixels were
 // read, {hex:null} when the image loaded but pixels are unreadable (tainted
 // canvas), or {loadError:true} when the image itself failed to load.
-function coverImageHex(src, useCors) {
+export function coverImageHex(src, useCors) {
   return new Promise(resolve => {
     const img = new Image();
     if (useCors) img.crossOrigin = 'anonymous';
@@ -229,7 +235,7 @@ function coverImageHex(src, useCors) {
 // pixels — and the proxy must not wrap them (supabase.co is not on its
 // provider allowlist, so it 403s, the load errors, and the fallback direct
 // read then happens without CORS and taints the canvas).
-function coverColorSources(url) {
+export function coverColorSources(url) {
   if (url && url.indexOf('/storage/v1/object/public/covers/') !== -1) return [[url, true]];
   const sources = [];
   const proxy = coverProxyURL(url);
@@ -239,7 +245,7 @@ function coverColorSources(url) {
 }
 // Dominant color of a cover image (darkened a touch so spine text stays readable).
 // Falls back to null when the image can't be read.
-function coverDominantColor(url) {
+export function coverDominantColor(url) {
   const sources = coverColorSources(url);
   return (async () => {
     for (const [src, cors] of sources) {
@@ -250,7 +256,7 @@ function coverDominantColor(url) {
   })();
 }
 // Dominant non-gray, non-border color of a loaded image, darkened ~18%.
-function dominantHex(img) {
+export function dominantHex(img) {
   const S = 24, c = document.createElement('canvas');
   c.width = S; c.height = S;
   const ctx = c.getContext('2d');
@@ -273,7 +279,7 @@ function dominantHex(img) {
   const rgb = best.split(',').map(x => Math.round(Math.min(255, ((Number(x) << 5) + 16) * 0.82)));
   return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
 }
-function paintSpineColors() {
+export function paintSpineColors() {
   document.querySelectorAll('.fav-shelf .spine').forEach(sp => {
     const b = library.find(x => x.id === sp.dataset.id);
     if (!b || !b.cover) return;
@@ -291,13 +297,13 @@ function paintSpineColors() {
     });
   });
 }
-function animEnabled() {
+export function animEnabled() {
   try { return localStorage.getItem('spicyshelves.animation') !== 'off'; } catch (e) { return true; }
 }
-const reducedMotion = () => !animEnabled() ||
+export const reducedMotion = () => !animEnabled() ||
   !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-let pullBusy = false;
-function pullSpine(el, id) {
+export let pullBusy = false;
+export function pullSpine(el, id) {
   const b = library.find(x => x.id === id);
   if (!b || pullBusy) return;
   if (reducedMotion()) { openDetail(id); return; }
@@ -332,14 +338,14 @@ function pullSpine(el, id) {
          justFinished: {title}|null, hour: 0-23, theme, dayNumber }
    Returns { text, action: 'book'|'discover'|'add', bookId }. Deterministic
    per day: same inputs → same line all day, rotates at midnight. */
-function simpleStringHash(str) {
+export function simpleStringHash(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
     h = ((h << 5) - h + str.charCodeAt(i)) | 0;
   }
   return Math.abs(h);
 }
-function homeSublineFor(s) {
+export function homeSublineFor(s) {
   const cutTitle = (t) => {
     t = String(t || 'your book');
     return t.length > 28 ? t.slice(0, 28) + '…' : t;
@@ -419,7 +425,7 @@ function homeSublineFor(s) {
   const idx = (s.dayNumber + simpleStringHash(stateKey)) % filled.length;
   return { text: filled[idx], action, bookId };
 }
-function homeGreetingHTML() {
+export function homeGreetingHTML() {
   const h = new Date().getHours();
   const tod = h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : 'evening';
   // v405 (L1): real greeting — profile first name with neutral fallback.
@@ -472,7 +478,7 @@ function homeGreetingHTML() {
     '<p>' + subBtn + '</p></section>';
 }
 
-function readingHeroHTML() {
+export function readingHeroHTML() {
   // Featured book = the reading book touched most recently.
   const reading = library.filter(b => b.status === 'reading')
     .sort((a, b) => String(b._mtime || '').localeCompare(String(a._mtime || '')));
@@ -508,7 +514,7 @@ function readingHeroHTML() {
   return html + '</section>';
 }
 
-function cantDecideHTML() {
+export function cantDecideHTML() {
   const tbr = library.filter(b => b.status === 'tbr').length;
   if (!tbr) return '';
   return '<section class="home-sec"><button class="cant-decide" id="cd-pick">' +
@@ -518,7 +524,7 @@ function cantDecideHTML() {
     '<span class="disc-go" aria-hidden="true">\u2192</span></button></section>';
 }
 
-function shelfTilesHTML(counts) {
+export function shelfTilesHTML(counts) {
   // v173: six tiles per the mockup — the four shelves plus Favorites and
   // Wishlist. v559: the Wishlist tile counts the derived set (tbr +
   // tobuy — the to-buy part of TBR), via isWishlistBook.
@@ -535,7 +541,7 @@ function shelfTilesHTML(counts) {
     ).join('') + '</div></section>';
 }
 
-function libraryHomeHTML(counts) {
+export function libraryHomeHTML(counts) {
   return homeGreetingHTML() + readingHeroHTML() +
     // v468: reading nudge slot (Book Portrait mid-read prompts)
     ((typeof nudgeSlotHTML === 'function') ? nudgeSlotHTML() : '') +
@@ -546,7 +552,7 @@ function libraryHomeHTML(counts) {
     recentlyAddedHTML() + upNextShelfHTML() + cantDecideHTML() + favShelfHTML();
 }
 
-function renderLibrary() {
+export function renderLibrary() {
   clearTimeout(libSearchTimer); libSearchTimer = null; // batch 4, issue #149
   const books = filteredBooks();
   const counts = { tbr: 0, reading: 0, read: 0, dnf: 0, wishlist: 0 };
@@ -724,7 +730,7 @@ function renderLibrary() {
 
 /* v126: empathetic, actionable empty states for the library — the copy
    acknowledges the situation instead of just reporting zero results. */
-function libraryEmptyHTML() {
+export function libraryEmptyHTML() {
   const q = query.trim();
   if (!library.length) return emptyState({
     icon: 'covers', title: 'Your shelves are waiting',
@@ -756,7 +762,7 @@ function libraryEmptyHTML() {
   return emptyState(per[filter] || per.tbr);
 }
 
-function renderLibraryKeepFocus(pos) {
+export function renderLibraryKeepFocus(pos) {
   // re-render list only, keep the search input focused
   renderLibrary();
   const input = document.getElementById('q');
@@ -764,7 +770,63 @@ function renderLibraryKeepFocus(pos) {
   try { input.setSelectionRange(pos, pos); } catch (e) {}
 }
 
-function chip(f, label, active) {
+export function chip(f, label, active) {
   return '<button class="chip' + (active ? ' active' : '') + '" data-f="' + f + '">' + label + '</button>';
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/136-coverpicker.js,
+   js/140-collections.js, js/150-modal-discovery.js, js/180-settings.js,
+   js/198-discovery.js, js/200-boot.js, js/215-shelf3d.js,
+   js/217-shelf3d-view.js, js/238-book-candle.js and js/240-book-dressing.js
+   — reach these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place before
+   any consumer can run. Remove a name from this bridge only when its last
+   classic caller is gone.
+ */
+window.favExpanded = favExpanded;
+window.favStyle = favStyle;
+window.libSearchTimer = libSearchTimer;
+window.LIB_SEARCH_DEBOUNCE_MS = LIB_SEARCH_DEBOUNCE_MS;
+window.SPINE_COLORS = SPINE_COLORS;
+window.hashStr = hashStr;
+window.spineHTML = spineHTML;
+window.recentlyAddedHTML = recentlyAddedHTML;
+window.favShelfHTML = favShelfHTML;
+window.upNextBooks = upNextBooks;
+window.upNextAdd = upNextAdd;
+window.upNextRemove = upNextRemove;
+window.upNextMove = upNextMove;
+window.upNextShelfHTML = upNextShelfHTML;
+window.renderUpNext = renderUpNext;
+window.spineColorCache = spineColorCache;
+window.spinePaintInflight = spinePaintInflight;
+window.loadSpineColorCache = loadSpineColorCache;
+window.saveSpineColorCache = saveSpineColorCache;
+window.coverCorsOK = coverCorsOK;
+window.coverProxyURL = coverProxyURL;
+window.coverImageHex = coverImageHex;
+window.coverColorSources = coverColorSources;
+window.coverDominantColor = coverDominantColor;
+window.dominantHex = dominantHex;
+window.paintSpineColors = paintSpineColors;
+window.animEnabled = animEnabled;
+window.reducedMotion = reducedMotion;
+window.pullBusy = pullBusy;
+window.pullSpine = pullSpine;
+window.simpleStringHash = simpleStringHash;
+window.homeSublineFor = homeSublineFor;
+window.homeGreetingHTML = homeGreetingHTML;
+window.readingHeroHTML = readingHeroHTML;
+window.cantDecideHTML = cantDecideHTML;
+window.shelfTilesHTML = shelfTilesHTML;
+window.libraryHomeHTML = libraryHomeHTML;
+window.renderLibrary = renderLibrary;
+window.libraryEmptyHTML = libraryEmptyHTML;
+window.renderLibraryKeepFocus = renderLibraryKeepFocus;
+window.chip = chip;
