@@ -5,7 +5,14 @@
 // v269: source order is Hardcover → Inventaire → Open Library. Google Books
 // was the last resort; it's dropped — Hardcover leads and the remaining
 // free sources cover the rest, avoiding Google's ToS/attribution baggage.
-async function fetchPageCountByISBN(isbn) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export async function fetchPageCountByISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (!clean) return null;
   // Someone may already have looked this book up: free page count, no APIs.
@@ -57,7 +64,7 @@ async function fetchPageCountByISBN(isbn) {
   return null;
 }
 
-async function fillPageCount(book) {
+export async function fillPageCount(book) {
   if (!book || book.pageCount > 0 || !book.isbn) return false;
   const n = await fetchPageCountByISBN(book.isbn);
   if (!n) return false;
@@ -70,7 +77,7 @@ async function fillPageCount(book) {
 // Backfill every book missing a page count. v476: opts.quiet suppresses
 // toasts for the automatic boot sweep — the user never asked for this,
 // so it shouldn't announce itself.
-async function backfillPageCounts(paceMs, opts) {
+export async function backfillPageCounts(paceMs, opts) {
   var quiet = !!(opts && opts.quiet);
   var say = function (m) { if (!quiet) toast(m); };
   paceMs = paceMs == null ? 1200 : paceMs;
@@ -89,3 +96,17 @@ async function backfillPageCounts(paceMs, opts) {
   return found;
 }
 
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/070-hardcover.js, js/095-gate.js,
+   js/138-editions.js and js/150-modal-discovery.js — reach
+   these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.fetchPageCountByISBN = fetchPageCountByISBN;
+window.fillPageCount = fillPageCount;
+window.backfillPageCounts = backfillPageCounts;
