@@ -152,7 +152,9 @@ const decorSrc = fs.readFileSync(ROOT + '/js/218-shelf3d-decor.js', 'utf8');
   const vm = require('vm');
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(decorSrc, sandbox);
+  // R3 repoint (migration plan §9.3): js/218 is an ES module; classicize
+  // its source before vm evaluation — loading plumbing only.
+  vm.runInContext(classicize(decorSrc, 'js/218-shelf3d-decor.js'), sandbox);
   const D = sandbox.window.Shelf3DDecor;
   ok('catalog module loads', !!D && Array.isArray(D.CATALOG));
 
@@ -250,7 +252,11 @@ ok('218 loads before 215 in index.html',
   const f0 = srcLayout.indexOf('function shelf3dFitDistance');
   const f1 = srcLayout.indexOf('function shelf3dClampPan');
   const f2 = srcLayout.indexOf('\n}', f1) + 2;
-  run(srcLayout.slice(f0, f2) + '\n;window.__fit = shelf3dFitDistance; window.__clampPan = shelf3dClampPan;');
+  // R2/R3 repoint (migration plan §9.3): the located slice spans the
+  // second function's declaration line, which as a module carries an
+  // export prefix; classicize the slice before evaluation — the located
+  // code and the assertions are identical.
+  run(classicize(srcLayout.slice(f0, f2), 'js/204-shelf3d-layout.js') + '\n;window.__fit = shelf3dFitDistance; window.__clampPan = shelf3dClampPan;');
   const fit = window.__fit, clampPan = window.__clampPan;
   ok('fit + clamp helpers exposed on Shelf3D',
     srcFix.includes('fitDistance: shelf3dFitDistance') && srcFix.includes('clampPan: shelf3dClampPan'));
