@@ -4,12 +4,19 @@
    shows owned books, wishlist books, and their other books she's missing
    (shaded out) — missing books come from the Open Library author lookup
    shared with the discovery sheets, each with a + Wishlist button. ---- */
-let authorView = null; // author display name when view === 'author'
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export let authorView = null; // author display name when view === 'author'
 
 // Grouping key: "H. D. Carlton", "H D Carlton" and "H.D. Carlton" (plus stray
 // double spaces / trailing spaces from exports) all become one author.
 // Display keeps the most common original spelling; book records are untouched.
-function authorKey(name) {
+export function authorKey(name) {
   return String(name || '')
     .toLowerCase()
     .replace(/\./g, ' ') // "H.D." → "h d", matching "H. D." and "H D"
@@ -17,7 +24,7 @@ function authorKey(name) {
     .trim();
 }
 
-function authorIndex() {
+export function authorIndex() {
   const map = new Map();
   library.forEach(b => {
     (b.authors || []).forEach(a => {
@@ -45,7 +52,7 @@ function authorIndex() {
   return list;
 }
 
-function authorRowHTML(e) {
+export function authorRowHTML(e) {
   const sub = e.owned.length + ' owned' +
     (e.wanted.length ? ' · ' + e.wanted.length + ' on wishlist' : '');
   const dn = displayAuthorName(e.name); // v224 (UX-05): normalized display
@@ -55,7 +62,7 @@ function authorRowHTML(e) {
     '<span class="cgo">›</span></button>';
 }
 
-function renderAuthors() {
+export function renderAuthors() {
   const list = authorIndex();
   let html = '<div class="wish-head"><h2 class="serif">' + icon('pencil') + ' Authors</h2>' +
     '<p class="note">' + list.length + ' author' + (list.length === 1 ? '' : 's') +
@@ -74,7 +81,7 @@ function renderAuthors() {
     el.addEventListener('click', () => openAuthor(el.dataset.author)));
 }
 
-function openAuthor(name) {
+export function openAuthor(name) {
   authorView = name;
   view = 'author';
   animateIn = true;
@@ -86,7 +93,7 @@ function openAuthor(name) {
 }
 
 // a book by this author she doesn't have: shaded out, with a + Wishlist button
-function missingRowHTML(x, i) {
+export function missingRowHTML(x, i) {
   return '<div class="crow ext missing" data-miss="' + i + '">' +
     (x.cover ? '<img src="' + esc(x.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
       : '<span class="cnocover">' + icon('covers') + '</span>') +
@@ -96,7 +103,7 @@ function missingRowHTML(x, i) {
 }
 
 // Fill the "missing books" section of the author detail (async, after render).
-async function fillMissingBooks(name) {
+export async function fillMissingBooks(name) {
   const box = document.getElementById('a-missing');
   if (!box) return;
   try {
@@ -129,7 +136,7 @@ async function fillMissingBooks(name) {
   }
 }
 
-function renderAuthorDetail() {
+export function renderAuthorDetail() {
   const name = authorView || '';
   const key = authorKey(name);
   const match = b => (b.authors || []).some(a => authorKey(a) === key);
@@ -159,3 +166,23 @@ function renderAuthorDetail() {
     el.addEventListener('click', () => openDetail(el.dataset.book)));
   fillMissingBooks(name);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/070-hardcover.js, js/134-verify.js and js/200-boot.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.authorView = authorView;
+window.authorKey = authorKey;
+window.authorIndex = authorIndex;
+window.authorRowHTML = authorRowHTML;
+window.renderAuthors = renderAuthors;
+window.openAuthor = openAuthor;
+window.missingRowHTML = missingRowHTML;
+window.fillMissingBooks = fillMissingBooks;
+window.renderAuthorDetail = renderAuthorDetail;
