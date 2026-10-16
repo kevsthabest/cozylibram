@@ -5,21 +5,27 @@
    captured side-on image. Page count is metadata/validation only, never the
    scale source. */
 
-const ED_MEASURE_REF_MM = 85.60;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const ED_MEASURE_REF_MM = 85.60;
 
-function editionMeasureClamp(n, lo, hi) {
+export function editionMeasureClamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, Number(n) || 0));
 }
 
-function editionMeasureDistance(a, b) {
+export function editionMeasureDistance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function editionMeasureAngle(a, b) {
+export function editionMeasureAngle(a, b) {
   return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
 }
 
-function editionMeasureOpenEditor(dataUrl, bookId) {
+export function editionMeasureOpenEditor(dataUrl, bookId) {
   return new Promise(function (resolve) {
     if (typeof document === 'undefined') { resolve(false); return; }
     var book = (typeof library !== 'undefined' ? library : []).find(function (b) {
@@ -186,7 +192,7 @@ function editionMeasureOpenEditor(dataUrl, bookId) {
   });
 }
 
-function editionMeasureThickness(bookId) {
+export function editionMeasureThickness(bookId) {
   if (typeof document === 'undefined') return null;
   var input = document.getElementById('edm-input');
   if (!input) {
@@ -205,3 +211,19 @@ function editionMeasureThickness(bookId) {
   };
   input.click();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/150-modal-discovery.js, calls editionMeasureThickness() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ED_MEASURE_REF_MM = ED_MEASURE_REF_MM;
+window.editionMeasureClamp = editionMeasureClamp;
+window.editionMeasureDistance = editionMeasureDistance;
+window.editionMeasureAngle = editionMeasureAngle;
+window.editionMeasureOpenEditor = editionMeasureOpenEditor;
+window.editionMeasureThickness = editionMeasureThickness;
