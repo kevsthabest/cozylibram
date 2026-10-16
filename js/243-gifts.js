@@ -27,16 +27,22 @@
  *   quiet — nothing renders (fail closed, the Marginalia pattern).
  */
 
-let giftTableMissing = false;   // gifts pre-migration
-let giftSupportKnown = null;    // probe cache: true / false / null
-const GIFT_RETAILERS_KEY = 'cozylibram.giftretailers';
-const GIFT_CLAIMS_LOCAL_KEY = 'cozylibram.giftclaims.local';
-const GIFT_NO_DETAILS_LINE = 'Delivery details aren\'t shared for this gift.';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export let giftTableMissing = false;   // gifts pre-migration
+export let giftSupportKnown = null;    // probe cache: true / false / null
+export const GIFT_RETAILERS_KEY = 'cozylibram.giftretailers';
+export const GIFT_CLAIMS_LOCAL_KEY = 'cozylibram.giftclaims.local';
+export const GIFT_NO_DETAILS_LINE = 'Delivery details aren\'t shared for this gift.';
 
-function giftLog() {
+export function giftLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[gifts]'].concat([].slice.call(arguments)));
 }
-function giftMissingErr(e) {
+export function giftMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -45,7 +51,7 @@ function giftMissingErr(e) {
      code === 'PGRST205' || code === '42883' ||
      /schema cache|does not exist|not found/i.test(msg));
 }
-function giftLatchIfMissing(e) {
+export function giftLatchIfMissing(e) {
   if (giftMissingErr(e)) { giftTableMissing = true; giftSupportKnown = false; return true; }
   return false;
 }
@@ -53,7 +59,7 @@ function giftLatchIfMissing(e) {
 /* Support probe: the profiles column is the migration's footprint
  * (the claim/address tables are policy-closed by design, so a
  * table probe can't distinguish missing from locked). */
-async function giftSupported() {
+export async function giftSupported() {
   if (giftTableMissing) return false;
   if (giftSupportKnown !== null) return giftSupportKnown;
   try {
@@ -72,7 +78,7 @@ async function giftSupported() {
 
 /* One RPC door: null on any failure (missing machinery latches
  * unsupported; anything else is logged and reads as "nothing"). */
-async function giftRpc(name, args) {
+export async function giftRpc(name, args) {
   if (giftTableMissing) return null;
   try {
     const sb = await cloudClient();
@@ -92,7 +98,7 @@ async function giftRpc(name, args) {
 /* ISBN-13 normalization: 13 digits pass through; a 10-char ISBN is
  * converted ('978' + first 9 + recomputed check digit); anything
  * else is no ISBN. */
-function giftIsbn13(raw) {
+export function giftIsbn13(raw) {
   const v = String(raw == null ? '' : raw).replace(/[^0-9Xx]/g, '').toUpperCase();
   if (v.length === 13) return v;
   if (v.length !== 10) return '';
@@ -101,7 +107,7 @@ function giftIsbn13(raw) {
   for (let i = 0; i < 12; i++) sum += Number(v12.charAt(i)) * (i % 2 === 0 ? 1 : 3);
   return v12 + String((10 - (sum % 10)) % 10);
 }
-function giftBookKey(book) {
+export function giftBookKey(book) {
   if (!book) return '';
   const d = (book.data && typeof book.data === 'object') ? book.data : book;
   const isbn = giftIsbn13((d.isbn != null && d.isbn !== '') ? d.isbn : book.isbn);
@@ -115,7 +121,7 @@ function giftBookKey(book) {
 }
 /* Human label for a key when no local copy names it (the
  * marginalia titleFor fallback shape). */
-function giftKeyLabel(key) {
+export function giftKeyLabel(key) {
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
   const mine = lib.find(b => b && giftBookKey(b) === key);
   if (mine) return mine.title || 'Untitled';
@@ -127,19 +133,19 @@ function giftKeyLabel(key) {
  * The link builder is the single place retailer URLs are composed.
  * Links are plain search URLs — no tags, no tracking parameters,
  * no referral codes, no prices, ever. */
-function giftFormatKind(fmt) {
+export function giftFormatKind(fmt) {
   return fmt === 'ebook' ? 'ebook' : fmt === 'audio' ? 'audio' : 'print';
 }
-const GIFT_RETAILERS = {
+export const GIFT_RETAILERS = {
   indigo: { label: 'Indigo', build: q => 'https://www.indigo.ca/en-ca/search?q=' + q },
   amazon: { label: 'Amazon.ca', build: q => 'https://www.amazon.ca/s?k=' + q },
   kobo:   { label: 'Kobo', build: q => 'https://www.kobo.com/ca/en/search?query=' + q },
   kindle: { label: 'Kindle', build: q => 'https://www.amazon.ca/s?k=' + q + '&i=digital-text' },
   libro:  { label: 'Libro.fm', build: q => 'https://libro.fm/search?q=' + q },
 };
-const GIFT_RETAILER_SETS = { print: ['indigo', 'amazon'], ebook: ['kobo', 'kindle'], audio: ['libro'] };
-const GIFT_RETAILER_DEFAULTS = { print: 'indigo', ebook: 'kobo', audio: 'libro' };
-function giftRetailerPrefs() {
+export const GIFT_RETAILER_SETS = { print: ['indigo', 'amazon'], ebook: ['kobo', 'kindle'], audio: ['libro'] };
+export const GIFT_RETAILER_DEFAULTS = { print: 'indigo', ebook: 'kobo', audio: 'libro' };
+export function giftRetailerPrefs() {
   let v = null;
   try { v = JSON.parse(localStorage.getItem(GIFT_RETAILERS_KEY) || 'null'); } catch (e) {}
   const out = {};
@@ -149,8 +155,8 @@ function giftRetailerPrefs() {
   });
   return out;
 }
-function giftRetailerPref(kind) { return giftRetailerPrefs()[kind] || GIFT_RETAILER_DEFAULTS[kind]; }
-function giftSetRetailerPref(kind, id) {
+export function giftRetailerPref(kind) { return giftRetailerPrefs()[kind] || GIFT_RETAILER_DEFAULTS[kind]; }
+export function giftSetRetailerPref(kind, id) {
   if (GIFT_RETAILER_SETS[kind].indexOf(id) === -1) return;
   const prefs = giftRetailerPrefs();
   prefs[kind] = id;
@@ -159,7 +165,7 @@ function giftSetRetailerPref(kind, id) {
 }
 /* The search query: the ISBN-13 when the record has one, else
  * "Title FirstAuthor" (the retailer's own search does the rest). */
-function giftSearchQuery(book) {
+export function giftSearchQuery(book) {
   const d = (book && book.data && typeof book.data === 'object') ? book.data : (book || {});
   const isbn = giftIsbn13((d.isbn != null && d.isbn !== '') ? d.isbn : (book && book.isbn));
   if (isbn) return isbn;
@@ -170,7 +176,7 @@ function giftSearchQuery(book) {
   else if (typeof a === 'string') first = a;
   return (title + ' ' + String(first).trim()).trim();
 }
-function giftRetailerLink(book, kind, retailerId) {
+export function giftRetailerLink(book, kind, retailerId) {
   const r = GIFT_RETAILERS[retailerId] || GIFT_RETAILERS[GIFT_RETAILER_DEFAULTS[kind]];
   return r.build(encodeURIComponent(giftSearchQuery(book)));
 }
@@ -179,29 +185,29 @@ function giftRetailerLink(book, kind, retailerId) {
  * Claims carry keys, not titles; the list views resolve names
  * from what THIS device saw at claim time (title + recipient),
  * degrading to the key label when the cache has nothing. */
-function giftClaimsLocal() {
+export function giftClaimsLocal() {
   try {
     const v = JSON.parse(localStorage.getItem(GIFT_CLAIMS_LOCAL_KEY) || 'null');
     return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   } catch (e) { return {}; }
 }
-function giftCacheClaim(key, info) {
+export function giftCacheClaim(key, info) {
   if (!key) return;
   const all = giftClaimsLocal();
   all[key] = info;
   try { localStorage.setItem(GIFT_CLAIMS_LOCAL_KEY, JSON.stringify(all)); } catch (e) {}
 }
-function giftClaimTitle(key) {
+export function giftClaimTitle(key) {
   const info = giftClaimsLocal()[key];
   return (info && info.title) || giftKeyLabel(key);
 }
-function giftClaimRecipientName(key) {
+export function giftClaimRecipientName(key) {
   const info = giftClaimsLocal()[key];
   return (info && info.recipientName) || '';
 }
 
 /* ---------- copy (clipboard, with the legacy fallback) ---------- */
-async function giftCopyText(text) {
+export async function giftCopyText(text) {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
@@ -229,7 +235,7 @@ async function giftCopyText(text) {
 /* The retailer block shared by both sheets: a switcher (the
  * per-format remembered choice) and the one prominent buy button.
  * Switching remembers the choice and re-points the button. */
-function giftRetailerBlockHTML(book, kind) {
+export function giftRetailerBlockHTML(book, kind) {
   const set = GIFT_RETAILER_SETS[kind];
   const chosen = giftRetailerPref(kind);
   let html = '<div class="field"><label>Buy this book</label>';
@@ -244,7 +250,7 @@ function giftRetailerBlockHTML(book, kind) {
     '<p class="note" style="margin:6px 0 0">The retailer handles the sale, payment and delivery — Cozy Libram just points you at the right book.</p></div>';
   return html;
 }
-function giftWireRetailerBlock(sheet, book, kind) {
+export function giftWireRetailerBlock(sheet, book, kind) {
   const buy = sheet.querySelector('#gift-buy');
   sheet.querySelectorAll('#gift-retailers button').forEach(b => b.addEventListener('click', () => {
     giftSetRetailerPref(kind, b.dataset.gr);
@@ -264,7 +270,7 @@ function giftWireRetailerBlock(sheet, book, kind) {
  * kind scopes in, each with its own copy button; print adds the
  * full address block copy. Values ride in a closure, never in the
  * DOM's data attributes. */
-function giftDetailsHTML(d) {
+export function giftDetailsHTML(d) {
   if (!d || !d.kind) {
     return '<p class="note" style="margin:0 0 4px">' + esc(GIFT_NO_DETAILS_LINE) + '</p>';
   }
@@ -290,7 +296,7 @@ function giftDetailsHTML(d) {
   }
   return html + '</div>';
 }
-function giftWireDetails(sheet, d) {
+export function giftWireDetails(sheet, d) {
   if (!d || !d.kind) return;
   const vals = {};
   if (d.kind === 'print') {
@@ -316,7 +322,7 @@ function giftWireDetails(sheet, d) {
  * reveal RPC for the delivery details — the answer is either the
  * field-scoped details or the one generic line — and always shows
  * the retailer block + the claim's state line. */
-async function openGiftSendSheet(cfg, opener) {
+export async function openGiftSendSheet(cfg, opener) {
   const body =
     '<p class="note" style="margin-top:0">For <b>' + esc(cfg.recipientName || 'your friend') + '</b> — ' +
     esc(cfg.title || giftKeyLabel(cfg.key)) + '</p>' +
@@ -335,7 +341,7 @@ async function openGiftSendSheet(cfg, opener) {
 /* The minimal sheet for your OWN books (own wishlist, modal trophy
  * want): the retailer block only — no claim, no address, nothing
  * to coordinate with. */
-function openGiftBuySheet(book, kind, opener) {
+export function openGiftBuySheet(book, kind, opener) {
   const body =
     '<p class="note" style="margin-top:0">' + esc(book.title || 'This book') + '</p>' +
     giftRetailerBlockHTML(book, kind);
@@ -349,7 +355,7 @@ function openGiftBuySheet(book, kind, opener) {
  * gift at all (gift_can_gift) and which books are claimed
  * (gift_claim_states_for). Any other world leaves the slots empty
  * and the shelf exactly as it always rendered. */
-async function fillGiftShelfActions() {
+export async function fillGiftShelfActions() {
   const slots = Array.from(document.querySelectorAll('[data-gift-slot]'));
   if (!slots.length || typeof circFriend === 'undefined' || !circFriend) return;
   const fid = circFriend.id;
@@ -380,7 +386,7 @@ async function fillGiftShelfActions() {
     }
   });
 }
-async function giftClaimTap(fid, book, key, btn) {
+export async function giftClaimTap(fid, book, key, btn) {
   if (btn.disabled) return;
   btn.disabled = true;
   const res = await giftRpc('gift_claim', { p_recipient: fid, p_book_key: key });
@@ -413,7 +419,7 @@ async function giftClaimTap(fid, book, key, btn) {
 
 /* js/190 slots (data-gift-buy-slot="<book id>") on the Wishlist
  * shelf — wishlist books and trophy wants alike. */
-async function fillOwnGiftBuys() {
+export async function fillOwnGiftBuys() {
   const slots = Array.from(document.querySelectorAll('[data-gift-buy-slot]'));
   if (!slots.length) return;
   if (!(await giftSupported())) return;
@@ -433,7 +439,7 @@ async function fillOwnGiftBuys() {
 
 /* js/150 slot: the Buy button under a trophy want in your own book
  * modal. The kind follows the WANTED format. */
-async function giftModalBuySlot(slot, book) {
+export async function giftModalBuySlot(slot, book) {
   if (!slot || !book) return;
   if (!(await giftSupported())) return;
   if (!document.body.contains(slot)) return;
@@ -447,7 +453,7 @@ async function giftModalBuySlot(slot, book) {
 
 /* ---------- "Gifts you're giving" (off the Circle) ---------- */
 
-async function fillGiftGivingEntry(slot) {
+export async function fillGiftGivingEntry(slot) {
   if (!slot || typeof cloudUser === 'undefined' || !cloudUser) return;
   if (!(await giftSupported())) return;
   if (!document.body.contains(slot)) return;
@@ -455,7 +461,7 @@ async function fillGiftGivingEntry(slot) {
     icon('gift') + ' Gifts you’re giving</button></div>';
   slot.querySelector('#gift-giving-open').addEventListener('click', (e) => openGiftGivingSheet(e.currentTarget));
 }
-async function openGiftGivingSheet(opener) {
+export async function openGiftGivingSheet(opener) {
   const rows = await giftRpc('gift_claims_mine');
   const visible = (rows || []).filter(r => r && (r.state === 'active' || r.state === 'purchased'));
   let body;
@@ -505,14 +511,14 @@ async function openGiftGivingSheet(opener) {
 /* The teen storage ban (spec §7/A9): the address form is never
  * offered to a teen-band account. The band is device state —
  * privacyState() (js/230) reads the same localStorage key. */
-function giftTeenBand() {
+export function giftTeenBand() {
   try {
     if (typeof privacyState === 'function') return privacyState().band === 'teen';
     const s = JSON.parse(localStorage.getItem('cozylibram.privacy.v1') || 'null');
     return !!(s && s.band === 'teen');
   } catch (e) { return false; }
 }
-function giftSegHTML(id, on) {
+export function giftSegHTML(id, on) {
   // v590: the privacy panel's shared builder (js/195) — same markup,
   // same aria-pressed contract, one source.
   if (typeof circleSegHTML === 'function') return circleSegHTML(id, on);
@@ -533,13 +539,13 @@ function giftSegHTML(id, on) {
  * is retired with the fork. The wrapper starts hidden and is only
  * revealed once giftSupported() confirms the server supports gifts
  * (fail closed: pre-migration it never appears anywhere). */
-function giftClusterHTML(p, giftClaimsOn) {
+export function giftClusterHTML(p, giftClaimsOn) {
   return '<div id="' + p + '-giftwrap" hidden>' +
     '<div class="field"><label>See claims on my wishlist</label>' + giftSegHTML(p + '-giftclaims', giftClaimsOn === true) +
     '<p class="note">When on, you can see which of your wishlist books friends have claimed — and who claimed them — right here. Off (the default) keeps gifts a complete surprise: you see nothing about claims, anywhere.</p></div>' +
     '<div id="' + p + '-gift-slot"></div></div>';
 }
-function giftWireSeg(root, id, initial, onChange) {
+export function giftWireSeg(root, id, initial, onChange) {
   let val = !!initial;
   root.querySelectorAll('#' + id + ' button').forEach(b => b.addEventListener('click', async () => {
     const v = b.dataset.v === '1';
@@ -556,7 +562,7 @@ function giftWireSeg(root, id, initial, onChange) {
   }));
 }
 
-async function fillGiftSettings(slot) {
+export async function fillGiftSettings(slot) {
   if (!slot || typeof cloudUser === 'undefined' || !cloudUser) return;
   if (!(await giftSupported())) return;
   if (!document.body.contains(slot)) return;
@@ -690,7 +696,7 @@ async function fillGiftSettings(slot) {
  * on-device before save: malformed blocks, doubtful warns with an
  * explicit Save anyway, and only the normalized postal value rides
  * the payload — the verdict itself is never stored or sent. */
-async function fillGiftAddress(slot) {
+export async function fillGiftAddress(slot) {
   if (!slot || typeof cloudUser === 'undefined' || !cloudUser) return;
   if (giftTeenBand()) return; // the form is never offered to teen-band accounts
   if (!(await giftSupported())) return;
@@ -814,3 +820,59 @@ async function fillGiftAddress(slot) {
     return false;
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/105-account.js, js/150-modal-discovery.js, js/190-wishlist.js and js/195-coven.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.giftTableMissing = giftTableMissing;
+window.giftSupportKnown = giftSupportKnown;
+window.GIFT_RETAILERS_KEY = GIFT_RETAILERS_KEY;
+window.GIFT_CLAIMS_LOCAL_KEY = GIFT_CLAIMS_LOCAL_KEY;
+window.GIFT_NO_DETAILS_LINE = GIFT_NO_DETAILS_LINE;
+window.giftLog = giftLog;
+window.giftMissingErr = giftMissingErr;
+window.giftLatchIfMissing = giftLatchIfMissing;
+window.giftSupported = giftSupported;
+window.giftRpc = giftRpc;
+window.giftIsbn13 = giftIsbn13;
+window.giftBookKey = giftBookKey;
+window.giftKeyLabel = giftKeyLabel;
+window.giftFormatKind = giftFormatKind;
+window.GIFT_RETAILERS = GIFT_RETAILERS;
+window.GIFT_RETAILER_SETS = GIFT_RETAILER_SETS;
+window.GIFT_RETAILER_DEFAULTS = GIFT_RETAILER_DEFAULTS;
+window.giftRetailerPrefs = giftRetailerPrefs;
+window.giftRetailerPref = giftRetailerPref;
+window.giftSetRetailerPref = giftSetRetailerPref;
+window.giftSearchQuery = giftSearchQuery;
+window.giftRetailerLink = giftRetailerLink;
+window.giftClaimsLocal = giftClaimsLocal;
+window.giftCacheClaim = giftCacheClaim;
+window.giftClaimTitle = giftClaimTitle;
+window.giftClaimRecipientName = giftClaimRecipientName;
+window.giftCopyText = giftCopyText;
+window.giftRetailerBlockHTML = giftRetailerBlockHTML;
+window.giftWireRetailerBlock = giftWireRetailerBlock;
+window.giftDetailsHTML = giftDetailsHTML;
+window.giftWireDetails = giftWireDetails;
+window.openGiftSendSheet = openGiftSendSheet;
+window.openGiftBuySheet = openGiftBuySheet;
+window.fillGiftShelfActions = fillGiftShelfActions;
+window.giftClaimTap = giftClaimTap;
+window.fillOwnGiftBuys = fillOwnGiftBuys;
+window.giftModalBuySlot = giftModalBuySlot;
+window.fillGiftGivingEntry = fillGiftGivingEntry;
+window.openGiftGivingSheet = openGiftGivingSheet;
+window.giftTeenBand = giftTeenBand;
+window.giftSegHTML = giftSegHTML;
+window.giftClusterHTML = giftClusterHTML;
+window.giftWireSeg = giftWireSeg;
+window.fillGiftSettings = fillGiftSettings;
+window.fillGiftAddress = fillGiftAddress;
