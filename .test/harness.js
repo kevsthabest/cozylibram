@@ -21,12 +21,41 @@ function loadApp(window) {
   }
   for (const file of jsFiles()) {
     const el = window.document.createElement('script');
-    el.textContent = fs.readFileSync(file, 'utf8');
+    el.textContent = classicize(fs.readFileSync(file, 'utf8'), path.basename(file));
     window.document.body.appendChild(el);
   }
 }
 
-module.exports = { loadApp, jsFiles, APP_DIR, chainableSelect };
+// --- ES-module bridge-pass support (migration plan §9.2) ------------------
+// jsdom cannot execute module scripts, so a converted file (a real ES
+// module: named exports only, no first-party static imports) is loaded by
+// stripping its module markers and injecting the identical body as a
+// classic script; the file's own bridge block then publishes its surface
+// on the window exactly as in production. The transform is faithful ONLY
+// because bridge-everything modules carry no static imports, so meeting
+// one here is a loud failure naming the file — never a silent strip. That
+// tripwire is what forces the real module loader (plan §9.4) to exist
+// before any import wiring begins. Classic files pass through untouched.
+const RE_STATIC_IMPORT = /^[ \t]*import[ \t]+(?:\{|\*|[A-Za-z_$'"])/m;
+const RE_REEXPORT = /^[ \t]*export[ \t]*(?:\{[^}]*\}|\*)[ \t]*from[ \t]*['"]/m;
+const RE_EXPORT_DEFAULT = /^[ \t]*export[ \t]+default\b/m;
+const RE_EXPORT_LIST = /^[ \t]*export[ \t]*\{[^}]*\}[ \t]*;?[ \t]*$/gm;
+const RE_EXPORT_DECL = /^([ \t]*)export[ \t]+(?=(?:async[ \t]+)?function\b|class\b|const\b|let\b|var\b)/gm;
+
+function classicize(src, filename) {
+  const name = filename || '(unknown file)';
+  if (RE_STATIC_IMPORT.test(src) || RE_REEXPORT.test(src)) {
+    throw new Error('classicize: ' + name + ' carries a static import/re-export — ' +
+      'the bridge-everything harness cannot load it; the plan §9.4 module loader must exist first');
+  }
+  if (RE_EXPORT_DEFAULT.test(src)) {
+    throw new Error('classicize: ' + name + ' uses export default — the migration recipe is named exports only');
+  }
+  if (!/^[ \t]*export[ \t]/m.test(src)) return src; // classic file: identity
+  return src.replace(RE_EXPORT_LIST, '').replace(RE_EXPORT_DECL, '$1');
+}
+
+module.exports = { loadApp, jsFiles, APP_DIR, chainableSelect, classicize };
 
 // Minimal PostgREST-style select builder for Supabase fakes: chainable
 // .eq() filters, thenable so a bare `await select()` also resolves.

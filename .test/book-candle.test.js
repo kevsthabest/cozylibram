@@ -16,10 +16,11 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { classicize } = require('./harness');
 const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 
 function loadJS(rel, extra) {
-  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const src = classicize(fs.readFileSync(path.join(ROOT, rel), 'utf8'), rel);
   const sandbox = {
     console: console,
     document: undefined,
