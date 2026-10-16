@@ -1126,3 +1126,44 @@ baseline); 50 of 104 files converted.
   bump" sentence** predating the release step. Corrected
   post-merge by the program manager and verified by
   read-back.
+
+## Gate notes — PR #277 (v601)
+
+Recorded from the Security Advisor's gate on the phase-2
+census batch 4 PR, at the program manager's direction.
+The gate closed PASS_WITH_RISK; merged as ff15013. Live at
+v601 with 57 module tags. Line tally at v601: 54,663 js
+lines (+188 this PR, +1,774 cumulative against the 52,889
+baseline); 57 of 104 files converted.
+
+- **The gate's census was fully independent.** The Advisor
+  wrote its own census and reproduced the Builder's with
+  zero per-file diffs across all 104 files — the third
+  consecutive PR with a zero-diff independent census.
+- **All four repoints ruled SOUND and mutation-tested.**
+  R1 ×3: the social-buddy-reads suite's js/233 tag pin; the
+  social-remediation-a suite's js/233 position pin via
+  `Math.max` of both tag forms, extending PR #273's js/234
+  shape symmetrically — its theoretical both-tags-present
+  widening is excluded by set equality; and the marginalia
+  suite's js/242 tag pin. R3 ×1: book-portrait's vm loader
+  classicizes js/225, its identity proven on classic loads.
+- **Low, standing pattern — six value-bridged in-module
+  reassigned bindings** (js/233's `buddyTableMissing`,
+  `buddySupportKnown`, and `buddyRowsCache`; js/242's
+  `margTableMissing`, `margSupportKnown`, and
+  `margReconciled`). The value-bridge audit proved zero
+  cross-file readers three ways — census inversion,
+  after-census, and word-boundary grep — so nothing
+  observable diverges. The caution is unchanged.
+- **The disclosed converter trailing-newline incident on
+  js/030/060/080 is confirmed ABSENT from the final tree.**
+- **Two suites that flaked once in an ad-hoc loop were
+  adjudicated transient** — community-curation-flow and
+  icon-sweep each passed standalone (64/64 and 373/373).
+- **js/225's `findBook` AST body is byte-identical across
+  js/225, js/238, and js/241**, so the classicize pool claim
+  holds.
+- **Nit — the PR body mis-stated js/225's consumers**
+  (js/150, js/160, and js/180, for the real js/150, js/226,
+  and js/227). Patched post-merge.
