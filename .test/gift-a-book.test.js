@@ -40,7 +40,7 @@ const mig583Path = path.join(APP_DIR, 'supabase/migrations/v583_gift_crypto_swap
 const mig583 = fs.existsSync(mig583Path) ? fs.readFileSync(mig583Path, 'utf8') : '';
 const schema = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
 const fnBody = (sql, name) => (sql.split('function public.' + name + '(')[1] || '').split('$$;')[0];
-const lastFnBody = (sql, name) => { const p = sql.split('function public.' + name + '('); return (p[p.length - 1] || '').split('$$;')[0]; };
+const lastFnBody = (sql, name) => { const p = sql.split('create or replace function public.' + name + '('); return (p[p.length - 1] || '').split('$$;')[0]; };
 
 for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
   if (label === 'migration') {
