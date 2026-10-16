@@ -18,7 +18,7 @@
    scripts keep resolving the same globals. See
    docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-export const APP_VERSION = 'v600';
+export const APP_VERSION = 'v601';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */

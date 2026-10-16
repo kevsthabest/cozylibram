@@ -12,7 +12,14 @@
    Characters + community data fill in async via portraitEnhance(); the
    card renders synchronously so the modal never waits on the network.
 */
-(function () {
+
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and the window block at the bottom (unchanged from
+   the classic file) is the compatibility bridge, so classic scripts
+   keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 var charCache = {}; // workId -> {count, top:[{name, role}]} (memory only)
@@ -48,6 +55,8 @@ function localTropes(b) {
   });
   return out;
 }
+export { localTropes as portraitLocalTropes };
+
 /* v547: the decided merge (User's call, 2026-10-14). Community-accepted
    first, then pipeline, then the user's own — across the whole merged
    list. Provenance follows precedence: the first source to claim a
@@ -84,7 +93,7 @@ function flavorLine(b) {
 }
 
 /* ---------- completeness (0-100) ---------- */
-function portraitScore(b, charCount) {
+export function portraitScore(b, charCount) {
   var s = 0;
   if (localTropes(b).length) s += 30;
   if (localWarnings(b).length || b.warningsReviewed) s += 25;
@@ -101,7 +110,7 @@ function portraitScore(b, charCount) {
    line can't drift from the breakdown behind it. The character count
    is async (portraitCharData); until it lands the line omits it, and
    portraitEnhance re-paints the line when the cast arrives. */
-function portraitSlimLine(b, charCount) {
+export function portraitSlimLine(b, charCount) {
   if (!b) return '';
   var parts = [portraitScore(b, charCount || 0) + '% mapped',
     localTropes(b).length + ' tropes',
@@ -138,7 +147,7 @@ async function portraitCharData(b) {
 /* Sync-safe character count for guards (nudge signals). Returns null when
    the cloud can't be reached — callers must treat null as "unknown",
    never as zero. */
-async function portraitCharCount(b) {
+export async function portraitCharCount(b) {
   try {
     if (typeof cloudClient !== 'function') return null;
     var sb = await cloudClient().catch(function () { return null; });
@@ -235,7 +244,7 @@ function warnChipsHTML(warns, b, bookId) {
   }).join(' ') + (ordered.length > limit ? ' <span class="note">+' + (ordered.length - limit) + '</span>' : '');
 }
 
-function portraitCardHTML(b) {
+export function portraitCardHTML(b) {
   if (!b) return '';
   var bookId = b.id || '';
   var tropes = localTropes(b);
@@ -261,7 +270,7 @@ function portraitCardHTML(b) {
 }
 
 /* ---------- async enhance ---------- */
-async function portraitEnhance(b) {
+export async function portraitEnhance(b) {
   if (!b) return;
   var card = document.getElementById('portraitCard');
   if (!card || card.dataset.book !== (b.id || '')) return;
@@ -448,4 +457,3 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined') {
   module.exports = { portraitScore: portraitScore, localTropes: localTropes, warningsState: warningsState, mergePortraitTropes: mergePortraitTropes };
 }
-})();

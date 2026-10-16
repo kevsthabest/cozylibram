@@ -10,7 +10,14 @@
    Wiring: MutationObserver injects affordances idempotently so the big
    modal render functions stay untouched.
 */
-(function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place (ccSetBook and ccSuggest, previously bare window
+   assignments, are named exports holding the identical values) and
+   republished on window by the compatibility bridge at the bottom of
+   this file, so classic scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 var CC = null; // window.CommunityCorpus, resolved lazily
@@ -24,7 +31,7 @@ function cc() {
 // overlayClosed so programmatic closes (scrim tap, successful send,
 // step-1→step-2 handoffs) don't leak phantom history entries.
 var ccSheetToken = null;
-function ccSheet(title, bodyHTML, onMount) {
+export function ccSheet(title, bodyHTML, onMount) {
   closeCcSheet();
   var scrim = document.createElement('div');
   scrim.className = 'sv-scrim'; scrim.id = 'ccScrim';
@@ -43,7 +50,7 @@ function ccSheet(title, bodyHTML, onMount) {
   if (typeof onMount === 'function') onMount(sheet, closeCcSheet);
   return closeCcSheet;
 }
-function closeCcSheet() {
+export function closeCcSheet() {
   ['ccScrim', 'ccSheet'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -260,7 +267,7 @@ function openTriggerPicker(book) {
 
 /* ---------- flywheel: merge accepted community warnings into the
    Start Reading trigger-check data source (PR #87) ---------- */
-async function ccEnrichWarnings(b) {
+export async function ccEnrichWarnings(b) {
   if (!b) return b;
   // v496 (#135): no _ccWarnEnriched flag on the book. The flag used to be
   // stamped on the live object, shipped cross-device inside bookToRow's data
@@ -299,10 +306,6 @@ async function ccEnrichWarnings(b) {
   } catch (e) {}
   return b;
 }
-
-/* Expose enrichment for the patched call sites (see edits in
-   150-modal-discovery.js and 160-roulette.js). */
-window.ccEnrichWarnings = ccEnrichWarnings;
 
 /* ---------- injection via MutationObserver ---------- */
 function injectTropeSuggest(box) {
@@ -380,9 +383,9 @@ function ccWatch() {
   ccObserver.observe(document.body, { childList: true, subtree: true });
 }
 /* Called by the modal render (patched into 150-modal-discovery.js). */
-window.ccSetBook = function (b) { ccBook = b || null; };
+export const ccSetBook = function (b) { ccBook = b || null; };
 /* v468: Book Portrait card contribution invites reuse these flows. */
-window.ccSuggest = {
+export const ccSuggest = {
   trope: function (b) { openTropePicker(b || ccBook); },
   character: function (b) { openCharacterSuggest(b || ccBook); },
   warning: function (b) { openTriggerPicker(b || ccBook); }
@@ -399,7 +402,21 @@ try {
   setTimeout(function () { if (cc() && cc().flushOutbox) cc().flushOutbox(); }, 8000);
 } catch (e) {}
 
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/150-modal-discovery.js, js/160-roulette.js and js/225-book-portrait.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
 // v496 (#136): exposed for tests — overlay token round-trip.
-if (typeof window !== 'undefined') { window.ccSheet = ccSheet; window.closeCcSheet = closeCcSheet; }
-
-})();
+window.ccSheet = ccSheet;
+window.closeCcSheet = closeCcSheet;
+/* Expose enrichment for the patched call sites (see edits in
+   150-modal-discovery.js and 160-roulette.js). */
+window.ccEnrichWarnings = ccEnrichWarnings;
+window.ccSetBook = ccSetBook;
+window.ccSuggest = ccSuggest;

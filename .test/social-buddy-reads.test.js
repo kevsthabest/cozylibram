@@ -112,7 +112,12 @@ for (const [label, sql] of [['v531 migration', mig531], ['schema.sql', schema]])
 /* ---------- registration ---------- */
 const indexHtml = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 const swText = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8');
-ok('index.html registers js/233-buddy-reads.js after js/232', indexHtml.includes('<script src="js/233-buddy-reads.js"></script>'));
+// R1 repoint (migration plan §9.3): js/233's tag is a module tag since
+// its ESM conversion; the registration assertion accepts either exact
+// tag form — the same assertion, coverage unchanged.
+ok('index.html registers js/233-buddy-reads.js after js/232',
+  indexHtml.includes('<script src="js/233-buddy-reads.js"></script>') ||
+  indexHtml.includes('<script type="module" src="js/233-buddy-reads.js"></script>'));
 ok('sw.js precaches 233-buddy-reads.js', swText.includes("'233-buddy-reads.js'"));
 
 /* ================= stub (v522–v528 semantics) ================= */
