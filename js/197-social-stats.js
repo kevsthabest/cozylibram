@@ -11,21 +11,28 @@
  */
 
 // --- per-person aggregates -----------------------------------------------
-function statDayKey(d) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export function statDayKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-function statMonthKey(d) {
+export function statMonthKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 // v454: normalise genre names — lowercase, trimmed, so "Dark Romance",
 // "dark romance " and "DARK ROMANCE" count as one.
-function normGenre(g) {
+export function normGenre(g) {
   return String(g || '').trim().toLowerCase();
 }
 // v454: shared log-based page sum. Sums (to - from) from reading logs within
 // [start, end] (YYYY-MM-DD). Returns { pages, estimated } — estimated is true
 // when falling back to finished books' pageCounts (no logs).
-function pagesInRangeFor(books, start, end) {
+export function pagesInRangeFor(books, start, end) {
   let pages = 0, hasLogs = false;
   (books || []).forEach(b => {
     (b.log || []).forEach(e => {
@@ -50,7 +57,7 @@ function pagesInRangeFor(books, start, end) {
 }
 // Same reading-day logic as readingStreak(), but over any book list so it
 // works for friends too (their logs ride along inside shared book data).
-function statStreak(books) {
+export function statStreak(books) {
   const days = new Set();
   (books || []).forEach(b => {
     (b.log || []).forEach(e => { if (e && e.to > e.from && e.d) days.add(e.d); });
@@ -62,17 +69,17 @@ function statStreak(books) {
   while (days.has(statDayKey(d))) { s++; d.setDate(d.getDate() - 1); }
   return s;
 }
-function topKeys(counts, n) {
+export function topKeys(counts, n) {
   return Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, n || 8);
 }
-function jaccard(a, b) {
+export function jaccard(a, b) {
   if (!a.length && !b.length) return 0;
   const bs = new Set(b);
   const inter = a.filter(x => bs.has(x)).length;
   return inter / (a.length + b.length - inter || 1);
 }
 // One aggregate per person: you, or one friend's visible books.
-function statPersonBooks(books) {
+export function statPersonBooks(books) {
   const s = {
     books: books || [], finished: 0, finishedDates: [], monthBooks: 0, monthPages: 0,
     streak: 0, avgDays: null, genreCounts: {}, authorCounts: {}, rated: new Map(),
@@ -128,7 +135,7 @@ function statPersonBooks(books) {
 // --- soulmate score --------------------------------------------------------
 // 0–100 from books you both rated: rating agreement (50%), shared genres
 // (25%), shared authors (25%). Needs 3+ books rated by both to say anything.
-function soulmateScore(myS, frS) {
+export function soulmateScore(myS, frS) {
   let shared = 0, diffSum = 0;
   myS.rated.forEach((r, k) => {
     const r2 = frS.rated.get(k);
@@ -148,7 +155,7 @@ function soulmateScore(myS, frS) {
 }
 
 // --- buddy reads: TBR books you both want ----------------------------------
-function buddyReads(myS, frS) {
+export function buddyReads(myS, frS) {
   const out = [];
   (frS.tbrBooks || []).forEach(b => {
     const k = (typeof recoKey === 'function') ? recoKey(b) : '';
@@ -166,7 +173,7 @@ function buddyReads(myS, frS) {
 // never pace comparisons: Deep Diver (longest book braved), Author Devotee
 // (loyalty to one author). Fearless Quitter is the model — playful, not
 // pressuring — and stays, with Genre Explorer and Spiciest Shelf.
-function longestFinishedBook(stats) {
+export function longestFinishedBook(stats) {
   let best = null;
   (stats.books || []).forEach(b => {
     if (b.status === 'read' || b.dateFinished) {
@@ -176,7 +183,7 @@ function longestFinishedBook(stats) {
   });
   return best;
 }
-function mostReadAuthor(stats) {
+export function mostReadAuthor(stats) {
   let top = null;
   Object.keys(stats.authorCounts || {}).forEach(k => {
     const n = stats.authorCounts[k];
@@ -184,7 +191,7 @@ function mostReadAuthor(stats) {
   });
   return top;
 }
-function covenAwards(people) {
+export function covenAwards(people) {
   const awards = [];
   const push = (p, label, detailFn) => { if (p) awards.push({ label: label, person: p, detail: detailFn(p) }); };
   push(people.slice().sort((a, b) => Object.keys(b.stats.genreCounts).length - Object.keys(a.stats.genreCounts).length)
@@ -210,7 +217,7 @@ function covenAwards(people) {
 }
 
 // --- load + shape everything for the UI ------------------------------------
-async function loadCovenStats() {
+export async function loadCovenStats() {
   const friends = ((await circleLists()).friends) || [];
   const people = [{ id: 'me', name: 'You', profile: null, stats: statPersonBooks(typeof library !== 'undefined' ? library : []) }];
   for (const f of friends) {
@@ -352,13 +359,13 @@ async function loadCovenStats() {
 }
 
 // --- UI --------------------------------------------------------------------
-function statAvatar(p) {
+export function statAvatar(p) {
   if (p.profile) return circAvatarHTML(p.profile, 'c-avatar');
   // v454: letter circle with the person's initial — never the dragon default
   const initial = esc(String(p.name || '?').trim().charAt(0).toUpperCase() || '?');
   return '<span class="c-avatar letter" aria-hidden="true">' + initial + '</span>';
 }
-function covenStatsHTML(d) {
+export function covenStatsHTML(d) {
   if (!d || !d.people || d.people.length < 2) return '';
   // v454: tabbed layout — Activity | Buddy reads | Discover
   let activityHTML = '', buddyHTML = '', discoverHTML = '';
@@ -493,7 +500,7 @@ function covenStatsHTML(d) {
 }
 
 // Fill the #stats-slot left by renderCovenMain; safe to call repeatedly.
-function refreshCovenStats() {
+export function refreshCovenStats() {
   const slot = document.getElementById('stats-slot');
   if (!slot || typeof circleLists !== 'function') return;
   slot.innerHTML = '<p class="note" style="text-align:center">Crunching ' + esc(covenName().toLowerCase()) + ' stats…</p>';
@@ -528,3 +535,31 @@ function refreshCovenStats() {
       if (el) el.innerHTML = '<p class="note" style="text-align:center">Couldn\u2019t load your circle stats just now \u2014 reopen this tab to try again.</p>';
     });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/195-coven.js, js/231-reactions.js and js/233-buddy-reads.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.statDayKey = statDayKey;
+window.statMonthKey = statMonthKey;
+window.normGenre = normGenre;
+window.pagesInRangeFor = pagesInRangeFor;
+window.statStreak = statStreak;
+window.topKeys = topKeys;
+window.jaccard = jaccard;
+window.statPersonBooks = statPersonBooks;
+window.soulmateScore = soulmateScore;
+window.buddyReads = buddyReads;
+window.longestFinishedBook = longestFinishedBook;
+window.mostReadAuthor = mostReadAuthor;
+window.covenAwards = covenAwards;
+window.loadCovenStats = loadCovenStats;
+window.statAvatar = statAvatar;
+window.covenStatsHTML = covenStatsHTML;
+window.refreshCovenStats = refreshCovenStats;
