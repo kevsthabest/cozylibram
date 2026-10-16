@@ -10,14 +10,20 @@
    - localStorage cozylibram.dnaSurveyOff === '1' → global off
    - re-read (readCount > 1) with a prior survey → only if DNA < 50%
 */
-(function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and the window block at the bottom (unchanged from
+   the classic file) is the compatibility bridge, so classic scripts
+   keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
-function dnaSurveyOff() {
+export function dnaSurveyOff() {
   try { return localStorage.getItem('cozylibram.dnaSurveyOff') === '1'; } catch (e) { return false; }
 }
 
-function dnaSurveyEligible(b) {
+export function dnaSurveyEligible(b) {
   if (!b || b.status !== 'read') return false;
   if (dnaSurveyOff()) return false;
   if (b.dnaSurveySeen || b.dnaSurveyNever) return false;
@@ -29,7 +35,7 @@ function dnaSurveyEligible(b) {
   return true;
 }
 
-function maybeShowDnaSurvey(b) {
+export function maybeShowDnaSurvey(b) {
   try {
     if (!dnaSurveyEligible(b)) return;
     // mark seen up-front so a second completion event can't double-fire
@@ -72,7 +78,7 @@ function chipRow(items, group, labelKey) {
   }).join('') + '</div>';
 }
 
-function openDnaSurvey(b) {
+export function openDnaSurvey(b) {
   if (document.getElementById('dnaSurveySheet')) return;
   surveySel = { tropes: {}, warns: {} };
   var pct = 0;
@@ -217,7 +223,7 @@ function openDnaSurvey(b) {
    prominently, and how much detail to show. Stored locally and, since
    v520, synced to the reader's own account via the warning_prefs
    user_state section — private to the account, never shared. */
-function getWarningPrefs() {
+export function getWarningPrefs() {
   var d = { excluded: [], prominent: [], detail: 'gentle' };
   try {
     var raw = localStorage.getItem('cozylibram.warningPrefs.v1');
@@ -256,7 +262,7 @@ function warnTaxonomyRows() {
   } catch (e) {}
   return warnTaxonomyMem || [];
 }
-function cacheWarnTaxonomy(rows) {
+export function cacheWarnTaxonomy(rows) {
   if (!Array.isArray(rows) || !rows.length) return;
   var byId = {};
   warnTaxonomyRows().forEach(function (r) { if (r && r.id) byId[r.id] = r; });
@@ -272,7 +278,7 @@ function cacheWarnTaxonomy(rows) {
   warnTaxonomyMem = Object.keys(byId).map(function (k) { return byId[k]; });
   try { localStorage.setItem(WARN_TAXONOMY_KEY, JSON.stringify(warnTaxonomyMem)); } catch (e) {}
 }
-async function primeWarningTaxonomy() {
+export async function primeWarningTaxonomy() {
   try {
     if (typeof window !== 'undefined' && window.CommunityCorpus && window.CommunityCorpus.taxonomy) {
       var rows = await window.CommunityCorpus.taxonomy();
@@ -298,31 +304,31 @@ function warnStringHitsId(w, id) {
   return false;
 }
 /* Subset of `ids` that at least one of the book's warnings hits. */
-function warnHitIds(warnings, ids) {
+export function warnHitIds(warnings, ids) {
   if (!Array.isArray(warnings) || !Array.isArray(ids) || !ids.length) return [];
   return ids.filter(function (id) {
     return warnings.some(function (w) { return warnStringHitsId(w, id); });
   });
 }
-function warnBookExcluded(b, prefs) {
+export function warnBookExcluded(b, prefs) {
   if (!b || !prefs || !prefs.excluded || !prefs.excluded.length) return false;
   return warnHitIds(b.contentWarnings, prefs.excluded).length > 0;
 }
-function warnIsProminent(w, prefs) {
+export function warnIsProminent(w, prefs) {
   if (!prefs || !prefs.prominent || !prefs.prominent.length) return false;
   return prefs.prominent.some(function (id) { return warnStringHitsId(w, id); });
 }
 /* Stable partition: prominent warnings first, original order kept
    inside each group (the sheet promises "always shown prominently" —
    first and emphasised, never re-sorted beyond that). */
-function warnOrderProminent(warnings, prefs) {
+export function warnOrderProminent(warnings, prefs) {
   var list = (warnings || []).slice();
   if (!prefs || !prefs.prominent || !prefs.prominent.length) return list;
   var first = [], rest = [];
   list.forEach(function (w) { (warnIsProminent(w, prefs) ? first : rest).push(w); });
   return first.concat(rest);
 }
-function warnDescFor(w) {
+export function warnDescFor(w) {
   var s = String(w || '').replace(/\s*\(community\)\s*$/i, '').trim();
   if (!s) return '';
   var low = s.toLowerCase(), slug = warnSlug(s);
@@ -340,19 +346,19 @@ function warnDescFor(w) {
    nothing is persisted (the pref itself is the persistent choice). */
 var warnRevealedKeys = {};
 var warnRevealBooks = {};
-function warnRevealKey(b) {
+export function warnRevealKey(b) {
   if (!b) return '';
   return String(b.id || b.isbn || b.title || '');
 }
-function warnIsRevealed(b) { return !!warnRevealedKeys[warnRevealKey(b)]; }
-function warnReveal(b) { var k = warnRevealKey(b); if (k) warnRevealedKeys[k] = 1; }
+export function warnIsRevealed(b) { return !!warnRevealedKeys[warnRevealKey(b)]; }
+export function warnReveal(b) { var k = warnRevealKey(b); if (k) warnRevealedKeys[k] = 1; }
 /* Book refs behind on-request reveal buttons (js/070's hcDetailHTML
    renders the button; its delegated click handler needs the book to
    repaint the section — preview transients aren't in the library). */
-function warnRegisterRevealBook(b) { var k = warnRevealKey(b); if (k) warnRevealBooks[k] = b; }
-function warnBookForReveal(key) { return warnRevealBooks[String(key || '')] || null; }
+export function warnRegisterRevealBook(b) { var k = warnRevealKey(b); if (k) warnRevealBooks[k] = b; }
+export function warnBookForReveal(key) { return warnRevealBooks[String(key || '')] || null; }
 
-function openWarningPrefs() {
+export function openWarningPrefs() {
   if (document.getElementById('warnPrefSheet')) return;
   var prefs = getWarningPrefs();
   var sel = { excluded: {}, prominent: {} };
@@ -484,4 +490,3 @@ if (typeof window !== 'undefined') {
   window.cacheWarnTaxonomy = cacheWarnTaxonomy;
 }
 if (typeof module !== 'undefined') module.exports = { dnaSurveyEligible: dnaSurveyEligible };
-})();
