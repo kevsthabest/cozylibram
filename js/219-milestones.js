@@ -25,7 +25,14 @@
 */
 
 /* Catalog: id, category, title, copy (warm, playful-never-mocking), hint for locked */
-const MILESTONE_CATALOG = [
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const MILESTONE_CATALOG = [
   // ---- Journey: cumulative counts ----
   { id: 'books-finished-1', cat: 'journey', icon: 'sprout',
     title: 'First finished book',
@@ -226,7 +233,7 @@ const MILESTONE_CATALOG = [
 /* v492: genre source for milestone detectors. `categories` (via bookGenres())
    is the live field; `genres` is kept for legacy book objects that predate it
    and for the existing detector tests, which build books with `genres`. */
-function detectorGenres(b) {
+export function detectorGenres(b) {
   const out = bookGenres(b).slice();
   (b.genres || []).forEach(g => { if (!out.includes(g)) out.push(g); });
   return out;
@@ -235,14 +242,14 @@ function detectorGenres(b) {
 /* Simple string hash for collision-safe IDs (djb2). Renamed from hashStr:
    classic scripts share one global namespace and 120-favorites.js already
    owns that name with a different return type. */
-function milestoneIdHash(s) {
+export function milestoneIdHash(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
 }
 
 /* Safe date parsing: returns a valid Date or null. Never throws. */
-function safeDate(v) {
+export function safeDate(v) {
   if (!v) return null;
   try {
     const d = new Date(v);
@@ -252,7 +259,7 @@ function safeDate(v) {
 
 /* Pure streak calculator: takes a library, returns longest consecutive-day run.
    Mirrors longestStreak() in 040-storage.js but without the global dependency. */
-function longestStreakFor(lib) {
+export function longestStreakFor(lib) {
   const days = new Set();
   const dk = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
     '-' + String(d.getDate()).padStart(2, '0');
@@ -278,7 +285,7 @@ function longestStreakFor(lib) {
 /* ---- Pure detectors: library -> [{ id, achievedAt }] ----
    achievedAt is an ISO date string when determinable, null when the
    milestone is earned but the date can't be established. Never invent. */
-function detectMilestones(lib) {
+export function detectMilestones(lib) {
   const found = [];
   const read = lib.filter(b => b.status === 'read');
   const byFinish = read
@@ -732,27 +739,27 @@ function detectMilestones(lib) {
    rows on sign-in and on first sync load (fire-and-forget — the sync path
    never blocks on network). Milestones are never un-earned, so the sync is
    upsert-only. */
-const MILESTONE_KEY = 'cozylibram.milestones';
-const MILESTONE_OWNER_KEY = 'cozylibram.milestones.owner';
-var __msMergedUid = null;    // uid we last merged remote milestones for
-var __msMergeRetryAt = 0;    // backoff: don't hammer a failing pull
-var __msPushTimer = null;
+export const MILESTONE_KEY = 'cozylibram.milestones';
+export const MILESTONE_OWNER_KEY = 'cozylibram.milestones.owner';
+export var __msMergedUid = null;    // uid we last merged remote milestones for
+export var __msMergeRetryAt = 0;    // backoff: don't hammer a failing pull
+export var __msPushTimer = null;
 
-function msLocalLoad() {
+export function msLocalLoad() {
   try { return JSON.parse(localStorage.getItem(MILESTONE_KEY) || '{}'); }
   catch (e) { return {}; }
 }
-function msLocalSave(store) {
+export function msLocalSave(store) {
   try { localStorage.setItem(MILESTONE_KEY, JSON.stringify(store)); } catch (e) {}
 }
-function msOwner() {
+export function msOwner() {
   try { return localStorage.getItem(MILESTONE_OWNER_KEY); } catch (e) { return null; }
 }
-function msSignedUid() {
+export function msSignedUid() {
   try { return (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) || null; }
   catch (e) { return null; }
 }
-function loadMilestones() {
+export function loadMilestones() {
   var store = msLocalLoad();
   // Lazy first-merge: once per signed-in user, pull remote milestones and
   // union them in. Fire-and-forget; a failed pull backs off for 60s.
@@ -763,7 +770,7 @@ function loadMilestones() {
   }
   return store;
 }
-function saveMilestones(store) {
+export function saveMilestones(store) {
   msLocalSave(store);
   scheduleMilestonePush();
 }
@@ -772,7 +779,7 @@ function saveMilestones(store) {
    would drop achievements earned <2.5s before sign-out, and the next sign-in
    would overwrite localStorage before they ever reached the cloud. At this
    point in leaveApp the auth session is still valid, so the push lands. */
-function resetMilestoneSync() {
+export function resetMilestoneSync() {
   __msMergedUid = null;
   __msMergeRetryAt = 0;
   if (__msPushTimer) {
@@ -784,7 +791,7 @@ function resetMilestoneSync() {
 /* Pure merge for milestone stores. Union of achieved milestones:
    earliest achievedAt wins, seen is OR, detail prefers the richer copy,
    value (personal-best style) takes the max. No side effects. */
-function mergeMilestoneStores(local, remote) {
+export function mergeMilestoneStores(local, remote) {
   var out = {};
   var ids = {};
   Object.keys(local || {}).forEach(function (id) { ids[id] = 1; });
@@ -810,7 +817,7 @@ function mergeMilestoneStores(local, remote) {
    writes .000Z, and string comparison would be wrong if formats ever mixed
    (e.g. a local date-only string). Null means "earned before we could date
    it" and loses to any real date. */
-function earliestAchievedAt(a, b) {
+export function earliestAchievedAt(a, b) {
   if (a && b) {
     var ta = new Date(a).getTime(), tb = new Date(b).getTime();
     if (!isNaN(ta) && !isNaN(tb)) return ta <= tb ? a : b;
@@ -822,7 +829,7 @@ function earliestAchievedAt(a, b) {
    Local-only achievements (earned offline, or pre-sync legacy data) are
    pushed up afterwards — nothing is ever lost in the merge. Silent: the
    merge never triggers celebrations for milestones earned on another device. */
-async function syncMilestonesFromCloud() {
+export async function syncMilestonesFromCloud() {
   try {
     if (typeof cloudClient !== 'function') return;
     var sb = await cloudClient().catch(function () { return null; });
@@ -852,14 +859,14 @@ async function syncMilestonesFromCloud() {
 /* Debounced upsert of the whole store. Signed-in only; offline or signed-out
    is a silent no-op (localStorage already has the data). The next save
    re-schedules, so nothing is lost. */
-function scheduleMilestonePush() {
+export function scheduleMilestonePush() {
   if (__msPushTimer) clearTimeout(__msPushTimer);
   __msPushTimer = setTimeout(function () {
     __msPushTimer = null;
     try { pushMilestonesToCloud().catch(function () {}); } catch (e) {}
   }, 2500);
 }
-async function pushMilestonesToCloud() {
+export async function pushMilestonesToCloud() {
   try {
     if (typeof cloudClient !== 'function') return;
     var sb = await cloudClient().catch(function () { return null; });
@@ -886,7 +893,7 @@ async function pushMilestonesToCloud() {
 }
 /* Check for new milestones. Idempotent: never recomputes achievedAt once set,
    EXCEPT for re-earnable series milestones (updates achievedAt when extended). */
-function checkMilestones() {
+export function checkMilestones() {
   if (typeof library === 'undefined' || !library) return [];
   const store = loadMilestones();
   const detected = detectMilestones(library);
@@ -931,7 +938,7 @@ function checkMilestones() {
   return fresh;
 }
 /* Backfill: same as check, but marks everything seen (no celebration flood). */
-function backfillMilestones() {
+export function backfillMilestones() {
   if (typeof library === 'undefined' || !library) return;
   const store = loadMilestones();
   // only backfill once — if the key exists at all, we've already done it
@@ -952,7 +959,7 @@ function backfillMilestones() {
    "Names in the Margins": characters tracked across 3+ distinct works.
    "Web of Fate": 10+ relationship entries with non-empty type+target
    (unverified/empty AI connections don't count). */
-async function checkSocialMilestones() {
+export async function checkSocialMilestones() {
   try {
     if (typeof CharacterWiki === 'undefined' || !CharacterWiki._sb) return;
     const sb = await CharacterWiki._sb();
@@ -1001,7 +1008,7 @@ async function checkSocialMilestones() {
    Lorekeeper milestones for ACCEPTED contributions only — never raw
    submissions. Credit uses the obscurity-weighted sum (cached by
    CommunityCorpus.acceptedCounts, refreshed here). Threshold 3. */
-async function checkCommunityMilestones() {
+export async function checkCommunityMilestones() {
   try {
     if (typeof CommunityCorpus === 'undefined' || !CommunityCorpus.acceptedCounts) return;
     var counts = await CommunityCorpus.acceptedCounts();
@@ -1031,7 +1038,7 @@ async function checkCommunityMilestones() {
     }
   } catch (e) { /* silent: best-effort */ }
 }
-function markMilestoneSeen(id) {
+export function markMilestoneSeen(id) {
   const store = loadMilestones();
   if (store[id]) { store[id].seen = true; saveMilestones(store); }
 }
@@ -1046,15 +1053,15 @@ function markMilestoneSeen(id) {
    Milestones surface in Chronicles (js/170). user_state is
    own-rows-only, so friends cannot read the pin — no friend-visible
    projection is built on it. */
-const MILESTONE_PIN_KEY = 'cozylibram.milestonePin.v1';
-function milestonePin() {
+export const MILESTONE_PIN_KEY = 'cozylibram.milestonePin.v1';
+export function milestonePin() {
   try {
     const id = localStorage.getItem(MILESTONE_PIN_KEY);
     if (!id) return null;
     return loadMilestones()[id] ? id : null; // unearned ids read as no pin
   } catch (e) { return null; }
 }
-function milestoneSetPin(id) {
+export function milestoneSetPin(id) {
   try {
     if (!id) {
       localStorage.removeItem(MILESTONE_PIN_KEY);
@@ -1068,7 +1075,7 @@ function milestoneSetPin(id) {
   return true;
 }
 /* Resolve a milestone ID to its definition, including dynamic series ones. */
-function milestoneDef(id, state) {
+export function milestoneDef(id, state) {
   const def = MILESTONE_CATALOG.find(m => m.id === id);
   if (def) {
     // Personal best: inject the record value into the copy
@@ -1119,7 +1126,7 @@ function milestoneDef(id, state) {
   }
   return null;
 }
-function newestUnseenMilestone() {
+export function newestUnseenMilestone() {
   const store = loadMilestones();
   const ids = Object.keys(store).filter(id => !store[id].seen);
   if (!ids.length) return null;
@@ -1135,3 +1142,47 @@ function newestUnseenMilestone() {
   const def = typeof milestoneDef === 'function' ? milestoneDef(id, store[id]) : MILESTONE_CATALOG.find(m => m.id === id);
   return def ? { def, state: store[id] } : null;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/090-sync.js, js/095-gate.js, js/170-stats.js and js/220-share-moments.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.MILESTONE_CATALOG = MILESTONE_CATALOG;
+window.detectorGenres = detectorGenres;
+window.milestoneIdHash = milestoneIdHash;
+window.safeDate = safeDate;
+window.longestStreakFor = longestStreakFor;
+window.detectMilestones = detectMilestones;
+window.MILESTONE_KEY = MILESTONE_KEY;
+window.MILESTONE_OWNER_KEY = MILESTONE_OWNER_KEY;
+window.__msMergedUid = __msMergedUid;
+window.__msMergeRetryAt = __msMergeRetryAt;
+window.__msPushTimer = __msPushTimer;
+window.msLocalLoad = msLocalLoad;
+window.msLocalSave = msLocalSave;
+window.msOwner = msOwner;
+window.msSignedUid = msSignedUid;
+window.loadMilestones = loadMilestones;
+window.saveMilestones = saveMilestones;
+window.resetMilestoneSync = resetMilestoneSync;
+window.mergeMilestoneStores = mergeMilestoneStores;
+window.earliestAchievedAt = earliestAchievedAt;
+window.syncMilestonesFromCloud = syncMilestonesFromCloud;
+window.scheduleMilestonePush = scheduleMilestonePush;
+window.pushMilestonesToCloud = pushMilestonesToCloud;
+window.checkMilestones = checkMilestones;
+window.backfillMilestones = backfillMilestones;
+window.checkSocialMilestones = checkSocialMilestones;
+window.checkCommunityMilestones = checkCommunityMilestones;
+window.markMilestoneSeen = markMilestoneSeen;
+window.MILESTONE_PIN_KEY = MILESTONE_PIN_KEY;
+window.milestonePin = milestonePin;
+window.milestoneSetPin = milestoneSetPin;
+window.milestoneDef = milestoneDef;
+window.newestUnseenMilestone = newestUnseenMilestone;
