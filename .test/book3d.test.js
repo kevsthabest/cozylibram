@@ -60,8 +60,12 @@ const merged = run(`JSON.stringify(b3dMergeFaces(
 }
 
 /* ---- 4. wiring ---- */
+// R1 repoint (migration plan §9.3): js/207's tag is a module tag since
+// its ESM conversion; the check accepts either tag form — the same
+// assertion ("index.html loads js/207-book3d.js"), coverage unchanged.
 ok('index.html loads js/207-book3d.js',
-  html.includes('<script src="js/207-book3d.js"></script>'));
+  html.includes('<script src="js/207-book3d.js"></script>') ||
+  html.includes('<script type="module" src="js/207-book3d.js"></script>'));
 ok('207 loads after 206 (scan flow)',
   html.indexOf('js/206-editioncapture.js') < html.indexOf('js/207-book3d.js'));
 const swText = fs.readFileSync(ROOT + '/sw.js', 'utf8');

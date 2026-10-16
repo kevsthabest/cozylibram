@@ -16,11 +16,22 @@
 
 'use strict';
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. window.THREE stays a lazy
+   window-slot publication inside b3dEnsureThree, exactly as before: it
+   is a shared cache slot co-published with js/215 (plan §2.1
+   mini-decision), not a binding this module owns at eval time, so
+   there is no THREE export. See docs/es-modules-migration-plan.md
+   (§3–§4) for the pattern. */
+
 // ---------- pure helpers (tested) ----------
 
 // Physical proportions from real scanned face sizes (both share the book's
 // height, so aspect ratios are enough). H is fixed at 2 units.
-function b3dDims(frontSize, spineSize, physical) {
+export function b3dDims(frontSize, spineSize, physical) {
   var H = 2, coverW = 1.3, thick = 0.26;
   if (frontSize && frontSize.h > 0) {
     var fa = frontSize.w / frontSize.h;
@@ -41,7 +52,7 @@ function b3dDims(frontSize, spineSize, physical) {
 }
 
 // Default appearance: jacket wins, then boards.
-function b3dPickAppearance(byAp) {
+export function b3dPickAppearance(byAp) {
   var has = function (ap) {
     return byAp && byAp[ap] && Object.keys(byAp[ap]).length > 0;
   };
@@ -52,7 +63,7 @@ function b3dPickAppearance(byAp) {
 
 // Merge face slots: local scan wins, then the shared pool (same
 // appearance, then the other one). Pure; pool rows are pre-shaped.
-function b3dMergeFaces(localAp, poolAp, poolOther) {
+export function b3dMergeFaces(localAp, poolAp, poolOther) {
   var out = {};
   ['front', 'back', 'spine', 'fore_edge'].forEach(function (f) {
     out[f] = (localAp && localAp[f]) ||
@@ -64,8 +75,8 @@ function b3dMergeFaces(localAp, poolAp, poolOther) {
 
 // ---------- three.js lazy load ----------
 
-var b3dThreePromise = null;
-function b3dEnsureThree() {
+export var b3dThreePromise = null;
+export function b3dEnsureThree() {
   if (typeof window !== 'undefined' && window.THREE) return Promise.resolve(window.THREE);
   if (b3dThreePromise) return b3dThreePromise;
   // Three.js r150+ deprecates the UMD build; r160 removes it. Load the
@@ -84,7 +95,7 @@ function b3dEnsureThree() {
 
 // ---------- image helpers ----------
 
-function b3dImageSize(url) {
+export function b3dImageSize(url) {
   return new Promise(function (resolve) {
     try {
       var img = new Image();
@@ -98,7 +109,7 @@ function b3dImageSize(url) {
   });
 }
 
-function b3dLoadTexture(THREE, url) {
+export function b3dLoadTexture(THREE, url) {
   return new Promise(function (resolve) {
     try {
       var img = new Image();
@@ -117,7 +128,7 @@ function b3dLoadTexture(THREE, url) {
   });
 }
 
-function b3dCanvasTexture(THREE, canvas) {
+export function b3dCanvasTexture(THREE, canvas) {
   var tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -126,7 +137,7 @@ function b3dCanvasTexture(THREE, canvas) {
 
 // ---------- procedural fallbacks ----------
 
-function b3dPalette(book) {
+export function b3dPalette(book) {
   try {
     if (typeof shelfSpineSpec === 'function') {
       var spec = shelfSpineSpec(book);
@@ -136,7 +147,7 @@ function b3dPalette(book) {
   return ['#5b4a68', '#3d3247'];
 }
 
-function b3dFitFont(ctx, text, maxW, base) {
+export function b3dFitFont(ctx, text, maxW, base) {
   var size = base;
   ctx.font = '600 ' + size + 'px Georgia, serif';
   while (size > 10 && ctx.measureText(text).width > maxW) {
@@ -147,7 +158,7 @@ function b3dFitFont(ctx, text, maxW, base) {
 }
 
 // Spine fallback: deterministic palette + vertical title, like the shelf.
-function b3dSpineCanvas(book) {
+export function b3dSpineCanvas(book) {
   var pal = b3dPalette(book);
   var c = document.createElement('canvas');
   c.width = 200; c.height = 1200;
@@ -172,7 +183,7 @@ function b3dSpineCanvas(book) {
 }
 
 // Cover fallback: palette gradient + centered title/author.
-function b3dCoverCanvas(book, face) {
+export function b3dCoverCanvas(book, face) {
   var pal = b3dPalette(book);
   var c = document.createElement('canvas');
   c.width = 660; c.height = 1000;
@@ -214,7 +225,7 @@ function b3dCoverCanvas(book, face) {
 }
 
 // Page-block texture: warm paper with fine page lines.
-function b3dPageCanvas() {
+export function b3dPageCanvas() {
   var c = document.createElement('canvas');
   c.width = 128; c.height = 256;
   var x = c.getContext('2d');
@@ -226,7 +237,7 @@ function b3dPageCanvas() {
 
 // ---------- shared-pool faces (best effort) ----------
 
-async function b3dPoolFaces(isbn) {
+export async function b3dPoolFaces(isbn) {
   var out = {};
   try {
     if (!isbn || typeof cloudClient !== 'function') return out;
@@ -261,7 +272,7 @@ async function b3dPoolFaces(isbn) {
   return out;
 }
 
-async function b3dLocalFaces(book, revokeList) {
+export async function b3dLocalFaces(book, revokeList) {
   var refs = (book && book.editionFaceRefs) || {};
   var legacy = (book && book.editionFaces) || {};
   var out = {};
@@ -305,7 +316,7 @@ async function b3dLocalFaces(book, revokeList) {
 // Resolve the faces to render: local scans win, pool fills gaps, procedural
 // art covers the rest. Returns { appearance, tex: {face: url|null(real scan?)},
 // real: {face: bool}, dims }.
-async function b3dResolveFaces(book, revokeList, poolOverride) {
+export async function b3dResolveFaces(book, revokeList, poolOverride) {
   var local = await b3dLocalFaces(book, revokeList);
   var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
   var pool = poolOverride || await b3dPoolFaces(isbn);
@@ -339,7 +350,7 @@ async function b3dResolveFaces(book, revokeList, poolOverride) {
 
 // ---------- the viewer ----------
 
-function b3dOpenViewer(bookId) {
+export function b3dOpenViewer(bookId) {
   if (typeof document === 'undefined') return;
   var lib = (typeof library !== 'undefined' ? library : []);
   var book = lib.find(function (b) { return b && String(b.id) === String(bookId); });
@@ -639,3 +650,36 @@ function b3dOpenViewer(bookId) {
   window.addEventListener('resize', onResize);
   build(null);
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers — js/150-modal-discovery.js
+   (the book modal's 3D viewer button calls b3dOpenViewer) and
+   js/215-shelf3d.js (which reuses this file's loader through
+   window.b3dEnsureThree) — reach these names at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups in classic scripts resolve through the global
+   object, so the caller needs no changes. Module scripts are deferred,
+   so the bridge is in place before any consumer can run. Remove a
+   name from this bridge only when its last classic caller is gone.
+   (No THREE line here: window.THREE is published lazily by
+   b3dEnsureThree when the library loads, unchanged — a shared cache
+   slot with js/215, not a binding this module owns at eval time.) */
+window.b3dDims = b3dDims;
+window.b3dPickAppearance = b3dPickAppearance;
+window.b3dMergeFaces = b3dMergeFaces;
+window.b3dThreePromise = b3dThreePromise;
+window.b3dEnsureThree = b3dEnsureThree;
+window.b3dImageSize = b3dImageSize;
+window.b3dLoadTexture = b3dLoadTexture;
+window.b3dCanvasTexture = b3dCanvasTexture;
+window.b3dPalette = b3dPalette;
+window.b3dFitFont = b3dFitFont;
+window.b3dSpineCanvas = b3dSpineCanvas;
+window.b3dCoverCanvas = b3dCoverCanvas;
+window.b3dPageCanvas = b3dPageCanvas;
+window.b3dPoolFaces = b3dPoolFaces;
+window.b3dLocalFaces = b3dLocalFaces;
+window.b3dResolveFaces = b3dResolveFaces;
+window.b3dOpenViewer = b3dOpenViewer;
