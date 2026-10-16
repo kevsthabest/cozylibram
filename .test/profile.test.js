@@ -351,6 +351,62 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('legacy bridge never overwrites local edits', JSON.parse(lsGet('spicyshelves.profile.u27')).firstName === 'Changed');
   window.__sbStub = null;
 
+  // ---- Gift a Book card shell: the titled card shares the cluster's
+  // fail-closed fate (Advisor observation on PR #266). The cluster
+  // inside stays hidden until wireCirclePrivacyPanel's reveal; the
+  // card + heading must not render visibly ahead of that reveal —
+  // not when the support probe refuses (unsupported install), and
+  // not when the privacy load itself fails. Wired + supported ⇒
+  // card and cluster appear together, at the same reveal. ----
+  const giftCardEl = () => qa('#view .pf-card').find(c => {
+    const h = c.querySelector('h3');
+    return h && /Gift a Book/.test(h.textContent);
+  }) || null;
+  const visEl = (el) => !!el && !el.hidden && el.style.display !== 'none';
+  const chainRes = (result) => {
+    const c = { select: () => c, eq: () => c, maybeSingle: async () => result,
+      then: (res, rej) => Promise.resolve(result).then(res, rej) };
+    return c;
+  };
+  const rowGift = { user_id: 'ugift', share_library: true, hidden_shelves: [], share_bio: true,
+    share_activity: false, receive_recos: true, receive_buddy_invites: true,
+    marginalia_enabled: true, gift_claims_visible: false };
+  runInWindow('cloudUser = { id: "ugift", email: "ugift@x.y" };');
+
+  // (a) Wired, but the support probe refuses (unsupported install):
+  // circlePrivacy loads and the wire path runs, but giftSupported
+  // says no — the wrap is dropped, and no visible card may be left
+  // behind. (A non-"missing" probe error, so nothing latches.)
+  window.__sbStub = {
+    from: (t) => (t === 'profiles'
+      ? { select: (cols) => chainRes(cols === 'gift_claims_visible'
+          ? { data: null, error: { code: 'XX000', message: 'probe unavailable' } }
+          : { data: rowGift, error: null }) }
+      : chainRes({ data: [], error: null })),
+    rpc: async () => ({ data: null, error: null }),
+  };
+  runInWindow(`view = 'profile'; renderProfile();`); await tick(10);
+  ok('unsupported install: no visible Gift a Book card (fail closed)', !visEl(giftCardEl()));
+  ok('unsupported install: the gift wrap is gone, not just hidden', !q('#pf-giftwrap'));
+
+  // (b) Wired and supported: the reveal shows card + cluster together.
+  window.__sbStub = {
+    from: (t) => (t === 'profiles'
+      ? { select: () => chainRes({ data: rowGift, error: null }) }
+      : chainRes({ data: [], error: null })),
+    rpc: async () => ({ data: null, error: null }),
+  };
+  runInWindow(`view = 'profile'; renderProfile();`); await tick(10);
+  ok('supported install: the Gift a Book card is visible', visEl(giftCardEl()));
+  ok('supported install: the gift cluster is visible with it', visEl(q('#pf-giftwrap')));
+
+  // (c) The privacy load itself fails (no backend at all): the
+  // cluster never wires, and the card must never appear.
+  window.__sbStub = null;
+  runInWindow(`view = 'profile'; renderProfile();`); await tick(10);
+  ok('privacy load fails: no visible Gift a Book card', !visEl(giftCardEl()));
+  ok('privacy load fails: the gift cluster stays hidden', !visEl(q('#pf-giftwrap')));
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });
