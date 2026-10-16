@@ -551,7 +551,10 @@ const claimOk = (W, who, key) => rpcClaim(W, who, 'R', key);
   const sandbox = { window: {}, console, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} }, navigator: {} };
   vm.createContext(sandbox);
   const src = g.split('/* ---------- the claim display cache')[0];
-  vm.runInContext(src + '\n;this.__gift = { giftBookKey, giftRetailerLink, giftIsbn13 };', sandbox);
+  // R3 repoint (migration plan §9.3): js/243 is a real ES module since
+  // phase 2 batch 6; classicize restores the classic body before vm
+  // evaluation. Loading plumbing only — assertions untouched.
+  vm.runInContext(classicize(src, 'js/243-gifts.js') + '\n;this.__gift = { giftBookKey, giftRetailerLink, giftIsbn13 };', sandbox);
   const G = sandbox.__gift;
   ok('client: giftBookKey matches the server key on vectors (isbn13 passthrough, isbn-10 conversion, ta: fallback, data-wrapped rows)',
     G.giftBookKey({ isbn: '9780593183649', title: 'X', authors: ['A'] }) === 'isbn:9780593183649' &&
@@ -619,7 +622,10 @@ const claimOk = (W, who, key) => rpcClaim(W, who, 'R', key);
   let P = null;
   try {
     const src = g.split('/* ---------- the claim display cache')[0];
-    vm.runInContext(classicize(p244, 'js/244-gift-postal.js') + '\n' + src +
+    // R3 repoint (migration plan §9.3): js/243 is a real ES module since
+    // phase 2 batch 6; classicize its extract like js/244's above.
+    // Loading plumbing only — assertions untouched.
+    vm.runInContext(classicize(p244, 'js/244-gift-postal.js') + '\n' + classicize(src, 'js/243-gifts.js') +
       '\n;this.__postal = { giftPostalCheck, giftCountryCodeFor, giftFsaCount, giftFsaProvince, GIFT_COUNTRIES, GIFT_POSTAL_FORMATS };',
       sandbox);
     P = sandbox.__postal;

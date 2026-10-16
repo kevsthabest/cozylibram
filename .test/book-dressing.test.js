@@ -19,6 +19,7 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { classicize } = require('./harness');
 const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
@@ -50,7 +51,11 @@ function loadJS(rel, extra) {
   };
   Object.assign(sandbox, extra || {});
   vm.createContext(sandbox);
-  try { vm.runInContext(read(rel), sandbox, { filename: rel }); } catch (e) { /* top-level DOM touches may throw in stubs */ }
+  // R3 repoint (migration plan §9.3): js/240 is a real ES module since
+  // phase 2 batch 6. classicize restores the classic body before vm
+  // evaluation (identity on the classic files loaded here). Loading
+  // plumbing only — assertions untouched.
+  try { vm.runInContext(classicize(read(rel), rel), sandbox, { filename: rel }); } catch (e) { /* top-level DOM touches may throw in stubs */ }
   return sandbox;
 }
 
@@ -231,7 +236,11 @@ const cacheA = { bkA: { hex: '#7a2a3a', cover: coverA } };
 /* ---------- wiring pins ---------- */
 {
   const html = read('index.html');
-  ok('index.html loads js/240-book-dressing.js', html.includes('<script src="js/240-book-dressing.js"></script>'));
+  // R1 repoint (migration plan §9.3): the tag pin accepts either exact
+  // tag form — classic or module; the registration intent is unchanged.
+  ok('index.html loads js/240-book-dressing.js',
+    html.includes('<script src="js/240-book-dressing.js"></script>') ||
+    html.includes('<script type="module" src="js/240-book-dressing.js"></script>'));
   ok('sw.js precaches js/240-book-dressing.js', read('sw.js').includes("'240-book-dressing.js'"));
   const s180 = read('js/180-settings.js');
   ok('Settings > Display renders the toggle', s180.includes('id="st-bookdress"') && s180.includes('Dress for my current book'));

@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { classicize } = require('./harness');
 
 const ROOT = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
 
@@ -14,7 +15,16 @@ function ok(name, cond) {
 }
 
 /* ---------- pure module logic (no DOM needed) ---------- */
-const src = fs.readFileSync(path.join(ROOT, 'js/222-community-corpus.js'), 'utf8');
+// R3 repoint (migration plan §9.3): js/222 is a real ES module since
+// phase 2 batch 6. classicize restores the classic body before
+// evaluation (identity on a classic file). A converted file has no
+// IIFE wrapper to strip — and the strip patterns could match nested
+// callbacks — so the strip below runs only when classicize changed
+// nothing, i.e. the target is still a classic IIFE file. Loading
+// plumbing only — assertions untouched.
+const rawSrc = fs.readFileSync(path.join(ROOT, 'js/222-community-corpus.js'), 'utf8');
+let src = classicize(rawSrc, 'js/222-community-corpus.js');
+if (src === rawSrc) src = src.replace(/\(function \(\) \{/, '').replace(/\}\)\(\);?\s*$/, '');
 // Stub browser globals the module touches at load time
 const localStore = {};
 global.localStorage = {
@@ -25,8 +35,7 @@ global.localStorage = {
 global.window = {};
 const moduleObj = { exports: {} };
 new Function('module', 'window', 'localStorage', 'toast', 'cloudClient', 'cloudUser', 'bookKeyFor', 'document',
-  src.replace(/\(function \(\) \{/, '').replace(/\}\)\(\);?\s*$/, '')
-    .replace("if (typeof window !== 'undefined') window.CommunityCorpus = CommunityCorpus;", 'window.CommunityCorpus = CommunityCorpus;')
+  src.replace("if (typeof window !== 'undefined') window.CommunityCorpus = CommunityCorpus;", 'window.CommunityCorpus = CommunityCorpus;')
     .replace("if (typeof module !== 'undefined') module.exports = CommunityCorpus;", 'module.exports = CommunityCorpus;')
 )(moduleObj, global.window, global.localStorage, function () {}, null, null, null, { readyState: 'complete', addEventListener: function () {} });
 const CC = moduleObj.exports;
