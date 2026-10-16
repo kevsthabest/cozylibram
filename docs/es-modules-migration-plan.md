@@ -854,3 +854,39 @@ as standing checks for later phases:
   classicized text still fails loudly at parse time in acorn/vm, so
   the never-silent property the tripwire exists for holds. A
   token-level pre-scan is future harness work — noted, unscheduled.
+
+---
+
+## Gate notes — PR #270 (v594)
+
+Recorded from the Security Advisor's gate on the phase-1b PR, at the
+program manager's direction. One Low finding and one Nit, plus a
+retro-check on the phase-1a files:
+
+- **Low — classicize places unwrapped shape-2 internals in the
+  shared loadApp global scope.** The harness's classicize turns a
+  converted file back into a classic script for the suites, so an
+  unwrapped file's internal (non-exported) helpers land in the one
+  global scope every loadApp suite shares. js/238-book-candle and
+  js/241-book-ambience share four internal helper names: three are
+  byte-identical, and the fourth, `localTropeNames`, leaves
+  js/241's null-tolerant variant in effect by load order — a
+  behavioural superset of js/238's, so no suite exercises a weaker
+  helper than production runs. Production is unaffected (real
+  module scope keeps internals private); the harness impact is
+  empirically bounded by the identical 200-pass / 6-baseline-file
+  signature at this gate. Standing fidelity note for later phases:
+  more shape-2 conversions mean more shared names in harness
+  scope — watch for non-identical same-name helpers in future
+  batches; a collision there is a harness-fidelity finding, not a
+  production one.
+- **Nit — js/215-shelf3d's new header comment contains a sentence
+  splice** ("…keeps name resolution identical in both worlds / of
+  this file…"). The mechanism the comment describes is correct;
+  only the sentence is garbled. Fix opportunistically in the
+  phase-2 shelf-cluster PR that next touches js/215.
+- **Retro-check — PR #269's eight files are clean under corrected
+  census handling.** Re-running the census with the shape-2
+  eval-read blind spot (§5 / PR #270's lesson (a)) accounted for
+  shows zero cross-file eval-scope reads in any of the eight
+  phase-1a files: the blind spot endangers nothing already merged.
