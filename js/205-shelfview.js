@@ -21,13 +21,19 @@
 // used to never appear on the Shelves tab (2D or Room) at all. The
 // Room renderer (js/217) builds its chips/counts from these same
 // constants, so both views learn the new groups together.
-const SHELF_GROUPS = ['tbr', 'reading', 'read', 'wishlist', 'dnf'];
-const SHELF_GROUP_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', wishlist: 'Wishlist', dnf: 'DNF' };
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const SHELF_GROUPS = ['tbr', 'reading', 'read', 'wishlist', 'dnf'];
+export const SHELF_GROUP_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', wishlist: 'Wishlist', dnf: 'DNF' };
 // Books per shelf row. 8 spines + decor fits a 360px phone.
-const SHELF_ROW_SIZE = 8;
+export const SHELF_ROW_SIZE = 8;
 
 // Dark, cozy spine palette: [face, edge].
-const SHELF_PALETTE = [
+export const SHELF_PALETTE = [
   ['#5e1f2e', '#380f1e'], ['#1c1c26', '#0e0e14'], ['#3d2352', '#221236'],
   ['#7a2a3a', '#471724'], ['#1f3d2b', '#0f2117'], ['#1f2b4d', '#10182e'],
   ['#8a6a2f', '#54401c'], ['#4a2545', '#2a142c'], ['#2b2b33', '#15151b'],
@@ -38,7 +44,7 @@ const SHELF_PALETTE = [
 /* ---------------- pure helpers (tested) ---------------- */
 
 // Stable FNV-1a hash -> uint32.
-function shelfHash(str) {
+export function shelfHash(str) {
   let h = 2166136261;
   str = String(str == null ? '' : str);
   for (let i = 0; i < str.length; i++) {
@@ -52,12 +58,12 @@ function shelfHash(str) {
 // 10px drag threshold and start a drag, which then swallowed the tap —
 // selection felt broken. The threshold is now generous. (v263: spine hit
 // slop moved to a ::after pseudo-element in CSS — no JS box-model tricks.)
-const SHELF_DRAG_SLOP_PX = 18;
+export const SHELF_DRAG_SLOP_PX = 18;
 
 // Deterministic spine geometry + palette slot for a book.
 // v266: compact/showcase formats scale the geometry; inner text scales via
 // the --svs CSS variable on #svShelves.
-function shelfSpineSpec(book) {
+export function shelfSpineSpec(book) {
   const h = shelfHash((book && book.id) || (book && book.title) || 'x');
   const pal = SHELF_PALETTE[h % SHELF_PALETTE.length];
   const s = (typeof shelfDensityScale === 'function') ? shelfDensityScale() : 1;
@@ -68,7 +74,7 @@ function shelfSpineSpec(book) {
   };
 }
 
-function shelfGroupBooks(books, group) {
+export function shelfGroupBooks(books, group) {
   // v559: the 'wishlist' group is the derived set (isWishlistBook);
   // every other group matches its status — so the TBR group includes
   // the wishlist books (the Wishlist is a subset view of TBR).
@@ -78,7 +84,7 @@ function shelfGroupBooks(books, group) {
 
 // Merge a saved id-order with the live book list: saved order first,
 // books missing from the order appended in library order, dead ids dropped.
-function shelfApplyOrder(books, orderIds) {
+export function shelfApplyOrder(books, orderIds) {
   const byId = new Map();
   (books || []).forEach(b => { if (b && b.id != null) byId.set(b.id, b); });
   const out = [];
@@ -91,7 +97,7 @@ function shelfApplyOrder(books, orderIds) {
 }
 
 // Center-crop rect cutting a spine-aspect (1:5.2) strip out of a photo.
-function spineCropRect(w, h) {
+export function spineCropRect(w, h) {
   const aspect = 1 / 5.2;
   let cw = w, ch = w / aspect;
   if (ch > h) { ch = h; cw = h * aspect; }
@@ -103,20 +109,20 @@ function spineCropRect(w, h) {
 // Shelf layouts, v261: 'manual' (hand-arranged, draggable), 'series'
 // (series together in position order), 'genre' (shelves by primary
 // category). Grouped layouts are auto-arranged — drag is disabled there.
-function shelfLayout() {
+export function shelfLayout() {
   const o = shelfOrder();
   const l = o.layout;
   return l === 'series' || l === 'genre' ? l : 'manual';
 }
-function shelfSetLayout(l) {
+export function shelfSetLayout(l) {
   const o = shelfOrder();
   o.layout = (l === 'series' || l === 'genre') ? l : 'manual';
   saveShelfOrder(o);
   shelfOrderCache = o;
 }
-function shelfCanDrag() { return shelfLayout() === 'manual'; }
+export function shelfCanDrag() { return shelfLayout() === 'manual'; }
 // Pure: bucket books into labeled sections for the active layout.
-function shelfLayoutSections(books, layout) {
+export function shelfLayoutSections(books, layout) {
   const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''));
   if (layout === 'series') {
     const groups = new Map();
@@ -171,25 +177,25 @@ function shelfLayoutSections(books, layout) {
 // Shelf formats, v266: 'standard' (classic full-width shelves), 'split'
 // (two side-by-side shelf columns), 'compact' (smaller books, more per
 // shelf), 'showcase' (bigger books, fewer per shelf).
-function shelfFormat() {
+export function shelfFormat() {
   const o = shelfOrder();
   const f = o.format;
   return f === 'split' || f === 'compact' || f === 'showcase' ? f : 'standard';
 }
-function shelfSetFormat(f) {
+export function shelfSetFormat(f) {
   const o = shelfOrder();
   o.format = (f === 'split' || f === 'compact' || f === 'showcase') ? f : 'standard';
   saveShelfOrder(o);
   shelfOrderCache = o;
 }
 // Density multiplier applied to book geometry for compact/showcase.
-function shelfDensityScale() {
+export function shelfDensityScale() {
   const f = shelfFormat();
   return f === 'compact' ? 0.72 : f === 'showcase' ? 1.35 : 1;
 }
 // Split format: distribute sections across two columns, balancing book
 // count while preserving section order. Returns 1-2 columns.
-function shelfSplitColumns(sections) {
+export function shelfSplitColumns(sections) {
   const cols = [[], []];
   const total = sections.reduce((n, s) => n + s.books.length, 0);
   let left = 0;
@@ -202,15 +208,15 @@ function shelfSplitColumns(sections) {
 }
 
 // Device-local shelf arrangement (mirrors upNext: local-only, not synced).
-function shelfOrderKey() {
+export function shelfOrderKey() {
   return typeof localUid !== 'undefined' && localUid
     ? 'spicyshelves.shelforder.v1.' + localUid : 'spicyshelves.shelforder.v1';
 }
-function loadShelfOrder() {
+export function loadShelfOrder() {
   try { return JSON.parse(localStorage.getItem(shelfOrderKey())) || {}; }
   catch (e) { return {}; }
 }
-function saveShelfOrder(o) {
+export function saveShelfOrder(o) {
   try { localStorage.setItem(shelfOrderKey(), JSON.stringify(o)); } catch (e) {}
 }
 
@@ -219,12 +225,12 @@ function saveShelfOrder(o) {
 // Per-book display pose: 'up' (spine, default), 'down' (laid flat in a
 // stack), 'face' (cover facing out, bookstore style). Stored on the book so
 // it syncs; 'up' is the absence of the field.
-const SHELF_POSES = ['up', 'down', 'face'];
-function shelfPoseOf(book) {
+export const SHELF_POSES = ['up', 'down', 'face'];
+export function shelfPoseOf(book) {
   const p = book && book.shelfPose;
   return p === 'down' || p === 'face' ? p : 'up';
 }
-function shelfSetPose(book, pose) {
+export function shelfSetPose(book, pose) {
   if (!book) return;
   if (pose === 'up') delete book.shelfPose; else book.shelfPose = pose;
   saveLibrary();
@@ -232,7 +238,7 @@ function shelfSetPose(book, pose) {
 }
 
 // Decoration registry: id -> label, HTML, reserved width.
-const SHELF_DECOR = {
+export const SHELF_DECOR = {
   plant: { label: 'Plant', w: 76,
     html: '<div class="sv-decor sv-plant" aria-hidden="true"><div class="leaves"><i></i><i></i><i></i><i></i></div><div class="pot"></div></div>' },
   candle: { label: 'Candle', w: 56,
@@ -296,7 +302,7 @@ const SHELF_DECOR = {
   leaves: { label: 'Autumn leaves', w: 44, season: 'thanksgiving',
     html: '<span class="sv-decor" style="font-size:28px" title="Autumn leaves">🍂</span>' },
 };
-const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
+export const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
   'pumpkin', 'ghost', 'bat', 'tree', 'snowman', 'stocking',
   'fireworks', 'champagne', 'popper', 'rose', 'hearts', 'loveletter',
   'shamrock', 'rainbow', 'clover', 'bunny', 'easteregg', 'chick',
@@ -304,7 +310,7 @@ const SHELF_DECOR_ORDER = ['plant', 'candle', 'mug', 'books', 'lights',
 // v255: seasonal shelf themes. Each season unlocks its decor set and
 // restyles the boards; the shelf picks one by date until overridden.
 // v256: New Year's, Valentine's, St. Patrick's, Easter, Thanksgiving.
-const SHELF_SEASONS = {
+export const SHELF_SEASONS = {
   none: { label: 'All year', icon: '📚', decor: [] },
   newyear: { label: "New Year's", icon: '🎆', decor: ['fireworks', 'champagne', 'popper'] },
   valentine: { label: "Valentine's", icon: '💕', decor: ['rose', 'hearts', 'loveletter'] },
@@ -317,7 +323,7 @@ const SHELF_SEASONS = {
 };
 
 // Easter Sunday via the Anonymous Gregorian algorithm (valid 1583-4099).
-function shelfEasterSunday(year) {
+export function shelfEasterSunday(year) {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
   const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
   const g = Math.floor((b - f + 1) / 3);
@@ -330,13 +336,13 @@ function shelfEasterSunday(year) {
   return new Date(year, month - 1, day);
 }
 // Canadian Thanksgiving: second Monday of October.
-function shelfCanadianThanksgiving(year) {
+export function shelfCanadianThanksgiving(year) {
   const first = new Date(year, 9, 1);
   return new Date(year, 9, 1 + ((8 - first.getDay()) % 7) + 7);
 }
 // Active shelf season (device-local): auto-detected by date until the
 // user picks one explicitly in the decorations tray.
-function shelfDefaultSeason(d) {
+export function shelfDefaultSeason(d) {
   d = d || new Date();
   const y = d.getFullYear();
   const t = new Date(y, d.getMonth(), d.getDate()).getTime();
@@ -354,11 +360,11 @@ function shelfDefaultSeason(d) {
   if (d.getMonth() >= 5 && d.getMonth() <= 7) return 'summer'; // v416 (T6): Jun–Aug
   return 'none';
 }
-function shelfSeason() {
+export function shelfSeason() {
   const o = shelfOrder();
   return (o.season && SHELF_SEASONS[o.season]) ? o.season : shelfDefaultSeason();
 }
-function shelfSetSeason(s) {
+export function shelfSetSeason(s) {
   if (!SHELF_SEASONS[s]) return;
   const o = shelfOrder();
   o.season = s;
@@ -366,7 +372,7 @@ function shelfSetSeason(s) {
   shelfOrderCache = o;
 }
 // Decorations the tray offers right now: year-round + the active season's set.
-function shelfTrayDecor() {
+export function shelfTrayDecor() {
   const seasonal = (SHELF_SEASONS[shelfSeason()] || {}).decor || [];
   return SHELF_DECOR_ORDER.filter(id => {
     const dec = SHELF_DECOR[id];
@@ -379,7 +385,7 @@ function shelfTrayDecor() {
 // Decorations are shelf furniture: they keep their slot while books are
 // rearranged around them. Drag a decoration anywhere; long-press removes it.
 // Migrates the v252 plain-id arrays (treated as end-of-shelf).
-function shelfDecorRaw(group) {
+export function shelfDecorRaw(group) {
   const o = shelfOrder();
   if (!o.decor) o.decor = {};
   if (!Array.isArray(o.decor[group])) {
@@ -387,13 +393,13 @@ function shelfDecorRaw(group) {
   }
   return o.decor[group];
 }
-function shelfDecorItems(group) {
+export function shelfDecorItems(group) {
   return shelfDecorRaw(group)
     .map(x => (typeof x === 'string' ? { d: x, at: 1e9 } : x))
     .filter(x => x && SHELF_DECOR[x.d])
     .map(x => ({ d: x.d, at: Math.max(0, x.at | 0) }));
 }
-function shelfSaveDecor(group, list) {
+export function shelfSaveDecor(group, list) {
   const o = shelfOrder();
   if (!o.decor) o.decor = {};
   o.decor[group] = list;
@@ -402,14 +408,14 @@ function shelfSaveDecor(group, list) {
 }
 // v432: undo stack for decoration moves/deletes. Snapshots the list before
 // each mutation; shelfDecorUndo() restores the last snapshot.
-const _decorUndoStack = [];
-function _decorPushUndo(group) {
+export const _decorUndoStack = [];
+export function _decorPushUndo(group) {
   try {
     _decorUndoStack.push({ group, list: JSON.parse(JSON.stringify(shelfDecorItems(group))) });
     if (_decorUndoStack.length > 20) _decorUndoStack.shift();
   } catch (e) {}
 }
-function shelfDecorUndo() {
+export function shelfDecorUndo() {
   const prev = _decorUndoStack.pop();
   if (!prev) { toast('Nothing to undo.'); return false; }
   shelfSaveDecor(prev.group, prev.list);
@@ -417,7 +423,7 @@ function shelfDecorUndo() {
   toast('Undone.');
   return true;
 }
-function shelfDecorAdd(group, decorId, bookCount) {
+export function shelfDecorAdd(group, decorId, bookCount) {
   if (!SHELF_DECOR[decorId]) return;
   const list = shelfDecorItems(group);
   if (list.filter(x => x.d === decorId).length >= 3 || list.length >= 6) return;
@@ -425,13 +431,13 @@ function shelfDecorAdd(group, decorId, bookCount) {
   list.push({ d: decorId, at: bookCount });
   shelfSaveDecor(group, list);
 }
-function shelfDecorRemove(group, di) {
+export function shelfDecorRemove(group, di) {
   const list = shelfDecorItems(group);
   _decorPushUndo(group);
   list.splice(di, 1);
   shelfSaveDecor(group, list);
 }
-function shelfDecorMove(group, di, at) {
+export function shelfDecorMove(group, di, at) {
   const list = shelfDecorItems(group);
   if (!list[di]) return;
   _decorPushUndo(group);
@@ -440,7 +446,7 @@ function shelfDecorMove(group, di, at) {
 }
 // Pure: splice decor instances into the flat book-item list at their `at`
 // slots (counted in book-items, decor items don't shift each other).
-function shelfMergeDecor(bookItems, decors) {
+export function shelfMergeDecor(bookItems, decors) {
   const items = bookItems.slice();
   (decors || []).forEach((dec, di) => {
     if (!SHELF_DECOR[dec.d]) return;
@@ -460,7 +466,7 @@ function shelfMergeDecor(bookItems, decors) {
 // slots, counted in book-items across the whole split view — the same order
 // shelfDropGhost counts on drop, so dragging a decoration is WYSIWYG instead
 // of piling everything at the end of the last column.
-function shelfMergeDecorSplit(flatSections, decors) {
+export function shelfMergeDecorSplit(flatSections, decors) {
   (decors || []).forEach((dec, di) => {
     if (!SHELF_DECOR[dec.d]) return;
     const item = { kind: 'decor', decorId: dec.d, di, w: SHELF_DECOR[dec.d].w };
@@ -481,7 +487,7 @@ function shelfMergeDecorSplit(flatSections, decors) {
 
 // Flat layout items from ordered books: consecutive laid-down books form
 // one horizontal stack (max 4); face-outs and uprights are single items.
-function shelfLayoutItems(books) {
+export function shelfLayoutItems(books) {
   const items = [];
   let pending = [];
   const ds = (typeof shelfDensityScale === 'function') ? shelfDensityScale() : 1;
@@ -509,7 +515,7 @@ function shelfLayoutItems(books) {
 }
 
 // Greedy row fill by pixel budget.
-function shelfFillRows(items, budget) {
+export function shelfFillRows(items, budget) {
   const rows = [];
   let cur = [], used = 0;
   (items || []).forEach(it => {
@@ -523,22 +529,22 @@ function shelfFillRows(items, budget) {
 
 /* ---------------- view ---------------- */
 
-let shelfGroup = 'tbr';
-let shelfOrderCache = null;
-let pendingSpinePhoto = null; // cropped data URL waiting for the user to tap a spine
-let pendingSpinePhotoAi = false; // v259: was it an AI-verified tight crop? (shareable)
-let shelfSheetToken = null;
+export let shelfGroup = 'tbr';
+export let shelfOrderCache = null;
+export let pendingSpinePhoto = null; // cropped data URL waiting for the user to tap a spine
+export let pendingSpinePhotoAi = false; // v259: was it an AI-verified tight crop? (shareable)
+export let shelfSheetToken = null;
 // v427: guard for the document-level menu-close listener (added once, not per render).
-let _shelfMenuDocWired = false;
-function _shelfCloseMenu(e) {
+export let _shelfMenuDocWired = false;
+export function _shelfCloseMenu(e) {
   const dd = document.getElementById('svMenuDropdown');
   const btn = document.getElementById('svMenu');
   if (dd && btn && !dd.hidden && !dd.contains(e.target) && e.target !== btn) dd.hidden = true;
 }
 /* v285: shelf photos are binary IDB assets, never book JSON. */
-const shelfAssetUrls = new Map();
-const shelfAssetPending = new Set();
-function shelfSpineAssetId(book) {
+export const shelfAssetUrls = new Map();
+export const shelfAssetPending = new Set();
+export function shelfSpineAssetId(book) {
   if (!book) return null;
   return book.spinePhotoAssetId ||
     (book.editionFaceRefs && book.editionFaceRefs.jacket && book.editionFaceRefs.jacket.spine) || null;
@@ -548,7 +554,7 @@ function shelfSpineAssetId(book) {
    the public bucket and caches locally, so a ref synced from another device
    still renders. Until it lands, the local-only IDB read is the fallback;
    null keeps the generated placeholder. */
-function shelfBlobFromRef(ref) {
+export function shelfBlobFromRef(ref) {
   if (typeof editionAssetBlob === 'function') {
     try { return Promise.resolve(editionAssetBlob(ref)); } catch (e) { /* fall through */ }
   }
@@ -560,7 +566,7 @@ function shelfBlobFromRef(ref) {
     return (asset && asset.blob) || null;
   }).catch(function () { return null; });
 }
-function shelfEnsureSpineAsset(book) {
+export function shelfEnsureSpineAsset(book) {
   const id = shelfSpineAssetId(book);
   if (!id || typeof currentDb === 'undefined' || !currentDb) return Promise.resolve(false);
   if (shelfAssetUrls.has(id)) return Promise.resolve(true);
@@ -577,22 +583,22 @@ function shelfEnsureSpineAsset(book) {
 }
 
 
-function shelfOrder() {
+export function shelfOrder() {
   if (!shelfOrderCache) shelfOrderCache = loadShelfOrder();
   return shelfOrderCache;
 }
 
-function shelfBooks() {
+export function shelfBooks() {
   const books = typeof library !== 'undefined' ? library : [];
   return shelfApplyOrder(shelfGroupBooks(books, shelfGroup), shelfOrder()[shelfGroup]);
 }
 
-function shelfBookAuthor(book) {
+export function shelfBookAuthor(book) {
   if (book.authors && book.authors.length) return book.authors[0];
   return book.author || '';
 }
 
-function shelfSpineHTML(book) {
+export function shelfSpineHTML(book) {
   const spec = shelfSpineSpec(book);
   const title = book.title || 'Untitled';
   const author = shelfBookAuthor(book);
@@ -616,7 +622,7 @@ function shelfSpineHTML(book) {
     (author ? '<span class="sp-a">' + esc(author) + '</span>' : '') + '</div>';
 }
 
-function shelfFaceHTML(book) {
+export function shelfFaceHTML(book) {
   const spec = shelfSpineSpec(book);
   const title = book.title || 'Untitled';
   const inner = book.cover
@@ -625,7 +631,7 @@ function shelfFaceHTML(book) {
   return '<div class="faceout" data-id="' + esc(book.id) + '" title="' + esc(title) + '">' + inner + '</div>';
 }
 
-function shelfStackHTML(books) {
+export function shelfStackHTML(books) {
   const ids = books.map(b => b.id).join(',');
   const top = books[books.length - 1] || {};
   const layers = books.map(b => {
@@ -640,7 +646,7 @@ function shelfStackHTML(books) {
     '" title="' + esc(top.title || 'Untitled') + '">' + layers + '</div>';
 }
 
-function shelfItemHTML(item) {
+export function shelfItemHTML(item) {
   if (item.kind === 'face') return shelfFaceHTML(item.books[0]);
   if (item.kind === 'stack') return shelfStackHTML(item.books);
   if (item.kind === 'decor') {
@@ -650,7 +656,7 @@ function shelfItemHTML(item) {
   return shelfSpineHTML(item.books[0]);
 }
 
-function renderShelf() {
+export function renderShelf() {
   // v405: 3D shelf integration. Unmount any live 3D scene first (safe no-op
   // when not mounted), then branch to the 3D renderer when that's the
   // active view mode.
@@ -777,10 +783,10 @@ function renderShelf() {
 
 /* ---------------- interactions: tap / drag / long-press ---------------- */
 
-let shelfDrag = null;
-let shelfIgnoreClickUntil = 0;
+export let shelfDrag = null;
+export let shelfIgnoreClickUntil = 0;
 
-function wireShelf() {
+export function wireShelf() {
   document.querySelectorAll('.sv-chip').forEach(ch =>
     ch.addEventListener('click', () => { shelfGroup = ch.dataset.g; renderShelf(); }));
   const cam = document.getElementById('svCam');
@@ -839,7 +845,7 @@ function wireShelf() {
   });
 }
 
-function shelfPointerDown(e, sp) {
+export function shelfPointerDown(e, sp) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   const isDecor = sp.hasAttribute('data-decor');
   const id = sp.dataset.id;
@@ -881,14 +887,14 @@ function shelfPointerDown(e, sp) {
   window.addEventListener('pointercancel', up);
 }
 
-function shelfCleanupDragListeners(d) {
+export function shelfCleanupDragListeners(d) {
   if (!d) return;
   window.removeEventListener('pointermove', d.move);
   window.removeEventListener('pointerup', d.up);
   window.removeEventListener('pointercancel', d.up);
 }
 
-function shelfStartGhost(d, e) {
+export function shelfStartGhost(d, e) {
   const r = d.el.getBoundingClientRect();
   const g = d.el.cloneNode(true);
   g.removeAttribute('data-id');
@@ -910,7 +916,7 @@ function shelfStartGhost(d, e) {
   d.el.classList.add('drag-src');
 }
 
-function shelfMoveGhost(d, e) {
+export function shelfMoveGhost(d, e) {
   d.ghost.style.left = (e.clientX - d.offX) + 'px';
   d.ghost.style.top = (e.clientY - d.offY) + 'px';
   const spines = Array.from(document.querySelectorAll(
@@ -932,7 +938,7 @@ function shelfMoveGhost(d, e) {
   }
 }
 
-function shelfDropGhost(d) {
+export function shelfDropGhost(d) {
   if (d.isDecor) {
     // Decorations keep a book-index slot: count book-items before the
     // placeholder in flat DOM order, then re-render from data.
@@ -972,14 +978,14 @@ function shelfDropGhost(d) {
 }
 
 // Persist a flat id order for the current group.
-function shelfCommitOrder(ids) {
+export function shelfCommitOrder(ids) {
   const o = shelfOrder();
   o[shelfGroup] = ids.slice();
   saveShelfOrder(o);
   shelfOrderCache = o;
 }
 
-function shelfSpineClick(e, sp) {
+export function shelfSpineClick(e, sp) {
   if (Date.now() < shelfIgnoreClickUntil) return;
   if (sp.hasAttribute('data-decor')) return; // decorations: drag/long-press only
   const id = sp.dataset.id;
@@ -998,7 +1004,7 @@ function shelfSpineClick(e, sp) {
 
 /* ---------------- spine photo: sheet, capture, review ---------------- */
 
-function shelfCloseSheet() {
+export function shelfCloseSheet() {
   if (typeof shelfStopCam === 'function') shelfStopCam(); // v260: never leave the camera running
   ['svSheetScrim', 'svSheet'].forEach(id => {
     const el = document.getElementById(id);
@@ -1010,7 +1016,7 @@ function shelfCloseSheet() {
   }
 }
 
-function shelfSheetShell(title, bodyHTML) {
+export function shelfSheetShell(title, bodyHTML) {
   shelfCloseSheet();
   const scrim = document.createElement('div');
   scrim.className = 'sv-scrim'; scrim.id = 'svSheetScrim';
@@ -1033,7 +1039,7 @@ function shelfSheetShell(title, bodyHTML) {
 }
 
 // Long-press action sheet for one book: display pose + spine photo.
-function shelfOpenPhotoSheet(id) {
+export function shelfOpenPhotoSheet(id) {
   const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === id);
   if (!book) return;
   const pose = shelfPoseOf(book);
@@ -1127,7 +1133,7 @@ function shelfOpenPhotoSheet(id) {
 // Decorations tray: tap to add an instance (up to 3 per kind); drag it
 // anywhere on the shelf; long-press it to remove. Season chips switch the
 // seasonal theme and unlock its decorations.
-function shelfOpenDecorSheet() {
+export function shelfOpenDecorSheet() {
   const group = shelfGroup;
   const { sheet, close } = shelfSheetShell('Decorations',
     '<p class="sv-review-hint">Tap to add to your ' + SHELF_GROUP_LABEL[group] +
@@ -1173,7 +1179,7 @@ function shelfOpenDecorSheet() {
 }
 
 // Shelf layout picker: grouping + shelf format.
-function shelfOpenLayoutSheet() {
+export function shelfOpenLayoutSheet() {
   const cur = shelfLayout();
   const fmt = shelfFormat();
   const { sheet, close } = shelfSheetShell('Shelf layout',
@@ -1209,7 +1215,7 @@ function shelfOpenLayoutSheet() {
 }
 
 // Long-press a decoration: offer removal.
-function shelfOpenDecorRemoveSheet(di) {
+export function shelfOpenDecorRemoveSheet(di) {
   const items = shelfDecorItems(shelfGroup);
   const it = items[di];
   if (!it || !SHELF_DECOR[it.d]) return;
@@ -1229,20 +1235,20 @@ function shelfOpenDecorRemoveSheet(di) {
 // Camera capture via the native camera (file input + capture="environment",
 // the same pattern visionPickPhoto uses). bookId may be null (header
 // button) — then the photo waits for the user to tap a spine.
-function shelfStartCapture(bookId) {
+export function shelfStartCapture(bookId) {
   // v260: in-app viewfinder with a spine-alignment overlay when the camera
   // is available; otherwise the native picker.
   if (shelfCanUseCam()) shelfOpenViewfinder(bookId);
   else shelfNativeCapture(bookId);
 }
 
-function shelfCanUseCam() {
+export function shelfCanUseCam() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
 
 // The pre-v260 native picker, kept as the fallback (denied permission,
 // desktop, or test DOMs).
-function shelfNativeCapture(bookId) {
+export function shelfNativeCapture(bookId) {
   let input = document.getElementById('sv-photo-input');
   if (!input) {
     input = document.createElement('input');
@@ -1269,14 +1275,14 @@ function shelfNativeCapture(bookId) {
 // v260: spine viewfinder — live preview with a spine-shaped guide
 // frame so the spine lands centered. Capture grabs the frame straight into
 // the existing review flow.
-let shelfCamStream = null;
-function shelfStopCam() {
+export let shelfCamStream = null;
+export function shelfStopCam() {
   try {
     if (shelfCamStream) shelfCamStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
   } catch (e) {}
   shelfCamStream = null;
 }
-function shelfOpenViewfinder(bookId) {
+export function shelfOpenViewfinder(bookId) {
   const { sheet, close } = shelfSheetShell('Center the spine',
     '<div class="sv-vf">' +
       '<video id="svVideo" playsinline muted autoplay></video>' +
@@ -1320,7 +1326,7 @@ function shelfOpenViewfinder(bookId) {
 // (almost) only the spine — background the user framed out (screens, walls)
 // never enters the image. Falls back to the full frame when the guide rect
 // can't be determined.
-function shelfSnapFrame(video) {
+export function shelfSnapFrame(video) {
   try {
     if (!video || !video.videoWidth || !video.videoHeight) return null;
     const c = document.createElement('canvas');
@@ -1339,7 +1345,7 @@ function shelfSnapFrame(video) {
 }
 // The guide frame's rect in video-source pixels, or null when it can't be
 // determined. Maps the CSS frame rect through the video's object-fit: cover.
-function shelfGuideSourceRect(video) {
+export function shelfGuideSourceRect(video) {
   try {
     const frame = document.querySelector('.sv-vf-frame');
     if (!frame) return null;
@@ -1361,7 +1367,7 @@ function shelfGuideSourceRect(video) {
   } catch (e) { return null; }
 }
 
-function shelfReviewCapture(dataUrl, bookId) {
+export function shelfReviewCapture(dataUrl, bookId) {
   // Downscale (reuse the vision pipeline's safe resizer), then let the AI
   // find the spine's tight box and pre-fit the crop to it — falling back
   // to the center strip when detection finds nothing usable.
@@ -1407,7 +1413,7 @@ function shelfReviewCapture(dataUrl, bookId) {
 
 // Crop a photo data URL to spine aspect at targetW wide, JPEG-encoded.
 // Never rejects: falls back to the original on any failure.
-function spineCropToDataURL(dataUrl, targetW) {
+export function spineCropToDataURL(dataUrl, targetW) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v); } };
@@ -1431,7 +1437,7 @@ function spineCropToDataURL(dataUrl, targetW) {
 // then the 1:5.2 spine aspect fitted inside it. y0/y1 are optional — when
 // absent the full image height is used (v253 behavior).
 // Returns null when the box is unusable (missing, inverted, a sliver).
-function spineBoxCropRect(w, h, x0, x1, y0, y1) {
+export function spineBoxCropRect(w, h, x0, x1, y0, y1) {
   if (x0 == null || x1 == null || x0 === '' || x1 === '') return null;
   x0 = Number(x0); x1 = Number(x1);
   if (!isFinite(x0) || !isFinite(x1)) return null;
@@ -1459,7 +1465,7 @@ function spineBoxCropRect(w, h, x0, x1, y0, y1) {
 // center-crops, which may include background) are contributed automatically,
 // keyed by ISBN. The crop contains no personal information by construction,
 // so no opt-in is needed — the library itself stays private as before.
-function spinePhotoISBN(book) {
+export function spinePhotoISBN(book) {
   const raw = book && (book.isbn13 || book.isbn || '');
   const d = String(raw).replace(/[^0-9X]/gi, '').toUpperCase();
   return /^(?:\d{13}|\d{10}|\d{9}X)$/.test(d) ? d : null;
@@ -1468,11 +1474,11 @@ function spinePhotoISBN(book) {
 // Legacy v259 rows still point at the spine-photos bucket. New contributions
 // go through edition_assets (below); editionImagePath stays for the legacy
 // read paths that still reference it.
-function editionImagePath(isbn, face, appearance) {
+export function editionImagePath(isbn, face, appearance) {
   return face + '/' + appearance + '/' + isbn + '.jpg';
 }
 // SHA-256 of image bytes as lowercase hex (content-addressed storage paths).
-async function spinePhotoSha256(bytes) {
+export async function spinePhotoSha256(bytes) {
   try {
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest)).map(function (x) {
@@ -1482,7 +1488,7 @@ async function spinePhotoSha256(bytes) {
 }
 // Natural dimensions of a data-URL image, or null — best-effort metadata on
 // the candidate row.
-function spinePhotoImageSize(dataUrl) {
+export function spinePhotoImageSize(dataUrl) {
   return new Promise(function (resolve) {
     try {
       const img = new Image();
@@ -1497,7 +1503,7 @@ function spinePhotoImageSize(dataUrl) {
     } catch (e) { resolve(null); }
   });
 }
-async function spinePhotoUid(sb) {
+export async function spinePhotoUid(sb) {
   try {
     const u = await sb.auth.getUser();
     return (u && u.data && u.data.user) ? u.data.user.id : null;
@@ -1508,7 +1514,7 @@ async function spinePhotoUid(sb) {
 // trigger picks the canonical slot and syncs the edition_images read model.
 // The legacy direct edition_images write is gone: it bypassed moderation
 // (no candidate row, no attribution) and was un-withdrawable.
-async function spinePhotoShare(book, dataUrl, aiCropped) {
+export async function spinePhotoShare(book, dataUrl, aiCropped) {
   try {
     if (!aiCropped) return false; // safety: only anonymous tight crops
     const isbn = spinePhotoISBN(book);
@@ -1552,8 +1558,8 @@ async function spinePhotoShare(book, dataUrl, aiCropped) {
 }
 // v259: adopt a shared spine photo for an ISBN book that has none.
 // Best-effort; resolves true when a photo was adopted and saved.
-const spineLookupDone = new Set();
-async function spinePhotoAdopt(book) {
+export const spineLookupDone = new Set();
+export async function spinePhotoAdopt(book) {
   try {
     if (!book || shelfSpineAssetId(book)) return false;
     const isbn = spinePhotoISBN(book);
@@ -1619,7 +1625,7 @@ async function spinePhotoAdopt(book) {
 // spine in a close-up photo. Resolves with {x0,y0,x1,y1} or null — never
 // rejects, so the manual flow always falls back to the center crop.
 // Failures are logged (Logs tab) with the reason instead of failing silent.
-function spineDetectBox(dataUrl) {
+export function spineDetectBox(dataUrl) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (v, reason) => {
@@ -1652,7 +1658,7 @@ function spineDetectBox(dataUrl) {
 
 // Shared canvas core: draw rect r of img into a targetW-wide JPEG data URL.
 // A whisper of contrast/saturation counteracts the flat look of a crop.
-function shelfDrawCrop(img, r, targetW) {
+export function shelfDrawCrop(img, r, targetW) {
   try {
     const targetH = Math.max(1, Math.round(targetW * (r.h / r.w)));
     const c = document.createElement('canvas');
@@ -1666,7 +1672,7 @@ function shelfDrawCrop(img, r, targetW) {
 
 // Crop a 0-1000 x-range box out of a photo data URL to spine aspect.
 // Resolves with a small JPEG data URL, or null when the box is unusable.
-function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW, y0, y1) {
+export function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW, y0, y1) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v || null); } };
@@ -1686,7 +1692,7 @@ function spineBoxPhotoToDataURL(dataUrl, x0, x1, targetW, y0, y1) {
   });
 }
 
-async function shelfAssignPhoto(bookId, dataUrl) {
+export async function shelfAssignPhoto(bookId, dataUrl) {
   const book = (typeof library !== 'undefined' ? library : []).find(b => b && b.id === bookId);
   if (!book || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/') !== 0) return;
   try {
@@ -1719,3 +1725,133 @@ async function shelfAssignPhoto(bookId, dataUrl) {
   renderShelf();
   toast('Spine photo saved');
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/010-theming.js, js/137-shelf.js,
+   js/180-settings.js, js/200-boot.js, js/206-editioncapture.js,
+   js/207-book3d.js, js/208-editionassets.js, js/210-editionmeasure.js,
+   js/217-shelf3d-view.js, js/220-share-moments.js and js/229-user-state.js
+   — reach these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place before
+   any consumer can run. Remove a name from this bridge only when its last
+   classic caller is gone.
+   shelfGroup and shelfOrderCache are republished as accessor properties,
+   not value copies: js/217-shelf3d-view.js reassigns shelfGroup when a
+   group chip is tapped in the 3D view and reads it live in the same
+   handler, and js/229-user-state.js reassigns shelfOrderCache when a roamed
+   shelf-order snapshot is adopted — its own comment at the site states the
+   running shelf would otherwise keep rendering the pre-apply order until
+   reload. A value copy would freeze the initial state and silently drop
+   those writes; the getter/setter pairs forward every read and write to the
+   module bindings, so the writers’ expressions are unchanged and every
+   reader sees the live value.
+ */
+window.SHELF_GROUPS = SHELF_GROUPS;
+window.SHELF_GROUP_LABEL = SHELF_GROUP_LABEL;
+window.SHELF_ROW_SIZE = SHELF_ROW_SIZE;
+window.SHELF_PALETTE = SHELF_PALETTE;
+window.shelfHash = shelfHash;
+window.SHELF_DRAG_SLOP_PX = SHELF_DRAG_SLOP_PX;
+window.shelfSpineSpec = shelfSpineSpec;
+window.shelfGroupBooks = shelfGroupBooks;
+window.shelfApplyOrder = shelfApplyOrder;
+window.spineCropRect = spineCropRect;
+window.shelfLayout = shelfLayout;
+window.shelfSetLayout = shelfSetLayout;
+window.shelfCanDrag = shelfCanDrag;
+window.shelfLayoutSections = shelfLayoutSections;
+window.shelfFormat = shelfFormat;
+window.shelfSetFormat = shelfSetFormat;
+window.shelfDensityScale = shelfDensityScale;
+window.shelfSplitColumns = shelfSplitColumns;
+window.shelfOrderKey = shelfOrderKey;
+window.loadShelfOrder = loadShelfOrder;
+window.saveShelfOrder = saveShelfOrder;
+window.SHELF_POSES = SHELF_POSES;
+window.shelfPoseOf = shelfPoseOf;
+window.shelfSetPose = shelfSetPose;
+window.SHELF_DECOR = SHELF_DECOR;
+window.SHELF_DECOR_ORDER = SHELF_DECOR_ORDER;
+window.SHELF_SEASONS = SHELF_SEASONS;
+window.shelfEasterSunday = shelfEasterSunday;
+window.shelfCanadianThanksgiving = shelfCanadianThanksgiving;
+window.shelfDefaultSeason = shelfDefaultSeason;
+window.shelfSeason = shelfSeason;
+window.shelfSetSeason = shelfSetSeason;
+window.shelfTrayDecor = shelfTrayDecor;
+window.shelfDecorRaw = shelfDecorRaw;
+window.shelfDecorItems = shelfDecorItems;
+window.shelfSaveDecor = shelfSaveDecor;
+window._decorUndoStack = _decorUndoStack;
+window._decorPushUndo = _decorPushUndo;
+window.shelfDecorUndo = shelfDecorUndo;
+window.shelfDecorAdd = shelfDecorAdd;
+window.shelfDecorRemove = shelfDecorRemove;
+window.shelfDecorMove = shelfDecorMove;
+window.shelfMergeDecor = shelfMergeDecor;
+window.shelfMergeDecorSplit = shelfMergeDecorSplit;
+window.shelfLayoutItems = shelfLayoutItems;
+window.shelfFillRows = shelfFillRows;
+Object.defineProperty(window, 'shelfGroup', { get: () => shelfGroup, set: (v) => { shelfGroup = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'shelfOrderCache', { get: () => shelfOrderCache, set: (v) => { shelfOrderCache = v; }, enumerable: true, configurable: true });
+window.pendingSpinePhoto = pendingSpinePhoto;
+window.pendingSpinePhotoAi = pendingSpinePhotoAi;
+window.shelfSheetToken = shelfSheetToken;
+window._shelfMenuDocWired = _shelfMenuDocWired;
+window._shelfCloseMenu = _shelfCloseMenu;
+window.shelfAssetUrls = shelfAssetUrls;
+window.shelfAssetPending = shelfAssetPending;
+window.shelfSpineAssetId = shelfSpineAssetId;
+window.shelfBlobFromRef = shelfBlobFromRef;
+window.shelfEnsureSpineAsset = shelfEnsureSpineAsset;
+window.shelfOrder = shelfOrder;
+window.shelfBooks = shelfBooks;
+window.shelfBookAuthor = shelfBookAuthor;
+window.shelfSpineHTML = shelfSpineHTML;
+window.shelfFaceHTML = shelfFaceHTML;
+window.shelfStackHTML = shelfStackHTML;
+window.shelfItemHTML = shelfItemHTML;
+window.renderShelf = renderShelf;
+window.shelfDrag = shelfDrag;
+window.shelfIgnoreClickUntil = shelfIgnoreClickUntil;
+window.wireShelf = wireShelf;
+window.shelfPointerDown = shelfPointerDown;
+window.shelfCleanupDragListeners = shelfCleanupDragListeners;
+window.shelfStartGhost = shelfStartGhost;
+window.shelfMoveGhost = shelfMoveGhost;
+window.shelfDropGhost = shelfDropGhost;
+window.shelfCommitOrder = shelfCommitOrder;
+window.shelfSpineClick = shelfSpineClick;
+window.shelfCloseSheet = shelfCloseSheet;
+window.shelfSheetShell = shelfSheetShell;
+window.shelfOpenPhotoSheet = shelfOpenPhotoSheet;
+window.shelfOpenDecorSheet = shelfOpenDecorSheet;
+window.shelfOpenLayoutSheet = shelfOpenLayoutSheet;
+window.shelfOpenDecorRemoveSheet = shelfOpenDecorRemoveSheet;
+window.shelfStartCapture = shelfStartCapture;
+window.shelfCanUseCam = shelfCanUseCam;
+window.shelfNativeCapture = shelfNativeCapture;
+window.shelfCamStream = shelfCamStream;
+window.shelfStopCam = shelfStopCam;
+window.shelfOpenViewfinder = shelfOpenViewfinder;
+window.shelfSnapFrame = shelfSnapFrame;
+window.shelfGuideSourceRect = shelfGuideSourceRect;
+window.shelfReviewCapture = shelfReviewCapture;
+window.spineCropToDataURL = spineCropToDataURL;
+window.spineBoxCropRect = spineBoxCropRect;
+window.spinePhotoISBN = spinePhotoISBN;
+window.editionImagePath = editionImagePath;
+window.spinePhotoSha256 = spinePhotoSha256;
+window.spinePhotoImageSize = spinePhotoImageSize;
+window.spinePhotoUid = spinePhotoUid;
+window.spinePhotoShare = spinePhotoShare;
+window.spineLookupDone = spineLookupDone;
+window.spinePhotoAdopt = spinePhotoAdopt;
+window.spineDetectBox = spineDetectBox;
+window.shelfDrawCrop = shelfDrawCrop;
+window.spineBoxPhotoToDataURL = spineBoxPhotoToDataURL;
+window.shelfAssignPhoto = shelfAssignPhoto;
