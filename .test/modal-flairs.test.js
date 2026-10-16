@@ -1,5 +1,6 @@
 // v417: modal flair catalog + selection + injection tests.
 const { JSDOM } = require('jsdom');
+const { classicize } = require('./harness');
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
@@ -16,7 +17,10 @@ const { window } = dom;
 window.__theme = 'dark';
 window.getTheme = function () { return window.__theme || 'dark'; };
 const scr = window.document.createElement('script');
-scr.textContent = fs.readFileSync(ROOT + '/js/151-modal-flairs.js', 'utf8');
+// R3 repoint (migration plan §9.3): js/151-modal-flairs.js is an ES module;
+// classicize its source at this load site — loading plumbing only,
+// assertions untouched.
+scr.textContent = classicize(fs.readFileSync(ROOT + '/js/151-modal-flairs.js', 'utf8'), '151-modal-flairs.js');
 window.document.body.appendChild(scr);
 const run = (js) => window.eval(js);
 

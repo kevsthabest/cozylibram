@@ -17,9 +17,9 @@ const { window } = dom;
 const run = (js) => window.eval(js);
 function load(f) {
   const scr = window.document.createElement('script');
-  // R3 repoint (migration plan §9.3): js/216 and js/218 are ES modules;
-  // classicize their source at this load site — loading plumbing only,
-  // identity on the classic files loaded here.
+  // R3 repoint (migration plan §9.3): js/151, js/216 and js/218 are ES
+  // modules; classicize their source at this load site — loading
+  // plumbing only, identity on the classic files loaded here.
   scr.textContent = classicize(fs.readFileSync(ROOT + '/' + f, 'utf8'), f);
   window.document.body.appendChild(scr);
 }
