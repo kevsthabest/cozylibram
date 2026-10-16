@@ -24,19 +24,26 @@
    bumps). Ordinary users never see this — inference runs only when
    an admin starts it here. */
 
-let tropeLabKeyToId = {}; // book_key -> library id, rebuilt on each coverage scan
-let tropeLabLastRows = []; // last book_tropes scan, reused by the all-libraries scan
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-function tropeLabBooks() {
+export let tropeLabKeyToId = {}; // book_key -> library id, rebuilt on each coverage scan
+export let tropeLabLastRows = []; // last book_tropes scan, reused by the all-libraries scan
+
+export function tropeLabBooks() {
   try { return (typeof library !== 'undefined' ? library : []).filter(b => b && !b._deleted); }
   catch (e) { return []; }
 }
 
-function tropeLabResolve(id) {
+export function tropeLabResolve(id) {
   return tropeLabBooks().find(b => b.id === id) || null;
 }
 
-async function tropeLabSb() {
+export async function tropeLabSb() {
   try { return await cloudClient().catch(() => null); }
   catch (e) { return null; }
 }
@@ -50,7 +57,7 @@ async function tropeLabSb() {
    v271: `claimed` is an optional Set of bookKeyFor() keys whose work has a
    non-rejected claim in book_trope_claims. The backfill writes work-keyed
    claims, so a book with claims but no legacy rows still counts as tagged. */
-function tropeLabCoverage(books, rows, current, claimed) {
+export function tropeLabCoverage(books, rows, current, claimed) {
   current = current || { version: TROPE_TAXONOMY_VERSION, rev: TropeTaxonomy.rev() };
   const byKey = {};
   (rows || []).forEach(r => {
@@ -79,7 +86,7 @@ function tropeLabCoverage(books, rows, current, claimed) {
    norm (works) so books match the same way bookKeyFor keys them.
    Returns a Set, or null when the tables can't be read (caller falls back
    to legacy-only coverage). */
-async function tropeLabClaimedKeys(sb) {
+export async function tropeLabClaimedKeys(sb) {
   try {
     const { data: claimRows, error: cErr } = await sb.from('book_trope_claims')
       .select('work_id').neq('status', 'rejected').limit(20000);
@@ -118,7 +125,7 @@ async function tropeLabClaimedKeys(sb) {
   }
 }
 
-function tropeLabWireQueue() {
+export function tropeLabWireQueue() {
   // v153: shared app-wide wiring (resolver, upsert, DB reads); Trope Lab
   // only adds its progress callback on top.
   ensureTropeQueueWired();
@@ -130,7 +137,7 @@ function tropeLabWireQueue() {
 }
 
 /* Refresh only the progress region (called on every queue event). */
-function tropeLabProgressHTML() {
+export function tropeLabProgressHTML() {
   const el = document.getElementById('tropelab-progress');
   if (!el) return;
   const s = TropeQueue.snapshot();
@@ -187,15 +194,15 @@ function tropeLabProgressHTML() {
    inferred trope for the book in one tap. Unreviewed books sort first
    so the list reads as a work queue. */
 
-let tropeLabReviewShown = 15; // pagination: how many books are rendered
-const TROPE_LAB_REVIEW_PAGE = 15;
+export let tropeLabReviewShown = 15; // pagination: how many books are rendered
+export const TROPE_LAB_REVIEW_PAGE = 15;
 
 /* Pure: group book_tropes rows into per-book review entries.
    rows: [{book_key, trope_id, confidence, source}].
    byId: trope_id -> {id, name}; rows with unknown ids are dropped.
    Returns [{ bookKey, tropes: [{id, name, confidence, source}] }] with
    tropes sorted by confidence desc. */
-function tropeLabReviewEntries(rows, byId) {
+export function tropeLabReviewEntries(rows, byId) {
   const byKey = {};
   (rows || []).forEach(r => {
     if (!r || !r.book_key || !r.trope_id) return;
@@ -217,7 +224,7 @@ function tropeLabReviewEntries(rows, byId) {
 /* Pure: aggregate trope_votes rows into the {tropeId:{up,down,mine}}
    shape dbTropeChipsHTML expects, keyed by book. `uid` marks the
    current user's own vote. */
-function tropeLabReviewVotes(rows, uid) {
+export function tropeLabReviewVotes(rows, uid) {
   const agg = {};
   (rows || []).forEach(r => {
     if (!r || !r.book_key || !r.trope_id) return;
@@ -234,9 +241,9 @@ function tropeLabReviewVotes(rows, uid) {
    then the persisted all-libraries admin projection, then the global works
    catalog (v276: a work row outlives library membership by design, so a
    book deleted from every library still resolves to its title/author). */
-let tropeLabWorkTitles = {}; // isbn -> { title, authors }, primed per render
+export let tropeLabWorkTitles = {}; // isbn -> { title, authors }, primed per render
 
-async function tropeLabPrimeWorkTitles(sb, keys) {
+export async function tropeLabPrimeWorkTitles(sb, keys) {
   tropeLabWorkTitles = {};
   try {
     const isbns = [...new Set((keys || [])
@@ -253,11 +260,11 @@ async function tropeLabPrimeWorkTitles(sb, keys) {
   } catch (e) { /* works lookup is best-effort; the honest label below covers misses */ }
 }
 
-function tropeLabIsbnOf(key) {
+export function tropeLabIsbnOf(key) {
   return (typeof key === 'string' && key.indexOf('isbn:') === 0) ? key.slice(5) : null;
 }
 
-function tropeLabReviewTitle(key) {
+export function tropeLabReviewTitle(key) {
   try {
     const b = tropeLabResolve(tropeLabKeyToId[key]);
     if (b) return { title: b.title || key, authors: (b.authors || []).join(', ') };
@@ -273,7 +280,7 @@ function tropeLabReviewTitle(key) {
   return { title: key, authors: '' };
 }
 
-async function tropeLabReviewHTML() {
+export async function tropeLabReviewHTML() {
   const el = document.getElementById('tropelab-review');
   if (!el) return;
   const head = '<div class="ob-card"><h3 class="serif">Review inferred tropes</h3>';
@@ -388,11 +395,11 @@ async function tropeLabReviewHTML() {
    ✓ confirms a candidate work-wide, ✕ rejects any AI claim (rejections
    survive re-inference). Auto-published tags are badged "auto". */
 
-let tropeLabClaimsShown = 15;
-const TROPE_LAB_CLAIMS_PAGE = 15;
-let tropeLabClaimsModelFilter = ''; // v315: '' = all models
+export let tropeLabClaimsShown = 15;
+export const TROPE_LAB_CLAIMS_PAGE = 15;
+export let tropeLabClaimsModelFilter = ''; // v315: '' = all models
 
-async function tropeLabClaimsHTML() {
+export async function tropeLabClaimsHTML() {
   const el = document.getElementById('tropelab-claims');
   if (!el) return;
   const head = '<div class="ob-card"><h3 class="serif">Review AI tags</h3>';
@@ -488,7 +495,7 @@ async function tropeLabClaimsHTML() {
   });
 }
 
-async function renderTropeLab() {
+export async function renderTropeLab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   tropeLabWireQueue();
@@ -613,7 +620,7 @@ async function renderTropeLab() {
    trope_provider_settings row and applies to all devices on their next
    inference run. API keys stay server-side — the proxy holds one key per
    provider (TROPE_KEY_<PROVIDER>) and the client only names the provider. */
-async function tropeLabProviderHTML() {
+export async function tropeLabProviderHTML() {
   const box = document.getElementById('tropelab-provider');
   if (!box || adminTab !== 'tropes') return;
   let cur = { provider: '', model: '' };
@@ -715,7 +722,7 @@ async function tropeLabProviderHTML() {
    then are the missing/stale ones enqueued. Tags land in the shared
    book_tropes table, so one backfill covers everyone. Jobs are keyed by
    book_key and resolve through the persisted admin projection. */
-function tropeLabAllLibrariesHTML(configured) {
+export function tropeLabAllLibrariesHTML(configured) {
   const box = document.getElementById('tropelab-alllibs');
   if (!box || adminTab !== 'tropes') return;
   box.innerHTML =
@@ -730,7 +737,7 @@ function tropeLabAllLibrariesHTML(configured) {
   if (btn) btn.addEventListener('click', tropeLabAllLibrariesScan);
 }
 
-async function tropeLabAllLibrariesScan() {
+export async function tropeLabAllLibrariesScan() {
   const out = document.getElementById('tl-alllibs-result');
   const btn = document.getElementById('tl-alllibs-scan');
   if (!out) return;
@@ -827,7 +834,7 @@ async function tropeLabAllLibrariesScan() {
 
 
 /* v155: admin review queue for user-proposed tropes. */
-async function tropeLabProposalsHTML() {
+export async function tropeLabProposalsHTML() {
   const box = document.getElementById('trope-proposals');
   if (!box || adminTab !== 'tropes') return;
   let list = [];
@@ -923,13 +930,13 @@ async function tropeLabProposalsHTML() {
    other users' books are dropped as deleted. Re-run the scan to rebuild the
    full projection. */
 
-const TROPE_ADMIN_BOOKS_KEY = 'cozylibram.tropeadminbooks.v1'; // v202: legacy key, removed on first load
-let tropeAdminBookCache = null; // null = not built yet
-let tropeAdminLegacyDropped = false;
+export const TROPE_ADMIN_BOOKS_KEY = 'cozylibram.tropeadminbooks.v1'; // v202: legacy key, removed on first load
+export let tropeAdminBookCache = null; // null = not built yet
+export let tropeAdminLegacyDropped = false;
 
 /* Rebuild the {key, book} projection from the in-memory library. Same
    minimal bibliographic shape the admin scan builds from Supabase rows. */
-function tropeAdminBooksRebuild() {
+export function tropeAdminBooksRebuild() {
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
   return lib.filter(b => b).map(b => ({
     key: bookKeyFor(b),
@@ -943,7 +950,7 @@ function tropeAdminBooksRebuild() {
   }));
 }
 
-function tropeAdminBooksLoad() {
+export function tropeAdminBooksLoad() {
   if (!tropeAdminLegacyDropped) {
     tropeAdminLegacyDropped = true;
     try { localStorage.removeItem(TROPE_ADMIN_BOOKS_KEY); } catch (e) {}
@@ -953,7 +960,7 @@ function tropeAdminBooksLoad() {
 }
 
 /* Minimal book projection for inference, looked up by book_key. */
-function tropeAdminBookById(id) {
+export function tropeAdminBookById(id) {
   if (!id) return null;
   const list = tropeAdminBooksLoad();
   for (const b of list) if (b && b.key === id) return b.book || null;
@@ -962,11 +969,11 @@ function tropeAdminBookById(id) {
 
 /* Keep the admin projection in memory for the scan session (v202: no
    localStorage persistence). */
-function tropeAdminBooksSave(list) {
+export function tropeAdminBooksSave(list) {
   tropeAdminBookCache = Array.isArray(list) ? list : [];
 }
 
-function tropeAdminBooksClear() {
+export function tropeAdminBooksClear() {
   tropeAdminBookCache = null;
 }
 
@@ -977,23 +984,23 @@ function tropeAdminBooksClear() {
    Keys stay server-side: the proxy holds one key per provider
    (TROPE_KEY_<PROVIDER>) and the client only names the provider. */
 
-const TROPE_PROVIDER_SETTINGS_KEY = 'cozylibram.tropeprovider.v1';
-const TROPE_PROVIDER_SUGGESTIONS = {
+export const TROPE_PROVIDER_SETTINGS_KEY = 'cozylibram.tropeprovider.v1';
+export const TROPE_PROVIDER_SUGGESTIONS = {
   openrouter: ['nvidia/nemotron-nano-9b-v2:free', 'qwen/qwen3-32b:free', 'google/gemma-3-27b-it:free'],
   gemini: ['gemini-3.8-flash'],
   groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
   ollama: ['llama3.1', 'qwen3'],
   custom: [],
 };
-let tropeProviderCache = null; // null = not loaded yet
-let tropeModelListCache = {}; // v164: provider -> [{id, name}], session cache
+export let tropeProviderCache = null; // null = not loaded yet
+export let tropeModelListCache = {}; // v164: provider -> [{id, name}], session cache
 
 /* v164: live model list for the Trope Lab picker. Asks the same-origin
    /api/trope-models proxy (the key stays server-side) for the provider's
    real, currently-available models. Resolves [{id, name}]; rejects when the
    list can't be loaded, and the caller falls back to the hardcoded
    TROPE_PROVIDER_SUGGESTIONS. */
-async function tropeModelList(provider) {
+export async function tropeModelList(provider) {
   provider = String(provider || '').trim().toLowerCase();
   if (!provider) throw new Error('no provider');
   if (tropeModelListCache[provider]) return tropeModelListCache[provider];
@@ -1009,7 +1016,7 @@ async function tropeModelList(provider) {
 }
 
 /* {provider, model} — either may be '' meaning "server default". */
-async function tropeProviderGet() {
+export async function tropeProviderGet() {
   if (tropeProviderCache) return tropeProviderCache;
   let row = null;
   try {
@@ -1034,7 +1041,7 @@ async function tropeProviderGet() {
 }
 
 /* Admin-only (RLS enforces). Clears the override when both are empty. */
-async function tropeProviderSet(provider, model) {
+export async function tropeProviderSet(provider, model) {
   provider = String(provider || '').trim().toLowerCase();
   model = String(model || '').trim();
   const sb = await cloudClient().catch(() => null);
@@ -1048,3 +1055,66 @@ async function tropeProviderSet(provider, model) {
   catch (e) {}
   return tropeProviderCache;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers — js/157-trope-inference.js
+   (tropeProviderGet and the shared provider override) and the
+   Observatory shell in js/199-admin.js (renderTropeLab dispatch) —
+   reach these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone.
+   tropeProviderCache is republished as an accessor property, not a
+   value copy: the Lab reassigns it when the provider settings load
+   (tropeProviderGet) and on every provider/model save
+   (tropeProviderSet), and js/157-trope-inference.js reads it live in
+   tropeProviderInfo(). A value copy would freeze the initial null and
+   silently disable the provider override; the getter/setter pair
+   forwards every read and write to the module binding, so no consumer
+   expression changes. */
+window.tropeLabKeyToId = tropeLabKeyToId;
+window.tropeLabLastRows = tropeLabLastRows;
+window.tropeLabBooks = tropeLabBooks;
+window.tropeLabResolve = tropeLabResolve;
+window.tropeLabSb = tropeLabSb;
+window.tropeLabCoverage = tropeLabCoverage;
+window.tropeLabClaimedKeys = tropeLabClaimedKeys;
+window.tropeLabWireQueue = tropeLabWireQueue;
+window.tropeLabProgressHTML = tropeLabProgressHTML;
+window.tropeLabReviewShown = tropeLabReviewShown;
+window.TROPE_LAB_REVIEW_PAGE = TROPE_LAB_REVIEW_PAGE;
+window.tropeLabReviewEntries = tropeLabReviewEntries;
+window.tropeLabReviewVotes = tropeLabReviewVotes;
+window.tropeLabWorkTitles = tropeLabWorkTitles;
+window.tropeLabPrimeWorkTitles = tropeLabPrimeWorkTitles;
+window.tropeLabIsbnOf = tropeLabIsbnOf;
+window.tropeLabReviewTitle = tropeLabReviewTitle;
+window.tropeLabReviewHTML = tropeLabReviewHTML;
+window.tropeLabClaimsShown = tropeLabClaimsShown;
+window.TROPE_LAB_CLAIMS_PAGE = TROPE_LAB_CLAIMS_PAGE;
+window.tropeLabClaimsModelFilter = tropeLabClaimsModelFilter;
+window.tropeLabClaimsHTML = tropeLabClaimsHTML;
+window.renderTropeLab = renderTropeLab;
+window.tropeLabProviderHTML = tropeLabProviderHTML;
+window.tropeLabAllLibrariesHTML = tropeLabAllLibrariesHTML;
+window.tropeLabAllLibrariesScan = tropeLabAllLibrariesScan;
+window.tropeLabProposalsHTML = tropeLabProposalsHTML;
+window.TROPE_ADMIN_BOOKS_KEY = TROPE_ADMIN_BOOKS_KEY;
+window.tropeAdminBookCache = tropeAdminBookCache;
+window.tropeAdminLegacyDropped = tropeAdminLegacyDropped;
+window.tropeAdminBooksRebuild = tropeAdminBooksRebuild;
+window.tropeAdminBooksLoad = tropeAdminBooksLoad;
+window.tropeAdminBookById = tropeAdminBookById;
+window.tropeAdminBooksSave = tropeAdminBooksSave;
+window.tropeAdminBooksClear = tropeAdminBooksClear;
+window.TROPE_PROVIDER_SETTINGS_KEY = TROPE_PROVIDER_SETTINGS_KEY;
+window.TROPE_PROVIDER_SUGGESTIONS = TROPE_PROVIDER_SUGGESTIONS;
+Object.defineProperty(window, 'tropeProviderCache', { get: () => tropeProviderCache, set: (v) => { tropeProviderCache = v; }, enumerable: true, configurable: true });
+window.tropeModelListCache = tropeModelListCache;
+window.tropeModelList = tropeModelList;
+window.tropeProviderGet = tropeProviderGet;
+window.tropeProviderSet = tropeProviderSet;
