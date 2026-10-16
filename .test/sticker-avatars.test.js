@@ -191,8 +191,12 @@ const lsGet = (k) => { try { return window.localStorage.getItem(k); } catch (e) 
     !precacheLines.includes('cut-webp') && !precacheLines.includes('stickers/'));
   ok('sw.js precaches the picker module itself',
     sw.includes("'236-sticker-picker.js'"));
+  // R1 repoint (migration plan §9.3): js/236's tag is a module tag since
+  // its ESM conversion; the check accepts either tag form — the same
+  // assertion ("index.html loads the picker module"), coverage unchanged.
   ok('index.html loads the picker module',
-    html.includes('<script src="js/236-sticker-picker.js"></script>'));
+    html.includes('<script src="js/236-sticker-picker.js"></script>') ||
+    html.includes('<script type="module" src="js/236-sticker-picker.js"></script>'));
 
   /* ---- motif index integrity ---- */
   ok('every motif pick resolves against the registry',
