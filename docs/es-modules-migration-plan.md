@@ -1074,3 +1074,55 @@ notes — comment-only.
 - **Nit — PR-body strip sizes were character counts labelled
   as bytes.** The conversions themselves were exact; the body
   figures were corrected post-merge.
+
+## Gate notes — PR #276 (v600)
+
+Recorded from the Security Advisor's gate on the phase-2
+census batch 3 PR (js/056, js/062-tropes, js/110, js/135,
+js/155, js/181, js/197), at the program manager's direction.
+The gate closed PASS_WITH_RISK; merged as e75ddb7. Live at
+v600 with 50 module tags. Line tally at v600: 54,475 js
+lines (+205 this PR, +1,586 cumulative against the 52,889
+baseline); 50 of 104 files converted.
+
+- **The gate's census was fully independent.** The Advisor
+  wrote its own census from §1's method and reproduced the
+  Builder's with zero per-file diffs across all 104 files —
+  surfaces, consumers, writers, and eval-consumers all
+  identical. The phase-2 roster published in the PR body
+  (34-file feature roster plus the js/180 named hold) is
+  therefore a twice-derived fact, and the batch's claim to
+  be the first seven files in ascending consumer order is
+  verified, not asserted.
+- **js/135 `visionBusy` accessor-bridged.** The binding is
+  reassigned in-module by `visionSetBusy()` and read by the
+  still-classic js/137's `shelfScan()` guard (:65), so it is
+  served by the accessor bridge PR #274 established; js/137
+  is untouched. The gate re-ran the Builder's two-realm
+  proof firsthand and its own probe additionally proved the
+  write direction through js/135's internal reader — a bare
+  external `visionBusy = true` correctly blocks
+  `visionReadCover()`'s guard, and clearing via the exported
+  setter restores the flow.
+- **js/181's load path makes the no-repoint claim sound.**
+  No suite loads js/181 raw: every load goes through
+  `.test/harness.js` `loadApp`, which applies `classicize()`
+  to every file (the PR #269 R3-in-harness pattern), and the
+  text consumers are all unanchored. Zero repoints were
+  needed across all seven files in the batch.
+- **js/180 reconciliation confirmed.** js/180-settings
+  measures exactly one consumer (js/200-boot) on both
+  censuses; its phase-2 membership rests on §9.5's named
+  hold, and its settings-groups §9.5 obligation is
+  explicitly deferred to whichever PR converts it — the
+  final phase-2 PR, risk-ordered by its blast radius — not
+  discharged by this PR.
+- **Low, standing pattern — two value-bridged in-module
+  reassigned bindings** (js/155's `authorView`, js/181's
+  `bootVersionChecked`). AST-proven zero cross-file
+  references of any kind, so nothing observable diverges.
+  The caution is unchanged.
+- **Nit — the PR body carried a stale "Draft — no version
+  bump" sentence** predating the release step. Corrected
+  post-merge by the program manager and verified by
+  read-back.
