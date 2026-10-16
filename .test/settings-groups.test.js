@@ -1,11 +1,15 @@
-// Settings groups (v117, v312, v424, v476, v590): Account / Library / Reading /
-// Appearance / Offline / Privacy / About — Variant B (v590) folds the Profile
-// view into the Account group, retires the Purchase Ledger group (its figures
-// live in Chronicles), restores Reading as its own group (the "What you see"
-// trio + Book Portrait), and retires the persisted open-state: groups always
-// start with Account open and the rest collapsed, so first paint is never the
-// 97-control wall the v588 census measured. Each group is a collapsible card;
-// all existing controls keep working.
+// Settings groups (v117, v312, v424, v476, v590, hybrid): Account / Library /
+// Reading / Appearance / Offline / Privacy / Circle & privacy / About.
+// v590 (Variant B) folded the Profile view into the Account group; the
+// HYBRID (user decision, 2026-10-16) re-homes it: Profile is a view again
+// and holds identity + the gift cluster, so the Account group is sign-in
+// only and the Circle & privacy panel stands as its OWN group (the shared
+// component, Settings + Hearth doors). The Purchase Ledger group stays
+// retired (its figures live in Chronicles), Reading keeps the "What you
+// see" trio + Book Portrait, and the persisted open-state stays retired:
+// groups always start with Account open and the rest collapsed, so first
+// paint is never the 97-control wall the v588 census measured. Each group
+// is a collapsible card; all existing controls keep working.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -27,24 +31,24 @@ const doc = () => window.document;
 const groupTitles = () => [...doc().querySelectorAll('#view > .set-group > summary .set-tt')].map(s => s.textContent.trim());
 
 runInWindow(`localStorage.removeItem('spicyshelves.setgroups'); library = [];`);
-// v590: the Account group carries the identity form only when signed in.
+// Hybrid: the Account group is sign-in only — the identity form lives on
+// the Profile view now (asserted in profile.test.js), signed in or not.
 runInWindow(`cloudUser = { id: 'sg-user', email: 'sg@example.com' };`);
 runInWindow(`view = 'settings'; renderSettings();`);
 
-ok('7 groups render in the Variant B order (Ledger retired; Reading restored)',
+ok('8 groups render in the hybrid order (Ledger retired; Circle & privacy its own group)',
   JSON.stringify(groupTitles()) ===
-  JSON.stringify(['Account', 'Library', 'Reading', 'Appearance', 'Offline', 'Privacy', 'About']));
+  JSON.stringify(['Account', 'Library', 'Reading', 'Appearance', 'Offline', 'Privacy', 'Circle & privacy', 'About']));
 ok('group summaries carry tag subtitles', (() => {
   const tags = [...doc().querySelectorAll('#view > .set-group > summary .set-tag')].map(s => s.textContent);
-  return /Sign in, profile & gifts/.test(tags[0]) && /Version & diagnostics/.test(tags[6]);
+  return /Sign in & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[7]);
 })());
 ok('first group open by default, rest collapsed', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
-  return g[0].open === true && g[1].open === false && g[6].open === false;
+  return g[0].open === true && g[1].open === false && g[7].open === false;
 })());
 ok('subsections exist inside groups',
   doc().querySelector('#view > .set-group .set-sub') !== null &&
-  [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'Circle & privacy') &&
   [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'What you see') &&
   [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'Data management'));
 
@@ -53,7 +57,7 @@ const groupOf = (id) => {
   const det = el && el.closest('.set-group');
   return det ? [...doc().querySelectorAll('#view > .set-group')].indexOf(det) : -1;
 };
-ok('controls landed in the right groups (v590 Variant B)',
+ok('controls landed in the right groups (hybrid)',
   groupOf('bk-wipe') === 1 &&            // Library: Data management
   groupOf('cover-offline') === 4 &&      // Offline
   groupOf('st-yolo') === 3 &&            // Appearance > Display
@@ -62,15 +66,17 @@ ok('controls landed in the right groups (v590 Variant B)',
   groupOf('pc-backfill') === -1 &&       // v476: removed with Metadata group
   groupOf('meta-verify') === -1 &&       // v476: removed with Metadata group
   groupOf('hc-test') === -1 &&           // v476: removed with Metadata group
-  groupOf('ac-signin') === 0 &&          // Account
+  groupOf('ac-signin') === 0 &&          // Account (sign-in only, hybrid)
   groupOf('ac-sync') === 0 &&            // Account card, S4
   groupOf('ac-card-email') === 0 &&      // Account card, S4
-  groupOf('pf-first') === 0 &&           // v590: the identity form lives in Account
-  groupOf('pf-giftaddr-slot') === 0 &&   // v590: the gift cluster lives in Account
+  groupOf('pf-first') === -1 &&          // hybrid: the identity form lives on Profile
+  groupOf('pf-giftaddr-slot') === -1 &&  // hybrid: the gift cluster lives on Profile
+  groupOf('st-giftclaims') === -1 &&     // hybrid: the See-claims seg moved with the cluster
+  groupOf('st-circle-privacy') === 6 &&  // Circle & privacy: the shared panel, its own group
   groupOf('st-warnprefs') === 2 &&       // Reading: warning preferences entry
   groupOf('st-spoilers') === 2 &&        // Reading: Hide spoilers moved out of Privacy
   groupOf('rd-shield') === 2 &&          // Reading: the content shield sits with "What you see"
-  groupOf('ap-update') === 6);           // About
+  groupOf('ap-update') === 7);           // About
 ok('retired controls are gone (v590 named cuts)',
   groupOf('th-rmentry') === -1 &&        // the Show/Hide setting is retired (button is contextual now)
   groupOf('st-privacy-go') === -1 &&     // "Manage sharing" teleport button cut
@@ -79,9 +85,9 @@ ok('retired controls are gone (v590 named cuts)',
   groupOf('pf-save') === -1 &&           // the account form autosaves — no Save button
   !groupTitles().includes('Purchase Ledger') &&
   doc().querySelectorAll('#view .ledger-row').length === 0);
-ok('all pre-existing control ids still present (v590: th-rmentry retired with its setting)',
+ok('all pre-existing control ids still present (v590: th-rmentry retired with its setting; hybrid: pf-* ids live on Profile)',
   ['th-accent', 'th-anim', 'bk-export', 'bk-import', 'im-pick',
-   'ac-signup', 'ac-logout', 'ap-ver', 'pf-first', 'pf-last', 'pf-bio']
+   'ac-signup', 'ac-logout', 'ap-ver']
     .every(id => !!doc().getElementById(id)));
 ok('v416: theme gallery replaced the th-theme dropdown',
   !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
@@ -96,7 +102,7 @@ ok('S1: header says Settings with a sync-status line (no stat row)',
 ok('S2: About has App content + collapsed Diagnostics (v476: YOLO in Display)',
   (() => {
     const groups = [...doc().querySelectorAll('#view > .set-group')];
-    const about = groups[6];
+    const about = groups[7];
     const diag = about.querySelector('details.set-diag');
     return !!doc().getElementById('ap-update') &&
       !about.querySelector('#st-yolo') &&

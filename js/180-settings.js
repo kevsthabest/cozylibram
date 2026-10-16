@@ -2,11 +2,13 @@
 
 /* ---------------- backup view ---------------- */
 /* ---------------- settings groups (v117) ---------------- */
-// IA (v590, Variant B — one Account & Settings surface; the separate
-// Profile view is gone): Account / Library / Reading / Appearance /
-// Offline / Privacy / About. The Account group leads with sign-in,
-// then the identity form (js/105's accountFormHTML), the reunited gift
-// cluster (js/243), and Circle & privacy (the shared js/195 panel).
+// IA (hybrid, 2026-10-16 — supersedes v590's Variant B placement):
+// Account / Library / Reading / Appearance / Offline / Privacy /
+// Circle & privacy / About. Settings holds CONFIG: the Account group
+// is sign-in/session only, and Circle & privacy (the shared js/195
+// panel) stands as its own group. Identity + the gift cluster live
+// on the Profile view (js/105's renderProfile) — "Profile holds me +
+// gifts, Settings holds config."
 // (Metadata group removed v476 — enrichment now runs automatically in
 // the background; see autoEnrichSweep + boot sequence.)
 // Groups render directly as <details> cards (no post-hoc DOM
@@ -228,16 +230,10 @@ function tsRevert() {
   applyTheme();
   renderSettings();
 }
-/* v590: every route that used to open the Profile view (the menu's
- * Profile entry, the deferred handle claim, the retired 'profile'
- * view) lands here instead: Settings, with the Account group — which
- * always starts open — holding the identity form. The flag asks the
- * next renderSettings to scroll the form into view, once. */
-let settingsAccountFocus = false;
-function openSettingsAccount() {
-  settingsAccountFocus = true;
-  go('settings');
-}
+/* Hybrid: the routes that v590 funnelled here (the menu's Profile
+ * entry, the deferred handle claim, the 'profile' view itself) go to
+ * the restored Profile view now — openSettingsAccount is retired with
+ * the placement it served. */
 
 /* S1 (settings review): slim sync-status line for the Settings header --
    answers "is my library safe?" -- reuses the last-sync timestamp from 090-sync. */
@@ -286,15 +282,9 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p></div>';
 
-  // v590 (Variant B): the identity form IS the Account group's second
-  // block — the old "Profile & avatar" shortcut row (avatar + @handle
-  // line + Edit profile button) is gone because the form it pointed at
-  // now lives right here (js/105's accountFormHTML). The gift cluster
-  // (js/243's giftClusterHTML: See claims + grants + claims + views
-  // log) follows it contiguously; the Circle & privacy panel closes
-  // the group (assembled in the groups array below).
-  const htmlAccountForm = (signedIn() && typeof accountFormHTML === 'function') ? accountFormHTML() : '';
-  const htmlGiftCluster = (signedIn() && typeof giftClusterHTML === 'function') ? giftClusterHTML('st', false) : '';
+  // Hybrid: the identity form and the gift cluster are NOT here any
+  // more — they mount on the Profile view (js/105's renderProfile).
+  // The Account group is the sign-in/session block above, only.
 
   /* ---- Library ---- */
   const htmlBackup =
@@ -430,13 +420,14 @@ function renderSettings() {
     '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-spoilers" ' +
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
-  // v590: Circle & privacy moved INTO the Account group (it closes the
-  // group, under the gift cluster — see the groups array). The
+  // Hybrid: Circle & privacy is its OWN group (see the groups array) —
+  // v590 had folded it into Account under the gift cluster; the
+  // cluster moved to Profile, and the panel stands alone again. The
   // read-only "The Hearth sharing" summary and the "Manage sharing"
-  // teleport button are CUT: the live panel is right there, and the
-  // Hearth overlay remains the Hearth's own door. Hide spoilers moved
-  // to Reading (with the shield + warning prefs — the "What you see"
-  // trio). Privacy keeps the account-level preferences.
+  // teleport button stay CUT (v590), and the Hearth overlay remains
+  // the Hearth's own door to the same shared panel. Hide spoilers
+  // stays in Reading (with the shield + warning prefs — the "What
+  // you see" trio). Privacy keeps the account-level preferences.
   const htmlPrivacy =
     setSub('Preferences') +
     // v118: usage-analytics opt-out. Default ON for signed-in users; never
@@ -478,13 +469,8 @@ function renderSettings() {
     htmlSpoiler;
 
   const groups = [
-    ['user', 'Account', 'Sign in, profile & gifts',
-      '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin +
-      (htmlAccountForm ? setSub('Your details') + htmlAccountForm : '') +
-      (htmlGiftCluster ? setSub('Gift a Book') + htmlGiftCluster : '') +
-      setSub('Circle & privacy') +
-      (typeof circlePrivacyIntroHTML === 'function' ? circlePrivacyIntroHTML() : '') +
-      '<div id="st-circle-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>'],
+    ['user', 'Account', 'Sign in & sync',
+      '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin],
     ['covers', 'Library', 'Backups, imports & data',
       setSub('Backup & export') + htmlBackup + setSub('Metadata check') + htmlMetaCheck + setSub('Data management') + htmlData],
     ['reading', 'Reading', 'Surveys, nudges & what you see',
@@ -501,6 +487,14 @@ function renderSettings() {
       setSub('Cover cache') + htmlOffline],
     ['eyeoff', 'Privacy', 'Sharing',
       htmlPrivacy],
+    // Hybrid: the shared Circle & privacy panel as its own group —
+    // the same component the Hearth sheet renders (js/195), filled by
+    // the async wiring below. The gift cluster is NOT here: it mounts
+    // on the Profile view, and this door's panel saves preserve the
+    // loaded gift opt-in (the fence pinned in circle-shield §E2).
+    ['friends', 'Circle & privacy', 'What your circle can see',
+      (typeof circlePrivacyIntroHTML === 'function' ? circlePrivacyIntroHTML() : '') +
+      '<div id="st-circle-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>'],
     ['help', 'About', 'Version & diagnostics',
       setSub('App') + htmlAbout],
   ];
@@ -514,16 +508,8 @@ function renderSettings() {
 
   // v590: no open-state persistence anymore (start-collapsed rule).
 
-  // v590: the account form (js/105) wires itself — autosave commit,
-  // handle editor, gift address slot.
-  if (signedIn() && typeof wireAccountForm === 'function') wireAccountForm(document.getElementById('view'));
-  // Arriving via the menu's Profile entry (or the retired 'profile'
-  // route): bring the identity form into view, once.
-  if (settingsAccountFocus) {
-    settingsAccountFocus = false;
-    const firstInput = document.getElementById('pf-first');
-    if (firstInput && firstInput.scrollIntoView) { try { firstInput.scrollIntoView({ block: 'start' }); } catch (e) {} }
-  }
+  // Hybrid: the account form wires itself on the Profile view
+  // (js/105's renderProfile) — Settings no longer mounts it.
 
   // Appearance wiring
   document.getElementById('st-back').addEventListener('click', () => {
@@ -687,8 +673,8 @@ function renderSettings() {
   });
   refreshAccountUI();
   // v590: the Edit-profile and Manage-sharing shortcut buttons are gone
-  // with the surfaces they pointed at (the form and the panel are both
-  // on this page now).
+  // (the Manage-sharing teleport was cut; the hybrid's Profile door is
+  // the avatar menu, not a Settings row).
   // v118: analytics opt-out
   // v346: spoiler toggle
   document.getElementById('st-spoilers').addEventListener('change', e => {
@@ -754,18 +740,14 @@ function renderSettings() {
       // books and later emptied lost its only Settings unhide chip.
       const shelves = hideableShelves();
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
-      // v590: wire against the whole view — the gift cluster the wire
-      // reveals and fills now lives in the Account group beside the
-      // panel, not inside this box.
+      // Hybrid: the gift cluster does NOT live in Settings any more
+      // (it mounts on the Profile view), so this door wires the panel
+      // alone. wireCirclePrivacyPanel finds no 'st' gift seg/wrap to
+      // wire — and its saves stay safe for the gift opt-in: the
+      // panel state is seeded from the loaded priv above, so a save
+      // folds priv.giftClaims back into the row unchanged (the fence
+      // the Advisor verified in v590; pinned in circle-shield §E2).
       wireCirclePrivacyPanel(document.getElementById('view'), priv, 'st');
-      // The cluster rendered before the saved state was known; bring
-      // its See-claims seg in step with what actually loaded.
-      const gcSeg = document.getElementById('st-giftclaims');
-      if (gcSeg) gcSeg.querySelectorAll('button').forEach(x => {
-        const on = (x.dataset.v === '1') === (priv.giftClaims === true);
-        x.classList.toggle('active', on);
-        x.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
       // v590: the content shield renders in Reading now — wire it here,
       // where the privacy state has just been loaded.
       if (typeof wireShieldSeg === 'function') wireShieldSeg(document.getElementById('view'), 'rd');

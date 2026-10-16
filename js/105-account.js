@@ -329,8 +329,8 @@ async function syncCloudProfile() {
       p.updatedAt = remoteTs;
       saveProfile(p);
       renderTopbar();
-      // v590: the identity editor lives in Settings → Account now.
-      if (view === 'settings' && typeof renderSettings === 'function') renderSettings();
+      // Hybrid: the identity editor lives on the Profile view.
+      if (view === 'profile' && typeof renderProfile === 'function') renderProfile();
     } else {
       const hasContent = !!(p.firstName || p.lastName || p.avatar.type !== 'letter' || localTs > 0);
       if (hasContent && (!row || localTs > remoteTs)) await pushCloudProfile(p);
@@ -433,8 +433,9 @@ function closeMenu() {
 }
 function menuAction(id) {
   closeMenu();
-  // v590: "Profile" is the Account group of the one Settings surface.
-  if (id === 'profile') { if (typeof openSettingsAccount === 'function') openSettingsAccount(); else go('settings'); }
+  // Hybrid: "Profile" is its own view again — the two menu doors lead
+  // to two different rooms (Profile = identity + gifts; Settings = config).
+  if (id === 'profile') go('profile');
   else if (id === 'settings') go('settings');
   else if (id === 'observatory') go('admin'); // v119: admin-gated in renderAdmin()
   else if (id === 'logout') {
@@ -476,11 +477,12 @@ function fileToAvatarDataURL(file) {
     img.src = url;
   });
 }
-/* ---- the account form (v590, Variant B) ----
- * Was the separate Profile view; it is now the FIRST group ("Account")
- * of the single Settings surface, rendered by js/180's renderSettings
- * and wired by wireAccountForm below. Identity + handle + findable +
- * the gift address slot live here.
+/* ---- the account form (v590 form; hybrid placement) ----
+ * v590 (Variant B) folded this form into Settings → Account; the
+ * hybrid (2026-10-16) moves the MOUNT back to the Profile view —
+ * renderProfile below renders it and wireAccountForm wires it,
+ * exactly as Settings did. Identity + handle + findable + the gift
+ * address slot live here.
  * SAVE MODEL (stated on the surface): the form AUTOSAVES through one
  * commit — the v589 house pattern. Text fields debounce-commit 700ms
  * after the last keystroke; the discrete pickers (gender, findable)
@@ -517,7 +519,7 @@ function accountFormHTML() {
     '<p class="note" style="margin:6px 0 0">Stored privately — never shown on your profile or to your circle. Choosing 13–17 for the first time turns on the content shield and starts your circle sharing closed; every setting stays yours to change afterwards.</p></div>' +
     '<div class="field"><label for="pf-bio">Bio</label>' +
     '<textarea id="pf-bio" class="text-input" rows="2" maxlength="240" placeholder="A line or two about your reading life">' + esc(p.bio || '') + '</textarea>' +
-    '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on (Circle &amp; privacy, further down this page).</p></div>' +
+    '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on in Settings → Circle &amp; privacy.</p></div>' +
     '<div class="field"><label for="pf-genres">Favourite genres</label>' +
     '<input id="pf-genres" class="text-input" value="' + esc((p.favGenres || []).join(', ')) + '" maxlength="200" placeholder="Romantasy, Gothic horror, Space opera">' +
     '<p class="note" style="margin:6px 0 0">Comma-separated, up to 8.</p></div>' +
@@ -645,6 +647,52 @@ function wireAccountForm(root) {
     if (!was) { b.classList.add('active'); b.setAttribute('aria-pressed', 'true'); }
     commit();
   }));
+}
+
+/* ---- the Profile view (hybrid, 2026-10-16) ----
+ * Restored as a real view after v590 folded it into Settings → Account:
+ * the User's ruling is "Profile holds me + gifts, Settings holds
+ * config." The view mounts the identity form (accountFormHTML, wired
+ * by wireAccountForm — the autosave behaviour is byte-identical, only
+ * the mount moved) and, for signed-in readers, the reunited gift
+ * cluster (js/243's giftClusterHTML) under it.
+ * The cluster's See-claims seg + gift slot are wired by js/195's
+ * wireCirclePrivacyPanel against THIS view (prefix 'pf') once the
+ * privacy state loads — the same wire path the panel's own doors use,
+ * so the panel state seeded from the loaded profile is what a
+ * gift-seg save folds into the row. Until the load lands (or if it
+ * fails) the cluster stays hidden: giftSupported's fail-closed rule
+ * is js/195's reveal, and an unwired cluster never appears. */
+function renderProfile() {
+  const htmlGiftCluster = (signedIn() && typeof giftClusterHTML === 'function') ? giftClusterHTML('pf', false) : '';
+  setView(
+    '<div class="view-head"><button class="btn ghost sm" id="pf-back">← Back</button>' +
+    '<h2 class="serif">Profile</h2></div>' +
+    '<div class="pf-card">' + accountFormHTML() + '</div>' +
+    (htmlGiftCluster
+      ? '<div class="pf-card" style="margin-top:12px"><h3 class="set-sub serif" style="margin-top:0">Gift a Book</h3>' +
+        htmlGiftCluster + '</div>'
+      : '')
+  );
+  wireAccountForm(document.getElementById('view'));
+  document.getElementById('pf-back').addEventListener('click', () => go('library'));
+  (async () => {
+    if (!signedIn() || typeof circlePrivacy !== 'function' || typeof wireCirclePrivacyPanel !== 'function') return;
+    let priv;
+    try { priv = await circlePrivacy(); } catch (e) { return; }
+    if (view !== 'profile') return; // navigated away mid-load — never wire a dead tree
+    const root = document.getElementById('view');
+    if (!root || !root.querySelector('#pf-giftwrap')) return;
+    wireCirclePrivacyPanel(root, priv, 'pf');
+    // The cluster rendered before the saved state was known; bring
+    // its See-claims seg in step with what actually loaded.
+    const gcSeg = document.getElementById('pf-giftclaims');
+    if (gcSeg) gcSeg.querySelectorAll('button').forEach(x => {
+      const on = (x.dataset.v === '1') === (priv.giftClaims === true);
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  })();
 }
 
 renderTopbar();

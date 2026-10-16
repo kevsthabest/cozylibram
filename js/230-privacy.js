@@ -7,7 +7,7 @@
    Two private per-user facts live here:
 
    - The age BAND: 'teen' (13–17) or 'adult' (18+), self-declared at
-     signup or set later in Settings → Account. A band is a DEFAULTS mechanism,
+     signup or set later in Profile. A band is a DEFAULTS mechanism,
      not identity verification — it only sets where the sharing and
      shield toggles START. It is never displayed anywhere: no badge,
      no profile field, no circle surface. Storage is the privacy

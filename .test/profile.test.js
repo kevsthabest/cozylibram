@@ -1,8 +1,10 @@
 // Profile + account menu (v37): the top-right avatar opens a dropdown
 // (Profile / Settings / Logout when signed in; Settings / Sign in when not).
-// v590 (Variant B): the separate Profile VIEW is gone — the menu's Profile
-// entry lands on Settings with the Account group open, where the identity
-// form edits names + avatar (themed defaults or upload) and AUTOSAVES.
+// v590 (Variant B) folded the Profile view into Settings; the HYBRID
+// (user decision, 2026-10-16) restores it: the menu's Profile entry lands
+// on the Profile VIEW again — two doors, two different rooms — where the
+// identity form edits names + avatar (themed defaults or upload) and
+// AUTOSAVES, with the gift cluster mounted below it.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -85,10 +87,12 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   window.document.body.click(); await tick();
   ok('clicking outside closes the menu', q('#menu-pop').hidden);
 
-  // Profile: the menu entry lands on Settings → Account (Variant B).
+  // Profile: the menu entry lands on the Profile view (hybrid).
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="profile"]').click(); await tick();
-  ok('menu Profile lands on the Settings account form', probe('view') === 'settings' && !!q('#pf-first') && !!q('#pf-last'));
+  ok('menu Profile lands on the Profile view', probe('view') === 'profile' && !!q('#pf-first') && !!q('#pf-last'));
+  ok('the gift cluster mounts on the Profile view (See-claims seg + slot)',
+    !!q('#pf-giftwrap') && !!q('#pf-giftclaims') && !!q('#pf-gift-slot'));
   ok('the account form states its save model (autosave, no Save button)',
     !!q('#ac-savestate') && /save automatically/i.test(q('#view').textContent) && !q('#pf-save'));
   ok('email field is read-only', !!q('#pf-last') && !!q('input[disabled]'));
@@ -124,7 +128,7 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('greeting uses the profile first name (v405)', q('.home-greet h2').textContent.includes('Ada'));
   runInWindow(`{ const p = loadProfile(); p.firstName = ''; touchProfile(p); renderLibrary(); }`); await tick();
   ok('greeting falls back gracefully without a name', /Good (morning|afternoon|evening)/.test(q('.home-greet h2').textContent));
-  runInWindow(`renderSettings();`); await tick();
+  runInWindow(`view = 'profile'; renderProfile();`); await tick();
   ok('back on the account form', !!q('#pf-first'));
 
   // Pick a themed default (v546 re-pin: through the fitting room —
@@ -143,13 +147,15 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   q('#apk-close').click(); await tick();
 
   // Back button returns home.
-  q('#st-back').click(); await tick();
+  q('#pf-back').click(); await tick();
   ok('back button returns to the library', probe('view') === 'library');
 
-  // Settings still reachable from the menu.
+  // Settings still reachable from the menu — and no longer carries the form.
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="settings"]').click(); await tick();
   ok('settings opens from the menu', probe('view') === 'settings' && !!q('#st-back'));
+  ok('settings no longer carries the identity form or the gift cluster (hybrid)',
+    !q('#pf-first') && !q('#st-giftwrap') && !!q('#st-circle-privacy'));
   q('#st-back').click(); await tick();
   ok('settings back button returns home', probe('view') === 'library');
 

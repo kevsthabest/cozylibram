@@ -281,6 +281,36 @@ const NOW = new Date().toISOString();
   mount.querySelector('#rd-shield [data-v="1"]').click(); await tick(3);
   ok('shield toggle back on', probe('privacyState()').shield === true);
 
+  /* ---------- E2. the gift opt-in fence (hybrid) ----------
+   * The gift cluster lives on the Profile view now, so the Settings
+   * door wires the panel with NO gift seg mounted. The panel seeds its
+   * gift state from the loaded profile, so a save from that door folds
+   * the LOADED value back into the row — it must neither reset an
+   * opt-in nor coerce the opt-in on. (The Advisor verified this fence
+   * in v590; the hybrid must not reopen it.) The row starts WITHOUT
+   * the key, so only a value the save actually writes can satisfy
+   * either direction. */
+  const fencePriv = { share: true, hidden: [], bio: true, activity: false, recos: true, buddy: true, marginalia: true, giftClaims: true };
+  delete stub.db.profiles[ME].gift_claims_visible;
+  const fenceHost = window.document.createElement('div');
+  fenceHost.innerHTML = probe('circlePrivacyPanelHTML(' + JSON.stringify(fencePriv) + ', "st", [])');
+  window.document.body.appendChild(fenceHost);
+  probe('wireCirclePrivacyPanel(document.body.lastElementChild, ' + JSON.stringify(fencePriv) + ', "st")');
+  fenceHost.querySelector('#st-share [data-v="0"]').click(); await tick(4);
+  ok('fence: a panel save with no gift seg mounted writes back the loaded opt-in (true)',
+    stub.db.profiles[ME].gift_claims_visible === true);
+  const fencePriv2 = Object.assign({}, fencePriv, { share: false, giftClaims: false });
+  delete stub.db.profiles[ME].gift_claims_visible;
+  fenceHost.remove(); // duplicate seg ids would shadow the second host's
+  const fenceHost2 = window.document.createElement('div');
+  fenceHost2.innerHTML = probe('circlePrivacyPanelHTML(' + JSON.stringify(fencePriv2) + ', "sf", [])');
+  window.document.body.appendChild(fenceHost2);
+  probe('wireCirclePrivacyPanel(document.body.lastElementChild, ' + JSON.stringify(fencePriv2) + ', "sf")');
+  fenceHost2.querySelector('#sf-share [data-v="1"]').click(); await tick(4);
+  ok('fence: a panel save with no gift seg mounted never coerces the opt-in on (false stays false)',
+    stub.db.profiles[ME].gift_claims_visible === false);
+  fenceHost2.remove();
+
   /* ---------- F. user_state privacy section sync ---------- */
   resetPrivacy();
   runInWindow('localStorage.setItem(' + JSON.stringify(PRIVACY_KEY) + ', JSON.stringify({ band: "teen", shield: true, teenDefaultsApplied: true, bandSetAt: 42 }))');
@@ -313,12 +343,12 @@ const NOW = new Date().toISOString();
   const suState = probe('privacyState()');
   ok('signup records the band on-device at once (shield on, profiles write pending)', suState.band === 'teen' && suState.shield === true && suState.teenDefaultsApplied === false);
 
-  // v590: the account form renders in Settings only when signed in
-  // (the old profile view rendered signed-out too). Sign back in as
+  // Hybrid: the account form renders on the Profile view again (it
+  // renders signed-out too, as the pre-v590 view did). Sign back in as
   // the test user — the band under test is device state, not the
   // profile's, so whose form it is doesn't matter.
   useAs(ME);
-  probe('renderSettings()'); await tick(2);
+  probe("view = 'profile'; renderProfile();"); await tick(2);
   ok('account form shows the band picker with teen active', !!window.document.querySelector('#pf-band [data-b="teen"].active'));
   window.document.querySelector('#pf-band [data-b="adult"]').click(); await tick(3);
   ok('band picker updates the band via user_state (instant apply in the account form)', probe('privacyState()').band === 'adult');

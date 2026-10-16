@@ -493,13 +493,14 @@ async function openGiftGivingSheet(opener) {
   }));
 }
 
-/* ---------- The gift cluster, reunited in Settings → Account
- * (v590): giftClusterHTML mounts the See-claims seg + the slot
- * fillGiftSettings fills with the sharing toggle, the per-friend
- * grants, the recipient claims, and the address access log; the
- * same cluster follows the Circle & privacy panel in the Hearth
- * sheet. fillGiftAddress mounts the gift address editor in the
- * account form's slot (js/105). ---------- */
+/* ---------- The gift cluster (hybrid placement): giftClusterHTML
+ * mounts the See-claims seg + the slot fillGiftSettings fills with
+ * the sharing toggle, the per-friend grants, the recipient claims,
+ * and the address access log — on the Profile view, under the
+ * identity form (v590 had it in Settings → Account; the hybrid moved
+ * the mount, nothing else); the same cluster follows the Circle &
+ * privacy panel in the Hearth sheet. fillGiftAddress mounts the
+ * gift address editor in the account form's slot (js/105). ---------- */
 
 /* The teen storage ban (spec §7/A9): the address form is never
  * offered to a teen-band account. The band is device state —
@@ -520,12 +521,12 @@ function giftSegHTML(id, on) {
     '<button data-v="0"' + (!on ? ' class="active"' : '') + ' aria-pressed="' + (!on ? 'true' : 'false') + '">Off</button></div>';
 }
 
-/* v590 (Variant B): the gift cluster's Settings-side shell — the
- * recipient claim-visibility opt-in plus the slot fillGiftSettings
- * fills (sharing toggle, per-friend grants, claims list, address-views
- * log). One builder for both doors: the Settings Account group renders
- * it directly, the Hearth privacy sheet appends it after the Circle &
- * privacy panel. The SEE CLAIMS helper below is the single source for
+/* The gift cluster's shell — the recipient claim-visibility opt-in
+ * plus the slot fillGiftSettings fills (sharing toggle, per-friend
+ * grants, claims list, address-views log). One builder for both
+ * doors: the Profile view renders it under the identity form, the
+ * Hearth privacy sheet appends it after the Circle & privacy panel.
+ * The SEE CLAIMS helper below is the single source for
  * the setting's explanation — it states the shipped mechanics (the
  * claims list shows book + claimer + state, per the gift RPCs); the
  * older Hearth copy describing a "marker on your copy" was wrong and

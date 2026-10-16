@@ -62,12 +62,15 @@ ok('css: :focus-visible rule', /:focus-visible\s*\{[^}]*outline/.test(css));
 ok('css: global reduced-motion kill-switch',
   /prefers-reduced-motion:\s*reduce[\s\S]*?\*\s*,\s*\*::before/.test(css));
 
-// --- v590 Variant B: the account/settings accessibility pack ---
+// --- v590 accessibility pack, hybrid placement ---
 // aria-pressed on every seg button + hide-shelf chip in the cluster (state
 // must be programmatically determinable, not colour/bold alone); aria-live
 // on the toast root; label association for the account form + login fields;
 // seg touch targets ≥44px; the two measured default-theme contrast failures
 // (hint --faint on card 4.29:1, white on --accent 4.23:1) fixed at token level.
+// The hybrid moves the form + gift cluster mounts from Settings to the
+// Profile view — the pack's assertions scan BOTH mounts so the move can
+// never silently drop coverage.
 (async () => {
   const tick = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
   const qa = (s, root) => Array.from((root || window.document).querySelectorAll(s));
@@ -90,7 +93,7 @@ ok('css: global reduced-motion kill-switch',
   const priv = { share: true, hidden: ['tbr'], bio: true, activity: false, recos: true, buddy: true, marginalia: true, giftClaims: false };
   pressedOk('privacy panel', run(`circlePrivacyPanelHTML(${JSON.stringify(priv)}, 'st', ['tbr', 'read'])`));
   pressedOk('content shield seg', run(`shieldSegHTML('rd', true)`));
-  pressedOk('gift cluster', run(`giftClusterHTML('st', false)`));
+  pressedOk('gift cluster', run(`giftClusterHTML('pf', false)`));
   pressedOk('gift sharing seg', run(`giftSegHTML('gift-sharing', true)`));
 
   // The rendered Settings surface: every seg button in the view is pressed-aware.
@@ -113,6 +116,22 @@ ok('css: global reduced-motion kill-switch',
   ok('login fields have real labels (not placeholder-only)',
     !!window.document.querySelector('label[for="ac-email"]') &&
     !!window.document.querySelector('label[for="ac-pass"]'));
+
+  // The Profile view mount (hybrid): the identity form + gift cluster
+  // live here now — scan its seg buttons and its field labels too.
+  run(`cloudUser = { id: 'a11y-u', email: 'a11y@example.com' }; view = 'profile'; renderProfile();`);
+  await tick(3);
+  const pfSegBtns = qa('#view .seg button');
+  ok('profile view: seg buttons exist to scan', pfSegBtns.length > 0);
+  ok('profile view: every seg button carries aria-pressed in step with .active',
+    pfSegBtns.every(b => b.getAttribute('aria-pressed') === String(b.classList.contains('active'))));
+  const pfUnlabelled = qa('#view input, #view textarea, #view select').filter(el => {
+    if (el.type === 'hidden' || el.type === 'file' || el.type === 'checkbox') return false;
+    if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return false;
+    return !(el.id && window.document.querySelector('label[for="' + el.id + '"]'));
+  });
+  ok('profile view fields: every text control has an associated label',
+    pfUnlabelled.length === 0);
 
   // Warning preferences: filter input narrows both pill lists; chips are pressed-aware.
   // The taxonomy read is the community corpus client's; stub it.

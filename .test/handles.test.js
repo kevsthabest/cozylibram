@@ -317,8 +317,8 @@ const stub = {
     return { data: null, error: null };
   };
   runInWindow('localStorage.setItem("spicyshelves.profile.' + ME + '", JSON.stringify({ firstName: "Me", lastName: "Myself", avatar: { type: "letter" }, updatedAt: 1 }))');
-  probe('renderSettings()'); await tick(3);
-  ok('editor: the handle field renders (Settings → Account, v590)', !!q('#pf-handle'));
+  probe("view = 'profile'; renderProfile();"); await tick(3);
+  ok('editor: the handle field renders (Profile view, hybrid)', !!q('#pf-handle'));
   ok('editor: the findable toggle renders, disabled until a handle exists', !!q('#pf-findable') &&
     q('#pf-findable').dataset.disabled === '1');
   q('#pf-handle').value = 'moon_reader';
@@ -331,7 +331,7 @@ const stub = {
     if (name === 'clear_handle') return { data: { ok: true, cleared: true }, error: null };
     return { data: null, error: null };
   };
-  probe('renderSettings()'); await tick(3);
+  probe("view = 'profile'; renderProfile();"); await tick(3);
   ok('editor: an existing handle renders with a clear action', !!q('#pf-handle-clear'));
   q('#pf-handle-clear').click(); await tick(2);
   ok('editor: clearing asks for a second tap with the 90-day hold stated first',
@@ -339,7 +339,7 @@ const stub = {
   q('#pf-handle-clear').click(); await tick(4);
   ok('editor: the confirmed clear removes the local handle', probe('loadProfile()').handle === '');
 
-  /* ---------- settings identity (v590: the stack is merged) ---------- */
+  /* ---------- identity placement (hybrid: card in Settings, form on Profile) ---------- */
   runInWindow('localStorage.setItem("spicyshelves.profile.' + ME + '", JSON.stringify({ firstName: "Me", lastName: "Myself", avatar: { type: "letter" }, updatedAt: 1, handle: "moon_reader" }))');
   probe('renderSettings()'); await tick(2);
   const cardName = q('#ac-card-name');
@@ -348,11 +348,12 @@ const stub = {
     !!cardName && cardName.textContent === 'Me Myself');
   ok('settings: exactly one identity row remains (the duplicate Profile & avatar row is gone)',
     profRows.length === 1);
-  ok('settings: the handle shows in the account form handle block instead',
+  probe("view = 'profile'; renderProfile();"); await tick(2);
+  ok('profile: the handle shows in the form handle block',
     !!q('#pf-handle-box') && q('#pf-handle-box').textContent.includes('@moon_reader'));
   runInWindow('localStorage.setItem("spicyshelves.profile.' + ME + '", JSON.stringify({ firstName: "Me", lastName: "Myself", avatar: { type: "letter" }, updatedAt: 1 }))');
-  probe('renderSettings()'); await tick(2);
-  ok('settings: with no handle the form invites setting one instead of repeating the name',
+  probe("view = 'profile'; renderProfile();"); await tick(2);
+  ok('profile: with no handle the form invites setting one instead of repeating the name',
     !!q('#pf-handle-box') && /pick a handle/i.test(q('#pf-handle-box').textContent));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

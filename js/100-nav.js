@@ -11,7 +11,8 @@ const NAV_PARENT = {
   shelf: 'shelf',
   coven: 'coven', 'coven-friend': 'coven',
   settings: 'settings', // v171: sidebar settings entry highlights itself
-  profile: 'settings', // v590: the retired Profile view's parent is Settings
+  // Hybrid: Profile is its own view again (reached from the avatar menu,
+  // not the bottom nav) — it has no nav parent, as before v590.
 };
 function navTab(v) {
   if (v === 'series') return NAV_PARENT[typeof seriesReturn !== 'undefined' ? seriesReturn : ''] || 'discover';
