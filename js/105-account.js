@@ -7,12 +7,18 @@
 // sync validates ids against this list, so an id is choosable (and syncable)
 // only once it lands here. `premium` is an internal catalog flag only during
 // alpha: premium sets are flagged, never locked. Ids are never reused.
-const AVATAR_SETS = [
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const AVATAR_SETS = [
   { key: 'classics', name: 'Libram Classics' },
   { key: 'stormrider', name: 'Stormrider' },
   { key: 'voidsignal', name: 'Voidsignal' },
 ];
-const DEFAULT_AVATARS = [
+export const DEFAULT_AVATARS = [
   { id: 'rose', label: 'Dark Rose', src: 'img/avatars/avatar-rose.webp', set: 'classics' },
   { id: 'moon', label: 'Moon & Dagger', src: 'img/avatars/avatar-moon.webp', set: 'classics' },
   { id: 'dragon', label: 'Dragon', src: 'img/avatars/avatar-dragon.webp', set: 'classics' },
@@ -41,10 +47,10 @@ const DEFAULT_AVATARS = [
 ];
 
 // Profile storage: one slot per user id ('offline' when not signed in).
-function profileKey() {
+export function profileKey() {
   return 'spicyshelves.profile.' + (cloudUser ? cloudUser.id : 'offline');
 }
-function blankProfile() {
+export function blankProfile() {
   // v522: bio + favGenres — the shareable profile content the Circle &
   // privacy "bio & favourite genres" toggle governs.
   // v550: handle (the chosen public identity; written ONLY by the
@@ -53,7 +59,7 @@ function blankProfile() {
   // the sync ladder like share_bio).
   return { firstName: '', lastName: '', gender: '', avatar: { type: 'letter' }, avatarCloudPath: '', updatedAt: 0, bio: '', favGenres: [], handle: '', findable: false };
 }
-function loadProfile() {
+export function loadProfile() {
   let p = null;
   try { p = JSON.parse(localStorage.getItem(profileKey()) || 'null'); } catch (e) {}
   const base = blankProfile();
@@ -75,19 +81,19 @@ function loadProfile() {
   }
   return base;
 }
-function saveProfile(p) {
+export function saveProfile(p) {
   try { localStorage.setItem(profileKey(), JSON.stringify(p)); } catch (e) {}
 }
 // Stamp a user edit and save it. The stamp is what last-write-wins sync
 // compares across devices.
-function touchProfile(p) {
+export function touchProfile(p) {
   p.updatedAt = Date.now();
   saveProfile(p);
   return p;
 }
 // dataURL <-> Blob helpers for the avatar bucket (btoa/atob/arrayBuffer exist
 // in both browsers and Node, so the test suite can exercise the real path).
-function dataUrlToBlob(dataUrl) {
+export function dataUrlToBlob(dataUrl) {
   const parts = String(dataUrl).split(',');
   const type = (parts[0].match(/data:(.*?);/) || [])[1] || 'image/jpeg';
   const bin = atob(parts[1] || '');
@@ -95,7 +101,7 @@ function dataUrlToBlob(dataUrl) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: type });
 }
-async function blobToDataUrl(blob) {
+export async function blobToDataUrl(blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -105,7 +111,7 @@ async function blobToDataUrl(blob) {
 }
 // One-time bridge: v37 briefly mirrored names into auth user_metadata.
 // If this device never set a profile, carry those values forward once.
-function adoptLegacyMetadata(user) {
+export function adoptLegacyMetadata(user) {
   const md = (user && user.user_metadata) || {};
   if (!md.first_name && !md.last_name && !md.avatar_id) return;
   try {
@@ -123,7 +129,7 @@ function adoptLegacyMetadata(user) {
 // v178: the gender column may not exist yet on databases whose owner
 // hasn't re-run supabase/schema.sql — detect that and retry without it so
 // names/avatars keep syncing instead of failing silently.
-function isMissingColumn(err) {
+export function isMissingColumn(err) {
   if (!err) return false;
   if (/42703/i.test(String(err.code || ''))) return true;
   return /column .* does not exist/i.test(String(err.message || ''));
@@ -131,7 +137,7 @@ function isMissingColumn(err) {
 // Push this device's profile to the profiles table (best-effort). A newly
 // picked photo is uploaded to the private `avatars` bucket first (one file
 // per user, overwritten in place); the row just stores its path.
-async function pushCloudProfile(p) {
+export async function pushCloudProfile(p) {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return { ok: false, error: null };
   try {
@@ -204,8 +210,8 @@ async function pushCloudProfile(p) {
    present or future catalog id (bare slugs: no prefix, no slash), and it
    resolves to its file with no lookup table. Unknown or stale ids fall
    back to the initial avatar exactly like bogus catalog ids. ---- */
-const STICKER_AVATAR_PREFIX = 'stk:';
-function stickerCatalog() {
+export const STICKER_AVATAR_PREFIX = 'stk:';
+export function stickerCatalog() {
   // js/228 loads after js/105; every real call site runs post-boot, and
   // the typeof guard keeps the first renderTopbar (end of this file,
   // before js/228 executes) safe — a sticker avatar just shows its
@@ -213,7 +219,7 @@ function stickerCatalog() {
   try { return (typeof PS_STICKER_SETS !== 'undefined' && PS_STICKER_SETS) ? PS_STICKER_SETS : null; }
   catch (e) { return null; }
 }
-function parseStickerAvatarId(id) {
+export function parseStickerAvatarId(id) {
   if (typeof id !== 'string' || id.indexOf(STICKER_AVATAR_PREFIX) !== 0) return null;
   const m = /^([a-z0-9-]+)\/([a-z0-9-]+)-([ab])-(\d{2})$/.exec(id.slice(STICKER_AVATAR_PREFIX.length));
   if (!m || m[2] !== m[1]) return null; // the file stem repeats its theme dir
@@ -226,13 +232,13 @@ function parseStickerAvatarId(id) {
    sticker-avatars suite pins registry == disk inventory, so a future
    re-cut that changes the numbering fails loudly here. js/228's
    portrait-share rotation consumes these same lists (v552, #213). */
-const STICKER_SHEET_NUMBERS = {
+export const STICKER_SHEET_NUMBERS = {
   'briarthrone/b': [1, 2, 3, 5, 10, 11, 13, 14, 15, 18, 19, 20, 21],
   'light/a': [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
   'midnight/b': [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13],
   'wisp/b': [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 };
-function stickerSheetNumbers(theme, sheet) {
+export function stickerSheetNumbers(theme, sheet) {
   const explicit = STICKER_SHEET_NUMBERS[theme + '/' + sheet];
   if (explicit) return explicit;
   const cat = stickerCatalog();
@@ -242,7 +248,7 @@ function stickerSheetNumbers(theme, sheet) {
   for (let i = 1; i <= n; i++) out.push(i);
   return out;
 }
-function stickerAvatarValid(id) {
+export function stickerAvatarValid(id) {
   const parts = parseStickerAvatarId(id);
   if (!parts || parts.num < 1) return false;
   const cat = stickerCatalog();
@@ -250,15 +256,15 @@ function stickerAvatarValid(id) {
   if (!cat[parts.theme]) return false;
   return stickerSheetNumbers(parts.theme, parts.sheet).indexOf(parts.num) !== -1;
 }
-function stickerAvatarPath(parts) {
+export function stickerAvatarPath(parts) {
   return 'assets/stickers/cut-webp/' + parts.theme + '/' + parts.stem + '.webp';
 }
-function stickerAvatarSrc(id) {
+export function stickerAvatarSrc(id) {
   if (!stickerAvatarValid(id)) return null;
   if (!stickerCatalog()) return null; // unresolved until js/228 lands; initial shows meanwhile
   return stickerAvatarPath(parseStickerAvatarId(id));
 }
-function themedOrLetterAvatar(id) {
+export function themedOrLetterAvatar(id) {
   if (id && DEFAULT_AVATARS.some(a => a.id === id)) return { type: 'default', id: id };
   if (id && stickerAvatarValid(id)) return { type: 'sticker', id: id };
   return { type: 'letter' };
@@ -266,13 +272,13 @@ function themedOrLetterAvatar(id) {
 /* Pure: the profiles.avatar_id value for a profile — the catalog id for
    painted avatars, the namespaced 'stk:' id for stickers, '' otherwise
    (uploads live in avatar_path; initials store nothing). */
-function cloudAvatarId(p) {
+export function cloudAvatarId(p) {
   if (!p || !p.avatar) return '';
   if (p.avatar.type === 'default' || p.avatar.type === 'sticker') return p.avatar.id || '';
   return '';
 }
 // Adopt the photo a winning cloud row points at (download once, keep local).
-async function adoptCloudPhoto(sb, p, row) {
+export async function adoptCloudPhoto(sb, p, row) {
   const want = row.avatar_path || '';
   if (want && want === p.avatarCloudPath && p.avatar.type === 'upload' && p.avatar.dataUrl) return;
   if (want && sb.storage) {
@@ -289,7 +295,7 @@ async function adoptCloudPhoto(sb, p, row) {
   p.avatarCloudPath = '';
 }
 // Two-way sync with the profiles table. Newer updatedAt wins, either direction.
-async function syncCloudProfile() {
+export async function syncCloudProfile() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
   try {
@@ -338,7 +344,7 @@ async function syncCloudProfile() {
   } catch (e) { /* offline — try again next sync */ }
 }
 
-function avatarSrc(p) {
+export function avatarSrc(p) {
   if (!p) return null;
   if (p.avatar.type === 'upload' && p.avatar.dataUrl) return p.avatar.dataUrl;
   if (p.avatar.type === 'default') {
@@ -348,13 +354,13 @@ function avatarSrc(p) {
   if (p.avatar.type === 'sticker') return stickerAvatarSrc(p.avatar.id);
   return null;
 }
-function avatarLetter(p) {
+export function avatarLetter(p) {
   const n = (p.firstName || '').trim();
   if (n) return n[0].toUpperCase();
   const e = (cloudUser && cloudUser.email) || '';
   return (e.trim()[0] || '•').toUpperCase();
 }
-function avatarHTML(p, cls) {
+export function avatarHTML(p, cls) {
   const src = avatarSrc(p);
   if (src) {
     // v546: sticker avatars carry .avatar-stk (contain rendering on the
@@ -384,10 +390,10 @@ if (typeof document !== 'undefined' && document.addEventListener) {
     if (t.parentNode) t.parentNode.replaceChild(span, t);
   }, true);
 }
-const signedIn = () => !!(cloudUser && cloudUser.email);
+export const signedIn = () => !!(cloudUser && cloudUser.email);
 
 /* ---- topbar + dropdown menu ---- */
-function renderTopbar() {
+export function renderTopbar() {
   const btn = document.getElementById('menu-btn');
   if (!btn) return;
   const p = loadProfile();
@@ -397,7 +403,7 @@ function renderTopbar() {
   btn.title = signedIn() ? 'Account — ' + cloudUser.email : 'Menu';
   closeMenu();
 }
-function menuItems() {
+export function menuItems() {
   if (signedIn()) {
     const items = [
       { id: 'profile', icon: 'user', label: 'Profile' },
@@ -416,7 +422,7 @@ function menuItems() {
   // which is the sign-in screen, so there is no separate menu item for it.
   return items;
 }
-function openMenu() {
+export function openMenu() {
   const pop = document.getElementById('menu-pop');
   if (!pop) return;
   pop.innerHTML =
@@ -427,11 +433,11 @@ function openMenu() {
   pop.querySelectorAll('[data-m]').forEach(b =>
     b.addEventListener('click', () => menuAction(b.dataset.m)));
 }
-function closeMenu() {
+export function closeMenu() {
   const pop = document.getElementById('menu-pop');
   if (pop) { pop.hidden = true; pop.innerHTML = ''; }
 }
-function menuAction(id) {
+export function menuAction(id) {
   closeMenu();
   // Hybrid: "Profile" is its own view again — the two menu doors lead
   // to two different rooms (Profile = identity + gifts; Settings = config).
@@ -444,7 +450,7 @@ function menuAction(id) {
     cloudSignOut();
   }
 }
-const _menuBtn = document.getElementById('menu-btn');
+export const _menuBtn = document.getElementById('menu-btn');
 if (_menuBtn) _menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   const pop = document.getElementById('menu-pop');
@@ -457,7 +463,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 
 /* ---- profile view ---- */
-function fileToAvatarDataURL(file) {
+export function fileToAvatarDataURL(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -489,7 +495,7 @@ function fileToAvatarDataURL(file) {
  * commit at once through the same function. The age band is NOT part
  * of the form's data (it writes user_state instantly, as before), and
  * the handle keeps its own claim buttons (a claim, not a save). */
-function accountFormHTML() {
+export function accountFormHTML() {
   const p = loadProfile();
   const bandNow = (typeof privacyState === 'function') ? privacyState().band : null;
   const email = (cloudUser && cloudUser.email) || '';
@@ -546,7 +552,7 @@ function accountFormHTML() {
     '<div id="pf-giftaddr-slot"></div>';
 }
 
-function wireAccountForm(root) {
+export function wireAccountForm(root) {
   const scope = root || document;
   // v546: the picker is the Collections + Fitting Room sheet (js/236).
   const changeBtn = scope.querySelector('#pf-change');
@@ -667,7 +673,7 @@ function wireAccountForm(root) {
  * with it and shares its fate — js/195's reveal shows both at the
  * same moment, and its fail-closed paths drop both — so a refused
  * load never leaves an empty titled card on the page. */
-function renderProfile() {
+export function renderProfile() {
   const htmlGiftCluster = (signedIn() && typeof giftClusterHTML === 'function') ? giftClusterHTML('pf', false) : '';
   setView(
     '<div class="view-head"><button class="btn ghost sm" id="pf-back">← Back</button>' +
@@ -700,3 +706,55 @@ function renderProfile() {
 }
 
 renderTopbar();
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/090-sync.js, js/095-gate.js,
+   js/120-favorites.js, js/180-settings.js, js/195-coven.js,
+   js/199-admin.js, js/200-boot.js, js/228-portrait-share.js,
+   js/236-sticker-picker.js and js/237-handles.js — reach these names at
+   runtime, so the bridge republishes exactly the pre-conversion public
+   surface on window. Bare-name lookups in classic scripts resolve through
+   the global object, so the caller needs no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run. Remove a
+   name from this bridge only when its last classic caller is gone.
+ */
+window.AVATAR_SETS = AVATAR_SETS;
+window.DEFAULT_AVATARS = DEFAULT_AVATARS;
+window.profileKey = profileKey;
+window.blankProfile = blankProfile;
+window.loadProfile = loadProfile;
+window.saveProfile = saveProfile;
+window.touchProfile = touchProfile;
+window.dataUrlToBlob = dataUrlToBlob;
+window.blobToDataUrl = blobToDataUrl;
+window.adoptLegacyMetadata = adoptLegacyMetadata;
+window.isMissingColumn = isMissingColumn;
+window.pushCloudProfile = pushCloudProfile;
+window.STICKER_AVATAR_PREFIX = STICKER_AVATAR_PREFIX;
+window.stickerCatalog = stickerCatalog;
+window.parseStickerAvatarId = parseStickerAvatarId;
+window.STICKER_SHEET_NUMBERS = STICKER_SHEET_NUMBERS;
+window.stickerSheetNumbers = stickerSheetNumbers;
+window.stickerAvatarValid = stickerAvatarValid;
+window.stickerAvatarPath = stickerAvatarPath;
+window.stickerAvatarSrc = stickerAvatarSrc;
+window.themedOrLetterAvatar = themedOrLetterAvatar;
+window.cloudAvatarId = cloudAvatarId;
+window.adoptCloudPhoto = adoptCloudPhoto;
+window.syncCloudProfile = syncCloudProfile;
+window.avatarSrc = avatarSrc;
+window.avatarLetter = avatarLetter;
+window.avatarHTML = avatarHTML;
+window.signedIn = signedIn;
+window.renderTopbar = renderTopbar;
+window.menuItems = menuItems;
+window.openMenu = openMenu;
+window.closeMenu = closeMenu;
+window.menuAction = menuAction;
+window._menuBtn = _menuBtn;
+window.fileToAvatarDataURL = fileToAvatarDataURL;
+window.accountFormHTML = accountFormHTML;
+window.wireAccountForm = wireAccountForm;
+window.renderProfile = renderProfile;
