@@ -42,14 +42,20 @@ function renderWishlist() {
       cta: { label: 'Discover books', go: 'discover' },
     });
   } else {
+    // v582: every card carries a gift-buy slot (data-gift-buy-slot)
+    // that js/243 fills with a Buy button opening the minimal
+    // retailer sheet — the owner's own copy of the Gift a Book
+    // flow, no claim, no address. Empty when gifts are unsupported.
     if (upcoming.length) {
       html += '<h3 class="wish-section">' + icon('calendar') + ' Coming soon</h3>' +
         '<div class="grid">' + upcoming.map((b, i) =>
           '<div class="up-wrap"><div class="up-pill">' + icon('calendar') + ' ' +
           esc(fmtDate(b.releaseDate)) + ' · ' + releaseCountdown(b.releaseDate) + '</div>' +
-          bookCard(b, i) + '</div>').join('') + '</div>';
+          bookCard(b, i) + '<div data-gift-buy-slot="' + esc(b.id) + '"></div></div>').join('') + '</div>';
     }
-    if (rest.length) html += '<div class="grid">' + rest.map((b, i) => bookCard(b, i + upcoming.length)).join('') + '</div>';
+    if (rest.length) html += '<div class="grid">' + rest.map((b, i) =>
+      '<div class="up-wrap">' + bookCard(b, i + upcoming.length) +
+      '<div data-gift-buy-slot="' + esc(b.id) + '"></div></div>').join('') + '</div>';
     if (trophies.length) {
       html += '<h3 class="wish-section">' + icon('trophy') + ' Trophy wants</h3>' +
         '<p class="note">Second copies you\u2019re hunting — you already have these in another format.</p>' +
@@ -57,7 +63,8 @@ function renderWishlist() {
           '<div class="up-wrap"><div class="up-pill trophy-pill">' + icon('trophy') + ' Trophy · want ' +
           esc(FORMAT_META[b.wantFormat].label) + '</div>' +
           bookCard(b, i) +
-          '<button class="btn ghost sm trophy-got" data-trophy-got="' + esc(b.id) + '">Got it</button></div>').join('') + '</div>';
+          '<button class="btn ghost sm trophy-got" data-trophy-got="' + esc(b.id) + '">Got it</button>' +
+          '<div data-gift-buy-slot="' + esc(b.id) + '"></div></div>').join('') + '</div>';
     }
   }
   setView(html);
@@ -75,5 +82,8 @@ function renderWishlist() {
     }));
   wireReleaseCheck(); // v114: "Check for new releases"
   renderVisibleReleases(); // v150: restore the release list across re-renders
+  // v582: Buy buttons on your own wishlist books (js/243; gated on
+  // gift server support, silent otherwise).
+  if (typeof fillOwnGiftBuys === 'function') fillOwnGiftBuys();
 }
 

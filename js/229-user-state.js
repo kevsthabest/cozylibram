@@ -310,7 +310,14 @@ function userStateApplyMilestonePin(payload) {
 // server reads it); this roamed key is the client's UI state and
 // js/242 reconciles it from profiles — the roam carries the
 // preference between devices, profiles carries the enforcement.
-const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress', 'cozylibram.ambience.volume', 'cozylibram.marginalia'];
+// v582: a sixth key — cozylibram.giftretailers, the Gift a Book
+// per-format retailer choices (js/243): a JSON map
+// {print, ebook, audio} of retailer ids. The same reasoning once
+// more — a user preference expected on every device joins THIS
+// section, never the frozen v518 list; js/243 reads it live from
+// localStorage at point of use, so apply writing localStorage is
+// the live apply.
+const PREFS_STATE_KEYS = ['spicyshelves.analytics', 'spicyshelves.logremove', 'cozylibram.bookdress', 'cozylibram.ambience.volume', 'cozylibram.marginalia', 'cozylibram.giftretailers'];
 function userStateCollectPrefs() {
   const values = {};
   try {
