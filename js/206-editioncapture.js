@@ -36,9 +36,15 @@
 // v310: Enhance (AI image editing) hidden — gemini-2.5-flash-image was shut down
 // by Google on 2026-10-02 and replacements have no free tier. Set to true
 // to re-enable if a working model becomes available.
-var EC_ENHANCE_AVAILABLE = false;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export var EC_ENHANCE_AVAILABLE = false;
 
-var EC_FACES = [
+export var EC_FACES = [
   { id: 'spine', label: 'Spine', skippable: false, guide: 'tall',
     hint: 'Hold the book upright with the spine facing you. Fill the frame.' },
   { id: 'fore_edge', label: 'Sprayed edge', skippable: false, guide: 'tall',
@@ -48,12 +54,12 @@ var EC_FACES = [
   { id: 'back', label: 'Back cover', skippable: true, guide: 'portrait',
     hint: 'Flip it over, back facing up. Skippable when it adds nothing.' },
 ];
-var EC_APPEARANCES = [
+export var EC_APPEARANCES = [
   { id: 'jacket', label: 'Dust jacket' },
   { id: 'board', label: 'Bare boards' },
 ];
-var EC_MAX_DIM = 1200;   // longest side of a saved face, px
-var EC_PREVIEW_MAX = 260; // longest side of the live editor preview, px
+export var EC_MAX_DIM = 1200;   // longest side of a saved face, px
+export var EC_PREVIEW_MAX = 260; // longest side of the live editor preview, px
 
 /* ---------- vision core ---------- */
 // Homography, quad ops, the auto-scan detection pipeline and the
@@ -66,7 +72,7 @@ var EC_PREVIEW_MAX = 260; // longest side of the live editor preview, px
 // push/back race), so the Android back-gesture walks the flow backward
 // instead of killing the scan. Terminal exits (cancel/save) use
 // overlayClosed. Render functions return the active token.
-function ecHandoff(openFn) {
+export function ecHandoff(openFn) {
   if (!EC) { openFn(); return null; }
   var oldToken = EC.token;
   EC.token = null;
@@ -82,7 +88,7 @@ function ecHandoff(openFn) {
 
 // Back-gesture landing: the manager already popped our entry, so re-render
 // the current step with a fresh one.
-function ecBackToStep() {
+export function ecBackToStep() {
   if (!EC) return null;
   EC.token = null;
   return ecRenderStep();
@@ -92,7 +98,7 @@ function ecBackToStep() {
 // Full-screen sheet: photo with 4 draggable corners + live warped preview.
 // onUse(warpedDataUrl); onRetake() returns to the face step. Returns the
 // overlay token.
-function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake, initialQuad) {
+export function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake, initialQuad) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
   ov.className = 'ec-backdrop';
@@ -339,11 +345,11 @@ function ecOpenEditor(dataUrl, faceLabel, subLabel, onUse, onRetake, initialQuad
 // Generic face capture: live camera with an aspect guide, or library photo.
 // cb(dataUrl) — full frame; the editor does the cropping. Returns the
 // overlay token. Back (button or gesture) returns to the face step.
-var EC_SCAN_W = 240; // analysis width for auto-scan (px)
+export var EC_SCAN_W = 240; // analysis width for auto-scan (px)
 
 // Detect a book quad in a full-size canvas; returns the quad in canvas
 // coords or null. Used to pre-fit the editor after a manual snap.
-function ecDetectQuadForCanvas(canvas) {
+export function ecDetectQuadForCanvas(canvas) {
   try {
     var vw = canvas.width, vh = canvas.height;
     if (!vw || !vh || typeof document === 'undefined') return null;
@@ -363,7 +369,7 @@ function ecDetectQuadForCanvas(canvas) {
 /* v287: best-of-burst capture. Motion and sharpness are measured on a
    tiny grayscale copy; the full-resolution frame is retained only for the
    winning candidate. This avoids sending or storing a burst. */
-function ecBurstFrameScore(canvas, previous) {
+export function ecBurstFrameScore(canvas, previous) {
   try {
     var w = 96, h = Math.max(1, Math.round(96 * canvas.height / canvas.width));
     var c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -394,7 +400,7 @@ function ecBurstFrameScore(canvas, previous) {
   } catch (e) { return { score: 0, gray: null }; }
 }
 
-function ecCaptureFace(face, subLabel, stepLabel, cb) {
+export function ecCaptureFace(face, subLabel, stepLabel, cb) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
   ov.className = 'ec-backdrop';
@@ -669,7 +675,7 @@ function ecCaptureFace(face, subLabel, stepLabel, cb) {
    (same as the classic flow). Manual mode (the classic per-face flow) stays
    one tap away and resumes at the current face. */
 
-function ecOrbitCapture() {
+export function ecOrbitCapture() {
   if (typeof document === 'undefined' || !EC || !EC.steps || !EC.steps.length) return null;
   var obIdx = 0, obPhase = 'aim', obTornDown = false;
   var obStream = null, obRaf = 0, obLastTick = 0, obAimSince = 0, obRoi = null;
@@ -982,7 +988,7 @@ function ecOrbitCapture() {
 }
 
 // Confirm sheet after an auto-scan: the warped face is already straightened.
-function ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb) {
+export function ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb) {
   if (typeof document === 'undefined') return null;
   var ov = document.createElement('div');
   ov.className = 'ec-backdrop';
@@ -1029,9 +1035,9 @@ function ecOpenConfirm(warpedUrl, fullUrl, quad, face, subLabel, stepLabel, cb) 
 }
 
 /* ---------- guided wizard ---------- */
-var EC = null; // active scan session
+export var EC = null; // active scan session
 
-function ecStartScan(bookId) {
+export function ecStartScan(bookId) {
   var lib = (typeof library !== 'undefined' ? library : []);
   var b = lib.find(function (x) { return x && x.id === bookId; });
   if (!b) return null;
@@ -1039,17 +1045,17 @@ function ecStartScan(bookId) {
   return ecRenderAppearance();
 }
 
-function ecAppearanceLabel(id) {
+export function ecAppearanceLabel(id) {
   var a = EC_APPEARANCES.find(function (x) { return x.id === id; });
   return a ? a.label : id;
 }
-function ecFaceDef(id) {
+export function ecFaceDef(id) {
   return EC_FACES.find(function (x) { return x.id === id; });
 }
 
 // Pure step-list builder (tested): appearances x faces, jacket first.
 // hasEdges === false drops the fore-edge face (plain page blocks need no photo).
-function ecBuildSteps(appearances, hasEdges) {
+export function ecBuildSteps(appearances, hasEdges) {
   var steps = [];
   (appearances || []).forEach(function (ap) {
     EC_FACES.forEach(function (f) {
@@ -1060,7 +1066,7 @@ function ecBuildSteps(appearances, hasEdges) {
   return steps;
 }
 
-function ecWizardShell(inner) {
+export function ecWizardShell(inner) {
   ecCloseWizard();
   var ov = document.createElement('div');
   ov.className = 'ec-backdrop';
@@ -1070,12 +1076,12 @@ function ecWizardShell(inner) {
   return ov;
 }
 
-function ecCloseWizard() {
+export function ecCloseWizard() {
   var n = typeof document !== 'undefined' && document.getElementById('ec-wizard');
   if (n) n.remove();
 }
 
-function ecCancelScan() {
+export function ecCancelScan() {
   if (EC && EC.token && typeof overlayClosed === 'function') overlayClosed(EC.token);
   EC = null;
   ecCloseWizard();
@@ -1084,7 +1090,7 @@ function ecCancelScan() {
 // Faces already saved on the book, grouped by appearance: { jacket: ['spine', ...] }.
 // Unions the legacy data-URL faces (book.editionFaces) and the binary asset
 // refs (book.editionFaceRefs) — both are real scans the user should see.
-function ecExistingFaces(book) {
+export function ecExistingFaces(book) {
   var out = {};
   var seen = function (ap, face) {
     if (out[ap] && out[ap].indexOf(face) !== -1) return;
@@ -1106,7 +1112,7 @@ function ecExistingFaces(book) {
 
 // Asset id out of a ref, tolerating the v284/v285 plain-string shape and the
 // canonical { assetId, bucket, path, width, height } object shape.
-function ecRefAssetId(ref) {
+export function ecRefAssetId(ref) {
   if (!ref) return null;
   if (typeof ref === 'string') return ref;
   return ref.assetId || null;
@@ -1117,7 +1123,7 @@ function ecRefAssetId(ref) {
 // replaced scans don't accumulate blobs forever, and clears the shelf's
 // spine pointer when it named that asset. Best effort, never throws.
 // Returns true when something was actually removed.
-function ecRemoveFace(book, appearance, face) {
+export function ecRemoveFace(book, appearance, face) {
   if (!book || !appearance || !face) return false;
   var removed = false;
   var removedAssetId = null;
@@ -1145,7 +1151,7 @@ function ecRemoveFace(book, appearance, face) {
   return removed;
 }
 
-function ecRenderAppearance() {
+export function ecRenderAppearance() {
   if (typeof document === 'undefined' || !EC) return null;
   var lib = (typeof library !== 'undefined' ? library : []);
   var b = lib.find(function (x) { return x && x.id === EC.bookId; });
@@ -1228,7 +1234,7 @@ function ecRenderAppearance() {
 }
 
 // v277: plain page blocks skip the sprayed-edge capture entirely.
-function ecRenderEdges() {
+export function ecRenderEdges() {
   if (typeof document === 'undefined' || !EC) return null;
   var ov = ecWizardShell(
     '<div class="ec-head"><h3 class="serif">Page edges</h3>' +
@@ -1256,7 +1262,7 @@ function ecRenderEdges() {
   return EC.token;
 }
 
-function ecRenderStep() {
+export function ecRenderStep() {
   if (typeof document === 'undefined' || !EC) return null;
   if (EC.idx >= EC.steps.length) return ecRenderReview();
   var st = EC.steps[EC.idx];
@@ -1303,7 +1309,7 @@ function ecRenderStep() {
   return EC.token;
 }
 
-function ecRenderReview() {
+export function ecRenderReview() {
   if (typeof document === 'undefined' || !EC) return null;
   var aps = EC.appearances;
   var thumbs = '';
@@ -1429,7 +1435,7 @@ function ecRenderReview() {
    with Keep/Discard; never applied silently. Runs in its own overlay on
    top of the review so the back gesture returns to the review. */
 
-function ecRunEnhance(imageUrl, mode) {
+export function ecRunEnhance(imageUrl, mode) {
   return apiFetch('/api/enhance-face', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1454,7 +1460,7 @@ function ecRunEnhance(imageUrl, mode) {
   });
 }
 
-function ecEnhanceShell(inner, label) {
+export function ecEnhanceShell(inner, label) {
   var old = document.getElementById('ec-enhance');
   if (old) old.remove();
   var ov = document.createElement('div');
@@ -1465,7 +1471,7 @@ function ecEnhanceShell(inner, label) {
   return ov;
 }
 
-function ecEnhanceClose(then) {
+export function ecEnhanceClose(then) {
   if (EC) EC.ehToken = null;
   var n = document.getElementById('ec-enhance');
   if (n) n.remove();
@@ -1474,7 +1480,7 @@ function ecEnhanceClose(then) {
 
 // Where the enhance flow reads/writes. Session faces (review screen) live in
 // EC.results; saved faces (appearance screen) live on the book.
-function ecEnhanceSessionCtx(ap, face) {
+export function ecEnhanceSessionCtx(ap, face) {
   return {
     label: function () { return ecEnhanceLabel(ap, face); },
     getUrl: function () { return EC && EC.results[ap] && EC.results[ap][face]; },
@@ -1488,7 +1494,7 @@ function ecEnhanceSessionCtx(ap, face) {
 // Saved-face enhance context. resolvedUrl is the face as a data URL (already
 // resolved from a legacy data URL or a binary asset ref); wasBinary selects
 // the binary write-back path (new IDB asset + ref update, never data URLs).
-function ecEnhanceSavedCtx(book, ap, face, resolvedUrl, wasBinary) {
+export function ecEnhanceSavedCtx(book, ap, face, resolvedUrl, wasBinary) {
   return {
     label: function () { return ecEnhanceLabel(ap, face); },
     getUrl: function () {
@@ -1544,12 +1550,12 @@ function ecEnhanceSavedCtx(book, ap, face, resolvedUrl, wasBinary) {
     after: function () { ecRenderAppearance(); },
   };
 }
-function ecEnhanceLabel(ap, face) {
+export function ecEnhanceLabel(ap, face) {
   var fd = ecFaceDef(face);
   return (fd ? fd.label : face) + ' \u00b7 ' + ecAppearanceLabel(ap);
 }
 
-function ecEnhancePicker(ap, face, ctx) {
+export function ecEnhancePicker(ap, face, ctx) {
   if (typeof document === 'undefined' || !EC) return null;
   EC.eh = ctx || ecEnhanceSessionCtx(ap, face);
   if (!EC.eh.getUrl()) return null;
@@ -1576,7 +1582,7 @@ function ecEnhancePicker(ap, face, ctx) {
   return EC.ehToken;
 }
 
-function ecEnhanceProgress(ap, face, mode) {
+export function ecEnhanceProgress(ap, face, mode) {
   if (typeof document === 'undefined' || !EC || !EC.eh) return null;
   EC.eh.mode = mode;
   var url = EC.eh.getUrl();
@@ -1608,7 +1614,7 @@ function ecEnhanceProgress(ap, face, mode) {
   return EC.ehToken;
 }
 
-function ecEnhanceCompare(origUrl, newUrl) {
+export function ecEnhanceCompare(origUrl, newUrl) {
   if (typeof document === 'undefined' || !EC || !EC.eh) return null;
   var eh = EC.eh;
   var ov = ecEnhanceShell(
@@ -1643,7 +1649,7 @@ function ecEnhanceCompare(origUrl, newUrl) {
 }
 
 // sha256 hex of a Blob (content-addressed pool path), or null on failure.
-function ecBlobToDataUrl(blob) {
+export function ecBlobToDataUrl(blob) {
   return new Promise(function (resolve, reject) {
     try {
       var fr = new FileReader();
@@ -1653,7 +1659,7 @@ function ecBlobToDataUrl(blob) {
     } catch (e) { reject(e); }
   });
 }
-async function ecBlobSha256(blob) {
+export async function ecBlobSha256(blob) {
   try {
     if (typeof crypto === 'undefined' || !crypto.subtle || !blob) return null;
     var bytes = await blob.arrayBuffer();
@@ -1666,7 +1672,7 @@ async function ecBlobSha256(blob) {
 
 // Pixel dimensions of a data URL, dependency-free. Null when undecodable
 // (e.g. no DOM) — the ref then just carries null width/height.
-function ecDataUrlSize(dataUrl) {
+export function ecDataUrlSize(dataUrl) {
   return new Promise(function (resolve) {
     if (typeof Image === 'undefined' || typeof dataUrl !== 'string') { resolve(null); return; }
     var img = new Image();
@@ -1677,7 +1683,7 @@ function ecDataUrlSize(dataUrl) {
 }
 
 // Persist: local book fields + shared pool contributions (pool: first writer wins).
-async function ecSaveAll() {
+export async function ecSaveAll() {
   if (!EC) return;
   var lib = (typeof library !== 'undefined' ? library : []);
   var b = lib.find(function (x) { return x && x.id === EC.bookId; });
@@ -1788,7 +1794,7 @@ async function ecSaveAll() {
 }
 
 // The signed-in user's id for pool attribution, or null.
-async function ecPoolUid(sb) {
+export async function ecPoolUid(sb) {
   try {
     var ug = await sb.auth.getUser();
     return (ug && ug.data && ug.data.user) ? ug.data.user.id : null;
@@ -1798,7 +1804,7 @@ async function ecPoolUid(sb) {
 // Contribute one face to the shared pool. First writer wins between users,
 // but the original contributor's newer capture auto-replaces their own image
 // (v283) — a bad first photo can never get permanently stuck.
-async function ecShareFace(isbn, appearance, face, dataUrl, sourceType) {
+export async function ecShareFace(isbn, appearance, face, dataUrl, sourceType) {
   try {
     if (!isbn || typeof dataUrl !== 'string' || dataUrl.indexOf('data:image') !== 0) return false;
     var sb = await (typeof cloudClient === 'function' ? cloudClient().catch(function () { return null; }) : null);
@@ -1923,7 +1929,7 @@ async function ecShareFace(isbn, appearance, face, dataUrl, sourceType) {
 // withdrawn the same way when owned by this user (ownership on uploaded_by).
 // Returns true only when at least one candidate (or legacy row) was actually
 // withdrawn, so the "shared copy withdrawn" toast stays truthful.
-async function ecWithdrawFace(book, appearance, face) {
+export async function ecWithdrawFace(book, appearance, face) {
   try {
     var isbn = (typeof spinePhotoISBN === 'function') ? spinePhotoISBN(book) : null;
     if (!isbn) return false;
@@ -1960,3 +1966,58 @@ async function ecWithdrawFace(book, appearance, face) {
     return withdrew;
   } catch (e) { return false; }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/150-modal-discovery.js and js/205-shelfview.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.EC_ENHANCE_AVAILABLE = EC_ENHANCE_AVAILABLE;
+window.EC_FACES = EC_FACES;
+window.EC_APPEARANCES = EC_APPEARANCES;
+window.EC_MAX_DIM = EC_MAX_DIM;
+window.EC_PREVIEW_MAX = EC_PREVIEW_MAX;
+window.ecHandoff = ecHandoff;
+window.ecBackToStep = ecBackToStep;
+window.ecOpenEditor = ecOpenEditor;
+window.EC_SCAN_W = EC_SCAN_W;
+window.ecDetectQuadForCanvas = ecDetectQuadForCanvas;
+window.ecBurstFrameScore = ecBurstFrameScore;
+window.ecCaptureFace = ecCaptureFace;
+window.ecOrbitCapture = ecOrbitCapture;
+window.ecOpenConfirm = ecOpenConfirm;
+window.EC = EC;
+window.ecStartScan = ecStartScan;
+window.ecAppearanceLabel = ecAppearanceLabel;
+window.ecFaceDef = ecFaceDef;
+window.ecBuildSteps = ecBuildSteps;
+window.ecWizardShell = ecWizardShell;
+window.ecCloseWizard = ecCloseWizard;
+window.ecCancelScan = ecCancelScan;
+window.ecExistingFaces = ecExistingFaces;
+window.ecRefAssetId = ecRefAssetId;
+window.ecRemoveFace = ecRemoveFace;
+window.ecRenderAppearance = ecRenderAppearance;
+window.ecRenderEdges = ecRenderEdges;
+window.ecRenderStep = ecRenderStep;
+window.ecRenderReview = ecRenderReview;
+window.ecRunEnhance = ecRunEnhance;
+window.ecEnhanceShell = ecEnhanceShell;
+window.ecEnhanceClose = ecEnhanceClose;
+window.ecEnhanceSessionCtx = ecEnhanceSessionCtx;
+window.ecEnhanceSavedCtx = ecEnhanceSavedCtx;
+window.ecEnhanceLabel = ecEnhanceLabel;
+window.ecEnhancePicker = ecEnhancePicker;
+window.ecEnhanceProgress = ecEnhanceProgress;
+window.ecEnhanceCompare = ecEnhanceCompare;
+window.ecBlobToDataUrl = ecBlobToDataUrl;
+window.ecBlobSha256 = ecBlobSha256;
+window.ecDataUrlSize = ecDataUrlSize;
+window.ecSaveAll = ecSaveAll;
+window.ecPoolUid = ecPoolUid;
+window.ecShareFace = ecShareFace;
+window.ecWithdrawFace = ecWithdrawFace;

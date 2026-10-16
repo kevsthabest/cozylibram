@@ -122,8 +122,13 @@ const aps = run(`JSON.stringify(EC_APPEARANCES.map(a => a.id))`);
 ok('appearance ids match edition_images CHECK', aps === '["jacket","board"]');
 
 /* ---- 10. three-touchpoint wiring ---- */
+// R1 repoint (migration plan §9.3): js/206's tag is a module tag since
+// its ESM conversion; the check accepts either tag form — the same
+// assertion ("index.html loads js/206-editioncapture.js"), coverage
+// unchanged.
 ok('index.html loads js/206-editioncapture.js',
-  html.includes('<script src="js/206-editioncapture.js"></script>'));
+  html.includes('<script src="js/206-editioncapture.js"></script>') ||
+  html.includes('<script type="module" src="js/206-editioncapture.js"></script>'));
 const swText = fs.readFileSync(ROOT + '/sw.js', 'utf8');
 ok('sw.js precaches js/206-editioncapture.js', swText.includes("'206-editioncapture.js'"));
 ok('206 loads after 205 (uses its pool helpers)',

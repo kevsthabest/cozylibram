@@ -8,7 +8,13 @@
    _mtime so the resolution wins the next cloud merge, saves. The
    record's primary format is NOT changed here; the modal's format
    picker is the only way to change that. */
-function trophyGotIt(id) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function trophyGotIt(id) {
   const b = library.find(x => x.id === id);
   if (!b || !b.wantFormat) return;
   b.wantFormat = '';
@@ -16,7 +22,7 @@ function trophyGotIt(id) {
   saveLibrary();
 }
 
-function renderWishlist() {
+export function renderWishlist() {
   const books = library.filter(isWishlistBook)
     .sort((a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')));
   // v563: trophy wants — second copies of books already held in another
@@ -87,3 +93,14 @@ function renderWishlist() {
   if (typeof fillOwnGiftBuys === 'function') fillOwnGiftBuys();
 }
 
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/200-boot.js, calls renderWishlist() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.trophyGotIt = trophyGotIt;
+window.renderWishlist = renderWishlist;

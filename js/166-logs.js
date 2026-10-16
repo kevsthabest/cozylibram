@@ -20,8 +20,14 @@
    Read AppLog (js/002-log.js). On this device only — nothing is uploaded.
    Reproduce the problem first, then open this tab before clearing site
    data (clearing wipes the log along with everything else). */
-let adminLogFilter = 'all'; // all | warn | error
-function renderLogsTab() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export let adminLogFilter = 'all'; // all | warn | error
+export function renderLogsTab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   const paint = () => {
@@ -62,3 +68,15 @@ function renderLogsTab() {
   };
   paint();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/199-admin.js, calls renderLogsTab() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.adminLogFilter = adminLogFilter;
+window.renderLogsTab = renderLogsTab;
