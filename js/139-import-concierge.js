@@ -7,10 +7,16 @@
 // the concierge is the forgiving UX around them. Nothing here replaces the
 // classic import hub; it just holds your hand through it.
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 // Per-run state. Reset every time the concierge opens.
-var IC = null;
-var icToken = null; // v535: overlay-history token for the concierge sheet
-function icReset() {
+export var IC = null;
+export var icToken = null; // v535: overlay-history token for the concierge sheet
+export function icReset() {
   IC = {
     step: 'source',       // source | file | working | report | covers | coverreport | done
     formatId: null,       // 'goodreads' | 'storygraph' | 'hardcover' | 'isbn-list'
@@ -29,14 +35,14 @@ function icReset() {
 }
 
 // ---- tiny helpers ----------------------------------------------------------
-function icEl(id) { return document.getElementById(id); }
-function icYield() { return new Promise(r => setTimeout(r, 0)); }
-function icTrack(ev, props) { try { track(ev, props || {}); } catch (e) {} }
-function icFormat() {
+export function icEl(id) { return document.getElementById(id); }
+export function icYield() { return new Promise(r => setTimeout(r, 0)); }
+export function icTrack(ev, props) { try { track(ev, props || {}); } catch (e) {} }
+export function icFormat() {
   return (typeof IMPORT_FORMATS !== 'undefined' ? IMPORT_FORMATS : [])
     .filter(f => f.id === IC.formatId)[0] || null;
 }
-function icSourceMeta(id) {
+export function icSourceMeta(id) {
   const meta = {
     'goodreads': { name: 'Goodreads', icon: 'covers' },
     'storygraph': { name: 'StoryGraph', icon: 'chart' },
@@ -47,7 +53,7 @@ function icSourceMeta(id) {
 }
 
 // ---- overlay shell ----------------------------------------------------------
-function icOpen() {
+export function icOpen() {
   icReset();
   if (icEl('ic-overlay')) return;
   const ov = document.createElement('div');
@@ -73,8 +79,8 @@ function icOpen() {
   icTrack('import_concierge_opened', {});
   icRender();
 }
-function openImportConcierge() { icOpen(); }
-function icClose() {
+export function openImportConcierge() { icOpen(); }
+export function icClose() {
   if (icToken != null) {
     const t = icToken; icToken = null;
     if (typeof overlayClosed === 'function') overlayClosed(t);
@@ -84,18 +90,18 @@ function icClose() {
   IC = null;
 }
 
-var IC_STEPS = ['Source', 'Your file', 'Match report', 'Covers', 'Done'];
-function icStepIndex() {
+export var IC_STEPS = ['Source', 'Your file', 'Match report', 'Covers', 'Done'];
+export function icStepIndex() {
   return { source: 0, file: 1, working: 1, report: 2, covers: 3, coverreport: 3, done: 4 }[IC.step] || 0;
 }
-function icRenderSteps() {
+export function icRenderSteps() {
   const idx = icStepIndex();
   icEl('ic-steps').innerHTML = '<div class="ic-dots">' + IC_STEPS.map((s, i) =>
     '<span class="ic-dot' + (i === idx ? ' on' : '') + (i < idx ? ' past' : '') +
     '" title="' + esc(s) + '"></span>').join('') + '</div>' +
     '<div class="ic-stepname">' + esc(IC_STEPS[idx]) + '</div>';
 }
-function icRender() {
+export function icRender() {
   if (!IC || !icEl('ic-body')) return;
   icRenderSteps();
   const body = icEl('ic-body');
@@ -110,7 +116,7 @@ function icRender() {
 }
 
 // ---- step 1: pick a source ---------------------------------------------------
-function icSourceHTML() {
+export function icSourceHTML() {
   const cards = ['goodreads', 'storygraph', 'hardcover', 'isbn-list'].map(id => {
     const m = icSourceMeta(id);
     const fmt = (typeof IMPORT_FORMATS !== 'undefined' ? IMPORT_FORMATS : []).filter(f => f.id === id)[0];
@@ -129,7 +135,7 @@ function icSourceHTML() {
 }
 
 // ---- step 2: hand over the file -----------------------------------------------
-function icFileHTML() {
+export function icFileHTML() {
   const m = icSourceMeta(IC.formatId);
   const fmt = icFormat();
   const isIsbn = IC.formatId === 'isbn-list';
@@ -150,15 +156,15 @@ function icFileHTML() {
 }
 
 // ---- transient: working --------------------------------------------------------
-var icWorkLabel = '', icWorkFrac = 0;
-function icWorkingHTML() {
+export var icWorkLabel = '', icWorkFrac = 0;
+export function icWorkingHTML() {
   return '<div class="ic-icon spin">' + icon('hourglass') + '</div>' +
     '<h2 class="serif" id="ic-worklabel">' + esc(icWorkLabel) + '</h2>' +
     '<div class="ic-progress"><div class="ic-bar" id="ic-bar" style="width:' +
     Math.round(icWorkFrac * 100) + '%"></div></div>' +
     '<p class="note" id="ic-worksub"></p>';
 }
-function icProgress(frac, label, sub) {
+export function icProgress(frac, label, sub) {
   icWorkFrac = frac;
   if (label) icWorkLabel = label;
   const bar = icEl('ic-bar'), lab = icEl('ic-worklabel'), sub2 = icEl('ic-worksub');
@@ -168,7 +174,7 @@ function icProgress(frac, label, sub) {
 }
 
 // ---- pipeline: parse + classify (chunked so the UI breathes) -------------------
-async function icRunPipeline() {
+export async function icRunPipeline() {
   IC.step = 'working';
   icWorkLabel = 'Reading your file…'; icWorkFrac = 0;
   icRender();
@@ -206,7 +212,7 @@ async function icRunPipeline() {
 }
 
 // ---- pipeline: ISBN list (lookup with progress, like the bulk tab) -------------
-async function icRunIsbnPipeline() {
+export async function icRunIsbnPipeline() {
   const isbns = parseISBNList(IC.rawText);
   IC.rawRows = isbns.length;
   if (!isbns.length) {
@@ -236,7 +242,7 @@ async function icRunIsbnPipeline() {
 }
 
 // ---- step 3: match report ---------------------------------------------------------
-function icCounts() {
+export function icCounts() {
   if (IC.formatId === 'isbn-list') {
     const r = IC.isbnResults || [];
     return {
@@ -255,7 +261,7 @@ function icCounts() {
   };
 }
 
-function icReportHTML() {
+export function icReportHTML() {
   const n = icCounts();
   const m = icSourceMeta(IC.formatId);
   let html = '<button class="ic-back" data-ic-back>← Back</button>' +
@@ -306,7 +312,7 @@ function icReportHTML() {
 }
 
 // ---- shelve → covers ---------------------------------------------------------------
-async function icShelve() {
+export async function icShelve() {
   let imported = [];
   if (IC.formatId === 'isbn-list') {
     const found = (IC.isbnResults || []).filter(x => x.status === 'found').map(x => x.book);
@@ -339,7 +345,7 @@ async function icShelve() {
 }
 
 // Scoped cover pass over just-imported books. Misses stay listed for retry.
-async function icFindCovers(targets) {
+export async function icFindCovers(targets) {
   IC.coverMissIds = [];
   const fns = { targets: targets.slice() };
   await downloadMissingCovers((i, n) => {
@@ -351,7 +357,7 @@ async function icFindCovers(targets) {
 }
 
 // ---- step 4b: cover report + retry ----------------------------------------------------
-function icCoverReportHTML() {
+export function icCoverReportHTML() {
   const found = IC.coverTotal - IC.coverMissIds.length;
   const misses = IC.coverMissIds
     .map(id => library.filter(b => b.id === id)[0])
@@ -378,7 +384,7 @@ function icCoverReportHTML() {
   return html;
 }
 
-async function icRetryCovers() {
+export async function icRetryCovers() {
   const targets = IC.coverMissIds
     .map(id => library.filter(b => b.id === id)[0])
     .filter(Boolean);
@@ -394,7 +400,7 @@ async function icRetryCovers() {
   icRender();
 }
 
-async function icRetryOne(id) {
+export async function icRetryOne(id) {
   const b = library.filter(x => x.id === id)[0];
   if (!b) return;
   const row = document.querySelector('[data-ic-miss="' + CSS.escape(id) + '"]');
@@ -406,7 +412,7 @@ async function icRetryOne(id) {
 }
 
 // Manual fix: search catalogs by title + author, tap a result to adopt it.
-async function icFindOne(id) {
+export async function icFindOne(id) {
   const b = library.filter(x => x.id === id)[0];
   if (!b || typeof searchBooks !== 'function') return;
   const row = document.querySelector('[data-ic-miss="' + CSS.escape(id) + '"]');
@@ -443,7 +449,7 @@ async function icFindOne(id) {
 }
 
 // ---- step 5: done -----------------------------------------------------------------------
-function icDoneHTML() {
+export function icDoneHTML() {
   const n = icCounts();
   return '<div class="ic-icon">' + icon('trophy') + '</div>' +
     '<h2 class="serif">Your shelves are looking cozy</h2>' +
@@ -458,14 +464,14 @@ function icDoneHTML() {
 }
 
 // ---- wiring -------------------------------------------------------------------------------
-function icBack() {
+export function icBack() {
   if (IC.step === 'file') IC.step = 'source';
   else if (IC.step === 'report') { IC.step = 'file'; }
   else return;
   icRender();
 }
 
-function icWire() {
+export function icWire() {
   const on = (sel, fn) => {
     const els = document.querySelectorAll('#ic-body ' + sel);
     els.forEach(el => el.addEventListener('click', fn));
@@ -513,7 +519,7 @@ function icWire() {
   if (skip) skip.addEventListener('click', () => { IC.step = 'done'; icRender(); });
 }
 
-function icSyncContinue() {
+export function icSyncContinue() {
   const btn = icEl('ic-continue'), paste = icEl('ic-paste');
   if (!btn) return;
   const hasFile = !!IC.rawText;
@@ -522,7 +528,7 @@ function icSyncContinue() {
   if (hasPaste && !hasFile) { IC.rawText = paste.value; IC.fileName = 'pasted text'; }
 }
 
-function icTakeFile(f) {
+export function icTakeFile(f) {
   IC.fileName = f.name || 'file';
   const r = new FileReader();
   r.onload = () => {
@@ -536,7 +542,7 @@ function icTakeFile(f) {
   r.readAsText(f);
 }
 
-function icContinue() {
+export function icContinue() {
   const paste = icEl('ic-paste');
   if (paste && !paste.hidden && paste.value.trim()) { IC.rawText = paste.value; IC.fileName = 'pasted text'; }
   if (!IC.rawText || !IC.rawText.trim()) return;
@@ -563,7 +569,7 @@ function icContinue() {
 }
 
 // ISBN-list: one-tap retry for the misses.
-async function icRetryIsbnMisses() {
+export async function icRetryIsbnMisses() {
   const misses = (IC.isbnResults || []).filter(x => x.status === 'missing').map(x => x.isbn);
   if (!misses.length) return;
   IC.step = 'working';
@@ -593,10 +599,59 @@ async function icRetryIsbnMisses() {
 }
 
 // Covers step gets a skip link (covers fill in quietly later anyway).
-function icCoversHTML() {
+export function icCoversHTML() {
   return '<div class="ic-icon spin">' + icon('hourglass') + '</div>' +
     '<h2 class="serif" id="ic-worklabel">' + esc(icWorkLabel) + '</h2>' +
     '<div class="ic-progress"><div class="ic-bar" id="ic-bar" style="width:0%"></div></div>' +
     '<p class="note" id="ic-worksub"></p>' +
     '<button class="btn ghost block" id="ic-skipcovers">Skip — covers can wait</button>';
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/096-onboarding.js and js/132-import.js, call openImportConcierge() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.IC = IC;
+window.icToken = icToken;
+window.icReset = icReset;
+window.icEl = icEl;
+window.icYield = icYield;
+window.icTrack = icTrack;
+window.icFormat = icFormat;
+window.icSourceMeta = icSourceMeta;
+window.icOpen = icOpen;
+window.openImportConcierge = openImportConcierge;
+window.icClose = icClose;
+window.IC_STEPS = IC_STEPS;
+window.icStepIndex = icStepIndex;
+window.icRenderSteps = icRenderSteps;
+window.icRender = icRender;
+window.icSourceHTML = icSourceHTML;
+window.icFileHTML = icFileHTML;
+window.icWorkLabel = icWorkLabel;
+window.icWorkFrac = icWorkFrac;
+window.icWorkingHTML = icWorkingHTML;
+window.icProgress = icProgress;
+window.icRunPipeline = icRunPipeline;
+window.icRunIsbnPipeline = icRunIsbnPipeline;
+window.icCounts = icCounts;
+window.icReportHTML = icReportHTML;
+window.icShelve = icShelve;
+window.icFindCovers = icFindCovers;
+window.icCoverReportHTML = icCoverReportHTML;
+window.icRetryCovers = icRetryCovers;
+window.icRetryOne = icRetryOne;
+window.icFindOne = icFindOne;
+window.icDoneHTML = icDoneHTML;
+window.icBack = icBack;
+window.icWire = icWire;
+window.icSyncContinue = icSyncContinue;
+window.icTakeFile = icTakeFile;
+window.icContinue = icContinue;
+window.icRetryIsbnMisses = icRetryIsbnMisses;
+window.icCoversHTML = icCoversHTML;
