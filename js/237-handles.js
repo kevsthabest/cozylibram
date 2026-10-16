@@ -24,13 +24,19 @@
    a flagged substring is never blocked. The list is deliberately
    narrow — unambiguous abuse + impersonation terms — with report
    and block as the backstop, as everywhere in the app. */
-const HANDLE_SCREEN_SLURS = [
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const HANDLE_SCREEN_SLURS = [
   'arsehole', 'asshole', 'bastard', 'beaner', 'bitch', 'chink',
   'cunt', 'faggot', 'fuck', 'gook', 'jigaboo', 'kike', 'nigger',
   'nigga', 'pedophile', 'porchmonkey', 'raghead', 'rapist',
   'retard', 'shit', 'slut', 'tranny', 'wetback', 'whore'
 ];
-const HANDLE_SCREEN_RESERVED = [
+export const HANDLE_SCREEN_RESERVED = [
   'admin', 'administrator', 'cozylibram', 'libram', 'luna', 'mod',
   'moderator', 'official', 'owner', 'root', 'staff', 'support',
   'system', 'team'
@@ -38,14 +44,14 @@ const HANDLE_SCREEN_RESERVED = [
 
 /* Leetspeak + case normalization, the mirror of handle_normalize():
    0→o, 1→i, 3→e, 4→a, 5→s, 7→t, 8→b, @→a, $→s, !→i, +→t. */
-function handleNormalizeText(s) {
+export function handleNormalizeText(s) {
   const map = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's', '!': 'i', '+': 't' };
   return String(s == null ? '' : s).toLowerCase().split('').map(c => map[c] || c).join('');
 }
 
 /* handleScreenHit(text, mode) → the listed term hit, or null.
    Modes: 'handle' | 'name' | 'bio' (see the posture note above). */
-function handleScreenHit(text, mode) {
+export function handleScreenHit(text, mode) {
   const raw = String(text == null ? '' : text).toLowerCase();
   const norm = handleNormalizeText(text);
   let i, t, j;
@@ -78,13 +84,13 @@ function handleScreenHit(text, mode) {
 
 /* Is a screen hit one of the reserved terms? (The editor and the
    signup form word reserved hits apart from slur hits.) */
-function handleHitIsReserved(hit) {
+export function handleHitIsReserved(hit) {
   return HANDLE_SCREEN_RESERVED.indexOf(hit) !== -1;
 }
 
 /* The profile save's pre-check (the server trigger is the backstop):
    returns 'firstName' | 'lastName' | 'bio' | null. */
-function profileContentScreenHit(p) {
+export function profileContentScreenHit(p) {
   if (!p) return null;
   if (handleScreenHit(p.firstName || '', 'name')) return 'firstName';
   if (handleScreenHit(p.lastName || '', 'name')) return 'lastName';
@@ -92,11 +98,11 @@ function profileContentScreenHit(p) {
   return null;
 }
 
-function handleFormatValid(h) {
+export function handleFormatValid(h) {
   return /^[a-z0-9_]{3,20}$/.test(String(h || ''));
 }
 /* What the user typed → the canonical handle (lowercase, @ stripped). */
-function cleanHandleInput(v) {
+export function cleanHandleInput(v) {
   return String(v || '').trim().toLowerCase().replace(/^@+/, '');
 }
 
@@ -105,59 +111,59 @@ function cleanHandleInput(v) {
    purpose, so the many first-token renderings (name.split(' ')[0])
    show the handle whole. Else today's behaviour: the full real name,
    or the caller's fallback. */
-function friendDisplayName(p, fallback) {
+export function friendDisplayName(p, fallback) {
   if (p && p.handle) return '@' + p.handle;
   const n = p ? (((p.first_name || p.firstName || '') + ' ' + (p.last_name || p.lastName || '')).trim()) : '';
   return n || fallback || 'A reader';
 }
 
 /* ---------- RPC wrappers (pre-migration tolerant) ---------- */
-function handlesRpcMissing(e) {
+export function handlesRpcMissing(e) {
   const s = String((e && (e.code + ' ' + e.message)) || e || '');
   return /PGRST20[0-9]|schema cache|could not find|does not exist|404/i.test(s);
 }
-async function handleRpc(name, args) {
+export async function handleRpc(name, args) {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return { data: null, error: { message: 'not signed in' } };
   try { return await sb.rpc(name, args || {}); }
   catch (e) { return { data: null, error: e }; }
 }
-async function claimHandleRpc(h) {
+export async function claimHandleRpc(h) {
   const r = await handleRpc('claim_handle', { p_handle: cleanHandleInput(h) });
   if (r.error) return { ok: false, error: handlesRpcMissing(r.error) ? 'unsupported' : 'failed' };
   return r.data || { ok: false, error: 'failed' };
 }
-async function clearHandleRpc() {
+export async function clearHandleRpc() {
   const r = await handleRpc('clear_handle', {});
   if (r.error) return { ok: false, error: handlesRpcMissing(r.error) ? 'unsupported' : 'failed' };
   return r.data || { ok: false, error: 'failed' };
 }
-async function handleAvailableRpc(h) {
+export async function handleAvailableRpc(h) {
   const r = await handleRpc('handle_available', { p_handle: cleanHandleInput(h) });
   if (r.error) return { available: false, unsupported: handlesRpcMissing(r.error) };
   return { available: r.data === true, unsupported: false };
 }
-async function lookupHandleRpc(h) {
+export async function lookupHandleRpc(h) {
   const r = await handleRpc('lookup_handle', { p_handle: cleanHandleInput(h) });
   if (r.error || !Array.isArray(r.data) || !r.data.length) return null;
   return r.data[0];
 }
-async function requestByHandleRpc(h) {
+export async function requestByHandleRpc(h) {
   const r = await handleRpc('request_by_handle', { p_handle: cleanHandleInput(h) });
   if (r.error) return { ok: false, error: 'unavailable' };
   return r.data || { ok: false, error: 'unavailable' };
 }
-async function blockByHandleRpc(h) {
+export async function blockByHandleRpc(h) {
   const r = await handleRpc('block_by_handle', { p_handle: cleanHandleInput(h) });
   if (r.error) return { ok: false, error: 'unavailable' };
   return r.data || { ok: false, error: 'unavailable' };
 }
-async function reportByHandleRpc(h, reason, details) {
+export async function reportByHandleRpc(h, reason, details) {
   const r = await handleRpc('report_by_handle', { p_handle: cleanHandleInput(h), p_reason: reason, p_details: details || '' });
   if (r.error) return { ok: false, error: 'unavailable' };
   return r.data || { ok: false, error: 'unavailable' };
 }
-async function friendFormerlyRpc(uid) {
+export async function friendFormerlyRpc(uid) {
   const r = await handleRpc('friend_formerly', { p_user: uid });
   if (r.error || !r.data) return null;
   return String(r.data);
@@ -165,7 +171,7 @@ async function friendFormerlyRpc(uid) {
 
 /* The typed claim results → honest words. The cooldown copy carries
    the server's own days_remaining — never a client-side guess. */
-function handleClaimErrorMessage(res) {
+export function handleClaimErrorMessage(res) {
   if (!res) return 'Something went wrong — try again.';
   switch (res.error) {
     case 'invalid': return 'Handles are 3–20 characters: lowercase letters, numbers and underscores.';
@@ -181,7 +187,7 @@ function handleClaimErrorMessage(res) {
 }
 
 /* ---------- the handle editor block (js/105 account form) ---------- */
-function handleEditorHTML(p) {
+export function handleEditorHTML(p) {
   const h = (p && p.handle) || '';
   return (h
     ? '<p class="note" style="margin:0 0 6px">Your handle is <b>@' + esc(h) + '</b> — friends see it instead of your name.</p>'
@@ -196,7 +202,7 @@ function handleEditorHTML(p) {
     '<p class="note" id="pf-handle-status" style="margin:6px 0 0">3–20 characters: lowercase letters, numbers, underscores.</p>' +
     (h ? '<button type="button" class="btn ghost sm" id="pf-handle-clear" style="margin-top:8px">Remove handle</button>' : '');
 }
-function refreshHandleEditor() {
+export function refreshHandleEditor() {
   const box = document.getElementById('pf-handle-box');
   if (!box) return;
   box.innerHTML = handleEditorHTML(loadProfile());
@@ -204,14 +210,14 @@ function refreshHandleEditor() {
 }
 /* The findable seg lives in the account form (its value rides the
    form's autosave commit); its enabled state follows the handle. */
-function syncFindableSeg() {
+export function syncFindableSeg() {
   const seg = document.getElementById('pf-findable');
   if (!seg) return;
   const has = !!(loadProfile().handle);
   seg.dataset.disabled = has ? '0' : '1';
   seg.querySelectorAll('button').forEach(b => { b.disabled = !has; });
 }
-async function wireHandleEditor() {
+export async function wireHandleEditor() {
   const box = document.getElementById('pf-handle-box');
   if (!box) return;
   // Pre-migration database: the whole handle field hides, exactly
@@ -300,7 +306,7 @@ async function wireHandleEditor() {
 }
 
 /* ---------- add by handle (the invite sheet, js/195) ---------- */
-async function wireHandleAdd() {
+export async function wireHandleAdd() {
   const btn = document.getElementById('cc-handle-find');
   const input = document.getElementById('cc-handle');
   const slot = document.getElementById('cc-handle-slot');
@@ -332,7 +338,7 @@ async function wireHandleAdd() {
   btn.addEventListener('click', run);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
 }
-function renderHandleCard(slot, card) {
+export function renderHandleCard(slot, card) {
   // The lookup shape carries no user_id and no name — by design. The
   // avatar renders from avatar_id alone (an uploaded photo sits
   // behind the accepted-link storage policy, so it can't — and
@@ -370,7 +376,7 @@ function renderHandleCard(slot, card) {
 /* Block from the lookup card — same sheet pattern and calm copy as
    openBlockSheet (js/195), but the resolution happens server-side:
    the card never learns a user_id. */
-function openHandleBlockSheet(handle, slot) {
+export function openHandleBlockSheet(handle, slot) {
   const ov = document.createElement('div');
   ov.className = 'collection-overlay';
   ov.innerHTML =
@@ -405,7 +411,7 @@ function openHandleBlockSheet(handle, slot) {
 
 /* Report from the lookup card — the v246 flow (same reasons, same
    table), resolved server-side like the block. */
-function openHandleReportSheet(handle) {
+export function openHandleReportSheet(handle) {
   if (!cloudUser) return;
   const reasons = (typeof REPORT_REASONS !== 'undefined' && REPORT_REASONS) || [
     ['spam', 'Spam'], ['harassment', 'Harassment'], ['inappropriate', 'Inappropriate content'],
@@ -465,9 +471,9 @@ function openHandleReportSheet(handle) {
    the stash is dead and never fires. The per-session flag below only
    bounds repeat attempts within one session; clearing the stash is
    best-effort (updateUser can fail offline) and is NOT load-bearing. */
-let signupHandleClaimFor = null;
+export let signupHandleClaimFor = null;
 
-async function clearSignupHandleStash() {
+export async function clearSignupHandleStash() {
   try {
     const sb = await cloudClient().catch(() => null);
     if (sb && sb.auth && typeof sb.auth.updateUser === 'function') {
@@ -477,7 +483,7 @@ async function clearSignupHandleStash() {
   try { if (cloudUser && cloudUser.user_metadata) cloudUser.user_metadata.handle = ''; } catch (e) {}
 }
 
-async function claimSignupHandle(user) {
+export async function claimSignupHandle(user) {
   if (!user || !user.id) return;
   if (signupHandleClaimFor === user.id) return; // once per user per session
   const md = user.user_metadata || {};
@@ -517,7 +523,7 @@ async function claimSignupHandle(user) {
 }
 
 /* ---------- friend card: "formerly @…" ---------- */
-async function fillFriendFormerly(uid) {
+export async function fillFriendFormerly(uid) {
   const el = document.getElementById('cf-formerly');
   if (!el || !uid) return;
   const former = await friendFormerlyRpc(uid).catch(() => null);
@@ -525,3 +531,46 @@ async function fillFriendFormerly(uid) {
   el.textContent = 'Formerly @' + former;
   el.hidden = false;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/095-gate.js, js/105-account.js, js/195-coven.js, js/231-reactions.js, js/232-thought-of-you.js, js/233-buddy-reads.js, js/234-outbox.js and js/242-marginalia.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.HANDLE_SCREEN_SLURS = HANDLE_SCREEN_SLURS;
+window.HANDLE_SCREEN_RESERVED = HANDLE_SCREEN_RESERVED;
+window.handleNormalizeText = handleNormalizeText;
+window.handleScreenHit = handleScreenHit;
+window.handleHitIsReserved = handleHitIsReserved;
+window.profileContentScreenHit = profileContentScreenHit;
+window.handleFormatValid = handleFormatValid;
+window.cleanHandleInput = cleanHandleInput;
+window.friendDisplayName = friendDisplayName;
+window.handlesRpcMissing = handlesRpcMissing;
+window.handleRpc = handleRpc;
+window.claimHandleRpc = claimHandleRpc;
+window.clearHandleRpc = clearHandleRpc;
+window.handleAvailableRpc = handleAvailableRpc;
+window.lookupHandleRpc = lookupHandleRpc;
+window.requestByHandleRpc = requestByHandleRpc;
+window.blockByHandleRpc = blockByHandleRpc;
+window.reportByHandleRpc = reportByHandleRpc;
+window.friendFormerlyRpc = friendFormerlyRpc;
+window.handleClaimErrorMessage = handleClaimErrorMessage;
+window.handleEditorHTML = handleEditorHTML;
+window.refreshHandleEditor = refreshHandleEditor;
+window.syncFindableSeg = syncFindableSeg;
+window.wireHandleEditor = wireHandleEditor;
+window.wireHandleAdd = wireHandleAdd;
+window.renderHandleCard = renderHandleCard;
+window.openHandleBlockSheet = openHandleBlockSheet;
+window.openHandleReportSheet = openHandleReportSheet;
+window.signupHandleClaimFor = signupHandleClaimFor;
+window.clearSignupHandleStash = clearSignupHandleStash;
+window.claimSignupHandle = claimSignupHandle;
+window.fillFriendFormerly = fillFriendFormerly;
