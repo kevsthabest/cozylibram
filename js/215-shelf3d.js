@@ -51,8 +51,8 @@
    transform, land in the shared global lexical scope and shadow
    window.Shelf3D for classic bare-name readers; production modules
    never leak their bindings, and the alias keeps name resolution
-   identical in both worlds
-   of this file, so classic scripts keep resolving the same globals.
+   identical in both worlds,
+   so classic scripts keep resolving the same globals.
    window.THREE stays a lazy window-slot publication inside
    s3dLoadThreeLocal, exactly as before: it is a shared cache slot
    co-published with js/207 (plan §2.1 mini-decision), not a binding
