@@ -19,11 +19,18 @@
    All names and behaviour unchanged; this file must load before
    js/159, js/199 and js/225. */
 
-const CHAR_ROLES = ['protagonist', 'antagonist', 'supporting', 'minor'];
-const CHAR_REL_TYPES = ['spouse', 'parent', 'child', 'sibling', 'friend',
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
+export const CHAR_ROLES = ['protagonist', 'antagonist', 'supporting', 'minor'];
+export const CHAR_REL_TYPES = ['spouse', 'parent', 'child', 'sibling', 'friend',
   'enemy', 'mentor', 'colleague', 'neighbor', 'other'];
 
-const CharacterStore = {
+export const CharacterStore = {
   _sb() { return cloudClient().catch(() => null); },
 
   /* Works that have character data, with counts. */
@@ -371,7 +378,7 @@ const CharacterStore = {
 /* Resolve a relationship target name to a character in the same work.
    Returns {character} or {unresolved: name}. Case-insensitive exact match
    first, then substring match (handles "Bodhi" -> "Bodhi Durran"). */
-function charResolveTarget(name, chars) {
+export function charResolveTarget(name, chars) {
   const n = String(name || '').trim().toLowerCase();
   if (!n) return { unresolved: String(name || '') };
   let c = chars.find(x => String(x.name).trim().toLowerCase() === n);
@@ -384,7 +391,7 @@ function charResolveTarget(name, chars) {
   return { unresolved: String(name || '').trim() };
 }
 
-function charNormRelType(t) {
+export function charNormRelType(t) {
   t = String(t || '').trim().toLowerCase();
   return CHAR_REL_TYPES.includes(t) ? t : 'other';
 }
@@ -392,19 +399,19 @@ function charNormRelType(t) {
 /* v317: quality gates (per Trope Review Agent).
    BLOCKED: generic kinship terms and obvious non-names — hidden by default.
    Duplicates: substring/similar names flagged for merge review. */
-const CHAR_BLOCKED_NAMES = ['dad', 'mom', 'mother', 'father', 'parent',
+export const CHAR_BLOCKED_NAMES = ['dad', 'mom', 'mother', 'father', 'parent',
   'parents', 'brother', 'sister', 'son', 'daughter', 'child', 'children',
   'friend', 'friends', 'enemy', 'enemies', 'someone', 'somebody', 'nobody',
   'everyone', 'man', 'woman', 'boy', 'girl', 'child', 'baby'];
 
-function charIsBlocked(c) {
+export function charIsBlocked(c) {
   const n = String(c.name || '').trim().toLowerCase();
   return CHAR_BLOCKED_NAMES.includes(n) || n.length < 2;
 }
 
 /* Find likely duplicates: names where one contains the other and they
    share the same role, or normalized names match. Returns pairs. */
-function charFindDuplicates(chars) {
+export function charFindDuplicates(chars) {
   const pairs = [];
   const norm = s => String(s || '').trim().toLowerCase().replace(/[^a-z ]/g, '');
   for (let i = 0; i < chars.length; i++) {
@@ -422,3 +429,22 @@ function charFindDuplicates(chars) {
   }
   return pairs;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/050-helpers.js, js/159-characters.js, js/162-charlab.js and js/225-book-portrait.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.CHAR_ROLES = CHAR_ROLES;
+window.CHAR_REL_TYPES = CHAR_REL_TYPES;
+window.CharacterStore = CharacterStore;
+window.charResolveTarget = charResolveTarget;
+window.charNormRelType = charNormRelType;
+window.CHAR_BLOCKED_NAMES = CHAR_BLOCKED_NAMES;
+window.charIsBlocked = charIsBlocked;
+window.charFindDuplicates = charFindDuplicates;
