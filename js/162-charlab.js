@@ -22,6 +22,13 @@
    through the shared global scope — this file declares
    only its own state at eval time. */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
 /* ---------------- Character Lab (v317) ----------------
    Review pipeline-extracted characters and trace their relationships.
    Data contract (from Ebook Processor):
@@ -33,22 +40,22 @@
    - Each work's cast is isolated (no cross-book linking yet).
    - Unresolved targets shown, never dropped. */
 
-const CHAR_ROLE_LABELS = { protagonist: 'Protagonist', antagonist: 'Antagonist',
+export const CHAR_ROLE_LABELS = { protagonist: 'Protagonist', antagonist: 'Antagonist',
   supporting: 'Supporting', minor: 'Minor' };
 
-let charLabWorkId = null;
-let charLabRoleFilter = '';
-let charLabSelectedId = null;
-let charLabShowBlocked = false; // v317: hidden by default
-let charLabView = 'characters'; // v395: 'review' | 'relationships' | 'characters' (was 'work'|'relationships')
-let charLabCanonicalId = null;
+export let charLabWorkId = null;
+export let charLabRoleFilter = '';
+export let charLabSelectedId = null;
+export let charLabShowBlocked = false; // v317: hidden by default
+export let charLabView = 'characters'; // v395: 'review' | 'relationships' | 'characters' (was 'work'|'relationships')
+export let charLabCanonicalId = null;
 
 /* CharacterStore, the pure char helpers (charResolveTarget, charNormRelType,
    charIsBlocked, charFindDuplicates) and CHAR_ROLES / CHAR_REL_TYPES live in
    js/154-characterstore.js — the Character Lab UI below consumes them as
    globals, same as js/159 and js/225. */
 
-async function renderCharacterLab() {
+export async function renderCharacterLab() {
   const body = document.getElementById('ob-body');
   if (!body) return;
   body.innerHTML = '<div class="ob-card"><h3 class="serif">' + icon('friends') +
@@ -80,20 +87,20 @@ async function renderCharacterLab() {
 
 /* v395: Review view — things needing human attention.
    Currently: relationship inbox. Future: characters needing review, identity matches. */
-async function charLabRenderReview(body, works) {
+export async function charLabRenderReview(body, works) {
   // For now, Review = Relationship Inbox
   await charLabRenderInbox(body, works);
 }
 
 /* v395: Relationships workspace — graph + inbox + table.
    Coming soon: D3 graph integration. Hidden from nav until then. */
-async function charLabRenderRelationships(body, works) {
+export async function charLabRenderRelationships(body, works) {
   body.innerHTML = '<div class="ob-card"><h3 class="serif">Relationships</h3>' +
     '<p class="note">Graph workspace coming soon. Use Review for now.</p></div>';
 }
 
 /* v397: Shared work deletion (consolidated from inbox + grid duplicates). */
-async function deleteWork(workId, workTitle) {
+export async function deleteWork(workId, workTitle) {
   if (!await confirmModal('Delete work "' + workTitle + '"? This removes the work, its editions, characters, relationships, claims, and quotes. This cannot be undone.', { okLabel: 'Delete', danger: true })) return;
   try {
     const sb = await CharacterStore._sb();
@@ -111,7 +118,7 @@ async function deleteWork(workId, workTitle) {
 /* v377: Phase 1 — Relationship Inbox.
    Review pipeline-suggested relationships: Accept / Change / Reject.
    Works against current JSON model; Phase 2 moves to edge table. */
-async function charLabRenderInbox(body, works) {
+export async function charLabRenderInbox(body, works) {
   // v395: Drive inbox from DB review_status, not localStorage (Claude bug 3)
   // Pipeline JSON items are matched to edge rows; reviewed = edge exists in any status
 
@@ -427,7 +434,7 @@ async function charLabRenderInbox(body, works) {
   if (charLabCanonicalId) await charLabCanonDetail();
 }
 
-function charLabWireViewToggle(body) {
+export function charLabWireViewToggle(body) {
   body.querySelectorAll('[data-chview]').forEach(b => b.addEventListener('click', () => {
     charLabView = b.getAttribute('data-chview');
     renderCharacterLab();
@@ -436,7 +443,7 @@ function charLabWireViewToggle(body) {
 
 /* Unified character detail: all linked instances, merged relationships
    labeled by book, and unlink controls. */
-async function charLabCanonDetail() {
+export async function charLabCanonDetail() {
   const el = document.getElementById('ch-canon-detail');
   if (!el || !charLabCanonicalId) { if (el) el.innerHTML = ''; return; }
   el.innerHTML = '<p class="note">Loading…</p>';
@@ -477,7 +484,7 @@ async function charLabCanonDetail() {
   }));
 }
 
-function charLabRender(body, works, chars) {
+export function charLabRender(body, works, chars) {
   const work = works.find(w => w.workId === charLabWorkId);
   const rf = charLabRoleFilter;
   // v317: blocked names hidden unless toggled; v321: merged hidden too
@@ -685,7 +692,7 @@ function charLabRender(body, works, chars) {
 
 /* Character detail panel with relationship tracing. Clicking a resolved
    relationship target navigates to that character (trace the graph). */
-function charLabDetail(chars) {
+export function charLabDetail(chars) {
   const el = document.getElementById('ch-detail');
   if (!el) return;
   const c = chars.find(x => x.id === charLabSelectedId);
@@ -937,7 +944,7 @@ function charLabDetail(chars) {
    aborts untouched, so this code can never mint a fresh irreversible
    merge. charUnmerge restores from the snapshot only.
    Never throws — returns error string on failure. */
-async function charMerge(winnerId, loserId, chars) {
+export async function charMerge(winnerId, loserId, chars) {
   try {
     const sb = await CharacterStore._sb();
     if (!sb) return 'cloud unavailable';
@@ -1024,7 +1031,7 @@ async function charMerge(winnerId, loserId, chars) {
    a second unmerge after success refuses as "not merged" instead of
    duplicating anything. Never throws — returns error string on
    failure, null on success. */
-async function charUnmerge(loserId, chars) {
+export async function charUnmerge(loserId, chars) {
   try {
     const sb = await CharacterStore._sb();
     if (!sb) return 'cloud unavailable';
@@ -1081,10 +1088,10 @@ async function charUnmerge(loserId, chars) {
    relationships as the stays and discloses the rewind, rather than
    claiming post-merge additions to those lists survive. */
 
-function charUnmergeNameEq(a, b) {
+export function charUnmergeNameEq(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
-function charUnmergeRelKey(r) {
+export function charUnmergeRelKey(r) {
   return String((r && r.to) || '').trim().toLowerCase() + '|' + charNormRelType(r && r.type);
 }
 
@@ -1096,7 +1103,7 @@ function charUnmergeRelKey(r) {
    at each other with the same type) the loser's entry keys IN via the
    repoint, never folds, and stays on the loser's own array, which
    merge and unmerge both leave untouched. */
-function charUnmergePostRepointKeys(winnerRels, winnerName, loserName) {
+export function charUnmergePostRepointKeys(winnerRels, winnerName, loserName) {
   return new Set((Array.isArray(winnerRels) ? winnerRels : []).map(r =>
     charUnmergeRelKey(charUnmergeNameEq(r.to, loserName)
       ? { to: winnerName, type: r.type } : r)));
@@ -1105,7 +1112,7 @@ function charUnmergePostRepointKeys(winnerRels, winnerName, loserName) {
 /* The preview model for restoring `loser` from `winner`: who comes
    back, every move named with its landing place, what stays, and what
    a verbatim restore rewinds. */
-function charUnmergePreview(loser, winner, chars) {
+export function charUnmergePreview(loser, winner, chars) {
   const snap = (loser && loser.mergeSnapshot) || {};
   const loserName = loser ? loser.name : '';
   const winnerName = winner ? winner.name : '';
@@ -1178,7 +1185,7 @@ function charUnmergePreview(loser, winner, chars) {
 
 /* Long-list window for the preview sections: first 8, then "+N more"
    expanding in place (spec §2). */
-function charUnmergeListWindow(items, expanded) {
+export function charUnmergeListWindow(items, expanded) {
   const list = Array.isArray(items) ? items : [];
   if (expanded || list.length <= 8) return { shown: list.slice(), moreCount: 0 };
   return { shown: list.slice(0, 8), moreCount: list.length - 8 };
@@ -1189,7 +1196,7 @@ function charUnmergeListWindow(items, expanded) {
    as back when the state charUnmerge writes verbatim is present: a
    third-party pointer naming the loser again, a winner pointer back in
    the snapshot array, a folded-in copy gone from the winner. */
-function charUnmergeOutcome(preview, charsAfter) {
+export function charUnmergeOutcome(preview, charsAfter) {
   const chars = Array.isArray(charsAfter) ? charsAfter : [];
   const byId = id => chars.find(c => c.id === id);
   let linksMoved = 0;
@@ -1224,11 +1231,11 @@ function charUnmergeOutcome(preview, charsAfter) {
   };
 }
 
-function charUnmergeCounted(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+export function charUnmergeCounted(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
 /* The result-state text model (spec §3): counts, never a bare "Done";
    a partial failure gets its own heading and of-total counts. */
-function charUnmergeResultModel(preview, outcome) {
+export function charUnmergeResultModel(preview, outcome) {
   const p = preview;
   if (!outcome || outcome.finished) {
     const links = outcome ? outcome.linksMoved : p.counts.links;
@@ -1258,7 +1265,7 @@ function charUnmergeResultModel(preview, outcome) {
 /* Spec §4: "Merged from {loser} · by {by} · {when}". The snapshot
    carries `at`; a snapshot without one reads "date not recorded" —
    never an invented date. Returns null for snapshot-less merges. */
-function charMergeHistoryLine(loser) {
+export function charMergeHistoryLine(loser) {
   const snap = loser && loser.mergeSnapshot;
   if (!snap) return null;
   const when = snap.at ? (fmtDate(snap.at) || 'date not recorded') : 'date not recorded';
@@ -1266,10 +1273,10 @@ function charMergeHistoryLine(loser) {
 }
 
 /* ---- the preview / result sheet ---- */
-let chRestoreState = null; // { ctx, loserId, preview, expandedB, expandedC, phase, outcome, err, busy }
-let chRestoreToken = null;
+export let chRestoreState = null; // { ctx, loserId, preview, expandedB, expandedC, phase, outcome, err, busy }
+export let chRestoreToken = null;
 
-function openCharRestoreSheet(loserId, ctx) {
+export function openCharRestoreSheet(loserId, ctx) {
   const loser = ctx.chars.find(c => c.id === loserId);
   const winner = loser ? ctx.chars.find(c => c.id === loser.duplicateOf) : null;
   if (!loser || !loser.mergeSnapshot) return;
@@ -1304,7 +1311,7 @@ function openCharRestoreSheet(loserId, ctx) {
   chRestoreRender();
 }
 
-function closeCharRestoreSheet() {
+export function closeCharRestoreSheet() {
   if (chRestoreToken != null) {
     const t = chRestoreToken; chRestoreToken = null;
     if (typeof overlayClosed === 'function') overlayClosed(t);
@@ -1314,12 +1321,12 @@ function closeCharRestoreSheet() {
   chRestoreState = null;
 }
 
-function chRestoreItemLines(items, lands, tail) {
+export function chRestoreItemLines(items, lands, tail) {
   return items.map(it =>
     '<p>' + esc(it.name) + ' — ' + esc(it.type) + ' ' + tail + ' ' + esc(lands) + '</p>').join('');
 }
 
-function chRestorePreviewHtml(st) {
+export function chRestorePreviewHtml(st) {
   const p = st.preview;
   const winB = charUnmergeListWindow(p.movesBack, st.expandedB);
   const winC = charUnmergeListWindow(p.staysList, st.expandedC);
@@ -1352,7 +1359,7 @@ function chRestorePreviewHtml(st) {
     (st.busy ? 'Restoring…' : 'Restore ' + esc(p.loserName)) + '</button></div>';
 }
 
-function chRestoreResultHtml(st) {
+export function chRestoreResultHtml(st) {
   const p = st.preview;
   const m = charUnmergeResultModel(p, st.outcome);
   if (m.done) {
@@ -1375,7 +1382,7 @@ function chRestoreResultHtml(st) {
     '<button class="btn" id="ch-restore-retry">Try again</button></div>';
 }
 
-function chRestoreRender() {
+export function chRestoreRender() {
   const st = chRestoreState;
   if (!st) return;
   const host = document.getElementById('ch-restore-body');
@@ -1412,7 +1419,7 @@ function chRestoreRender() {
   });
 }
 
-async function chRestoreCommit() {
+export async function chRestoreCommit() {
   const st = chRestoreState;
   if (!st || st.busy) return;
   st.busy = true;
@@ -1430,3 +1437,51 @@ async function chRestoreCommit() {
   st.busy = false;
   chRestoreRender();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/159-characters.js
+   (CHAR_ROLE_LABELS) and js/199-admin.js (renderCharacterLab dispatch),
+   reach these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.CHAR_ROLE_LABELS = CHAR_ROLE_LABELS;
+window.charLabWorkId = charLabWorkId;
+window.charLabRoleFilter = charLabRoleFilter;
+window.charLabSelectedId = charLabSelectedId;
+window.charLabShowBlocked = charLabShowBlocked;
+window.charLabView = charLabView;
+window.charLabCanonicalId = charLabCanonicalId;
+window.renderCharacterLab = renderCharacterLab;
+window.charLabRenderReview = charLabRenderReview;
+window.charLabRenderRelationships = charLabRenderRelationships;
+window.deleteWork = deleteWork;
+window.charLabRenderInbox = charLabRenderInbox;
+window.charLabWireViewToggle = charLabWireViewToggle;
+window.charLabCanonDetail = charLabCanonDetail;
+window.charLabRender = charLabRender;
+window.charLabDetail = charLabDetail;
+window.charMerge = charMerge;
+window.charUnmerge = charUnmerge;
+window.charUnmergeNameEq = charUnmergeNameEq;
+window.charUnmergeRelKey = charUnmergeRelKey;
+window.charUnmergePostRepointKeys = charUnmergePostRepointKeys;
+window.charUnmergePreview = charUnmergePreview;
+window.charUnmergeListWindow = charUnmergeListWindow;
+window.charUnmergeOutcome = charUnmergeOutcome;
+window.charUnmergeCounted = charUnmergeCounted;
+window.charUnmergeResultModel = charUnmergeResultModel;
+window.charMergeHistoryLine = charMergeHistoryLine;
+window.chRestoreState = chRestoreState;
+window.chRestoreToken = chRestoreToken;
+window.openCharRestoreSheet = openCharRestoreSheet;
+window.closeCharRestoreSheet = closeCharRestoreSheet;
+window.chRestoreItemLines = chRestoreItemLines;
+window.chRestorePreviewHtml = chRestorePreviewHtml;
+window.chRestoreResultHtml = chRestoreResultHtml;
+window.chRestoreRender = chRestoreRender;
+window.chRestoreCommit = chRestoreCommit;
