@@ -36,16 +36,23 @@
  *   quiet — the section simply never renders (fail closed).
  */
 
-let margTableMissing = false;   // marginalia pre-migration
-let margSupportKnown = null;    // probe cache: true / false / null
-let margReconciled = false;     // profiles → local toggle sync, per session
-const MARGINALIA_KEY = 'cozylibram.marginalia';
-const MARG_NOTE_MAX = 280;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-function margLog() {
+export let margTableMissing = false;   // marginalia pre-migration
+export let margSupportKnown = null;    // probe cache: true / false / null
+export let margReconciled = false;     // profiles → local toggle sync, per session
+export const MARGINALIA_KEY = 'cozylibram.marginalia';
+export const MARG_NOTE_MAX = 280;
+
+export function margLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[marginalia]'].concat([].slice.call(arguments)));
 }
-function margMissingErr(e) {
+export function margMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -53,7 +60,7 @@ function margMissingErr(e) {
     (code === '42703' || code === 'PGRST204' || code === 'PGRST205' || code === '42P01' ||
      /schema cache|does not exist|not found/i.test(msg));
 }
-function margRpcMissingErr(e) {
+export function margRpcMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -61,7 +68,7 @@ function margRpcMissingErr(e) {
     (code === 'PGRST202' || code === '42883' ||
      /schema cache|does not exist|not found/i.test(msg));
 }
-function margLatchIfMissing(e) {
+export function margLatchIfMissing(e) {
   if (margMissingErr(e) || margRpcMissingErr(e)) { margTableMissing = true; margSupportKnown = false; return true; }
   return false;
 }
@@ -69,7 +76,7 @@ function margLatchIfMissing(e) {
 /* Support probe: the profiles column is the migration's footprint
  * (the notes table itself is policy-closed by design, so a table
  * probe can't distinguish missing from locked). */
-async function marginaliaSupported() {
+export async function marginaliaSupported() {
   if (margTableMissing) return false;
   if (margSupportKnown !== null) return margSupportKnown;
   try {
@@ -88,12 +95,12 @@ async function marginaliaSupported() {
 
 /* ---------- the toggle ---------- */
 
-function marginaliaEnabled() {
+export function marginaliaEnabled() {
   try { return localStorage.getItem(MARGINALIA_KEY) !== 'off'; } catch (e) { return true; }
 }
 /* Local write only (book-dressing pattern: 'off' is stored, ON is
  * the absence of the key); js/229 roams it via the prefs section. */
-function marginaliaSetLocal(on) {
+export function marginaliaSetLocal(on) {
   try {
     if (on) localStorage.removeItem(MARGINALIA_KEY);
     else localStorage.setItem(MARGINALIA_KEY, 'off');
@@ -104,7 +111,7 @@ function marginaliaSetLocal(on) {
  * it. Runs at most once per session, and only latches on success
  * (the teen-defaults retry discipline): a failed reconcile simply
  * retries at the next book open. */
-async function marginaliaReconcile() {
+export async function marginaliaReconcile() {
   if (margReconciled) return;
   if (typeof circlePrivacy !== 'function') return;
   try {
@@ -122,14 +129,14 @@ async function marginaliaReconcile() {
 /* One copy's HISTORICAL read fraction (client mirror of the
  * SQL): finished by any recorded evidence counts as 1 — a re-read
  * never re-locks what a first read unlocked. */
-function marginaliaBookFrac(b) {
+export function marginaliaBookFrac(b) {
   if (!b) return 0;
   if (b.status === 'read' || b.dateFinished || (Number(b.readCount) || 0) >= 1 || b.previouslyRead) return 1;
   const pc = Number(b.pageCount) || 0, pr = Number(b.progress) || 0;
   if (pc <= 0 || pr <= 0) return 0;
   return Math.min(1, pr / pc);
 }
-function marginaliaViewerFrac(book) {
+export function marginaliaViewerFrac(book) {
   if (!book || typeof recoKey !== 'function') return 0;
   const key = recoKey(book);
   let f = marginaliaBookFrac(book);
@@ -142,7 +149,7 @@ function marginaliaViewerFrac(book) {
  * gated on the cloud copy; this gates on the local one — the two
  * can only ever disagree in the fail-safe direction). Returns the
  * notes in book order. */
-function marginaliaGate(notes, myId, vfrac) {
+export function marginaliaGate(notes, myId, vfrac) {
   if (!Array.isArray(notes)) return [];
   return notes
     .filter(n => n && (n.author_id === myId || (typeof n.frac === 'number' && n.frac <= vfrac)))
@@ -152,7 +159,7 @@ function marginaliaGate(notes, myId, vfrac) {
 /* Same-edition readers see the writer's page; everyone else gets
  * the fraction in words — never another edition's page number
  * presented as theirs, and never a percentage (no pace data). */
-function marginaliaPositionLabel(note, myBook) {
+export function marginaliaPositionLabel(note, myBook) {
   if (myBook && Number(myBook.pageCount) > 0 && Number(note.page_count) === Number(myBook.pageCount)) {
     return 'p. ' + note.page;
   }
@@ -165,7 +172,7 @@ function marginaliaPositionLabel(note, myBook) {
   if (f < 0.88) return 'about three-quarters in';
   return 'near the end';
 }
-function margAuthorName(uid) {
+export function margAuthorName(uid) {
   if (typeof cloudUser !== 'undefined' && cloudUser && uid === cloudUser.id) return 'You';
   const p = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[uid] : null;
   if (p && typeof friendDisplayName === 'function') {
@@ -177,7 +184,7 @@ function margAuthorName(uid) {
 
 /* ---------- RPC doors ---------- */
 
-async function marginaliaFetch(book) {
+export async function marginaliaFetch(book) {
   if (margTableMissing) return null;
   try {
     const sb = await cloudClient();
@@ -192,7 +199,7 @@ async function marginaliaFetch(book) {
 }
 /* Confirm the cloud copy of this book carries my local progress
  * BEFORE posting: flush the push, then re-read my own row. */
-async function marginaliaFlushBook(book) {
+export async function marginaliaFlushBook(book) {
   try { if (typeof cloudPushNow === 'function') await cloudPushNow(); } catch (e) {}
   try {
     const sb = await cloudClient();
@@ -204,7 +211,7 @@ async function marginaliaFlushBook(book) {
       (Number(d.pageCount) || 0) === (Number(book.pageCount) || 0);
   } catch (e) { return false; }
 }
-async function marginaliaAdd(book, page, body) {
+export async function marginaliaAdd(book, page, body) {
   if (margTableMissing) return 'unavailable';
   if (!(await marginaliaFlushBook(book))) return 'offline';
   try {
@@ -226,7 +233,7 @@ async function marginaliaAdd(book, page, body) {
     return (r.data === 'slow_down' || r.data === 'off') ? r.data : 'ok';
   } catch (e) { margLog('add threw', e); return 'error'; }
 }
-async function marginaliaDelete(id) {
+export async function marginaliaDelete(id) {
   try {
     const sb = await cloudClient();
     if (!sb || !cloudUser) return false;
@@ -235,7 +242,7 @@ async function marginaliaDelete(id) {
     return true;
   } catch (e) { return false; }
 }
-async function marginaliaReport(noteId, reason, details) {
+export async function marginaliaReport(noteId, reason, details) {
   try {
     const sb = await cloudClient();
     if (!sb || !cloudUser) return false;
@@ -244,7 +251,7 @@ async function marginaliaReport(noteId, reason, details) {
     return true;
   } catch (e) { return false; }
 }
-async function marginaliaMine() {
+export async function marginaliaMine() {
   if (margTableMissing) return null;
   try {
     const sb = await cloudClient();
@@ -260,7 +267,7 @@ async function marginaliaMine() {
 
 /* ---------- the book-page section ---------- */
 
-function marginaliaNoteHTML(note, myBook) {
+export function marginaliaNoteHTML(note, myBook) {
   const mine = typeof cloudUser !== 'undefined' && cloudUser && note.author_id === cloudUser.id;
   const actions = mine
     ? '<button class="taplink" data-marg-del="' + esc(note.id) + '">Delete</button>'
@@ -271,7 +278,7 @@ function marginaliaNoteHTML(note, myBook) {
     '<p class="marg-body">' + esc(note.body || '') + '</p>' +
     '<div class="marg-actions">' + actions + '</div></div>';
 }
-function marginaliaSectionHTML(book, notes) {
+export function marginaliaSectionHTML(book, notes) {
   const prog = Number(book.progress) || 0, pc = Number(book.pageCount) || 0;
   let html = '<div class="marg-card"><h3 style="margin:0 0 2px">Marginalia</h3>' +
     '<p class="note" style="margin:0 0 10px">Margin notes from your ' + covenNameBare().toLowerCase() +
@@ -291,7 +298,7 @@ function marginaliaSectionHTML(book, notes) {
   return html + '</div>';
 }
 
-function wireMarginaliaSection(slot, book, notes) {
+export function wireMarginaliaSection(slot, book, notes) {
   const byId = {};
   notes.forEach(n => { byId[n.id] = n; });
   slot.querySelectorAll('[data-marg-del]').forEach(btn => btn.addEventListener('click', async () => {
@@ -321,7 +328,7 @@ function wireMarginaliaSection(slot, book, notes) {
  * pre-migration, shield-held, or any read failure. Staleness is
  * the js/235 discipline: the slot is stamped with the book's key
  * and re-checked after every await. */
-async function fillMarginalia(book) {
+export async function fillMarginalia(book) {
   const slot = document.getElementById('m-marginalia');
   if (!slot || !book || typeof recoKey !== 'function') return;
   const key = recoKey(book);
@@ -370,7 +377,7 @@ async function fillMarginalia(book) {
 /* ---------- composer + report sheets (covenOpenSheet: the
  * swipe-to-dismiss rule is inherited, js/195) ---------- */
 
-function openMarginaliaComposer(book, opener) {
+export function openMarginaliaComposer(book, opener) {
   const prog = Math.max(1, Math.floor(Number(book.progress) || 0));
   const pc = Math.floor(Number(book.pageCount) || 0);
   const body =
@@ -415,7 +422,7 @@ function openMarginaliaComposer(book, opener) {
   });
 }
 
-function openMarginaliaReportSheet(note, opener) {
+export function openMarginaliaReportSheet(note, opener) {
   const reasons = (typeof REPORT_REASONS !== 'undefined' && Array.isArray(REPORT_REASONS)) ? REPORT_REASONS :
     [['spam', 'Spam'], ['harassment', 'Harassment'], ['inappropriate', 'Inappropriate content'], ['fake_account', 'Fake account'], ['other', 'Other']];
   const body =
@@ -449,7 +456,7 @@ function openMarginaliaReportSheet(note, opener) {
  * feature is unsupported or the list is empty — the
  * blocked-readers discipline) ---------- */
 
-async function renderMarginaliaMine(box) {
+export async function renderMarginaliaMine(box) {
   if (!box || typeof cloudUser === 'undefined' || !cloudUser) return;
   if (!(await marginaliaSupported())) return;
   const notes = await marginaliaMine();
@@ -478,3 +485,45 @@ async function renderMarginaliaMine(box) {
     } else { btn.disabled = false; toast('Couldn’t remove that note'); }
   }));
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/150-modal-discovery.js, js/180-settings.js and js/195-coven.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.margTableMissing = margTableMissing;
+window.margSupportKnown = margSupportKnown;
+window.margReconciled = margReconciled;
+window.MARGINALIA_KEY = MARGINALIA_KEY;
+window.MARG_NOTE_MAX = MARG_NOTE_MAX;
+window.margLog = margLog;
+window.margMissingErr = margMissingErr;
+window.margRpcMissingErr = margRpcMissingErr;
+window.margLatchIfMissing = margLatchIfMissing;
+window.marginaliaSupported = marginaliaSupported;
+window.marginaliaEnabled = marginaliaEnabled;
+window.marginaliaSetLocal = marginaliaSetLocal;
+window.marginaliaReconcile = marginaliaReconcile;
+window.marginaliaBookFrac = marginaliaBookFrac;
+window.marginaliaViewerFrac = marginaliaViewerFrac;
+window.marginaliaGate = marginaliaGate;
+window.marginaliaPositionLabel = marginaliaPositionLabel;
+window.margAuthorName = margAuthorName;
+window.marginaliaFetch = marginaliaFetch;
+window.marginaliaFlushBook = marginaliaFlushBook;
+window.marginaliaAdd = marginaliaAdd;
+window.marginaliaDelete = marginaliaDelete;
+window.marginaliaReport = marginaliaReport;
+window.marginaliaMine = marginaliaMine;
+window.marginaliaNoteHTML = marginaliaNoteHTML;
+window.marginaliaSectionHTML = marginaliaSectionHTML;
+window.wireMarginaliaSection = wireMarginaliaSection;
+window.fillMarginalia = fillMarginalia;
+window.openMarginaliaComposer = openMarginaliaComposer;
+window.openMarginaliaReportSheet = openMarginaliaReportSheet;
+window.renderMarginaliaMine = renderMarginaliaMine;
