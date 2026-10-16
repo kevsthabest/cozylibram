@@ -2,7 +2,13 @@
 
 /* ---------------- detail modal ---------------- */
 /* ---- author / series collections: "more like this" from your own shelves ---- */
-function collectionRowHTML(b) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function collectionRowHTML(b) {
   const sub = (b.series && b.series.name
     ? icon('series') + ' ' + esc(b.series.name) +
       (b.series.position != null && b.series.position !== '' ? ' #' + esc(String(b.series.position)) : '') + ' · '
@@ -22,13 +28,13 @@ function collectionRowHTML(b) {
 // v78: a single-book "series" is hidden unless that book is still upcoming
 // (unread) — one lone finished book isn't a series she follows; filter pills
 // split All / Started / Completed; covers tap open like the grid.
-let seriesReturn = 'library';
-let seriesFilter = 'all';
+export let seriesReturn = 'library';
+export let seriesFilter = 'all';
 try {
   const sf = localStorage.getItem('spicyshelves.seriesfilter');
   if (sf === 'started' || sf === 'completed') seriesFilter = sf;
 } catch (e) {}
-function seriesData() {
+export function seriesData() {
   const byKey = {};
   library.forEach(b => {
     const sn = b.series && b.series.name;
@@ -62,17 +68,17 @@ function seriesData() {
 // v78: hide single-book "series" unless the book is still upcoming (unread).
 // v404: strictly require 2+ books — phantom single-book series for standalones
 // confused users (UX Tester L9). Unread standalones don't get a series row.
-function visibleSeries() {
+export function visibleSeries() {
   return seriesData().filter(s => s.books.length > 1);
 }
 // v108: owned-vs-full-series total. Hardcover's series listing is the honest
 // total; owned books are unioned in (deduped by title+author/ISBN) so a thin
 // Hardcover listing can never undercount what she owns.
-function seriesFullTotal(ownedBooks, hcRows) {
+export function seriesFullTotal(ownedBooks, hcRows) {
   const asRow = b => ({ title: b.title, author: ((b.authors || [])[0]) || '', isbn: b.isbn });
   return dedupeExternal(ownedBooks.map(asRow).concat(hcRows || [])).length;
 }
-function renderSeries() {
+export function renderSeries() {
   const all = visibleSeries();
   const shown = all.filter(s => seriesFilter === 'started' ? s.started
     : seriesFilter === 'completed' ? s.completed : true);
@@ -176,3 +182,31 @@ function renderSeries() {
     }
   })();
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/100-nav.js, js/150-modal-discovery.js, js/155-authors.js, js/200-boot.js and js/239-finale.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone.
+   seriesReturn and seriesFilter are republished as accessor
+   properties, not value copies: js/120-favorites.js and
+   js/170-stats.js reassign seriesReturn when their Series entries
+   are tapped, js/229-user-state.js reassigns seriesFilter when a
+   roamed settings snapshot is adopted, and js/100-nav.js reads
+   seriesReturn live in its back-route lookup. A value copy would
+   freeze the initial state and silently drop those writes; the
+   getter/setter pairs forward every read and write to the module
+   bindings, so the writers' expressions are unchanged and every
+   reader sees the live value. */
+window.collectionRowHTML = collectionRowHTML;
+Object.defineProperty(window, 'seriesReturn', { get: () => seriesReturn, set: (v) => { seriesReturn = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'seriesFilter', { get: () => seriesFilter, set: (v) => { seriesFilter = v; }, enumerable: true, configurable: true });
+window.seriesData = seriesData;
+window.visibleSeries = visibleSeries;
+window.seriesFullTotal = seriesFullTotal;
+window.renderSeries = renderSeries;

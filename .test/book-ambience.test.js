@@ -54,7 +54,10 @@ function makeStubCtx() {
 }
 
 /* ---------- module loading (vm, candle-test pattern) ---------- */
-const taxSrc = fs.readFileSync(path.join(ROOT, 'js/156-trope-taxonomy.js'), 'utf8');
+// R3 repoint (migration plan §9.3): js/156 is a real ES module since
+// phase 2 batch 6; classicize restores the classic body before vm
+// evaluation. Loading plumbing only — assertions untouched.
+const taxSrc = classicize(fs.readFileSync(path.join(ROOT, 'js/156-trope-taxonomy.js'), 'utf8'), 'js/156-trope-taxonomy.js');
 const taxSandbox = { console: console, window: {}, module: { exports: {} } };
 vm.createContext(taxSandbox);
 vm.runInContext(taxSrc, taxSandbox, { filename: 'js/156-trope-taxonomy.js' });

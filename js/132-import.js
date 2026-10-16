@@ -6,7 +6,13 @@
 // (detect + parse); the UI, preview, and dedupe stay shared.
 
 // Minimal CSV parser: handles quoted fields, escaped quotes, CRLF, BOM.
-function parseCSV(text) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function parseCSV(text) {
   text = String(text || '').replace(/^﻿/, '');
   const rows = [];
   let row = [], field = '', inQ = false;
@@ -25,11 +31,11 @@ function parseCSV(text) {
   if (field !== '' || row.length) { row.push(field); rows.push(row); }
   return rows.filter(r => r.length && !(r.length === 1 && r[0] === ''));
 }
-function csvHeader(text) {
+export function csvHeader(text) {
   const rows = parseCSV(text);
   return rows.length ? rows[0].map(h => h.trim()) : [];
 }
-function csvToObjects(text) {
+export function csvToObjects(text) {
   const rows = parseCSV(text);
   if (!rows.length) return [];
   const head = rows[0].map(h => h.trim());
@@ -39,12 +45,12 @@ function csvToObjects(text) {
     return o;
   });
 }
-function cleanISBN(s) {
+export function cleanISBN(s) {
   const d = String(s || '').replace(/[^0-9X]/gi, '').toUpperCase();
   return (d.length === 10 || d.length === 13) ? d : '';
 }
 // Goodreads "2024/03/15", StoryGraph "2024/03/15" / "03/15/2024" / "March 15, 2024" → ISO.
-function parseLooseDate(s) {
+export function parseLooseDate(s) {
   s = String(s || '').trim();
   if (!s) return '';
   let d = null;
@@ -53,11 +59,11 @@ function parseLooseDate(s) {
   else { const t = Date.parse(s); if (!isNaN(t)) d = new Date(t); }
   return d && !isNaN(d) ? d.toISOString() : '';
 }
-function splitNames(s) {
+export function splitNames(s) {
   return String(s || '').split(/;/).map(x => x.trim()).filter(Boolean);
 }
 
-function parseGoodreadsCSV(text) {
+export function parseGoodreadsCSV(text) {
   return csvToObjects(text).filter(r => r['Title']).map(r => {
     const shelf = (r['Exclusive Shelf'] || '').toLowerCase();
     const status = shelf === 'read' ? 'read' : shelf === 'currently-reading' ? 'reading' : 'tbr';
@@ -87,7 +93,7 @@ function parseGoodreadsCSV(text) {
   });
 }
 
-function parseStoryGraphCSV(text) {
+export function parseStoryGraphCSV(text) {
   const statusMap = { 'read': 'read', 'currently-reading': 'reading', 'to-read': 'tbr', 'did-not-finish': 'dnf' };
   return csvToObjects(text).filter(r => r['Title']).map(r => {
     const status = statusMap[(r['Read Status'] || '').toLowerCase()] || 'tbr';
@@ -116,14 +122,14 @@ function parseStoryGraphCSV(text) {
 // Columns include Title, Author, Series ("Name (#1.0)"), Status, ISBN 10/13,
 // Pages, Publisher, Publish Date, Genres, Moods, Tags, Content Warnings,
 // Date Added/Started/Finished, Rating, Review, Private Notes, Owned.
-function parseHardcoverSeries(s) {
+export function parseHardcoverSeries(s) {
   const m = String(s || '').match(/^(.*)\s*\(#([\d.]+)\)\s*$/);
   if (!m || !m[1].trim()) return null;
   const pos = parseFloat(m[2]);
   return { name: m[1].trim(), position: isNaN(pos) ? null : pos };
 }
 
-function parseHardcoverCSV(text) {
+export function parseHardcoverCSV(text) {
   const statusMap = {
     'want to read': 'tbr',
     'currently reading': 'reading',
@@ -164,7 +170,7 @@ function parseHardcoverCSV(text) {
   }).filter(Boolean);
 }
 
-const IMPORT_FORMATS = [
+export const IMPORT_FORMATS = [
   {
     id: 'goodreads', name: 'Goodreads',
     hint: 'goodreads.com → My Books → Import/Export → Export Library',
@@ -196,7 +202,7 @@ const IMPORT_FORMATS = [
   },
 ];
 
-function detectImportFormat(text, filename) {
+export function detectImportFormat(text, filename) {
   for (const f of IMPORT_FORMATS) {
     try { if (f.detect(text, filename)) return f; } catch (e) { /* try the next one */ }
   }
@@ -205,20 +211,20 @@ function detectImportFormat(text, filename) {
 
 // v224 (UX-14): the import result is a summary banner with a way back to the
 // shelf -- not a toast that vanishes while she wonders what happened.
-function importDoneBannerHTML(parts) {
+export function importDoneBannerHTML(parts) {
   return '<div class="import-done">' + icon('check') +
     '<p><b>' + esc(parts.join(' \u00b7 ')) + '</b></p>' +
     '<p class="note">Your library was updated -- duplicates were skipped, never added twice.</p>' +
     '<button class="btn ghost" data-import-done>View in library</button></div>';
 }
-function wireImportDoneBanner(mount) {
+export function wireImportDoneBanner(mount) {
   if (!mount) return;
   const btn = mount.querySelector('[data-import-done]');
   if (btn) btn.addEventListener('click', () => go('library'));
 }
 
 // Add parsed books: dedupe against the shelf, normalize, one save + render.
-function importForeignBooks(books, label, source, mountId) {
+export function importForeignBooks(books, label, source, mountId) {
   let added = 0, skipped = 0;
   const fresh = [];
   for (const raw of books) {
@@ -253,7 +259,7 @@ function importForeignBooks(books, label, source, mountId) {
 
 // v224 (UX-13): the import hub is shared between Settings and the Add screen.
 // pfx prefixes the element ids so both can exist without colliding.
-function importHubHTML(pfx) {
+export function importHubHTML(pfx) {
   return '<div class="ic-hub-hero"><button class="btn block" id="' + pfx + '-concierge">' + icon('sparkles') +
     ' Guided import — bring a whole library over</button>' +
     '<p class="note">New here? The concierge walks you through it step by step, with a match report at the end.</p></div>' +
@@ -263,7 +269,7 @@ function importHubHTML(pfx) {
     '<button class="btn ghost block" id="' + pfx + '-pick">' + icon('download') + ' Choose an export file</button>' +
     '<div id="' + pfx + '-result"></div>';
 }
-function wireImportHub(pfx) {
+export function wireImportHub(pfx) {
   const concierge = document.getElementById(pfx + '-concierge');
   if (concierge) concierge.addEventListener('click', () => {
     try { openImportConcierge(); } catch (e) {}
@@ -280,7 +286,7 @@ function wireImportHub(pfx) {
 }
 
 // v224 (UX-13): the hub lives on the Add screen too, so the mount is a parameter.
-function handleImportFile(file, mountId) {
+export function handleImportFile(file, mountId) {
   const mount = document.getElementById(mountId || 'im-result');
   const name = String(file.name || '').toLowerCase();
   // Bookmory ships a binary ZIP (Database.bookmory) — handled separately.
@@ -321,7 +327,7 @@ function handleImportFile(file, mountId) {
 }
 
 // An ISBN-list file goes through the same lookup pipeline as the Bulk tab.
-function importISBNListFile(text, mount) {
+export function importISBNListFile(text, mount) {
   // v224 (UX-14): banner in the hub on completion.
   const mountId = mount && mount.id;
   const isbns = parseISBNList(text);
@@ -348,3 +354,33 @@ function importISBNListFile(text, mount) {
     });
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/130-add.js, js/133-bookmory.js, js/134-verify.js, js/136-coverpicker.js, js/139-import-concierge.js and js/180-settings.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.parseCSV = parseCSV;
+window.csvHeader = csvHeader;
+window.csvToObjects = csvToObjects;
+window.cleanISBN = cleanISBN;
+window.parseLooseDate = parseLooseDate;
+window.splitNames = splitNames;
+window.parseGoodreadsCSV = parseGoodreadsCSV;
+window.parseStoryGraphCSV = parseStoryGraphCSV;
+window.parseHardcoverSeries = parseHardcoverSeries;
+window.parseHardcoverCSV = parseHardcoverCSV;
+window.IMPORT_FORMATS = IMPORT_FORMATS;
+window.detectImportFormat = detectImportFormat;
+window.importDoneBannerHTML = importDoneBannerHTML;
+window.wireImportDoneBanner = wireImportDoneBanner;
+window.importForeignBooks = importForeignBooks;
+window.importHubHTML = importHubHTML;
+window.wireImportHub = wireImportHub;
+window.handleImportFile = handleImportFile;
+window.importISBNListFile = importISBNListFile;
