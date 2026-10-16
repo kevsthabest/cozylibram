@@ -154,10 +154,11 @@ async function loadQueue(sb) {
 async function setStatus(sb, item, accepted) {
   var status = accepted ? (item.ptype === 'new-trope' ? 'approved' : 'accepted') : 'rejected';
   if (item.ptype === 'trope' || item.ptype === 'new-trope') {
-    var r = await sb.from('trope_proposals').update({ status: status }).eq('id', item.id);
-    if (r.error) throw new Error(r.error.message);
     if (accepted && item.ptype === 'trope') {
-      /* Apply: upsert into the shared book_key-keyed cache as community. */
+      /* Apply FIRST, flip status only on success (issue #258): a failed
+         upsert must leave the proposal pending and retryable — flipping
+         first recorded an acceptance that never landed. The apply is an
+         upsert into the shared book_key-keyed cache as community. */
       var up = await sb.from('book_tropes').upsert({
         book_key: item.bookKey, trope_id: item.raw.trope_id,
         source: 'community', confidence: 0.7, taxonomy_version: 1,
@@ -165,6 +166,8 @@ async function setStatus(sb, item, accepted) {
       }, { onConflict: 'book_key,trope_id' });
       if (up.error) throw new Error(up.error.message);
     }
+    var r = await sb.from('trope_proposals').update({ status: status }).eq('id', item.id);
+    if (r.error) throw new Error(r.error.message);
     if (!accepted && item.ptype === 'trope') {
       /* Rejected wins: admin downvote so the suggestion stays down. */
       try {
