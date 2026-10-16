@@ -371,8 +371,8 @@ function userStateApplyFinale(payload) {
 }
 
 /* ---------------- roaming reco dismissals (v575) ---------------- */
-// The ninth section: the Discover dismissal set ('hc:<id>' keys,
-// js/198), in its own column (reco_state, supabase/migrations/
+// The ninth section: the Discover dismissal set ('hc:<id>' record keys
+// and, since v583, 'wk:<workKey>' work keys — js/198), in its own column (reco_state, supabase/migrations/
 // v575_user_state_reco.sql), payload { _at, value } — value is the key
 // array as-is, warning/upnext-style. The dismissals were the one piece
 // of user data with no cloud copy (IDB kv + a localStorage fallback,

@@ -304,6 +304,76 @@ const hcAudio = (over) => hcBook(Object.assign({
   ok('fallback: no AppLog warn on the happy path',
     get('AppLog.entries("warn").filter(e => e.tag === "reco").length') === 0);
 
+  // ---- #196: dismissal + library exclusion key at WORK level ----
+  // A dismissal (or an owned copy) speaks for the whole work: a sibling
+  // edition the user never saw must not be promoted by the collapse
+  // into the dismissed/owned work's place.
+  const rawPrint11 = hcBook({ id: 11 });
+  const rawAudio12 = hcAudio({ id: 12 });
+  const IRON_WK = 'iron flame|rebecca yarros';
+
+  // (a) A stored work-key dismissal drops EVERY edition of the work.
+  runInWindow('library = []');
+  runInWindow('hcGraphQL = async (q) => ({ books: ' + JSON.stringify([rawPrint11, rawAudio12]) + ' });');
+  const sweptWk = await get('sweepRecoCandidates(["Rebecca Yarros"], new Set(["wk:' + IRON_WK + '"]))');
+  ok('#196: work-key dismissal drops all editions of the work', sweptWk.length === 0);
+
+  // (b) A legacy record-only dismissal is interpreted at work level in
+  // the same sweep (the sibling is dropped, not promoted) AND upgraded:
+  // the derived work key lands in the stored dismissal set.
+  runInWindow('localStorage.removeItem("spicyshelves.reco_dismissed"); recoDismissedMirror = null;');
+  const sweptLegacy = await get('sweepRecoCandidates(["Rebecca Yarros"], new Set(["hc:11"]))');
+  ok('#196: legacy hc dismissal drops the sibling edition too', sweptLegacy.length === 0);
+  ok('#196: legacy dismissal upgraded — work key now stored',
+    get('recoDismissedKeys()').indexOf('wk:' + IRON_WK) !== -1);
+
+  // (c) Owning ONE edition (under an edition-qualified title, with an
+  // ISBN no candidate carries) excludes the work's other editions.
+  runInWindow('library = [{ title: "Iron Flame (The Empyrean, #2)", authors: ["Rebecca Yarros"], isbn: "9780000000000" }]');
+  const sweptOwned = await get('sweepRecoCandidates(["Rebecca Yarros"], new Set())');
+  ok('#196: owning one edition excludes sibling editions (work key)', sweptOwned.length === 0);
+
+  // (d) A DIFFERENT work with a near key is unaffected: owning and
+  // work-dismissing "Mistborn - The Final Empire" must not touch
+  // "Mistborn - The Well of Ascension".
+  const rawFE = hcBook({ id: 21, title: 'Mistborn: The Final Empire', contributions: [{ author: { name: 'Brandon Sanderson' } }], default_physical_edition: { isbn_13: '9780765311788', language: { language: 'English' } } });
+  const rawWoA = hcBook({ id: 22, title: 'Mistborn - The Well of Ascension', contributions: [{ author: { name: 'Brandon Sanderson' } }], default_physical_edition: { isbn_13: '9780765316882', language: { language: 'English' } } });
+  runInWindow('library = [{ title: "Mistborn - The Final Empire", authors: ["Brandon Sanderson"], isbn: "" }]');
+  runInWindow('hcGraphQL = async (q) => ({ books: ' + JSON.stringify([rawFE, rawWoA]) + ' });');
+  const sweptNear = await get('sweepRecoCandidates(["Brandon Sanderson"], new Set(["wk:mistborn the final empire|brandon sanderson"]))');
+  ok('#196: near-key different work still surfaces', sweptNear.length === 1 && sweptNear[0].hcId === 22);
+
+  // (e) The dismiss write path persists BOTH the record key and the
+  // work key, so future sweeps (and other devices, via roaming) read
+  // the dismissal at work level directly.
+  ok('#196: recoDismissCandidate exists', get('typeof recoDismissCandidate') === 'function');
+  runInWindow('localStorage.removeItem("spicyshelves.reco_dismissed"); recoDismissedMirror = null;');
+  await get('recoDismissCandidate({ hcId: 77, title: "Dune", authors: ["Frank Herbert"] })');
+  const storedKeys = get('recoDismissedKeys()');
+  ok('#196: dismiss stores the record key', storedKeys.indexOf('hc:77') !== -1);
+  ok('#196: dismiss stores the work key', storedKeys.indexOf('wk:dune|frank herbert') !== -1);
+
+  // (f) The memo path (refreshRecommendations without a fresh sweep)
+  // applies the same work-level gates: a memoized sibling of a
+  // work-dismissed book drops out, an unrelated work stays.
+  runInWindow('localStorage.removeItem("spicyshelves.reco_dismissed"); recoDismissedMirror = null;');
+  await get('recoDismiss("wk:' + IRON_WK + '")');
+  // The memo path needs its render target: renderDiscover builds
+  // #disc-reco in the app; the bare index.html harness has none.
+  runInWindow('if (!document.getElementById("disc-reco")) { var d = document.createElement("div"); d.id = "disc-reco"; document.body.appendChild(d); }');
+  runInWindow('library = [{ title: "Onyx Storm", authors: ["Rebecca Yarros"], status: "read", myRating: 5, isbn: "" }]');
+  runInWindow('_recoMemo = (function () {' +
+    ' var prof = library.filter(b => b && (b.status === "read" || b.favorite));' +
+    ' var auth = topLovedAuthors(6);' +
+    ' return { fp: recoTasteFingerprint(auth, prof), embedded: false, spiceMap: {},' +
+    '   ranked: [' +
+    '     { c: { hcId: 12, title: "Iron Flame", authors: ["Rebecca Yarros"], isbns: [] } },' +
+    '     { c: { hcId: 31, title: "Fourth Wing", authors: ["Rebecca Yarros"], isbns: [] } }' +
+    '   ] }; })();');
+  await get('refreshRecommendations()');
+  ok('#196: memo path drops the work-dismissed sibling, keeps the other work',
+    get('visibleRecos.length') === 1 && get('visibleRecos[0].c.hcId') === 31);
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('FATAL', e); process.exit(1); });

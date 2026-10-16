@@ -991,13 +991,19 @@ function recoSharedTropes(text, lovedIds) {
   return out;
 }
 
-/* Dismissals: 'hc:<id>' keys in the IDB kv store, localStorage fallback
-   (same split-brain rule as the release dismissals). The local store is
-   the working copy: dismissing works offline and instantly against it.
+/* Dismissals: 'hc:<id>' record keys and 'wk:<workKey>' work keys in the
+   IDB kv store, localStorage fallback (same split-brain rule as the
+   release dismissals). The local store is the working copy: dismissing
+   works offline and instantly against it.
    Since v575 the set also roams through the user_state reco_state
    section (js/229-user-state.js), union-merged on pull and on push —
    dismissals are append-only, so a dismissal made on any signed-in
-   device propagates and none is lost to another device's older set. */
+   device propagates and none is lost to another device's older set.
+   v583 (#196): a dismissal also speaks for its WORK — dismissing one
+   edition stores its 'wk:' key alongside the 'hc:' key, and sweeps
+   interpret legacy record-only dismissals at work level (adopting the
+   derived work key into the stored set), so the collapse can no
+   longer promote a sibling edition into the dismissed work's place. */
 const RECO_DISMISS_KEY = 'reco_dismissed';
 const RECO_DISMISS_CAP = 200;
 let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
@@ -1035,6 +1041,33 @@ async function recoPersistDismissals(arr) {
 async function recoDismiss(key) {
   const s = await recoDismissedSet();
   s.add(key);
+  const arr = Array.from(s).slice(-RECO_DISMISS_CAP);
+  recoDismissedMirror = arr.slice();
+  await recoPersistDismissals(arr);
+}
+
+// Dismiss a Recommended candidate: persist its record key AND its work
+// key (#196), through the one write path each time, so every future
+// sweep — and every other device, via roaming — reads the dismissal at
+// work level directly.
+async function recoDismissCandidate(c) {
+  if (!c || c.hcId == null) return;
+  await recoDismiss('hc:' + c.hcId);
+  const wk = recoWorkKey(c);
+  if (wk) await recoDismiss('wk:' + wk);
+}
+
+// #196 legacy upgrade: fold derived work keys into the stored dismissal
+// set (the same union + persist path as a local dismissal and the
+// roaming merge). A record-only dismissal made before v583 thereby
+// gains its work-level reading permanently, instead of depending on
+// the dismissed edition still appearing in a sweep window.
+async function recoAdoptDismissalKeys(keys) {
+  const extra = (keys || []).filter(k => typeof k === 'string' && k);
+  if (!extra.length) return;
+  const s = await recoDismissedSet();
+  if (extra.every(k => s.has(k))) return;
+  extra.forEach(k => s.add(k));
   const arr = Array.from(s).slice(-RECO_DISMISS_CAP);
   recoDismissedMirror = arr.slice();
   await recoPersistDismissals(arr);
@@ -1369,6 +1402,31 @@ function recoWorkKey(c) {
   return t + '|' + a;
 }
 
+// Work keys of everything on her shelves — the library read at the
+// same granularity as the collapse, so owning any one edition of a
+// work speaks for the work (#196). Recomputed per gate call: the
+// library is small and the gates run per sweep, not per render.
+function recoLibraryWorkKeys() {
+  const keys = new Set();
+  (typeof library !== 'undefined' ? library : []).forEach(b => {
+    const k = recoWorkKey(b);
+    if (k) keys.add(k);
+  });
+  return keys;
+}
+
+// True when a candidate's WORK is dismissed (a stored 'wk:' key) or
+// already in the library (any edition of it). The record-level checks
+// ('hc:' dismissal, releaseInLibrary) stay with their callers; this is
+// the work-level half of the gate, shared by the sweep intake and the
+// memoized re-filter so both apply #196 identically.
+function recoWorkKeyBlocked(c, dismissed, libWorkKeys) {
+  const wk = recoWorkKey(c);
+  if (!wk) return false;
+  if (dismissed && dismissed.has('wk:' + wk)) return true;
+  return !!(libWorkKeys && libWorkKeys.has(wk));
+}
+
 /* v535 (audit #1): "Filter from discovery" for Recommended. Sweep
    candidates carry no warning data — Hardcover's books type has no
    content_warnings field; warnings live only on search-index docs —
@@ -1466,16 +1524,38 @@ function recoSweepQuery(author, extended) {
 }
 async function sweepRecoCandidates(authors, dismissed) {
   const out = [], seen = new Set();
+  const libWorkKeys = recoLibraryWorkKeys();
+  const upgradeWorkKeys = new Set();
   let fellBack = false;
   for (const a of (authors || []).slice(0, 6)) {
     try {
       let data = null;
       try { data = await hcGraphQL(recoSweepQuery(a, true)); }
       catch (e) { fellBack = true; data = await hcGraphQL(recoSweepQuery(a, false)); }
-      ((data || {}).books || []).forEach(b => {
+      const books = ((data || {}).books || []);
+      // #196 pre-pass: the work keys of THIS list's record-dismissed
+      // books. A legacy 'hc:'-only dismissal speaks for its whole work
+      // within the sweep, whichever order the editions arrive in — and
+      // its derived work key is adopted into the stored set below, so
+      // the reading outlives the dismissed edition's sweep window.
+      const listWorkDismissed = new Set();
+      books.forEach(b => {
+        if (b.id == null || !dismissed.has('hc:' + b.id)) return;
+        const wk = recoWorkKey(hcBookToCandidate(b));
+        if (!wk) return;
+        listWorkDismissed.add(wk);
+        if (!dismissed.has('wk:' + wk)) upgradeWorkKeys.add('wk:' + wk);
+      });
+      books.forEach(b => {
         if (b.id == null || seen.has(b.id)) return;
         if (dismissed.has('hc:' + b.id)) return;
         const c = hcBookToCandidate(b);
+        // #196: work-level gates beside the record-level ones — a
+        // work-dismissed or already-owned work must not re-enter
+        // represented by a sibling edition.
+        if (recoWorkKeyBlocked(c, dismissed, libWorkKeys)) return;
+        const cwk = recoWorkKey(c);
+        if (cwk && listWorkDismissed.has(cwk)) return;
         if (releaseInLibrary(c)) return;
         if (isRecoMerch(c)) return; // v403: skip merchandise
         seen.add(b.id);
@@ -1484,6 +1564,9 @@ async function sweepRecoCandidates(authors, dismissed) {
       });
     } catch (e) { /* next author */ }
     await new Promise(r => setTimeout(r, 700)); // share the Hardcover pacing
+  }
+  if (upgradeWorkKeys.size) {
+    try { await recoAdoptDismissalKeys(Array.from(upgradeWorkKeys)); } catch (e) {}
   }
   if (fellBack) {
     try {
@@ -1617,7 +1700,7 @@ function wireRecoResults(box) {
   box.querySelectorAll('[data-dis]').forEach(btn => btn.addEventListener('click', async e => {
     e.stopPropagation();
     const r = visibleRecos[Number(btn.dataset.dis)];
-    if (r) await recoDismiss('hc:' + r.c.hcId);
+    if (r) await recoDismissCandidate(r.c); // #196: record key + work key
     btn.closest('.rel-card').remove();
     if (!box.querySelector('.rel-card')) box.innerHTML = '<p class="note">All caught up \u2728</p>';
   }));
@@ -1685,8 +1768,10 @@ async function refreshRecommendations(force) {
     }
     if (!force && _recoMemo && _recoMemo.fp === recoTasteFingerprint(authors, profBooks)) {
       const dismissedNow = await recoDismissedSet();
+      const libWorkKeys = recoLibraryWorkKeys();
       const rankedNow = _recoMemo.ranked.filter(r => r && r.c &&
-        !releaseInLibrary(r.c) && !dismissedNow.has('hc:' + r.c.hcId));
+        !releaseInLibrary(r.c) && !dismissedNow.has('hc:' + r.c.hcId) &&
+        !recoWorkKeyBlocked(r.c, dismissedNow, libWorkKeys));
       renderRecoResults(rankedNow, recoLovedTropeIds(), _recoMemo.embedded, _recoMemo.spiceMap);
       return;
     }
