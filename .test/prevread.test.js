@@ -36,7 +36,7 @@ runInWindow(`localStorage.clear();
 // 1. fixing the total on a finished book must not fabricate a reading session
 runInWindow(`openDetail('p1');`);
 q('#f-pagecount').value = '280';
-q('#m-save').click();
+q('#m-x').click();
 ok('page count corrected', book('p1').pageCount === 280);
 ok('no phantom log entry', (book('p1').log || []).length === 0);
 ok('progress capped to new total', book('p1').progress === 280);
@@ -51,7 +51,7 @@ q('#f-prevread').checked = true;
 q('#f-prevread').dispatchEvent(new window.Event('change', { bubbles: true }));
 runInWindow(`window.__cleared = !editingDraft.dateFinished;`);
 ok('checking toggle clears the fresh stamp', window.__cleared === true);
-q('#m-save').click();
+q('#m-x').click();
 ok('saved as read', book('p2').status === 'read');
 ok('no finish date kept', !book('p2').dateFinished);
 ok('no log entries', (book('p2').log || []).length === 0);
@@ -60,7 +60,7 @@ ok('flag persisted', book('p2').previouslyRead === true);
 // 3. normal finish keeps the old behavior (stamp + completion log)
 runInWindow(`openDetail('p3');`);
 q('#f-status button[data-s="read"]').click();
-q('#m-save').click();
+q('#m-x').click();
 ok('normal finish stamps today', !!book('p3').dateFinished);
 const lg = book('p3').log || [];
 ok('completion delta logged', lg.length === 1 && lg[0].to - lg[0].from === 200);
@@ -77,7 +77,7 @@ closeModal();
 runInWindow(`openDetail('p4');`);
 q('#f-status button[data-s="reading"]').click();
 q('#f-progress').value = '40';
-q('#m-save').click();
+q('#m-x').click();
 const lg2 = book('p4').log || [];
 ok('manual progress edit logs pages', lg2.length === 1 && lg2[0].to - lg2[0].from === 40);
 

@@ -54,7 +54,7 @@ ok('entry removed', (book('r1').log || []).length === 0);
 ok('progress rolled back to day start', book('r1').progress === 40);
 ok('button disappears after removal', q('#m-rmlog') === null);
 q('#f-progress').value = '40'; // unchanged by the user
-q('#m-save').click();
+q('#m-x').click();
 ok('save does not re-log the removed entry', (book('r1').log || []).length === 0);
 
 // 4. no button when there is nothing to remove today

@@ -58,7 +58,7 @@ ok('no stepper section for TBR book', !q('#m-progress .stepper-row'));
 ok('total-pages field present even without pageCount', !!q('#f-pagecount'));
 q('#f-pagecount').value = '300';
 q('#f-progress').value = '50';
-q('#m-save').click();
+q('#m-x').click();
 ok('manual total pages saved', window.__b2.pageCount === 300);
 ok('manual current page saved', window.__b2.progress === 50);
 
@@ -68,7 +68,7 @@ runInWindow(`
   library.push(window.__b3);
   openDetail('bp3');`);
 q('#f-progress').value = '999';
-q('#m-save').click();
+q('#m-x').click();
 ok('progress clamped to total on save', window.__b3.progress === 200);
 
 // 5. marking as read auto-completes progress
@@ -78,7 +78,7 @@ runInWindow(`
   openDetail('bp4');`);
 qa('#f-status button').find(x => x.dataset.s === 'read').click();
 ok('progress section hides when moved off reading', !q('#m-progress .stepper-row'));
-q('#m-save').click();
+q('#m-x').click();
 ok('marking read sets progress = total', window.__b4.progress === 250);
 ok('marking read sets dateFinished', !!window.__b4.dateFinished);
 

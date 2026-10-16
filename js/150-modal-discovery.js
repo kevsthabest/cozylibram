@@ -890,19 +890,34 @@ function openDetail(id, opts) {
     renderDetailModal(b, false);
   }
 }
-/* ---- Modal Variant A: the save-model seam ------------------------------
+/* ---- Modal save-model seam (Variant B: autosave, shipped v589) --------
    ModalFormState: dirty-state tracking for the book modal's ONE save
    model, deliberately decoupled from any UI. Every staged control
    registers a read() here (draft fields or input values); the tracker
-   diffs reads against the baseline captured at open (arm()). The sticky
-   Save bar is a pure VIEW of count() — it owns no state. Variant B
-   (autosave) can swap the bar's commit trigger for a debounced
-   commitForm() without touching a single field registration: the
-   switch is a behaviour change at this seam, not a restructure.
+   diffs reads against the baseline captured at open (arm()).
+   Variant A (v569) rendered a sticky Save bar as a pure VIEW of
+   count(); Variant B retired the bar and swapped ONLY the trigger, as
+   this seam was designed for: the tracker now drives a debounced
+   applyDetailForm() (700ms after the last change, promptly on blur,
+   and flushed by every close path), and the only UI left is a quiet
+   header status text. No field registration changed.
    Instant actions (favourite, progress steppers, primary actions) are
    NOT fields — when one also moves a staged value it blesses exactly
-   its own field via commitValue(), so the bar never double-reports an
-   already-committed change. */
+   its own field via commitValue(), so an autosave never double-applies
+   an already-committed change. */
+const MODAL_AUTOSAVE_MS = 700;
+// The currently open modal's flush (assigned by renderDetailModal).
+// Book-to-book navigation re-renders the modal WITHOUT going through
+// close(), so a fresh render flushes the previous form first — a
+// pending debounce timer can never write one book's staged values into
+// another book's record, and no edit is lost on the hop.
+let modalFormFlush = null;
+function flushPreviousModalForm() {
+  if (!modalFormFlush) return;
+  const f = modalFormFlush;
+  modalFormFlush = null;
+  try { f(); } catch (e) {}
+}
 function createModalFormState() {
   const fields = new Map();
   let baseline = {};
@@ -938,8 +953,14 @@ function createModalFormState() {
 }
 
 function renderDetailModal(b, viaBook) {
+  // Variant B: a previous modal form may still hold a pending autosave
+  // (book-to-book navigation bypasses close()) — flush it BEFORE this
+  // render touches editingId or the DOM, so its edits land on its own
+  // book and its timers die with its own render.
+  flushPreviousModalForm();
   const id = b.id;
   editingId = id;
+  const statusAtOpen = b.status; // Variant B: celebration baseline (see applyDetailForm)
   // v459: community corpus — stash the open book for suggestion flows
   try { if (typeof window.ccSetBook === 'function') window.ccSetBook(b); } catch (e) {}
   lockBodyScroll(); // v215: the library behind must not scroll while open
@@ -981,7 +1002,7 @@ function renderDetailModal(b, viaBook) {
   const stars5 = [1, 2, 3, 4, 5].map(n =>
     '<button data-v="' + n + '" class="' + (b.myRating >= n ? 'on' : '') + '" aria-label="Rate ' + n + ' star' + (n === 1 ? '' : 's') + '">' + icon('star') + '</button>').join('');
 
-  // draft copy the controls edit until Save
+  // draft copy the controls edit until the autosave commits
   const draft = Object.assign({}, b, {
     tropes: (b.tropes || []).slice(),
     ratings: Object.assign({}, b.ratings),
@@ -1015,10 +1036,10 @@ function renderDetailModal(b, viaBook) {
     (f ? icon(FORMAT_META[f].ic) + ' ' + FORMAT_META[f].label : 'Not set') + '</button>').join('');
   if (!draft.axes.length) draft.axes = autoDetectAxes(draft);
   editingDraft = draft;
-  // Variant A: register every Save-model field with the tracker. Reads
-  // are lazy (draft fields + live input values), so registration can
-  // happen before the DOM exists; arm() runs once the controls are
-  // wired and painted (see below — the bar subscribes there).
+  // Register every save-model field with the tracker. Reads are lazy
+  // (draft fields + live input values), so registration can happen
+  // before the DOM exists; arm() runs once the controls are wired and
+  // painted (see below — the autosave subscribes there).
   const formState = createModalFormState();
   const elVal = (eid) => { const e = document.getElementById(eid); return e ? e.value : ''; };
   formState.register('title', () => elVal('f-title').trim());
@@ -1050,10 +1071,6 @@ function renderDetailModal(b, viaBook) {
     const v = spiceBaseline.source === 'manual' ? spiceBaseline.manual : spiceBaseline.detected;
     return (v >= 1 && v <= 5) ? v : 0;
   };
-  // Snapshot the rating state at open — the Save-time diff reports
-  // what actually changed (Variant A: taps stage into the draft).
-  const ratingBefore = { myRating: b.myRating || 0, ratings: Object.assign({}, b.ratings || {}) };
-
   // v67: previously-read default from history — a finish older than 60 days
   // means she read it before tracking, so don't stamp or log today.
   if (draft.previouslyRead == null) {
@@ -1183,6 +1200,9 @@ function renderDetailModal(b, viaBook) {
     // v405 (M1): single favorite heart lives in the CTA row (f-fav2) —
     // the top-right duplicate is removed. Overflow menu keeps its entry.
     '<div class="d-topactions">' +
+    // Variant B: the only save UI — a quiet header status text
+    // (Saving… / Saved / failure reason), empty while the form is clean.
+    '<span class="m-savestate" id="m-savestate" role="status" aria-live="polite"></span>' +
     '<div class="more-wrap"><button class="btn ghost" id="m-more" aria-label="More actions" aria-haspopup="true">' + icon('dots') + '</button>' +
     '<div class="more-menu" id="m-moremenu" hidden>' +
     '<button class="more-item" id="m-share">' + icon('share') + ' <span>Share</span></button>' +
@@ -1441,13 +1461,7 @@ function renderDetailModal(b, viaBook) {
     '<div id="m-quotes"></div></div>' +
     '</div>' +
 
-    // Variant A: the sticky Save bar — a pure VIEW of ModalFormState
-    // (see createModalFormState above). Hidden while the form is clean;
-    // rises with the unsaved-change count when it goes dirty.
-    '<div class="modal-actions m-savebar" id="m-savebar" hidden>' +
-    '<span class="save-count" id="m-savecount" role="status"></span>' +
-    '<button class="btn ghost" id="m-discard">Discard</button>' +
-    '<button class="btn" id="m-save">Save</button></div>' +
+    // Variant B: no save bar — autosave replaced it (see the wiring below).
     '</div></div>';
 
   // v123: contextual primary action — the one thing she most likely wants,
@@ -1554,13 +1568,11 @@ function renderDetailModal(b, viaBook) {
     if (ct && !ct.hidden && !e.target.closest('.cover-wrap')) ct.hidden = true;
   });
 
-  // wire controls (work on the draft copy until Save)
-  // Variant A: rating/axis taps STAGE into the draft under the one save
-  // model — this deliberately reverses v224's live-commit (the decided
-  // design: the bar is the single save model for the whole form, so a
-  // rating tap raises the bar like every other edit, and Discard can
-  // undo it). The ratingBefore snapshot still powers trackBookSaveDiff
-  // at Save. Variant B would re-add a commit here — at the seam only.
+  // wire controls (work on the draft copy until the autosave commits)
+  // Rating/axis taps STAGE into the draft under the one save model —
+  // this deliberately reverses v224's live-commit (the decided design:
+  // the form is the single save model, so a rating tap stages like
+  // every other edit until the debounced autosave lands it).
   const renderAxSection = () => {
     document.getElementById('f-axrows').innerHTML = draft.axes.map(axRowHTML).join('');
     document.getElementById('f-axadd').innerHTML = axAddHTML();
@@ -1589,20 +1601,20 @@ function renderDetailModal(b, viaBook) {
           : detAfter ? esc(a.levels[detAfter - 1]) + ' <span class="axdet-tag">(' +
             (spiceBaseline.source === 'manual' ? 'curated' : 'detected') + ')</span>'
           : 'Tap to rate';
-        formState.touch(); // Variant A: staged — the bar counts it
+        formState.touch(); // Variant A: staged — the tracker counts it
       }));
       const rm = row.querySelector('[data-axrm]');
       if (rm) rm.addEventListener('click', () => {
         draft.axes = draft.axes.filter(x => x !== k);
         delete draft.ratings[k];
         renderAxSection();
-        formState.touch(); // Variant A: staged — the bar counts it
+        formState.touch(); // Variant A: staged — the tracker counts it
       });
     });
     root.querySelectorAll('#f-axadd [data-axadd]').forEach(c => c.addEventListener('click', () => {
       draft.axes = draft.axes.concat(c.dataset.axadd);
       renderAxSection();
-      formState.touch(); // Variant A: staged — the bar counts it
+      formState.touch(); // Variant A: staged — the tracker counts it
     }));
   };
 
@@ -1712,7 +1724,7 @@ function renderDetailModal(b, viaBook) {
     box.querySelectorAll('[data-w]').forEach(btn => btn.addEventListener('click', () => {
       draft.wantFormat = draft.wantFormat === btn.dataset.w ? '' : btn.dataset.w;
       paintWantRow();
-      formState.touch(); // Variant A: staged — the bar counts it
+      formState.touch(); // Variant A: staged — the tracker counts it
     }));
     if (note) note.textContent = draft.wantFormat
       ? 'Trophy want — this book sits in your Wishlist\u2019s Trophy wants until you mark it Got it. You have the ' + FORMAT_META[draft.format].label + ' copy.'
@@ -1748,13 +1760,15 @@ function renderDetailModal(b, viaBook) {
 
   root.querySelectorAll('#f-status [data-s]').forEach(btn =>
     btn.addEventListener('click', () => {
-      // v534: the shelf picker STAGES into the draft until Save. It used
-      // to write b.status + saveLibrary() on tap (v353), so a pick the
-      // user never saved leaked: the reopened modal showed the unsaved
-      // status while the grid tag and header counts kept the old one.
-      // Now a discarded pick changes nothing anywhere; Save commits it
-      // (including the DNF reason prompt, below). The primary action
-      // button still commits immediately — it's an action, not a picker.
+      // v534: the shelf picker STAGES into the draft until the save
+      // lands. It used to write b.status + saveLibrary() on tap (v353),
+      // so a pick the user never saved leaked: the reopened modal
+      // showed the unsaved status while the grid tag and header counts
+      // kept the old one. Variant B: the debounced autosave commits the
+      // pick (and closing commits it too — there is no discard); the
+      // DNF reason prompt fires at close, after the commit. The primary
+      // action button still commits immediately — it's an action, not
+      // a picker.
       draft.status = btn.dataset.s;
       root.querySelectorAll('#f-status [data-s]').forEach(x => x.classList.toggle('active', x === btn));
       const pv = document.getElementById('f-prevwrap');
@@ -1773,7 +1787,7 @@ function renderDetailModal(b, viaBook) {
       if (chev) chev.textContent = '›';
       renderProgressSection();
       paintPrimary(); // v123: primary action follows the shelf
-      formState.touch(); // Variant A: staged status — the bar counts it
+      formState.touch(); // Variant A: staged status — the tracker counts it
     }));
 
   // v476: no manual price entry — f-purchase-price input removed.
@@ -1789,7 +1803,7 @@ function renderDetailModal(b, viaBook) {
       if (psc) psc.style.display = 'none';
       draft.purchaseSource = v || null;
     }
-    formState.touch(); // Variant A: staged — the bar counts it
+    formState.touch(); // Variant A: staged — the tracker counts it
   });
   if (psc) psc.addEventListener('input', e => {
     if (ps && ps.value === '__other') { draft.purchaseSource = e.target.value || null; formState.touch(); }
@@ -1797,7 +1811,7 @@ function renderDetailModal(b, viaBook) {
   var pd = document.getElementById('f-purchase-date');
   if (pd) pd.addEventListener('change', e => {
     draft.purchaseDate = e.target.value || null;
-    formState.touch(); // Variant A: staged — the bar counts it
+    formState.touch(); // Variant A: staged — the tracker counts it
   });
   const _faceoutEl = document.getElementById('f-faceout');
   if (_faceoutEl) _faceoutEl.addEventListener('change', e => {
@@ -1834,7 +1848,7 @@ function renderDetailModal(b, viaBook) {
       if (chev) chev.textContent = '›';
       const bw = document.getElementById('m-buywrap');
       if (bw) bw.style.display = draft.owned === 'owned' ? 'none' : '';
-      formState.touch(); // Variant A: staged — the bar counts it
+      formState.touch(); // Variant A: staged — the tracker counts it
     }));
 
   // v563: format picker — same pick/collapse shape as ownership.
@@ -1849,7 +1863,7 @@ function renderDetailModal(b, viaBook) {
       if (opts) { opts.hidden = true; }
       const chev = btn.closest('.mselect').querySelector('.mrow-chev');
       if (chev) chev.textContent = '›';
-      formState.touch(); // Variant A: staged — the bar counts it
+      formState.touch(); // Variant A: staged — the tracker counts it
     }));
 
   const wirePicker = (sel, key) => {
@@ -1866,72 +1880,139 @@ function renderDetailModal(b, viaBook) {
             w.textContent = rv ? RATING_WORDS[rv] : 'Unrated'; // v224 (UX-09)
             w.classList.toggle('plain', !rv);
           }
-          formState.touch(); // Variant A: staged — the bar counts it
+          formState.touch(); // Variant A: staged — the tracker counts it
         }
       }));
   };
   wirePicker('#f-myrating', 'myRating');
   wireAxRows();
-  // Variant A: the sticky Save bar — a pure view of ModalFormState.
-  // It subscribes to the tracker and renders count(); it owns no state.
-  // (The v224 focus/blur save-hint is gone: the bar + the dirty-close
-  // prompt below are the legible risk surface now.)
-  const saveBar = document.getElementById('m-savebar');
-  const saveCountEl = document.getElementById('m-savecount');
-  const renderSaveBar = () => {
-    const n = formState.count();
-    if (saveBar) saveBar.hidden = n === 0;
-    if (saveCountEl) saveCountEl.textContent = n ? (n + ' unsaved change' + (n === 1 ? '' : 's')) : '';
+  // Variant B: AUTOSAVE — the bar's manual trigger is replaced by a
+  // debounced applyDetailForm() driven by the same tracker (the seam's
+  // designed swap; no field registration changed). 700ms after the last
+  // change the form commits in place and the modal stays open; blur
+  // commits promptly; every close path flushes first, so closing never
+  // loses an edit and the dirty-close prompt is gone with the bar.
+  // The only UI is the quiet header status text.
+  const saveStateEl = document.getElementById('m-savestate');
+  let saveTimer = null, savedFlashTimer = null, commitError = '', savedFlash = false;
+  // Completion celebrations (DNA survey, Finale ceremony, DNF reason
+  // sheet) are DEFERRED to close: Variant A fired them after Save —
+  // i.e. after the modal had closed — and under autosave a mid-edit
+  // commit must not pop a sheet over the form. applyDetailForm keeps
+  // these flags current against the status at open; close fires them.
+  let pendingRead = false, pendingDnf = false;
+  const setSaveState = (txt, isErr) => {
+    if (!saveStateEl) return;
+    saveStateEl.textContent = txt;
+    saveStateEl.classList.toggle('err', !!isErr);
   };
-  formState.onChange(renderSaveBar);
+  const showSaved = () => {
+    savedFlash = true;
+    setSaveState('Saved');
+    clearTimeout(savedFlashTimer);
+    savedFlashTimer = setTimeout(() => { savedFlash = false; setSaveState(''); }, 1600);
+  };
+  const doCommit = () => {
+    if (!formState.isDirty()) { commitError = ''; return true; }
+    try {
+      applyDetailForm();
+      commitError = '';
+      showSaved();
+      return true;
+    } catch (e) {
+      // A commit that genuinely cannot apply (persistence threw): the
+      // staged edits stay staged, the reason stays visible in the
+      // header, and close() refuses until a commit lands.
+      commitError = (e && e.message) ? e.message : 'storage unavailable';
+      setSaveState('Couldn’t save — ' + commitError, true);
+      return false;
+    }
+  };
+  const scheduleAutosave = () => {
+    clearTimeout(saveTimer); saveTimer = null;
+    if (!formState.isDirty()) {
+      if (!commitError && !savedFlash) setSaveState('');
+      return;
+    }
+    savedFlash = false; clearTimeout(savedFlashTimer);
+    if (!commitError) setSaveState('Saving…');
+    saveTimer = setTimeout(() => { saveTimer = null; doCommit(); }, MODAL_AUTOSAVE_MS);
+  };
+  const flushAutosave = () => {
+    // Re-read every field BEFORE deciding: the commit itself reads the
+    // live DOM/draft (as Variant A's Save always did), so a value staged
+    // without an event the tracker saw must still count — touch()
+    // recomputes the reads against the baseline.
+    formState.touch();
+    clearTimeout(saveTimer); saveTimer = null;
+    return doCommit();
+  };
+  const fireDeferredCelebrations = () => {
+    const wasRead = pendingRead, wasDnf = pendingDnf;
+    pendingRead = pendingDnf = false;
+    if (wasRead) {
+      try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {}
+      try { if (typeof maybeFinaleCeremony === 'function') maybeFinaleCeremony(b); } catch (e) {}
+    }
+    if (wasDnf) { try { if (typeof openDnfReasonSheet === 'function') openDnfReasonSheet(b); } catch (e) {} }
+  };
   // Text inputs and selects report through one delegated pair of
   // listeners — recompute is idempotent, and inputs that aren't
   // registered fields (e.g. the quick page box) can't dirty anything.
   root.addEventListener('input', () => formState.touch());
   root.addEventListener('change', () => formState.touch());
+  formState.onChange(scheduleAutosave);
+  // Blur commits promptly — no waiting out the debounce when the user
+  // tabs or taps away from a field. (flushAutosave re-reads the fields
+  // itself, so it no-ops on a clean form.)
+  root.addEventListener('focusout', () => flushAutosave());
+  // Cross-book navigation re-renders without close(): the next render
+  // flushes this form first (see flushPreviousModalForm).
+  const myFormFlush = () => { if (flushAutosave()) fireDeferredCelebrations(); };
+  modalFormFlush = myFormFlush;
   formState.arm();
-  renderSaveBar();
-  // Variant A: Discard = a true reset. Staged fields live only in the
-  // draft + inputs, so a fresh render of the same book IS the reset
-  // (instant commits — favourite, logged pages — stay committed).
-  const discardBtn = document.getElementById('m-discard');
-  if (discardBtn) discardBtn.addEventListener('click', () => renderDetailModal(b, false));
 
   const escClose = e => { if (e.key === 'Escape' && overlayIsTop(ovToken)) close(); }; // v129: escape closes, v220: topmost only
+  // Variant B: the Delete flow removes the book BEFORE closing — its
+  // close must not flush the form into the removed record.
+  let flushSuppressed = false;
   // v220: DOM-only teardown — the history entry is owned by overlayOpened.
+  // The Android back gesture lands here directly (the history entry is
+  // already consumed by then), so teardown flushes too: no close path
+  // can lose an edit. The flush is idempotent — close() already flushed.
   const closeDom = () => {
     document.removeEventListener('keydown', escClose);
+    let flushOk = true;
+    if (!flushSuppressed) { try { flushOk = flushAutosave(); } catch (e) { flushOk = false; } }
     unlockBodyScroll(); // v215: release the background scroll lock
     root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
+    if (modalFormFlush === myFormFlush) modalFormFlush = null;
+    if (flushOk) fireDeferredCelebrations();
   };
   const ovToken = overlayOpened('modal-root', closeDom); // v220: back-gesture closes the modal
-  // Variant A: closing with a dirty form must NOT silently discard —
-  // every user close path (×, backdrop tap, Escape, swipe-down) funnels
-  // through close() and prompts first. Programmatic paths that already
-  // know the answer pass force (the Delete flow; post-Save the tracker
-  // is clean anyway). The Android back gesture goes through closeDom —
-  // the history entry is already consumed by then — and keeps its v220
-  // semantics; in-modal book-to-book navigation likewise stays as-is.
-  let discardPromptOpen = false;
+  // Variant B: closing COMMITS — every user close path (×, backdrop tap,
+  // Escape, swipe-down) funnels through close(), which flushes first.
+  // There is nothing unsaved to confirm, so the Variant A prompt is
+  // gone. The one exception: a commit that genuinely cannot apply
+  // (persistence threw) keeps the modal open with the reason visible in
+  // the header status, rather than dropping the edit.
   const closeNow = () => { overlayClosed(ovToken); closeDom(); }; // v220: programmatic close consumes the entry
   const close = (force) => {
-    if (force || !formState.isDirty()) { closeNow(); return; }
-    if (discardPromptOpen) return;
-    discardPromptOpen = true;
-    // A swipe-down may have already translated the sheet off-screen —
-    // reset it before prompting so the modal is visible behind the ask.
-    const sheet = root.querySelector('#m-back .modal');
-    if (sheet) { sheet.style.transition = ''; sheet.style.transform = ''; }
-    const n = formState.count();
-    confirmModal('You have ' + n + ' unsaved change' + (n === 1 ? '' : 's') + ' to “' + (b.title || 'this book') + '”. Discard them?',
-      { okLabel: 'Discard', cancelLabel: 'Keep editing' })
-      .then(ok => { discardPromptOpen = false; if (ok) closeNow(); });
+    if (force) { closeNow(); return; }
+    if (!flushAutosave()) {
+      // A swipe-down may have already translated the sheet off-screen —
+      // reset it so the modal (and the failure reason) is visible.
+      const sheet = root.querySelector('#m-back .modal');
+      if (sheet) { sheet.style.transition = ''; sheet.style.transform = ''; }
+      return;
+    }
+    closeNow();
   };
   document.addEventListener('keydown', escClose);
   root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
     el.addEventListener('click', () => openDetail(el.dataset.sim)));
   // NB: never bind close directly as an event listener — the event
-  // object would land in the force parameter and skip the prompt.
+  // object would land in the force parameter and skip the close flush.
   document.getElementById('m-x').addEventListener('click', () => close());
   // v174: tab switching — Details | Tropes | Notes.
   const showDTab = (name) => {
@@ -2286,10 +2367,12 @@ function renderDetailModal(b, viaBook) {
   // v476: quiet metadata-diff badge → compare sheet
   const mdBtn = document.getElementById('m-metadiff');
   if (mdBtn) mdBtn.addEventListener('click', () => openMetaCompareSheet(b.id));
-  // Variant A: the ONE commit path for the whole form — the bar's Save
-  // button calls it. (Variant B/autosave would call it from a debounce
-  // at the ModalFormState seam instead; no field code changes.)
-  const commitDetailForm = () => {
+  // Variant B: the ONE commit path for the whole form — the autosave
+  // controller calls it (debounce / blur / close flush). Unlike Variant
+  // A's Save it does NOT close the modal and shows no toast: the header
+  // status text is the acknowledgement, and the completion celebrations
+  // defer to close via the pending flags below.
+  const applyDetailForm = () => {
     // v354: save edited title/author
     const newTitle = document.getElementById('f-title').value.trim();
     const newAuthors = document.getElementById('f-author').value.split(',').map(a => a.trim()).filter(Boolean);
@@ -2345,9 +2428,13 @@ function renderDetailModal(b, viaBook) {
     }
     if (!BOOK_FORMATS.includes(draft.wantFormat) || draft.wantFormat === draft.format) draft.wantFormat = '';
     const _aBefore = { // v118: snapshot for analytics diff (never book content)
-      status: b.status, myRating: ratingBefore.myRating, title: b.title, notes: b.notes,
+      status: b.status, title: b.title, notes: b.notes,
       releaseDate: b.releaseDate, tropes: (b.tropes || []).slice(),
-      pageCount: b.pageCount, ratings: ratingBefore.ratings, // open-time snapshot (see ratingBefore)
+      // Variant B: ratings snapshot the LIVE book, not open time — an
+      // autosave session commits repeatedly, and each commit's diff
+      // must describe its own change, not re-report the whole session.
+      myRating: b.myRating || 0,
+      pageCount: b.pageCount, ratings: Object.assign({}, b.ratings || {}),
     };
     Object.assign(b, draft);
     // Batch 4 (issue #148): title/author edits must bust the WorkStore cache —
@@ -2360,33 +2447,29 @@ function renderDetailModal(b, viaBook) {
     // queue holds — no eviction for the derived shelf; the three
     // non-TBR statuses still evict.
     if (['reading', 'read', 'dnf'].includes(draft.status)) upNextRemove(id);
-    var _becameRead = draft.status === 'read' && _aBefore.status !== 'read';
-    formState.markSaved(); // Variant A: the tracker resets before close
-    saveLibrary(); close(); render();
+    saveLibrary();
+    formState.markSaved(); // Variant B: persistence first — a throw above leaves the form dirty and the commit retryable
+    render();
+    startProgress = draft.progress; // repeated autosave commits must not re-log the same stretch
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events
-    toast('Saved ✨');
-    // v468: post-completion portrait survey (save-flow path to 'read').
-    if (_becameRead) { try { if (typeof maybeShowDnaSurvey === 'function') maybeShowDnaSurvey(b); } catch (e) {} }
-    // The Finale: if this save finished a series, mark the moment
-    // (js/238 decides — library-complete + honest total — and presents
-    // at most once per series). Fire-and-forget; never blocks the save.
-    if (_becameRead) { try { if (typeof maybeFinaleCeremony === 'function') maybeFinaleCeremony(b); } catch (e) {} }
-    // v534: DNF Autopsy prompt — follows the now-staged shelf pick, so
-    // it fires on Save when the book newly lands on DNF (the pick-time
-    // prompt went away with the picker's immediate save: an unsaved
-    // DNF pick must not prompt for a reason).
-    if (draft.status === 'dnf' && _aBefore.status !== 'dnf' && typeof openDnfReasonSheet === 'function') {
-      try { openDnfReasonSheet(b); } catch (e) {}
-    }
+    // Variant B: completion celebrations defer to close (an autosave
+    // commit lands mid-edit, modal open). Variant A fired them here,
+    // post-Save: the v468 portrait survey + the Finale ceremony when
+    // the book newly lands on Read, and the v534 DNF Autopsy sheet when
+    // it newly lands on DNF. The flags track the FINAL committed state
+    // against the status at open, so flipping read→tbr before close
+    // celebrates nothing, and close fires them (fireDeferredCelebrations).
+    pendingRead = (b.status === 'read' && statusAtOpen !== 'read');
+    pendingDnf = (b.status === 'dnf' && statusAtOpen !== 'dnf');
   };
-  document.getElementById('m-save').addEventListener('click', commitDetailForm);
 
   document.getElementById('m-del').addEventListener('click', async () => {
     // v352: in-app confirm (native confirm blocks renderer)
     const ok = await confirmModal('Remove "' + b.title + '" from your shelves?', { okLabel: 'Remove' });
     if (!ok) return;
     removeBook(id);
-    close(true); render(); // Variant A: the book is gone — no dirty prompt on top of Remove's own confirm
+    flushSuppressed = true; // Variant B: never flush the form into a removed book
+    close(true); render(); // the book is gone — close without an autosave flush
     toast('Removed');
   });
 

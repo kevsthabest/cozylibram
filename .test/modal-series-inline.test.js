@@ -92,7 +92,7 @@ setTimeout(() => {
   runInWindow(`openBookFromEl(null, 's3');`);
   q('#f-series').value = 'The Great Saga';
   q('#f-series-pos').value = '3';
-  q('#m-save').click();
+  q('#m-x').click();
   const s3 = window.eval(`library.find(b => b.id === 's3')`);
   ok('save writes the manual series', s3.series && s3.series.name === 'The Great Saga' && String(s3.series.position) === '3');
   ok('manual series sets the seriesManual flag', s3.seriesManual === true);
@@ -115,7 +115,7 @@ setTimeout(() => {
   // clearing the name removes the series and the flag
   runInWindow(`openBookFromEl(null, 's3');`);
   q('#f-series').value = '';
-  q('#m-save').click();
+  q('#m-x').click();
   const cleared = window.eval(`(() => { const b = library.find(x => x.id === 's3'); return [b.series, b.seriesManual]; })()`);
   ok('clearing the name removes the series and flag', cleared[0] === null && cleared[1] === false);
   console.log(`\n${pass} passed, ${fail} failed (incl. v239)`);

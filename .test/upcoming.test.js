@@ -63,7 +63,7 @@ const dateInput = window.document.getElementById('f-releasedate');
 ok('release date input prefilled', !!dateInput && dateInput.value === isoIn(12));
 runInWindow(`
   document.getElementById('f-releasedate').value = '${isoIn(20)}';
-  document.getElementById('m-save').click();
+  document.getElementById('m-x').click();
   window.__savedRD = library.find(b => b.id === 'u1').releaseDate;
 `);
 ok('save persists the release date', window.__savedRD === isoIn(20));

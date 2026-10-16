@@ -140,7 +140,7 @@ const book = (id, status, owned, extra) => Object.assign({
   ok('modal: ownership summary composes too',
     w.document.getElementById('f-owned-sum') !== null &&
     w.document.getElementById('f-owned-sum').textContent.includes('Subscription · Ebook'));
-  w.document.getElementById('m-save').click();
+  w.document.getElementById('m-x').click();
   await tick();
   ok('modal: Save does NOT coerce subscription to tobuy (sanitizer regression pin)',
     w.eval(`library.find(b => b.id === 'sub1').owned`) === 'subscription');
@@ -160,7 +160,7 @@ const book = (id, status, owned, extra) => Object.assign({
   // Change the primary format TO the wanted one: the want must clear.
   w.document.querySelector('#f-format [data-f="hardcover"]').click();
   await tick();
-  w.document.getElementById('m-save').click();
+  w.document.getElementById('m-x').click();
   await tick();
   ok('modal: picking the wanted format as primary clears the want (want != format guard)',
     w.eval(`library.find(b => b.id === 'own1').format`) === 'hardcover' &&
@@ -179,7 +179,7 @@ const book = (id, status, owned, extra) => Object.assign({
     !w.document.querySelector('#f-want-opts [data-w="ebook"]'));
   w.document.querySelector('#f-want-opts [data-w="physical"]').click();
   await tick();
-  w.document.getElementById('m-save').click();
+  w.document.getElementById('m-x').click();
   await tick();
   ok('modal: want pick persists (ebook record, want physical — the canonical trophy)',
     w.eval(`library.find(b => b.id === 'plain').wantFormat`) === 'physical' &&
@@ -188,7 +188,7 @@ const book = (id, status, owned, extra) => Object.assign({
   await waitFor(() => heroIs('plain'));
   w.document.querySelector('#f-want-opts [data-w="physical"]').click(); // toggle off
   await tick();
-  w.document.getElementById('m-save').click();
+  w.document.getElementById('m-x').click();
   await tick();
   ok('modal: tapping the active want chip toggles the want off',
     !w.eval(`library.find(b => b.id === 'plain').wantFormat`));

@@ -82,7 +82,7 @@ const mk = (id, isbn, pc) => `({ id: '${id}', isbn: '${isbn}', title: 'PC ${id}'
   q('#pc-lookup').click();
   await tick();
   ok('lookup fills Total pages input', q('#f-pagecount').value === '384');
-  q('#m-save').click();
+  q('#m-x').click();
   ok('save persists looked-up pages', window.__d.pageCount === 384);
 
   // 8. no lookup button without ISBN
