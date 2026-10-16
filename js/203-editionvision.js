@@ -14,11 +14,18 @@
    guide-ROI mapping. No UI and no session state — the only globals
    are the functions below and the EC_ALPHA/EC_BETA corner tables. */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+
 /* ---------- homography ---------- */
 
 // Solve the 3x3 homography mapping src quad -> dst quad (h33 pinned to 1).
 // Quads are arrays of 4 [x, y] in TL TR BR BL order. Returns null on failure.
-function ecSolveHomography(src, dst) {
+export function ecSolveHomography(src, dst) {
   // From H[x,y,1] ~ [u,v,1]: h0*x+h1*y+h2 - u*(h6*x+h7*y) = u  (h8 = 1),
   // and likewise for v. Eight equations, eight unknowns.
   var A = [], i;
@@ -46,7 +53,7 @@ function ecSolveHomography(src, dst) {
   return [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1]];
 }
 
-function ecInvert3(m) {
+export function ecInvert3(m) {
   var a = m[0][0], b = m[0][1], c = m[0][2],
       d = m[1][0], e = m[1][1], f = m[1][2],
       g = m[2][0], h = m[2][1], i = m[2][2];
@@ -60,7 +67,7 @@ function ecInvert3(m) {
   ];
 }
 
-function ecApplyH(H, x, y) {
+export function ecApplyH(H, x, y) {
   var X = H[0][0] * x + H[0][1] * y + H[0][2];
   var Y = H[1][0] * x + H[1][1] * y + H[1][2];
   var W = H[2][0] * x + H[2][1] * y + H[2][2];
@@ -70,7 +77,7 @@ function ecApplyH(H, x, y) {
 // Pure pixel warp: inverse-map every output pixel through the homography
 // and bilinear-sample the source. No DOM/canvas — unit-testable.
 // spx: Uint8ClampedArray RGBA, sw x sh. Returns { data, w, h } or null.
-function ecWarpPixels(spx, sw, sh, quad, outW, outH) {
+export function ecWarpPixels(spx, sw, sh, quad, outW, outH) {
   var H = ecSolveHomography(quad, [[0, 0], [outW, 0], [outW, outH], [0, outH]]);
   if (!H) return null;
   var Hi = ecInvert3(H);
@@ -97,14 +104,14 @@ function ecWarpPixels(spx, sw, sh, quad, outW, outH) {
   return { data: opx, w: outW, h: outH };
 }
 
-function ecSample(px, w, h, x, y, ch) {
+export function ecSample(px, w, h, x, y, ch) {
   if (x < 0) x = 0; else if (x >= w) x = w - 1;
   if (y < 0) y = 0; else if (y >= h) y = h - 1;
   return px[(y * w + x) * 4 + ch];
 }
 
 // Output dimensions from a quad: average opposite-edge lengths, capped.
-function ecQuadSize(quad, maxDim) {
+export function ecQuadSize(quad, maxDim) {
   var dist = function (a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); };
   var w = (dist(quad[0], quad[1]) + dist(quad[3], quad[2])) / 2;
   var h = (dist(quad[0], quad[3]) + dist(quad[1], quad[2])) / 2;
@@ -117,14 +124,14 @@ function ecQuadSize(quad, maxDim) {
 // rectangle: corner drags resize (opposite corner anchored), a rotate
 // handle straightens tilt, dragging inside moves. Free-quad mode stays
 // available behind the lock toggle for badly skewed shots.
-var EC_ALPHA = [0, 1, 1, 0], EC_BETA = [0, 0, 1, 1]; // rect-space coords per corner (TL TR BR BL)
+export var EC_ALPHA = [0, 1, 1, 0], EC_BETA = [0, 0, 1, 1]; // rect-space coords per corner (TL TR BR BL)
 
-function ecQuadCenter(q) {
+export function ecQuadCenter(q) {
   return [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4,
           (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
 }
 
-function ecQuadAxes(q) {
+export function ecQuadAxes(q) {
   var ux = q[1][0] - q[0][0], uy = q[1][1] - q[0][1];
   var vx = q[3][0] - q[0][0], vy = q[3][1] - q[0][1];
   var ul = Math.hypot(ux, uy) || 1, vl = Math.hypot(vx, vy) || 1;
@@ -133,7 +140,7 @@ function ecQuadAxes(q) {
 
 // Resize a rectangle by dragging corner i to P; the opposite corner stays
 // anchored and the 90° angles are preserved. Returns the new quad.
-function ecLockedResize(q, i, P) {
+export function ecLockedResize(q, i, P) {
   var k = (i + 2) % 4;
   var ax = ecQuadAxes(q);
   var dx = P[0] - q[k][0], dy = P[1] - q[k][1];
@@ -148,7 +155,7 @@ function ecLockedResize(q, i, P) {
   });
 }
 
-function ecRotateQuad(q, delta) {
+export function ecRotateQuad(q, delta) {
   var c = ecQuadCenter(q), cos = Math.cos(delta), sin = Math.sin(delta);
   return q.map(function (p) {
     var x = p[0] - c[0], y = p[1] - c[1];
@@ -157,7 +164,7 @@ function ecRotateQuad(q, delta) {
 }
 
 // Fit the closest rectangle to a free quad (used when re-enabling the lock).
-function ecSnapToRect(q) {
+export function ecSnapToRect(q) {
   var c = ecQuadCenter(q);
   var ax = ecQuadAxes(q);
   var ux = ax.u[0], uy = ax.u[1];
@@ -182,7 +189,7 @@ function ecSnapToRect(q) {
    the rect perimeter. Returns { quad, cx, cy, w, h, angle } in input px
    (quad normalized: portrait winding, short edge first) or null. */
 
-function ecToGray(rgba, w, h) {
+export function ecToGray(rgba, w, h) {
   var g = new Uint8ClampedArray(w * h);
   for (var i = 0; i < w * h; i++) {
     g[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
@@ -190,7 +197,7 @@ function ecToGray(rgba, w, h) {
   return g;
 }
 
-function ecBlur3(g, w, h) {
+export function ecBlur3(g, w, h) {
   var o = new Uint8ClampedArray(w * h);
   for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
     var s = 0, n = 0;
@@ -203,7 +210,7 @@ function ecBlur3(g, w, h) {
   return o;
 }
 
-function ecSobel(g, w, h) {
+export function ecSobel(g, w, h) {
   var mag = new Uint16Array(w * h), max = 0;
   for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
     var i = y * w + x;
@@ -218,7 +225,7 @@ function ecSobel(g, w, h) {
 
 // v297: one-pass separated Sobel (|gx|, |gy|) for projection-based
 // guided detection.
-function ecSobelSep(g, w, h) {
+export function ecSobelSep(g, w, h) {
   var gx = new Uint16Array(w * h), gy = new Uint16Array(w * h);
   for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
     var i = y * w + x;
@@ -232,7 +239,7 @@ function ecSobelSep(g, w, h) {
 // rect (stable); here we measure the book's actual edges once — no flicker
 // risk — and tighten the crop so the 3D view isn't padded with background.
 // Returns a quad in the input coords, or null (caller falls back to guide).
-function ecTightenQuad(gray, w, h, roi, tall) {
+export function ecTightenQuad(gray, w, h, roi, tall) {
   var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
   var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
   var y0 = Math.max(1, Math.floor(roi.y)), y1 = Math.min(h - 2, Math.ceil(roi.y + roi.h));
@@ -294,7 +301,7 @@ function ecTightenQuad(gray, w, h, roi, tall) {
 // v298: region contrast — the strongest object-vs-surroundings signal over
 // centered candidate strips at several widths. A book bounds a region that
 // differs from what's beside it; texture (floor, wall) does not.
-function ecRegionContrast(gray, w, h, roi, tall) {
+export function ecRegionContrast(gray, w, h, roi, tall) {
   var x0 = Math.max(0, Math.floor(roi.x)), x1 = Math.min(w - 1, Math.ceil(roi.x + roi.w));
   var y0 = Math.max(0, Math.floor(roi.y)), y1 = Math.min(h - 1, Math.ceil(roi.y + roi.h));
   function mean(ax0, ax1, ay0, ay1) {
@@ -329,7 +336,7 @@ function ecRegionContrast(gray, w, h, roi, tall) {
 // (wood floors have those). A book face shows FEW dominant parallel edges —
 // a spine usually two, a weak-contrast spine one strong edge bounding a
 // contrasting region — while texture shows many.
-function ecBookPresent(gray, w, h, roi, tall) {
+export function ecBookPresent(gray, w, h, roi, tall) {
   var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
   var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
   var y0 = Math.max(1, Math.floor(roi.y)), y1 = Math.min(h - 2, Math.ceil(roi.y + roi.h));
@@ -373,13 +380,13 @@ function ecBookPresent(gray, w, h, roi, tall) {
   return false;
 }
 
-function ecThreshold(mag, w, h, t) {
+export function ecThreshold(mag, w, h, t) {
   var o = new Uint8Array(w * h), c = 0;
   for (var i = 0; i < w * h; i++) if (mag[i] > t) { o[i] = 1; c++; }
   return { bin: o, count: c };
 }
 
-function ecDilate(bin, w, h, iters) {
+export function ecDilate(bin, w, h, iters) {
   var cur = bin;
   for (var k = 0; k < (iters || 1); k++) {
     var o = new Uint8Array(w * h);
@@ -396,7 +403,7 @@ function ecDilate(bin, w, h, iters) {
   return cur;
 }
 
-function ecErode(bin, w, h, iters) {
+export function ecErode(bin, w, h, iters) {
   var cur = bin;
   for (var k = 0; k < (iters || 1); k++) {
     var o = new Uint8Array(w * h);
@@ -415,7 +422,7 @@ function ecErode(bin, w, h, iters) {
 
 // Iterative flood fill through pixels where bin==1, marking mark[]=1.
 // Returns the filled pixel indices.
-function ecFloodFill(bin, w, h, sx, sy, mark) {
+export function ecFloodFill(bin, w, h, sx, sy, mark) {
   if (sx < 0 || sy < 0 || sx >= w || sy >= h) return [];
   var stack = [sy * w + sx], pts = [];
   while (stack.length) {
@@ -434,7 +441,7 @@ function ecFloodFill(bin, w, h, sx, sy, mark) {
 
 // Background = everything reachable from the image border through non-edge
 // pixels (edges are walls).
-function ecFillBackground(edges, w, h) {
+export function ecFillBackground(edges, w, h) {
   var open = new Uint8Array(w * h);
   for (var i = 0; i < w * h; i++) open[i] = edges[i] ? 0 : 1;
   var bg = new Uint8Array(w * h);
@@ -451,7 +458,7 @@ function ecFillBackground(edges, w, h) {
 
 // Top-k connected components of a binary mask, scored by area biased
 // toward the frame center (the user aims at the book).
-function ecTopComponents(mask, w, h, k) {
+export function ecTopComponents(mask, w, h, k) {
   var seen = new Uint8Array(w * h);
   var all = [];
   var ccx = w / 2, ccy = h / 2, maxd = Math.hypot(ccx, ccy) || 1;
@@ -475,12 +482,12 @@ function ecTopComponents(mask, w, h, k) {
 
 // Largest connected component of a binary mask, scored by area biased
 // toward the frame center (the user aims at the book).
-function ecLargestComponent(mask, w, h) {
+export function ecLargestComponent(mask, w, h) {
   return ecTopComponents(mask, w, h, 1)[0] || null;
 }
 
 // Andrew's monotone chain.
-function ecConvexHull(pts) {
+export function ecConvexHull(pts) {
   var p = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
   var u = [];
   for (var i = 0; i < p.length; i++) {
@@ -506,7 +513,7 @@ function ecConvexHull(pts) {
 }
 
 // Minimum-area enclosing rectangle (a side is flush with a hull edge).
-function ecMinAreaRect(hull) {
+export function ecMinAreaRect(hull) {
   var n = hull.length, bi = 0, best = null;
   for (var i = 0; i < n; i++) {
     var p1 = hull[i], p2 = hull[(i + 1) % n];
@@ -536,7 +543,7 @@ function ecMinAreaRect(hull) {
 // Normalize a detected quad for the warp: clockwise winding (matching the
 // warp's destination order, so output is never mirrored) and starting at
 // the shortest edge (so output is always portrait, w <= h).
-function ecNormQuad(quad) {
+export function ecNormQuad(quad) {
   var q = quad.slice(), i;
   var s = 0;
   for (i = 0; i < 4; i++) {
@@ -554,7 +561,7 @@ function ecNormQuad(quad) {
 }
 
 // Fraction of the quad perimeter lying on/near edge pixels (validation).
-function ecPerimeterDensity(edges, w, h, quad) {
+export function ecPerimeterDensity(edges, w, h, quad) {
   var on = 0, total = 0;
   for (var e = 0; e < 4; e++) {
     var a = quad[e], b = quad[(e + 1) % 4];
@@ -574,7 +581,7 @@ function ecPerimeterDensity(edges, w, h, quad) {
   return total ? on / total : 0;
 }
 
-function ecDetectBookRect(gray, w, h, roi, guide) {
+export function ecDetectBookRect(gray, w, h, roi, guide) {
   var n = w * h;
   // v297: with a guide ROI, verify a book-like edge structure is present and
   // then trust the guide rect itself. The user framed the shot; the detector's
@@ -622,7 +629,7 @@ function ecDetectBookRect(gray, w, h, roi, guide) {
 }
 
 // Fit a validated book rect to a pixel cloud (edge-component or blob).
-function ecRectFromPixels(edges, comp, vedges, w, h) {
+export function ecRectFromPixels(edges, comp, vedges, w, h) {
   var n = w * h;
   if (!comp || !comp.pts || comp.pts.length < 40 || comp.touchesBorder) return null;
   var pts = [];
@@ -647,16 +654,16 @@ function ecRectFromPixels(edges, comp, vedges, w, h) {
 }
 
 // --- stability tracking: N consecutive similar rects -> auto-capture ---
-function ecNewScanTracker() { return { hist: [] }; }
+export function ecNewScanTracker() { return { hist: [] }; }
 
-function ecAngDiff(a, b) {
+export function ecAngDiff(a, b) {
   var d = a - b;
   while (d > Math.PI) d -= 2 * Math.PI;
   while (d < -Math.PI) d += 2 * Math.PI;
   return d;
 }
 
-function ecScanTrack(tr, rect) {
+export function ecScanTrack(tr, rect) {
   if (!rect) { tr.hist.length = 0; return { stable: false, progress: 0 }; }
   tr.hist.push(rect);
   if (tr.hist.length > 8) tr.hist.shift();
@@ -673,7 +680,7 @@ function ecScanTrack(tr, rect) {
 }
 
 // Lenient per-face shape gate for auto-capture (normalized: w <= h).
-function ecFaceAspectOk(face, rect) {
+export function ecFaceAspectOk(face, rect) {
   if (!rect || !rect.w) return false;
   var aspect = rect.h / rect.w;
   if (face.guide === 'tall') return aspect >= 1.8;
@@ -681,7 +688,7 @@ function ecFaceAspectOk(face, rect) {
 }
 
 // Canvas wrapper around ecWarpPixels (browser only).
-function ecWarpCanvas(srcCanvas, quad, outW, outH) {
+export function ecWarpCanvas(srcCanvas, quad, outW, outH) {
   try {
     var sctx = srcCanvas.getContext('2d');
     var sd = sctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
@@ -695,7 +702,7 @@ function ecWarpCanvas(srcCanvas, quad, outW, outH) {
   } catch (e) { return null; }
 }
 
-function ecDataUrlToCanvas(dataUrl) {
+export function ecDataUrlToCanvas(dataUrl) {
   return new Promise(function (res) {
     var img = new Image();
     img.onload = function () {
@@ -715,7 +722,7 @@ function ecDataUrlToCanvas(dataUrl) {
 // v296: map the dashed guide's box to analysis pixels. The viewfinder shows
 // the video with object-fit: cover, so the guide rect is mapped through the
 // cover crop back onto the video frame. Pure math — unit tested.
-function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
+export function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
   if (!gr || !vr || !gr.width || !vr.width || !vw || !vh) return null;
   var elA = vr.width / vr.height, vidA = vw / vh;
   var visW, visH;
@@ -728,3 +735,54 @@ function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
            w: (gr.width / vr.width) * visW * aw,
            h: (gr.height / vr.height) * visH * ah };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/206-editioncapture.js,
+   calls these vision functions at runtime, so the bridge republishes
+   exactly the pre-conversion public surface on window. Bare-name
+   lookups in classic scripts resolve through the global object, so the
+   caller needs no changes. Module scripts are deferred, so the bridge
+   is in place before any consumer can run. Remove a name from this
+   bridge only when its last classic caller is gone. */
+window.EC_ALPHA = EC_ALPHA;
+window.EC_BETA = EC_BETA;
+window.ecAngDiff = ecAngDiff;
+window.ecApplyH = ecApplyH;
+window.ecBlur3 = ecBlur3;
+window.ecBookPresent = ecBookPresent;
+window.ecConvexHull = ecConvexHull;
+window.ecDataUrlToCanvas = ecDataUrlToCanvas;
+window.ecDetectBookRect = ecDetectBookRect;
+window.ecDilate = ecDilate;
+window.ecErode = ecErode;
+window.ecFaceAspectOk = ecFaceAspectOk;
+window.ecFillBackground = ecFillBackground;
+window.ecFloodFill = ecFloodFill;
+window.ecGuideRoiMath = ecGuideRoiMath;
+window.ecInvert3 = ecInvert3;
+window.ecLargestComponent = ecLargestComponent;
+window.ecLockedResize = ecLockedResize;
+window.ecMinAreaRect = ecMinAreaRect;
+window.ecNewScanTracker = ecNewScanTracker;
+window.ecNormQuad = ecNormQuad;
+window.ecPerimeterDensity = ecPerimeterDensity;
+window.ecQuadAxes = ecQuadAxes;
+window.ecQuadCenter = ecQuadCenter;
+window.ecQuadSize = ecQuadSize;
+window.ecRectFromPixels = ecRectFromPixels;
+window.ecRegionContrast = ecRegionContrast;
+window.ecRotateQuad = ecRotateQuad;
+window.ecSample = ecSample;
+window.ecScanTrack = ecScanTrack;
+window.ecSnapToRect = ecSnapToRect;
+window.ecSobel = ecSobel;
+window.ecSobelSep = ecSobelSep;
+window.ecSolveHomography = ecSolveHomography;
+window.ecThreshold = ecThreshold;
+window.ecTightenQuad = ecTightenQuad;
+window.ecToGray = ecToGray;
+window.ecTopComponents = ecTopComponents;
+window.ecWarpCanvas = ecWarpCanvas;
+window.ecWarpPixels = ecWarpPixels;
