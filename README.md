@@ -101,7 +101,7 @@ social shelves.
 
 ## Run it locally
 
-No build step, no dependencies — it's static files.
+It's static files today — no build step, no runtime dependencies. Stack policy (User decision, 2026-10-16): frameworks, packages, and build tooling may be adopted where they unlock a capability the current stack can't; production adoption is per-proposal, fork-first. Offline is a resilience requirement, not a hosting ban — the core loop works fully offline; hosted services are allowed where a capability requires them, degrading cleanly when the connection drops.
 
 ```bash
 cd cozylibram
@@ -163,7 +163,8 @@ creates each:
 ## Tech notes
 
 - Single-page vanilla JS — 73 numbered scripts (`js/000-core.js`
-  … `js/224-curation-queue.js`), zero runtime dependencies, no build step.
+  … `js/224-curation-queue.js`), zero runtime dependencies, no build step
+  (current state; see the stack-policy note under "Run it locally" above).
 - Book schema: `id, isbn, title, authors[], cover, description,
   pageCount, publishedDate, categories[], publicRating, ratingsCount,
   status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],

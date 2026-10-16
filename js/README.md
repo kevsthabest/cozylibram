@@ -2,7 +2,8 @@
 
 The app is plain, dependency-free JavaScript split into one file per feature.
 Files are classic scripts (no `import`/`export`, no build step) loaded in
-numeric order by `index.html`. They share one global scope, exactly as if
+numeric order by `index.html` — classic scripts are the current state, and
+module adoption is a per-proposal decision, not a ban. They share one global scope, exactly as if
 they were still a single `app.js` — so load order matters: keep the zero-padded numeric
 prefixes (lexicographic sort must equal numeric order) and don't create circular top-level dependencies.
 
