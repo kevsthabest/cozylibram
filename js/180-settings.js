@@ -16,7 +16,13 @@
 // closed — and the choice is NOT persisted: the old per-device
 // open-state record (spicyshelves.setgroups, a frozen v518 key) is no
 // longer read or written, so first paint is never a 97-control wall.
-function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
   return '<details class="set-group"' + (openIdx.indexOf(idx) !== -1 ? ' open' : '') + '>' +
     '<summary class="section serif"><span class="set-st"><span class="set-tt">' +
     icon(iconName) + ' ' + esc(title) + '</span>' +
@@ -24,24 +30,24 @@ function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
     '<div class="set-body">' + inner + '</div></details>';
 }
 
-function setSub(t) {
+export function setSub(t) {
   return '<h3 class="set-sub serif">' + esc(t) + '</h3>';
 }
 
 /* ---- v416 (P1/P2/P3/P4): visual theme gallery + detail sheet ----
    Replaces the blind theme dropdown. Tapping a card live-previews the theme
    app-wide and opens the detail sheet; closing without "Use theme" reverts. */
-let tsSnapshot = null;   // { theme, accent } captured before previewing
-let tsPreviewTheme = null;
-let tsToken = null;      // v535: overlay-history token for the theme sheet
-let tsPreviewAccent = null; // null = theme's designed default
+export let tsSnapshot = null;   // { theme, accent } captured before previewing
+export let tsPreviewTheme = null;
+export let tsToken = null;      // v535: overlay-history token for the theme sheet
+export let tsPreviewAccent = null; // null = theme's designed default
 
 /* Social section name shown on theme cards. User's call (2026-10-11):
    always "The Hearth" — the old per-theme names are retired. */
-function tsCovenDisplay() {
+export function tsCovenDisplay() {
   return 'The Hearth';
 }
-function themeCardHTML(th) {
+export function themeCardHTML(th) {
   const pv = themePreview(th.key);
   const active = getTheme() === th.key;
   let inSeason = false;
@@ -63,7 +69,7 @@ function themeCardHTML(th) {
     (active ? '<span class="check">✓</span>' : '') +
   '</button>';
 }
-function themeGalleryHTML() {
+export function themeGalleryHTML() {
   const core = THEMES.filter(t => !t.season && !t.premium).map(themeCardHTML).join('');
   const seasonal = THEMES.filter(t => t.season).map(themeCardHTML).join('');
   // v423: premium packs get their own group. Wisp shows one card (Daybreak);
@@ -74,7 +80,7 @@ function themeGalleryHTML() {
     '<div class="tgroup-label">Premium</div><div class="tgrid">' + premium + '</div>' +
     '<p class="note">Premium packs are unlocked during the alpha — no paywall yet.</p>';
 }
-function tsSheetHTML(th) {
+export function tsSheetHTML(th) {
   const pv = themePreview(th.key);
   const pairs = themeAccentPairings(th.key);
   const defA = themeDefaultAccent(th.key);
@@ -117,7 +123,7 @@ function tsSheetHTML(th) {
       '<button class="btn ghost block sm" id="tsResetAccent" style="margin-top:8px">Reset accent to theme default</button>' +
     '</div></div>';
 }
-function tsApplyPreview() {
+export function tsApplyPreview() {
   document.documentElement.dataset.theme = tsPreviewTheme;
   if (tsPreviewAccent) document.documentElement.dataset.accent = tsPreviewAccent;
   else document.documentElement.removeAttribute('data-accent');
@@ -128,7 +134,7 @@ function tsApplyPreview() {
   document.querySelectorAll('.tcard').forEach(c =>
     c.classList.toggle('sel', c.dataset.th === tsPreviewTheme));
 }
-function tsRefreshSheetAccents() {
+export function tsRefreshSheetAccents() {
   if (!tsPreviewTheme) return;
   const cur = tsPreviewAccent || themeDefaultAccent(tsPreviewTheme);
   const nameEl = document.getElementById('tsAccentName');
@@ -141,13 +147,13 @@ function tsRefreshSheetAccents() {
   document.querySelectorAll('#tsSwatches .sw').forEach(b =>
     b.classList.toggle('active', b.dataset.a === cur));
 }
-function tsBeginPreview(themeKey) {
+export function tsBeginPreview(themeKey) {
   if (!tsSnapshot) tsSnapshot = { theme: getTheme(), accent: getAccent() };
   tsPreviewTheme = themeKey;
   tsPreviewAccent = null; // preview the theme's designed look first
   tsApplyPreview();
 }
-function tsOpenSheet(th) {
+export function tsOpenSheet(th) {
   tsCloseSheet();
   tsBeginPreview(th.key);
   document.body.insertAdjacentHTML('beforeend', tsSheetHTML(th));
@@ -203,7 +209,7 @@ function tsOpenSheet(th) {
   const tsSheetEl = document.querySelector('#tsSheetWrap .tsheet');
   if (tsSheetEl && typeof wireSheetDrag === 'function') wireSheetDrag(tsSheetEl, tsRevert);
 }
-function tsCloseSheet() {
+export function tsCloseSheet() {
   if (tsToken != null) {
     const t = tsToken; tsToken = null;
     if (typeof overlayClosed === 'function') overlayClosed(t);
@@ -211,7 +217,7 @@ function tsCloseSheet() {
   const w = document.getElementById('tsSheetWrap');
   if (w) w.remove();
 }
-function tsConfirm() {
+export function tsConfirm() {
   const themeKey = tsPreviewTheme, accentKey = tsPreviewAccent;
   tsCloseSheet();
   tsSnapshot = null; tsPreviewTheme = null; tsPreviewAccent = null;
@@ -224,7 +230,7 @@ function tsConfirm() {
   renderSettings();
   toast('Theme: ' + ((THEMES.find(t => t.key === themeKey) || {}).name || themeKey));
 }
-function tsRevert() {
+export function tsRevert() {
   tsCloseSheet();
   tsSnapshot = null; tsPreviewTheme = null; tsPreviewAccent = null;
   applyTheme();
@@ -237,7 +243,7 @@ function tsRevert() {
 
 /* S1 (settings review): slim sync-status line for the Settings header --
    answers "is my library safe?" -- reuses the last-sync timestamp from 090-sync. */
-function syncStatusLine() {
+export function syncStatusLine() {
   try {
     const n = (typeof library !== 'undefined' && library) ? library.length : 0;
     const booksTxt = n + (n === 1 ? ' book' : ' books') + ' safe';
@@ -254,7 +260,7 @@ function syncStatusLine() {
     return '<span class="sync-dot ok">\u25cf</span> Up to date \u00b7 ' + booksTxt;
   } catch (e) { return ''; }
 }
-function renderSettings() {
+export function renderSettings() {
 
   /* ---- Account ---- */
   const prof = loadProfile();
@@ -949,3 +955,34 @@ function renderSettings() {
     checkForAppUpdate(document.getElementById('ap-status'));
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/200-boot.js, calls renderSettings() at runtime, and the
+   rest of the surface is reached through window-level calls and the
+   settings view's own wiring, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.setGroupShell = setGroupShell;
+window.setSub = setSub;
+window.tsSnapshot = tsSnapshot;
+window.tsPreviewTheme = tsPreviewTheme;
+window.tsToken = tsToken;
+window.tsPreviewAccent = tsPreviewAccent;
+window.tsCovenDisplay = tsCovenDisplay;
+window.themeCardHTML = themeCardHTML;
+window.themeGalleryHTML = themeGalleryHTML;
+window.tsSheetHTML = tsSheetHTML;
+window.tsApplyPreview = tsApplyPreview;
+window.tsRefreshSheetAccents = tsRefreshSheetAccents;
+window.tsBeginPreview = tsBeginPreview;
+window.tsOpenSheet = tsOpenSheet;
+window.tsCloseSheet = tsCloseSheet;
+window.tsConfirm = tsConfirm;
+window.tsRevert = tsRevert;
+window.syncStatusLine = syncStatusLine;
+window.renderSettings = renderSettings;
