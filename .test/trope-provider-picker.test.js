@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { pathToFileURL } = require('url');
+const { classicize } = require('./harness');
 
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
@@ -67,8 +68,12 @@ const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'tropes.sql'), 'utf8');
   };
   ctx.window = ctx;
   vm.createContext(ctx);
+  // R3 repoint (migration plan §9.3): js/161 is a real ES module since
+  // phase 2. classicize restores the classic body before evaluation
+  // (identity on the classic files loaded here). Loading plumbing only
+  // — assertions untouched.
   const load = f => vm.runInContext(
-    fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), ctx, { filename: f });
+    classicize(fs.readFileSync(path.join(ROOT, 'js', f), 'utf8'), f), ctx, { filename: f });
   load('156-trope-taxonomy.js');
   load('157-trope-inference.js');
   load('161-tropelab.js'); // architecture candidate 6: tropeProvider*/tropeModelList moved here
