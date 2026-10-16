@@ -563,5 +563,120 @@ const claimOk = (W, who, key) => rpcClaim(W, who, 'R', key);
     G.giftRetailerLink({ isbn: '', title: 'The Spy', authors: ['Clive Cussler'] }, 'ebook', 'kobo') === 'https://www.kobo.com/ca/en/search?query=The%20Spy%20Clive%20Cussler');
 }
 
+/* ============ postal validation + address placement (v588) ============
+ * The gift address editor moves from Settings → Circle & privacy to the
+ * Profile surface, and gains fully on-device postal validation
+ * (js/244-gift-postal.js): CA deep checks (syntax hard block, FSA
+ * existence + province consistency as soft warnings), US ZIP syntax, a
+ * per-country format table for the rest of the world, and no validation
+ * for countries with no postal system. NO network in the path. */
+{
+  const fsx = require('fs'), pathx = require('path'), vm = require('vm');
+  const read = p => fsx.readFileSync(pathx.join(APP_DIR, p), 'utf8');
+  const g = read('js/243-gifts.js');
+  const p244Path = pathx.join(APP_DIR, 'js/244-gift-postal.js');
+  const p244 = fsx.existsSync(p244Path) ? read('js/244-gift-postal.js') : '';
+  const acct = read('js/105-account.js');
+  const coven = read('js/195-coven.js');
+
+  ok('postal: data module registered in index.html and the sw.js precache list, ahead of js/243',
+    read('index.html').includes('js/244-gift-postal.js') &&
+    read('sw.js').includes("'244-gift-postal.js'") &&
+    read('index.html').indexOf('js/244-gift-postal.js') < read('index.html').indexOf('js/243-gifts.js'));
+  ok('postal: the validation path makes NO network call (no fetch / XHR / beacon / websocket in js/244)',
+    p244.length > 0 && !/fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|\.ajax\s*\(/.test(p244));
+  ok('postal: js/243 gains no network API either (validation wiring stays on-device)',
+    !/fetch\s*\(|XMLHttpRequest|sendBeacon/.test(g));
+
+  /* --- placement pins --- */
+  const settingsBody = g.slice(g.indexOf('async function fillGiftSettings'),
+    g.indexOf('async function fillGiftAddress'));
+  const addressBody = g.slice(g.indexOf('async function fillGiftAddress'));
+  ok('placement: the Profile surface carries the gift address slot and fills it (js/105)',
+    acct.includes('pf-giftaddr-slot') && /fillGiftAddress\(/.test(acct));
+  ok('placement: Circle & privacy fill no longer renders the address editor (no fields, no upsert)',
+    settingsBody.length > 0 && !/gift-addr-/.test(settingsBody) && !/gift_address_upsert/.test(settingsBody) &&
+    !/gift_address_set_sharing/.test(settingsBody) && !/gift_address_delete/.test(settingsBody));
+  ok('placement: the access log STAYS in Circle & privacy (log block + RPC still in the settings fill)',
+    /gift-log-open/.test(settingsBody) && /gift_address_log_mine/.test(settingsBody));
+  ok('placement: grants + recipient claims stay in Circle & privacy too',
+    /gift-grant-/.test(settingsBody) && /gift_claims_for_recipient/.test(settingsBody));
+  ok('placement: the moved block keeps the same RPCs (upsert / set_sharing / delete) and the teen ban',
+    /gift_address_upsert/.test(addressBody) && /gift_address_set_sharing/.test(addressBody) &&
+    /gift_address_delete/.test(addressBody) && /giftTeenBand\(\)/.test(addressBody));
+  ok('placement: the country field is a SELECT keyed to the vendored country list, not free text',
+    /<select[^>]*id="gift-addr-country"/.test(addressBody) && /GIFT_COUNTRIES/.test(addressBody));
+  ok('placement: save validates first and sends the NORMALIZED postal value; verdict state is never sent',
+    /giftPostalCheck\(/.test(addressBody) && /p_postal:\s*check\.normalized/.test(addressBody) &&
+    !/p_(status|validation|verdict|warn)/.test(addressBody));
+  ok('placement: a soft warning offers an explicit Save anyway; Circle & privacy no longer mentions the address editor in js/195 comments',
+    /gift-addr-save-anyway/.test(addressBody) && !/gift address \+ sharing/.test(coven));
+
+  /* --- functional: the validator, extracted and run --- */
+  const sandbox = { window: {}, console, localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} }, navigator: {} };
+  vm.createContext(sandbox);
+  let P = null;
+  try {
+    const src = g.split('/* ---------- the claim display cache')[0];
+    vm.runInContext(p244 + '\n' + src +
+      '\n;this.__postal = { giftPostalCheck, giftCountryCodeFor, giftFsaCount, giftFsaProvince, GIFT_COUNTRIES, GIFT_POSTAL_FORMATS };',
+      sandbox);
+    P = sandbox.__postal;
+  } catch (e) { P = null; }
+  ok('postal: validator module loads in the VM harness', !!P);
+  const chk = (cc, postal, region) => P.giftPostalCheck(cc, postal, region);
+
+  ok('postal CA: a valid code passes and normalizes (e1c1a1 → E1C 1A1, region name or code)',
+    !!P && chk('CA', 'e1c1a1', 'New Brunswick').status === 'ok' && chk('CA', 'e1c1a1', 'New Brunswick').normalized === 'E1C 1A1' &&
+    chk('CA', 'E1C 1A1', 'NB').status === 'ok' && chk('CA', 'h0h 0h0', 'Quebec').status === 'ok');
+  ok('postal CA: forbidden letters D/F/I/O/Q/U block in ANY letter position',
+    !!P && chk('CA', 'D1C 1A1', 'NB').status === 'block' && chk('CA', 'E1F 1A1', 'NB').status === 'block' &&
+    chk('CA', 'E1C 1Q1', 'NB').status === 'block' && chk('CA', 'E1C 1U1', 'NB').status === 'block' &&
+    chk('CA', 'I1C 1A1', 'NB').status === 'block' && chk('CA', 'E1O 1A1', 'NB').status === 'block');
+  ok('postal CA: W and Z block in the first position (but are fine nowhere else to appear — they simply cannot occur)',
+    !!P && chk('CA', 'W1C 1A1', 'NB').status === 'block' && chk('CA', 'Z9Z 9Z9', 'ON').status === 'block');
+  ok('postal CA: wrong shape blocks (digit in a letter slot, letter in a digit slot, too short, too long)',
+    !!P && chk('CA', 'E11 1A1', 'NB').status === 'block' && chk('CA', 'EAC 1A1', 'NB').status === 'block' &&
+    chk('CA', 'E1C 1A', 'NB').status === 'block' && chk('CA', 'E1C 1A11', 'NB').status === 'block' &&
+    chk('CA', 'E1C-1A1', 'NB').status === 'ok');
+  ok('postal CA: an unknown FSA WARNS but still saves (normalized value rides along)',
+    !!P && chk('CA', 'E9Z 1A1', 'New Brunswick').status === 'warn' && chk('CA', 'E9Z 1A1', 'New Brunswick').normalized === 'E9Z 1A1');
+  ok('postal CA: FSA/province mismatch WARNS; matching province (EN, FR, or code) passes; K1A spans ON/QC',
+    !!P && chk('CA', 'V6B 1A1', 'Ontario').status === 'warn' && chk('CA', 'V6B 1A1', 'British Columbia').status === 'ok' &&
+    chk('CA', 'V6B 1A1', 'Colombie-Britannique').status === 'ok' && chk('CA', 'V6B 1A1', '').status === 'ok' &&
+    chk('CA', 'K1A 0B1', 'Quebec').status === 'ok' && chk('CA', 'K1A 0B1', 'Ontario').status === 'ok' &&
+    chk('CA', 'G1K 1A1', 'Ontario').status === 'warn' && chk('CA', 'G1K 1A1', 'Québec').status === 'ok');
+  ok('postal CA: the vendored FSA set is the full national list (1,676 FSAs incl. A0Z) and maps provinces per FSA',
+    !!P && P.giftFsaCount() === 1676 && P.giftFsaProvince('X0A') === 'NU' && P.giftFsaProvince('X0E') === 'NT' &&
+    P.giftFsaProvince('X1A') === 'NT' && P.giftFsaProvince('E1C') === 'NB' && P.giftFsaProvince('E9Z') === null);
+  ok('postal US: ZIP passes (5, 5+4, bare 9 normalizes to 5+4); malformed blocks',
+    !!P && chk('US', '90210', 'CA').status === 'ok' && chk('US', '90210', 'CA').normalized === '90210' &&
+    chk('US', '902101234', 'CA').normalized === '90210-1234' && chk('US', '90210-1234', 'CA').status === 'ok' &&
+    chk('US', '9021', 'CA').status === 'block' && chk('US', '90210-123', 'CA').status === 'block' &&
+    chk('US', 'ABCDE', 'CA').status === 'block');
+  ok('postal formats: GB / DE / FR / JP / AU pass well-formed and block malformed',
+    !!P && chk('GB', 'SW1A 1AA', '').status === 'ok' && chk('GB', 'SW1A', '').status === 'block' &&
+    chk('DE', '10115', '').status === 'ok' && chk('DE', '1011', '').status === 'block' &&
+    chk('FR', '75001', '').status === 'ok' && chk('FR', '7500A', '').status === 'block' &&
+    chk('JP', '100-0001', '').status === 'ok' && chk('JP', '1000001', '').status === 'block' &&
+    chk('AU', '2000', '').status === 'ok' && chk('AU', '20000', '').status === 'block' &&
+    chk('NL', '1234 AB', '').status === 'ok' && chk('BR', '01310-100', '').status === 'ok');
+  ok('postal: countries with NO postal system are unvalidated (HK, AE — any entry skips)',
+    !!P && chk('HK', '999077', '').status === 'skip' && chk('AE', '12345', '').status === 'skip' &&
+    chk('JM', 'anything', '').status === 'skip');
+  ok('postal: unknown country, unlisted country, and empty postal all skip (never trap the user)',
+    !!P && chk('', 'E1C 1A1', '').status === 'skip' && chk('XX', '12345', '').status === 'skip' &&
+    chk('CA', '', 'NB').status === 'skip' && chk('DE', '   ', '').status === 'skip');
+  ok('postal: the country list covers the world (240+ entries incl. CA/US) and every format compiles',
+    !!P && P.GIFT_COUNTRIES.length >= 240 &&
+    P.GIFT_COUNTRIES.some(c => c[0] === 'CA' && c[1] === 'Canada') &&
+    Object.keys(P.GIFT_POSTAL_FORMATS).every(k => { try { new RegExp('^(?:' + P.GIFT_POSTAL_FORMATS[k] + ')$'); return true; } catch (e) { return false; } }));
+  ok('postal: stored country values resolve to codes by name, code, or common alias (legacy free text survives)',
+    !!P && P.giftCountryCodeFor('Canada') === 'CA' && P.giftCountryCodeFor('CA') === 'CA' && P.giftCountryCodeFor('ca') === 'CA' &&
+    P.giftCountryCodeFor('United States') === 'US' && P.giftCountryCodeFor('USA') === 'US' && P.giftCountryCodeFor('U.S.A.') === 'US' &&
+    P.giftCountryCodeFor('United Kingdom') === 'GB' && P.giftCountryCodeFor('UK') === 'GB' &&
+    P.giftCountryCodeFor('') === '' && P.giftCountryCodeFor('Narnia') === '');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
