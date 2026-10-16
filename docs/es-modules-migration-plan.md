@@ -826,3 +826,31 @@ this plan, with census-updated numbers. Where the pilot and this plan
 differ: the pilot's harness classicize is re-specified with a loud
 failure tripwire (§9.2), and the pilot's phase sketch is replaced by
 the census-derived phases (§2).
+
+---
+
+## Gate notes — PR #269 (v593)
+
+Recorded from the Security Advisor's gate on the phase-1a PR, at the
+program manager's direction. Two Low findings, both carried forward
+as standing checks for later phases:
+
+- **Low-1 — a bridge republishes a reassigned primitive's INITIAL
+  value on window.** A bridge block assigns the export's value at
+  module-eval time; if a converted file later reassigns one of its
+  exported primitives internally, `window` keeps the initial value
+  and a classic reader of the bare name would see stale data (a
+  module reader of the export sees the live binding — the two
+  surfaces would diverge). Later phases must therefore check any
+  converted file for cross-file READ reassigned primitives and use
+  a getter-style bridge, or a roster hold, for those files. In
+  PR #269 the exposure was audited per file and proven zero readers
+  for the two reassigned primitives in scope (js/182-tileguard's and
+  js/211-yolo's session state): consumers read only
+  functions/tables.
+- **Low-2 — the classicize tripwire's line-anchored regexes can
+  miss exotic import placements** (a no-whitespace `import"…"` or a
+  mid-line import statement). The miss is not silent: the
+  classicized text still fails loudly at parse time in acorn/vm, so
+  the never-silent property the tripwire exists for holds. A
+  token-level pre-scan is future harness work — noted, unscheduled.

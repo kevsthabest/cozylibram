@@ -20,6 +20,7 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { classicize } = require('./harness');
 const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 
 /* ---------- recording stub AudioContext ---------- */
@@ -80,7 +81,10 @@ function loadModule(shared) {
   sandbox.window = { AudioContext: FakeAudioContext };
   sandbox.window.window = sandbox.window;
   vm.createContext(sandbox);
-  const src = fs.readFileSync(path.join(ROOT, 'js/241-book-ambience.js'), 'utf8');
+  // R3 repoint (migration plan §9.3): js/241 is a real ES module since
+  // phase 1b; classicize restores the classic body before vm evaluation.
+  // Loading plumbing only — assertions untouched.
+  const src = classicize(fs.readFileSync(path.join(ROOT, 'js/241-book-ambience.js'), 'utf8'), 'js/241-book-ambience.js');
   vm.runInContext(src, sandbox, { filename: 'js/241-book-ambience.js' });
   return sandbox;
 }

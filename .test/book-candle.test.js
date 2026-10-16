@@ -16,10 +16,14 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { classicize } = require('./harness');
 const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 
 function loadJS(rel, extra) {
-  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  // R3 repoint (migration plan §9.3): js/238 is a real ES module since
+  // phase 1b; classicize restores the classic body before vm evaluation.
+  // Loading plumbing only — assertions untouched; identity on classic files.
+  const src = classicize(fs.readFileSync(path.join(ROOT, rel), 'utf8'), rel);
   const sandbox = {
     console: console,
     document: undefined,

@@ -34,7 +34,13 @@
    this module reads it live at start and on slider input, the same
    point-of-use pattern as the other prefs keys.
 */
-(function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and the window block at the bottom (unchanged from
+   the classic file) is the compatibility bridge, so classic scripts
+   keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 var AMBIENCE_TABLE_VERSION = 1;
@@ -436,7 +442,7 @@ function ambienceBuildGraph(ctx, recipe) {
 var amb = { ctx: null, graph: null, bookId: null, title: '', sel: null, options: [], idx: 0, playing: false };
 var focus = { bookId: null, title: '', sel: null, idx: 0 }; // the sheet's book, before anything plays
 
-function ambienceState() {
+export function ambienceState() {
   return {
     ctxCreated: !!amb.ctx,
     playing: amb.playing,
@@ -499,7 +505,7 @@ function ambienceResume() {
   amb.playing = true;
   paintAmbience();
 }
-function ambienceStopAll() {
+export function ambienceStopAll() {
   if (amb.graph && amb.ctx) {
     try { amb.graph.master.gain.setTargetAtTime(0, amb.ctx.currentTime, 0.03); } catch (e) {}
   }
@@ -508,7 +514,7 @@ function ambienceStopAll() {
   amb.bookId = null; amb.title = ''; amb.sel = null; amb.options = []; amb.idx = 0; amb.playing = false;
   paintAmbience();
 }
-function ambienceToggleFor(book) {
+export function ambienceToggleFor(book) {
   if (!book) return;
   if (amb.bookId === book.id && amb.graph) {
     if (amb.playing) ambiencePause(); else ambienceResume();
@@ -540,7 +546,7 @@ function ambienceCycle() {
 }
 
 /* ---------- the book-page entry (rendered by js/150) ---------- */
-function ambienceEntryHTML(b) {
+export function ambienceEntryHTML(b) {
   if (!b) return '';
   var sel = ambienceSelect(b);
   var isThis = amb.bookId === b.id && !!amb.graph;
@@ -567,7 +573,7 @@ function ambienceView() {
   if (focus.bookId) return { bookId: focus.bookId, title: focus.title, sel: focus.sel, options: focus.sel.options, idx: focus.idx, started: false, playing: false };
   return null;
 }
-function openAmbienceSheet(bookId) {
+export function openAmbienceSheet(bookId) {
   if (typeof document === 'undefined') return;
   var book = findBook(bookId);
   if (amb.bookId === bookId && amb.graph) {
@@ -758,4 +764,3 @@ if (typeof module !== 'undefined') {
     ambienceToggleFor: ambienceToggleFor, ambienceState: ambienceState,
   };
 }
-})();

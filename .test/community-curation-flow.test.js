@@ -37,6 +37,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { classicize } = require('./harness');
 
 const ROOT = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
 
@@ -124,8 +125,16 @@ const toastFn = function () {};
 const escFn = (s) => String(s == null ? '' : s);
 
 const loadModule = (file, params, args, rewrites) => {
-  let src = fs.readFileSync(path.join(ROOT, 'js', file), 'utf8');
-  src = src.replace(/\(function \(\) \{/, '').replace(/\}\)\(\);?\s*$/, '');
+  const raw = fs.readFileSync(path.join(ROOT, 'js', file), 'utf8');
+  // R3 repoint (migration plan §9.3): js/224 is a real ES module since
+  // phase 1b. classicize restores the classic body before evaluation
+  // (identity on classic files). A converted file has no IIFE wrapper
+  // to strip — and the strip patterns could match nested callbacks —
+  // so the strip now runs only when classicize changed nothing, i.e.
+  // the target is still a classic IIFE file (js/222, js/223 today).
+  // Loading plumbing only — assertions untouched.
+  let src = classicize(raw, file);
+  if (src === raw) src = src.replace(/\(function \(\) \{/, '').replace(/\}\)\(\);?\s*$/, '');
   (rewrites || []).forEach(([a, b]) => { src = src.split(a).join(b); });
   const moduleObj = { exports: {} };
   const fn = new Function(...params, src);
@@ -269,8 +278,12 @@ const win224 = {};
 loadModule('224-curation-queue.js',
   ['module', 'window', 'document', 'cloudClient', 'cloudUser', 'esc', 'toast', 'library', 'saveLibrary'],
   [win224, doc224, cloudClientFn, userObj, escFn, toastFn, libraryStub, () => { saveLibraryCalls++; }],
-  [['window.CurationQueue = { loadQueue: loadQueue, setStatus: setStatus, workIdFromBookKey: workIdFromBookKey };',
-    'window.CurationQueue = { loadQueue: loadQueue, setStatus: setStatus, cqDecide: cqDecide, renderCqList: renderCqList, renderCurationQueue: renderCurationQueue, workIdFromBookKey: workIdFromBookKey, _items: function () { return cqItems; } };']]);
+  // R3 anchor update (same repoint): the publication this rewrite expands
+  // is, since the phase-1b conversion, the classicized declaration line
+  // `const CurationQueue = { ... }` (was the window assignment inside the
+  // typeof guard). The expanded literal is member-for-member identical.
+  [['const CurationQueue = { loadQueue: loadQueue, setStatus: setStatus, workIdFromBookKey: workIdFromBookKey };',
+    'const CurationQueue = { loadQueue: loadQueue, setStatus: setStatus, cqDecide: cqDecide, renderCqList: renderCqList, renderCurationQueue: renderCurationQueue, workIdFromBookKey: workIdFromBookKey, _items: function () { return cqItems; } };']]);
 const CQ = win224.CurationQueue;
 ok('js/224: CurationQueue surface loaded (loadQueue/setStatus/cqDecide/renderCurationQueue)',
   !!CQ && typeof CQ.loadQueue === 'function' && typeof CQ.setStatus === 'function' &&

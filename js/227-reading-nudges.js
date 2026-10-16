@@ -12,10 +12,16 @@
    Renders as an inline card at the top of the Library home's reading
    area — glanceable and ignorable, never a modal.
 */
-(function () {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and the window block at the bottom (unchanged from
+   the classic file) is the compatibility bridge, so classic scripts
+   keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
-function dnaNudgesOff() {
+export function dnaNudgesOff() {
   try { return localStorage.getItem('cozylibram.dnaNudgesOff') === '1'; } catch (e) { return false; }
 }
 function daysSince(ts) {
@@ -26,7 +32,7 @@ function promptCount(b) { return b.dnaPromptCount || 0; }
 // v496 (#137): in-flight guard for nudgeEvaluate (see below).
 var nudgeEvaluating = false;
 
-function nudgeSlotHTML() { return '<div id="nudgeSlot"></div>'; }
+export function nudgeSlotHTML() { return '<div id="nudgeSlot"></div>'; }
 
 function localTropeCount(b) {
   var n = 0;
@@ -39,7 +45,7 @@ function dnaPct(b) {
   catch (e) { return 0; }
 }
 
-async function nudgeEvaluate() {
+export async function nudgeEvaluate() {
   var slot = document.getElementById('nudgeSlot');
   if (!slot) return;
   // v496 (#137): in-flight guard — two overlapping evaluations could both
@@ -175,4 +181,3 @@ if (typeof window !== 'undefined') {
   window.nudgeEvaluate = nudgeEvaluate;
   window.dnaNudgesOff = dnaNudgesOff;
 }
-})();

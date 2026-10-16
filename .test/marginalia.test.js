@@ -101,9 +101,9 @@ ok('index.html registers js/242-marginalia.js after js/241',
   indexHtml.includes('<script src="js/242-marginalia.js"></script>') &&
   indexHtml.indexOf('js/242-marginalia.js') > indexHtml.indexOf('js/241-book-ambience.js'));
 ok('sw.js precaches 242-marginalia.js', swText.includes("'242-marginalia.js'"));
-ok('version pairing is v593',
-  /APP_VERSION = 'v593'/.test(fs.readFileSync(path.join(APP_DIR, 'js/181-appversion.js'), 'utf8')) &&
-  swText.includes("cozy-libram-v593"));
+ok('version pairing is v594',
+  /APP_VERSION = 'v594'/.test(fs.readFileSync(path.join(APP_DIR, 'js/181-appversion.js'), 'utf8')) &&
+  swText.includes("cozy-libram-v594"));
 const js150 = fs.readFileSync(path.join(APP_DIR, 'js/150-modal-discovery.js'), 'utf8');
 ok('js/150 carries the slot + the fill call',
   js150.includes('<div id="m-marginalia"></div>') && js150.includes("fillMarginalia(b)"));
