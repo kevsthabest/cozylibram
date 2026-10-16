@@ -29,7 +29,14 @@
    for a given book + cover it is identical on every render and device.
    Scent derivation never reads the tint.
 */
-(function () {
+
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Module scope replaces the old IIFE wrapper; the public surface is
+   exported in place and the window block at the bottom (unchanged from
+   the classic file) is the compatibility bridge, so classic scripts
+   keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 var CANDLE_TABLE_VERSION = 1;
@@ -236,7 +243,7 @@ function layerNote(hit) {
   if (hit.entry.scene) out.scene = hit.entry.scene;
   return out;
 }
-function bookCandle(b) {
+export function bookCandle(b) {
   b = b || {};
   var names = localTropeNames(b);
   // base: first setting-flavoured trope on the book
@@ -277,7 +284,7 @@ function headOf(note) {
   var head = String(note || '').split('&')[0].trim();
   return head.replace(/(^|\s)([a-z])/g, function (m, sp, ch) { return sp + ch.toUpperCase(); });
 }
-function candleName(candle, pattern) {
+export function candleName(candle, pattern) {
   var n = (candle && candle.notes) || {};
   var p = (pattern === 2 || pattern === 3) ? pattern : 1;
   if (p === 2) {
@@ -336,7 +343,7 @@ function candleTone(hex) {
    on both surfaces every label sits on the card background, never on
    the wax — and the band clamp keeps the wax a mid-tone, so the jar
    outline and flame read against it at either extreme. */
-function candleTint(b) {
+export function candleTint(b) {
   var hex = candleCoverHex(b);
   if (!hex) return null;
   var tone = candleTone(hex);
@@ -357,7 +364,7 @@ function noteRowHTML(label, layer) {
     '<div class="candle-row">' + esc(layer.note) +
     ' <span class="note">from ' + esc(layer.source.value) + '</span></div></div>';
 }
-function candleCardHTML(b) {
+export function candleCardHTML(b) {
   if (!b) return '';
   var c = bookCandle(b);
   var stops = candleWaxStops(b);
@@ -387,7 +394,7 @@ function findBook(id) {
   } catch (e) {}
   return null;
 }
-function drawCandleCard(b) {
+export function drawCandleCard(b) {
   if (!b || typeof cardCanvas !== 'function') return null;
   var c = bookCandle(b);
   var made = cardCanvas();
@@ -473,7 +480,7 @@ function drawCandleCard(b) {
   if (typeof cardFooter === 'function') cardFooter(x, W);
   return cv;
 }
-function shareCandleCard(id) {
+export function shareCandleCard(id) {
   var b = findBook(id);
   if (!b) return;
   try { toast('Making your card\u2026 \u2728'); } catch (e) {}
@@ -509,4 +516,3 @@ if (typeof module !== 'undefined') {
     CANDLE_NAME_PATTERN: CANDLE_NAME_PATTERN,
   };
 }
-})();
