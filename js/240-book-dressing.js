@@ -53,29 +53,35 @@
    --accent-deep as <color> via @property so changes cross-fade where
    the browser supports it; elsewhere the swap is instant, as before. */
 
-const BOOK_DRESS_KEY = 'cozylibram.bookdress';
-const BOOK_DRESS_APPLIED_KEY = 'cozylibram.bookdress.applied';
-const BOOK_DRESS_NOTED_KEY = 'cozylibram.bookdress.noted';
-const DRESSING_GATE_MIN = 2.0;
-const DRESSING_CHROMA_MIN = 0.08;
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const BOOK_DRESS_KEY = 'cozylibram.bookdress';
+export const BOOK_DRESS_APPLIED_KEY = 'cozylibram.bookdress.applied';
+export const BOOK_DRESS_NOTED_KEY = 'cozylibram.bookdress.noted';
+export const DRESSING_GATE_MIN = 2.0;
+export const DRESSING_CHROMA_MIN = 0.08;
 
 /* Default ON: only an explicit 'off' disables (the prefs section's
    full-snapshot apply encodes "back to default" by removing the key). */
-function bookDressingEnabled() {
+export function bookDressingEnabled() {
   try { return localStorage.getItem(BOOK_DRESS_KEY) !== 'off'; } catch (e) { return true; }
 }
 
 /* ---------- colour maths (self-contained; candle-family helpers) ---------- */
-function _dressRgb(hex) {
+export function _dressRgb(hex) {
   const m = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
   if (!m) return null;
   const n = parseInt(m[1], 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-function _dressHex(rgb) {
+export function _dressHex(rgb) {
   return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 }
-function _dressHsl(rgb) {
+export function _dressHsl(rgb) {
   const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
   if (mx === mn) return { h: 0, s: 0, l: l };
@@ -87,7 +93,7 @@ function _dressHsl(rgb) {
   else h = ((r - g) / d + 4) * 60;
   return { h: h, s: s, l: l };
 }
-function _dressFromHsl(h, s, l) {
+export function _dressFromHsl(h, s, l) {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
@@ -97,17 +103,17 @@ function _dressFromHsl(h, s, l) {
   else if (h < 300) rgb = [x, 0, c]; else rgb = [c, 0, x];
   return _dressHex(rgb.map(v => (v + m) * 255));
 }
-function _dressLum(rgb) {
+export function _dressLum(rgb) {
   const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
   return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
 }
-function dressingContrast(hexA, hexB) {
+export function dressingContrast(hexA, hexB) {
   const a = _dressRgb(hexA), b = _dressRgb(hexB);
   if (!a || !b) return 0;
   const x = _dressLum(a), y = _dressLum(b);
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
-function dressingHue(hex) {
+export function dressingHue(hex) {
   const rgb = _dressRgb(hex);
   return rgb ? _dressHsl(rgb).h : 0;
 }
@@ -118,7 +124,7 @@ function dressingHue(hex) {
    own lightness, so the winning shade is the closest honest version of
    the cover's colour. accent-deep mirrors the built-in pairs: same hue,
    lightness scaled ~0.78. */
-function dressingGate(hex, surfaces, min) {
+export function dressingGate(hex, surfaces, min) {
   const rgb = _dressRgb(hex);
   if (!rgb || !Array.isArray(surfaces) || !surfaces.length) return null;
   const need = (typeof min === 'number' && min > 0) ? min : DRESSING_GATE_MIN;
@@ -146,7 +152,7 @@ function dressingGate(hex, surfaces, min) {
    null. Mirrors candleCoverHex's guard exactly (js/238): the cache entry
    must exist, its cover must equal b.cover (a cover change invalidates
    the palette until the new cover is sampled), hex must be #rrggbb. */
-function dressingCoverHex(b) {
+export function dressingCoverHex(b) {
   try {
     if (!b || !b.cover || typeof spineColorCache === 'undefined') return null;
     const c = spineColorCache[b.id];
@@ -156,7 +162,7 @@ function dressingCoverHex(b) {
 
 /* The book to dress for: status 'reading', most recent progress update
    first (lastPagedAt, then _mtime). Deterministic on ties: first wins. */
-function dressingBook(books) {
+export function dressingBook(books) {
   const reading = (books || []).filter(b => b && b.status === 'reading');
   let best = null, bestAt = -1;
   for (const b of reading) {
@@ -169,7 +175,7 @@ function dressingBook(books) {
 /* Pure resolution: { bookId, title, accent, deep } or null — null always
    means "the theme's own accents apply", for every reason (toggle off,
    nothing reading, palette uncached/stale, gate failed). */
-function resolveBookDressing() {
+export function resolveBookDressing() {
   try {
     if (!bookDressingEnabled()) return null;
     const books = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
@@ -186,13 +192,13 @@ function resolveBookDressing() {
   } catch (e) { return null; }
 }
 
-let _dressingState = null; // last resolved { bookId, accent, deep } applied to the DOM
+export let _dressingState = null; // last resolved { bookId, accent, deep } applied to the DOM
 
 /* Reconcile the document with resolveBookDressing(). Cheap and
    idempotent: DOM/localStorage writes happen only on an actual change,
    so the hot hooks (every saveLibrary, every palette-cache write) cost
    a resolve and a comparison. */
-function refreshBookDressing() {
+export function refreshBookDressing() {
   try {
     const de = document.documentElement;
     const next = resolveBookDressing();
@@ -247,3 +253,33 @@ if (typeof module !== 'undefined') {
     BOOK_DRESS_APPLIED_KEY: BOOK_DRESS_APPLIED_KEY,
   };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/010-theming.js, js/040-storage.js, js/095-gate.js, js/120-favorites.js, js/180-settings.js and js/229-user-state.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.BOOK_DRESS_KEY = BOOK_DRESS_KEY;
+window.BOOK_DRESS_APPLIED_KEY = BOOK_DRESS_APPLIED_KEY;
+window.BOOK_DRESS_NOTED_KEY = BOOK_DRESS_NOTED_KEY;
+window.DRESSING_GATE_MIN = DRESSING_GATE_MIN;
+window.DRESSING_CHROMA_MIN = DRESSING_CHROMA_MIN;
+window.bookDressingEnabled = bookDressingEnabled;
+window._dressRgb = _dressRgb;
+window._dressHex = _dressHex;
+window._dressHsl = _dressHsl;
+window._dressFromHsl = _dressFromHsl;
+window._dressLum = _dressLum;
+window.dressingContrast = dressingContrast;
+window.dressingHue = dressingHue;
+window.dressingGate = dressingGate;
+window.dressingCoverHex = dressingCoverHex;
+window.dressingBook = dressingBook;
+window.resolveBookDressing = resolveBookDressing;
+window._dressingState = _dressingState;
+window.refreshBookDressing = refreshBookDressing;
