@@ -178,9 +178,10 @@ async function setStatus(sb, item, accepted) {
     return;
   }
   if (item.ptype === 'character') {
-    var r2 = await sb.from('character_suggestions').update({ status: status }).eq('id', item.id);
-    if (r2.error) throw new Error(r2.error.message);
     if (accepted && item.raw.type === 'add') {
+      /* Insert FIRST, flip status only on success (issue #219): a failed
+         resolve/insert must leave the suggestion pending and retryable —
+         flipping first recorded an acceptance that never landed. */
       var workId = await workIdFromBookKey(sb, item.bookKey);
       if (!workId) throw new Error('could not resolve work for ' + item.bookKey + ' — kept pending');
       var ins = await sb.from('book_characters').insert({
@@ -189,6 +190,8 @@ async function setStatus(sb, item, accepted) {
       });
       if (ins.error) throw new Error(ins.error.message);
     }
+    var r2 = await sb.from('character_suggestions').update({ status: status }).eq('id', item.id);
+    if (r2.error) throw new Error(r2.error.message);
     /* merge/correct: decision recorded; User applies manually in Character Lab. */
     await bumpCounters(sb, item.by, accepted);
     return;

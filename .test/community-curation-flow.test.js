@@ -367,9 +367,15 @@ const tierBump = (sb, field) => {
     ins[0].payload.source_type === 'community');
   const upd = callsTo(sb, 'update', 'character_suggestions');
   ok('setStatus character accept: suggestion marked accepted', upd.length === 1 && upd[0].payload.status === 'accepted');
+  const callOrder = sb.calls.map(c => c.op + ':' + c.table);
+  ok('setStatus character accept: insert lands BEFORE the status flip (issue #219 ordering)',
+    callOrder.indexOf('insert:book_characters') !== -1 &&
+    callOrder.indexOf('insert:book_characters') < callOrder.indexOf('update:character_suggestions'));
 }
-{ // character ACCEPT with unresolvable work — throws, inserts nothing
-  sb = mkSb(seedTiers());
+{ // character ACCEPT with unresolvable work — throws, inserts nothing, stays pending (issue #219)
+  sb = mkSb(Object.assign(seedTiers(), {
+    character_suggestions: [{ id: 'cs-2', status: 'pending' }]
+  }));
   const item = { ptype: 'character', id: 'cs-2', bookKey: 'isbn:9789999999999', by: 'user-a',
     raw: { type: 'add', name: 'Ghost', role: null, description: '' } };
   let threw = '';
@@ -377,6 +383,25 @@ const tierBump = (sb, field) => {
   ok('setStatus character accept (no work): throws the resolve error, cqDecide would log it failed',
     threw.indexOf('could not resolve work') === 0);
   ok('setStatus character accept (no work): NO book_characters insert', callsTo(sb, 'insert', 'book_characters').length === 0);
+  ok('setStatus character accept (no work): status NOT flipped — suggestion stays pending (issue #219)',
+    callsTo(sb, 'update', 'character_suggestions').length === 0 &&
+    sb.tables.character_suggestions[0].status === 'pending');
+}
+{ // character ACCEPT, work resolves but the insert itself fails — status stays pending (issue #219)
+  sb = mkSb(Object.assign(seedTiers(), {
+    editions: [{ isbn: '9780000000001', work_id: 'work-42' }],
+    character_suggestions: [{ id: 'cs-9', status: 'pending' }]
+  }));
+  sb.failTables.add('book_characters');
+  const item = { ptype: 'character', id: 'cs-9', bookKey: BOOK.key, by: 'user-a',
+    raw: { type: 'add', name: 'Wyn', role: 'supporting', description: 'A scout.' } };
+  let threw = '';
+  try { await CQ.setStatus(sb, item, true); } catch (e) { threw = e.message || ''; }
+  ok('setStatus character accept (insert fails): throws the insert error',
+    threw.indexOf('stub insert failure') !== -1);
+  ok('setStatus character accept (insert fails): status NOT flipped — suggestion stays pending (issue #219)',
+    callsTo(sb, 'update', 'character_suggestions').length === 0 &&
+    sb.tables.character_suggestions[0].status === 'pending');
 }
 { // character REJECT + merge ACCEPT — decisions recorded, nothing applied
   sb = mkSb(seedTiers());
