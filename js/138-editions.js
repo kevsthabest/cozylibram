@@ -13,14 +13,20 @@
    Books already Hardcover-enriched skip the re-enrich so the public rating
    isn't blended twice; never-enriched books get the standard pass. */
 
-function epCleanISBN(s) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function epCleanISBN(s) {
   return String(s || '').replace(/[^0-9X]/gi, '').toUpperCase();
 }
 
 // All usable editions Hardcover knows for this book's work.
 // Returns { title, editions: [{isbn, publisher, year, pages, cover}] }
 // or { error } when Hardcover can't be reached or knows nothing.
-async function fetchEditionOptions(book) {
+export async function fetchEditionOptions(book) {
   if (typeof hcReady !== 'function' || !hcReady()) {
     return { error: 'Edition lookup needs the home-server connection (Hardcover).' };
   }
@@ -72,24 +78,24 @@ async function fetchEditionOptions(book) {
   }
 }
 
-let editionPickerToken = null; // v220: history entry for the back-gesture
-function closeEditionPickerDom() { // v220: DOM-only teardown
+export let editionPickerToken = null; // v220: history entry for the back-gesture
+export function closeEditionPickerDom() { // v220: DOM-only teardown
   if (typeof document === 'undefined') return;
   const ov = document.getElementById('edition-picker');
   if (ov) ov.remove();
 }
-function closeEditionPicker() {
+export function closeEditionPicker() {
   if (typeof document === 'undefined') return;
   if (editionPickerToken) { overlayClosed(editionPickerToken); editionPickerToken = null; } // v220
   closeEditionPickerDom();
 }
 
-function epSubLine(e) {
+export function epSubLine(e) {
   return [e.year, e.pages ? e.pages + ' pages' : '', 'ISBN ' + e.isbn]
     .filter(Boolean).join(' · ');
 }
 
-function openEditionPicker(bookId) {
+export function openEditionPicker(bookId) {
   if (typeof document === 'undefined') return;
   const b = (typeof library !== 'undefined' ? library : []).find(x => x.id === bookId);
   if (!b) return;
@@ -155,7 +161,7 @@ function openEditionPicker(bookId) {
 }
 
 // Switch the book to the picked edition and refresh edition-level details.
-async function applyEdition(bookId, ed) {
+export async function applyEdition(bookId, ed) {
   const lib = typeof library !== 'undefined' ? library : [];
   const b = lib.find(x => x.id === bookId);
   const isbn = epCleanISBN(ed && ed.isbn);
@@ -206,7 +212,7 @@ async function applyEdition(bookId, ed) {
 }
 
 // Patch the open book modal's edition bits without a full re-render.
-function epRefreshModalBits(b) {
+export function epRefreshModalBits(b) {
   if (typeof document === 'undefined' || !b) return;
   const btn = document.getElementById('m-edition');
   if (btn && typeof icon === 'function' && typeof esc === 'function') {
@@ -229,3 +235,22 @@ function epRefreshModalBits(b) {
   const pc = document.getElementById('f-pagecount');
   if (pc && b.pageCount) pc.value = b.pageCount;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The one classic consumer, js/150-modal-discovery.js, calls openEditionPicker() at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.epCleanISBN = epCleanISBN;
+window.fetchEditionOptions = fetchEditionOptions;
+window.editionPickerToken = editionPickerToken;
+window.closeEditionPickerDom = closeEditionPickerDom;
+window.closeEditionPicker = closeEditionPicker;
+window.epSubLine = epSubLine;
+window.openEditionPicker = openEditionPicker;
+window.applyEdition = applyEdition;
+window.epRefreshModalBits = epRefreshModalBits;
