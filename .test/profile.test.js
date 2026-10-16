@@ -1,6 +1,8 @@
-// Profile view + account menu (v37): the top-right avatar opens a dropdown
-// (Profile / Settings / Logout when signed in; Settings / Sign in when not),
-// and the Profile view edits names + avatar (themed defaults or upload).
+// Profile + account menu (v37): the top-right avatar opens a dropdown
+// (Profile / Settings / Logout when signed in; Settings / Sign in when not).
+// v590 (Variant B): the separate Profile VIEW is gone — the menu's Profile
+// entry lands on Settings with the Account group open, where the identity
+// form edits names + avatar (themed defaults or upload) and AUTOSAVES.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -23,6 +25,8 @@ const runInWindow = (js) => {
 };
 const probe = (js) => window.eval(js);
 const tick = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const typeIn = (el, v) => { el.value = v; el.dispatchEvent(new window.Event('input', { bubbles: true })); };
 const lsGet = (k) => { try { return window.localStorage.getItem(k); } catch (e) { return null; } };
 const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
 
@@ -81,10 +85,12 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   window.document.body.click(); await tick();
   ok('clicking outside closes the menu', q('#menu-pop').hidden);
 
-  // Profile view.
+  // Profile: the menu entry lands on Settings → Account (Variant B).
   q('#menu-btn').click(); await tick();
   q('#menu-pop [data-m="profile"]').click(); await tick();
-  ok('profile view renders', !!q('#pf-first') && !!q('#pf-last'));
+  ok('menu Profile lands on the Settings account form', probe('view') === 'settings' && !!q('#pf-first') && !!q('#pf-last'));
+  ok('the account form states its save model (autosave, no Save button)',
+    !!q('#ac-savestate') && /save automatically/i.test(q('#view').textContent) && !q('#pf-save'));
   ok('email field is read-only', !!q('#pf-last') && !!q('input[disabled]'));
   ok('email shows the account address', Array.from(qa('input')).some(i => i.value === 'wife@example.com'));
   ok('twenty-two themed default avatars offered (6 Classics + 8 Stormrider + 8 Voidsignal, v544)', probe('DEFAULT_AVATARS.length') === 22);
@@ -94,12 +100,12 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   q('#apk-close').click(); await tick();
   ok('avatar image files exist', probe("DEFAULT_AVATARS.every(a => a.src.indexOf('img/avatars/avatar-') === 0)"));
 
-  // Save names.
-  q('#pf-first').value = 'Ada';
-  q('#pf-last').value = 'Lovelace';
-  q('#pf-save').click(); await tick();
+  // Autosave names (debounced commit — no Save button anymore).
+  typeIn(q('#pf-first'), 'Ada');
+  typeIn(q('#pf-last'), 'Lovelace');
+  await wait(900);
   const saved = JSON.parse(lsGet('spicyshelves.profile.u1'));
-  ok('names saved to the per-user profile slot', saved.firstName === 'Ada' && saved.lastName === 'Lovelace');
+  ok('names autosaved to the per-user profile slot', saved.firstName === 'Ada' && saved.lastName === 'Lovelace');
   ok('menu button initial follows the first name', q('#menu-btn').textContent.trim() === 'A');
 
   // v177: gender picker + gender-aware home greeting.
@@ -109,9 +115,8 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('tapping Male marks it active', gMale.classList.contains('active'));
   gMale.click();
   ok('tapping the active choice again clears it', !q('#pf-gender button.active'));
-  q('#pf-gender [data-g="m"]').click();
-  q('#pf-save').click(); await tick();
-  ok('gender saved to the per-user profile slot', JSON.parse(lsGet('spicyshelves.profile.u1')).gender === 'm');
+  q('#pf-gender [data-g="m"]').click(); await tick(3);
+  ok('gender saved to the per-user profile slot (seg commits at once)', JSON.parse(lsGet('spicyshelves.profile.u1')).gender === 'm');
   // v405 (L1): gendered greetings removed — greeting now uses the profile
   // first name with a neutral fallback. No more terms of endearment.
   runInWindow(`library.push({ id: 'g1', title: 'Seed', authors: ['A'], status: 'tbr', owned: 'owned', cover: '', tropes: [] });
@@ -119,8 +124,8 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   ok('greeting uses the profile first name (v405)', q('.home-greet h2').textContent.includes('Ada'));
   runInWindow(`{ const p = loadProfile(); p.firstName = ''; touchProfile(p); renderLibrary(); }`); await tick();
   ok('greeting falls back gracefully without a name', /Good (morning|afternoon|evening)/.test(q('.home-greet h2').textContent));
-  runInWindow(`renderProfile();`); await tick();
-  ok('back on the profile view', !!q('#pf-first'));
+  runInWindow(`renderSettings();`); await tick();
+  ok('back on the account form', !!q('#pf-first'));
 
   // Pick a themed default (v546 re-pin: through the fitting room —
   // tapping a tile tries it on; only "Use this picture" saves).
@@ -138,7 +143,7 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   q('#apk-close').click(); await tick();
 
   // Back button returns home.
-  q('#pf-back').click(); await tick();
+  q('#st-back').click(); await tick();
   ok('back button returns to the library', probe('view') === 'library');
 
   // Settings still reachable from the menu.

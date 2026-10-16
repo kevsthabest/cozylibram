@@ -382,6 +382,10 @@ function releaseCountdown(iso) {
 }
 function toast(msg) {
   const root = document.getElementById('toast-root');
+  // v590: the toast is the privacy panel's only save feedback — it must be
+  // announced. index.html carries aria-live; enforce it here too so any
+  // host page gets the same behaviour.
+  if (root && !root.getAttribute('aria-live')) root.setAttribute('aria-live', 'polite');
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;

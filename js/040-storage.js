@@ -579,8 +579,12 @@ function pagesOnDay(b, k) {
   return (b.log || []).filter(e => e.d === k).reduce((s, e) => s + Math.max(0, e.to - e.from), 0);
 }
 // v68: Settings toggle gating the "remove today's entry" button in the book modal.
+// v590 (Variant B): the Show/Hide SETTING is retired — the button only ever
+// appears on days with an entry to remove, so context is the gate and the
+// behaviour is hardcoded Show. The stored key (spicyshelves.logremove, a
+// frozen roamed pref) is simply no longer read.
 function logRemoveEnabled() {
-  try { return localStorage.getItem('spicyshelves.logremove') === 'on'; } catch (e) { return false; }
+  return true;
 }
 function readingStreak() {
   const days = new Set();

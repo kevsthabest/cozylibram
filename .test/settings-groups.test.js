@@ -1,7 +1,11 @@
-// Settings groups (v117, v312, v424, v476): Account / Library / Purchase Ledger /
-// Appearance / Offline / Privacy / About (S3 folded Reading into Library;
-// v476 removed the Metadata group — enrichment is automatic now),
-// each a collapsible card with persisted open/closed state; all existing controls keep working.
+// Settings groups (v117, v312, v424, v476, v590): Account / Library / Reading /
+// Appearance / Offline / Privacy / About — Variant B (v590) folds the Profile
+// view into the Account group, retires the Purchase Ledger group (its figures
+// live in Chronicles), restores Reading as its own group (the "What you see"
+// trio + Book Portrait), and retires the persisted open-state: groups always
+// start with Account open and the rest collapsed, so first paint is never the
+// 97-control wall the v588 census measured. Each group is a collapsible card;
+// all existing controls keep working.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -23,14 +27,16 @@ const doc = () => window.document;
 const groupTitles = () => [...doc().querySelectorAll('#view > .set-group > summary .set-tt')].map(s => s.textContent.trim());
 
 runInWindow(`localStorage.removeItem('spicyshelves.setgroups'); library = [];`);
+// v590: the Account group carries the identity form only when signed in.
+runInWindow(`cloudUser = { id: 'sg-user', email: 'sg@example.com' };`);
 runInWindow(`view = 'settings'; renderSettings();`);
 
-ok('7 groups render in Kevin\'s order (S3: Reading folded into Library; v476: Metadata removed)',
+ok('7 groups render in the Variant B order (Ledger retired; Reading restored)',
   JSON.stringify(groupTitles()) ===
-  JSON.stringify(['Account', 'Library', 'Purchase Ledger', 'Appearance', 'Offline', 'Privacy', 'About']));
+  JSON.stringify(['Account', 'Library', 'Reading', 'Appearance', 'Offline', 'Privacy', 'About']));
 ok('group summaries carry tag subtitles', (() => {
   const tags = [...doc().querySelectorAll('#view > .set-group > summary .set-tag')].map(s => s.textContent);
-  return /Sign in, profile & sync/.test(tags[0]) && /Version & diagnostics/.test(tags[6]);
+  return /Sign in, profile & gifts/.test(tags[0]) && /Version & diagnostics/.test(tags[6]);
 })());
 ok('first group open by default, rest collapsed', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
@@ -38,7 +44,8 @@ ok('first group open by default, rest collapsed', (() => {
 })());
 ok('subsections exist inside groups',
   doc().querySelector('#view > .set-group .set-sub') !== null &&
-  [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'Coven sharing') &&
+  [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'Circle & privacy') &&
+  [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'What you see') &&
   [...doc().querySelectorAll('.set-sub')].some(h => h.textContent === 'Data management'));
 
 const groupOf = (id) => {
@@ -46,25 +53,35 @@ const groupOf = (id) => {
   const det = el && el.closest('.set-group');
   return det ? [...doc().querySelectorAll('#view > .set-group')].indexOf(det) : -1;
 };
-ok('controls landed in the right groups (v476: Metadata removed)',
-  groupOf('bk-wipe') === 1 &&            // Library, moved out of About
-  groupOf('th-rmentry') === 1 &&        // Library, S3 folded from Reading
-  groupOf('cover-offline') === 4 &&     // Offline (was 5 before Metadata removal)
-  groupOf('st-yolo') === 3 &&           // Appearance > Display (was Metadata > Covers)
+ok('controls landed in the right groups (v590 Variant B)',
+  groupOf('bk-wipe') === 1 &&            // Library: Data management
+  groupOf('cover-offline') === 4 &&      // Offline
+  groupOf('st-yolo') === 3 &&            // Appearance > Display
   groupOf('th-region') === 3 &&         // Appearance (Display)
-  groupOf('cover-bulk') === -1 &&       // v476: removed with Metadata group
-  groupOf('pc-backfill') === -1 &&      // v476: removed with Metadata group
-  groupOf('meta-verify') === -1 &&      // v476: removed with Metadata group
-  groupOf('hc-test') === -1 &&          // v476: removed with Metadata group
-  groupOf('ac-signin') === 0 &&         // Account
-  groupOf('ac-sync') === 0 &&           // Account card, S4
-  groupOf('ac-card-email') === 0 &&     // Account card, S4
-  groupOf('st-edit-profile') === 0 &&
-  groupOf('st-privacy-go') === 5 &&      // Privacy (was 6)
-  groupOf('ap-update') === 6);           // About (was 7)
-ok('all pre-existing control ids still present (v476: metadata bulk ids removed)',
-  ['th-accent', 'th-anim', 'th-rmentry', 'bk-export', 'bk-import', 'im-pick',
-   'ac-signup', 'ac-logout', 'ap-ver']
+  groupOf('cover-bulk') === -1 &&        // v476: removed with Metadata group
+  groupOf('pc-backfill') === -1 &&       // v476: removed with Metadata group
+  groupOf('meta-verify') === -1 &&       // v476: removed with Metadata group
+  groupOf('hc-test') === -1 &&           // v476: removed with Metadata group
+  groupOf('ac-signin') === 0 &&          // Account
+  groupOf('ac-sync') === 0 &&            // Account card, S4
+  groupOf('ac-card-email') === 0 &&      // Account card, S4
+  groupOf('pf-first') === 0 &&           // v590: the identity form lives in Account
+  groupOf('pf-giftaddr-slot') === 0 &&   // v590: the gift cluster lives in Account
+  groupOf('st-warnprefs') === 2 &&       // Reading: warning preferences entry
+  groupOf('st-spoilers') === 2 &&        // Reading: Hide spoilers moved out of Privacy
+  groupOf('rd-shield') === 2 &&          // Reading: the content shield sits with "What you see"
+  groupOf('ap-update') === 6);           // About
+ok('retired controls are gone (v590 named cuts)',
+  groupOf('th-rmentry') === -1 &&        // the Show/Hide setting is retired (button is contextual now)
+  groupOf('st-privacy-go') === -1 &&     // "Manage sharing" teleport button cut
+  groupOf('st-edit-profile') === -1 &&   // no separate Profile view to edit in
+  groupOf('st-privacy') === -1 &&        // the read-only Hearth-sharing summary is cut
+  groupOf('pf-save') === -1 &&           // the account form autosaves — no Save button
+  !groupTitles().includes('Purchase Ledger') &&
+  doc().querySelectorAll('#view .ledger-row').length === 0);
+ok('all pre-existing control ids still present (v590: th-rmentry retired with its setting)',
+  ['th-accent', 'th-anim', 'bk-export', 'bk-import', 'im-pick',
+   'ac-signup', 'ac-logout', 'ap-ver', 'pf-first', 'pf-last', 'pf-bio']
     .every(id => !!doc().getElementById(id)));
 ok('v416: theme gallery replaced the th-theme dropdown',
   !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
@@ -93,26 +110,31 @@ ok('S4: sign-in note deduped; account card present with sync controls',
       !!doc().getElementById('ac-signedin') &&
       !!doc().getElementById('ac-card-email');
   })());
-ok('S6: privacy loading state is skeleton shimmer or resolved content (never bare Loading text)',
+ok('S6: privacy panel loading state is skeleton shimmer or resolved content (never bare Loading text)',
   (() => {
-    const box = doc().getElementById('st-privacy');
+    const box = doc().getElementById('st-circle-privacy');
     if (!box) return false;
-    // Signed-out resolves immediately to the share note; signed-in shows skeleton then summary.
+    // Signed-out resolves immediately to the sign-in note; signed-in shows skeleton then the panel.
     return !!box.querySelector('.skel') || !/Loading\.\.\./.test(box.textContent);
   })());
 
-// toggling persists; a re-render restores it
+// v590: the persisted open-state is retired — a stale all-open record must
+// NOT resurrect the wall, and a re-render always returns to the default
+// (Account open, the rest collapsed).
+runInWindow(`localStorage.setItem('spicyshelves.setgroups', '[0,1,2,3,4,5,6]'); renderSettings();`);
+ok('a persisted all-open record no longer restores (start-collapsed is the rule)', (() => {
+  const g = doc().querySelectorAll('#view > .set-group');
+  return g[0].open === true && g[3].open === false && g[6].open === false;
+})());
 runInWindow(`
   const gs = document.querySelectorAll('#view > .set-group');
-  gs[0].open = false; gs[3].open = true;
+  gs[3].open = true;
   gs[3].dispatchEvent(new Event('toggle'));
-  window.__saved = localStorage.getItem('spicyshelves.setgroups');
+  renderSettings();
 `);
-ok('toggle persists open groups', window.__saved === '[3]');
-runInWindow(`renderSettings();`);
-ok('re-render restores persisted state', (() => {
+ok('re-render returns to the collapsed default (no open-state persistence)', (() => {
   const g = doc().querySelectorAll('#view > .set-group');
-  return g[3].open === true && g[0].open === false;
+  return g[0].open === true && g[3].open === false;
 })());
 
 console.log(`\n${pass} passed, ${fail} failed`);

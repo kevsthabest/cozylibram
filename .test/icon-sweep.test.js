@@ -82,7 +82,9 @@ const ALLOW = [
   { file: 'js/090-sync.js', key: "toast('☁️ Account created", why: TOAST },
   // js/095 / js/105 / js/130 / js/155 — toasts only.
   { file: 'js/095-gate.js', key: "toast('Password updated", why: TOAST },
-  { file: 'js/105-account.js', key: "toast('Profile saved", why: TOAST },
+  // (the ✨ "Profile saved" toast entry was removed with the Save
+  // button it celebrated — the account form autosaves now; named
+  // movement, settings-variant-b PR)
   { file: 'js/130-add.js', key: "toast(n ? 'Added '", why: TOAST },
   { file: 'js/155-authors.js', key: "toast('Added to wishlist", why: TOAST },
   // js/136 — a comment naming the modal cover button + one toast.
@@ -136,7 +138,9 @@ const ALLOW = [
   { file: 'js/170-stats.js', key: "toast('Summary copied", why: TOAST },
   // js/180 — toasts only; the Wisp variant buttons are swept.
   { file: 'js/180-settings.js', key: "toast('Accent updated", why: TOAST },
-  { file: 'js/180-settings.js', key: "btn.dataset.t === 'on'", why: TOAST }, // 👁️/🙈 visibility toast
+  // (the 👁️/🙈 Show/Hide toast entry was removed with the retired
+  // "Remove today's entry" setting it toggled — named movement,
+  // settings-variant-b PR)
   { file: 'js/180-settings.js', key: "toast('Store region:", why: TOAST },
   { file: 'js/180-settings.js', key: "toast('Shelf view:", why: TOAST },
   { file: 'js/180-settings.js', key: "toast('Backup downloaded", why: TOAST },

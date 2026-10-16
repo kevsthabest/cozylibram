@@ -235,7 +235,8 @@ function giftRetailerBlockHTML(book, kind) {
   let html = '<div class="field"><label>Buy this book</label>';
   if (set.length > 1) {
     html += '<div class="seg" id="gift-retailers">' + set.map(id =>
-      '<button data-gr="' + id + '"' + (id === chosen ? ' class="active"' : '') + '>' +
+      '<button data-gr="' + id + '"' + (id === chosen ? ' class="active"' : '') +
+      ' aria-pressed="' + (id === chosen ? 'true' : 'false') + '">' +
       GIFT_RETAILERS[id].label + '</button>').join('') + '</div>';
   }
   html += '<a class="btn block" id="gift-buy" target="_blank" rel="noopener" href="' +
@@ -247,7 +248,11 @@ function giftWireRetailerBlock(sheet, book, kind) {
   const buy = sheet.querySelector('#gift-buy');
   sheet.querySelectorAll('#gift-retailers button').forEach(b => b.addEventListener('click', () => {
     giftSetRetailerPref(kind, b.dataset.gr);
-    sheet.querySelectorAll('#gift-retailers button').forEach(x => x.classList.toggle('active', x === b));
+    sheet.querySelectorAll('#gift-retailers button').forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false'); // v590: keep state programmatic
+    });
     if (buy) {
       buy.href = giftRetailerLink(book, kind, b.dataset.gr);
       buy.textContent = 'Buy on ' + GIFT_RETAILERS[b.dataset.gr].label;
@@ -488,11 +493,13 @@ async function openGiftGivingSheet(opener) {
   }));
 }
 
-/* ---------- Settings → Circle & privacy (js/195 mounts the
- * slot inside the shared privacy panel; fillGiftSettings fills it
- * with the grants, the recipient claims, and the address access
- * log) — and the Profile surface (js/105), where fillGiftAddress
- * mounts the gift address editor itself ---------- */
+/* ---------- The gift cluster, reunited in Settings → Account
+ * (v590): giftClusterHTML mounts the See-claims seg + the slot
+ * fillGiftSettings fills with the sharing toggle, the per-friend
+ * grants, the recipient claims, and the address access log; the
+ * same cluster follows the Circle & privacy panel in the Hearth
+ * sheet. fillGiftAddress mounts the gift address editor in the
+ * account form's slot (js/105). ---------- */
 
 /* The teen storage ban (spec §7/A9): the address form is never
  * offered to a teen-band account. The band is device state —
@@ -505,9 +512,31 @@ function giftTeenBand() {
   } catch (e) { return false; }
 }
 function giftSegHTML(id, on) {
+  // v590: the privacy panel's shared builder (js/195) — same markup,
+  // same aria-pressed contract, one source.
+  if (typeof circleSegHTML === 'function') return circleSegHTML(id, on);
   return '<div class="seg" id="' + id + '">' +
-    '<button data-v="1"' + (on ? ' class="active"' : '') + '>On</button>' +
-    '<button data-v="0"' + (!on ? ' class="active"' : '') + '>Off</button></div>';
+    '<button data-v="1"' + (on ? ' class="active"' : '') + ' aria-pressed="' + (on ? 'true' : 'false') + '">On</button>' +
+    '<button data-v="0"' + (!on ? ' class="active"' : '') + ' aria-pressed="' + (!on ? 'true' : 'false') + '">Off</button></div>';
+}
+
+/* v590 (Variant B): the gift cluster's Settings-side shell — the
+ * recipient claim-visibility opt-in plus the slot fillGiftSettings
+ * fills (sharing toggle, per-friend grants, claims list, address-views
+ * log). One builder for both doors: the Settings Account group renders
+ * it directly, the Hearth privacy sheet appends it after the Circle &
+ * privacy panel. The SEE CLAIMS helper below is the single source for
+ * the setting's explanation — it states the shipped mechanics (the
+ * claims list shows book + claimer + state, per the gift RPCs); the
+ * older Hearth copy describing a "marker on your copy" was wrong and
+ * is retired with the fork. The wrapper starts hidden and is only
+ * revealed once giftSupported() confirms the server supports gifts
+ * (fail closed: pre-migration it never appears anywhere). */
+function giftClusterHTML(p, giftClaimsOn) {
+  return '<div id="' + p + '-giftwrap" hidden>' +
+    '<div class="field"><label>See claims on my wishlist</label>' + giftSegHTML(p + '-giftclaims', giftClaimsOn === true) +
+    '<p class="note">When on, you can see which of your wishlist books friends have claimed — and who claimed them — right here. Off (the default) keeps gifts a complete surprise: you see nothing about claims, anywhere.</p></div>' +
+    '<div id="' + p + '-gift-slot"></div></div>';
 }
 function giftWireSeg(root, id, initial, onChange) {
   let val = !!initial;
@@ -518,7 +547,11 @@ function giftWireSeg(root, id, initial, onChange) {
     val = v;
     const okSave = await onChange(v);
     if (okSave === false) { val = prev; return; }
-    root.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b));
+    root.querySelectorAll('#' + id + ' button').forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false'); // v590: keep state programmatic
+    });
   }));
 }
 
@@ -582,9 +615,12 @@ async function fillGiftSettings(slot) {
     html += '</div>';
   }
 
-  /* access log — pull-only disclosure (stays here; the address
-   * editor itself moved to the Profile surface) */
+  /* access log — pull-only disclosure. v590: the timing explanation
+   * (fact tier at 72h; claimer + book at resolution or 14 days) is
+   * stated at the row itself — it used to exist only inside the
+   * log's empty state, where nobody with views ever saw it. */
   html += '<div class="field"><label>Gift address views</label>' +
+    '<p class="note" style="margin:0 0 6px">When a friend views your address to send a gift, it’s logged here. Views appear 72 hours after they happen; who viewed, and which book, appears once the gift is settled or 14 days pass.</p>' +
     '<button class="btn ghost sm" id="gift-log-open">Show views</button>' +
     '<div id="gift-log-list"></div></div>';
 
@@ -734,7 +770,9 @@ async function fillGiftAddress(slot) {
       return;
     }
     if (check.status === 'warn' && !doSave.force) {
-      if (msgEl) { msgEl.textContent = check.message; msgEl.hidden = false; }
+      // v590: the pair must explain itself — what Save anyway bypasses
+      // (this one warning, nothing else) was previously nowhere stated.
+      if (msgEl) { msgEl.textContent = check.message + ' Save anyway keeps the values exactly as typed — it bypasses this check only, and the address is still saved encrypted the same way.'; msgEl.hidden = false; }
       if (anywayBtn) anywayBtn.hidden = false;
       return;
     }

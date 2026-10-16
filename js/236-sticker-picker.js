@@ -435,7 +435,8 @@ function apkUse() {
   apkCloseFitting();
   toast(cand.kind === 'upload' ? 'Photo uploaded ✨'
     : cand.kind === 'letter' ? 'Avatar cleared ✨' : 'Avatar updated ✨');
-  if (typeof view !== 'undefined' && view === 'profile' && typeof renderProfile === 'function') renderProfile();
+  // v590: the identity form lives in Settings → Account now.
+  if (typeof view !== 'undefined' && view === 'settings' && typeof renderSettings === 'function') renderSettings();
 }
 
 function openAvatarPicker() {

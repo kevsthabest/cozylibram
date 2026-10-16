@@ -10,7 +10,9 @@ function render() {
   else if (view === 'stats') renderStats();
   else if (view === 'shelf') renderShelf();
   else if (view === 'settings') renderSettings();
-  else if (view === 'profile') renderProfile();
+  // v590: the Profile view is retired — its route lands on Settings
+  // with the Account group in focus (js/180's openSettingsAccount).
+  else if (view === 'profile') { view = 'settings'; document.body.dataset.view = view; if (typeof openSettingsAccount === 'function') openSettingsAccount(); else renderSettings(); }
   else if (view === 'authors') renderAuthors();
   else if (view === 'author') renderAuthorDetail();
   else if (view === 'character') renderCharacterPage();

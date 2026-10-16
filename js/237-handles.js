@@ -180,14 +180,18 @@ function handleClaimErrorMessage(res) {
   }
 }
 
-/* ---------- the profile editor block (js/105 renderProfile) ---------- */
+/* ---------- the handle editor block (js/105 account form) ---------- */
 function handleEditorHTML(p) {
   const h = (p && p.handle) || '';
   return (h
     ? '<p class="note" style="margin:0 0 6px">Your handle is <b>@' + esc(h) + '</b> — friends see it instead of your name.</p>'
     : '<p class="note" style="margin:0 0 6px">Pick a handle if you’d rather friends see <b>@you</b> than your name. It’s also how people can find you — but only if you turn that on below.</p>') +
     '<div class="search-row"><span class="note" style="align-self:center">@</span>' +
-    '<input id="pf-handle" class="text-input" value="' + esc(h) + '" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="moon_reader">' +
+    // v590: the placeholder must read as an EXAMPLE, not a value the
+    // reader already has (census F-copy) — "e.g." plus a visually
+    // distinct sample, and a real label for the field.
+    '<label class="sr-only" for="pf-handle">Handle</label>' +
+    '<input id="pf-handle" class="text-input" value="' + esc(h) + '" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="e.g. moon_reader42">' +
     '<button type="button" class="btn" id="pf-handle-save">' + (h ? 'Change handle' : 'Claim handle') + '</button></div>' +
     '<p class="note" id="pf-handle-status" style="margin:6px 0 0">3–20 characters: lowercase letters, numbers, underscores.</p>' +
     (h ? '<button type="button" class="btn ghost sm" id="pf-handle-clear" style="margin-top:8px">Remove handle</button>' : '');
@@ -198,8 +202,8 @@ function refreshHandleEditor() {
   box.innerHTML = handleEditorHTML(loadProfile());
   wireHandleEditor();
 }
-/* The findable seg lives in the main profile form (its value rides
-   the profile save); its enabled state follows the handle. */
+/* The findable seg lives in the account form (its value rides the
+   form's autosave commit); its enabled state follows the handle. */
 function syncFindableSeg() {
   const seg = document.getElementById('pf-findable');
   if (!seg) return;
@@ -498,14 +502,15 @@ async function claimSignupHandle(user) {
   }
   if (res && ['taken', 'quarantined', 'screened', 'reserved', 'cooldown', 'invalid'].indexOf(res.error) !== -1) {
     // A typed refusal is final for this stash: clear it, say honestly
-    // what happened, and put the reader in the Profile editor to pick
+    // what happened, and put the reader in Settings → Account to pick
     // another — the claim race they lost was real (account created,
     // email confirmed, handle gone in the meantime).
     await clearSignupHandleStash();
     toast(res.error === 'taken'
-      ? 'The handle @' + stash + ' was just taken — pick yours in Profile.'
-      : handleClaimErrorMessage(res) + ' Pick yours in Profile.');
-    if (typeof go === 'function') go('profile');
+      ? 'The handle @' + stash + ' was just taken — pick yours in Settings.'
+      : handleClaimErrorMessage(res) + ' Pick yours in Settings.');
+    if (typeof openSettingsAccount === 'function') openSettingsAccount();
+    else if (typeof go === 'function') go('settings');
     return;
   }
   // 'unsupported' (a pre-v550 database) or a transient failure: leave

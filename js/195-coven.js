@@ -449,15 +449,65 @@ async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, mar
 function hideableShelves() { return Object.keys(STATUS).concat(['wishlist']); }
 function shelfLabel(s) { return s === 'wishlist' ? 'Wishlist' : (STATUS[s] || s); }
 
+/* v590: the shared On/Off seg builder for the privacy-panel family —
+ * js/243's gift cluster renders its See-claims seg from the same builder
+ * so the surfaces can never drift. Every button carries aria-pressed in
+ * step with .active (v588 census F2: state was colour + bold only, so a
+ * screen reader could not tell whether any switch was on or off). */
+function circleSegHTML(id, on) {
+  return '<div class="seg" id="' + id + '">' +
+    '<button data-v="1"' + (on ? ' class="active"' : '') + ' aria-pressed="' + (on ? 'true' : 'false') + '">On</button>' +
+    '<button data-v="0"' + (!on ? ' class="active"' : '') + ' aria-pressed="' + (!on ? 'true' : 'false') + '">Off</button></div>';
+}
+/* Keep a seg's .active classes and aria-pressed in step after a toggle. */
+function circleSegSync(root, id, activeBtn) {
+  root.querySelectorAll('#' + id + ' button').forEach(x => {
+    const on = x === activeBtn;
+    x.classList.toggle('active', on);
+    x.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+/* v590: ONE intro line for the shared panel, whichever door renders it
+ * (the v588 census found the Settings and Hearth copies worded
+ * differently for the same controls). */
+function circlePrivacyIntroHTML() {
+  return '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +
+    ' only receives what you switch on — anything off is never sent to them, not just hidden in the app.</p>';
+}
+/* v590: the content shield — the one INCOMING control that used to sit
+ * inside this sharing panel — now renders with the "What you see" trio
+ * in Settings → Reading. Its state still lives ONLY in user_state
+ * (js/230-privacy.js), never in profiles; the builder/wire pair stays in
+ * this module so the seg semantics (and the never-writes-profiles rule)
+ * remain the panel family's. */
+function shieldSegHTML(id) {
+  const shieldNow = (typeof privacyState === 'function') ? privacyState().shield : false;
+  return '<div class="field"><label>Content shield</label>' + circleSegHTML(id + '-shield', shieldNow) +
+    '<p class="note">For what you see: high-spice covers are blurred and spice ratings hidden in shared views, Discover and recommendations — and adult titles stay out of “You’d love this” and circle stats. Your own library is never changed.</p></div>';
+}
+function wireShieldSeg(root, id) {
+  if (typeof setShield !== 'function' || typeof shieldOn !== 'function') return;
+  root.querySelectorAll('#' + id + '-shield button').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.v === '1';
+    if (shieldOn() === v) return;
+    setShield(v);
+    circleSegSync(root, id + '-shield', b);
+    toast(v ? 'Content shield on' : 'Content shield off');
+  }));
+}
+
 /* v522 — the "Circle & privacy" controls, shared by the coven Privacy
  * sheet (prefix 'cc') and Settings → Circle & privacy (prefix 'st') so
  * the two surfaces can never drift. Name & avatar are identity, not a
  * toggle: they're always shared, and the panel says so instead of
- * offering a switch that couldn't keep its promise. */
+ * offering a switch that couldn't keep its promise.
+ * v590: the gift block (See claims + the js/243 slot) is built by
+ * js/243's giftClusterHTML and mounted beside the panel — in Settings
+ * it lives in the Account group with the rest of the gift cluster; in
+ * the Hearth sheet it follows the panel as before. The shield moved to
+ * Settings → Reading (shieldSegHTML above). */
 function circlePrivacyPanelHTML(priv, p, shelves) {
-  const seg = (id, on) => '<div class="seg" id="' + id + '">' +
-    '<button data-v="1"' + (on ? ' class="active"' : '') + '>On</button>' +
-    '<button data-v="0"' + (!on ? ' class="active"' : '') + '>Off</button></div>';
+  const seg = circleSegHTML;
   let html =
     '<div class="field"><label>Name &amp; avatar</label>' +
     '<p class="note" style="margin:0">Always shared — it’s how your ' + covenNameBare().toLowerCase() + ' recognises you.</p></div>' +
@@ -468,7 +518,8 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
   if (shelves && shelves.length) {
     html += '<div class="field"><label>Hide these shelves from my ' + covenNameBare().toLowerCase() + '</label>' +
       '<div class="chips" id="' + p + '-hide">' +
-      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '">' +
+      shelves.map(s => '<button class="chip' + (priv.hidden.indexOf(s) !== -1 ? ' active' : '') + '" data-shelf="' + s + '"' +
+        ' aria-pressed="' + (priv.hidden.indexOf(s) !== -1 ? 'true' : 'false') + '">' +
         shelfLabel(s) + '</button>').join('') +
       '</div></div>';
   }
@@ -489,27 +540,7 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     // and stops yours being shown. profiles is authoritative for
     // serving; js/242 mirrors it into the roamed prefs key.
     '<div class="field"><label>Marginalia</label>' + seg(p + '-marginalia', priv.marginalia !== false) +
-    '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>' +
-    // v582: Gift a Book — the recipient claim-visibility opt-in
-    // plus the slot the async gift sections (per-friend grants,
-    // claim views, address access log) fill from js/243. The
-    // gift ADDRESS editor itself lives on the Profile surface
-    // (js/105 slot, filled by js/243's fillGiftAddress). The
-    // wrapper starts hidden and is only revealed once js/243
-    // confirms the server supports gifts (fail closed: pre-migration
-    // it never appears, and nothing gift-related renders anywhere).
-    '<div id="' + p + '-giftwrap" hidden>' +
-    '<div class="field"><label>See claims on my wishlist</label>' + seg(p + '-giftclaims', priv.giftClaims === true) +
-    '<p class="note">When on, you can see which of your wishlist books friends have claimed — and who claimed them — right here. Off (the default) keeps gifts a complete surprise: you see nothing about claims, anywhere.</p></div>' +
-    '<div id="' + p + '-gift-slot"></div></div>';
-  // v524: the content shield — the one INCOMING control in this panel
-  // (what the viewer sees, not what they send). Its state lives in
-  // user_state (js/230-privacy.js), never in profiles, so it is read
-  // directly here rather than arriving via circlePrivacy().
-  const shieldNow = (typeof privacyState === 'function') ? privacyState().shield : false;
-  html +=
-    '<div class="field"><label>Content shield</label>' + seg(p + '-shield', shieldNow) +
-    '<p class="note">For what you see: high-spice covers are blurred and spice ratings hidden in shared views, Discover and recommendations — and adult titles stay out of “You’d love this” and circle stats. Your own library is never changed.</p></div>';
+    '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>';
   return html;
 }
 function wireCirclePrivacyPanel(root, priv, p) {
@@ -540,7 +571,7 @@ function wireCirclePrivacyPanel(root, priv, p) {
       state[key] = v;
       try {
         await save();
-        root.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b));
+        circleSegSync(root, id, b);
         toast(v ? msgOn : msgOff);
         if (after) after(v);
       } catch (e) {
@@ -593,18 +624,8 @@ function wireCirclePrivacyPanel(root, priv, p) {
       }).catch(() => { try { gwrap.remove(); } catch (e) {} });
     } else gwrap.remove();
   }
-  // v524: the shield seg saves through js/230 (user_state) — deliberately
-  // NOT through circleSavePrivacy, so shield state can never land in
-  // the profiles row a friend projects.
-  if (typeof setShield === 'function' && typeof shieldOn === 'function') {
-    root.querySelectorAll('#' + p + '-shield button').forEach(b => b.addEventListener('click', () => {
-      const v = b.dataset.v === '1';
-      if (shieldOn() === v) return;
-      setShield(v);
-      root.querySelectorAll('#' + p + '-shield button').forEach(x => x.classList.toggle('active', x === b));
-      toast(v ? 'Content shield on' : 'Content shield off');
-    }));
-  }
+  // v590: the shield is wired where it renders now (Settings → Reading,
+  // via wireShieldSeg) — the sharing panel no longer carries it.
   root.querySelectorAll('#' + p + '-hide .chip').forEach(ch => ch.addEventListener('click', async () => {
     const s = ch.dataset.shelf;
     const hidden = state.hidden.slice();
@@ -615,6 +636,7 @@ function wireCirclePrivacyPanel(root, priv, p) {
     try {
       await save();
       ch.classList.toggle('active', i === -1);
+      ch.setAttribute('aria-pressed', i === -1 ? 'true' : 'false'); // v590: chip state is programmatic too
     } catch (e) {
       state.hidden = prev;
       toast('Couldn’t save: ' + ((e && e.message) || e));
@@ -1132,9 +1154,11 @@ function openPrivacySheet(priv, shelves, opener) {
     giftClaims: priv.giftClaims === true,
   };
   const body =
-    '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +
-    ' only receives what you switch on — anything off is never sent to them, not just hidden.</p>' +
-    circlePrivacyPanelHTML(full, 'cc', shelves);
+    circlePrivacyIntroHTML() +
+    circlePrivacyPanelHTML(full, 'cc', shelves) +
+    // v590: the gift cluster (js/243) follows the panel here; in Settings
+    // it renders in the Account group instead. One builder, one wire path.
+    (typeof giftClusterHTML === 'function' ? giftClusterHTML('cc', full.giftClaims) : '');
   covenOpenSheet('Privacy', body, opener);
   wireCirclePrivacyPanel(document, full, 'cc');
 }

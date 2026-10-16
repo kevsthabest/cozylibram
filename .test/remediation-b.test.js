@@ -15,7 +15,11 @@
 //  6. Settings hide-chips render for every shelf, even empty+hidden.
 //  7. STATUS_BADGE covers 'wishlist' with a real bmwishlist glyph
 //     (v559: the badge of a derived wishlist book, tbr + tobuy).
-//  8. Purchase Ledger always renders the TOTAL SPENT line.
+//  8. Purchase Ledger always renders the TOTAL SPENT line. — v590
+//     (Variant B, named movement): the Ledger GROUP leaves Settings;
+//     the figure's home is Chronicles, whose library-value card is fed
+//     by the same estimateBookValue (purchase prices included). The pin
+//     now guards: no ledger in Settings + the value alive in Chronicles.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
@@ -151,18 +155,15 @@ const setLib = (books) => runInWindow(`library = ${JSON.stringify(books)}; saveL
   const wishHide = qa('#st-hide [data-shelf]').find(c => c.dataset.shelf === 'wishlist');
   ok('hidden + empty shelf shows its (active) unhide chip', !!wishHide && wishHide.classList.contains('active'));
   const spentStat = () => qa('.stat').find(el => el.querySelector('.l') && el.querySelector('.l').textContent === 'Total spent');
-  ok('ledger renders TOTAL SPENT with no priced books', !!spentStat() &&
-    spentStat().querySelector('.n').textContent === run(`formatMoney(0)`));
+  ok('v590: Settings renders no Purchase Ledger (group retired, no TOTAL SPENT stat, no by-source rows)',
+    !spentStat() && qa('.ledger-row').length === 0 &&
+    !qa('.set-group .set-tt').some(t => /Purchase Ledger/.test(t.textContent)));
   runInWindow(`library[0].purchasePrice = 12.5; library[0].purchaseSource = 'Indigo';
-    library[1].purchasePrice = 7.5; library[1].purchaseSource = 'Amazon'; renderSettings();`);
+    library[1].purchasePrice = 7.5; library[1].purchaseSource = 'Amazon';`);
+  runInWindow(`try { statsMode = 'dash'; } catch (e) {} view = 'stats'; renderStats();`);
   await tick(60);
-  ok('ledger TOTAL SPENT equals the sum of its entries', !!spentStat() &&
-    spentStat().querySelector('.n').textContent === run(`formatMoney(20)`));
-  const rowSum = qa('.ledger-row').reduce((acc, r) => {
-    const m = r.textContent.match(/([\d.]+)\s*$/);
-    return acc + (m ? parseFloat(m[1]) : 0);
-  }, 0);
-  ok('by-source rows sum to the same total', Math.abs(rowSum - 20) < 0.001);
+  ok('v590: the figures live in Chronicles — library value counts the priced books (12.50 + 7.50)',
+    !!q('.valcard .big') && q('.valcard .big').textContent.includes(run(`formatMoney(20, { digits: 0 })`)));
 
   /* ---------- 1. import keeps ids ---------- */
   runInWindow(`localStorage.clear(); library = []; tombstones = [{ id: 'x3', at: 1 }];
