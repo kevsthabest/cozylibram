@@ -85,7 +85,14 @@ const syncJs = read('js/090-sync.js');
 const addJs = read('js/130-add.js');
 ok('vendor: supabase lib is same-origin', /SB_LIB_URL = 'js\/vendor\/supabase\.min\.js'/.test(syncJs));
 ok('vendor: supabase lib has no CDN url', !/cdn\.jsdelivr\.net|unpkg\.com/.test(syncJs));
-ok('vendor: zxing reader is same-origin', /js\/vendor\/zxing\/es\/reader\.js/.test(addJs));
+// R1-class repoint created by R4 (migration plan §9.3, CONSTRAINTS rule 4):
+// js/130 is a real ES module since phase 2 batch 7, so its dynamic-import
+// specifier is module-relative ('./vendor/zxing/es/reader.js') where the
+// classic script's was document-relative ('./js/vendor/zxing/es/reader.js').
+// Both spellings resolve to the identical same-origin vendored file, so the
+// pin accepts exactly those two quoted specifiers — any other origin or
+// path still fails. Assertion text and intent unchanged.
+ok('vendor: zxing reader is same-origin', /['"](?:\.\/js\/vendor\/zxing\/es\/reader\.js|\.\/vendor\/zxing\/es\/reader\.js)['"]/.test(addJs));
 ok('vendor: zxing has no CDN url', !/cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fastly\.jsdelivr\.net|unpkg\.com/.test(addJs));
 ok('vendor: supabase file exists', fs.existsSync(path.join(ROOT, 'js/vendor/supabase.min.js')));
 ok('vendor: zxing files exist',
