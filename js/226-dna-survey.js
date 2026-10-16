@@ -364,10 +364,15 @@ function openWarningPrefs() {
     '<div class="survey-inner">' +
     '<p class="survey-title">Content warning preferences</p>' +
     '<p class="note">Private to your account — they sync across your devices and are never shared with anyone. These shape how warnings appear for you.</p>' +
+    // v590: a text filter over the 60 category pills (30 categories ×
+    // the two intent lists below) — both lists narrow together by
+    // category name; the Save/Cancel model is unchanged.
+    '<div class="field" style="margin-top:10px"><label class="sr-only" for="wpFilter">Filter warning categories</label>' +
+    '<input id="wpFilter" class="text-input" type="search" placeholder="Filter warning categories…" autocomplete="off"></div>' +
     '<div class="survey-sec"><div class="portrait-label">How much detail?</div>' +
     '<div class="seg" id="wpDetail" style="grid-template-columns:repeat(3,1fr)">' +
     [['gentle', 'Gentle'], ['detailed', 'Detailed'], ['on-request', 'On request']].map(function (o) {
-      return '<button data-wd="' + o[0] + '" class="' + (detail === o[0] ? 'active' : '') + '">' + o[1] + '</button>';
+      return '<button data-wd="' + o[0] + '" class="' + (detail === o[0] ? 'active' : '') + '" aria-pressed="' + (detail === o[0] ? 'true' : 'false') + '">' + o[1] + '</button>';
     }).join('') + '</div></div>' +
     '<div class="survey-sec"><div class="portrait-label">Surface first <span class="note">always shown prominently</span></div>' +
     '<div id="wpProminent"><p class="note">Loading…</p></div></div>' +
@@ -404,28 +409,48 @@ function openWarningPrefs() {
   sheet.querySelectorAll('#wpDetail button').forEach(function (b) {
     b.addEventListener('click', function () {
       detail = b.getAttribute('data-wd');
-      sheet.querySelectorAll('#wpDetail button').forEach(function (x) { x.classList.toggle('active', x === b); });
+      sheet.querySelectorAll('#wpDetail button').forEach(function (x) {
+        var on = x === b;
+        x.classList.toggle('active', on);
+        x.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
     });
   });
   primeWarningTaxonomy();
+  var filterQ = '';
+  // v590: the filter hides non-matching chips in place (both lists
+  // together) — selections are never rebuilt by filtering, so a pick
+  // made before filtering survives clearing the filter.
+  var applyFilter = function () {
+    sheet.querySelectorAll('#wpProminent .survey-chip, #wpExcluded .survey-chip').forEach(function (c) {
+      c.style.display = (!filterQ || c.textContent.toLowerCase().indexOf(filterQ) !== -1) ? '' : 'none';
+    });
+  };
   var fill = function (boxId, group) {
     warnOptions().then(function (rows) {
       cacheWarnTaxonomy(rows);
       var box = sheet.querySelector('#' + boxId);
       if (!box || !box.isConnected) return;
       box.innerHTML = rows.length ? '<div class="survey-chips">' + rows.map(function (r) {
-        return '<button class="chip survey-chip' + (sel[group][r.id] ? ' on' : '') + '" data-wg="' + group + '" data-wid="' + esc(r.id) + '">' + esc(r.label) + '</button>';
+        var on = !!sel[group][r.id];
+        return '<button class="chip survey-chip' + (on ? ' on' : '') + '" data-wg="' + group + '" data-wid="' + esc(r.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(r.label) + '</button>';
       }).join('') + '</div>' : '<p class="note">Warning list needs internet — try again when you\u2019re back online.</p>';
+      applyFilter();
     });
   };
   fill('wpProminent', 'prominent');
   fill('wpExcluded', 'excluded');
+  var filterEl = sheet.querySelector('#wpFilter');
+  if (filterEl) filterEl.addEventListener('input', function () {
+    filterQ = filterEl.value.trim().toLowerCase();
+    applyFilter();
+  });
   sheet.addEventListener('click', function (e) {
     var c = e.target && e.target.closest ? e.target.closest('.survey-chip') : null;
     if (c) {
       var g = c.getAttribute('data-wg'), id = c.getAttribute('data-wid');
-      if (sel[g][id]) { delete sel[g][id]; c.classList.remove('on'); }
-      else { sel[g][id] = 1; c.classList.add('on'); }
+      if (sel[g][id]) { delete sel[g][id]; c.classList.remove('on'); c.setAttribute('aria-pressed', 'false'); }
+      else { sel[g][id] = 1; c.classList.add('on'); c.setAttribute('aria-pressed', 'true'); }
     }
   });
   sheet.querySelector('#wpCancel').addEventListener('click', close);

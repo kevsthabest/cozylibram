@@ -262,21 +262,24 @@ const NOW = new Date().toISOString();
   probe('renderRecoResults([{ c: ' + JSON.stringify(candBase) + ', sim: 0.9 }], [], true, ' + JSON.stringify(candMap) + ')');
   ok('Discover: shield off = no blur (v522 behavior)', recoBox.querySelectorAll('.shield-blur').length === 0);
 
-  /* ---------- E. the privacy panel shield toggle ---------- */
+  /* ---------- E. the shield toggle (v590: moved out of the sharing
+     panel into Settings → Reading, with the "What you see" trio — it is
+     the one INCOMING control; its user_state home is unchanged) ---------- */
   probe('setShield(true)');
-  const panelPriv = { share: true, hidden: [], bio: true, activity: false };
-  const panelHTML = probe('circlePrivacyPanelHTML(' + JSON.stringify(panelPriv) + ', "st", [])');
-  ok('panel has the shield toggle', panelHTML.indexOf('id="st-shield"') !== -1 && panelHTML.indexOf('Content shield') !== -1);
+  const shieldHTML = probe('shieldSegHTML("rd")');
+  ok('shield seg renders with its label', shieldHTML.indexOf('id="rd-shield"') !== -1 && shieldHTML.indexOf('Content shield') !== -1);
+  const panelHTML2 = probe('circlePrivacyPanelHTML(' + JSON.stringify({ share: true, hidden: [], bio: true, activity: false }) + ', "st", [])');
+  ok('the sharing panel no longer carries the shield (it is not a sharing posture)', panelHTML2.indexOf('Content shield') === -1);
   const mount = window.document.createElement('div');
-  mount.innerHTML = panelHTML;
+  mount.innerHTML = shieldHTML;
   window.document.body.appendChild(mount);
-  probe('wireCirclePrivacyPanel(document.body.lastElementChild, ' + JSON.stringify(panelPriv) + ', "st")');
+  probe('wireShieldSeg(document.body.lastElementChild, "rd")');
   const rowBefore = JSON.stringify(stub.db.profiles[ME]);
-  mount.querySelector('#st-shield [data-v="0"]').click(); await tick(3);
-  ok('panel: shield toggle writes user_state state', probe('privacyState()').shield === false);
-  ok('panel: shield toggle NEVER writes the profiles row', JSON.stringify(stub.db.profiles[ME]) === rowBefore);
-  mount.querySelector('#st-shield [data-v="1"]').click(); await tick(3);
-  ok('panel: shield toggle back on', probe('privacyState()').shield === true);
+  mount.querySelector('#rd-shield [data-v="0"]').click(); await tick(3);
+  ok('shield toggle writes user_state state', probe('privacyState()').shield === false);
+  ok('shield toggle NEVER writes the profiles row', JSON.stringify(stub.db.profiles[ME]) === rowBefore);
+  mount.querySelector('#rd-shield [data-v="1"]').click(); await tick(3);
+  ok('shield toggle back on', probe('privacyState()').shield === true);
 
   /* ---------- F. user_state privacy section sync ---------- */
   resetPrivacy();
@@ -310,11 +313,15 @@ const NOW = new Date().toISOString();
   const suState = probe('privacyState()');
   ok('signup records the band on-device at once (shield on, profiles write pending)', suState.band === 'teen' && suState.shield === true && suState.teenDefaultsApplied === false);
 
-  probe('renderProfile()'); await tick(2);
-  ok('profile shows the band picker with teen active', !!window.document.querySelector('#pf-band [data-b="teen"].active'));
-  window.document.querySelector('#pf-band [data-b="adult"]').click();
-  window.document.getElementById('pf-save').click(); await tick(3);
-  ok('profile save updates the band via user_state', probe('privacyState()').band === 'adult');
+  // v590: the account form renders in Settings only when signed in
+  // (the old profile view rendered signed-out too). Sign back in as
+  // the test user — the band under test is device state, not the
+  // profile's, so whose form it is doesn't matter.
+  useAs(ME);
+  probe('renderSettings()'); await tick(2);
+  ok('account form shows the band picker with teen active', !!window.document.querySelector('#pf-band [data-b="teen"].active'));
+  window.document.querySelector('#pf-band [data-b="adult"]').click(); await tick(3);
+  ok('band picker updates the band via user_state (instant apply in the account form)', probe('privacyState()').band === 'adult');
   ok('profile row still carries NO band', !('band' in stub.db.profiles[ME]) && !('age_band' in stub.db.profiles[ME]));
 
   /* ---------- H. friend preview modal: the cover is a shared-view cover ---------- */

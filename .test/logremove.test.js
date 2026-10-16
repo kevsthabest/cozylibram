@@ -1,4 +1,7 @@
-// "Remove today's entry" button + Settings toggle tests (v68).
+// "Remove today's entry" button tests (v68). v590 (Variant B, named
+// movement): the Settings Show/Hide toggle is RETIRED — the button is
+// contextual (it appears only on days with an entry to remove), so the
+// gate is hardcoded Show and a previously stored 'off' no longer hides it.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
@@ -34,16 +37,13 @@ runInWindow(`localStorage.clear();
   // r2: no entry today
   library.push(M('r2', 'Clean Book', { status: 'read', pageCount: 200, progress: 200 }));`);
 
-// 1. hidden by default
+// 1. v590: no gate — the affordance is hardcoded on (context is the gate)
 runInWindow(`window.__en = logRemoveEnabled();`);
-ok('toggle defaults to hidden', window.__en === false);
+ok('gate retired: logRemoveEnabled is hardcoded on', window.__en === true);
+runInWindow(`localStorage.setItem('spicyshelves.logremove', 'off'); window.__en2 = logRemoveEnabled();`);
+ok('a stored off from the retired setting no longer hides the button', window.__en2 === true);
 runInWindow(`openDetail('r1');`);
-ok('no remove button when toggle is off', q('#m-rmlog') === null);
-closeModal();
-
-// 2. enabling shows the button with the page count
-runInWindow(`localStorage.setItem('spicyshelves.logremove', 'on'); openDetail('r1');`);
-ok('button appears when toggle is on', !!q('#m-rmlog'));
+ok('button appears whenever an entry exists', !!q('#m-rmlog'));
 ok('button names the page count', (q('#m-rmlog').textContent || '').includes('10 pages'));
 
 // 3. removing clears the entry, rolls progress back, and Save does not re-log
@@ -62,16 +62,9 @@ runInWindow(`openDetail('r2');`);
 ok('no button without a today entry', q('#m-rmlog') === null);
 closeModal();
 
-// 5. settings toggle flips the preference
+// 5. v590: the Settings toggle is gone (retired with the setting)
 runInWindow(`renderSettings();`);
-const onBtn = q('#th-rmentry button[data-t="on"]');
-const offBtn = q('#th-rmentry button[data-t="off"]');
-ok('settings shows the toggle', !!onBtn && !!offBtn);
-ok('on is active after enabling', onBtn.classList.contains('active'));
-offBtn.click();
-runInWindow(`window.__v = localStorage.getItem('spicyshelves.logremove');`);
-ok('toggle persists off', window.__v === 'off');
-ok('off becomes active', q('#th-rmentry button[data-t="off"]').classList.contains('active'));
+ok('settings no longer offers the Show/Hide toggle', q('#th-rmentry') === null);
 })().then(() => {
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

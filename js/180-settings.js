@@ -2,10 +2,18 @@
 
 /* ---------------- backup view ---------------- */
 /* ---------------- settings groups (v117) ---------------- */
-// User's IA: Account / Library / Appearance / Reading / Offline /
-// Privacy / About. (Metadata group removed v476 — enrichment now runs
-// automatically in the background; see autoEnrichSweep + boot sequence.). Groups render directly as <details> cards (no post-hoc DOM
-// wrapping); open/closed state persists per device in spicyshelves.setgroups.
+// IA (v590, Variant B — one Account & Settings surface; the separate
+// Profile view is gone): Account / Library / Reading / Appearance /
+// Offline / Privacy / About. The Account group leads with sign-in,
+// then the identity form (js/105's accountFormHTML), the reunited gift
+// cluster (js/243), and Circle & privacy (the shared js/195 panel).
+// (Metadata group removed v476 — enrichment now runs automatically in
+// the background; see autoEnrichSweep + boot sequence.)
+// Groups render directly as <details> cards (no post-hoc DOM
+// wrapping). v590: groups START COLLAPSED — Account open, the rest
+// closed — and the choice is NOT persisted: the old per-device
+// open-state record (spicyshelves.setgroups, a frozen v518 key) is no
+// longer read or written, so first paint is never a 97-control wall.
 function setGroupShell(iconName, title, tag, inner, idx, openIdx) {
   return '<details class="set-group"' + (openIdx.indexOf(idx) !== -1 ? ' open' : '') + '>' +
     '<summary class="section serif"><span class="set-st"><span class="set-tt">' +
@@ -220,6 +228,17 @@ function tsRevert() {
   applyTheme();
   renderSettings();
 }
+/* v590: every route that used to open the Profile view (the menu's
+ * Profile entry, the deferred handle claim, the retired 'profile'
+ * view) lands here instead: Settings, with the Account group — which
+ * always starts open — holding the identity form. The flag asks the
+ * next renderSettings to scroll the form into view, once. */
+let settingsAccountFocus = false;
+function openSettingsAccount() {
+  settingsAccountFocus = true;
+  go('settings');
+}
+
 /* S1 (settings review): slim sync-status line for the Settings header --
    answers "is my library safe?" -- reuses the last-sync timestamp from 090-sync. */
 function syncStatusLine() {
@@ -248,8 +267,11 @@ function renderSettings() {
     '<p class="note">Sign in to keep your library safe and synced across devices.</p>' +
     '<p class="note" id="ac-status">Checking…</p>' +
     '<div id="ac-signedout">' +
-    '<div class="search-row"><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
-    '<input id="ac-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password"></div>' +
+    // v590: real labels for the sign-in fields (they were placeholder-
+    // only — a screen reader announced nothing). Visually hidden; the
+    // placeholders stay as the visible hint.
+    '<div class="search-row"><label class="sr-only" for="ac-email">Email</label><input id="ac-email" type="email" class="text-input" placeholder="Email" autocomplete="email">' +
+    '<label class="sr-only" for="ac-pass">Password</label><input id="ac-pass" type="password" class="text-input" placeholder="Password" autocomplete="current-password"></div>' +
     '<div class="search-row"><button class="btn" id="ac-signin">Sign in</button>' +
     '<button class="btn ghost" id="ac-signup">Create account</button></div>' +
     (window.isSecureContext
@@ -264,15 +286,15 @@ function renderSettings() {
     '<button class="btn ghost" id="ac-logout">Sign out</button></div>' +
     '<p class="note" id="ac-last"></p></div>';
 
-  // v550 dedupe: the signed-in card above is the identity block (name
-  // + email) — this row no longer repeats the name. Its line is the
-  // handle: @handle when set, else the prompt to set one.
-  const htmlProfile =
-    '<div class="pf-row">' + avatarHTML(prof, 'st-avatar') +
-    '<div><div class="st-pname">' + (prof.handle ? esc('@' + prof.handle) : 'Set a handle') + '</div>' +
-    '<button class="btn ghost sm" id="st-edit-profile">Edit profile</button></div></div>' +
-    '<p class="note">Your picture shows up for your ' + esc(covenName().toLowerCase()) +
-    ' — and your handle instead of your name, when you set one.</p>';
+  // v590 (Variant B): the identity form IS the Account group's second
+  // block — the old "Profile & avatar" shortcut row (avatar + @handle
+  // line + Edit profile button) is gone because the form it pointed at
+  // now lives right here (js/105's accountFormHTML). The gift cluster
+  // (js/243's giftClusterHTML: See claims + grants + claims + views
+  // log) follows it contiguously; the Circle & privacy panel closes
+  // the group (assembled in the groups array below).
+  const htmlAccountForm = (signedIn() && typeof accountFormHTML === 'function') ? accountFormHTML() : '';
+  const htmlGiftCluster = (signedIn() && typeof giftClusterHTML === 'function') ? giftClusterHTML('st', false) : '';
 
   /* ---- Library ---- */
   const htmlBackup =
@@ -280,7 +302,9 @@ function renderSettings() {
     '<button class="btn block" id="bk-export">' + icon('download') + ' Export library (' + library.length + ' books)</button>' +
     '<button class="btn ghost block" id="bk-import">' + icon('upload') + ' Import from file</button>' +
     '<input type="file" id="bk-file" accept="application/json" style="display:none">' +
-    '<p class="note">Import merges by ISBN — books you already have are skipped.</p>' +
+    // v590: the "merges by ISBN" helper sentence lives ONCE — in the
+    // import hub's own copy (js/132); the duplicate that stood here is
+    // removed (census F-copy: three import doors, one repeated line).
     importHubHTML('im');
 
   // v536 (audit #9): manual door for the library metadata check
@@ -316,7 +340,7 @@ function renderSettings() {
     '</div><p class="note">The gallery suggests pairings per theme — this stays for free choice.</p></div>' +
     '<div class="field"><label>Book pull-out animation</label><div class="seg" id="th-anim" style="grid-template-columns:1fr 1fr">' +
     ['on', 'off'].map(t =>
-      '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '">' +
+      '<button data-t="' + t + '" class="' + (animEnabled() === (t === 'on') ? 'active' : '') + '" aria-pressed="' + (animEnabled() === (t === 'on') ? 'true' : 'false') + '">' +
       (t === 'on' ? icon('sparkles') + ' On' : icon('pause') + ' Off') + '</button>').join('') +
     '</div></div>';
 
@@ -324,14 +348,14 @@ function renderSettings() {
     '<p class="note">Wishlist books show “Where to buy” links for stores in your region.</p>' +
     '<div class="field"><label>Storefront region</label><div class="seg" id="th-region" style="grid-template-columns:1fr 1fr">' +
     ['auto'].concat(STORE_REGION_KEYS).map(r =>
-      '<button data-r="' + r + '" class="' + (storeRegionSetting() === r ? 'active' : '') + '">' +
+      '<button data-r="' + r + '" class="' + (storeRegionSetting() === r ? 'active' : '') + '" aria-pressed="' + (storeRegionSetting() === r ? 'true' : 'false') + '">' +
       (r === 'auto' ? icon('globe') + ' Auto' : STORE_REGIONS[r].label) + '</button>').join('') +
     '</div></div>' +
     // v432: visible shelf view preference (2D/3D) — the v407 one-way trap proved
     // invisible preferences are a design smell.
     '<div class="field"><label>Shelf view</label><div class="seg" id="th-shelfview" style="grid-template-columns:1fr 1fr">' +
     ['3d', '2d'].map(m =>
-      '<button data-m="' + m + '" class="' + (shelfViewMode() === m ? 'active' : '') + '">' +
+      '<button data-m="' + m + '" class="' + (shelfViewMode() === m ? 'active' : '') + '" aria-pressed="' + (shelfViewMode() === m ? 'true' : 'false') + '">' +
       (m === '3d' ? icon('cube') + ' 3D' : icon('shelf') + ' 2D') + '</button>').join('') +
     '</div></div>' +
     '<p class="note">Switch between the 3D bookshelf and the classic 2D view.</p>' +
@@ -350,16 +374,12 @@ function renderSettings() {
     '<span class="chk-hint">On-device book detection for tighter cover crops. Turn off if you see odd permission prompts.</span></label>';
 
   /* ---- Reading ---- */
+  // v590: the "Remove today's entry" Show/Hide SETTING is retired — the
+  // button is contextual (it exists only on days with an entry to
+  // remove), so its gate is hardcoded Show in js/040 and no control
+  // renders here. What remains is the reading-preferences block proper
+  // (moved out of the Library group, where it never belonged).
   const htmlReadLog =
-    // v535 (UX P2-7): the label was the feature's internal name, shouted
-    // by the uppercase field-label CSS — it names the actual button it
-    // controls, matching the note below.
-    '<div class="field"><label>Remove today&rsquo;s entry button</label><div class="seg" id="th-rmentry" style="grid-template-columns:1fr 1fr">' +
-    ['off', 'on'].map(t =>
-      '<button data-t="' + t + '" class="' + (logRemoveEnabled() === (t === 'on') ? 'active' : '') + '">' +
-      (t === 'on' ? icon('eye') + ' Show' : icon('eyeoff') + ' Hide') + '</button>').join('') +
-    '</div></div>' +
-    '<p class="note">When shown, a book&rsquo;s detail sheet gets a &ldquo;Remove today&rsquo;s entry&rdquo; button on days with logged pages &mdash; handy for cleaning up mistaken entries.</p>' +
     // v468: Book Portrait — survey + nudge toggles, warning preferences
     setSub('Book Portrait') +
     '<label class="checkline"><input type="checkbox" id="st-dnasurvey" ' +
@@ -382,7 +402,7 @@ function renderSettings() {
         if (typeof tropeSource !== 'function' || typeof TROPE_SOURCES === 'undefined') return '';
         return '<div class="field" style="margin-top:10px"><label>Trope suggestions</label><div class="seg" id="trope-srcseg" style="grid-template-columns:repeat(4,1fr)">' +
           TROPE_SOURCES.map(t =>
-            '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '">' +
+            '<button data-t="' + t + '" class="' + (tropeSource() === t ? 'active' : '') + '" aria-pressed="' + (tropeSource() === t ? 'true' : 'false') + '">' +
             ((typeof TROPE_SRC_LABELS !== 'undefined' && TROPE_SRC_LABELS[t]) || t) + '</button>').join('') +
           '</div></div>' +
           '<p class="note">Where a book&rsquo;s trope tags come from: the story&rsquo;s own keywords, Hardcover&rsquo;s community tags, both, or off entirely.</p>';
@@ -410,17 +430,15 @@ function renderSettings() {
     '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-spoilers" ' +
     (typeof spoilersHidden === 'function' && spoilersHidden() ? 'checked' : '') + '> ' +
     'Hide spoilers <span class="note">(character fates, key moments — tap to reveal)</span></label>';
+  // v590: Circle & privacy moved INTO the Account group (it closes the
+  // group, under the gift cluster — see the groups array). The
+  // read-only "The Hearth sharing" summary and the "Manage sharing"
+  // teleport button are CUT: the live panel is right there, and the
+  // Hearth overlay remains the Hearth's own door. Hide spoilers moved
+  // to Reading (with the shield + warning prefs — the "What you see"
+  // trio). Privacy keeps the account-level preferences.
   const htmlPrivacy =
-    // v522: Circle & privacy — the live sharing controls (same shared
-    // panel as the Hearth's Privacy sheet, js/195), filled in async below.
-    setSub('Circle & privacy') +
-    '<p class="note" style="margin:0 2px 10px">Your circle only receives what you switch on — anything off is never sent to them, not just hidden in the app.</p>' +
-    '<div id="st-circle-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
-    setSub('The Hearth sharing') +
-    '<div id="st-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>' +
-    '<button class="btn ghost block" id="st-privacy-go">' + icon('eyeoff') + ' Manage sharing</button>' +
     setSub('Preferences') +
-    htmlSpoiler +
     // v118: usage-analytics opt-out. Default ON for signed-in users; never
     // tracks guests, never collects book content — see docs/ANALYTICS.md.
     '<label class="checkline" style="margin-top:10px"><input type="checkbox" id="st-analytics" ' +
@@ -442,52 +460,35 @@ function renderSettings() {
     '<p class="note">Cover grid CSS (home server): <b id="ap-css-srv">checking…</b></p>' +
     '</details>';
 
-  let openIdx = [0];
-  try {
-    const saved = JSON.parse(localStorage.getItem('spicyshelves.setgroups') || 'null');
-    if (Array.isArray(saved)) openIdx = saved;
-  } catch (e) {}
+  // v590: start-collapsed rule — the Account group opens, every other
+  // group starts closed, on every render. (The persisted per-device
+  // open-state is retired; the frozen key stays stored, unread.)
+  const openIdx = [0];
 
-  // v476: ledger uses the shared estimateBookValue() (defined in 170-stats.js),
-  // so Settings and Stats always agree. No manual price entry — estimates are
-  // automatic; purchasePrice is preferred when the user previously entered one.
-  var ledgerTotal = 0, ledgerCount = 0, ledgerBySource = {}, listTotal = 0;
-  try {
-    (typeof library !== 'undefined' ? library : []).forEach(function(b) {
-      var hasPurchase = (b.purchasePrice != null && !isNaN(b.purchasePrice));
-      if (hasPurchase) {
-        ledgerTotal += b.purchasePrice;
-        ledgerCount++;
-        var src = b.purchaseSource || 'Unknown';
-        ledgerBySource[src] = (ledgerBySource[src] || 0) + b.purchasePrice;
-      }
-      if (typeof estimateBookValue === 'function') {
-        listTotal += estimateBookValue(b).value;
-      }
-    });
-  } catch (e) {}
-  var ledgerSources = Object.keys(ledgerBySource).sort(function(a, b) { return ledgerBySource[b] - ledgerBySource[a]; });
-  var htmlLedger =
-    '<div class="stat-row">' +
-    '<div class="stat"><div class="n">' + esc(formatMoney(listTotal)) + '</div><div class="l">Est. value</div></div>' +
-    // v534: Total spent renders unconditionally again (pre-v476
-    // behavior) — making it conditional on a priced book existing
-    // silently dropped the line from the ledger entirely.
-    '<div class="stat"><div class="n">' + esc(formatMoney(ledgerTotal)) + '</div><div class="l">Total spent</div></div>' +
-    '</div>' +
-    '<p class="note">A rough estimate — actual prices vary.</p>' +
-    (ledgerSources.length ? '<div class="field"><label>By source</label>' +
-      ledgerSources.map(function(src) {
-        return '<div class="ledger-row"><span>' + esc(src) + '</span><span>' + esc(formatMoney(ledgerBySource[src])) + '</span></div>';
-      }).join('') + '</div>' : '');
+  // v590: the Purchase Ledger GROUP leaves Settings — it was one
+  // read-only figure wearing a group; the numbers live in Chronicles
+  // (js/170's library-value card reads the same estimateBookValue).
+  // The Reading group: reading preferences (out of Library) + the
+  // "What you see" trio gathered adjacently — the content shield
+  // (js/195's shieldSegHTML; its user_state home is unchanged), Hide
+  // spoilers (out of Privacy), and the warning-preferences entry
+  // (inside htmlReadLog's Book Portrait block above).
+  const htmlReading = htmlReadLog + setSub('What you see') +
+    (typeof shieldSegHTML === 'function' ? shieldSegHTML('rd') : '') +
+    htmlSpoiler;
 
   const groups = [
-    ['user', 'Account', 'Sign in, profile & sync',
-      '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin + setSub('Profile & avatar') + htmlProfile],
+    ['user', 'Account', 'Sign in, profile & gifts',
+      '<h3 class="set-sub serif" id="ac-subhead">Login</h3>' + htmlLogin +
+      (htmlAccountForm ? setSub('Your details') + htmlAccountForm : '') +
+      (htmlGiftCluster ? setSub('Gift a Book') + htmlGiftCluster : '') +
+      setSub('Circle & privacy') +
+      (typeof circlePrivacyIntroHTML === 'function' ? circlePrivacyIntroHTML() : '') +
+      '<div id="st-circle-privacy"><div class="skel"></div><div class="skel" style="width:70%"></div></div>'],
     ['covers', 'Library', 'Backups, imports & data',
-      setSub('Backup & export') + htmlBackup + setSub('Metadata check') + htmlMetaCheck + setSub('Reading log') + htmlReadLog + setSub('Data management') + htmlData],
-    ['tobuy', 'Purchase Ledger', 'Spending & collection value',
-      setSub('Ledger') + htmlLedger],
+      setSub('Backup & export') + htmlBackup + setSub('Metadata check') + htmlMetaCheck + setSub('Data management') + htmlData],
+    ['reading', 'Reading', 'Surveys, nudges & what you see',
+      htmlReading],
     ['sparkles', 'Appearance', 'Theme & display',
       setSub('Theme') + htmlTheme + setSub('Display') + htmlDisplay],
     // v476: Metadata group removed — Hardcover auto-enrich, page-count
@@ -511,15 +512,18 @@ function renderSettings() {
     groups.map((g, i) => setGroupShell(g[0], g[1], g[2], g[3], i, openIdx)).join('')
   );
 
-  // v117: persist open groups
-  document.querySelectorAll('#view > .set-group').forEach(det => {
-    det.addEventListener('toggle', () => {
-      const open = [];
-      document.querySelectorAll('#view > .set-group').forEach((d, k) => { if (d.open) open.push(k); });
-      try { localStorage.setItem('spicyshelves.setgroups', JSON.stringify(open)); } catch (e) {}
-    });
-  });
+  // v590: no open-state persistence anymore (start-collapsed rule).
 
+  // v590: the account form (js/105) wires itself — autosave commit,
+  // handle editor, gift address slot.
+  if (signedIn() && typeof wireAccountForm === 'function') wireAccountForm(document.getElementById('view'));
+  // Arriving via the menu's Profile entry (or the retired 'profile'
+  // route): bring the identity form into view, once.
+  if (settingsAccountFocus) {
+    settingsAccountFocus = false;
+    const firstInput = document.getElementById('pf-first');
+    if (firstInput && firstInput.scrollIntoView) { try { firstInput.scrollIntoView({ block: 'start' }); } catch (e) {} }
+  }
 
   // Appearance wiring
   document.getElementById('st-back').addEventListener('click', () => {
@@ -545,18 +549,12 @@ function renderSettings() {
   document.querySelectorAll('#th-anim button').forEach(btn =>
     btn.addEventListener('click', () => {
       try { localStorage.setItem('spicyshelves.animation', btn.dataset.t); } catch (e) {}
-      document.querySelectorAll('#th-anim button').forEach(x => x.classList.toggle('active', x === btn));
-    }));
-  document.querySelectorAll('#th-rmentry button').forEach(btn =>
-    btn.addEventListener('click', () => {
-      try { localStorage.setItem('spicyshelves.logremove', btn.dataset.t); } catch (e) {}
-      document.querySelectorAll('#th-rmentry button').forEach(x => x.classList.toggle('active', x === btn));
-      toast(btn.dataset.t === 'on' ? '“Remove today’s entry” visible 👁️' : '“Remove today’s entry” hidden 🙈');
+      document.querySelectorAll('#th-anim button').forEach(x => { const on = x === btn; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     }));
   document.querySelectorAll('#th-region button').forEach(btn =>
     btn.addEventListener('click', () => {
       try { localStorage.setItem('spicyshelves.storeRegion', btn.dataset.r); } catch (e) {}
-      document.querySelectorAll('#th-region button').forEach(x => x.classList.toggle('active', x === btn));
+      document.querySelectorAll('#th-region button').forEach(x => { const on = x === btn; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
       toast('Store region: ' + (btn.dataset.r === 'auto' ? 'auto-detect 🌍' : STORE_REGIONS[btn.dataset.r].label));
     }));
 
@@ -564,7 +562,7 @@ function renderSettings() {
   document.querySelectorAll('#th-shelfview button').forEach(btn =>
     btn.addEventListener('click', () => {
       shelfSetViewMode(btn.dataset.m);
-      document.querySelectorAll('#th-shelfview button').forEach(x => x.classList.toggle('active', x === btn));
+      document.querySelectorAll('#th-shelfview button').forEach(x => { const on = x === btn; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
       toast('Shelf view: ' + (btn.dataset.m === '3d' ? '3D 📚' : '2D 📖'));
     }));
 
@@ -688,9 +686,9 @@ function renderSettings() {
     await cloudFirstSync({ announce: true }); // v144: quiet unless it changed something
   });
   refreshAccountUI();
-  // v117: profile + privacy shortcuts
-  document.getElementById('st-edit-profile').addEventListener('click', () => go('profile'));
-  document.getElementById('st-privacy-go').addEventListener('click', () => go('coven'));
+  // v590: the Edit-profile and Manage-sharing shortcut buttons are gone
+  // with the surfaces they pointed at (the form and the panel are both
+  // on this page now).
   // v118: analytics opt-out
   // v346: spoiler toggle
   document.getElementById('st-spoilers').addEventListener('change', e => {
@@ -738,27 +736,6 @@ function renderSettings() {
     const d = document.getElementById('st-analytics-detail');
     if (d) d.hidden = !d.hidden;
   });
-  // v117: privacy summary (v522: the live controls are the Circle &
-  // privacy panel above; this box stays as the at-a-glance summary)
-  (async () => {
-    const box = document.getElementById('st-privacy');
-    if (!box) return;
-    const cname = covenName().toLowerCase();
-    if (!cloudUser || typeof circlePrivacy !== 'function') {
-      box.innerHTML = '<p class="note">Sign in to share your shelves with your ' + esc(cname) + '.</p>';
-      return;
-    }
-    try {
-      const priv = await circlePrivacy();
-      const hidden = (priv.hidden || []).map(s => STATUS[s] || s);
-      box.innerHTML = '<p class="note">' + (priv.share
-        ? 'Your ' + esc(cname) + ' can see your shelves' + (hidden.length ? ' except: ' + esc(hidden.join(', ')) : '') + '.'
-        : 'Sharing is off — nobody can see your books.') + '</p>';
-    } catch (e) {
-      box.innerHTML = '<p class="note">Couldn\'t load sharing status.</p>';
-    }
-  })();
-
   // v522: Circle & privacy panel — live toggles, same controls (and same
   // save path) as the Hearth's Privacy sheet.
   (async () => {
@@ -777,7 +754,21 @@ function renderSettings() {
       // books and later emptied lost its only Settings unhide chip.
       const shelves = hideableShelves();
       box.innerHTML = circlePrivacyPanelHTML(priv, 'st', shelves);
-      wireCirclePrivacyPanel(box, priv, 'st');
+      // v590: wire against the whole view — the gift cluster the wire
+      // reveals and fills now lives in the Account group beside the
+      // panel, not inside this box.
+      wireCirclePrivacyPanel(document.getElementById('view'), priv, 'st');
+      // The cluster rendered before the saved state was known; bring
+      // its See-claims seg in step with what actually loaded.
+      const gcSeg = document.getElementById('st-giftclaims');
+      if (gcSeg) gcSeg.querySelectorAll('button').forEach(x => {
+        const on = (x.dataset.v === '1') === (priv.giftClaims === true);
+        x.classList.toggle('active', on);
+        x.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      // v590: the content shield renders in Reading now — wire it here,
+      // where the privacy state has just been loaded.
+      if (typeof wireShieldSeg === 'function') wireShieldSeg(document.getElementById('view'), 'rd');
       // v526: Blocked readers — my own block list lives under the same
       // panel; renderBlockedReaders (js/195) renders nothing at all
       // when the blocks table isn't there yet.
@@ -956,7 +947,7 @@ function renderSettings() {
   document.querySelectorAll('#trope-srcseg button').forEach(btn =>
     btn.addEventListener('click', () => {
       setTropeSource(btn.dataset.t);
-      document.querySelectorAll('#trope-srcseg button').forEach(x => x.classList.toggle('active', x === btn));
+      document.querySelectorAll('#trope-srcseg button').forEach(x => { const on = x === btn; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
       toast('Trope suggestions: ' + TROPE_SRC_LABELS[btn.dataset.t]);
     }));
   // App version + updates

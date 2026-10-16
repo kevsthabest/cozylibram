@@ -9,6 +9,10 @@
 //  3. Theme sheet + import concierge: wireSheetDrag + overlay history
 //     (audit #8).
 //  4. The Settings reading-log label names the real control (UX P2-7).
+//     — v590 (Variant B, named movement): the Show/Hide control the
+//     label named is RETIRED (the modal button is contextual; its gate
+//     is hardcoded Show), so the pin now guards the retirement: no
+//     such label, no such control, no placeholder ancestor text.
 //  5. Junk ISBNs resolve to nothing with zero network (UX P2-5); real
 //     ISBN-13 and hyphenated ISBN-10 still resolve.
 //  6. ICONS.edit / ICONS.inbox exist and differ from the fallback
@@ -281,8 +285,9 @@ clearPrefs();
   ok('trope control click persists through setTropeSource',
     probe('tropeSource()') === 'off' &&
     window.localStorage.getItem('spicyshelves.tropesrc') === 'off');
-  ok('reading-log label names the real control, not the placeholder text',
-    qa('label').some(l => l.textContent.includes("Remove today")) &&
+  ok('v590: the reading-log Show/Hide control is retired (label and control gone; modal button is contextual)',
+    !qa('label').some(l => l.textContent.includes("Remove today")) &&
+    !window.document.getElementById('th-rmentry') &&
     !window.document.body.innerHTML.includes('Log cleanup button'));
   ok('warning-prefs note no longer claims device-only storage',
     !window.document.body.innerHTML.includes('Private to this device'));

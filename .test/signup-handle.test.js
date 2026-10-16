@@ -190,8 +190,8 @@ const statusText = () => (q('#gs-status') || {}).textContent || '';
     calls.updateUser.some(a => a && a.data && a.data.handle === ''));
   ok('claim (taken): the user hears the handle was just taken',
     window.__toasts.some(t => t.includes('@gone_handle') && /just taken/i.test(t)));
-  ok('claim (taken): the user is routed to the Profile editor to choose another',
-    probe('view') === 'profile');
+  ok('claim (taken): the user is routed to Settings → Account to choose another (v590)',
+    probe('view') === 'settings');
 
   // -- typed failure: quarantined → server wording + Profile routing --
   rpcImpl = async (name) => {
@@ -204,10 +204,10 @@ const statusText = () => (q('#gs-status') || {}).textContent || '';
   runInWindow('view = "library";');
   const userE = asUser('u-e', { handle: 'held_handle' });
   await probe('claimSignupHandle(' + JSON.stringify(userE) + ')'); await tick(3);
-  ok('claim (quarantined): stash cleared, hold explained, routed to Profile',
+  ok('claim (quarantined): stash cleared, hold explained, routed to Settings → Account (v590)',
     calls.updateUser.some(a => a && a.data && a.data.handle === '') &&
-    window.__toasts.some(t => /held for its previous owner/i.test(t) && /Profile/.test(t)) &&
-    probe('view') === 'profile');
+    window.__toasts.some(t => /held for its previous owner/i.test(t) && /Settings/.test(t)) &&
+    probe('view') === 'settings');
 
   // -- unsupported (pre-v550 database): stash kept, silent --
   rpcImpl = async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function in the schema cache' } });

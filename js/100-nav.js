@@ -11,6 +11,7 @@ const NAV_PARENT = {
   shelf: 'shelf',
   coven: 'coven', 'coven-friend': 'coven',
   settings: 'settings', // v171: sidebar settings entry highlights itself
+  profile: 'settings', // v590: the retired Profile view's parent is Settings
 };
 function navTab(v) {
   if (v === 'series') return NAV_PARENT[typeof seriesReturn !== 'undefined' ? seriesReturn : ''] || 'discover';

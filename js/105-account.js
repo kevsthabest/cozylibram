@@ -329,7 +329,8 @@ async function syncCloudProfile() {
       p.updatedAt = remoteTs;
       saveProfile(p);
       renderTopbar();
-      if (view === 'profile') renderProfile();
+      // v590: the identity editor lives in Settings → Account now.
+      if (view === 'settings' && typeof renderSettings === 'function') renderSettings();
     } else {
       const hasContent = !!(p.firstName || p.lastName || p.avatar.type !== 'letter' || localTs > 0);
       if (hasContent && (!row || localTs > remoteTs)) await pushCloudProfile(p);
@@ -432,7 +433,8 @@ function closeMenu() {
 }
 function menuAction(id) {
   closeMenu();
-  if (id === 'profile') go('profile');
+  // v590: "Profile" is the Account group of the one Settings surface.
+  if (id === 'profile') { if (typeof openSettingsAccount === 'function') openSettingsAccount(); else go('settings'); }
   else if (id === 'settings') go('settings');
   else if (id === 'observatory') go('admin'); // v119: admin-gated in renderAdmin()
   else if (id === 'logout') {
@@ -474,132 +476,174 @@ function fileToAvatarDataURL(file) {
     img.src = url;
   });
 }
-function renderProfile() {
+/* ---- the account form (v590, Variant B) ----
+ * Was the separate Profile view; it is now the FIRST group ("Account")
+ * of the single Settings surface, rendered by js/180's renderSettings
+ * and wired by wireAccountForm below. Identity + handle + findable +
+ * the gift address slot live here.
+ * SAVE MODEL (stated on the surface): the form AUTOSAVES through one
+ * commit — the v589 house pattern. Text fields debounce-commit 700ms
+ * after the last keystroke; the discrete pickers (gender, findable)
+ * commit at once through the same function. The age band is NOT part
+ * of the form's data (it writes user_state instantly, as before), and
+ * the handle keeps its own claim buttons (a claim, not a save). */
+function accountFormHTML() {
   const p = loadProfile();
   const bandNow = (typeof privacyState === 'function') ? privacyState().band : null;
   const email = (cloudUser && cloudUser.email) || '';
-  setView(
-    '<div class="view-head"><button class="btn ghost sm" id="pf-back">← Back</button>' +
-    '<h2 class="serif">Profile</h2></div>' +
-    '<div class="pf-card">' +
-      '<div class="pf-avatar-row">' + avatarHTML(p, 'pf-avatar') +
-      '<div><button class="btn ghost sm" id="pf-change">Change picture</button>' +
-      '<p class="note" style="margin:6px 0 0">Painted avatars, stickers, or your own photo — try them on first.</p></div></div>' +
-      '<div class="field"><label>First name</label>' +
-      '<input id="pf-first" class="text-input" value="' + esc(p.firstName) + '" autocomplete="given-name" maxlength="40"></div>' +
-      '<div class="field"><label>Last name</label>' +
-      '<input id="pf-last" class="text-input" value="' + esc(p.lastName) + '" autocomplete="family-name" maxlength="40"></div>' +
-      '<div class="field"><label>Gender</label>' +
-      '<div class="seg" id="pf-gender" style="grid-template-columns:1fr 1fr 1fr">' +
-      '<button type="button" data-g="f" class="' + (p.gender === 'f' ? 'active' : '') + '">Female</button>' +
-      '<button type="button" data-g="m" class="' + (p.gender === 'm' ? 'active' : '') + '">Male</button>' +
-      '<button type="button" data-g="other" class="' + (p.gender === 'other' ? 'active' : '') + '">Other</button></div>' +
-      '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
-      // v524: age band — the owner's own setting only. It renders here
-      // (their private Profile editor) and NOWHERE else: never on the
-      // public projection, never as a badge. Stored in user_state.
-      '<div class="field"><label>Age group</label>' +
-      '<div class="seg" id="pf-band" style="grid-template-columns:1fr 1fr">' +
-      '<button type="button" data-b="teen" class="' + (bandNow === 'teen' ? 'active' : '') + '">13–17</button>' +
-      '<button type="button" data-b="adult" class="' + (bandNow === 'adult' ? 'active' : '') + '">18+</button></div>' +
-      '<p class="note" style="margin:6px 0 0">Stored privately — never shown on your profile or to your circle. Choosing 13–17 for the first time turns on the content shield and starts your circle sharing closed; every setting stays yours to change afterwards.</p></div>' +
-      '<div class="field"><label>Bio</label>' +
-      '<textarea id="pf-bio" class="text-input" rows="2" maxlength="240" placeholder="A line or two about your reading life">' + esc(p.bio || '') + '</textarea>' +
-      '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on in Settings → Circle &amp; privacy.</p></div>' +
-      '<div class="field"><label>Favourite genres</label>' +
-      '<input id="pf-genres" class="text-input" value="' + esc((p.favGenres || []).join(', ')) + '" maxlength="200" placeholder="Romantasy, Gothic horror, Space opera">' +
-      '<p class="note" style="margin:6px 0 0">Comma-separated, up to 8.</p></div>' +
-      // v550: the handle — claimed/changed/cleared through its own
-      // buttons (the claim RPC is the only write path), NOT through
-      // Save profile. The block is built and wired by js/237.
-      '<div class="field"><label>Handle</label>' +
-      '<div id="pf-handle-box">' + (typeof handleEditorHTML === 'function' ? handleEditorHTML(p) : '') + '</div></div>' +
-      '<div class="field" id="pf-findable-field"><label>Findable by handle</label>' +
-      '<div class="seg" id="pf-findable" data-disabled="' + (p.handle ? '0' : '1') + '" style="grid-template-columns:1fr 1fr">' +
-      '<button type="button" data-f="1" class="' + (p.findable ? 'active' : '') + '"' + (p.handle ? '' : ' disabled') + '>On</button>' +
-      '<button type="button" data-f="0" class="' + (!p.findable ? 'active' : '') + '"' + (p.handle ? '' : ' disabled') + '>Off</button></div>' +
-      '<p class="note" style="margin:6px 0 0">' + (p.handle
-        ? 'When on, anyone who knows your exact handle (@' + esc(p.handle) + ') can find you and send a connection request — which you can accept or decline. There’s no browsing and no partial search: the exact handle only. Off is the default.'
-        : 'Set a handle first — then you can choose whether people who know it can find you by it.') + '</p></div>' +
-      '<div class="field"><label>Email</label>' +
-      '<input class="text-input" value="' + esc(email) + '" disabled></div>' +
-      '<button class="btn block" id="pf-save">Save profile</button>' +
-      '<p class="note">Your name, themed avatar, and profile picture sync to your cloud account when you\'re signed in, so they follow you across devices.</p>' +
-      // v588: the Gift a Book address editor lives here, with the
-      // rest of the user's own details (it moved out of Settings →
-      // Circle & privacy; the access log stayed there). Like the
-      // handle block, it saves through its own buttons, not Save
-      // profile. Built and wired by js/243's fillGiftAddress; the
-      // slot stays empty when signed out, unsupported, or teen-band.
-      '<div id="pf-giftaddr-slot"></div>' +
-    '</div>'
-  );
-  document.getElementById('pf-back').addEventListener('click', () => go('library'));
+  const segBtn = (attrs, active, label) =>
+    '<button type="button" ' + attrs + ' class="' + (active ? 'active' : '') + '" aria-pressed="' + (active ? 'true' : 'false') + '">' + label + '</button>';
+  return '<p class="note" style="margin:0 0 10px">Your account details — changes save automatically.<span id="ac-savestate" role="status" style="margin-left:6px"></span></p>' +
+    '<div class="pf-avatar-row">' + avatarHTML(p, 'pf-avatar') +
+    '<div><button class="btn ghost sm" id="pf-change">Change picture</button>' +
+    '<p class="note" style="margin:6px 0 0">Painted avatars, stickers, or your own photo — try them on first.</p></div></div>' +
+    '<div class="field"><label for="pf-first">First name</label>' +
+    '<input id="pf-first" class="text-input" value="' + esc(p.firstName) + '" autocomplete="given-name" maxlength="40"></div>' +
+    '<div class="field"><label for="pf-last">Last name</label>' +
+    '<input id="pf-last" class="text-input" value="' + esc(p.lastName) + '" autocomplete="family-name" maxlength="40"></div>' +
+    '<div class="field"><label>Gender</label>' +
+    '<div class="seg" id="pf-gender" role="group" aria-label="Gender" style="grid-template-columns:1fr 1fr 1fr">' +
+    segBtn('data-g="f"', p.gender === 'f', 'Female') +
+    segBtn('data-g="m"', p.gender === 'm', 'Male') +
+    segBtn('data-g="other"', p.gender === 'other', 'Other') + '</div>' +
+    '<p class="note" style="margin:6px 0 0">Sets how the home screen greets you. Tap again to clear.</p></div>' +
+    // v524: age band — the owner's own setting only. It renders here
+    // and NOWHERE else: never on the public projection, never as a
+    // badge. Stored in user_state (js/230), applied instantly.
+    '<div class="field"><label>Age group</label>' +
+    '<div class="seg" id="pf-band" role="group" aria-label="Age group" style="grid-template-columns:1fr 1fr">' +
+    segBtn('data-b="teen"', bandNow === 'teen', '13–17') +
+    segBtn('data-b="adult"', bandNow === 'adult', '18+') + '</div>' +
+    '<p class="note" style="margin:6px 0 0">Stored privately — never shown on your profile or to your circle. Choosing 13–17 for the first time turns on the content shield and starts your circle sharing closed; every setting stays yours to change afterwards.</p></div>' +
+    '<div class="field"><label for="pf-bio">Bio</label>' +
+    '<textarea id="pf-bio" class="text-input" rows="2" maxlength="240" placeholder="A line or two about your reading life">' + esc(p.bio || '') + '</textarea>' +
+    '<p class="note" style="margin:6px 0 0">Shown to your circle only if “Profile bio &amp; favourite genres” is on (Circle &amp; privacy, further down this page).</p></div>' +
+    '<div class="field"><label for="pf-genres">Favourite genres</label>' +
+    '<input id="pf-genres" class="text-input" value="' + esc((p.favGenres || []).join(', ')) + '" maxlength="200" placeholder="Romantasy, Gothic horror, Space opera">' +
+    '<p class="note" style="margin:6px 0 0">Comma-separated, up to 8.</p></div>' +
+    // v550: the handle — claimed/changed/cleared through its own
+    // buttons (the claim RPC is the only write path), NOT through the
+    // form commit. The block is built and wired by js/237.
+    '<div class="field"><label>Handle</label>' +
+    '<div id="pf-handle-box">' + (typeof handleEditorHTML === 'function' ? handleEditorHTML(p) : '') + '</div></div>' +
+    '<div class="field" id="pf-findable-field"><label>Findable by handle</label>' +
+    '<div class="seg" id="pf-findable" role="group" aria-label="Findable by handle" data-disabled="' + (p.handle ? '0' : '1') + '" style="grid-template-columns:1fr 1fr">' +
+    '<button type="button" data-f="1" class="' + (p.findable ? 'active' : '') + '" aria-pressed="' + (p.findable ? 'true' : 'false') + '"' + (p.handle ? '' : ' disabled') + '>On</button>' +
+    '<button type="button" data-f="0" class="' + (!p.findable ? 'active' : '') + '" aria-pressed="' + (!p.findable ? 'true' : 'false') + '"' + (p.handle ? '' : ' disabled') + '>Off</button></div>' +
+    '<p class="note" style="margin:6px 0 0">' + (p.handle
+      ? 'When on, anyone who knows your exact handle (@' + esc(p.handle) + ') can find you and send a connection request — which you can accept or decline. There’s no browsing and no partial search: the exact handle only. Off is the default.'
+      : 'Set a handle first — then you can choose whether people who know it can find you by it.') + '</p></div>' +
+    '<div class="field"><label for="pf-email">Email</label>' +
+    '<input id="pf-email" class="text-input" value="' + esc(email) + '" disabled></div>' +
+    '<p class="note">Your name, themed avatar, and profile picture sync to your cloud account when you\'re signed in, so they follow you across devices.</p>' +
+    // v582/v588: the Gift a Book address editor lives here, with the
+    // rest of the user's own details. Like the handle block, it saves
+    // through its own buttons (validation-gated), not the form
+    // commit. Built and wired by js/243's fillGiftAddress; the slot
+    // stays empty when signed out, unsupported, or teen-band.
+    '<div id="pf-giftaddr-slot"></div>';
+}
+
+function wireAccountForm(root) {
+  const scope = root || document;
   // v546: the picker is the Collections + Fitting Room sheet (js/236).
-  document.getElementById('pf-change').addEventListener('click', () => {
+  const changeBtn = scope.querySelector('#pf-change');
+  if (changeBtn) changeBtn.addEventListener('click', () => {
     if (typeof openAvatarPicker === 'function') openAvatarPicker();
   });
-  document.getElementById('pf-save').addEventListener('click', () => {
+  // v550: the handle editor block (js/237).
+  if (typeof wireHandleEditor === 'function') wireHandleEditor();
+  // v582: the gift address block (js/243) — fills only when signed in,
+  // gifts are supported, and the account is not teen-band.
+  const giftSlot = scope.querySelector('#pf-giftaddr-slot');
+  if (giftSlot && typeof fillGiftAddress === 'function') fillGiftAddress(giftSlot);
+
+  /* --- the ONE commit path --- */
+  const statusEl = scope.querySelector('#ac-savestate');
+  const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
+  let timer = null, savedTimer = null;
+  const commit = () => {
+    timer = null;
+    const firstEl = scope.querySelector('#pf-first');
+    if (!firstEl) return; // the form left the DOM before the debounce landed
     const np = loadProfile();
-    np.firstName = document.getElementById('pf-first').value.trim().slice(0, 40);
-    np.lastName = document.getElementById('pf-last').value.trim().slice(0, 40);
-    const gsel = document.querySelector('#pf-gender button.active');
+    np.firstName = firstEl.value.trim().slice(0, 40);
+    const lastEl = scope.querySelector('#pf-last');
+    np.lastName = lastEl ? lastEl.value.trim().slice(0, 40) : '';
+    const gsel = scope.querySelector('#pf-gender button.active');
     np.gender = gsel ? gsel.dataset.g : '';
-    const bioEl = document.getElementById('pf-bio');
+    const bioEl = scope.querySelector('#pf-bio');
     if (bioEl) np.bio = bioEl.value.trim().slice(0, 240);
-    const genEl = document.getElementById('pf-genres');
+    const genEl = scope.querySelector('#pf-genres');
     if (genEl) np.favGenres = genEl.value.split(',').map(g => g.trim()).filter(Boolean).slice(0, 8);
-    // v550: findable rides this save (it is a posture flag on the
+    // v550: findable rides the commit (it is a posture flag on the
     // profile); the handle itself never does — js/237's claim buttons
     // own it. No handle → findable is meaningless and forced off.
-    const fsel = document.querySelector('#pf-findable button.active');
+    const fsel = scope.querySelector('#pf-findable button.active');
     if (fsel) np.findable = fsel.dataset.f === '1';
     if (!np.handle) np.findable = false;
     // v550: screen the name fields + bio BEFORE anything persists —
     // the server trigger (migration v550) is the backstop, this is
-    // the immediate, honest answer.
+    // the immediate, honest answer. A screen hit holds the WHOLE
+    // commit: nothing persists, and the reason stays on the surface.
     if (typeof profileContentScreenHit === 'function') {
       const hitField = profileContentScreenHit(np);
       if (hitField) {
-        toast(hitField === 'bio'
-          ? 'That bio can’t be used — please adjust it and save again.'
-          : 'That name can’t be used — please adjust it and save again.');
+        setStatus(hitField === 'bio'
+          ? 'That bio can’t be used — please adjust it.'
+          : 'That name can’t be used — please adjust it.');
         return;
       }
     }
     touchProfile(np);
     pushCloudProfile(np);
-    // v524: age band saves through js/230 (user_state), not the
-    // profiles row. Only a live selection writes; the first teen
-    // selection applies the teen starting positions exactly once.
-    const bsel = document.querySelector('#pf-band button.active');
-    if (bsel && typeof setAgeBand === 'function') setAgeBand(bsel.dataset.b);
     renderTopbar();
-    toast('Profile saved ✨');
+    setStatus('Saved');
+    if (savedTimer) clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => setStatus(''), 2000);
+  };
+  const schedule = () => {
+    setStatus('Saving…');
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(commit, 700);
+  };
+  ['#pf-first', '#pf-last', '#pf-bio', '#pf-genres'].forEach(sel => {
+    const el = scope.querySelector(sel);
+    if (el) el.addEventListener('input', schedule);
   });
-  // v550: the handle editor block + the findable seg (radio behaviour,
-  // like the band picker; disabled buttons stay inert).
-  if (typeof wireHandleEditor === 'function') wireHandleEditor();
-  // v588: the gift address block (js/243) — fills only when signed in,
-  // gifts are supported, and the account is not teen-band.
-  if (typeof fillGiftAddress === 'function') fillGiftAddress(document.getElementById('pf-giftaddr-slot'));
-  const fbtns = Array.from(document.querySelectorAll('#pf-findable button'));
+  // Findable seg: radio behaviour; a discrete choice commits at once
+  // through the same path. Disabled buttons (no handle) stay inert.
+  const fbtns = Array.from(scope.querySelectorAll('#pf-findable button'));
   fbtns.forEach(b => b.addEventListener('click', () => {
     if (b.disabled) return;
-    fbtns.forEach(x => x.classList.toggle('active', x === b));
+    fbtns.forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    commit();
   }));
-  // v524: band picker — radio behavior (tap to select; no clear-to-unset,
-  // "unset" only ever means "never declared").
-  const bbtns = Array.from(document.querySelectorAll('#pf-band button'));
+  // v524: band picker — radio behavior, applied INSTANTLY through
+  // js/230 (user_state), never through the form: the band is not
+  // profile data. Only a live selection writes; the first teen
+  // selection applies the teen starting positions exactly once.
+  const bbtns = Array.from(scope.querySelectorAll('#pf-band button'));
   bbtns.forEach(b => b.addEventListener('click', () => {
-    bbtns.forEach(x => x.classList.toggle('active', x === b));
+    bbtns.forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (typeof setAgeBand === 'function') setAgeBand(b.dataset.b);
   }));
-  // v177: gender picker toggles (tap the active one to clear back to unset)
-  const gbtns = Array.from(document.querySelectorAll('#pf-gender button'));
+  // v177: gender picker toggles (tap the active one to clear back to
+  // unset); a discrete choice commits at once through the same path.
+  const gbtns = Array.from(scope.querySelectorAll('#pf-gender button'));
   gbtns.forEach(b => b.addEventListener('click', () => {
     const was = b.classList.contains('active');
-    gbtns.forEach(x => x.classList.remove('active'));
-    if (!was) b.classList.add('active');
+    gbtns.forEach(x => { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
+    if (!was) { b.classList.add('active'); b.setAttribute('aria-pressed', 'true'); }
+    commit();
   }));
 }
 
