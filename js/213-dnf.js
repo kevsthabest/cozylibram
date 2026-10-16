@@ -4,9 +4,15 @@
    + synced via existing book sync. Also logged to Supabase dnf_reasons
    table for aggregate insights. ---- */
 
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 // icon = an ICONS glyph name (js/050), rendered via icon() — the line-art
 // set themes with the UI; the old emoji here did not. (Icon sweep.)
-const DNF_REASONS = [
+export const DNF_REASONS = [
   { key: 'too_slow', label: 'Too slow', icon: 'hourglass' },
   { key: 'hated_trope', label: 'Hated the trope', icon: 'dnf' },
   { key: 'wrong_mood', label: 'Wrong mood', icon: 'cloud' },
@@ -15,7 +21,7 @@ const DNF_REASONS = [
   { key: 'too_long', label: 'Too long', icon: 'ruler' },
 ];
 
-function openDnfReasonSheet(b) {
+export function openDnfReasonSheet(b) {
   // Dedup: don't stack sheets if one is already open
   if (document.querySelector('.dnf-bottom-sheet')) return;
   const reasonBtns = DNF_REASONS.map(r =>
@@ -60,7 +66,7 @@ function openDnfReasonSheet(b) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
-function saveDnfReason(b, reasonKey) {
+export function saveDnfReason(b, reasonKey) {
   const reason = DNF_REASONS.find(r => r.key === reasonKey);
   if (!reason) return;
   // Guard: user may have changed status away from DNF during the sheet delay
@@ -102,7 +108,7 @@ function saveDnfReason(b, reasonKey) {
 }
 
 /* ---- DNF insights: "You DNF 80% of books with X" ---- */
-function dnfInsightsHTML() {
+export function dnfInsightsHTML() {
   const dnfs = library.filter(b => b.status === 'dnf' && b.dnfReason);
   if (dnfs.length < 3) return '';
 
@@ -125,3 +131,17 @@ function dnfInsightsHTML() {
   html += '</div>';
   return html;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/150-modal-discovery.js and js/170-stats.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.DNF_REASONS = DNF_REASONS;
+window.openDnfReasonSheet = openDnfReasonSheet;
+window.saveDnfReason = saveDnfReason;
+window.dnfInsightsHTML = dnfInsightsHTML;
