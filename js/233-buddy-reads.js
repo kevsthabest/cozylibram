@@ -32,22 +32,29 @@
  *   (invite buttons hide; the tab keeps its v197 matches card).
  */
 
-let buddyTableMissing = false;   // buddy_reads pre-migration
-let buddySupportKnown = null;    // probe cache: true / false / null
-let buddyRowsCache = [];         // rows as RLS hands them to me
-const buddyInvitedLocal = new Set(); // session-only: friendId|key I invited
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-const BUDDY_STATE_LABELS = {
+export let buddyTableMissing = false;   // buddy_reads pre-migration
+export let buddySupportKnown = null;    // probe cache: true / false / null
+export let buddyRowsCache = [];         // rows as RLS hands them to me
+export const buddyInvitedLocal = new Set(); // session-only: friendId|key I invited
+
+export const BUDDY_STATE_LABELS = {
   not_started: 'Not started',
   reading: 'Reading',
   finished: 'Finished',
   set_aside: 'Set aside',
 };
 
-function buddyLog() {
+export function buddyLog() {
   if (window.AppLog && AppLog.info) AppLog.info.apply(AppLog, ['[buddy]'].concat([].slice.call(arguments)));
 }
-function buddyMissingErr(e) {
+export function buddyMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -55,7 +62,7 @@ function buddyMissingErr(e) {
     (code === 'PGRST205' || code === '42P01' ||
      /schema cache|does not exist|not found/i.test(msg));
 }
-function buddyRpcMissingErr(e) {
+export function buddyRpcMissingErr(e) {
   if (!e) return false;
   const msg = String((e && e.message) || e || '');
   const code = String((e && e.code) || '');
@@ -65,7 +72,7 @@ function buddyRpcMissingErr(e) {
 }
 
 /* Support probe (the v526/v527 pattern): one throwaway select. */
-async function buddySupported() {
+export async function buddySupported() {
   if (buddyTableMissing) return false;
   if (buddySupportKnown !== null) return buddySupportKnown;
   try {
@@ -88,7 +95,7 @@ async function buddySupported() {
 
 /* ---------- rows ---------- */
 
-async function buddyFetchRows() {
+export async function buddyFetchRows() {
   if (buddyTableMissing) return [];
   try {
     const sb = await cloudClient();
@@ -106,11 +113,11 @@ async function buddyFetchRows() {
   } catch (e) { buddyLog('rows read threw', e); return []; }
 }
 
-function buddyPartnerId(row) {
+export function buddyPartnerId(row) {
   if (!row || typeof cloudUser === 'undefined' || !cloudUser) return '';
   return row.inviter_id === cloudUser.id ? row.invitee_id : row.inviter_id;
 }
-function buddyName(uid) {
+export function buddyName(uid) {
   const p = (typeof circProfiles !== 'undefined' && circProfiles) ? circProfiles[uid] : null;
   if (p) {
     // v550: the one display helper (js/237) — @handle when set.
@@ -119,13 +126,13 @@ function buddyName(uid) {
   }
   return 'A friend';
 }
-function buddyFirstName(uid) {
+export function buddyFirstName(uid) {
   return String(buddyName(uid)).split(' ')[0];
 }
 /* A row I can see for (friend, key) — actives in both directions,
  * plus pendings addressed to me. (My own pendings are not readable,
  * by design; buddyInvitedLocal covers this device's memory of them.) */
-function buddyRowFor(friendId, key) {
+export function buddyRowFor(friendId, key) {
   if (!key || typeof cloudUser === 'undefined' || !cloudUser) return null;
   return buddyRowsCache.find(r => r.book_key === key && buddyPartnerId(r) === friendId) || null;
 }
@@ -135,11 +142,11 @@ function buddyRowFor(friendId, key) {
  * Fallbacks keep a row legible if my copy is gone: the ta: key
  * carries its title|author; an isbn: key with no local copy renders
  * as a plain "A book". */
-function buddyMyCopy(key) {
+export function buddyMyCopy(key) {
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
   return lib.find(b => (typeof recoKey === 'function') && recoKey(b) === key) || null;
 }
-function buddyDisplayBook(row) {
+export function buddyDisplayBook(row) {
   const mine = buddyMyCopy(row.book_key);
   if (mine) return mine;
   const k = String(row.book_key || '');
@@ -152,7 +159,7 @@ function buddyDisplayBook(row) {
 
 /* ---------- writes (RPC only — the v525/v527 house pattern) ---------- */
 
-async function buddyInvite(friendId, myBook) {
+export async function buddyInvite(friendId, myBook) {
   const sb = await cloudClient();
   if (!sb || !cloudUser || !myBook) return 'unavailable';
   const r = await sb.rpc('buddy_invite', { p_friend: friendId, p_book_id: myBook.id });
@@ -162,7 +169,7 @@ async function buddyInvite(friendId, myBook) {
   }
   return r.data === 'slow_down' ? 'slow_down' : 'ok';
 }
-async function buddyRespond(id, accept) {
+export async function buddyRespond(id, accept) {
   const sb = await cloudClient();
   if (!sb || !cloudUser) return false;
   const r = await sb.rpc('buddy_respond', { p_id: id, p_accept: !!accept });
@@ -173,7 +180,7 @@ async function buddyRespond(id, accept) {
   }
   return true;
 }
-async function buddyEnd(id) {
+export async function buddyEnd(id) {
   const sb = await cloudClient();
   if (!sb || !cloudUser) return false;
   const r = await sb.rpc('buddy_end', { p_id: id });
@@ -186,7 +193,7 @@ async function buddyEnd(id) {
 }
 /* The presence read: both states as bare enums from the server, or
  * null when the read isn't active / no longer stands. */
-async function buddyStates(id) {
+export async function buddyStates(id) {
   if (buddyTableMissing) return null;
   try {
     const sb = await cloudClient();
@@ -210,14 +217,14 @@ async function buddyStates(id) {
  * tobuy facet on top). The v531 presence ladder and the server's
  * buddy_invite gate treat a to-buy TBR copy as a valid pre-reading
  * copy, which the status term now expresses on its own. */
-function buddyPreReading(status) { return status === 'tbr'; }
+export function buddyPreReading(status) { return status === 'tbr'; }
 
 /* My book id if I can invite this friend to buddy-read their book:
  * the shared pre-reading rule (their copy and mine both sit on a
  * pre-reading shelf — TBR or Wishlist) and no row I can see already
  * stands for the pair + book. Used by the Buddy tab's match rows
  * and by the friend-shelf preview modal (js/195 openCovenBook). */
-function buddyOfferBookId(friendId, theirBook) {
+export function buddyOfferBookId(friendId, theirBook) {
   if (!theirBook || !buddyPreReading(theirBook.status)) return '';
   if (typeof recoKey !== 'function') return '';
   const key = recoKey(theirBook);
@@ -229,7 +236,7 @@ function buddyOfferBookId(friendId, theirBook) {
   return mine ? mine.id : '';
 }
 
-async function buddySendInvite(friendId, key, btn) {
+export async function buddySendInvite(friendId, key, btn) {
   const lib = (typeof library !== 'undefined' && Array.isArray(library)) ? library : [];
   const mine = lib.find(b => (typeof recoKey === 'function') && recoKey(b) === key && buddyPreReading(b.status));
   if (!mine) { toast('That book isn’t on your TBR or Wishlist'); return; }
@@ -261,7 +268,7 @@ async function buddySendInvite(friendId, key, btn) {
 
 /* ---------- rendering (into the Buddy tab, js/197's panel) ---------- */
 
-function buddyCoverHTML(book, blurred) {
+export function buddyCoverHTML(book, blurred) {
   let html = (typeof recoCoverHTML === 'function')
     ? recoCoverHTML(book)
     : '<div class="cover-wrap reco-cover"><span class="cover-initial">' +
@@ -270,7 +277,7 @@ function buddyCoverHTML(book, blurred) {
   return html;
 }
 
-function buddyInviteCardHTML(row, book, blurred) {
+export function buddyInviteCardHTML(row, book, blurred) {
   const partner = buddyPartnerId(row);
   /* The consent line and the quiet actions sit full-width under the
    * row: at 360px the meta column is too narrow for a sentence, and
@@ -288,7 +295,7 @@ function buddyInviteCardHTML(row, book, blurred) {
     '</span></div>';
 }
 
-function buddyActiveRowHTML(row, book, blurred) {
+export function buddyActiveRowHTML(row, book, blurred) {
   const partner = buddyPartnerId(row);
   return '<div class="circle-row reco-row">' + buddyCoverHTML(book, blurred) +
     '<div class="circle-meta"><b>' + esc(book.title || 'Untitled') + '</b>' +
@@ -299,7 +306,7 @@ function buddyActiveRowHTML(row, book, blurred) {
     '<div class="circle-actions"><button class="btn ghost sm" data-buddy-end="' + esc(row.id) + '">End</button></div></div>';
 }
 
-function buddyStateChipsHTML(row, states) {
+export function buddyStateChipsHTML(row, states) {
   if (!states) return '';
   const partner = buddyPartnerId(row);
   const chip = (who, v) => v
@@ -312,7 +319,7 @@ function buddyStateChipsHTML(row, states) {
  * TBR card js/197 rendered; the match rows' invite buttons are
  * wired (or labelled per the rows that already stand). Called by
  * refreshCovenStats after the stats HTML lands. */
-async function wireBuddyReads(root) {
+export async function wireBuddyReads(root) {
   const panel = root ? root.querySelector('#ctab-buddy') : null;
   if (!panel || typeof cloudUser === 'undefined' || !cloudUser) return;
   const hideOffers = () => panel.querySelectorAll('[data-buddy-invite]').forEach(b => { b.style.display = 'none'; });
@@ -442,7 +449,7 @@ async function wireBuddyReads(root) {
 /* End a buddy read: a calm confirm (a covenOpenSheet, so the
  * swipe-to-dismiss rule is inherited), then the RPC. Silent for
  * the partner — the read just stops being there. */
-function openBuddyEndSheet(row, opener) {
+export function openBuddyEndSheet(row, opener) {
   const partner = buddyPartnerId(row);
   const book = buddyDisplayBook(row);
   const body =
@@ -467,3 +474,43 @@ function openBuddyEndSheet(row, opener) {
     }
   });
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/195-coven.js, js/197-social-stats.js and js/234-outbox.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.buddyTableMissing = buddyTableMissing;
+window.buddySupportKnown = buddySupportKnown;
+window.buddyRowsCache = buddyRowsCache;
+window.buddyInvitedLocal = buddyInvitedLocal;
+window.BUDDY_STATE_LABELS = BUDDY_STATE_LABELS;
+window.buddyLog = buddyLog;
+window.buddyMissingErr = buddyMissingErr;
+window.buddyRpcMissingErr = buddyRpcMissingErr;
+window.buddySupported = buddySupported;
+window.buddyFetchRows = buddyFetchRows;
+window.buddyPartnerId = buddyPartnerId;
+window.buddyName = buddyName;
+window.buddyFirstName = buddyFirstName;
+window.buddyRowFor = buddyRowFor;
+window.buddyMyCopy = buddyMyCopy;
+window.buddyDisplayBook = buddyDisplayBook;
+window.buddyInvite = buddyInvite;
+window.buddyRespond = buddyRespond;
+window.buddyEnd = buddyEnd;
+window.buddyStates = buddyStates;
+window.buddyPreReading = buddyPreReading;
+window.buddyOfferBookId = buddyOfferBookId;
+window.buddySendInvite = buddySendInvite;
+window.buddyCoverHTML = buddyCoverHTML;
+window.buddyInviteCardHTML = buddyInviteCardHTML;
+window.buddyActiveRowHTML = buddyActiveRowHTML;
+window.buddyStateChipsHTML = buddyStateChipsHTML;
+window.wireBuddyReads = wireBuddyReads;
+window.openBuddyEndSheet = openBuddyEndSheet;
