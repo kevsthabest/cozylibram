@@ -24,7 +24,13 @@
 /* Pure: identity keys for a book. Returns null when the book has no
    usable title — such a book cannot resolve to a work. Norms use
    tropeNormIdent (js/157), the client mirror of SQL norm_ident(). */
-function workKeysFor(book) {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function workKeysFor(book) {
   book = book || {};
   const title = String(book.title || '').trim();
   const titleNorm = (typeof tropeNormIdent === 'function' ? tropeNormIdent : String)(title);
@@ -48,7 +54,7 @@ function workKeysFor(book) {
   return { title, titleNorm, authors, authorNorm, isbn, series };
 }
 
-const WorkStore = {
+export const WorkStore = {
   _cache: {}, // stable book key -> work id (or null)
 
   _cacheKey(book, keys) {
@@ -248,7 +254,7 @@ const WorkStore = {
 
 /* Convenience wrapper used by the trope read path. Guards for contexts
    (older tests, cached pages) where js/158 hasn't loaded. */
-async function resolveWork(book, opts) {
+export async function resolveWork(book, opts) {
   try {
     if (typeof WorkStore === 'undefined' || !WorkStore) return null;
     return await WorkStore.resolve(book, opts);
@@ -258,7 +264,7 @@ async function resolveWork(book, opts) {
 /* v272: provider IDs a book already carries, keyed by the works.provider_ids
    conventions (see supabase/migrations/v272_work_provider_ids.sql).
    Pure — safe to call anywhere. */
-function providerIdsFromBook(book) {
+export function providerIdsFromBook(book) {
   const ids = {};
   try {
     book = book || {};
@@ -273,7 +279,7 @@ function providerIdsFromBook(book) {
    and never blocks the caller — identity capture is advisory. Used by
    flows (like Hardcover enrichment) that learn a provider ID after the
    work was already resolved. */
-async function workAttachProviderIds(book, ids) {
+export async function workAttachProviderIds(book, ids) {
   try {
     if (typeof WorkStore === 'undefined' || !WorkStore) return;
     const keys = ids && Object.keys(ids).filter(k => ids[k] != null && ids[k] !== '');
@@ -286,3 +292,19 @@ async function workAttachProviderIds(book, ids) {
     await WorkStore._mergeProviderIds(sb, id, ids);
   } catch (e) {}
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/070-hardcover.js, js/138-editions.js, js/150-modal-discovery.js, js/157-trope-inference.js, js/198-discovery.js, js/212-dna.js, js/225-book-portrait.js and js/230-privacy.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.workKeysFor = workKeysFor;
+window.WorkStore = WorkStore;
+window.resolveWork = resolveWork;
+window.providerIdsFromBook = providerIdsFromBook;
+window.workAttachProviderIds = workAttachProviderIds;

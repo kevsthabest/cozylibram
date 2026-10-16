@@ -1207,3 +1207,34 @@ baseline); 64 of 104 files converted.
 - **Nit — a stale "no version bump in this PR" sentence
   in the body's intro.** Patched post-merge and verified
   by read-back.
+
+## Gate notes — PR #279 (v603)
+
+Recorded from the Security Advisor's gate on the phase-2
+census batch 6 PR, at the program manager's direction.
+The gate closed PASS_WITH_RISK; merged as e8cc23f. Live at
+v603 with 71 module tags. Line tally at v603: 55,283 js
+lines (+345 this PR, +2,394 cumulative against the 52,889
+baseline); 71 of 104 files converted.
+
+- **js/140-collections accessor case verified
+  end-to-end.** Its three inbound writes — js/120:701 and
+  js/170:1396 writing `seriesReturn`, and js/229:175
+  writing `seriesFilter` inside `applyRoamedViewState` —
+  all target js/140-owned bindings, served by two accessor
+  bridges on js/140 with every writer byte-untouched. The
+  gate re-ran the two-realm proof and drove js/140's real
+  `renderSeries` back handler against an external write.
+- **Thirteen repoints ruled SOUND.** R3 ×12: classicize
+  coverage across twelve suites. R1 ×1: the book-dressing
+  suite's js/240 tag pin, mutation-tested.
+- **Low, standing pattern — twelve value-bridged
+  bindings** (js/243 ×2, js/198 ×9, js/240 ×1). Nothing
+  observable diverges. The caution is unchanged.
+- **js/222's unwrap added 15 IIFE-internal names to the
+  census** (totals 2,264→2,279, edges unchanged).
+- **The gate corrected its own initial suite figure
+  on record** — 201/5 was misstated; the completed run
+  was 200/6, all baselines A/B-identical.
+- **Nit — a stale draft sentence in the body.** Patched
+  post-merge.

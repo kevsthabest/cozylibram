@@ -17,17 +17,23 @@
    4s apart) and persists its cursor in localStorage so a backfill
    survives reloads and tab closes. */
 
-const TROPE_INFER_TIMEOUT_MS = 90000;
-const TROPE_QUEUE_DELAY_MS = 4000;
-const TROPE_QUEUE_STORE_KEY = 'cozylibram.tropequeue.v1';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const TROPE_INFER_TIMEOUT_MS = 90000;
+export const TROPE_QUEUE_DELAY_MS = 4000;
+export const TROPE_QUEUE_STORE_KEY = 'cozylibram.tropequeue.v1';
 /* v156: raised from 1200 — free reasoning models can spend 1000+ tokens on
    chain-of-thought before emitting the JSON, which truncated output
    (finish_reason: length) and produced "unparseable model output". */
-const TROPE_MAX_TOKENS = 2000;
+export const TROPE_MAX_TOKENS = 2000;
 
 /* Informational: where the server proxy sends requests per provider.
    The client never calls these directly. */
-const TROPE_PROVIDERS = {
+export const TROPE_PROVIDERS = {
   openrouter: 'https://openrouter.ai/api/v1',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   groq: 'https://api.groq.com/openai/v1',
@@ -36,7 +42,7 @@ const TROPE_PROVIDERS = {
 };
 
 /* Pure: is trope inference configured on this server? */
-function tropeInferenceConfigured() {
+export function tropeInferenceConfigured() {
   try {
     return !!(window.SPICY_CONFIG && window.SPICY_CONFIG.trope);
   } catch (e) { return false; }
@@ -44,7 +50,7 @@ function tropeInferenceConfigured() {
 
 /* Pure: display info about the configured provider (names only, no secrets).
    v160: reflects the shared provider/model override when one is set. */
-function tropeProviderInfo() {
+export function tropeProviderInfo() {
   try {
     const c = window.SPICY_CONFIG || {};
     const ov = (typeof tropeProviderCache !== 'undefined' && tropeProviderCache) || null;
@@ -69,9 +75,9 @@ function tropeProviderInfo() {
    taxonomy grows. The last-known live taxonomy is cached in localStorage
    so an offline device keeps inferring with it. Never throws. */
 
-const TROPE_TAXONOMY_STORE_KEY = 'cozylibram.tropetaxonomy.v1';
+export const TROPE_TAXONOMY_STORE_KEY = 'cozylibram.tropetaxonomy.v1';
 
-const TropeTaxonomy = {
+export const TropeTaxonomy = {
   _db: null,   // array of {id,name,description,genres} from the shared table
   _rev: 1,     // taxonomy_meta rev last seen
   _ready: false,
@@ -184,7 +190,7 @@ const TropeTaxonomy = {
 };
 
 /* Map the app's free-form category strings onto taxonomy genres. */
-const TROPE_GENRE_ALIASES = [
+export const TROPE_GENRE_ALIASES = [
   [/dark[\s-]*romance/, 'dark-romance'],
   [/romance/, 'romance'],
   [/fantas/, 'fantasy'],
@@ -197,7 +203,7 @@ const TROPE_GENRE_ALIASES = [
 ];
 
 /* Pure: app categories -> TROPE_GENRES subset. */
-function appGenresToTropeGenres(categories) {
+export function appGenresToTropeGenres(categories) {
   const out = new Set();
   (categories || []).forEach(c => {
     const s = String(c).toLowerCase();
@@ -206,7 +212,7 @@ function appGenresToTropeGenres(categories) {
   return [...out];
 }
 
-const TROPE_SYSTEM_PROMPT = [
+export const TROPE_SYSTEM_PROMPT = [
   'You are a fiction metadata tagger for a book catalog. Read the book\'s',
   'title, author, genres, and description, then tag it with tropes from the',
   'fixed taxonomy below.',
@@ -246,7 +252,7 @@ const TROPE_SYSTEM_PROMPT = [
 /* Pure: build the { system, user } prompt for a book. Only tropes whose
    genres intersect the book's genres are included — keeps the prompt
    small and kills cross-genre noise. */
-function buildTropePrompt(book) {
+export function buildTropePrompt(book) {
   book = book || {};
   const genres = appGenresToTropeGenres(book.categories);
   const pool = TropeTaxonomy.forGenres(genres);
@@ -262,7 +268,7 @@ function buildTropePrompt(book) {
 }
 
 /* Pure: normalize one identifier string for book keys. */
-function tropeNormIdent(s) {
+export function tropeNormIdent(s) {
   return String(s || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ').trim()
@@ -272,7 +278,7 @@ function tropeNormIdent(s) {
 /* Pure: stable per-work cache key. ISBN-13 when available, else
    t:<normalized-title>:<normalized-author>. Trope data is about the
    work, not the user's library row, so one inference serves everyone. */
-function bookKeyFor(book) {
+export function bookKeyFor(book) {
   book = book || {};
   const digits = String(book.isbn || '').replace(/[^0-9]/g, '');
   if (digits.length === 13) return 'isbn:' + digits;
@@ -284,7 +290,7 @@ function bookKeyFor(book) {
    Accepts {"tropes":[...]} or a bare array; tolerates markdown fences and
    JSON embedded in reasoning prose. Throws on unparseable output — the
    caller treats that as a failed inference, never as "no tropes". */
-function parseTropeResponse(text) {
+export function parseTropeResponse(text) {
   if (text == null || String(text).trim() === '') throw new Error('empty response');
   let t = String(text).trim()
     .replace(/^```(?:json)?\s*/i, '')
@@ -310,7 +316,7 @@ function parseTropeResponse(text) {
 
 /* Pure: clean a model's evidence quotes — at most 2, trimmed, capped at
    200 chars each, whitespace-collapsed. Non-array input yields []. */
-function cleanEvidence(ev) {
+export function cleanEvidence(ev) {
   const out = [];
   for (const q of Array.isArray(ev) ? ev : []) {
     if (out.length >= 2) break;
@@ -323,10 +329,10 @@ function cleanEvidence(ev) {
 /* v208: confidence tiers (single source of truth). High-confidence claims
    WITH quoted evidence auto-publish; everything else stays a candidate
    for human correction. Thresholds are starting points, not permanent. */
-const TROPE_CONFIDENCE_TIERS = { high: 0.85, medium: 0.60 };
+export const TROPE_CONFIDENCE_TIERS = { high: 0.85, medium: 0.60 };
 
 /* Pure: which tier a validated trope falls in. */
-function tropeClaimTier(t) {
+export function tropeClaimTier(t) {
   const c = t && isFinite(t.confidence) ? t.confidence : 0;
   if (c >= TROPE_CONFIDENCE_TIERS.high) return 'high';
   if (c >= TROPE_CONFIDENCE_TIERS.medium) return 'medium';
@@ -336,7 +342,7 @@ function tropeClaimTier(t) {
 /* Pure: may this validated trope auto-publish? Only high-confidence
    claims with quoted evidence — the human review queue is for
    corrections, not approvals. */
-function tropeAutoPublish(t) {
+export function tropeAutoPublish(t) {
   return tropeClaimTier(t) === 'high' &&
     Array.isArray(t && t.evidence) && t.evidence.length > 0;
 }
@@ -345,7 +351,7 @@ function tropeAutoPublish(t) {
    re-inference)? AI candidates always; AI auto-confirmed rows too (they
    carry evidence.auto_confirmed). Human/community confirmations and
    rejections are never regenerable. */
-function isRegenerableClaim(row) {
+export function isRegenerableClaim(row) {
   if (!row || row.source_type !== 'ai') return false;
   if (row.status === 'candidate') return true;
   return row.status === 'confirmed' &&
@@ -357,7 +363,7 @@ function isRegenerableClaim(row) {
    call. The model is compared separately (see _pump): with a client model
    override the stored model must match; without one the server default is
    assumed stable. cyrb53, hex; a cache key, not a security hash. */
-function tropeInputHash(book) {
+export function tropeInputHash(book) {
   book = book || {};
   const authors = Array.isArray(book.authors) ? book.authors.join(' ')
     : String(book.authors || '');
@@ -397,14 +403,14 @@ function tropeInputHash(book) {
    the supplied description (normalized: lowercase, whitespace collapsed).
    Without a description there is nothing to check against, so cleaned
    quotes are kept as-is (Trope Lab re-inference fallback). */
-function evidenceQuoteIn(quote, description) {
+export function evidenceQuoteIn(quote, description) {
   if (!description) return true;
   const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
   const q = norm(quote), d = norm(description);
   return q.length >= 4 && d.indexOf(q) !== -1;
 }
 
-function validateTropeResults(raw, description) {
+export function validateTropeResults(raw, description) {
   const out = [], seen = new Set();
   for (const r of raw || []) {
     if (out.length >= 8) break;
@@ -425,7 +431,7 @@ function validateTropeResults(raw, description) {
 
 /* Error type for inference failures. `fatal` means "stop the queue"
    (bad key); anything else is per-book and retried later. */
-function TropeInferError(message, opts) {
+export function TropeInferError(message, opts) {
   const e = new Error(message);
   e.name = 'TropeInferError';
   e.fatal = !!(opts && opts.fatal);
@@ -434,14 +440,14 @@ function TropeInferError(message, opts) {
 }
 
 /* Pure: backoff delay for attempt n (0-based), honoring Retry-After. */
-function tropeBackoffMs(attempt, retryAfterSecs) {
+export function tropeBackoffMs(attempt, retryAfterSecs) {
   if (retryAfterSecs != null && isFinite(retryAfterSecs) && retryAfterSecs >= 0) {
     return Math.min(120000, Math.round(retryAfterSecs * 1000));
   }
   return [1000, 4000, 16000][Math.min(attempt, 2)];
 }
 
-function sleepMs(ms) {
+export function sleepMs(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -450,7 +456,7 @@ function sleepMs(ms) {
    any failure throws TropeInferError (fatal=true means "stop the
    queue and tell the admin to check the key"). fetchFn is injectable
    for tests. */
-async function inferBookTropes(book, opts) {
+export async function inferBookTropes(book, opts) {
   opts = opts || {};
   const fetchFn = opts.fetchFn || apiFetch;
   const delayFn = opts.delayFn || sleepMs;
@@ -595,7 +601,7 @@ async function inferBookTropes(book, opts) {
    rest of the Lab. Runtime callers here (TropeQueue, inferBookTropes,
    ensureTropeQueueWired) resolve them as globals, as before. */
 
-const TropeQueue = {
+export const TropeQueue = {
   _state: null,
   _pumping: false,
   _resolveBook: null, // id -> book (set by the app)
@@ -806,13 +812,13 @@ const TropeQueue = {
    + provider configured) so the next view has real data. Never touches
    the books table or sync logic — purely additive metadata. */
 
-const TROPE_CACHE_TTL_MS = 10 * 60 * 1000;
+export const TROPE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 /* v212: the auto-publish tier — high-confidence AI claims carrying quoted
    evidence (evidence.auto_confirmed). Only these auto-add to the book's
    own trope list; candidates never do. Admin-confirmed candidates lack the
    flag, so a human confirmation never triggers an auto-add. */
-function isAutoConfirmed(row) {
+export function isAutoConfirmed(row) {
   if (!row || row.status !== 'confirmed' || row.source_type !== 'ai') return false;
   let e = row.evidence;
   if (typeof e === 'string') { try { e = JSON.parse(e); } catch (_) { return false; } }
@@ -827,7 +833,7 @@ function isAutoConfirmed(row) {
    (a community/admin confirmation outranks the AI's guess); among equal
    statuses the highest confidence wins. Unknown statuses (e.g. disputed)
    stay hidden until reviewed. Unknown trope ids are dropped. */
-function resolveClaims(claims) {
+export function resolveClaims(claims) {
   const byTrope = {};
   for (const c of claims || []) {
     if (!c || !c.trope_id) continue;
@@ -870,7 +876,7 @@ function resolveClaims(claims) {
      admin-only per RLS; the tombstone rides the synced book row.)
    - Never removes anything from book.tropes. Idempotent. Returns true
    when the book changed (caller re-syncs the editor chips). */
-function autoAddConfirmedTropes(book, claims) {
+export function autoAddConfirmedTropes(book, claims) {
   if (!book || !Array.isArray(claims)) return false;
   if (!Array.isArray(book.tropes)) book.tropes = [];
   if (!Array.isArray(book.tropesAI)) book.tropesAI = [];
@@ -902,7 +908,7 @@ function autoAddConfirmedTropes(book, claims) {
 
 /* She ×-removed an AI-added trope from her list. Tombstone the claim id so
    auto-add never brings it back. */
-function dismissAutoTrope(book, tropeId) {
+export function dismissAutoTrope(book, tropeId) {
   if (!book || !tropeId) return;
   if (!Array.isArray(book.tropesAIDismissed)) book.tropesAIDismissed = [];
   if (!book.tropesAIDismissed.includes(tropeId)) book.tropesAIDismissed.push(tropeId);
@@ -910,7 +916,7 @@ function dismissAutoTrope(book, tropeId) {
   try { if (typeof saveLibrary === 'function') saveLibrary(); } catch (e) {}
 }
 
-const TropeStore = {
+export const TropeStore = {
   _cache: {},      // book_key -> { tropes, at }
   _readRows: null, // async (bookKey) -> rows (injected)
   _readClaims: null, // v205: async (workId) -> claim rows (injected)
@@ -987,9 +993,9 @@ const TropeStore = {
 
 /* Wire the queue + store for app-wide use (modal read-path and Trope Lab
    both call this; Trope Lab then adds its own onEvent). Idempotent. */
-let tropeQueueWiredForApp = false;
+export let tropeQueueWiredForApp = false;
 
-function ensureTropeQueueWired() {
+export function ensureTropeQueueWired() {
   /* v157: actually honor the idempotency this function always claimed —
      without it, the taxonomy refresh below would fire on every book read. */
   if (tropeQueueWiredForApp) return;
@@ -1128,7 +1134,7 @@ function ensureTropeQueueWired() {
    votes: {tropeId: {up, down, mine}} from TropeVotes.getVotes().
    userTagSet: Set of lowercase user-entered tag names (Tropes tab), or null.
    Returns {key, label} — 'yours' | 'confirmed' | 'text'. */
-function tropeProvenance(trope, votes, userTagSet) {
+export function tropeProvenance(trope, votes, userTagSet) {
   var name = String((trope && trope.name) || '').toLowerCase().trim();
   var src = trope && trope.source;
   if (src === 'user' || src === 'you' || (userTagSet && name && userTagSet.has(name))) {
@@ -1139,7 +1145,7 @@ function tropeProvenance(trope, votes, userTagSet) {
   if (net >= 1 || src === 'community') return { key: 'confirmed', label: 'readers confirmed' };
   return { key: 'text', label: 'from the text' };
 }
-function dbTropeChipsHTML(tropes, origin, votes, userTagSet) {
+export function dbTropeChipsHTML(tropes, origin, votes, userTagSet) {
   if (!tropes || !tropes.length) {
     return '<p class="note">No trope data yet.</p>';
   }
@@ -1171,7 +1177,7 @@ function dbTropeChipsHTML(tropes, origin, votes, userTagSet) {
    rows). Votes never rewrite the stored LLM confidence — they only nudge
    what's displayed, bounded so a pile-on can't flip a result. */
 
-const TropeVotes = {
+export const TropeVotes = {
   _getClient: null, // async () -> supabase client (injected)
   _cache: {},       // book_key -> { tropeId: { up, down, mine } }
 
@@ -1250,7 +1256,7 @@ const TropeVotes = {
    chip opens "Is this right? [Yes] [No] [Not sure]" below the chip container.
    Votes go through TropeConfirmVote.cast (rate-limit respected, offline queued).
    Never reveals vote counts or other users' names — only provenance labels. */
-var TropeConfirm = {
+export var TropeConfirm = {
   _row: null,
 
   /* container: element the row is inserted after. opts: {bookKey, tropeId, onDone} */
@@ -1307,7 +1313,7 @@ var TropeConfirm = {
 /* Vote dispatch with rate-limit respect + offline queue (v473, Part 1 item 3).
    Returns 'voted' | 'queued'. Never throws, never surfaces errors to the UI —
    throttled or offline votes queue quietly to the community outbox. */
-var TropeConfirmVote = {
+export var TropeConfirmVote = {
   OUTBOX_KEY: 'cozylibram.cc.outbox.v1',
 
   async cast(bookKey, tropeId, vote) {
@@ -1356,7 +1362,7 @@ var TropeConfirmVote = {
    resurrect them. RLS enforces the admin-only part; these helpers just
    shape the calls. */
 
-const TropeClaims = {
+export const TropeClaims = {
   _sb() {
     return cloudClient().catch(() => null);
   },
@@ -1447,11 +1453,11 @@ const TropeClaims = {
    immediately, so the new trope is inferable with one tap. No file edit,
    no snippet, no redeploy. */
 
-function tropeGenreLabel(g) {
+export function tropeGenreLabel(g) {
   return String(g).split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-const TropeProposals = {
+export const TropeProposals = {
   _getClient: null, // async () -> supabase client (injected)
 
   configure({ getClient } = {}) {
@@ -1637,3 +1643,59 @@ const TropeProposals = {
 };
 
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The consumers — js/150-modal-discovery.js, js/158-works.js, js/161-tropelab.js, js/222-community-corpus.js, js/223-community-corpus-ui.js, js/225-book-portrait.js, js/226-dna-survey.js and js/227-reading-nudges.js — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.TROPE_INFER_TIMEOUT_MS = TROPE_INFER_TIMEOUT_MS;
+window.TROPE_QUEUE_DELAY_MS = TROPE_QUEUE_DELAY_MS;
+window.TROPE_QUEUE_STORE_KEY = TROPE_QUEUE_STORE_KEY;
+window.TROPE_MAX_TOKENS = TROPE_MAX_TOKENS;
+window.TROPE_PROVIDERS = TROPE_PROVIDERS;
+window.tropeInferenceConfigured = tropeInferenceConfigured;
+window.tropeProviderInfo = tropeProviderInfo;
+window.TROPE_TAXONOMY_STORE_KEY = TROPE_TAXONOMY_STORE_KEY;
+window.TropeTaxonomy = TropeTaxonomy;
+window.TROPE_GENRE_ALIASES = TROPE_GENRE_ALIASES;
+window.appGenresToTropeGenres = appGenresToTropeGenres;
+window.TROPE_SYSTEM_PROMPT = TROPE_SYSTEM_PROMPT;
+window.buildTropePrompt = buildTropePrompt;
+window.tropeNormIdent = tropeNormIdent;
+window.bookKeyFor = bookKeyFor;
+window.parseTropeResponse = parseTropeResponse;
+window.cleanEvidence = cleanEvidence;
+window.TROPE_CONFIDENCE_TIERS = TROPE_CONFIDENCE_TIERS;
+window.tropeClaimTier = tropeClaimTier;
+window.tropeAutoPublish = tropeAutoPublish;
+window.isRegenerableClaim = isRegenerableClaim;
+window.tropeInputHash = tropeInputHash;
+window.evidenceQuoteIn = evidenceQuoteIn;
+window.validateTropeResults = validateTropeResults;
+window.TropeInferError = TropeInferError;
+window.tropeBackoffMs = tropeBackoffMs;
+window.sleepMs = sleepMs;
+window.inferBookTropes = inferBookTropes;
+window.TropeQueue = TropeQueue;
+window.TROPE_CACHE_TTL_MS = TROPE_CACHE_TTL_MS;
+window.isAutoConfirmed = isAutoConfirmed;
+window.resolveClaims = resolveClaims;
+window.autoAddConfirmedTropes = autoAddConfirmedTropes;
+window.dismissAutoTrope = dismissAutoTrope;
+window.TropeStore = TropeStore;
+window.tropeQueueWiredForApp = tropeQueueWiredForApp;
+window.ensureTropeQueueWired = ensureTropeQueueWired;
+window.tropeProvenance = tropeProvenance;
+window.dbTropeChipsHTML = dbTropeChipsHTML;
+window.TropeVotes = TropeVotes;
+window.TropeConfirm = TropeConfirm;
+window.TropeConfirmVote = TropeConfirmVote;
+window.TropeClaims = TropeClaims;
+window.tropeGenreLabel = tropeGenreLabel;
+window.TropeProposals = TropeProposals;

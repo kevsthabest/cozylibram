@@ -137,7 +137,14 @@ ok('lists: reserved covers the brand/app/staff terms',
 /* ================= registration ================= */
 const html = read('index.html');
 const swText = read('sw.js');
-ok('index.html registers js/237-handles.js', html.includes('<script src="js/237-handles.js"></script>'));
+// R1 repoint (migration plan §9.3): js/237 is a real ES module since
+// phase 2 batch 7 — the registration pin accepts either exact tag form
+// (classic or module); the assertion and its intent are unchanged and
+// coverage is not narrower (a missing, renamed, or mis-src'd tag still
+// fails both literals).
+ok('index.html registers js/237-handles.js',
+  html.includes('<script src="js/237-handles.js"></script>') ||
+  html.includes('<script type="module" src="js/237-handles.js"></script>'));
 ok('sw.js precaches 237-handles.js', swText.includes("'237-handles.js'"));
 
 /* ================= client behaviour ================= */

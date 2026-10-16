@@ -148,7 +148,10 @@ function ok(name, cond) {
   const ctx = { console, setTimeout, clearTimeout, fetch: null };
   ctx.window = ctx;
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', '157-trope-inference.js'), 'utf8'), ctx,
+  // R3 repoint (migration plan §9.3): js/157 is a real ES module since
+  // phase 2 batch 7 — classicize restores the classic body before
+  // evaluation. Loading plumbing only — assertions untouched.
+  vm.runInContext(classicize(fs.readFileSync(path.join(ROOT, 'js', '157-trope-inference.js'), 'utf8'), '157-trope-inference.js'), ctx,
     { filename: '157-trope-inference.js' });
   // architecture candidate 6: tropeModelList/tropeModelListCache moved to js/161.
   // R3 repoint (migration plan §9.3): js/161 is a real ES module since
