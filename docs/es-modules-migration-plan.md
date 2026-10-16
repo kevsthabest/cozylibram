@@ -990,3 +990,48 @@ at the program manager's direction. The gate closed PASS_WITH_RISK.
   which the per-gate set-equality census (104 = 104 = 104)
   excludes. For future R1 ordering repoints, prefer
   single-position derivations where the suite's structure allows.
+
+---
+
+## Gate notes — PR #274 (v598)
+
+Recorded from the Security Advisor's gate on the phase-2 admin
+cluster PR (js/161, js/162, js/163, js/199), at the program
+manager's direction. The gate closed PASS_WITH_RISK; merged as
+8ee44a3. **Phase 2 opened with this PR.** Line tally at v598:
+54,147 js lines (+1,258 cumulative against the 52,889 baseline).
+
+- **The accessor-bridge mechanism is established.** All 10
+  cross-file binding-reassignment writes into js/163 and js/199
+  (from js/199 itself and from js/095's `leaveApp()`), plus
+  js/161's `tropeProviderCache` (read cross-file by js/157), are
+  published via `Object.defineProperty` get/set bridges that
+  forward to the live module bindings — with ZERO writer or
+  reader expression edits anywhere (js/095 and js/157
+  untouched). The gate independently re-derived the write-site
+  inventory (exactly 10 writes; exotic write channels swept
+  clean), re-ran both two-realm proofs, and probe-proved the
+  production-critical case: js/165's bare `isAppAdmin` read
+  observing `refreshAdminStatus()` flips in both directions
+  through the accessor, and js/157's `tropeProviderInfo()`
+  returning the provider override — and null when none is set —
+  against the converted js/161.
+- **js/161's conversion followed a Builder STOP, ruled by the
+  program manager.** The Builder held js/161 out of the first
+  build because `tropeProviderCache` is reassigned in-module
+  and read cross-file: a value bridge would have frozen it at
+  `null`. The ruling applied this plan's own Low-1
+  prescription — the one-name accessor bridge above — and the
+  cluster converted as a unit in the same PR.
+- **R3 repoints ×3 ruled SOUND.** trope-admin-backfill,
+  trope-models, and trope-provider-picker apply `classicize()`
+  at their vm load sites for js/161; assertions untouched.
+- **Low, standing pattern — 15 value-bridged in-module
+  reassigned bindings across js/161 and js/162.** AST-proven
+  zero cross-file references, so nothing observable diverges.
+  The caution is unchanged: the accessor mechanism now exists
+  for any future reassigned binding that gains a cross-file
+  reader.
+- **Nit — one PR-body sentence initially overstated js/162's
+  reassignment state.** The conversion itself was exact; the
+  body wording was corrected post-merge.
