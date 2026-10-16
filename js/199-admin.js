@@ -13,10 +13,17 @@
    Aggregation is client-side over a capped raw fetch (limit 20000) — the
    right size for tens to hundreds of users, with no extra SQL surface. */
 
-let isAppAdmin = false; // per-session; resolved by refreshAdminStatus()
-let adminTab = 'analytics'; // analytics | tropes | curation | logs | spine | assets | characters
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 
-async function refreshAdminStatus() {
+export let isAppAdmin = false; // per-session; resolved by refreshAdminStatus()
+export let adminTab = 'analytics'; // analytics | tropes | curation | logs | spine | assets | characters
+
+export async function refreshAdminStatus() {
   isAppAdmin = false;
   try {
     if (typeof cloudUser === 'undefined' || !cloudUser) return;
@@ -35,7 +42,7 @@ async function refreshAdminStatus() {
    keeps the Observatory shell and the other tabs;
    renderAdmin() still dispatches to renderAdminBody() there. */
 
-function renderAdmin() {
+export function renderAdmin() {
   if (!signedIn() || !isAppAdmin) {
     setView('<div class="view-head"><h2 class="serif">' + icon('chart') + ' Libram Observatory</h2></div>' +
       '<div class="empty"><div class="big">' + icon('eyeoff') + '</div>' +
@@ -100,17 +107,17 @@ function renderAdmin() {
    ban (reversible), unban, or permanently delete users. Banned users
    are signed out client-side and rejected by every /api/* function. */
 
-let adminModCache = null; // { reports, banned, bannedById }
+export let adminModCache = null; // { reports, banned, bannedById }
 
 // v248: admin-only user directory (user_id -> email), so the moderation UI
 // can identify users instead of showing truncated IDs.
-let adminUserDir = {};
-function modUserLabel(uid) {
+export let adminUserDir = {};
+export function modUserLabel(uid) {
   const e = adminUserDir[uid];
   return e ? e : String(uid).slice(0, 8);
 }
 
-async function fetchUserDirectory() {
+export async function fetchUserDirectory() {
   try {
     const r = await apiFetch('/api/admin-users', {
       method: 'POST',
@@ -125,7 +132,7 @@ async function fetchUserDirectory() {
   } catch (e) { /* directory unavailable — truncated IDs it is */ }
 }
 
-async function fetchModeration() {
+export async function fetchModeration() {
   if (adminModCache) return adminModCache;
   try {
     const sb = await cloudClient().catch(() => null);
@@ -150,13 +157,13 @@ async function fetchModeration() {
   return adminModCache;
 }
 
-const REPORT_REASON_LABELS = {
+export const REPORT_REASON_LABELS = {
   spam: 'Spam', harassment: 'Harassment', inappropriate: 'Inappropriate content',
   fake_account: 'Fake account', other: 'Other',
 };
 
 /* Pure: moderation data -> HTML cards. */
-function moderationHTML(mod) {
+export function moderationHTML(mod) {
   const rl = r => REPORT_REASON_LABELS[r] || r;
   const reportRows = mod.reports.map(r =>
     '<tr><td>' + esc(modUserLabel(r.reported_user_id)) + '</td>' +
@@ -188,26 +195,26 @@ function moderationHTML(mod) {
   return html;
 }
 
-async function modBan(uid) {
+export async function modBan(uid) {
   const sb = await cloudClient();
   const { error } = await sb.from('banned_users').insert({
     user_id: uid, reason: 'manual ban from Observatory', banned_by: (cloudUser && cloudUser.id) || null,
   });
   if (error) throw error;
 }
-async function modUnban(uid) {
+export async function modUnban(uid) {
   const sb = await cloudClient();
   const { error } = await sb.from('banned_users').delete().eq('user_id', uid);
   if (error) throw error;
 }
-async function modSetReportStatus(id, status) {
+export async function modSetReportStatus(id, status) {
   const sb = await cloudClient();
   const { error } = await sb.from('user_reports').update({
     status, handled_by: (cloudUser && cloudUser.id) || null, handled_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw error;
 }
-async function modDeleteUser(uid) {
+export async function modDeleteUser(uid) {
   const r = await apiFetch('/api/admin-users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -217,7 +224,7 @@ async function modDeleteUser(uid) {
   if (!r.ok || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
 }
 
-function wireModeration(body) {
+export function wireModeration(body) {
   const refresh = async () => { adminModCache = null; await renderAdminBody(); };
   const run = async (label, fn) => {
     try { await fn(); toast(label); await refresh(); }
@@ -250,7 +257,7 @@ function wireModeration(body) {
 }
 
 /* Pure: user activity rows with Ban/Unban + Delete actions. */
-function userActivityRowsHTML(activity, bannedById) {
+export function userActivityRowsHTML(activity, bannedById) {
   return activity.slice(0, 50).map(u => {
     const toggle = bannedById[u.uid]
       ? '<button class="btn ghost sm" data-mod-unban="' + esc(u.uid) + '">Unban</button>'
@@ -289,3 +296,42 @@ function userActivityRowsHTML(activity, bannedById) {
    js/162-charlab.js (architecture candidate 6). This file keeps
    the Observatory shell and the other tabs; renderAdmin() still
    dispatches adminTab === 'characters' to renderCharacterLab() there. */
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers — js/095-gate.js (sign-out
+   reset), js/105-account.js and js/159-characters.js (admin menu
+   entries), js/165-editionassets.js (the isAppAdmin gate),
+   js/161-tropelab.js (adminTab guards), js/163-analytics.js (the
+   moderation helpers) and js/200-boot.js (boot wiring) — reach these
+   names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone.
+   The four state bindings are republished as accessor properties, not
+   value copies: js/095-gate.js reassigns isAppAdmin, adminModCache and
+   adminUserDir on sign-out, and isAppAdmin / adminTab are read live by
+   the consumers above. A value copy would freeze the initial state and
+   silently drop the sign-out reset; the getter/setter pair forwards
+   every read and write to the module binding, so no consumer
+   expression changes. */
+Object.defineProperty(window, 'isAppAdmin', { get: () => isAppAdmin, set: (v) => { isAppAdmin = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminTab', { get: () => adminTab, set: (v) => { adminTab = v; }, enumerable: true, configurable: true });
+window.refreshAdminStatus = refreshAdminStatus;
+window.renderAdmin = renderAdmin;
+Object.defineProperty(window, 'adminModCache', { get: () => adminModCache, set: (v) => { adminModCache = v; }, enumerable: true, configurable: true });
+Object.defineProperty(window, 'adminUserDir', { get: () => adminUserDir, set: (v) => { adminUserDir = v; }, enumerable: true, configurable: true });
+window.modUserLabel = modUserLabel;
+window.fetchUserDirectory = fetchUserDirectory;
+window.fetchModeration = fetchModeration;
+window.REPORT_REASON_LABELS = REPORT_REASON_LABELS;
+window.moderationHTML = moderationHTML;
+window.modBan = modBan;
+window.modUnban = modUnban;
+window.modSetReportStatus = modSetReportStatus;
+window.modDeleteUser = modDeleteUser;
+window.wireModeration = wireModeration;
+window.userActivityRowsHTML = userActivityRowsHTML;
