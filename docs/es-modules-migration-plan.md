@@ -1167,3 +1167,43 @@ baseline); 57 of 104 files converted.
 - **Nit — the PR body mis-stated js/225's consumers**
   (js/150, js/160, and js/180, for the real js/150, js/226,
   and js/227). Patched post-merge.
+
+## Gate notes — PR #278 (v602)
+
+Recorded from the Security Advisor's gate on the phase-2
+census batch 5 PR, at the program manager's direction.
+The gate closed PASS_WITH_RISK; merged as 08d85ac. Live at
+v602 with 64 module tags. Line tally at v602: 54,938 js
+lines (+275 this PR, +2,049 cumulative against the 52,889
+baseline); 64 of 104 files converted.
+
+- **The gate's census was fully independent.** The Advisor
+  wrote its own census and reproduced the Builder's with
+  zero per-file diffs across all 104 files — the fourth
+  consecutive PR with a zero-diff independent census.
+  Census totals: 104 files / 745 edges / 2,264 names.
+- **Low, standing pattern — eleven value-bridged
+  in-module-reassigned bindings** (js/134's
+  `metaConflicts`; js/159's `charNavStack`,
+  `charModalReturn`, `characterViewId`, and
+  `bookCharViewId`; js/219's `__msMergedUid`,
+  `__msMergeRetryAt`, and `__msPushTimer`; js/232's
+  `toyTableMissing` and `toySupportKnown`; js/239's
+  `finaleCloseFn`). The value-bridge audit proved zero
+  cross-file readers three ways, so nothing observable
+  diverges. The caution is unchanged.
+- **The one repoint ruled SOUND and mutation-tested.**
+  R1 ×1: the social-thought-of-you suite's js/232 tag pin.
+  Mutation-tested five ways — missing, wrong-src, and
+  attribute-swapped forms FAIL; both literals PASS.
+- **js/159's seven outbound writes into js/000 verified
+  sound** — module→classic, with `view` ×4 and
+  `animateIn` ×3, and js/000 byte-identical.
+- **§9.5 A/B byte-identical for community-corpus**, the
+  one baseline suite reading batch sources
+  (js/154/159/219).
+- **Whole-tree grep found zero remaining v601 pins**
+  after the bump.
+- **Nit — a stale "no version bump in this PR" sentence
+  in the body's intro.** Patched post-merge and verified
+  by read-back.
