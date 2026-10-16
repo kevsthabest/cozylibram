@@ -662,7 +662,11 @@ function wireAccountForm(root) {
  * so the panel state seeded from the loaded profile is what a
  * gift-seg save folds into the row. Until the load lands (or if it
  * fails) the cluster stays hidden: giftSupported's fail-closed rule
- * is js/195's reveal, and an unwired cluster never appears. */
+ * is js/195's reveal, and an unwired cluster never appears. The
+ * titled card around the cluster (#pf-giftcard) renders hidden
+ * with it and shares its fate — js/195's reveal shows both at the
+ * same moment, and its fail-closed paths drop both — so a refused
+ * load never leaves an empty titled card on the page. */
 function renderProfile() {
   const htmlGiftCluster = (signedIn() && typeof giftClusterHTML === 'function') ? giftClusterHTML('pf', false) : '';
   setView(
@@ -670,7 +674,7 @@ function renderProfile() {
     '<h2 class="serif">Profile</h2></div>' +
     '<div class="pf-card">' + accountFormHTML() + '</div>' +
     (htmlGiftCluster
-      ? '<div class="pf-card" style="margin-top:12px"><h3 class="set-sub serif" style="margin-top:0">Gift a Book</h3>' +
+      ? '<div class="pf-card" id="pf-giftcard" style="margin-top:12px" hidden><h3 class="set-sub serif" style="margin-top:0">Gift a Book</h3>' +
         htmlGiftCluster + '</div>'
       : '')
   );

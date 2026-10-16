@@ -612,18 +612,29 @@ function wireCirclePrivacyPanel(root, priv, p) {
   // v582: the gift block stays hidden unless js/243 confirms the
   // server supports gifts (fail closed pre-migration); once
   // confirmed, reveal it and let js/243 fill the async sections.
+  // The Profile view wraps the block in a titled card (#<p>-giftcard,
+  // js/105) that starts hidden with it and shares its fate — revealed
+  // at this same moment, dropped on these same fail-closed paths —
+  // so a refused load never leaves an empty titled card behind.
+  // Doors that render the block bare have no card to move.
   const gwrap = root.querySelector('#' + p + '-giftwrap');
   if (gwrap) {
+    const gcard = root.querySelector('#' + p + '-giftcard');
+    const dropGift = () => {
+      try { gwrap.remove(); } catch (e) {}
+      if (gcard) { try { gcard.remove(); } catch (e) {} }
+    };
     if (typeof giftSupported === 'function') {
       giftSupported().then(ok => {
         if (!document.body.contains(gwrap)) return;
         if (ok) {
           gwrap.hidden = false;
+          if (gcard) gcard.hidden = false;
           const slot = root.querySelector('#' + p + '-gift-slot');
           if (slot && typeof fillGiftSettings === 'function') fillGiftSettings(slot);
-        } else gwrap.remove();
-      }).catch(() => { try { gwrap.remove(); } catch (e) {} });
-    } else gwrap.remove();
+        } else dropGift();
+      }).catch(() => dropGift());
+    } else dropGift();
   }
   // v590: the shield is wired where it renders now (Settings → Reading,
   // via wireShieldSeg) — the sharing panel no longer carries it.
