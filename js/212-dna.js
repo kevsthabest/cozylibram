@@ -5,7 +5,13 @@
    (Hearthside) mockups — theme-aware colors, ghost numerals, ember dots
    (no glow), spice hidden when unrated, deduped tropes, longest streak. ---- */
 
-function readingDnaData() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function readingDnaData() {
   const read = library.filter(b => b.status === 'read');
   if (!read.length) return null;
 
@@ -43,7 +49,7 @@ function readingDnaData() {
 
 /* v487: drop a trope when a strictly longer trope name in the same set
    contains it (case-insensitive substring). Pure — unit tested. */
-function dedupeTropes(tropeCount) {
+export function dedupeTropes(tropeCount) {
   const names = Object.keys(tropeCount || {});
   const drop = new Set();
   names.forEach(a => {
@@ -63,7 +69,7 @@ function dedupeTropes(tropeCount) {
 /* ---- v487: theme-aware palette for the share card ----
    Canvas can't read CSS vars, so pull them from the root computed style.
    `light` is derived from --bg luminance (no hardcoded theme list). */
-function portraitTheme() {
+export function portraitTheme() {
   let cs = null;
   try { cs = (typeof getComputedStyle === 'function') ? getComputedStyle(document.documentElement) : null; } catch (e) {}
   const g = (n, fb) => {
@@ -86,14 +92,14 @@ function portraitTheme() {
   t.light = dnaLum(bg) > 0.4;
   return t;
 }
-function dnaLum(hex) {
+export function dnaLum(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return 0;
   const n = parseInt(m[1], 16);
   const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
   return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
 }
-function dnaMix(a, b, t) {
+export function dnaMix(a, b, t) {
   const pa = /^#?([0-9a-f]{6})$/i.exec(String(a || '').trim());
   const pb = /^#?([0-9a-f]{6})$/i.exec(String(b || '').trim());
   if (!pa || !pb) return a;
@@ -101,7 +107,7 @@ function dnaMix(a, b, t) {
   const ch = (s) => Math.round(((na >> s) & 255) * (1 - t) + (((nb >> s) & 255) * t));
   return '#' + [16, 8, 0].map(s => ch(s).toString(16).padStart(2, '0')).join('');
 }
-function dnaAlpha(hex, a) {
+export function dnaAlpha(hex, a) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return hex;
   const n = parseInt(m[1], 16);
@@ -109,7 +115,7 @@ function dnaAlpha(hex, a) {
 }
 
 /* v487: centered letterspaced text (ctx.letterSpacing is spotty cross-browser). */
-function dnaSpaced(x, text, cx, y, spacing) {
+export function dnaSpaced(x, text, cx, y, spacing) {
   const chars = [...String(text)];
   const widths = chars.map(c => { try { return x.measureText(c).width; } catch (e) { return 0; } });
   const total = widths.reduce((s, w) => s + w, 0) + spacing * Math.max(0, chars.length - 1);
@@ -119,7 +125,7 @@ function dnaSpaced(x, text, cx, y, spacing) {
   x.textAlign = prev;
 }
 /* v487: shrink a font to fit maxW, then ellipsize if still too wide. */
-function dnaFitSize(x, text, maxW, mkFont, base, min) {
+export function dnaFitSize(x, text, maxW, mkFont, base, min) {
   let s = base;
   x.font = mkFont(s);
   while (s > min) {
@@ -130,7 +136,7 @@ function dnaFitSize(x, text, maxW, mkFont, base, min) {
   }
   return s;
 }
-function dnaEllipsize(x, text, maxW) {
+export function dnaEllipsize(x, text, maxW) {
   text = String(text);
   let w = 0;
   try { w = x.measureText(text).width; } catch (e) {}
@@ -144,12 +150,12 @@ function dnaEllipsize(x, text, maxW) {
   return t + '…';
 }
 
-var SERIF = "Georgia, 'Times New Roman', serif";
-var SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+export var SERIF = "Georgia, 'Times New Roman', serif";
+export var SANS = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 /* v487: ember dots for the spice level. No glow (User's critique: the italic
    title + ghost numerals are decoration enough). */
-function dnaSpiceDots(x, d, t, x0, cy) {
+export function dnaSpiceDots(x, d, t, x0, cy) {
   const r = 29, gap = 24;
   const full = Math.min(5, Math.floor(d.avgSpice + 1e-6));
   const frac = d.avgSpice - Math.floor(d.avgSpice + 1e-6);
@@ -182,7 +188,7 @@ function dnaSpiceDots(x, d, t, x0, cy) {
 }
 
 /* v487: Variant B (Midnight) — dark, dramatic. Ghost numerals, ember dots. */
-function drawPortraitMidnight(x, W, H, d, t) {
+export function drawPortraitMidnight(x, W, H, d, t) {
   const pad = 90;
   x.fillStyle = t.bg; x.fillRect(0, 0, W, H);
   // Radial glow behind the title (theme-tinted, no extra decoration)
@@ -281,7 +287,7 @@ function drawPortraitMidnight(x, W, H, d, t) {
 }
 
 /* v487: Variant A (Hearthside) — light, bookplate. Used on light themes. */
-function drawPortraitHearthside(x, W, H, d, t) {
+export function drawPortraitHearthside(x, W, H, d, t) {
   const pad = 90;
   let bg = null;
   try {
@@ -400,7 +406,7 @@ function drawPortraitHearthside(x, W, H, d, t) {
 
 /* v487: theme-aware entry. Dark themes → Midnight (B); light → Hearthside (A).
    Spice section renders only when avgSpice > 0. */
-function drawDnaImage(d) {
+export function drawDnaImage(d) {
   const W = 1080, H = 1920;
   let cv = null;
   try {
@@ -415,7 +421,7 @@ function drawDnaImage(d) {
   return cv;
 }
 
-function shareDnaImage() {
+export function shareDnaImage() {
   // v500: v2 share sheet is the default. The v1 card stays reachable behind
   // a flag (localStorage portraitShareV1 = '1') until v2 verifies live.
   let v1 = false;
@@ -431,7 +437,7 @@ function shareDnaImage() {
 }
 
 /* ---- Reading DNA section in the Stats tab ---- */
-function dnaSectionHTML() {
+export function dnaSectionHTML() {
   const d = readingDnaData();
   if (!d) return '';
   const tropeChips = d.topTropes.map(([t, c]) =>
@@ -449,14 +455,14 @@ function dnaSectionHTML() {
     '</div>';
 }
 
-function wireDnaShare() {
+export function wireDnaShare() {
   const btn = document.getElementById('dna-share-btn');
   if (btn) btn.addEventListener('click', shareDnaImage);
 }
 
 /* ---- Reader Portrait hero card (v486): prominent placement at the top of
    the Details view. Wraps dnaSectionHTML(); returns '' when gated/empty. ---- */
-function dnaHeroHTML() {
+export function dnaHeroHTML() {
   if (typeof dnaSectionHTML !== 'function') return '';
   const h = dnaSectionHTML();
   return h ? '<div class="dna-hero">' + h + '</div>' : '';
@@ -477,14 +483,14 @@ function dnaHeroHTML() {
    ===================================================================== */
 
 /* FNV-1a string hash — the deterministic per-reader seed. */
-function portraitHash(str) {
+export function portraitHash(str) {
   let h = 0x811c9dc5;
   const s = String(str == null ? '' : str);
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return h >>> 0;
 }
 /* mulberry32 PRNG from a numeric seed. */
-function portraitRng(seed) {
+export function portraitRng(seed) {
   let a = (seed >>> 0) || 1;
   return function () {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -493,13 +499,13 @@ function portraitRng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function portraitReaderKey() {
+export function portraitReaderKey() {
   try { if (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) return 'u:' + cloudUser.id; } catch (e) {}
   try { if (typeof localUid !== 'undefined' && localUid) return 'l:' + localUid; } catch (e) {}
   return 'local-reader';
 }
 /* Distinct-work key: duplicate editions of the same work count once. */
-function portraitWorkKey(b) {
+export function portraitWorkKey(b) {
   try {
     if (typeof workKeysFor === 'function') {
       const k = workKeysFor(b);
@@ -510,7 +516,7 @@ function portraitWorkKey(b) {
   const a = ((b && b.authors) || []).join(' ').trim().toLowerCase();
   return 'w:' + t + '|' + a;
 }
-function portraitFinishedAt(b) {
+export function portraitFinishedAt(b) {
   if (b && b.dateFinished) { const d = new Date(b.dateFinished); if (!isNaN(d)) return d; }
   let best = null;
   ((b && b.log) || []).forEach(e => {
@@ -523,11 +529,11 @@ function portraitFinishedAt(b) {
 /* Variant pools (spec amendment): copy with tasteful variants stays a
    pool; selection is seeded by reader id + month, matching the sticker
    rotation — stable for a reader's share, fresh across months. */
-function portraitMonthKey(d) {
+export function portraitMonthKey(d) {
   const dt = d || new Date();
   return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
 }
-function portraitPickFromPool(pool, readerKey, salt) {
+export function portraitPickFromPool(pool, readerKey, salt) {
   if (!pool || !pool.length) return null;
   if (pool.length === 1) return pool[0];
   const rng = portraitRng(portraitHash(String(readerKey || '') + ':' + portraitMonthKey() + ':' + String(salt || '')));
@@ -538,7 +544,7 @@ function portraitPickFromPool(pool, readerKey, salt) {
    book = one vote and dominance is honest. Genre tests are substring checks
    against the book's normalized genre list; dark romance also accepts the
    trope signal (it is often shelved as plain "Romance"). */
-const PORTRAIT_CLUSTERS = [
+export const PORTRAIT_CLUSTERS = [
   { key: 'romantasy',   titles: ['Romantasy Royalty'],    tagline: 'here for the courts and the chaos',
     test: (g) => g('romantasy') || (g('romance') && g('fantasy')) },
   { key: 'darkromance', titles: ['Dark Romance Darling', 'Dark Romance Devotee', 'Dark Romance Romantic', 'Dark Romance Shadow Romantic', 'Dark Romance Midnight Romantic'], tagline: 'here for the darkness and the devotion', // DRAFT-EXT tagline
@@ -566,11 +572,11 @@ const PORTRAIT_CLUSTERS = [
   { key: 'memoir',      titles: ['Life Story Collector'], tagline: 'here for the lives behind the stories', // DRAFT-EXT
     test: (g) => g('memoir') || g('biography') || g('autobiography') },
 ];
-const PORTRAIT_GENRE_HOPPER = { key: 'hopper', titles: ['Genre Hopper'], tagline: null };
+export const PORTRAIT_GENRE_HOPPER = { key: 'hopper', titles: ['Genre Hopper'], tagline: null };
 
 /* Trope praise-quotes (spec bank, verbatim). Keys are normalized trope
    names: lowercase, alphanumerics only. */
-const PORTRAIT_TROPE_QUOTES = {
+export const PORTRAIT_TROPE_QUOTES = {
   enemiestolovers: 'Devastating taste in enemies-to-lovers.',
   forcedproximity: 'One bed? Say less.',
   morallygrey: 'Here for the morally grey, every time.',
@@ -587,8 +593,8 @@ const PORTRAIT_TROPE_QUOTES = {
   possessive: 'Mine, said the book boyfriend.',
   billionaire: 'Old money, new problems.'
 };
-function portraitTropeKey(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
-function portraitTropeQuote(name) {
+export function portraitTropeKey(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+export function portraitTropeQuote(name) {
   const q = PORTRAIT_TROPE_QUOTES[portraitTropeKey(name)];
   if (q) return q;
   // Fallback in the bank's voice for tropes outside the bank.
@@ -597,7 +603,7 @@ function portraitTropeQuote(name) {
 
 /* Attribution patterns. "and counting" is reserved for tropes whose history
    is actively growing (rule 3); the two static forms rotate by seed+rank. */
-function portraitAttribution(n, growing, seed, rank) {
+export function portraitAttribution(n, growing, seed, rank) {
   if (growing) return '— ' + n + ' books and counting';
   const forms = ['— ' + n + " books' worth of evidence", '— ' + n + ' books deep'];
   return forms[Math.abs((seed || 0) + (rank || 0)) % forms.length];
@@ -606,7 +612,7 @@ function portraitAttribution(n, growing, seed, rank) {
 /* Appetite ladder (rule 4): first axis with evidence wins; never guessed.
    Spice needs 10+ spice-rated read books. "a slow burn with teeth" fires
    ONLY when Slow Burn is itself a qualifying trope. */
-function portraitAppetite(spiceRated, avgSpice, qualifyingTropes, cluster) {
+export function portraitAppetite(spiceRated, avgSpice, qualifyingTropes, cluster) {
   if (spiceRated >= 10 && avgSpice > 0) {
     if (avgSpice >= 4.0) return { axis: 'spice', text: 'a dragonfire palate — no regrets' };
     if (avgSpice >= 3.0) {
@@ -624,7 +630,7 @@ function portraitAppetite(spiceRated, avgSpice, qualifyingTropes, cluster) {
   return null;
 }
 
-function buildReaderPortrait() {
+export function buildReaderPortrait() {
   const read = library.filter(b => b.status === 'read');
   if (!read.length) return null;
 
@@ -749,3 +755,47 @@ function buildReaderPortrait() {
     readerKey: readerKey
   };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers, js/170-stats.js and js/228-portrait-share.js, call these functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.readingDnaData = readingDnaData;
+window.dedupeTropes = dedupeTropes;
+window.portraitTheme = portraitTheme;
+window.dnaLum = dnaLum;
+window.dnaMix = dnaMix;
+window.dnaAlpha = dnaAlpha;
+window.dnaSpaced = dnaSpaced;
+window.dnaFitSize = dnaFitSize;
+window.dnaEllipsize = dnaEllipsize;
+window.SERIF = SERIF;
+window.SANS = SANS;
+window.dnaSpiceDots = dnaSpiceDots;
+window.drawPortraitMidnight = drawPortraitMidnight;
+window.drawPortraitHearthside = drawPortraitHearthside;
+window.drawDnaImage = drawDnaImage;
+window.shareDnaImage = shareDnaImage;
+window.dnaSectionHTML = dnaSectionHTML;
+window.wireDnaShare = wireDnaShare;
+window.dnaHeroHTML = dnaHeroHTML;
+window.portraitHash = portraitHash;
+window.portraitRng = portraitRng;
+window.portraitReaderKey = portraitReaderKey;
+window.portraitWorkKey = portraitWorkKey;
+window.portraitFinishedAt = portraitFinishedAt;
+window.portraitMonthKey = portraitMonthKey;
+window.portraitPickFromPool = portraitPickFromPool;
+window.PORTRAIT_CLUSTERS = PORTRAIT_CLUSTERS;
+window.PORTRAIT_GENRE_HOPPER = PORTRAIT_GENRE_HOPPER;
+window.PORTRAIT_TROPE_QUOTES = PORTRAIT_TROPE_QUOTES;
+window.portraitTropeKey = portraitTropeKey;
+window.portraitTropeQuote = portraitTropeQuote;
+window.portraitAttribution = portraitAttribution;
+window.portraitAppetite = portraitAppetite;
+window.buildReaderPortrait = buildReaderPortrait;
