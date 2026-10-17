@@ -127,7 +127,12 @@ const NOW = new Date().toISOString();
   resetPrivacy();
 
   /* ---------- A. registration + payload hygiene ---------- */
-  ok('index.html registers js/230-privacy.js', html.includes('<script src="js/230-privacy.js"></script>'));
+  // R1 repoint (migration plan §9.3): js/230's tag is a module tag since
+  // its ESM conversion; the registration assertion accepts either exact
+  // tag form — the same assertion, coverage unchanged.
+  ok('index.html registers js/230-privacy.js',
+    html.includes('<script src="js/230-privacy.js"></script>') ||
+    html.includes('<script type="module" src="js/230-privacy.js"></script>'));
   const swText = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8');
   ok('sw.js precaches 230-privacy.js', swText.includes("'230-privacy.js'"));
   const dflt = probe('privacyState()');

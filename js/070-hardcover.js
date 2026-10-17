@@ -5,12 +5,18 @@
 // v89: the personal token never reaches the browser. The app POSTs queries to
 // the same-origin /api/hardcover proxy (Pages Function or server.py), which
 // attaches the token server-side. /config.js only carries a boolean flag.
-const HC_API = '/api/hardcover';
-function hcReady() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const HC_API = '/api/hardcover';
+export function hcReady() {
   try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.hardcover)); }
   catch (e) { return false; }
 }
-async function hcGraphQL(query) {
+export async function hcGraphQL(query) {
   if (!hcReady()) return null;
   // v77: every failure mode throws a specific, human-readable error instead of
   // silently returning undefined — callers (series overlay, test button,
@@ -60,14 +66,14 @@ async function hcGraphQL(query) {
   if (!d.data) throw new Error('Hardcover returned no data — the token may be invalid or revoked.');
   return d.data;
 }
-function hcHits(data) {
+export function hcHits(data) {
   try { return data.search.results.hits || []; } catch (e) { return []; }
 }
 
 // v516 (#132): does this Hardcover doc actually list the book's ISBN?
 // Same guard as the page-count waterfall (js/080): normalize both sides
 // and compare ISBN-13 forms, so a 10 on one side matches a 13 on the other.
-function hcDocIsbnMatch(doc, isbn) {
+export function hcDocIsbnMatch(doc, isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '').toUpperCase();
   if (!clean || !doc) return false;
   const want13 = (typeof isbn13of === 'function') ? isbn13of(clean) : clean;
@@ -80,7 +86,7 @@ function hcDocIsbnMatch(doc, isbn) {
 // v516 (#132): title comparison form for the fallback matcher — the same
 // recipe as normTitle (js/134): trailing "(Series, #1)" dropped, case and
 // punctuation ignored.
-function hcMatchTitle(t) {
+export function hcMatchTitle(t) {
   return String(t || '')
     .replace(/\s*\([^)]*\)\s*$/, '')
     .toLowerCase()
@@ -96,7 +102,7 @@ function hcMatchTitle(t) {
 // from turning its first fragment into a "main title". Two different
 // subtitles with a shared main title ("Dune: Part One" / "Part Two") match
 // neither form and are rejected.
-function hcTitleMatch(docTitle, bookTitle) {
+export function hcTitleMatch(docTitle, bookTitle) {
   const a = hcMatchTitle(docTitle), b = hcMatchTitle(bookTitle);
   if (!a || !b) return false;
   if (a === b) return true;
@@ -111,7 +117,7 @@ function hcTitleMatch(docTitle, bookTitle) {
 
 // First-author agreement. Either side missing author data can't disagree —
 // the (already strict) title match carries the acceptance then.
-function hcAuthorMatch(doc, book) {
+export function hcAuthorMatch(doc, book) {
   const bFirst = (book.authors || [])[0], dFirst = (doc.author_names || [])[0];
   if (!bFirst || !dFirst) return true;
   const key = (typeof authorKey === 'function') ? authorKey
@@ -132,7 +138,7 @@ function hcAuthorMatch(doc, book) {
 // exists), or the full titles match AND the first authors agree. An ISBN
 // mismatch alone never vetoes a title+author match: the book's ISBN may
 // belong to a different edition of the same work.
-function hcFallbackDocMatches(doc, book) {
+export function hcFallbackDocMatches(doc, book) {
   if (!doc || !book) return false;
   if (hcDocIsbnMatch(doc, book.isbn)) return true;
   return hcTitleMatch(doc.title, book.title) && hcAuthorMatch(doc, book);
@@ -140,7 +146,7 @@ function hcFallbackDocMatches(doc, book) {
 
 // Enrich a book with Hardcover data: series, content warnings, moods, genres, rating.
 // Returns true when Hardcover had the book.
-async function enrichHardcover(book) {
+export async function enrichHardcover(book) {
   if (!hcReady() || book.hcEnriched) return false;
   try {
     let doc = null;
@@ -164,7 +170,7 @@ async function enrichHardcover(book) {
 // v191: trope suggestions, extracted from enrichHardcover so books that skip
 // the Hardcover re-fetch (shared-cache hits, Hardcover-search adds) still get
 // suggestions — refreshTropeSuggestions only needs the cached hcId.
-async function enrichTropesFor(book) {
+export async function enrichTropesFor(book) {
   // v81: trope suggestions ride along with enrichment (best-effort; never
   // fails the enrichment). Pace the extra tags request under the rate limit.
   try {
@@ -176,7 +182,7 @@ async function enrichTropesFor(book) {
   } catch (e) {}
 }
 
-function applyHardcoverDoc(book, doc) {
+export function applyHardcoverDoc(book, doc) {
   if (Array.isArray(doc.content_warnings) && doc.content_warnings.length)
     book.contentWarnings = Array.from(new Set(doc.content_warnings.map(String)));
   const fs = doc.featured_series;
@@ -231,7 +237,7 @@ function applyHardcoverDoc(book, doc) {
 // Indie titles (KU romance especially) are often in neither Google Books nor
 // Open Library. The Search tab asks Hardcover last before giving up, so those
 // books can still be added with full metadata instead of by hand.
-function hcDocToBook(doc) {
+export function hcDocToBook(doc) {
   const isbns = ((doc.isbns || []).map(i => String(i).replace(/[^0-9X]/gi, '')).filter(Boolean));
   const isbn = isbns.find(s => s.length === 13) || isbns[0] || '';
   const book = {
@@ -262,7 +268,7 @@ function hcDocToBook(doc) {
   return book;
 }
 
-async function hcSearchDocs(q) {
+export async function hcSearchDocs(q) {
   // v196: raw Hardcover docs (unmapped) so the ISBN waterfall can verify a
   // doc's isbns[] contains the scanned ISBN before accepting the match —
   // Typesense search is fuzzy, and a near-miss title is worse than no match.
@@ -272,7 +278,7 @@ async function hcSearchDocs(q) {
     return hcHits(data).map(h => h.document).filter(d => d && d.title);
   } catch (e) { return []; }
 }
-async function hcSearchBooks(q) {
+export async function hcSearchBooks(q) {
   return (await hcSearchDocs(q)).map(hcDocToBook);
 }
 
@@ -282,12 +288,12 @@ async function hcSearchBooks(q) {
 // manual bulk run. Books Hardcover doesn't know get hcCheckedAt so misses
 // aren't re-hammered every boot (retried after 7 days); the manual button
 // always retries everything.
-let hcEnrichBusy = false;
-function hcSweepTargets() {
+export let hcEnrichBusy = false;
+export function hcSweepTargets() {
   const weekAgo = Date.now() - 7 * 86400000;
   return library.filter(b => !b.hcEnriched && !(b.hcCheckedAt > weekAgo));
 }
-async function autoEnrichSweep() {
+export async function autoEnrichSweep() {
   if (hcEnrichBusy || !hcReady()) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const targets = hcSweepTargets();
@@ -314,7 +320,7 @@ async function autoEnrichSweep() {
 }
 
 // Display-only Hardcover sections for the detail modal (series, moods, warnings).
-function hcDetailHTML(b) {
+export function hcDetailHTML(b) {
   let h = '';
   // v133: series display moved to the inline "In this series" block in the
   // modal (150-modal-discovery.js) — the name is no longer a tap-through.
@@ -376,7 +382,7 @@ if (typeof document !== 'undefined' && document.addEventListener && !window.__wa
 
 // Second public-rating signal from Open Library (free, no key), merged with the
 // Google Books score via a count-weighted average. Falls back gracefully.
-async function enrichRatings(book) {
+export async function enrichRatings(book) {
   try {
     const q = book.isbn ? book.isbn : (book.title + ' ' + (book.authors[0] || '')).trim();
     if (!q) return book;
@@ -410,7 +416,7 @@ async function enrichRatings(book) {
   return book;
 }
 
-function alreadyHave(book) {
+export function alreadyHave(book) {
   return library.some(b =>
     (book.isbn && b.isbn && b.isbn === book.isbn) ||
     (b.title.toLowerCase() === book.title.toLowerCase() &&
@@ -418,7 +424,7 @@ function alreadyHave(book) {
   );
 }
 
-function addBook(book, openEditor, source) {
+export function addBook(book, openEditor, source) {
   // v495 (#125): normalize the shape AND wrap for dirty-flag tracking — every
   // book entering the library is tracked (migrateBook is idempotent, and this
   // is also the C1 invariant: no hand-built book shapes).
@@ -482,3 +488,41 @@ function addBook(book, openEditor, source) {
   return book;
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — 061-gbooks-key.js, 062-tropes.js,
+   080-pagecount.js, 095-gate.js, 130-add.js, 132-import.js,
+   133-bookmory.js, 134-verify.js, 136-coverpicker.js, 137-shelf.js,
+   138-editions.js, 139-import-concierge.js, 140-collections.js,
+   150-modal-discovery.js, 180-settings.js, 195-coven.js, 196-recos.js,
+   198-discovery.js, 232-thought-of-you.js and 239-finale.js — reach these
+   names at runtime, so the bridge republishes exactly the pre-conversion
+   public surface on window. Bare-name lookups in classic scripts resolve
+   through the global object, so the caller needs no changes. Module scripts
+   are deferred, so the bridge is in place before any consumer can run.
+   Remove a name from this bridge only when its last classic caller is gone.
+ */
+window.HC_API = HC_API;
+window.hcReady = hcReady;
+window.hcGraphQL = hcGraphQL;
+window.hcHits = hcHits;
+window.hcDocIsbnMatch = hcDocIsbnMatch;
+window.hcMatchTitle = hcMatchTitle;
+window.hcTitleMatch = hcTitleMatch;
+window.hcAuthorMatch = hcAuthorMatch;
+window.hcFallbackDocMatches = hcFallbackDocMatches;
+window.enrichHardcover = enrichHardcover;
+window.enrichTropesFor = enrichTropesFor;
+window.applyHardcoverDoc = applyHardcoverDoc;
+window.hcDocToBook = hcDocToBook;
+window.hcSearchDocs = hcSearchDocs;
+window.hcSearchBooks = hcSearchBooks;
+window.hcEnrichBusy = hcEnrichBusy;
+window.hcSweepTargets = hcSweepTargets;
+window.autoEnrichSweep = autoEnrichSweep;
+window.hcDetailHTML = hcDetailHTML;
+window.enrichRatings = enrichRatings;
+window.alreadyHave = alreadyHave;
+window.addBook = addBook;

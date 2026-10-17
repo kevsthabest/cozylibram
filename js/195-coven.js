@@ -12,10 +12,16 @@
 /* User's call (2026-10-11): the social section is called "The Hearth" in
    every theme. The old theme-specific names (Night Court, Harvest Court,
    Book Club, ...) are retired. */
-function covenName() { return 'The Hearth'; }
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function covenName() { return 'The Hearth'; }
 // Possessive-safe form: "your hearth", not "your the hearth".
-function covenNameBare() { return covenName().replace(/^the\s+/i, ''); }
-function refreshCovenNav() {
+export function covenNameBare() { return covenName().replace(/^the\s+/i, ''); }
+export function refreshCovenNav() {
   const btn = document.querySelector('.bottom-nav [data-nav="coven"]');
   if (!btn) return;
   const name = covenName();
@@ -24,17 +30,17 @@ function refreshCovenNav() {
   if (label) label.textContent = name;
 }
 
-let circFriend = null;   // { id, name } — friend whose shelves are open
-let circShelf = 'all';   // shelf filter in the friend view
-let circBooks = [];      // friend's visible books (this session's view)
-const circProfiles = {}; // user_id -> profile row cache (names, avatars)
+export let circFriend = null;   // { id, name } — friend whose shelves are open
+export let circShelf = 'all';   // shelf filter in the friend view
+export let circBooks = [];      // friend's visible books (this session's view)
+export const circProfiles = {}; // user_id -> profile row cache (names, avatars)
 
 /* ---------- invite links ---------- */
 // v240: invite links replaced the old 6-char codes. The token is a 12-char
 // URL-safe crypto-random string (72 bits) — unguessable, so invite codes are
 // no longer enumerable. It doubles as the link slug: #/invite/<token>.
-const INVITE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-function genInviteCode() {
+export const INVITE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+export function genInviteCode() {
   const bytes = new Uint8Array(12);
   try { window.crypto.getRandomValues(bytes); }
   catch (e) { for (let i = 0; i < 12; i++) bytes[i] = Math.floor(Math.random() * 256); }
@@ -43,23 +49,23 @@ function genInviteCode() {
   return s;
 }
 // Accept a bare token or a pasted invite link/URL; '' when unusable.
-function parseInviteToken(s) {
+export function parseInviteToken(s) {
   const t = String(s || '').trim();
   const m = /invite\/([A-Za-z0-9\-_]{6,})/.exec(t);
   const tok = m ? m[1] : t;
   return /^[A-Za-z0-9\-_]{10,16}$/.test(tok) ? tok : '';
 }
-function inviteLinkFor(code) {
+export function inviteLinkFor(code) {
   return location.origin + '/#/invite/' + code;
 }
 // A token arriving via deep link (#/invite/<token>) waits here until the
 // coven tab renders its accept card.
-let pendingInviteToken = null;
-function clearPendingInvite() {
+export let pendingInviteToken = null;
+export function clearPendingInvite() {
   pendingInviteToken = null;
   try { sessionStorage.removeItem('cozylibram.invite'); } catch (e) {}
 }
-async function storeInviteCode(code) {
+export async function storeInviteCode(code) {
   const sb = await cloudClient();
   for (let t = 0; t < 5; t++) {
     const c = t === 0 ? code : genInviteCode();
@@ -70,7 +76,7 @@ async function storeInviteCode(code) {
   }
   throw new Error('Couldn’t save the invite link — try again.');
 }
-async function ensureInviteCode() {
+export async function ensureInviteCode() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return '';
   try {
@@ -82,10 +88,10 @@ async function ensureInviteCode() {
   } catch (e) { /* offline — the coven needs the cloud */ }
   return '';
 }
-async function rotateInviteCode() {
+export async function rotateInviteCode() {
   return storeInviteCode(genInviteCode());
 }
-async function shareInviteLink(code) {
+export async function shareInviteLink(code) {
   const url = inviteLinkFor(code);
   const text = 'Join me in ' + covenName() + ' on Cozy Libram — tap the link and we’re connected.';
   track('invite_link_shared');
@@ -101,7 +107,7 @@ async function shareInviteLink(code) {
 }
 
 /* ---------- friend links ---------- */
-async function circleLinkBetween(a, b) {
+export async function circleLinkBetween(a, b) {
   const sb = await cloudClient();
   const r1 = await sb.from('circle_links').select('requester_id,addressee_id,status')
     .eq('requester_id', a).eq('addressee_id', b).maybeSingle();
@@ -113,7 +119,7 @@ async function circleLinkBetween(a, b) {
   return r2.data || null;
 }
 // Look up who owns an invite token. Returns { token, userId, profile, name }.
-async function resolveInviteToken(raw) {
+export async function resolveInviteToken(raw) {
   const sb = await cloudClient();
   const token = parseInviteToken(raw);
   if (!token) throw new Error('That doesn’t look like an invite link — paste the full link.');
@@ -150,12 +156,12 @@ async function resolveInviteToken(raw) {
 // One-sided accept: the token proves the inviter's consent, so this creates
 // the friendship immediately (server-side via accept_circle_invite — the
 // plain insert policy deliberately only allows pending rows).
-async function acceptInviteToken(token) {
+export async function acceptInviteToken(token) {
   const sb = await cloudClient();
   const r = await sb.rpc('accept_circle_invite', { p_token: token });
   if (r.error) throw r.error;
 }
-async function circleAnswer(them, accept) {
+export async function circleAnswer(them, accept) {
   const sb = await cloudClient();
   const up = await sb.from('circle_links').update({ status: accept ? 'accepted' : 'declined' })
     .eq('requester_id', them).eq('addressee_id', cloudUser.id).eq('status', 'pending');
@@ -166,13 +172,13 @@ async function circleAnswer(them, accept) {
       .eq('requester_id', cloudUser.id).eq('addressee_id', them).eq('status', 'pending');
   }
 }
-async function circleCancel(them) {
+export async function circleCancel(them) {
   const sb = await cloudClient();
   const del = await sb.from('circle_links').delete()
     .eq('requester_id', cloudUser.id).eq('addressee_id', them).eq('status', 'pending');
   if (del.error) throw del.error;
 }
-async function circleRemove(them) {
+export async function circleRemove(them) {
   const sb = await cloudClient();
   const d1 = await sb.from('circle_links').delete()
     .eq('requester_id', cloudUser.id).eq('addressee_id', them);
@@ -194,12 +200,12 @@ async function circleRemove(them) {
  * read policy is "rows I created", so everything below reads MY list
  * and nothing else. Unblocking deletes my row; it does NOT restore
  * any old link (a fresh invite is required, like anyone new). */
-function blocksMissing(e) {
+export function blocksMissing(e) {
   const s = String((e && (e.code + ' ' + e.message)) || e || '');
   return /block/i.test(s) && /schema cache|could not find|does not exist|not found|PGRST20[0-9]|404/i.test(s);
 }
-let circBlocksState = null; // null = unknown; boolean once proven
-async function circleBlocksSupported() {
+export let circBlocksState = null; // null = unknown; boolean once proven
+export async function circleBlocksSupported() {
   if (circBlocksState !== null) return circBlocksState;
   try {
     const sb = await cloudClient();
@@ -211,12 +217,12 @@ async function circleBlocksSupported() {
 }
 // Pre-migration tolerance: when the blocks table isn't there yet the
 // block affordances hide entirely — nothing renders half-working.
-async function applyBlockUi(scope) {
+export async function applyBlockUi(scope) {
   if (!cloudUser) return;
   if (await circleBlocksSupported()) return;
   (scope || document).querySelectorAll('[data-block]').forEach(b => { b.style.display = 'none'; });
 }
-async function circleBlock(them) {
+export async function circleBlock(them) {
   const sb = await cloudClient();
   const ins = await sb.from('blocks').insert({ blocker_id: cloudUser.id, blocked_id: them });
   if (ins.error) {
@@ -227,14 +233,14 @@ async function circleBlock(them) {
   }
   delete circProfiles[them];
 }
-async function circleUnblock(them) {
+export async function circleUnblock(them) {
   const sb = await cloudClient();
   const del = await sb.from('blocks').delete().eq('blocked_id', them);
   if (del.error) throw del.error;
 }
 // My blocked list (Settings). Returns null when the blocks machinery
 // isn't there yet (pre-v526 database) so the section can hide.
-async function circleBlockedReaders() {
+export async function circleBlockedReaders() {
   const sb = await cloudClient();
   const r = await sb.rpc('my_blocked_readers');
   if (r.error) {
@@ -245,7 +251,7 @@ async function circleBlockedReaders() {
 }
 // Settings → Circle & privacy: the Blocked readers list. Only ever
 // shows people I blocked (the RPC cannot return anything else).
-async function renderBlockedReaders(box) {
+export async function renderBlockedReaders(box) {
   if (!box || !cloudUser) return;
   let rows = null;
   try { rows = await circleBlockedReaders(); } catch (e) { rows = null; }
@@ -284,13 +290,13 @@ async function renderBlockedReaders(box) {
  * keys, so even a future query mistake can't smuggle extra fields into
  * the app. A user's OWN profile is still read from the base table (see
  * circlePrivacy / js/105) and keeps every field. */
-const CIRCLE_PROFILE_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path,share_library,share_bio,share_activity,bio,fav_genres';
+export const CIRCLE_PROFILE_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path,share_library,share_bio,share_activity,bio,fav_genres';
 // v550: the handle rides the projection as an identity column. A
 // pre-v550 view has no such column — the fetchers below retry with
 // the v522 set on that specific error (the missing-column ladder).
-const CIRCLE_PROFILE_COLS_V550 = CIRCLE_PROFILE_COLS + ',handle';
-const CIRCLE_IDENTITY_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path';
-function circleProjectRow(p) {
+export const CIRCLE_PROFILE_COLS_V550 = CIRCLE_PROFILE_COLS + ',handle';
+export const CIRCLE_IDENTITY_COLS = 'user_id,first_name,last_name,avatar_id,avatar_path';
+export function circleProjectRow(p) {
   if (!p) return null;
   const out = {
     user_id: p.user_id,
@@ -314,11 +320,11 @@ function circleProjectRow(p) {
 // deployed before migration v522 was applied). Only then may reads fall
 // back to the legacy identity-only base-table select; any other error is
 // real and must surface rather than silently degrade a privacy boundary.
-function circleViewMissing(e) {
+export function circleViewMissing(e) {
   const s = String((e && (e.code + ' ' + e.message)) || e || '');
   return /circle_profiles/i.test(s) && /schema cache|could not find|does not exist|not found|PGRST205|404/i.test(s);
 }
-async function circleFetchProfiles(ids) {
+export async function circleFetchProfiles(ids) {
   const sb = await cloudClient();
   if (!ids.length) return [];
   let q = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS_V550).in('user_id', ids);
@@ -332,7 +338,7 @@ async function circleFetchProfiles(ids) {
   return (legacy.data || []).map(circleProjectRow);
 }
 
-async function circleLists() {
+export async function circleLists() {
   const sb = await cloudClient();
   const me = cloudUser.id;
   const [rec, sent, f1, f2] = await Promise.all([
@@ -377,7 +383,7 @@ async function circleLists() {
  * posture flags themselves. Defaults match migration v522: shelves keep
  * whatever share_library already says, bio/genres on (today's de-facto
  * exposure), activity off (opt-in for everyone). */
-async function circlePrivacy() {
+export async function circlePrivacy() {
   const sb = await cloudClient();
   let r = await sb.from('profiles').select('share_library,hidden_shelves,share_bio,share_activity,receive_recos,receive_buddy_invites,marginalia_enabled,gift_claims_visible').eq('user_id', cloudUser.id).maybeSingle();
   if (r.error && typeof isMissingColumn === 'function' && isMissingColumn(r.error)) {
@@ -411,8 +417,8 @@ async function circlePrivacy() {
  * keeps in step with its panel state: the seven-parameter signature
  * below is pinned by the marginalia suite, so the value travels
  * beside it — same optional-key write, same column-drop retry. */
-let circleGiftClaimsValue;
-async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, marginalia) {
+export let circleGiftClaimsValue;
+export async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, marginalia) {
   const sb = await cloudClient();
   const row = {
     user_id: cloudUser.id, share_library: !!share, hidden_shelves: hidden,
@@ -446,21 +452,21 @@ async function circleSavePrivacy(share, hidden, bio, activity, recos, buddy, mar
  * on the stored status string, so a hidden 'wishlist' key alone no
  * longer gates the derived set server-side — those books carry status
  * 'tbr' now; hiding 'tbr' hides them with the rest of the TBR.) */
-function hideableShelves() { return Object.keys(STATUS).concat(['wishlist']); }
-function shelfLabel(s) { return s === 'wishlist' ? 'Wishlist' : (STATUS[s] || s); }
+export function hideableShelves() { return Object.keys(STATUS).concat(['wishlist']); }
+export function shelfLabel(s) { return s === 'wishlist' ? 'Wishlist' : (STATUS[s] || s); }
 
 /* v590: the shared On/Off seg builder for the privacy-panel family —
  * js/243's gift cluster renders its See-claims seg from the same builder
  * so the surfaces can never drift. Every button carries aria-pressed in
  * step with .active (v588 census F2: state was colour + bold only, so a
  * screen reader could not tell whether any switch was on or off). */
-function circleSegHTML(id, on) {
+export function circleSegHTML(id, on) {
   return '<div class="seg" id="' + id + '">' +
     '<button data-v="1"' + (on ? ' class="active"' : '') + ' aria-pressed="' + (on ? 'true' : 'false') + '">On</button>' +
     '<button data-v="0"' + (!on ? ' class="active"' : '') + ' aria-pressed="' + (!on ? 'true' : 'false') + '">Off</button></div>';
 }
 /* Keep a seg's .active classes and aria-pressed in step after a toggle. */
-function circleSegSync(root, id, activeBtn) {
+export function circleSegSync(root, id, activeBtn) {
   root.querySelectorAll('#' + id + ' button').forEach(x => {
     const on = x === activeBtn;
     x.classList.toggle('active', on);
@@ -470,7 +476,7 @@ function circleSegSync(root, id, activeBtn) {
 /* v590: ONE intro line for the shared panel, whichever door renders it
  * (the v588 census found the Settings and Hearth copies worded
  * differently for the same controls). */
-function circlePrivacyIntroHTML() {
+export function circlePrivacyIntroHTML() {
   return '<p class="note" style="margin-top:0">Your ' + covenNameBare().toLowerCase() +
     ' only receives what you switch on — anything off is never sent to them, not just hidden in the app.</p>';
 }
@@ -480,12 +486,12 @@ function circlePrivacyIntroHTML() {
  * (js/230-privacy.js), never in profiles; the builder/wire pair stays in
  * this module so the seg semantics (and the never-writes-profiles rule)
  * remain the panel family's. */
-function shieldSegHTML(id) {
+export function shieldSegHTML(id) {
   const shieldNow = (typeof privacyState === 'function') ? privacyState().shield : false;
   return '<div class="field"><label>Content shield</label>' + circleSegHTML(id + '-shield', shieldNow) +
     '<p class="note">For what you see: high-spice covers are blurred and spice ratings hidden in shared views, Discover and recommendations — and adult titles stay out of “You’d love this” and circle stats. Your own library is never changed.</p></div>';
 }
-function wireShieldSeg(root, id) {
+export function wireShieldSeg(root, id) {
   if (typeof setShield !== 'function' || typeof shieldOn !== 'function') return;
   root.querySelectorAll('#' + id + '-shield button').forEach(b => b.addEventListener('click', () => {
     const v = b.dataset.v === '1';
@@ -507,7 +513,7 @@ function wireShieldSeg(root, id) {
  * it with this same function, prefix 'pf'); in the Hearth sheet it
  * follows the panel as before. The shield moved to Settings → Reading
  * (shieldSegHTML above). */
-function circlePrivacyPanelHTML(priv, p, shelves) {
+export function circlePrivacyPanelHTML(priv, p, shelves) {
   const seg = circleSegHTML;
   let html =
     '<div class="field"><label>Name &amp; avatar</label>' +
@@ -544,7 +550,7 @@ function circlePrivacyPanelHTML(priv, p, shelves) {
     '<p class="note">Margin notes from your ' + covenNameBare().toLowerCase() + ' on books you’re both reading — each note appears only when your own reading reaches it. Off stops margin notes entirely: you won’t see friends’ notes, you can’t leave them, and yours stop being shown.</p></div>';
   return html;
 }
-function wireCirclePrivacyPanel(root, priv, p) {
+export function wireCirclePrivacyPanel(root, priv, p) {
   const state = {
     share: priv.share, hidden: (priv.hidden || []).slice(),
     bio: priv.bio !== false, activity: priv.activity === true,
@@ -663,14 +669,14 @@ function wireCirclePrivacyPanel(root, priv, p) {
    answering sets the standing preference; later acceptances respect it.
    "Not now"/dismiss means defer, not revoke: an existing opt-in is never
    silently revoked. Only an explicit "Yes, share" writes to the profile. */
-var SHELF_SHARE_ASKED_KEY = 'cozylibram.shelfShareAsked';
-function shelfShareAsked() {
+export var SHELF_SHARE_ASKED_KEY = 'cozylibram.shelfShareAsked';
+export function shelfShareAsked() {
   try { return localStorage.getItem(SHELF_SHARE_ASKED_KEY) === '1'; } catch (e) { return true; }
 }
-function markShelfShareAsked() {
+export function markShelfShareAsked() {
   try { localStorage.setItem(SHELF_SHARE_ASKED_KEY, '1'); } catch (e) {}
 }
-async function maybeAskShelfShare(friendName) {
+export async function maybeAskShelfShare(friendName) {
   if (shelfShareAsked()) return;
   let hidden = [];
   try { hidden = (await circlePrivacy()).hidden || []; } catch (e) {}
@@ -706,7 +712,7 @@ async function maybeAskShelfShare(friendName) {
 }
 
 /* ---------- friend shelves (read-only) ---------- */
-async function circleFriendProfile(friendId) {
+export async function circleFriendProfile(friendId) {
   const sb = await cloudClient();
   let r = await sb.from('circle_profiles').select(CIRCLE_PROFILE_COLS_V550)
     .eq('user_id', friendId).maybeSingle();
@@ -722,7 +728,7 @@ async function circleFriendProfile(friendId) {
   if (legacy.error) throw legacy.error;
   return legacy.data ? circleProjectRow(legacy.data) : null;
 }
-async function circleFriendBooks(friendId) {
+export async function circleFriendBooks(friendId) {
   const sb = await cloudClient();
   const r = await sb.from('books').select('book_id,isbn,data').eq('user_id', friendId);
   if (r.error) throw r.error;
@@ -730,7 +736,7 @@ async function circleFriendBooks(friendId) {
     try { return migrateBook(Object.assign({}, row.data)); } catch (e) { return null; }
   }).filter(Boolean);
 }
-function circAvatarHTML(profile, cls) {
+export function circAvatarHTML(profile, cls) {
   const p = { avatar: { type: 'letter' }, firstName: profile.first_name, lastName: profile.last_name };
   if (profile.avatar_id && DEFAULT_AVATARS.some(a => a.id === profile.avatar_id)) {
     p.avatar = { type: 'default', id: profile.avatar_id };
@@ -744,7 +750,7 @@ function circAvatarHTML(profile, cls) {
     .replace(/^<(img|span)/, '<$1 data-cav="' + esc(profile.user_id) + '"');
 }
 // Swap letter/themed avatars for real photos where friends share one.
-async function circleUpgradeAvatars(scopeEl) {
+export async function circleUpgradeAvatars(scopeEl) {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !sb.storage) return;
   const els = Array.from((scopeEl || document).querySelectorAll('[data-cav]'));
@@ -770,7 +776,7 @@ async function circleUpgradeAvatars(scopeEl) {
 }
 
 /* ---------- Coven section ---------- */
-function renderCoven() {
+export function renderCoven() {
   refreshCovenNav(); // theme may have changed since the nav was drawn
   track('coven_opened', null, { dedupeKey: 'coven-open', dedupeMs: 60000 });
   if (!cloudUser) {
@@ -808,12 +814,12 @@ function renderCoven() {
       document.getElementById('cc-retry').addEventListener('click', renderCoven);
     });
 }
-function circleRowHTML(p, name, actions, sub) {
+export function circleRowHTML(p, name, actions, sub) {
   return '<div class="circle-row">' + circAvatarHTML(p, 'c-avatar') +
     '<div class="circle-meta"><b>' + esc(name) + '</b>' + (sub ? '<span class="note">' + sub + '</span>' : '') + '</div>' +
     '<div class="circle-actions">' + actions + '</div></div>';
 }
-function renderInviteAccept(slot, inv) {
+export function renderInviteAccept(slot, inv) {
   slot.innerHTML =
     '<div class="circle-row invite-accept">' +
     (inv.profile ? circAvatarHTML(inv.profile, 'c-avatar') : '<span class="c-avatar"></span>') +
@@ -851,7 +857,7 @@ function renderInviteAccept(slot, inv) {
 }
 // A deep-link token (or a pasted link) waiting on the coven tab: resolve it
 // into the accept card, or surface why it's unusable.
-function consumePendingInvite(code, friends) {
+export function consumePendingInvite(code, friends) {
   if (!pendingInviteToken) return;
   // v454: invite UI lives in the sheet now — open it for the deep link
   let slot = document.getElementById('cc-accept-slot');
@@ -875,7 +881,7 @@ function consumePendingInvite(code, friends) {
     if (s2) s2.innerHTML = '';
   });
 }
-function renderCovenMain(code, lists, priv) {
+export function renderCovenMain(code, lists, priv) {
   // v559: hideable shelves = the four statuses + the Wishlist view
   // identity (hideableShelves) — 'wishlist' stays a hidden_shelves key
   // even though it is no longer a status.
@@ -966,7 +972,7 @@ function renderCovenMain(code, lists, priv) {
 }
 
 /* ---------- friend shelf browser (read-only) ---------- */
-function renderCovenFriend() {
+export function renderCovenFriend() {
   const f = circFriend;
   if (!f || !cloudUser) { go('coven'); return; }
   track('shared_shelf_viewed', null, { dedupeKey: 'shelf-' + f.id, dedupeMs: 60000 });
@@ -995,7 +1001,7 @@ function renderCovenFriend() {
       document.getElementById('cf-back2').addEventListener('click', () => go('coven'));
     });
 }
-function renderCovenFriendMain() {
+export function renderCovenFriendMain() {
   const f = circFriend;
   const prof = circProfiles[f.id];
   const counts = { all: circBooks.length };
@@ -1092,13 +1098,13 @@ function renderCovenFriendMain() {
   // only when this pair may gift; silent in every other world.
   if (circShelf === 'wishlist' && typeof fillGiftShelfActions === 'function') fillGiftShelfActions();
 }
-let circBookMap = {};
-let circSpiceMap = {}; // v524: work-spice map for the open friend's books
+export let circBookMap = {};
+export let circSpiceMap = {}; // v524: work-spice map for the open friend's books
 /* v524: content shield — blur high-spice covers in the friend grid and
    tag them with a "Shielded" badge so the blur reads as deliberate,
    not as a broken image. Idempotent; runs at first paint (record-rated
    books) and again when the work-spice map lands. */
-function markShieldedCovers() {
+export function markShieldedCovers() {
   if (typeof shieldOn !== 'function' || !shieldOn()) return;
   if (typeof shieldIsHighSpice !== 'function') return;
   document.querySelectorAll('#view .book-card').forEach(c => {
@@ -1118,7 +1124,7 @@ function markShieldedCovers() {
 // v219: the read-only friend shelf browser opens the shared preview modal
 // (replacing its own tiny overlay) — description, tropes, genres, with +TBR
 // adding a clean copy per the v97 rule and Wishlist as usual.
-function openCovenBook(b) {
+export function openCovenBook(b) {
   const t = previewTransient(b, 'friend');
   // v524 (Advisor ruling): the modal's DATA is metadata, but its cover in
   // this friend flow is a shared-view cover, which the shield promises to
@@ -1153,7 +1159,7 @@ function openCovenBook(b) {
 
 /* v454: privacy sheet — same controls as Settings → Circle & privacy
  * (v522: one shared panel builder, in a bottom sheet). */
-function openPrivacySheet(priv, shelves, opener) {
+export function openPrivacySheet(priv, shelves, opener) {
   const full = {
     share: priv.share, hidden: priv.hidden || [],
     bio: priv.bio !== false, activity: priv.activity === true,
@@ -1177,7 +1183,7 @@ function openPrivacySheet(priv, shelves, opener) {
 }
 
 /* v454: invite sheet — the invite card UI moved into a bottom sheet. */
-function openInviteSheet(code, opener, friends) {
+export function openInviteSheet(code, opener, friends) {
   const body =
     '<div class="field"><label>Invite a friend</label>' +
     '<p class="note">Share your personal invite link — they tap it, sign in (or create an account), and you’re connected. Nothing to type.</p>' +
@@ -1256,7 +1262,7 @@ function openInviteSheet(code, opener, friends) {
   }));
   return ref;
 }
-function covenOpenSheet(title, bodyHTML, opener, onDismiss) {
+export function covenOpenSheet(title, bodyHTML, opener, onDismiss) {
   covenCloseSheet();
   const scrim = document.createElement('div');
   scrim.className = 'coven-scrim'; scrim.id = 'covenScrim';
@@ -1283,7 +1289,7 @@ function covenOpenSheet(title, bodyHTML, opener, onDismiss) {
   if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
   return { sheet: sheet, close: close };
 }
-function covenCloseSheet() {
+export function covenCloseSheet() {
   ['covenScrim', 'covenSheet'].forEach(id => {
     const el = document.getElementById(id);
     if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -1292,7 +1298,7 @@ function covenCloseSheet() {
 
 /* v224 (UX-21): confirm removing a friend with the app's own sheet pattern
    (collection-overlay + modal-backdrop + overlayOpened), not window.confirm. */
-function openRemoveFriendSheet(friendId, friendName) {
+export function openRemoveFriendSheet(friendId, friendName) {
   const ov = document.createElement('div');
   ov.className = 'collection-overlay';
   ov.innerHTML =
@@ -1323,7 +1329,7 @@ function openRemoveFriendSheet(friendId, friendName) {
    plain language: what happens, and the fact that they aren't told.
    `after` replaces the default re-render (the friend view navigates
    back to the circle instead). */
-function openBlockSheet(friendId, friendName, after) {
+export function openBlockSheet(friendId, friendName, after) {
   const ov = document.createElement('div');
   ov.className = 'collection-overlay';
   ov.innerHTML =
@@ -1361,14 +1367,14 @@ function openBlockSheet(friendId, friendName, after) {
 
 /* v246: report a user for abuse. Uses the app's own sheet pattern
    (collection-overlay + modal-backdrop + overlayOpened), not window.confirm. */
-const REPORT_REASONS = [
+export const REPORT_REASONS = [
   ['spam', 'Spam'],
   ['harassment', 'Harassment'],
   ['inappropriate', 'Inappropriate content'],
   ['fake_account', 'Fake account'],
   ['other', 'Other'],
 ];
-function openReportSheet(userId, userName) {
+export function openReportSheet(userId, userName) {
   if (!cloudUser || userId === cloudUser.id) return;
   const ov = document.createElement('div');
   ov.className = 'collection-overlay';
@@ -1408,7 +1414,7 @@ function openReportSheet(userId, userName) {
     }
   });
 }
-async function submitUserReport(reportedUserId, reason, details) {
+export async function submitUserReport(reportedUserId, reason, details) {
   const sb = await cloudClient();
   const { error } = await sb.from('user_reports').insert({
     reporter_id: cloudUser.id,
@@ -1419,3 +1425,105 @@ async function submitUserReport(reportedUserId, reason, details) {
   if (error) throw error;
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — 010-theming.js, 105-account.js,
+   180-settings.js, 196-recos.js, 197-social-stats.js, 198-discovery.js,
+   199-admin.js, 200-boot.js, 230-privacy.js, 231-reactions.js,
+   232-thought-of-you.js, 233-buddy-reads.js, 234-outbox.js,
+   235-reading-it-too.js, 237-handles.js, 242-marginalia.js and 243-gifts.js
+   — reach these names at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place before
+   any consumer can run. Remove a name from this bridge only when its last
+   classic caller is gone. circFriend and circBookMap are republished as
+   accessor properties, not value copies: circFriend is reassigned as the
+   reader opens a friend’s shelves and circBookMap is rebuilt when the
+   friend’s books load, and js/243-gifts.js reads both live — the friend in
+   fillGiftShelfActions and giftClaimTap, the book map when it fills the
+   gift slots on the open shelf. A value copy would freeze the initial
+   values and silently empty those slots; the getter/setter pairs forward
+   every read and write to the module bindings, so the readers’ expressions
+   are unchanged and every read sees the live value.
+ */
+window.covenName = covenName;
+window.covenNameBare = covenNameBare;
+window.refreshCovenNav = refreshCovenNav;
+Object.defineProperty(window, 'circFriend', { get: () => circFriend, set: (v) => { circFriend = v; }, enumerable: true, configurable: true });
+window.circShelf = circShelf;
+window.circBooks = circBooks;
+window.circProfiles = circProfiles;
+window.INVITE_CHARS = INVITE_CHARS;
+window.genInviteCode = genInviteCode;
+window.parseInviteToken = parseInviteToken;
+window.inviteLinkFor = inviteLinkFor;
+window.pendingInviteToken = pendingInviteToken;
+window.clearPendingInvite = clearPendingInvite;
+window.storeInviteCode = storeInviteCode;
+window.ensureInviteCode = ensureInviteCode;
+window.rotateInviteCode = rotateInviteCode;
+window.shareInviteLink = shareInviteLink;
+window.circleLinkBetween = circleLinkBetween;
+window.resolveInviteToken = resolveInviteToken;
+window.acceptInviteToken = acceptInviteToken;
+window.circleAnswer = circleAnswer;
+window.circleCancel = circleCancel;
+window.circleRemove = circleRemove;
+window.blocksMissing = blocksMissing;
+window.circBlocksState = circBlocksState;
+window.circleBlocksSupported = circleBlocksSupported;
+window.applyBlockUi = applyBlockUi;
+window.circleBlock = circleBlock;
+window.circleUnblock = circleUnblock;
+window.circleBlockedReaders = circleBlockedReaders;
+window.renderBlockedReaders = renderBlockedReaders;
+window.CIRCLE_PROFILE_COLS = CIRCLE_PROFILE_COLS;
+window.CIRCLE_PROFILE_COLS_V550 = CIRCLE_PROFILE_COLS_V550;
+window.CIRCLE_IDENTITY_COLS = CIRCLE_IDENTITY_COLS;
+window.circleProjectRow = circleProjectRow;
+window.circleViewMissing = circleViewMissing;
+window.circleFetchProfiles = circleFetchProfiles;
+window.circleLists = circleLists;
+window.circlePrivacy = circlePrivacy;
+window.circleGiftClaimsValue = circleGiftClaimsValue;
+window.circleSavePrivacy = circleSavePrivacy;
+window.hideableShelves = hideableShelves;
+window.shelfLabel = shelfLabel;
+window.circleSegHTML = circleSegHTML;
+window.circleSegSync = circleSegSync;
+window.circlePrivacyIntroHTML = circlePrivacyIntroHTML;
+window.shieldSegHTML = shieldSegHTML;
+window.wireShieldSeg = wireShieldSeg;
+window.circlePrivacyPanelHTML = circlePrivacyPanelHTML;
+window.wireCirclePrivacyPanel = wireCirclePrivacyPanel;
+window.SHELF_SHARE_ASKED_KEY = SHELF_SHARE_ASKED_KEY;
+window.shelfShareAsked = shelfShareAsked;
+window.markShelfShareAsked = markShelfShareAsked;
+window.maybeAskShelfShare = maybeAskShelfShare;
+window.circleFriendProfile = circleFriendProfile;
+window.circleFriendBooks = circleFriendBooks;
+window.circAvatarHTML = circAvatarHTML;
+window.circleUpgradeAvatars = circleUpgradeAvatars;
+window.renderCoven = renderCoven;
+window.circleRowHTML = circleRowHTML;
+window.renderInviteAccept = renderInviteAccept;
+window.consumePendingInvite = consumePendingInvite;
+window.renderCovenMain = renderCovenMain;
+window.renderCovenFriend = renderCovenFriend;
+window.renderCovenFriendMain = renderCovenFriendMain;
+Object.defineProperty(window, 'circBookMap', { get: () => circBookMap, set: (v) => { circBookMap = v; }, enumerable: true, configurable: true });
+window.circSpiceMap = circSpiceMap;
+window.markShieldedCovers = markShieldedCovers;
+window.openCovenBook = openCovenBook;
+window.openPrivacySheet = openPrivacySheet;
+window.openInviteSheet = openInviteSheet;
+window.covenOpenSheet = covenOpenSheet;
+window.covenCloseSheet = covenCloseSheet;
+window.openRemoveFriendSheet = openRemoveFriendSheet;
+window.openBlockSheet = openBlockSheet;
+window.REPORT_REASONS = REPORT_REASONS;
+window.openReportSheet = openReportSheet;
+window.submitUserReport = submitUserReport;

@@ -1,11 +1,17 @@
 'use strict';
 
 /* ---- "missing books" discovery: more by author / full series from outside the library ---- */
-const authorCache = new Map(); // author key -> external rows
-const seriesCache = new Map(); // series key -> { rows } or { needsToken: true }
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const authorCache = new Map(); // author key -> external rows
+export const seriesCache = new Map(); // series key -> { rows } or { needsToken: true }
 
 // More books by an author via Open Library (no key, no quota).
-async function fetchMoreByAuthor(author) {
+export async function fetchMoreByAuthor(author) {
   const key = String(author).trim().toLowerCase();
   if (authorCache.has(key)) return authorCache.get(key);
   const url = 'https://openlibrary.org/search.json?author=' + encodeURIComponent(author) +
@@ -38,7 +44,7 @@ async function fetchMoreByAuthor(author) {
 // edition, so the work's canonical title can be non-English ("Alas de ónix"
 // instead of "Onyx Storm") even when English editions exist. For suspicious
 // titles, pull the work's editions and take the first English one's title.
-async function repairTranslatedTitles(rows) {
+export async function repairTranslatedTitles(rows) {
   const suspects = rows.filter(r =>
     /[^\x00-\x7F]/.test(r.title) && // non-ASCII in the title…
     (r.languages || []).some(l => l === 'eng') && // …but English editions exist
@@ -61,7 +67,7 @@ async function repairTranslatedTitles(rows) {
 // sangre (Empíreo 1)" is really Fourth Wing). When the Hardcover token is
 // available, resolve the edition ISBN to Hardcover's canonical book so the row
 // shows the real title — and matches her shelf instead of looking "missing".
-async function resolveForeignTitles(rows) {
+export async function resolveForeignTitles(rows) {
   if (typeof hcReady !== 'function' || !hcReady()) return;
   const targets = rows.filter(r =>
     /[^\x00-\x7F]/.test(r.title) && /^\d{13}$/.test(normISBN(r.isbn)));
@@ -87,7 +93,7 @@ async function resolveForeignTitles(rows) {
 }
 
 // v116: some works have no cover at the work level but their editions do.
-async function backfillCovers(rows) {
+export async function backfillCovers(rows) {
   for (const r of rows.filter(x => !x.cover && x.workKey)) {
     try {
       const d = await (await fetch('https://openlibrary.org' + r.workKey + '/editions.json?limit=20')).json();
@@ -98,7 +104,7 @@ async function backfillCovers(rows) {
 }
 
 // Every book in a series via Hardcover (needs the token).
-async function fetchSeriesBooks(seriesName, authorName) {
+export async function fetchSeriesBooks(seriesName, authorName) {
   const key = String(seriesName).trim().toLowerCase();
   if (seriesCache.has(key)) return seriesCache.get(key);
   if (!hcReady()) { const r = { needsToken: true, rows: [], found: false }; seriesCache.set(key, r); return r; }
@@ -168,7 +174,7 @@ async function fetchSeriesBooks(seriesName, authorName) {
 // pattern operators (_ilike and friends) are blocked by the API (HTTP 403).
 // Prefers the hit whose author matches, otherwise the top hit. Returns the
 // numeric id or null.
-async function searchSeriesId(seriesName, authorName) {
+export async function searchSeriesId(seriesName, authorName) {
   const q = 'query { search(query: ' + JSON.stringify(seriesName) +
     ', query_type: "Series", per_page: 5, page: 1) { results } }';
   const data = await hcGraphQL(q);
@@ -184,7 +190,7 @@ async function searchSeriesId(seriesName, authorName) {
 // v559: that means the born pair status 'tbr' + owned 'tobuy' — the
 // Wishlist is the to-buy part of TBR (isWishlistBook, js/000), derived
 // from the pair, never a status of its own.
-function addExternalBook(x) {
+export function addExternalBook(x) {
   const book = {
     id: uid(),
     isbn: x.isbn || '',
@@ -217,7 +223,7 @@ function addExternalBook(x) {
   return book;
 }
 
-function externalRowHTML(x, i) {
+export function externalRowHTML(x, i) {
   const sub = (x.position != null && x.position !== '' ? '#' + esc(String(x.position)) + ' · ' : '') +
     esc(x.author || 'Unknown author');
   return '<div class="crow ext" data-ext="' + i + '">' +
@@ -244,7 +250,7 @@ function externalRowHTML(x, i) {
 /* v402: Spice Forecast sparkline — inline SVG, no external libs.
    Takes an array of per-chapter spice levels (0-5), renders a small
    area sparkline. Returns '' when data is insufficient. */
-function spiceSparklineHTML(levels) {
+export function spiceSparklineHTML(levels) {
   try {
     if (!Array.isArray(levels) || levels.length < 2) return '';
     const vals = levels.map(v => {
@@ -274,7 +280,7 @@ function spiceSparklineHTML(levels) {
 /* v329: shared character-tab loader — used by renderDetailModal (the full
    book modal). Takes the book object directly; caches per book id so
    re-opening the tab doesn't refetch. */
-async function loadCharsTabForBook(t) {
+export async function loadCharsTabForBook(t) {
   // v403 fix: no persistent cache across modal instances.
   // The modal HTML re-renders fresh each time with "Loading...", so a stale
   // cache hit leaves the placeholder forever. Just load every time.
@@ -353,7 +359,7 @@ async function loadCharsTabForBook(t) {
 }
 
 /* v337: load memorable quotes for a book's work into the modal Details tab. */
-async function loadQuotesForBook(t) {
+export async function loadQuotesForBook(t) {
   try {
     const wrap = document.getElementById('m-quotes-wrap');
     const box = document.getElementById('m-quotes');
@@ -372,7 +378,7 @@ async function loadQuotesForBook(t) {
   } catch (e) {}
 }
 
-function previewTransient(src, kind) {
+export function previewTransient(src, kind) {
   const s = src || {};
   const authors = Array.isArray(s.authors) ? s.authors.slice()
     : (s.author ? [s.author] : []);
@@ -416,10 +422,10 @@ function previewTransient(src, kind) {
   };
 }
 
-let previewOpenId = null; // guards the async enrichment against a closed modal
+export let previewOpenId = null; // guards the async enrichment against a closed modal
 
 // opts: { why: [html chips], contextNote, source, onAddTBR: () => book|null }
-function openPreviewModal(t, opts) {
+export function openPreviewModal(t, opts) {
   opts = opts || {};
   const root = document.getElementById('modal-root');
   if (!root || !t) return;
@@ -581,7 +587,7 @@ function openPreviewModal(t, opts) {
 
 // Fill a "more books" box: the overlay's #c-more, or the modal's inline
 // #m-series-more (bare mode: compact heading, no overlay chrome).
-async function fillMoreSection(kind, name, fromId, box, bare) {
+export async function fillMoreSection(kind, name, fromId, box, bare) {
   if (!box) return;
   // The icon is trusted markup — only the text (which carries the library's
   // own author/series name) goes through esc().
@@ -644,7 +650,7 @@ async function fillMoreSection(kind, name, fromId, box, bare) {
 // v239: manual series tagging — name (autocompletes the library's existing
 // series) + position. Committed via the sticky Save bar; a hand-set series
 // is never overwritten by enrichment (seriesManual flag, see 070-hardcover).
-function seriesEditHTML(b, id) {
+export function seriesEditHTML(b, id) {
   const names = [...new Set(library
     .filter(x => x.id !== id && x.series && x.series.name)
     .map(x => String(x.series.name).trim()).filter(Boolean))]
@@ -663,10 +669,10 @@ function seriesEditHTML(b, id) {
    as cover figures captioned "#pos · Status"; missing books join the
    same row as "+ Wishlist" figures when the full-series lookup lands
    (fillSeriesStrip) — one tap adds, like the old list's button. ---- */
-const SERIES_STATUS_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', dnf: 'DNF' };
-let stripExtRows = null; // { bookId, rows } — the open modal's missing-books fill
+export const SERIES_STATUS_LABEL = { tbr: 'TBR', reading: 'Reading', read: 'Read', dnf: 'DNF' };
+export let stripExtRows = null; // { bookId, rows } — the open modal's missing-books fill
 
-function seriesStripHTML(b, id) {
+export function seriesStripHTML(b, id) {
   if (!(b.series && b.series.name)) return '';
   stripExtRows = { bookId: id, rows: null };
   return '<div class="m-series-zone" id="m-series"><div class="lbl">In this series' +
@@ -677,7 +683,7 @@ function seriesStripHTML(b, id) {
 // Paints owned + missing figures merged in position order and wires them.
 // Re-run after the external fill lands and after a wishlist add (the added
 // book is owned then, so it repaints from the library side).
-function paintSeriesStrip(b) {
+export function paintSeriesStrip(b) {
   const strip = document.getElementById('m-strip');
   if (!strip || !(b.series && b.series.name)) return;
   const key = String(b.series.name).trim().toLowerCase();
@@ -721,7 +727,7 @@ function paintSeriesStrip(b) {
   }));
 }
 
-async function fillSeriesStrip(b) {
+export async function fillSeriesStrip(b) {
   if (!(b.series && b.series.name) || !document.getElementById('m-strip')) return;
   try {
     const r = await fetchSeriesBooks(b.series.name, (b.authors || [])[0]);
@@ -739,14 +745,14 @@ async function fillSeriesStrip(b) {
     paintSeriesStrip(b);
   } catch (e) { /* the owned strip stands on its own */ }
 }
-function wireSeriesRows(scope) {
+export function wireSeriesRows(scope) {
   scope.querySelectorAll('#m-series [data-book]').forEach(el =>
     el.addEventListener('click', () => openDetail(el.dataset.book)));
 }
 /* js/070 calls this after background enrichment lands more data, so the
    strip (and the series position in the header) can repaint without a
    reopen. Modal Variant A: the strip lives in #m-series-wrap. */
-function refreshSeriesInline(book) {
+export function refreshSeriesInline(book) {
   if (!book) return;
   const wrap = document.getElementById('m-series-wrap');
   if (wrap && book.series && book.series.name) {
@@ -759,7 +765,7 @@ function refreshSeriesInline(book) {
     ? ' · Book ' + book.series.position : '';
 }
 
-function openCollection(kind, name, fromId) {
+export function openCollection(kind, name, fromId) {
   const key = String(name).trim().toLowerCase();
   const match = b => kind === 'author'
     ? (b.authors || []).some(a => String(a).trim().toLowerCase() === key)
@@ -805,7 +811,7 @@ function openCollection(kind, name, fromId) {
 
 /* ---- book-opening transition: the tapped cover flies to center, then swings
    open like a real book cover, revealing the detail modal behind it ---- */
-function bookCoverFaceHTML(b) {
+export function bookCoverFaceHTML(b) {
   if (b.cover) return '<img src="' + esc(b.cover) + '" alt="">';
   const c = (typeof spineColorCache !== 'undefined' && spineColorCache[b.id] && spineColorCache[b.id].hex) ||
     SPINE_COLORS[hashStr(b.title || '?') % SPINE_COLORS.length];
@@ -814,7 +820,7 @@ function bookCoverFaceHTML(b) {
 }
 // from: element or rect the cover starts from. dropEl: removed in the same
 // frame (used by the spine pull-out so its popped cover swaps seamlessly).
-function playBookOpen(b, from, dropEl, done) {
+export function playBookOpen(b, from, dropEl, done) {
   const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : from;
   const vw = window.innerWidth || 360, vh = window.innerHeight || 640;
   const bw = Math.min(230, vw * 0.62), bh = bw * 1.5;
@@ -849,13 +855,13 @@ function playBookOpen(b, from, dropEl, done) {
 }
 // Open a book's detail modal, playing the book-opening transition when the
 // call site has a cover element (or rect) to start from and motion is allowed.
-function openBookFromEl(el, id) {
+export function openBookFromEl(el, id) {
   openDetail(id, el ? { fromEl: el } : null);
 }
 /* ---- v110: "More like this" — similar books from her own shelves ---- */
 // Ranked by shared tropes (3 pts), shared genres (2 pts), same author (4 pts),
 // spice-level closeness, with a nudge for books she rated 4★+. Purely local.
-function similarBooks(book, limit) {
+export function similarBooks(book, limit) {
   const norm = s => String(s || '').trim().toLowerCase();
   const bTropes = new Set((book.tropes || []).map(norm));
   const bCats = new Set((book.categories || []).map(norm));
@@ -878,7 +884,7 @@ function similarBooks(book, limit) {
     String(x.book.title || '').localeCompare(String(y.book.title || '')));
   return scored.slice(0, limit || 6).map(s => s.book);
 }
-function openDetail(id, opts) {
+export function openDetail(id, opts) {
   const b = library.find(x => x.id === id);
   if (!b) return;
   track('book_opened', null, { dedupeKey: 'open-' + id, dedupeMs: 60000 });
@@ -905,20 +911,20 @@ function openDetail(id, opts) {
    NOT fields — when one also moves a staged value it blesses exactly
    its own field via commitValue(), so an autosave never double-applies
    an already-committed change. */
-const MODAL_AUTOSAVE_MS = 700;
+export const MODAL_AUTOSAVE_MS = 700;
 // The currently open modal's flush (assigned by renderDetailModal).
 // Book-to-book navigation re-renders the modal WITHOUT going through
 // close(), so a fresh render flushes the previous form first — a
 // pending debounce timer can never write one book's staged values into
 // another book's record, and no edit is lost on the hop.
-let modalFormFlush = null;
-function flushPreviousModalForm() {
+export let modalFormFlush = null;
+export function flushPreviousModalForm() {
   if (!modalFormFlush) return;
   const f = modalFormFlush;
   modalFormFlush = null;
   try { f(); } catch (e) {}
 }
-function createModalFormState() {
+export function createModalFormState() {
   const fields = new Map();
   let baseline = {};
   let armed = false;
@@ -952,7 +958,7 @@ function createModalFormState() {
   return api;
 }
 
-function renderDetailModal(b, viaBook) {
+export function renderDetailModal(b, viaBook) {
   // Variant B: a previous modal form may still hold a pending autosave
   // (book-to-book navigation bypasses close()) — flush it BEFORE this
   // render touches editingId or the DOM, so its edits land on its own
@@ -2482,7 +2488,7 @@ function renderDetailModal(b, viaBook) {
 
 /* ---------------- quotes browser (v75) ---------------- */
 // Every saved quote across the library, newest first.
-function allQuotes() {
+export function allQuotes() {
   const out = [];
   library.forEach(b => (b.quotes || []).forEach(qt =>
     out.push({ book: b, q: qt })));
@@ -2492,7 +2498,7 @@ function allQuotes() {
   });
   return out;
 }
-function quoteCardHTML(book, qt, feat) {
+export function quoteCardHTML(book, qt, feat) {
   return '<div class="q-card' + (feat ? ' feat' : '') + '" data-book="' + book.id + '">' +
     '<p class="q-text">❝' + esc(qt.t) + '❞</p>' +
     '<div class="q-meta">' +
@@ -2501,7 +2507,7 @@ function quoteCardHTML(book, qt, feat) {
     esc((book.authors || []).join(', ') || 'Unknown author') +
     (qt.p ? ' · p. ' + qt.p : '') + '</span></span></div></div>';
 }
-function renderQuotes() {
+export function renderQuotes() {
   const all = allQuotes();
   let html = '<button class="btn ghost" id="q-back">← Shelves</button>' +
     '<h2 class="section serif" style="font-size:26px;margin-top:10px">' + icon('quotes') + ' Quotes' +
@@ -2535,7 +2541,7 @@ function renderQuotes() {
    v473: provenance labels + tap-to-confirm replace the ▲▼ buttons
    (Part 1: no vote counts shown; throttled/offline votes queue quietly).
    Async; leaves a fallback note on failure. */
-async function renderDbTropeChips(book, onAutoAdd) {
+export async function renderDbTropeChips(book, onAutoAdd) {
   const box = document.getElementById('m-tropedb');
   if (!box) return;
   try {
@@ -2571,3 +2577,65 @@ async function renderDbTropeChips(book, onAutoAdd) {
     box.innerHTML = '<p class="note">No trope data yet.</p>';
   }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — 070-hardcover.js, 120-favorites.js,
+   130-add.js, 140-collections.js, 155-authors.js, 159-characters.js,
+   160-roulette.js, 170-stats.js, 190-wishlist.js, 195-coven.js,
+   196-recos.js, 198-discovery.js, 200-boot.js, 205-shelfview.js,
+   217-shelf3d-view.js and 239-finale.js — reach these names at runtime, so
+   the bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups in classic scripts resolve through the global
+   object, so the caller needs no changes. Module scripts are deferred, so
+   the bridge is in place before any consumer can run. Remove a name from
+   this bridge only when its last classic caller is gone. previewOpenId is
+   republished as an accessor property, not a value copy: openPreviewModal
+   assigns it the open book’s id and the close path resets it to null, and
+   js/159-characters.js reads it live in openCharacter to stash the modal
+   return target before the book modal closes. A value copy would freeze the
+   initial null and silently drop that read; the getter/setter pair forwards
+   every read and write to the module binding, so the reader’s expression is
+   unchanged and every read sees the live value.
+ */
+window.authorCache = authorCache;
+window.seriesCache = seriesCache;
+window.fetchMoreByAuthor = fetchMoreByAuthor;
+window.repairTranslatedTitles = repairTranslatedTitles;
+window.resolveForeignTitles = resolveForeignTitles;
+window.backfillCovers = backfillCovers;
+window.fetchSeriesBooks = fetchSeriesBooks;
+window.searchSeriesId = searchSeriesId;
+window.addExternalBook = addExternalBook;
+window.externalRowHTML = externalRowHTML;
+window.spiceSparklineHTML = spiceSparklineHTML;
+window.loadCharsTabForBook = loadCharsTabForBook;
+window.loadQuotesForBook = loadQuotesForBook;
+window.previewTransient = previewTransient;
+Object.defineProperty(window, 'previewOpenId', { get: () => previewOpenId, set: (v) => { previewOpenId = v; }, enumerable: true, configurable: true });
+window.openPreviewModal = openPreviewModal;
+window.fillMoreSection = fillMoreSection;
+window.seriesEditHTML = seriesEditHTML;
+window.SERIES_STATUS_LABEL = SERIES_STATUS_LABEL;
+window.stripExtRows = stripExtRows;
+window.seriesStripHTML = seriesStripHTML;
+window.paintSeriesStrip = paintSeriesStrip;
+window.fillSeriesStrip = fillSeriesStrip;
+window.wireSeriesRows = wireSeriesRows;
+window.refreshSeriesInline = refreshSeriesInline;
+window.openCollection = openCollection;
+window.bookCoverFaceHTML = bookCoverFaceHTML;
+window.playBookOpen = playBookOpen;
+window.openBookFromEl = openBookFromEl;
+window.similarBooks = similarBooks;
+window.openDetail = openDetail;
+window.MODAL_AUTOSAVE_MS = MODAL_AUTOSAVE_MS;
+window.modalFormFlush = modalFormFlush;
+window.flushPreviousModalForm = flushPreviousModalForm;
+window.createModalFormState = createModalFormState;
+window.renderDetailModal = renderDetailModal;
+window.allQuotes = allQuotes;
+window.quoteCardHTML = quoteCardHTML;
+window.renderQuotes = renderQuotes;
+window.renderDbTropeChips = renderDbTropeChips;
