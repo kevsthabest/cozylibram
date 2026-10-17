@@ -1,8 +1,9 @@
 // Theming tests: light/dark mode + accent options + v416 visual theme gallery.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in theme tests'); };
@@ -13,7 +14,7 @@ let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
 const q = (s) => window.document.querySelector(s);
 const qa = (s) => Array.from(window.document.querySelectorAll(s));
-const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
 
 // 1. Defaults with empty storage (v416: no forced rose — theme default wins)
 window.localStorage.clear();

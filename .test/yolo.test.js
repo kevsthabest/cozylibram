@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /* Unit tests for js/211-yolo.js: NMS, guide selection, ensemble. */
 const fs = require('fs');
+const path = require('path');
 const { classicize } = require('./harness');
 // R3 repoint (migration plan §9.3): js/211 is an ES module; classicize its
 // source before evaluation, and stub the window its bridge publishes to —
 // loading plumbing only, assertions untouched.
-const src = classicize(fs.readFileSync('/home/hatch/workspace/booktok/js/211-yolo.js', 'utf8'), 'js/211-yolo.js');
+const src = classicize(fs.readFileSync(path.join(__dirname, '..', 'js/211-yolo.js'), 'utf8'), 'js/211-yolo.js');
 const stub = 'var document = undefined; var ort = undefined; var window = {}; ';
 const run = (expr) => new Function(stub + src + '\nreturn (' + expr + ');')();
 

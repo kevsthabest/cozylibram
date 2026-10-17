@@ -1,8 +1,9 @@
 // v292: api429Message distinguishes our per-IP limiter from upstream quota.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const ROOT = '/home/hatch/workspace/booktok';
+const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;

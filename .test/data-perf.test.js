@@ -2,8 +2,9 @@
 // sweep, #128 differential push + tombstone pruning).
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const APP_DIR = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const html = fs.readFileSync(APP_DIR + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;

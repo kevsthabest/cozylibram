@@ -4,8 +4,9 @@
 // never carry book content.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 
@@ -193,7 +194,7 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
     JSON.stringify(pvals.context) === '["search","isbn","pagecount"]');
 
   // 16. SQL security model.
-  const sql = fs.readFileSync('/home/hatch/workspace/booktok/supabase/analytics.sql', 'utf8');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/analytics.sql'), 'utf8');
   ok('analytics_events table created', /create table if not exists analytics_events/.test(sql));
   ok('app_admins registry created', /create table if not exists app_admins/.test(sql));
   ok('is_admin() is security definer', /security definer/.test(sql));

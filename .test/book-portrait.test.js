@@ -12,6 +12,7 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
 
 // ---- load modules in a sandbox ----
 const fs = require('fs');
+const path = require('path');
 const vm = require('vm');
 const { classicize } = require('./harness');
 function loadJS(path, extra) {
@@ -36,7 +37,7 @@ function loadJS(path, extra) {
 }
 
 // portraitScore is exported via module.exports in 225
-const p225 = loadJS('/home/hatch/workspace/booktok/js/225-book-portrait.js', {
+const p225 = loadJS(path.join(__dirname, '..', 'js/225-book-portrait.js'), {
   esc: s => String(s), icon: () => '',
   bookGenres: () => ['romantasy'],
   library: [],
@@ -58,7 +59,7 @@ eq('warningsState: not reviewed', warningsState([], {}), 'unreviewed');
 eq('warningsState: null warns', warningsState(null, {}), 'unreviewed');
 
 // empty book → 0 (genre stub returns romantasy though; override via book without stub)
-const p225b = loadJS('/home/hatch/workspace/booktok/js/225-book-portrait.js', {
+const p225b = loadJS(path.join(__dirname, '..', 'js/225-book-portrait.js'), {
   esc: s => String(s), icon: () => '', bookGenres: () => [], library: [],
 });
 const score0 = p225b.module.exports.portraitScore({}, 0);
@@ -87,7 +88,7 @@ eq('localTropes user first', lt[0].source, 'you');
 eq('localTropes AI second', lt[1].source, 'auto');
 
 // ---- survey guards (226) ----
-const p226 = loadJS('/home/hatch/workspace/booktok/js/226-dna-survey.js', {
+const p226 = loadJS(path.join(__dirname, '..', 'js/226-dna-survey.js'), {
   esc: s => String(s), toast: () => {}, saveLibrary: () => {},
 });
 const eligible = (p226.module.exports && p226.module.exports.dnaSurveyEligible) ||
@@ -122,7 +123,7 @@ ok('eligible: re-read thin portrait', eligible(Object.assign({ readCount: 2, dna
 // second, user's own third; the first source to claim a trope owns its slot
 // AND its provenance label. Drives the real portraitEnhance through its
 // window export with cloud / CharacterStore / document stubbed.
-const ROOT547 = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const ROOT547 = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 function jeq(name, a, b) {
   ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.stringify(b) + ')',
     JSON.stringify(a) === JSON.stringify(b));

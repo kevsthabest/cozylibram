@@ -3,7 +3,7 @@
 // before auth).
 const path = require('path');
 
-const ROOT = '/home/hatch/workspace/booktok';
+const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };
