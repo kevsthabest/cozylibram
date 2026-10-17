@@ -295,20 +295,20 @@ async function main() {
     body: JSON.stringify(body),
   });
   // Non-admin caller -> 403.
-  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['alice'] });
   const admDenied = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
   ok('admin-users: non-admin -> 403', admDenied.status === 403);
   // Admin cannot delete themself.
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
-  const admSelf = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'kevin' }) });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'] });
+  const admSelf = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'alice' }) });
   ok('admin-users: self-delete refused', admSelf.status === 400);
   // Admin cannot delete another admin.
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin', 'wifey'] });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice', 'wifey'] });
   const admTarget2 = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'wifey' }) });
   ok('admin-users: admin target refused', admTarget2.status === 400);
   // Happy path: wipe + auth delete.
   admCalls.length = 0;
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'] });
   const admOk = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
   const admOkJson = JSON.parse(await admOk.text());
   const wiped = ['books', 'profiles', 'deleted_books', 'circle_invites', 'circle_links', 'user_reports', 'banned_users', 'analytics_events', 'trope_votes', 'trope_proposal_votes'];
@@ -318,28 +318,28 @@ async function main() {
   ok('admin-users: auth user deleted via admin API',
     admCalls.some(c => c.method === 'DELETE' && c.url === 'https://x.supabase.co/auth/v1/admin/users/victim'));
   // Auth deletion failure -> 500.
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'], authDeleteOk: false });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'], authDeleteOk: false });
   const admFail = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'delete_user', target_user_id: 'victim' }) });
   ok('admin-users: auth delete failure -> 500', admFail.status === 500);
   // Missing service key -> 500 misconfigured.
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'] });
   const admNoKey = await admFn.onRequest({
     env: { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'sb1' },
     request: admReq({ action: 'delete_user', target_user_id: 'victim' }),
   });
   ok('admin-users: no service key -> 500', admNoKey.status === 500);
   // v248: list_users — admin-only user directory.
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'] });
   const admList = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'list_users' }) });
   const admListJson = JSON.parse(await admList.text());
   ok('admin-users: list_users -> 200 with the directory',
     admList.status === 200 && Array.isArray(admListJson.users) && admListJson.users.length === 2 &&
     admListJson.users[0].user_id === 'u1' && admListJson.users[0].email === 'a@x.y' &&
     admListJson.users[1].last_sign_in_at === '2026-02-01T00:00:00Z');
-  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'mallory', admins: ['alice'] });
   const admListDenied = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'list_users' }) });
   ok('admin-users: list_users non-admin -> 403', admListDenied.status === 403);
-  globalThis.fetch = admFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = admFetch({ caller: 'alice', admins: ['alice'] });
   const admUnknown = await admFn.onRequest({ env: admEnv, request: admReq({ action: 'nonsense' }) });
   ok('admin-users: unknown action -> 400', admUnknown.status === 400);
 
@@ -353,7 +353,7 @@ async function main() {
   }), { status: 200 });
   const ssFetch = (opts) => async (url, init) => {
     const u = String(url);
-    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: opts.caller || 'kevin' }), { status: 200 });
+    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: opts.caller || 'alice' }), { status: 200 });
     if (u.startsWith('https://x.supabase.co/rest/v1/banned_users'))
       return new Response(JSON.stringify([]), { status: 200 });
     if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) {
@@ -380,13 +380,13 @@ async function main() {
   });
   const ssGet = new Request('https://app.test/api/spine-search', { method: 'GET' });
   ok('spine-search: GET -> 405', (await ssFn.onRequest({ env: ssEnv, request: ssGet })).status === 405);
-  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = ssFetch({ caller: 'alice', admins: ['alice'] });
   ok('spine-search: no auth -> 401',
     (await ssFn.onRequest({ env: ssEnv, request: ssReq(undefined, false) })).status === 401);
-  globalThis.fetch = ssFetch({ caller: 'mallory', admins: ['kevin'] });
+  globalThis.fetch = ssFetch({ caller: 'mallory', admins: ['alice'] });
   ok('spine-search: non-admin -> 403',
     (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).status === 403);
-  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'] });
+  globalThis.fetch = ssFetch({ caller: 'alice', admins: ['alice'] });
   ok('spine-search: missing title -> 400',
     (await ssFn.onRequest({ env: ssEnv, request: ssReq({ title: '  ' }) })).status === 400);
   const ssRes = await ssFn.onRequest({ env: ssEnv, request: ssReq() });
@@ -396,10 +396,10 @@ async function main() {
     ssJson.candidates[0].image_url === 'https://img.example/spine1.jpg');
   ok('spine-search: grounding sources passed through',
     ssJson.sources.length === 1 && ssJson.sources[0].uri === 'https://books.example/p/1');
-  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'], geminiStatus: 500 });
+  globalThis.fetch = ssFetch({ caller: 'alice', admins: ['alice'], geminiStatus: 500 });
   ok('spine-search: upstream 500 -> 502',
     (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).status === 502);
-  globalThis.fetch = ssFetch({ caller: 'kevin', admins: ['kevin'], geminiText: 'not json at all https://img.example/a.png' });
+  globalThis.fetch = ssFetch({ caller: 'alice', admins: ['alice'], geminiText: 'not json at all https://img.example/a.png' });
   const ssFb = await (await ssFn.onRequest({ env: ssEnv, request: ssReq() })).json();
   ok('spine-search: non-JSON answer falls back to URL scraping',
     ssFb.candidates.length === 1 && ssFb.candidates[0].image_url === 'https://img.example/a.png');
@@ -431,8 +431,8 @@ async function main() {
   const BRAVE = 'https://api.search.brave.com/res/v1/images/search';
   const braveFetch = (opts) => async (url, init) => {
     const u = String(url);
-    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: 'kevin' }), { status: 200 });
-    if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) return new Response(JSON.stringify([{ user_id: 'kevin' }]), { status: 200 });
+    if (u === ADM_AUTH) return new Response(JSON.stringify({ id: 'alice' }), { status: 200 });
+    if (u.startsWith('https://x.supabase.co/rest/v1/app_admins')) return new Response(JSON.stringify([{ user_id: 'alice' }]), { status: 200 });
     if (u.startsWith('https://x.supabase.co/rest/v1/banned_users')) return new Response(JSON.stringify([]), { status: 200 });
     if (u.startsWith(BRAVE)) {
       if (opts.braveStatus) return new Response('nope', { status: opts.braveStatus });

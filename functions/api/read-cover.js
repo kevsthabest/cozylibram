@@ -18,7 +18,7 @@ function aiLog(endpoint, user, status, detail) {
 // client validates any returned ISBN's check digit before trusting it — a
 // misread becomes "couldn't read it", never the wrong book.
 //
-// v198: switched from OpenAI to Gemini — Kevin's Gemini key was already set
+// v198: switched from OpenAI to Gemini — the owner's Gemini key was already set
 // up for trope inference, so this reuses it. Same OpenAI-compatible wire
 // format the trope endpoint already speaks to Gemini
 // (generativelanguage.googleapis.com/v1beta/openai).
@@ -204,7 +204,7 @@ export async function onRequest(context) {
     headers['HTTP-Referer'] = 'https://cozylibram.pages.dev';
     headers['X-Title'] = 'Cozy Libram';
   } else {
-    // v198: Kevin's Gemini key is already configured for trope inference, so
+    // v198: the owner's Gemini key is already configured for trope inference, so
     // reuse it — VISION_API_KEY is only needed for a separate key.
     key = (env.VISION_API_KEY || '').trim() || (env.TROPE_KEY_GEMINI || '').trim();
     if (!key) {

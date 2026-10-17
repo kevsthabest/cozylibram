@@ -1,7 +1,7 @@
 # Community corpus v1
 
 Cozy Libram's character + trope + trigger-warning corpus is community-refined.
-The model: **AI first pass, users refine, Kevin always overrides.** v1 is a
+The model: **AI first pass, users refine, the owner always overrides.** v1 is a
 suggestion system with a human curation queue. There is no automated
 consensus yet — that waits for a community large enough to need it.
 
@@ -17,13 +17,13 @@ Three pillars, one pipeline each:
 
 1. **Controlled vocabularies.** Trope and trigger suggestions pick from
    fixed catalogs only. Users never mint catalog IDs — new trope *ideas* are
-   free text, but they go to Kevin's queue and are never auto-added to the
+   free text, but they go to the owner's queue and are never auto-added to the
    taxonomy.
 2. **Merges are evidence-gated.** A character merge proposal without
    evidence is rejected. Accepted merges are never auto-applied: approval
-   records the decision; Kevin applies the merge himself in the Character Lab.
+   records the decision; the owner applies the merge by hand in the Character Lab.
 3. **Provenance on everything.** Every suggestion records who suggested it
-   and when. Kevin's curation view shows full provenance; the public-facing
+   and when. The owner's curation view shows full provenance; the public-facing
    credit reads "refined by the community".
 4. **One vote each, no self-votes, rate-limited.** See below.
 5. **Accepted contributions only.** Lorekeeper milestones reward
@@ -37,7 +37,7 @@ Three pillars, one pipeline each:
 - *Catalog suggestion* — pick one of the 89 catalog tropes for this book.
   On approval, a `book_tropes` row is written with `source: 'community'`.
 - *New-trope idea* — free-text proposal (name, definition, genres). These
-  are curation-only: Kevin may add the trope to the taxonomy by hand, but
+  are curation-only: the owner may add the trope to the taxonomy by hand, but
   the pipeline never adds taxonomy entries on its own.
 
 **Character suggestions** — three types, from the character wiki and book
@@ -49,14 +49,14 @@ detail:
   Requires evidence (text or reasoning); proposals without it are rejected.
 
 **Trigger-warning suggestions** — pick from the 30-entry controlled
-taxonomy (seeded by Kevin) for a book. Accepted warnings flow into the
+taxonomy (seeded by the owner) for a book. Accepted warnings flow into the
 Start Reading trigger check, so the next reader gets the heads-up.
 Thresholds are safety-biased: the bar to *apply* a warning is low, and the
 reject path stays intact for bad suggestions.
 
 ## Curation queue (Observatory → Curation)
 
-Kevin's review inbox. It lists pending suggestions across all three
+The owner's review inbox. It lists pending suggestions across all three
 pillars with full provenance (he sees who suggested what and when), a
 consensus snapshot per suggestion (votes for/against), and bulk
 approve/reject — built for speed, not one-by-one clicking.
@@ -65,16 +65,16 @@ Approve effects:
 
 - Catalog trope → upsert `book_tropes` (`book_key`, `trope_id`,
   `source='community'`); reject → mark rejected + admin downvote.
-- New-trope idea → marked approved/rejected (Kevin adds to the taxonomy
+- New-trope idea → marked approved/rejected (the owner adds to the taxonomy
   manually).
 - Character add → resolves the work, inserts `book_characters` with
   `source_type='community'`.
-- Character merge/correct → marked accepted/rejected; Kevin applies the
+- Character merge/correct → marked accepted/rejected; the owner applies the
   change by hand.
 - Trigger warning → marked accepted/rejected; accepted warnings enrich the
   trigger check (`ccEnrichWarnings`).
 
-Kevin's decision is final and always overrides any vote tally.
+The owner's decision is final and always overrides any vote tally.
 
 ## Offline outbox and rate limits
 
@@ -97,7 +97,7 @@ weights are 1 until the community exists:
 
 - **Established** (automatic): granted after N accepted contributions.
   Votes count ×2.
-- **Verified** (Kevin's grant, revocable): fast-tracked suggestions, votes
+- **Verified** (the owner's grant, revocable): fast-tracked suggestions, votes
   count ×3.
 
 Accept/reject decisions already bump the `community_tiers` counters, so
@@ -106,7 +106,7 @@ the history accumulates even while the tiers do nothing.
 ## Lorekeeper milestones
 
 Three milestones reward accepted contributions (`js/219-milestones.js`):
-they fire only when Kevin approves a suggestion, never on submission.
+they fire only when the owner approves a suggestion, never on submission.
 Submitting fifty suggestions that all get rejected earns nothing — the
 system rewards judgment, not volume.
 

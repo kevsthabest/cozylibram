@@ -15,7 +15,7 @@
 // is checked with the service-role key against app_admins (RLS is bypassed,
 // so is_admin()'s auth.uid() wouldn't see the caller).
 //
-// Env: SUPABASE_URL + SUPABASE_SERVICE_KEY (Pages env vars, Kevin-owned).
+// Env: SUPABASE_URL + SUPABASE_SERVICE_KEY (Pages env vars, owner-managed).
 
 import { authedUser, unauthorized, forbiddenBanned } from '../_lib/require-user.js';
 

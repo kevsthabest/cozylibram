@@ -94,7 +94,7 @@ all with provenance. Run `supabase/migrations/v399_community_corpus_v1.sql`
 `trope_proposals` with `kind` (`catalog`/`new-idea`), `trope_id`, and
 `obscurity_weight`.
 
-Kevin reviews everything in the curation queue (Observatory → Curation tab):
+The owner reviews everything in the curation queue (Observatory → Curation tab):
 bulk approve/reject across all three pillars, full provenance visible to
 the curator. Approving a catalog trope writes a `book_tropes` row with
 `source='community'`; character merges are never auto-applied. Accepted

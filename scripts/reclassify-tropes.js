@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* One-off batch reclassification (2026-09-30, Kevin-approved).
+/* One-off batch reclassification (2026-09-30, User-approved).
    Re-runs trope inference for every work in the library under the v208
    evidence pipeline, writing claims through the v208 write path:
    rejected tropes are never resurrected, human-confirmed ones never

@@ -325,7 +325,7 @@ stub.rpc = (fn, args) => {
   ok('friend shelf shows their books', fvText.indexOf('Shared Tome') !== -1);
   ok('friend shelf does not leak my books', fvText.indexOf('Mine') === -1);
 
-  // ---- social section is always "The Hearth" (Kevin's call, 2026-10-11) ----
+  // ---- social section is always "The Hearth" (the User's call, 2026-10-11) ----
   // Theme-specific names (Night Court, Harvest Court, ...) are retired.
   ok('covenName() is always The Hearth', probe('covenName()') === 'The Hearth');
 

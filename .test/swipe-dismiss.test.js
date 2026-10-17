@@ -1,6 +1,6 @@
 // v215: swipe-down-to-close on the book modal — unit tests for the pure
 // decision logic (shouldDismissDrag) and the idempotent body scroll lock.
-// Touch/DOM gesture feel can't run in node; Kevin QAs that on his phone.
+// Touch/DOM gesture feel can't run in node; the User QAs that on his phone.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 

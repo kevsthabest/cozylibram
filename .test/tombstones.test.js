@@ -265,7 +265,7 @@ const mk = (id) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}', autho
   runInWindow(`setLocalUser(null);`);
   ok('floor survives user switching', window.eval(`tombstoneFloor`) === floorBefore);
 
-  // 12. v147 (Kevin's report): a deleted book's cloud row is dropped on push,
+  // 12. v147 (the User's report): a deleted book's cloud row is dropped on push,
   // so even if this device later loses its local tombstone (floor filtering,
   // partition restore, fresh sign-in), a manual sync can never resurrect it.
   const stub6 = makeSyncStub();
