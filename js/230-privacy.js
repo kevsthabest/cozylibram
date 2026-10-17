@@ -26,16 +26,22 @@
    Runtime source is the local key (the warning-prefs pattern);
    js/229-user-state.js mirrors it into user_state.privacy_state so it
    follows the account across devices. */
-const PRIVACY_KEY = 'cozylibram.privacy.v1';
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const PRIVACY_KEY = 'cozylibram.privacy.v1';
 
 /* High-spice threshold: the app's own spice axis words (js/020) name
    level 4 "Explicit" and level 5 "Filthy" — 4+ is where the scale
    itself stops describing mainstream romance (level 3 is "Steamy").
    The shield anchors to the top two rungs of the app's existing
    scale rather than inventing a second one. */
-const SHIELD_SPICE_MIN = 4;
+export const SHIELD_SPICE_MIN = 4;
 
-function privacyState() {
+export function privacyState() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(PRIVACY_KEY) || 'null'); } catch (e) {}
   if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
@@ -46,14 +52,14 @@ function privacyState() {
     bandSetAt: Number(s.bandSetAt) || 0,
   };
 }
-function privacySave(state) {
+export function privacySave(state) {
   try { localStorage.setItem(PRIVACY_KEY, JSON.stringify(state)); } catch (e) {}
   // Roam it (hash-gated inside userStatePush; a no-op signed out).
   try { if (typeof userStatePush === 'function') userStatePush(); } catch (e) {}
 }
 
-function shieldOn() { return privacyState().shield === true; }
-function setShield(on) {
+export function shieldOn() { return privacyState().shield === true; }
+export function setShield(on) {
   const s = privacyState();
   s.shield = !!on;
   privacySave(s);
@@ -76,7 +82,7 @@ function setShield(on) {
      Profile, re-declaring teen, or flipping adult→teen later leaves
      every toggle exactly where the user put it.
    Declaring 'adult' never writes any toggle, in either direction. */
-async function setAgeBand(band) {
+export async function setAgeBand(band) {
   if (band !== 'teen' && band !== 'adult') return privacyState();
   const s = privacyState();
   const firstTeen = band === 'teen' && !s.teenDefaultsApplied;
@@ -90,7 +96,7 @@ async function setAgeBand(band) {
 
 // The profiles half of the teen starting positions. Safe to call any
 // time: a no-op unless the band is teen and the write hasn't landed.
-async function applyPendingTeenDefaults() {
+export async function applyPendingTeenDefaults() {
   const s = privacyState();
   if (s.band !== 'teen' || s.teenDefaultsApplied) return false;
   if (typeof cloudUser === 'undefined' || !cloudUser) return false; // signed out: stays pending
@@ -114,7 +120,7 @@ async function applyPendingTeenDefaults() {
    Profile is never stomped by the stale signup value. When the band
    was already declared on this device at signup, this is a no-op and
    applyPendingTeenDefaults (called alongside) does any retry. */
-async function adoptSignupBand(user) {
+export async function adoptSignupBand(user) {
   const md = (user && user.user_metadata) || {};
   const b = md.age_band;
   if (b !== 'teen' && b !== 'adult') return false;
@@ -136,7 +142,7 @@ async function adoptSignupBand(user) {
       opt-in metadata, most books have none, and failing closed would
       blank most of a friend's shelves and teach users to switch the
       shield off. The shield claims only what the data supports. */
-function shieldWorkKey(book) {
+export function shieldWorkKey(book) {
   try {
     if (typeof workKeysFor === 'function') {
       const k = workKeysFor(book);
@@ -145,7 +151,7 @@ function shieldWorkKey(book) {
   } catch (e) {}
   return '';
 }
-function shieldSpiceOf(book, map) {
+export function shieldSpiceOf(book, map) {
   const own = Number(((book && book.ratings) || {}).spice) || 0;
   if (own > 0) return own;
   if (map) {
@@ -154,11 +160,11 @@ function shieldSpiceOf(book, map) {
   }
   return null;
 }
-function shieldIsHighSpice(book, map) {
+export function shieldIsHighSpice(book, map) {
   const v = shieldSpiceOf(book, map);
   return v != null && v >= SHIELD_SPICE_MIN;
 }
-async function shieldSpiceMapFor(books) {
+export async function shieldSpiceMapFor(books) {
   if (typeof WorkStore === 'undefined' || !WorkStore || typeof WorkStore.spiceMapFor !== 'function') return {};
   try { return (await WorkStore.spiceMapFor(books || [])) || {}; } catch (e) { return {}; }
 }
@@ -167,10 +173,38 @@ async function shieldSpiceMapFor(books) {
    axis badge is stripped (spice indicators hidden) — every other
    field renders as-is. Returns the book itself when the shield is
    off, so unshielded rendering is byte-identical to before v524. */
-function shieldCardBook(b) {
+export function shieldCardBook(b) {
   if (!b || !shieldOn()) return b;
   if (!Array.isArray(b.axes) || b.axes.indexOf('spice') === -1) return b;
   const copy = Object.assign({}, b);
   copy.axes = b.axes.filter(k => k !== 'spice');
   return copy;
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — 095-gate.js, 105-account.js, 195-coven.js,
+   196-recos.js, 197-social-stats.js, 198-discovery.js,
+   232-thought-of-you.js, 233-buddy-reads.js, 235-reading-it-too.js,
+   242-marginalia.js and 243-gifts.js — reach these names at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups in classic scripts resolve through the global object,
+   so the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name from this
+   bridge only when its last classic caller is gone.
+ */
+window.PRIVACY_KEY = PRIVACY_KEY;
+window.SHIELD_SPICE_MIN = SHIELD_SPICE_MIN;
+window.privacyState = privacyState;
+window.privacySave = privacySave;
+window.shieldOn = shieldOn;
+window.setShield = setShield;
+window.setAgeBand = setAgeBand;
+window.applyPendingTeenDefaults = applyPendingTeenDefaults;
+window.adoptSignupBand = adoptSignupBand;
+window.shieldWorkKey = shieldWorkKey;
+window.shieldSpiceOf = shieldSpiceOf;
+window.shieldIsHighSpice = shieldIsHighSpice;
+window.shieldSpiceMapFor = shieldSpiceMapFor;
+window.shieldCardBook = shieldCardBook;
