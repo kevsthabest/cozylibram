@@ -1,43 +1,42 @@
 'use strict';
 
-/* ---- 218-shelf3d-decor.js: 3D shelf decoration catalog (v406) ----
-   Single source of truth for shelf decorations: catalog entries, per-theme
-   recommended sets, and per-theme preset arrangements.
-
-   Catalog format per entry:
-     id      — stable key used by presets, sets, and the engine inventory
-     name    — display name in the inventory
-     build   — builder key (DECO_MAKERS / ROOM_MAKERS in js/215-shelf3d.js)
-     room    — true for room decorations (inventory Room tab, free placement);
-               'wall' items pin to the back wall, floor items sit on the floor
-     mount   — for room items: 'wall' | 'floor' (placement plane)
-     premium — premium-tier flag. INTERNAL ONLY during alpha: everything stays
-               unlocked and usable; no paywall enforcement yet. The flag
-               establishes the entitlement structure for later.
-     stock   — initial inventory count per session
-     svg     — 30x30 inventory icon
-
-   SETS: theme key -> recommended decoration ids (UI Designer fit table).
-   PRESETS: theme key -> placements. Each placement:
-     { deco, pi, x }                  — shelf plank (pi 0=bottom..2=top)
-     { deco, room:true, x, y, z }     — room decoration (wall or floor)
-     Optional: tint (wax/bulb/flower hex), tint2 (secondary hex),
-               variant (named palette, e.g. vase:'harvest').
-
-   Behavior contract (with js/215-shelf3d.js):
-   - Switching app theme NEVER auto-rearranges decorations mid-session.
-   - Mounting with an empty shelf auto-applies the current theme's preset
-     (decorations are session-only, so "empty shelf" == every fresh mount).
-   - The "Dress shelf for <theme>" button applies the preset on explicit tap
-     (with confirm when decorations exist, toggleable back). */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   The catalog's IIFE result is the file's whole public surface: it is
-   exported in place below and republished on window by the
-   compatibility bridge at the bottom of this file, so classic scripts
-   keep resolving the same global. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/218-shelf3d-decor.js — 3D shelf decoration catalog: the single
+ * source of truth for what decorations exist, which ones each theme
+ * recommends, and where a theme's preset arrangement puts them.
+ *
+ * The catalog holds 33 entries. An entry's `id` is the stable key
+ * that presets, sets, and the engine inventory all join on, and its
+ * `build` key names the builder that constructs it in
+ * js/215-shelf3d.js (DECO_MAKERS / ROOM_MAKERS there). Room entries
+ * (room: true) place on a wall or floor plane (mount: 'wall' |
+ * 'floor') instead of a shelf plank. `premium` is an internal
+ * entitlement flag only during alpha: everything stays unlocked and
+ * usable, with no paywall enforcement yet — the flag exists so the
+ * entitlement structure is in place before it is ever switched on.
+ * `stock` is the per-session inventory count, and `svg` the 30x30
+ * inventory icon.
+ *
+ * SETS maps a theme key to its recommended decoration ids (22
+ * themes); PRESETS maps a theme key to placements (23 themes —
+ * solstice carries a preset but no recommended set, so setFor falls
+ * back to the dark set for it). A placement is either a shelf plank
+ * ({ deco, pi, x }, with pi 0 = bottom .. 2 = top) or a room
+ * placement ({ deco, room: true, x, y, z }), with optional tint /
+ * tint2 hexes and a named variant palette (e.g. vase: 'harvest').
+ * setFor and presetFor hand out copies, never the tables themselves,
+ * so a caller dressing a shelf cannot mutate the shared catalog.
+ *
+ * Behavior contract with js/215-shelf3d.js, the only consumer (it
+ * reads the Shelf3DDecor namespace through the window bridge at the
+ * bottom of this file): switching the app theme never auto-rearranges
+ * decorations mid-session; mounting with an empty shelf auto-applies
+ * the current theme's preset, and decorations are session-only, so
+ * every fresh mount counts as empty; the "Dress shelf for <theme>"
+ * button applies a preset only on explicit tap, with a confirm when
+ * decorations already exist, and can toggle back. The catalog
+ * surface is pinned by .test/premium-packs.test.js. This file reads
+ * nothing from any other module.
+ */
 export const Shelf3DDecor = (function () {
 
   var CATALOG = [
@@ -96,7 +95,8 @@ export const Shelf3DDecor = (function () {
       svg: '<svg viewBox="0 0 30 30"><circle cx="11" cy="12" r="4" fill="#2a8a4a"/><circle cx="19" cy="12" r="4" fill="#2a8a4a"/><circle cx="15" cy="17" r="4" fill="#35a055"/><path d="M15 20 C15 23 14 25 12 27" stroke="#2a8a4a" stroke-width="1.6" fill="none"/></svg>' },
     { id: 'applebowl', name: 'Apple bowl', build: 'applebowl', stock: 1, premium: false,
       svg: '<svg viewBox="0 0 30 30"><ellipse cx="11" cy="12" rx="3.6" ry="3.2" fill="#c0392b"/><ellipse cx="18" cy="11" rx="3.6" ry="3.2" fill="#d43a55"/><ellipse cx="15" cy="15" rx="3.6" ry="3.2" fill="#e05252"/><path d="M6 18 h18 l-3 7 h-12 Z" fill="#8a6a4a"/></svg>' },
-    /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
+    /* ---- premium theme packs: every entry premium:true but unlocked
+       during alpha, per the catalog rule in the header (v423) ---- */
     /* Stormrider */
     { id: 'dragon-egg', name: 'Dragon egg', build: 'dragonEgg', stock: 1, premium: true,
       svg: '<svg viewBox="0 0 30 30"><path d="M15 4 C21 4 25 12 25 19 C25 24 20 27 15 27 C10 27 5 24 5 19 C5 12 9 4 15 4Z" fill="#3a4a6a"/><path d="M10 14 Q13 11 16 14 M14 19 Q17 16 20 19" stroke="#7fb3e8" stroke-width="1.2" fill="none"/></svg>' },
@@ -149,7 +149,7 @@ export const Shelf3DDecor = (function () {
     shamrock:    ['plant', 'candle', 'mug', 'stack', 'coins', 'clover'],
     pastel:      ['succulent', 'lights', 'plant', 'photo', 'eggs', 'vase'],
     harvest:     ['pumpkin', 'lights', 'stack', 'mug', 'vase', 'applebowl'],
-    /* v423: premium packs */
+    /* premium packs (v423) */
     stormrider:  ['dragon-egg', 'storm-lantern', 'rider-blade', 'candle', 'stack'],
     briarthrone: ['thorn-crown', 'moon-goblet', 'night-bloom', 'candle', 'photo'],
     voidsignal:  ['holo-cube', 'signal-dish', 'data-core', 'lights', 'globe'],
@@ -277,7 +277,7 @@ export const Shelf3DDecor = (function () {
       { deco: 'applebowl', pi: 1, x: -3.4 },
       { deco: 'vase', pi: 0, x: -4.0, variant: 'harvest' },
     ],
-    solstice: [ // v416 (T6): bright summer day
+    solstice: [ // the bright summer day arrangement (v416)
       { deco: 'succulent', pi: 1, x: 3.4 },
       { deco: 'plant', pi: 1, x: -3.2 },
       { deco: 'globe', pi: 0, x: 4.0 },
@@ -285,7 +285,7 @@ export const Shelf3DDecor = (function () {
       { deco: 'mug', pi: 0, x: 2.9 },
       { deco: 'lights', pi: 2, x: 0, tint: '#ffe9a8' },
     ],
-    /* v423: premium packs */
+    /* premium packs (v423) */
     stormrider: [
       { deco: 'dragon-egg', pi: 1, x: 3.6 },
       { deco: 'storm-lantern', pi: 1, x: -3.4 },
@@ -348,11 +348,12 @@ export const Shelf3DDecor = (function () {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The one classic consumer, js/215-shelf3d.js,
-   reads the Shelf3DDecor namespace at runtime, so the bridge
-   republishes exactly the pre-conversion public surface on window.
-   Bare-name lookups in classic scripts resolve through the global
-   object, so the caller needs no changes. Module scripts are deferred,
-   so the bridge is in place before any consumer can run. Remove a name
-   from this bridge only when its last classic caller is gone. */
+   file can see them. Its one consumer, js/215-shelf3d.js, still
+   reads the Shelf3DDecor namespace through window at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups resolve through the global object, so
+   the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name
+   from this bridge only when its last window-reading caller has
+   wired the read as an import (ADR-003). */
 window.Shelf3DDecor = Shelf3DDecor;
