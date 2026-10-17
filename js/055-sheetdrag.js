@@ -1,22 +1,29 @@
 'use strict';
 
-/* ---------------- sheet drag-to-dismiss + body scroll lock ----------------
-   Extracted from js/150-modal-discovery.js (v553): this is shared UI
-   machinery — every sheet/modal in the app wires its swipe-down-to-dismiss
-   gesture through wireSheetDrag — so it lives in its own early module,
-   loaded before all consumers (first consumer is js/134). Pure relocation:
-   function names, signatures and behaviour unchanged. */
-/* ---- v215: bottom-sheet drag-to-dismiss (touch only) + background scroll lock.
-   The sheet follows the finger only when its scrollable content is at the
-   very top (scrollTop <= 0) — otherwise the gesture is a normal content
-   scroll. Desktop keeps the close button; no mouse-drag. Gesture feel needs
-   on-phone QA; the decision math below is unit-tested. ---- */
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/055-sheetdrag.js — Sheet drag-to-dismiss and the body scroll
+ * lock: the shared gesture machinery behind every sheet and modal in
+ * the app.
+ *
+ * Swipe-down-to-dismiss is an app rule (see ADR-009): every sheet
+ * wires its gesture through wireSheetDrag here rather than
+ * re-implementing it. The gesture is touch-only — desktop keeps the
+ * close button, there is no mouse-drag. The sheet follows the finger
+ * only when its scrollable content is at the very top
+ * (scrollTop <= 0); otherwise the gesture is a normal content
+ * scroll. The dismiss decision itself is pure
+ * (shouldDismissDrag: distance past SHEET_DISMISS_PX, or a downward
+ * flick past SHEET_FLICK_V) and is unit-tested in
+ * .test/swipe-dismiss.test.js; the gesture feel around it needs
+ * on-phone QA. lockBodyScroll / unlockBodyScroll are the shared
+ * background scroll lock the modal code uses alongside.
+ *
+ * Extracted from js/150-modal-discovery.js (v553) because the
+ * machinery is shared by the whole app, so it lives in its own early
+ * module, loaded before all consumers (first consumer is js/134).
+ * Seventeen files still read wireSheetDrag as a global through the
+ * window bridge at the bottom of this file; js/162-charlab.js
+ * imports it. This file reads nothing from any other module.
+ */
 export const SHEET_DISMISS_PX = 120; // drag distance that dismisses the sheet
 export const SHEET_FLICK_V = 0.55;   // px/ms downward velocity that dismisses (a flick)
 // Pure decision logic — testable in node.
@@ -38,11 +45,11 @@ export function unlockBodyScroll() {
   bodyScrollLocked = false;
   document.body.style.overflow = bodyScrollPrev;
 }
-/* v511: a drag that starts inside a horizontally scrollable descendant
+/* A drag that starts inside a horizontally scrollable descendant
    (a chip row, a similar-books rail) belongs to that scroller, not to
    the sheet — walk from the touch target up to the sheet and refuse
    the dismiss gesture for such starts. Generic: any descendant whose
-   content overflows horizontally with overflow-x auto/scroll. */
+   content overflows horizontally with overflow-x auto/scroll (v511). */
 export function sheetDragStartsInHScroller(sheet, el) {
   try {
     while (el && el.nodeType === 1) {
@@ -76,9 +83,9 @@ export function wireSheetDrag(sheet, onDismiss) {
     const d = e.touches[0].clientY - y0;
     if (!dragging) {
       if (d < 10 || sheet.scrollTop > 0) return; // not a top-of-sheet downward swipe
-      /* v511: a predominantly horizontal gesture is a swipe at content,
+      /* A predominantly horizontal gesture is a swipe at content,
          not a dismiss — refuse it for the rest of this touch, exactly
-         as the browser hands it to the horizontal scroller. */
+         as the browser hands it to the horizontal scroller (v511). */
       if (x0 != null && Math.abs(e.touches[0].clientX - x0) > Math.abs(d)) { refused = true; return; }
       dragging = true;
       // Re-anchor: the sheet starts following from this finger position so it
@@ -120,15 +127,16 @@ export function wireSheetDrag(sheet, onDismiss) {
    A module's top-level names are module-private: nothing outside this file
    can see them. The consumers — 134-verify.js, 136-coverpicker.js,
    138-editions.js, 139-import-concierge.js, 150-modal-discovery.js,
-   162-charlab.js, 180-settings.js, 195-coven.js, 205-shelfview.js,
-   213-dnf.js, 221-trigger-check.js, 223-community-corpus-ui.js,
-   226-dna-survey.js, 228-portrait-share.js, 236-sticker-picker.js,
-   237-handles.js, 239-finale.js and 241-book-ambience.js — reach these
-   names at runtime, so the bridge republishes exactly the pre-conversion
-   public surface on window. Bare-name lookups in classic scripts resolve
-   through the global object, so the caller needs no changes. Module scripts
-   are deferred, so the bridge is in place before any consumer can run.
-   Remove a name from this bridge only when its last classic caller is gone.
+   180-settings.js, 195-coven.js, 205-shelfview.js, 213-dnf.js,
+   221-trigger-check.js, 223-community-corpus-ui.js, 226-dna-survey.js,
+   228-portrait-share.js, 236-sticker-picker.js, 237-handles.js,
+   239-finale.js and 241-book-ambience.js — still reach these names as
+   globals at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve
+   through the global object, so the callers need no changes. Module
+   scripts are deferred, so the bridge is in place before any consumer
+   can run. Remove a name from this bridge only when its last
+   window-reading caller has wired the read as an import (ADR-003).
  */
 window.SHEET_DISMISS_PX = SHEET_DISMISS_PX;
 window.SHEET_FLICK_V = SHEET_FLICK_V;

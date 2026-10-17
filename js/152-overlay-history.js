@@ -1,33 +1,41 @@
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
-/* ---- overlay history (v220): Android's system back-gesture must close the
-   topmost overlay instead of navigating away. The SPA keeps its routes in
-   memory (no hash routing), so without this the back gesture pops the
-   document history — dropping User to whatever page was open before the app.
-
-   Design: every overlay registers with overlayOpened(slot, domCloser), which
-   pushes a SAME-URL history entry (no URL/hash change, so no routing fires).
-   A single global popstate listener then closes the topmost overlay when the
-   gesture pops that entry. Programmatic closes (x / backdrop / Escape /
-   swipe-down) consume their entry via history.back() behind a suppression
-   flag, so no phantom entries linger. Sequential handoffs (preview +TBR ->
-   real modal, collection row -> book modal) use overlayReplace: the new
-   overlay adopts the old one's entry — exactly one entry per visible
-   overlay, with no back()/pushState() race.
-
-   Slots group overlays that replace each other in place: 'modal-root'
-   covers BOTH the real book modal and the v219 preview modal, so a
-   re-render (e.g. jumping to a similar book) swaps the closer without
-   pushing a second entry.
-
-   With no overlay open the popstate handler does nothing — normal history
-   navigation is untouched. Where history.pushState is unavailable the
-   manager degrades silently: overlays still open/close, the gesture just
-   can't reach them. ---- */
+/* js/152-overlay-history.js — Overlay history: the manager that makes
+ * Android's system back-gesture close the topmost overlay instead of
+ * navigating away (v220).
+ *
+ * The SPA keeps its routes in memory (no hash routing), so without
+ * this the back gesture pops the document history — dropping the
+ * reader to whatever page was open before the app. Design: every
+ * overlay registers with overlayOpened(slot, domCloser), which pushes
+ * a SAME-URL history entry (no URL/hash change, so no routing
+ * fires). A single global popstate listener then closes the topmost
+ * overlay when the gesture pops that entry. Programmatic closes
+ * (x / backdrop / Escape / swipe-down) consume their entry via
+ * history.back() behind a suppression flag, so no phantom entries
+ * linger. Sequential handoffs (preview +TBR -> real modal,
+ * collection row -> book modal) use overlayReplace: the new overlay
+ * adopts the old one's entry — exactly one entry per visible
+ * overlay, with no back()/pushState() race.
+ *
+ * Slots group overlays that replace each other in place: 'modal-root'
+ * covers BOTH the real book modal and the v219 preview modal, so a
+ * re-render (e.g. jumping to a similar book) swaps the closer without
+ * pushing a second entry. Full-view routes are not overlays, but the
+ * gesture still needs somewhere to go there, so routeBackOpened
+ * registers a 'route' entry whose closer navigates back (v224).
+ *
+ * With no overlay open the popstate handler does nothing — normal
+ * history navigation is untouched. Where history.pushState is
+ * unavailable the manager degrades silently: overlays still
+ * open/close, the gesture just can't reach them.
+ * __overlayHistoryReset / __overlayStackDepth are test-only
+ * introspection, not part of the app contract.
+ *
+ * Twenty-three files read the overlay and route-back functions as
+ * globals through the window bridge at the bottom of this file;
+ * js/162-charlab.js imports overlayOpened / overlayClosed instead.
+ * Behaviour is pinned by .test/overlay-history.test.js. This file
+ * reads nothing from any other module.
+ */
 
 export let ovStack = []; // [{ token, slot, domCloser, pushed }]
 export let ovSeq = 0;
@@ -109,10 +117,11 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('popstate', __overlayOnPopState);
 }
 
-// v224 (UX-23): full-view routes (author detail, series view) are not
-// overlays, but the Android back-gesture still needs somewhere to go —
-// without a history entry the gesture exits the app. A route registers a
-// 'route' slot entry whose closer navigates back; any go() consumes it.
+// Full-view routes (author detail, series view) are not overlays, but
+// the Android back-gesture still needs somewhere to go — without a
+// history entry the gesture exits the app. A route registers a
+// 'route' slot entry whose closer navigates back; any go() consumes
+// it (v224, UX-23).
 export let routeBackToken = null;
 export let routeBackFn = null;
 export function routeBackOpened(onBack) {
@@ -139,12 +148,14 @@ export function __overlayStackDepth() { return ovStack.length; }
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers (24 files) call the overlay and route-back functions at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. Twenty-three files still call the overlay and
+   route-back functions as globals at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups resolve through the global object, so the
+   callers need no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name
+   from this bridge only when its last window-reading caller has
+   wired the read as an import (ADR-003). */
 window.ovStack = ovStack;
 window.ovSeq = ovSeq;
 window.ovSuppressPop = ovSuppressPop;

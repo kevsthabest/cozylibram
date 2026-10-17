@@ -1,24 +1,35 @@
 'use strict';
 
-/* ---------------- YOLO book segmentation (v301+) ----------------
-   On-device book detection via yolo11n-seg (ONNX, onnxruntime-web).
-   Used as the second stage of the orbit burst crop: the edge-based
-   tighten (ecTightenQuad) runs first for precision; YOLO refines when
-   they disagree (damaged/warped books where straight edges fail).
-
-   The model is loaded lazily (only when orbit capture runs). The
-   12MB .onnx is NOT precached by the service worker — it is fetched
-   at runtime on first use, so a first-ever orbit capture needs a
-   connection (later captures ride the browser cache).
-   Detection is class-agnostic: we pick by guide-overlap geometry, not
-   the COCO label (a spine is often called 'tie' or 'skateboard'). */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/211-yolo.js — YOLO book segmentation: on-device book detection
+ * (yolo11n-seg, ONNX, onnxruntime-web) for edition-face capture
+ * (v301+).
+ *
+ * This is the second stage of the orbit burst crop: the edge-based
+ * tighten (ecTightenQuad, js/203-editionvision.js) runs first for
+ * precision; YOLO refines when they disagree (damaged/warped books
+ * where straight edges fail). ecEnsembleQuad states the vote
+ * exactly: agreement (bounding-box IoU > 0.7) keeps the edge quad,
+ * disagreement trusts YOLO.
+ *
+ * Everything loads lazily, only when orbit capture runs: the
+ * vendored ort runtime is injected as a script tag by
+ * ecYoloLoadOrt, and the 12MB .onnx is NOT precached by the service
+ * worker — it is fetched at runtime on first use, so a first-ever
+ * orbit capture needs a connection (later captures ride the
+ * browser cache). Detection is class-agnostic: ecYoloBestForGuide
+ * picks by guide-overlap geometry (IoU above a 0.15 floor), not
+ * the COCO label (a spine is often called 'tie' or 'skateboard').
+ * The decode helpers (ecYoloNms, ecYoloDecode, ecQuadIoU) are pure.
+ *
+ * The user toggle lives here too: ecYoloEnabled defaults on and is
+ * stored under EC_YOLO_OPT_KEY; js/180-settings.js reads and writes
+ * it as globals through the window bridge, and
+ * js/206-editioncapture.js calls the detection entry points the
+ * same way. The `ort` global this file reads at runtime is the
+ * vendored runtime it loads itself — not another module's bridge
+ * surface — and no bridge-published name is read here. Pinned by
+ * .test/yolo.test.js.
+ */
 export var EC_YOLO_IMG = 640;
 export var EC_YOLO_CONF = 0.15;
 export var EC_YOLO_NMS_IOU = 0.5;
@@ -224,14 +235,14 @@ export function ecYoloQuad(det) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers (js/180-settings.js,
-   js/206-editioncapture.js) call these functions at runtime, so the
-   bridge republishes exactly the pre-conversion public surface on
-   window. Bare-name lookups in classic scripts resolve through the
+   file can see them. Its consumers (js/180-settings.js,
+   js/206-editioncapture.js) still call these functions as globals at
+   runtime, so the bridge republishes exactly the pre-conversion
+   public surface on window. Bare-name lookups resolve through the
    global object, so the callers need no changes. Module scripts are
    deferred, so the bridge is in place before any consumer can run.
-   Remove a name from this bridge only when its last classic caller
-   is gone. */
+   Remove a name from this bridge only when its last window-reading
+   caller has wired the read as an import (ADR-003). */
 window.EC_YOLO_IMG = EC_YOLO_IMG;
 window.EC_YOLO_CONF = EC_YOLO_CONF;
 window.EC_YOLO_NMS_IOU = EC_YOLO_NMS_IOU;

@@ -1,22 +1,25 @@
 'use strict';
 
-/* ---- 216-shelf3d-theme.js: 3D shelf theme mapping (v405) ----
-   Maps the 17 app themes (+ 12 accents) to Three.js scene parameters.
-   The Autumn cozy preset is the north star: harvest theme carries it.
-
-   Moods drive decoration suggestions:
-   - cozy:    warm, inviting (dark, hearthside, amour, harvest)
-   - moody:   dramatic, low-key (twilight, verdant, midnight, velvet, abyss)
-   - bright:  airy, light (light, candlelight, frost, pastel)
-   - spooky:  halloween (haunt)
-   - festive: celebratory (yuletide, fete, shamrock) */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/216-shelf3d-theme.js — 3D shelf theme mapping: how each app
+ * theme looks as a Three.js room (v405).
+ *
+ * SHELF3D_THEMES carries one row per app theme (23 rows): shelf
+ * timber, key/rim light colours, ambient level and exposure, the
+ * accent glow, the floor tint, and a mood label (cozy / moody /
+ * bright / spooky / festive). The Autumn cozy preset is the north
+ * star: the harvest row carries it. SHELF3D_SHELLS carries the room
+ * shell (walls, floor, trim) per theme, and SHELF3D_ACCENTS the 12
+ * accent colours that can override a row's accentGlow.
+ *
+ * shelf3dThemeFor(themeKey, accentKey) is the entry point: an
+ * unknown theme falls back to the dark row, an unknown accent to
+ * the row's own accentGlow, and every call returns a fresh object
+ * (see the note at the function) so no caller can mutate the
+ * tables through a shared reference. The file's one consumer,
+ * js/217-shelf3d-view.js, reads the Shelf3DTheme namespace as a
+ * global through the window bridge at the bottom of this file.
+ * This file reads nothing from any other module.
+ */
 export const SHELF3D_ACCENTS = {
   rose: '#e5488f', violet: '#8b5cf6', gold: '#c08a24', teal: '#2fa39a',
   crimson: '#d43a55', ember: '#e0722a', ocean: '#3f8fd6', sage: '#8aa864',
@@ -44,8 +47,7 @@ export const SHELF3D_THEMES = {
   shamrock:    { woodBase: '#3d5a34', woodDark: '#22331c', lightWarm: '#ffd86a', lightCool: '#2a8a4a', ambientLevel: 0.85, exposure: 1.05, accentGlow: '#6fce9e', floorTint: '#0c1e13', mood: 'festive' },
   pastel:      { woodBase: '#d4b8a0', woodDark: '#96745e', lightWarm: '#fff0f5', lightCool: '#ffe0ec', ambientLevel: 1.05, exposure: 1.1,  accentGlow: '#b9a3f2', floorTint: '#f7f2fa', mood: 'bright' },
   harvest:     { woodBase: '#6b4426', woodDark: '#3a2412', lightWarm: '#ffc27a', lightCool: '#b07a3a', ambientLevel: 0.8,  exposure: 1.05, accentGlow: '#c47b4a', floorTint: '#191007', mood: 'cozy' },
-  solstice:    { woodBase: '#d4a86a', woodDark: '#96703e', lightWarm: '#fff3d8', lightCool: '#ffe9b8', ambientLevel: 1.15, exposure: 1.2,  accentGlow: '#c08a24', floorTint: '#fdf1d7', mood: 'bright' }, // v416 (T6)
-  // v423: premium packs.
+  solstice:    { woodBase: '#d4a86a', woodDark: '#96703e', lightWarm: '#fff3d8', lightCool: '#ffe9b8', ambientLevel: 1.15, exposure: 1.2,  accentGlow: '#c08a24', floorTint: '#fdf1d7', mood: 'bright' },
   stormrider:  { woodBase: '#3d3a55', woodDark: '#222031', lightWarm: '#ffd9a0', lightCool: '#5a6a9a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#e8a94e', floorTint: '#12141f', mood: 'moody' },
   briarthrone: { woodBase: '#4a2f52', woodDark: '#2a1a30', lightWarm: '#d8c0ff', lightCool: '#5a3a6a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#c9b3f5', floorTint: '#130e1a', mood: 'moody' },
   voidsignal:  { woodBase: '#2a3a44', woodDark: '#162026', lightWarm: '#a0e8ff', lightCool: '#1a3a44', ambientLevel: 0.9,  exposure: 1.0,  accentGlow: '#38e1ff', floorTint: '#0a0f14', mood: 'moody' },
@@ -53,7 +55,7 @@ export const SHELF3D_THEMES = {
   'wisp-night':{ woodBase: '#3a2a55', woodDark: '#1e1430', lightWarm: '#ffe9a0', lightCool: '#4a3a7a', ambientLevel: 0.85, exposure: 1.0,  accentGlow: '#ffd76a', floorTint: '#0e0a1a', mood: 'moody' },
 };
 
-/* v475: room shells — the walls, floor and trim around the bookcases.
+/* Room shells — the walls, floor and trim around the bookcases (v475).
    [wall colour, wall pattern, floor colour, floor kind, trim colour]
    wall patterns: plain | wainscot | panel | stripe | starry | grid
    floor kinds:   boards | tile | stone                                    */
@@ -112,13 +114,14 @@ export const Shelf3DTheme = { forTheme: shelf3dThemeFor };
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The one classic consumer, js/217-shelf3d-view.js,
-   reads the Shelf3DTheme namespace at runtime, so the bridge
-   republishes exactly the pre-conversion public surface on window.
-   Bare-name lookups in classic scripts resolve through the global
-   object, so the caller needs no changes. Module scripts are deferred,
-   so the bridge is in place before any consumer can run. Remove a name
-   from this bridge only when its last classic caller is gone. */
+   file can see them. The one consumer, js/217-shelf3d-view.js, still
+   reads the Shelf3DTheme namespace as a global at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups resolve through the global object, so
+   the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name
+   from this bridge only when its last window-reading caller has
+   wired the read as an import (ADR-003). */
 window.SHELF3D_ACCENTS = SHELF3D_ACCENTS;
 window.SHELF3D_THEMES = SHELF3D_THEMES;
 window.SHELF3D_SHELLS = SHELF3D_SHELLS;
