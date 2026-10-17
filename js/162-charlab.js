@@ -1,44 +1,61 @@
 'use strict';
 
-/* ---------------- Character Lab (v317) ----------------
-   The admin Character Lab, extracted into its own module
-   (architecture candidate 6, second piece): the curation views
-   (review, relationships inbox, canonical detail), the Merged
-   characters card, and the merge machinery — charMerge /
-   charUnmerge and the v578 Unmerge companions (restore preview
-   sheet, counted results, winner-side merge history). The
-   render path is renderCharacterLab(), dispatched from the
-   Observatory shell in js/199-admin.js (adminTab ===
-   'characters'). charMerge and charUnmerge travel with the
-   Lab: the Lab's surfaces are their only callers. What does
-   NOT live here: CharacterStore and the pure char helpers
-   stay in js/154-characterstore.js, shared with js/159 and
-   the other character surfaces. CHAR_ROLE_LABELS travels
-   with the Lab; js/159 keeps reading it at runtime, exactly
-   as it did when it lived in js/199. Load order: after
-   js/154 (CharacterStore is called at runtime) and before
-   js/199 (whose tab dispatch calls renderCharacterLab at
-   runtime); every cross-file reference is a runtime call
-   through the shared global scope — this file declares
-   only its own state at eval time. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
-
-/* ---------------- Character Lab (v317) ----------------
-   Review pipeline-extracted characters and trace their relationships.
-   Data contract (from Ebook Processor):
-   - book_characters: work_id, name, role (protagonist/antagonist/supporting/minor),
-     description, relationships JSONB [{to: "<name>", type: "<type>"}]
-   - Relationship `to` is a NAME string, not an ID — resolve defensively.
-   - Relationship types: closed set of 10 (spouse/parent/child/sibling/friend/
-     enemy/mentor/colleague/neighbor/other); unknown -> "other".
-   - Each work's cast is isolated (no cross-book linking yet).
-   - Unresolved targets shown, never dropped. */
+/* js/162-charlab.js — Character Lab: the Observatory's curation
+ * views for pipeline-extracted characters, and the merge machinery
+ * that makes merging duplicates reversible.
+ *
+ * renderCharacterLab() is the entry: the Observatory shell in
+ * js/199-admin.js dispatches to it when adminTab === 'characters',
+ * and it renders into #ob-body. charLabView selects the view:
+ * 'characters' (the default — a per-work grid with role filters,
+ * duplicate detection and inline editing), 'review' (the
+ * relationship inbox: pipeline relationships not yet reviewed
+ * into an edge row, plus pending reader-suggested edges), and
+ * 'relationships' (a placeholder card — the graph workspace was
+ * never built, and the card says so). charLabCanonDetail()
+ * groups a canonical character's linked instances, with unlink
+ * controls.
+ *
+ * Data contract (from the ebook processor): book_characters rows
+ * carry work_id, name, role (protagonist / antagonist / supporting
+ * / minor), description, and relationships as JSONB
+ * [{to: "<name>", type: "<type>"}]. A relationship's `to` is a
+ * NAME string, not an id, so targets resolve defensively through
+ * charResolveTarget and unresolved targets are shown, never
+ * dropped. Relationship types are a closed set of 10 (spouse /
+ * parent / child / sibling / friend / enemy / mentor / colleague /
+ * neighbor / other); charNormRelType maps anything unknown to
+ * "other". Casts are handled one work at a time.
+ *
+ * charMerge / charUnmerge live here because the Lab's surfaces
+ * are their only callers. A merge is soft — the loser is marked
+ * status 'merged' with duplicate_of pointing at the winner, never
+ * deleted — and reversible by construction: charMerge stores one
+ * snapshot (merge_snapshot) on the loser row BEFORE any repoint
+ * lands, and aborts untouched if that write fails; charUnmerge
+ * restores verbatim from the snapshot only and refuses merges
+ * that have none. The companions over that core (the restore
+ * preview sheet, its counted results, and winner-side merge
+ * history) are pure derivations over the in-memory Lab list plus
+ * the snapshot. The merge core is pinned end-to-end by
+ * .test/char-unmerge.test.js and the companions by
+ * .test/char-unmerge-companions.test.js.
+ *
+ * What does NOT live here: CharacterStore and the pure character
+ * helpers stay in js/154-characterstore.js, shared with js/159
+ * and the other character surfaces — this file reads them as
+ * wired imports, together with the js/050 helpers, the js/152
+ * overlay pair and js/055's sheet-drag helper (see ADR-003).
+ * Several Lab writes still reach Supabase through
+ * CharacterStore._sb() directly rather than through a store
+ * method. CHAR_ROLE_LABELS lives here; js/159 reads it, and
+ * js/199 reads renderCharacterLab, through the window bridge at
+ * the bottom of this file.
+ */
+import { confirmModal, esc, findCharByName, fmtDate, icon, toast } from './050-helpers.js';
+import { wireSheetDrag } from './055-sheetdrag.js';
+import { overlayClosed, overlayOpened } from './152-overlay-history.js';
+import { CHAR_ROLES, CharacterStore, charFindDuplicates, charIsBlocked, charNormRelType, charResolveTarget } from './154-characterstore.js';
 
 export const CHAR_ROLE_LABELS = { protagonist: 'Protagonist', antagonist: 'Antagonist',
   supporting: 'Supporting', minor: 'Minor' };
@@ -49,11 +66,6 @@ export let charLabSelectedId = null;
 export let charLabShowBlocked = false; // v317: hidden by default
 export let charLabView = 'characters'; // v395: 'review' | 'relationships' | 'characters' (was 'work'|'relationships')
 export let charLabCanonicalId = null;
-
-/* CharacterStore, the pure char helpers (charResolveTarget, charNormRelType,
-   charIsBlocked, charFindDuplicates) and CHAR_ROLES / CHAR_REL_TYPES live in
-   js/154-characterstore.js — the Character Lab UI below consumes them as
-   globals, same as js/159 and js/225. */
 
 export async function renderCharacterLab() {
   const body = document.getElementById('ob-body');
@@ -92,8 +104,9 @@ export async function charLabRenderReview(body, works) {
   await charLabRenderInbox(body, works);
 }
 
-/* v395: Relationships workspace — graph + inbox + table.
-   Coming soon: D3 graph integration. Hidden from nav until then. */
+/* Relationships view — a placeholder, not a workspace yet: the graph
+   workspace was never built, so this renders a card saying so and
+   points at Review, where relationship curation actually happens. */
 export async function charLabRenderRelationships(body, works) {
   body.innerHTML = '<div class="ob-card"><h3 class="serif">Relationships</h3>' +
     '<p class="note">Graph workspace coming soon. Use Review for now.</p></div>';
@@ -1302,7 +1315,8 @@ export function openCharRestoreSheet(loserId, ctx) {
   if (typeof overlayOpened === 'function') {
     chRestoreToken = overlayOpened('char-restore', closeCharRestoreSheet);
   }
-  // App rule: every sheet ships swipe-down-to-dismiss (js/055).
+  // App rule: every sheet ships swipe-down-to-dismiss via the shared
+  // helper in js/055. See ADR-009.
   if (typeof wireSheetDrag === 'function') {
     wireSheetDrag(ov.querySelector('#ch-restore-sheet'), closeCharRestoreSheet);
   }
@@ -1441,14 +1455,15 @@ export async function chRestoreCommit() {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers, js/159-characters.js
-   (CHAR_ROLE_LABELS) and js/199-admin.js (renderCharacterLab dispatch),
-   reach these names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. Its consumers — js/159-characters.js
+   (CHAR_ROLE_LABELS) and js/199-admin.js (the renderCharacterLab
+   dispatch) — still read this surface as globals at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups resolve through the global object, so the
+   callers need no changes. Module scripts are deferred, so the bridge
+   is in place before any consumer can run. Remove a name from this
+   bridge only when its last window-reading caller has wired the read
+   as an import (ADR-003). */
 window.CHAR_ROLE_LABELS = CHAR_ROLE_LABELS;
 window.charLabWorkId = charLabWorkId;
 window.charLabRoleFilter = charLabRoleFilter;
