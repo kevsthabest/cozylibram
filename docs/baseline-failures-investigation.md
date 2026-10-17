@@ -190,7 +190,7 @@ value instead of the source text:
 
 ```js
 const vendorList = new Function(
-  sw.match(/const VENDOR = [^\n]*\n/)[0].replace('const VENDOR', 'return'))();
+  sw.match(/const VENDOR = [^\n]*\n/)[0].replace('const VENDOR =', 'return'))();
 ok('sw: vendor precache list present', JSON.stringify(vendorList) === JSON.stringify(
   ['./js/vendor/supabase.min.js', './js/vendor/three.module.js', './vendor/d3.min.js']));
 ```
