@@ -9,21 +9,20 @@ Maintained per the `constraint-driven` skill. **Any change to a number or rule i
 
 ## Pre-existing test-failure baseline
 
-The suite is 178 files in `.test/`, each run standalone with `node`. Measured serially on the checkout above, exactly **5 files fail**:
+The suite is 178 files in `.test/`, each run standalone with `node`. Measured serially on the checkout above, exactly **4 files fail**:
 
 | # | File | Failing assertion (as reported) |
 |---|---|---|
-| 1 | `.test/community-corpus.test.js` | version bumped past v474 |
-| 2 | `.test/security-v194.test.js` | sw: vendor precache list present |
-| 3 | `.test/settings-groups.test.js` | subsections exist inside groups; v416 theme gallery replaced the th-theme dropdown |
-| 4 | `.test/tropelab-review.test.js` | ▲ vote button wired per trope |
-| 5 | `.test/v398-features.test.js` | wrapped total pages |
+| 1 | `.test/security-v194.test.js` | sw: vendor precache list present |
+| 2 | `.test/settings-groups.test.js` | subsections exist inside groups; v416 theme gallery replaced the th-theme dropdown |
+| 3 | `.test/tropelab-review.test.js` | ▲ vote button wired per trope |
+| 4 | `.test/v398-features.test.js` | wrapped total pages |
 
 **Reconciliation (2026-10-14):** this matches the latest recorded baseline of exactly 6 failures. The "7 baseline failures" figure quoted in the 2026-10-14 skills audit was **not reproduced** — the measured count is 6.
 
 **Measurement rule:** run the suite serially (or treat parallel failures as suspects). Under 6-way parallel load, `.test/cover-adoption-closure.test.js`, `.test/import.test.js`, and `.test/orbitcapture.test.js` fail on timeouts but pass serially — they are **not** baseline failures.
 
-These 5 are baseline: they pre-date your change, they are not yours to fix in passing, and a run is "green" when it shows exactly these 5 and no new failures. (`.test/modal-flairs.test.js` left the baseline by the User's named decision of 2026-10-17 — its signature-table pin was stale since the deliberate `wisp-vine` / `wisp-night-vine` split in `d8cfd17`; see `docs/baseline-failures-investigation.md` §2.)
+These 4 are baseline: they pre-date your change, they are not yours to fix in passing, and a run is "green" when it shows exactly these 4 and no new failures. (`.test/modal-flairs.test.js` left the baseline by the User's named decision of 2026-10-17 — its signature-table pin was stale since the deliberate `wisp-vine` / `wisp-night-vine` split in `d8cfd17`; see `docs/baseline-failures-investigation.md` §2.) (`.test/community-corpus.test.js` left the baseline by the User's named decision of 2026-10-17 — its version probe substring-matched `v48`, so it could only pass while APP_VERSION sat in the v480s; the probe now parses the version number and compares it against 474; see `docs/baseline-failures-investigation.md` §1.)
 
 ## Standing rules
 
