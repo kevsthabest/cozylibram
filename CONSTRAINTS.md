@@ -28,7 +28,7 @@ These 6 are baseline: they pre-date your change, they are not yours to fix in pa
 
 ## Standing rules
 
-1. **BOOKTOK_DIR outside the main checkout.** Test suites default their ROOT to the main checkout. When running tests from a worktree or branch checkout, `export BOOKTOK_DIR=<that worktree>` first — otherwise you have tested main, not your change, and the result proves nothing.
+1. **COZYLIBRAM_DIR outside the main checkout.** Test suites default their ROOT to the main checkout. When running tests from a worktree or branch checkout, `export COZYLIBRAM_DIR=<that worktree>` first — otherwise you have tested main, not your change, and the result proves nothing.
 2. **Version pairing.** `APP_VERSION` (`js/181-appversion.js`) and the `CACHE` name in `sw.js` bump together, in the same change, to the same version. Tests pin the pair; a mismatch is a failure you introduced.
 3. **Frozen settings keys.** Existing `user_state` / settings keys are never renamed or repurposed. New behavior gets a new key; old keys keep their meaning for every already-synced device.
 4. **No drive-by test fixes.** Never weaken, skip, delete, or re-baseline a test — and never move a threshold, count, or config value — to make a run green. Baseline failures stay as listed above until a named decision (see header) changes them. If your change genuinely requires a test or threshold to move, that movement is a separate, explicitly reviewed decision, stated in the PR.

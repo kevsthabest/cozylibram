@@ -6,7 +6,7 @@
    Run: node .test/portrait-share-v2.test.js */
 'use strict';
 const path = require('path');
-if (!process.env.BOOKTOK_DIR) process.env.BOOKTOK_DIR = path.join(__dirname, '..');
+if (!process.env.COZYLIBRAM_DIR) process.env.COZYLIBRAM_DIR = path.join(__dirname, '..');
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 

@@ -28,7 +28,7 @@
 const fs = require('fs');
 const path = require('path');
 const { classicize } = require('./harness');
-const APP_DIR = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
+const APP_DIR = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 const ok = (label, cond) => { if (cond) { pass++; console.log('  ok -', label); } else { fail++; console.log('  NOT OK -', label); } };

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-const ROOT = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const VENDOR = path.join(ROOT, 'js', 'vendor', 'zxing');
 
 let pass = 0, fail = 0;

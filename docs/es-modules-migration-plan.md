@@ -454,8 +454,8 @@ Orthogonally: **175 suites read index.html as text**, **25 read sw.js**,
 individual assertions — the classes overlap per-assertion, not per-file.
 Two environmental facts matter for fork evidence: **134 suites hardcode
 the main-checkout path** (`/home/hatch/workspace/booktok/...`) for at
-least some reads, and only 42 are fully `BOOKTOK_DIR`-aware (harness.js
-itself honours `BOOKTOK_DIR` — CONSTRAINTS rule 1). Consequences in §9.6.
+least some reads, and only 42 are fully `COZYLIBRAM_DIR`-aware (harness.js
+itself honours `COZYLIBRAM_DIR` — CONSTRAINTS rule 1). Consequences in §9.6.
 
 ### 9.2 The loadApp class (174) — the classicize transform, and its soundness boundary
 
@@ -542,7 +542,7 @@ CONSTRAINTS baseline (main @ v592 lineage): exactly **6 failing files** —
 community-corpus, modal-flairs, security-v194, settings-groups,
 tropelab-review, v398-features. The rule for every conversion step, in
 the fork and later in production PRs: a full serial run
-(`BOOKTOK_DIR=<tree>`) must show **exactly those 6 files failing, on the
+(`COZYLIBRAM_DIR=<tree>`) must show **exactly those 6 files failing, on the
 same assertions**, plus zero new failures. Anything else is a stop.
 What conversion does to each baseline suite, individually:
 
@@ -558,7 +558,7 @@ What conversion does to each baseline suite, individually:
 ### 9.6 Fork-run evidence caveat (hardcoded paths)
 
 Because 134 suites hardcode the main-checkout path for some reads, a
-full-suite run against the fork (BOOKTOK_DIR=fork) executes fork *code*
+full-suite run against the fork (COZYLIBRAM_DIR=fork) executes fork *code*
 through the harness but reads *main's* index.html/sw.js in those suites'
 text assertions. Behavioural evidence is therefore valid; tag/sw
 text-assertion evidence testifies about main, not the fork. Slice

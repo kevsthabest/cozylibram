@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { classicize } = require('./harness');
 
-const ROOT = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 function ok(name, cond) {
