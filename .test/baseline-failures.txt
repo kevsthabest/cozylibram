@@ -6,7 +6,6 @@
 # with the CONSTRAINTS.md table, in the same named-decision PR
 # (CONSTRAINTS.md rule 4; docs/adr/012-named-test-baseline.md).
 .test/community-corpus.test.js
-.test/modal-flairs.test.js
 .test/security-v194.test.js
 .test/settings-groups.test.js
 .test/tropelab-review.test.js
