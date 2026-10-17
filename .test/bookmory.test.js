@@ -6,7 +6,11 @@ const path = require('path');
 const zlib = require('zlib');
 
 const BM_PATH = '/home/hatch/workspace/user/files/Database.bookmory';
-const zipBytes = new Uint8Array(fs.readFileSync(BM_PATH));
+// The real export is a machine-local fixture, never committed to the repo.
+// Read it only when present: on machines without it (CI runners, other
+// checkouts) the export-dependent sections below skip with a notice and the
+// synthetic checks still run — the same guard hardcover-csv.test.js uses.
+const zipBytes = fs.existsSync(BM_PATH) ? new Uint8Array(fs.readFileSync(BM_PATH)) : null;
 
 // load the app so the 133-bookmory.js globals exist for the flow tests
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -29,51 +33,55 @@ const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setT
 (async () => {
   const P = window.eval; // pure functions live on the jsdom window
 
-  // --- ZIP: find the database entry ---
-  const files = P('bmZipList')(zipBytes);
-  const dbEntry = files.find(f => f.name === 'new_bookmory.db');
-  ok('zip lists new_bookmory.db', !!dbEntry && dbEntry.method === 8);
+  if (zipBytes) {
+    // --- ZIP: find the database entry ---
+    const files = P('bmZipList')(zipBytes);
+    const dbEntry = files.find(f => f.name === 'new_bookmory.db');
+    ok('zip lists new_bookmory.db', !!dbEntry && dbEntry.method === 8);
 
-  // --- inflate: my implementation must match Node's zlib byte-for-byte ---
-  const dv = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
-  const lh = dbEntry.lhOff;
-  const comp = zipBytes.subarray(lh + 30 + dv.getUint16(lh + 26, true) + dv.getUint16(lh + 28, true),
-    lh + 30 + dv.getUint16(lh + 26, true) + dv.getUint16(lh + 28, true) + dbEntry.csize);
-  const mine = P('bmInflateRaw')(comp);
-  const ref = zlib.inflateRawSync(Buffer.from(comp));
-  ok('pure-JS inflate matches zlib (length)', mine.length === ref.length);
-  ok('pure-JS inflate matches zlib (bytes)', mine.length === ref.length &&
-    mine.every((b, i) => b === ref[i]));
+    // --- inflate: my implementation must match Node's zlib byte-for-byte ---
+    const dv = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
+    const lh = dbEntry.lhOff;
+    const comp = zipBytes.subarray(lh + 30 + dv.getUint16(lh + 26, true) + dv.getUint16(lh + 28, true),
+      lh + 30 + dv.getUint16(lh + 26, true) + dv.getUint16(lh + 28, true) + dbEntry.csize);
+    const mine = P('bmInflateRaw')(comp);
+    const ref = zlib.inflateRawSync(Buffer.from(comp));
+    ok('pure-JS inflate matches zlib (length)', mine.length === ref.length);
+    ok('pure-JS inflate matches zlib (bytes)', mine.length === ref.length &&
+      mine.every((b, i) => b === ref[i]));
 
-  // --- SQLite: the real database parses to 190 books ---
-  const db = P('bmZipExtract')(zipBytes, dbEntry);
-  const rows = P('bmSqliteReadEntry')(db);
-  const books = rows.filter(r => r.store === 'books' && !r.deleted);
-  ok('sqlite reader finds 190 bookmory books', books.length === 190);
-  const haunting = books.find(r => JSON.parse(r.value).title === 'Haunting Adeline');
-  ok('spot check: Haunting Adeline is DONE', haunting && JSON.parse(haunting.value).status_list[0] === 'DONE');
+    // --- SQLite: the real database parses to 190 books ---
+    const db = P('bmZipExtract')(zipBytes, dbEntry);
+    const rows = P('bmSqliteReadEntry')(db);
+    const books = rows.filter(r => r.store === 'books' && !r.deleted);
+    ok('sqlite reader finds 190 bookmory books', books.length === 190);
+    const haunting = books.find(r => JSON.parse(r.value).title === 'Haunting Adeline');
+    ok('spot check: Haunting Adeline is DONE', haunting && JSON.parse(haunting.value).status_list[0] === 'DONE');
 
-  // --- full parse pipeline ---
-  const parsed = P('parseBookmoryExport')(zipBytes);
-  ok('parseBookmoryExport yields 189 books', parsed.books.length === 189);
-  ok('one binary-corrupted record reported by name',
-    parsed.skippedTitles.length === 1 && /dungeon crawler carl/i.test(parsed.skippedTitles[0]));
-  ok('local cover images found in zip', parsed.imageEntries.length === 3);
-  const m = parsed.books.find(b => b.title === 'Haunting Adeline');
-  ok('status DONE maps to read', m && m.status === 'read');
-  ok('stable bm- id', m && m.id.startsWith('bm-'));
-  ok('owned defaults to owned', parsed.books.every(b => b.owned === 'owned'));
-  ok('favorites mapped (4)', parsed.books.filter(b => b.favorite).length === 4);
-  const tagged = parsed.books.find(b => b.tropes.length > 0);
-  ok('tags map to tropes without #', tagged && tagged.tropes.every(t => !t.includes('#')));
-  const rated = parsed.books.find(b => b.myRating > 0);
-  ok('ratings map 0-5', rated && rated.myRating >= 0.5 && rated.myRating <= 5);
-  const finished = parsed.books.find(b => b.dateFinished);
-  ok('finish dates are YYYY-MM-DD', finished && /^\d{4}-\d{2}-\d{2}$/.test(finished.dateFinished));
-  const withLog = parsed.books.find(b => b.log.length > 0);
-  ok('page logs convert to {d,from,to}', withLog && withLog.log.every(e => e.d && e.to > e.from));
-  const dnf = parsed.books.find(b => b.status === 'dnf');
-  ok('GIVE_UP maps to dnf', !!dnf);
+    // --- full parse pipeline ---
+    const parsed = P('parseBookmoryExport')(zipBytes);
+    ok('parseBookmoryExport yields 189 books', parsed.books.length === 189);
+    ok('one binary-corrupted record reported by name',
+      parsed.skippedTitles.length === 1 && /dungeon crawler carl/i.test(parsed.skippedTitles[0]));
+    ok('local cover images found in zip', parsed.imageEntries.length === 3);
+    const m = parsed.books.find(b => b.title === 'Haunting Adeline');
+    ok('status DONE maps to read', m && m.status === 'read');
+    ok('stable bm- id', m && m.id.startsWith('bm-'));
+    ok('owned defaults to owned', parsed.books.every(b => b.owned === 'owned'));
+    ok('favorites mapped (4)', parsed.books.filter(b => b.favorite).length === 4);
+    const tagged = parsed.books.find(b => b.tropes.length > 0);
+    ok('tags map to tropes without #', tagged && tagged.tropes.every(t => !t.includes('#')));
+    const rated = parsed.books.find(b => b.myRating > 0);
+    ok('ratings map 0-5', rated && rated.myRating >= 0.5 && rated.myRating <= 5);
+    const finished = parsed.books.find(b => b.dateFinished);
+    ok('finish dates are YYYY-MM-DD', finished && /^\d{4}-\d{2}-\d{2}$/.test(finished.dateFinished));
+    const withLog = parsed.books.find(b => b.log.length > 0);
+    ok('page logs convert to {d,from,to}', withLog && withLog.log.every(e => e.d && e.to > e.from));
+    const dnf = parsed.books.find(b => b.status === 'dnf');
+    ok('GIVE_UP maps to dnf', !!dnf);
+  } else {
+    console.log('(skip) real Bookmory export not present — synthetic checks cover the mapper and import flow');
+  }
 
   // --- mapper unit checks on a synthetic record ---
   const syn = P('mapBookmoryBook')('123', {
