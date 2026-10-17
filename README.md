@@ -216,5 +216,5 @@ creates each:
 Three ongoing pillars: a **trope intelligence** layer (curated taxonomy,
 LLM-seeded per-book tropes, discovery), a **community corpus** (users
 refine characters, tropes, and trigger warnings through suggestion flows;
-Kevin curates — see `docs/community-corpus.md`), and **sustained quality**
+the owner curates — see `docs/community-corpus.md`), and **sustained quality**
 (one feature per version, tests green, data-safety invariants hold).
