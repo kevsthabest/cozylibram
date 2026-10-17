@@ -1280,3 +1280,45 @@ Phase subtotals: phase 1 +1,047, phase 2 +1,585.
   cloud.test.js produced a 0-byte log from the gate's
   own /tmp exhaustion; a standalone re-run passed 37/0
   and the net signature stood at 200/6.
+
+## Gate notes — PR #281 (v605)
+
+Recorded from the Security Advisor's gate on the first
+phase-3 PR, at the program manager's direction. The gate
+closed PASS_WITH_RISK; merged as 0f382da. Live at v605
+with 84 module tags. Line tally at v605: 55,944 js lines
+(+423 this PR, +3,055 cumulative against the 52,889
+baseline); 84 of 104 files converted.
+
+- **HEADLINE — the reassignment inventory was
+  re-derived with correct walkers.** The gate's own
+  first walker draft reproduced the seeded audit
+  script's silent zero — a dangling-else bound to the
+  inner if, so single-node AST children were never
+  walked — diagnosed it forensically, and rebuilt the
+  inventory from scratch: two corrected walkers, the
+  census inversion, and a word-boundary grep then
+  agreed name-for-name and site-for-site. Final count:
+  16 value-bridged + 3 accessor-bridged bindings,
+  nothing missing, nothing extra, no Blocker. The
+  lesson stands for the remaining phase-3 gates: a
+  walker that returns zero has failed loudly or not at
+  all — cross-check any zero against a second method.
+- **Accessor proofs re-run firsthand.** js/170 proof
+  10/10, including the real renderYearInBooks and a
+  real year-pill click; js/205 proof 13/13, including
+  both writers' verbatim statements.
+- **Outbound module-writer proof 7/7:** js/120 and
+  js/170 write into js/140's seriesReturn accessor
+  exactly as the classic writers did.
+- **No-repoint claim CONFIRMED** — the batch needed no
+  test repoints, and the gate verified none were
+  smuggled in.
+- **Low, standing pattern — the 16 value-bridged
+  bindings,** zero cross-file readers proven by three
+  independent methods. Nothing observable diverges;
+  after this gate they are the hardest-proven of the
+  series. The caution is unchanged.
+- **Nits — two body defects** (a stale Draft intro
+  sentence; §3's overstated grep scope). Both patched
+  post-merge.
