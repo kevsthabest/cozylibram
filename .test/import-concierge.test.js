@@ -2,8 +2,9 @@
 // scoped cover pass + retry. Network is stubbed; the app loads via harness.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync((process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok') + '/index.html', 'utf8');
+const html = fs.readFileSync((process.env.COZYLIBRAM_DIR || path.join(__dirname, '..')) + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in concierge tests'); };

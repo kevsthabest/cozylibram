@@ -7,8 +7,9 @@
 // AUTOSAVES, with the gift cluster mounted below it.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in profile tests'); };
@@ -36,21 +37,21 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   await tick(3); // let boot() settle (no backend → library view)
 
   ok('settings lives in the nav DOM for the desktop sidebar (v171)', !!q('.bottom-nav [data-nav="settings"]'));
-  ok('settings nav entry is hidden on mobile', fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8').includes('.bottom-nav .nav-settings { display: none; }'));
+  ok('settings nav entry is hidden on mobile', fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8').includes('.bottom-nav .nav-settings { display: none; }'));
   ok('bottom nav has seven entries incl. desktop-only settings (v171; v250 adds Shelf)', qa('.bottom-nav button').length === 7);
   ok('menu button lives in the top-right header', !!q('.app-header .topbar-menu-wrap #menu-btn'));
   ok('header title is centered on all screens', (() => {
-    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
     const m = css.match(/\.app-header\s*\{[^}]*\}/);
     return !!m && m[0].includes('justify-content: center') && m[0].includes('text-align: center');
   })());
   ok('menu button is out of the header flow on phones', (() => {
-    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
     const m = css.match(/\.topbar-menu-wrap\s*\{[^}]*\}/);
     return !!m && m[0].includes('position: absolute');
   })());
   ok('on wide screens the menu docks to the top-right corner next to the nav', (() => {
-    const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
     const mq = css.indexOf('@media (min-width: 760px)');
     const rule = css.indexOf('.topbar-menu-wrap', mq);
     const chunk = css.slice(rule, rule + 120);

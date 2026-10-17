@@ -2,13 +2,14 @@
 // field mapping, and the import/update flow.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 const zlib = require('zlib');
 
 const BM_PATH = '/home/hatch/workspace/user/files/Database.bookmory';
 const zipBytes = new Uint8Array(fs.readFileSync(BM_PATH));
 
 // load the app so the 133-bookmory.js globals exist for the flow tests
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });

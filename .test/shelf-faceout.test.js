@@ -8,8 +8,9 @@
 // packer, which ARE executed here, plus source pins on js/215's wiring.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const ROOT = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;

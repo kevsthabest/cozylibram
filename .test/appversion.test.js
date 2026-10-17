@@ -1,8 +1,9 @@
 // App version tests: parseSwVersion extracts the running version from sw.js text.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in appversion tests'); };
@@ -22,7 +23,7 @@ ok('handles empty string', parse('') === null);
 ok('handles null/undefined', parse(null) === null && parse(undefined) === null);
 
 // The real sw.js parses to the same version the service worker cache uses.
-const swText = fs.readFileSync('/home/hatch/workspace/booktok/sw.js', 'utf8');
+const swText = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
 const cacheName = (/const CACHE = '([^']+)'/.exec(swText) || [])[1];
 ok('sw.js CACHE name matches parsed version',
   cacheName === 'cozy-libram-' + parse(swText));
@@ -49,7 +50,7 @@ if (missing.length) console.log('  missing from sw.js: ' + missing.join(', '));
 // Reverse check (v106): every precached script must exist on disk. A stale
 // entry 404s, cache.addAll rejects, and the service worker never installs —
 // the device silently stays on the old version.
-const stale = precached.filter(f => !fs.existsSync('/home/hatch/workspace/booktok/js/' + f));
+const stale = precached.filter(f => !fs.existsSync(path.join(__dirname, '..', 'js', f)));
 ok('every precached script exists on disk', stale.length === 0);
 if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
 
@@ -59,7 +60,7 @@ if (stale.length) console.log('  stale in sw.js: ' + stale.join(', '));
 const parseAv = window.parseAppVersion;
 ok('parseAppVersion is defined', typeof parseAv === 'function');
 ok('parseAppVersion reads the real file',
-  parseAv(fs.readFileSync((process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok') + '/js/181-appversion.js', 'utf8')) === window.eval('APP_VERSION'));
+  parseAv(fs.readFileSync((process.env.COZYLIBRAM_DIR || path.join(__dirname, '..')) + '/js/181-appversion.js', 'utf8')) === window.eval('APP_VERSION'));
 ok('parseAppVersion handles whitespace variants',
   parseAv("const APP_VERSION  =  'v123';") === 'v123');
 ok('parseAppVersion returns null when absent',
