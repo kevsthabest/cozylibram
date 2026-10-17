@@ -1,20 +1,34 @@
 'use strict';
 
-/* ---------------- storefront links ("where to buy" for wishlist books) ---------------- */
-// Region-aware retailer search links. Verified live 2026-09-27 against a real
-// book (Iron Flame): ISBN search is exact on Amazon ("1-1 of 1 results") but
-// unreliable everywhere else — Indigo and B&N return zero results for valid
-// ISBNs, Booktopia 404s on ISBN queries — while title + author finds the book
-// as the top result on every store tested. So: Amazon searches by ISBN (exact
-// edition), every other store searches by title + author (forgiving). No APIs
-// or keys needed. (Kobo was dropped in v146 — unverifiable behind its bot
-// check, and Indigo covers the Canadian market.)
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/030-storefront.js — Storefront: region-aware "where to buy" links
+ * for wishlist books, plus the rating badges the library and roulette
+ * render.
+ *
+ * storeLinks(book) returns {name, url} search links for the stores of
+ * the reader's region (STORE_REGIONS: CA / US / UK / AU). A stored
+ * region choice ('spicyshelves.storeRegion') wins when present; else
+ * the region is auto-detected from the device language, then the
+ * timezone, else US.
+ *
+ * Which stores get which query is the file's load-bearing choice,
+ * verified live 2026-09-27 against a real book: Amazon searches by ISBN
+ * (exact — "1-1 of 1 results"), but ISBN search is unreliable
+ * everywhere else (Indigo and Barnes & Noble return zero results for
+ * valid ISBNs, Booktopia 404s on ISBN queries), so every other store
+ * searches by title + author, which lands the book as the top result
+ * on each. These are plain search URLs — no APIs, no keys. (Kobo was
+ * dropped in v146: unverifiable behind its bot check, and Indigo
+ * covers the Canadian market.)
+ *
+ * ratingBadges and primaryAxisKey render a book's rated axes from
+ * js/020-ratings.js's axis table. This file's outbound reads are wired
+ * as real imports — axisByKey from js/020-ratings.js, icon from
+ * js/050-helpers.js (see ADR-003); its own surface still reaches
+ * js/110, js/150, js/160 and js/180 through the window bridge at the
+ * bottom of this file.
+ */
+import { axisByKey } from './020-ratings.js';
+import { icon } from './050-helpers.js';
 
 export const STORE_REGIONS = {
   CA: { label: 'Canada', stores: [
@@ -111,14 +125,15 @@ export function primaryAxisKey(b) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The consumers — js/110-library.js, js/150-modal-discovery.js,
-   js/160-roulette.js and js/180-settings.js — reach these
-   names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. Its consumers — js/110-library.js,
+   js/150-modal-discovery.js, js/160-roulette.js and js/180-settings.js
+   — still read this surface as globals at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups resolve through the global object, so the callers
+   need no changes. Module scripts are deferred, so the bridge is in
+   place before any consumer can run. Remove a name from this bridge
+   only when its last window-reading caller has wired the read as an
+   import (ADR-003). */
 window.STORE_REGIONS = STORE_REGIONS;
 window.STORE_REGION_KEYS = STORE_REGION_KEYS;
 window.storeRegionSetting = storeRegionSetting;

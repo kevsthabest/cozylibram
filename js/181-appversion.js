@@ -1,24 +1,36 @@
 'use strict';
 
-/* ---------------- app version + updates ----------------
-   The phone caches the app aggressively (service worker), so after a new
-   zip is deployed the device can look "stuck" on the old version. This
-   shows the version actually running on THIS device and offers a manual
-   update check. */
+/* js/181-appversion.js — App version: which version is running on
+ * this device, and is a newer one available?
+ *
+ * APP_VERSION is the release stamp, paired with the service worker's
+ * CACHE name in sw.js — bump both on release (the pairing is asserted
+ * in .test/book-ambience.test.js; this file's parsers are covered by
+ * .test/appversion.test.js). The version is also stamped onto every
+ * analytics event: js/065 reads APP_VERSION through the bridge.
+ *
+ * The rest of the file exists because the phone caches the app
+ * aggressively (service worker), so after a deploy a device can look
+ * stuck on the old version — and "which version am I on?" has three
+ * different honest answers. APP_VERSION is the running bundle;
+ * runningAppVersion reads sw.js back through the controlling service
+ * worker (cache-first), i.e. the copy this device actually runs;
+ * checkBootVersion instead fetches this file from the server (the
+ * ?probe= query busts the cache-first match) and, on a mismatch,
+ * raises the tap-to-refresh banner — never an auto-reload, because
+ * the reader might be mid-action. watchForAppUpdates drives the same
+ * banner from service-worker lifecycle events instead. Everything
+ * here is best-effort: a failed probe (offline) skips silently.
+ *
+ * This file's outbound reads are wired as real imports — AppLog from
+ * js/002-log.js, icon from js/050-helpers.js (see ADR-003); its own
+ * surface still reaches js/065, js/095 and js/180 through the window
+ * bridge at the bottom of this file.
+ */
+import { AppLog } from './002-log.js';
+import { icon } from './050-helpers.js';
 
-/* The version stamped onto every analytics event (v118+). Paired with the
-   service-worker cache name by appversion.test.js — bump BOTH on release. */
-
-
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
-
-export const APP_VERSION = 'v608';
+export const APP_VERSION = 'v609';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */
@@ -172,13 +184,14 @@ if (document.readyState === 'loading') {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The consumers — js/065-analytics.js, js/095-gate.js and js/180-settings.js — reach these
-   names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. Its consumers — js/065-analytics.js,
+   js/095-gate.js and js/180-settings.js — still read this surface as
+   globals at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve
+   through the global object, so the callers need no changes. Module
+   scripts are deferred, so the bridge is in place before any consumer
+   can run. Remove a name from this bridge only when its last
+   window-reading caller has wired the read as an import (ADR-003). */
 window.APP_VERSION = APP_VERSION;
 window.parseSwVersion = parseSwVersion;
 window.runningAppVersion = runningAppVersion;
