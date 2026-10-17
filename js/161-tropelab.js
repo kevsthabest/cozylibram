@@ -333,8 +333,8 @@ export async function tropeLabReviewHTML() {
   entries.forEach(e => { byKey[e.bookKey] = e; });
   let html = head +
     '<p class="note">' + entries.length + ' books with inferred tropes · ' +
-    reviewedCount + ' fully reviewed by you. ▲ approves a trope, ▼ rejects it — ' +
-    'the same votes as in each book\u2019s detail sheet. ' +
+    reviewedCount + ' fully reviewed by you. Tap an unconfirmed trope to ' +
+    'confirm or dispute it — the same votes as in each book\u2019s detail sheet. ' +
     '<button class="btn sm ghost" id="tl-review-refresh">↻ Refresh</button></p>';
   shown.forEach(e => {
     const v = votes[e.bookKey] || {};
@@ -363,13 +363,29 @@ export async function tropeLabReviewHTML() {
   });
   el.querySelectorAll('[data-review-book]').forEach(row => {
     const key = row.getAttribute('data-review-book');
-    row.querySelectorAll('[data-tv]').forEach(btn => btn.addEventListener('click', async () => {
-      const tid = btn.getAttribute('data-tid');
-      const want = parseInt(btn.getAttribute('data-tv'), 10);
-      btn.disabled = true;
-      try { await TropeVotes.toggleVote(key, tid, want); } catch (e) {}
-      tropeLabReviewHTML(); // re-render: counts, highlights, reviewed state
-    }));
+    // Per-trope confirm/dispute, on the same model as the detail sheet
+    // and the Book Portrait: tapping an unconfirmed chip opens the
+    // shared "Is this right?" row, and the answer casts the vote.
+    // Reviewers work this queue daily, so its chips must behave
+    // identically to the other surfaces — when the ▲▼ buttons were
+    // retired (v473) the queue kept its tappable chips but never got
+    // this wiring, and its taps silently did nothing.
+    if (typeof TropeConfirm !== 'undefined') {
+      const chipsBox = row.querySelector('.tl-review-chips');
+      row.querySelectorAll('[data-tid][tabindex]').forEach(chip => {
+        const openRow = () => {
+          TropeConfirm.open(chipsBox, {
+            bookKey: key,
+            tropeId: chip.getAttribute('data-tid'),
+            onDone: () => tropeLabReviewHTML()
+          });
+        };
+        chip.addEventListener('click', openRow);
+        chip.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openRow(); }
+        });
+      });
+    }
     const all = row.querySelector('[data-approve-all]');
     if (all) all.addEventListener('click', async () => {
       const label = all.textContent;
