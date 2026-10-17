@@ -405,6 +405,9 @@ export function detectMilestones(lib) {
     lib.forEach(b => {
       (b.log || []).forEach(e => {
         if (!e.d || typeof e.to !== 'number' || typeof e.from !== 'number') return;
+        // Percent spans are not pages — a 0→100% listening day must not
+        // read as a 100-page day.
+        if (entryUnit(e) !== 'page') return;
         const pages = e.to - e.from;
         if (pages <= 0) return;
         pagesByDay[e.d] = (pagesByDay[e.d] || 0) + pages;

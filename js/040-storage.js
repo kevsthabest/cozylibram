@@ -556,27 +556,83 @@ function untombstone(id) {
   const i = tombstones.findIndex(t => t.id === id);
   if (i >= 0) { tombstones.splice(i, 1); saveTombstones(); }
 }
-// Daily reading log: one entry per book per day { d:'YYYY-MM-DD', from, to }.
-// Logged on every page update (steppers, manual entry, mark-as-read).
-function logPages(b, oldP, newP) {
-  oldP = Number(oldP) || 0; newP = Number(newP) || 0;
-  if (oldP === newP) return;
+// Daily reading log: one entry per book per day per unit,
+// { d:'YYYY-MM-DD', from, to } for pages, plus u:'pct' on percent entries
+// (audiobooks log percent — a recording has no meaningful page). An entry
+// with no u is a page entry, forever: history written before percent
+// logging existed stays valid untouched, and a book's current progress
+// derives from its latest entry, whichever unit that entry used.
+// Logged on every progress update (steppers, manual entry, mark-as-read).
+function entryUnit(e) { return e && e.u === 'pct' ? 'pct' : 'page'; }
+function logProgress(b, oldV, newV, unit) {
+  oldV = Number(oldV) || 0; newV = Number(newV) || 0;
+  if (oldV === newV) return;
   if (!Array.isArray(b.log)) b.log = [];
   const k = dayKey(new Date());
-  let e = b.log.find(x => x.d === k);
+  // The fold matches on unit as well as day: folding a percent update into
+  // a page entry (or the reverse) would corrupt both ranges, so a
+  // mixed-unit day holds one entry per unit.
+  let e = b.log.find(x => x.d === k && entryUnit(x) === unit);
   if (!e) {
-    e = { d: k, from: Math.min(oldP, newP), to: Math.max(oldP, newP) }; b.log.push(e);
-    // v468: reading session counter for portrait nudges (a day with a page log).
+    e = { d: k, from: Math.min(oldV, newV), to: Math.max(oldV, newV) };
+    if (unit === 'pct') e.u = 'pct';
+    b.log.push(e);
+    // v468: reading session counter for portrait nudges (a day with a log).
     b.readSessions = (b.readSessions || 0) + 1;
   }
-  else { e.from = Math.min(e.from, newP); e.to = Math.max(e.to, newP); }
+  else { e.from = Math.min(e.from, newV); e.to = Math.max(e.to, newV); }
   if (b.log.length > 730) b.log = b.log.slice(-730); // ~2 years cap
   b.lastPagedAt = new Date().toISOString(); // v59: exact touch time, so the
   // Recently read shelf can put the just-updated book first even when several
   // books were read on the same day.
 }
-function pagesOnDay(b, k) {
-  return (b.log || []).filter(e => e.d === k).reduce((s, e) => s + Math.max(0, e.to - e.from), 0);
+function logPages(b, oldP, newP) { logProgress(b, oldP, newP, 'page'); }
+// The unit a book's current progress is expressed in: the marker the write
+// paths stamp, else the latest log entry's unit, else pages. Audiobooks
+// with only pre-percent page history therefore still read as page books
+// until their first percent entry lands.
+function progressUnitOf(b) {
+  if (!b) return 'page';
+  if (b.progressUnit === 'pct' || b.progressUnit === 'page') return b.progressUnit;
+  const log = b.log || [];
+  for (let i = log.length - 1; i >= 0; i--) { if (log[i]) return entryUnit(log[i]); }
+  return 'page';
+}
+// Display percent for either unit; null when a page book has no page
+// count to divide by (percent books always know their percent).
+function progressPctOf(b) {
+  if (!b) return null;
+  const v = Number(b.progress) || 0;
+  if (progressUnitOf(b) === 'pct') return Math.max(0, Math.min(100, Math.round(v)));
+  return b.pageCount > 0 ? Math.max(0, Math.min(100, Math.round(v / b.pageCount * 100))) : null;
+}
+function loggedOnDay(b, k, unit) {
+  return (b.log || []).filter(e => e.d === k && entryUnit(e) === unit)
+    .reduce((s, e) => s + Math.max(0, e.to - e.from), 0);
+}
+// Pages only: a percent entry's span is percentage points, and summing it
+// as pages would poison every page statistic downstream.
+function pagesOnDay(b, k) { return loggedOnDay(b, k, 'page'); }
+// Seconds of listening left, or null when the question has no answer:
+// no recorded length, progress not in percent, or already finished.
+// Display-only by design — nothing here feeds pace or deadline framing.
+function audioLeftSecs(b) {
+  if (!b || b.format !== 'audio') return null;
+  const total = Number(b.audioSecs) || 0;
+  if (total <= 0 || progressUnitOf(b) !== 'pct') return null;
+  const p = Number(b.progress) || 0;
+  if (p >= 100) return null;
+  return Math.round(total * (100 - Math.max(0, p)) / 100);
+}
+// "11 h 22 min" / "1 h" / "42 min" — the shape durations are shown in.
+function fmtHMS(secs) {
+  const s = Math.max(0, Math.round(Number(secs) || 0));
+  const h = Math.floor(s / 3600);
+  let m = Math.floor((s % 3600) / 60);
+  if (h === 0 && m === 0 && s > 0) m = 1;
+  if (h && m) return h + ' h ' + m + ' min';
+  if (h) return h + ' h';
+  return m + ' min';
 }
 // v68: Settings toggle gating the "remove today's entry" button in the book modal.
 // v590 (Variant B): the Show/Hide SETTING is retired — the button only ever

@@ -215,6 +215,12 @@ export function applyHardcoverDoc(book, doc) {
     }
   }
   if (!book.description && doc.description) book.description = String(doc.description);
+  // Audiobook length: Hardcover carries the recording's length in seconds
+  // (audio_seconds). Adopt it only when the book has none — a duration the
+  // listener typed in describes their edition, and editions differ, so a
+  // lookup must never overwrite it.
+  if (!book.audioSecs && typeof doc.audio_seconds === 'number' && doc.audio_seconds > 0)
+    book.audioSecs = Math.round(doc.audio_seconds);
   // v113: adopt a release date when the book has none (powers Coming soon).
   if (!book.releaseDate && doc.release_date) {
     const d = String(doc.release_date).slice(0, 10);

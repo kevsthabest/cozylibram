@@ -37,7 +37,10 @@ export function pagesInRangeFor(books, start, end) {
   (books || []).forEach(b => {
     (b.log || []).forEach(e => {
       const d = String(e.d || '');
-      if (d >= start && d <= end && e.to > e.from) {
+      // Percent entries are not page logs: they add no pages here and do
+      // not count as hasLogs — that flag means "page logs exist" and
+      // gates the estimated-pageCount fallback below.
+      if (d >= start && d <= end && e.to > e.from && entryUnit(e) === 'page') {
         pages += Math.max(0, e.to - e.from);
         hasLogs = true;
       }
