@@ -1,8 +1,9 @@
 // Line-art icon tests (v79): cohesive SVG icon set for the toolbar + view headers.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });

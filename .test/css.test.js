@@ -1,7 +1,8 @@
 // CSS sanity (v42): guards against edit mishaps in styles.css — balanced braces,
 // no orphaned declarations outside rule blocks, and the #view centering contract.
 const fs = require('fs');
-const css = fs.readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8');
+const path = require('path');
+const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };

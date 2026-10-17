@@ -3,8 +3,9 @@
 'use strict';
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.fetch = async () => { throw new Error('no network in v398 tests'); };
@@ -61,10 +62,10 @@ ok('dnaHeroHTML returns empty when gated', run(`dnaHeroHTML()`) === '');
 run(`library = [
   { id: 'b1', title: 'Book One', authors: ['Author A'], status: 'read', pageCount: 300,
     tropes: ['enemies-to-lovers', 'forced proximity'], ratings: { spice: 4 }, myRating: 5,
-    dateFinished: '2026-06-15T00:00:00Z', log: [] },
+    dateFinished: '2026-06-15T00:00:00Z', log: [{ d: '2026-06-15', from: 0, to: 300 }] },
   { id: 'b2', title: 'Book Two', authors: ['Author A'], status: 'read', pageCount: 250,
     tropes: ['enemies-to-lovers', 'secret baby'], ratings: { spice: 2 }, myRating: 4,
-    dateFinished: '2026-07-20T00:00:00Z', log: [] },
+    dateFinished: '2026-07-20T00:00:00Z', log: [{ d: '2026-07-20', from: 0, to: 250 }] },
 ];`); // restore for downstream wrapped tests
 
 /* ---- DNF Autopsy (213-dnf.js) ---- */

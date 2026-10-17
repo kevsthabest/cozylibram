@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = '/home/hatch/workspace/booktok';
+const APP_DIR = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
 const failures = [];

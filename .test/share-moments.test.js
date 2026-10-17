@@ -4,7 +4,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = process.env.APP_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.APP_DIR || path.join(__dirname, '..');
 
 const html = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
@@ -34,14 +34,7 @@ window.Image = class {
   }
 };
 
-// load app scripts in numeric order (same as index.html)
-fs.readdirSync(path.join(APP_DIR, 'js'))
-  .filter(f => f.endsWith('.js')).sort()
-  .forEach(f => {
-    const el = window.document.createElement('script');
-    el.textContent = fs.readFileSync(path.join(APP_DIR, 'js', f), 'utf8');
-    window.document.body.appendChild(el);
-  });
+require('./harness').loadApp(window);
 
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); };

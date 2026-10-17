@@ -30,7 +30,7 @@
 import { AppLog } from './002-log.js';
 import { icon } from './050-helpers.js';
 
-export const APP_VERSION = 'v612';
+export const APP_VERSION = 'v613';
 
 
 /* Pure: pull 'vNN' out of sw.js text. Covered by appversion.test.js. */

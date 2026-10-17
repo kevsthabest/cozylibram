@@ -17,8 +17,9 @@
 // like a provider outage.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const APP = '/home/hatch/workspace/booktok';
+const APP = path.join(__dirname, '..');
 const html = fs.readFileSync(APP + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;

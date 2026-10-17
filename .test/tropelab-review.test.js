@@ -1,9 +1,11 @@
 // v166: Trope Lab review queue — approve inferred tropes without opening books.
 // Covers the pure grouping/vote-aggregation helpers and the end-to-end
-// render: review card lists inferred books, ▲ votes through trope_votes,
+// render: review card lists inferred books, tapping an unconfirmed chip
+// opens the confirm/dispute row whose answer votes through trope_votes,
 // and "Approve all" upvotes every inferred trope for the book in one tap.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 const harness = require('./harness');
 
 const TROPE_ROWS = [
@@ -39,7 +41,7 @@ const missingTable = (table) => ({
 });
 
 function buildDom() {
-  const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
   const window = dom.window;
   window.fetch = async () => { throw new Error('no network in tests'); };
@@ -148,7 +150,7 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
     ok('marks my vote', agg.k1.t1.mine === 1 && agg.k1.t2.mine === 0);
   }
 
-  // C: review card renders inferred books with vote buttons.
+  // C: review card renders inferred books with tappable chips.
   {
     const { window, fake } = buildDom();
     const key1 = probe(window, `bookKeyFor({title:'Kill Decision', authors:['Daniel Suarez']})`);
@@ -157,24 +159,64 @@ const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? 'PASS' 
     ok('lists the inferred book by title', /Kill Decision/.test(el.textContent));
     ok('shows inferred trope chips', /Forced Proximity/.test(el.textContent) && /Enemies to Lovers/.test(el.textContent));
     ok('drops tropes missing from the taxonomy', !/nope/.test(el.textContent));
-    const upBtn = el.querySelector('[data-review-book] [data-tv="1"][data-tid="t1"]');
-    ok('▲ vote button wired per trope', !!upBtn);
+    const chip = el.querySelector('[data-review-book] [data-tid="t1"][tabindex]');
+    ok('unconfirmed chip renders tappable with data-tid', !!chip);
+    ok('queue instructions describe tap-to-confirm, not ▲▼ buttons',
+      !/▲ approves/.test(el.textContent) && /tap an unconfirmed/i.test(el.textContent));
     ok('Approve all button present', !!el.querySelector('[data-approve-all]'));
   }
 
-  // D: ▲ writes a trope_votes upsert for the book.
+  // D: tapping an unconfirmed chip opens the confirm row; the answer
+  // writes the trope_votes upsert (Yes = vote 1, No = vote -1).
   {
     const { window, fake } = buildDom();
     const key1 = probe(window, `bookKeyFor({title:'Kill Decision', authors:['Daniel Suarez']})`);
     const el = await renderLab(window, fake, key1);
-    const upBtn = el.querySelector('[data-tv="1"][data-tid="t1"]');
-    upBtn.click();
-    await tick(10);
-    const w = fake.upserts.find(u => u.trope_id === 't1');
-    ok('▲ upserts vote=1 for (book, trope, user)',
-      !!w && w.book_key === key1 && w.user_id === 'u1' && w.vote === 1);
-    const el2 = window.document.getElementById('tropelab-review');
-    ok('review re-renders after voting', !!el2 && /Forced Proximity/.test(el2.textContent));
+    const chip = el.querySelector('[data-review-book] [data-tid="t1"][tabindex]');
+    // Guard: a missing control must fail BY NAME here, never crash the
+    // suite and darken the sections after this one.
+    ok('tappable chip present for t1 (guard before click)', !!chip);
+    if (chip) {
+      chip.click();
+      await tick(10);
+      const row = window.document.querySelector('.tconfirm');
+      ok('tapping an unconfirmed chip opens the confirm row',
+        !!row && !!row.querySelector('[data-tc="1"]') && !!row.querySelector('[data-tc="-1"]'));
+      if (row) {
+        row.querySelector('[data-tc="1"]').click();
+        await tick(10);
+        const w = fake.upserts.find(u => u.trope_id === 't1');
+        ok('confirm (Yes) upserts vote=1 for (book, trope, user)',
+          !!w && w.book_key === key1 && w.user_id === 'u1' && w.vote === 1);
+        // The row closes after its thank-you beat, then onDone re-renders
+        // the queue — poll for both instead of sleeping a fixed span.
+        let el2 = null;
+        for (let i = 0; i < 40; i++) {
+          await tick(5);
+          el2 = window.document.getElementById('tropelab-review');
+          if (el2 && /Forced Proximity/.test(el2.textContent) &&
+              !window.document.querySelector('.tconfirm')) break;
+        }
+        ok('review re-renders after confirming', !!el2 && /Forced Proximity/.test(el2.textContent));
+        // Dispute path: t2 is still unconfirmed, so its chip stays
+        // tappable in the re-rendered queue.
+        const chip2 = el2.querySelector('[data-review-book] [data-tid="t2"][tabindex]');
+        ok('second chip still tappable after re-render (guard before click)', !!chip2);
+        if (chip2) {
+          chip2.click();
+          await tick(10);
+          const row2 = window.document.querySelector('.tconfirm');
+          ok('tapping the second chip reopens the confirm row', !!row2);
+          if (row2) {
+            row2.querySelector('[data-tc="-1"]').click();
+            await tick(10);
+            const w2 = fake.upserts.find(u => u.trope_id === 't2');
+            ok('dispute (No) upserts vote=-1 for (book, trope, user)',
+              !!w2 && w2.book_key === key1 && w2.user_id === 'u1' && w2.vote === -1);
+          }
+        }
+      }
+    }
   }
 
   // E: Approve all upvotes every inferred trope for the book.

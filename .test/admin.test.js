@@ -30,7 +30,7 @@ function jsFiles() {
 
 // Load the full app through the shared harness (index.html + script tags,
 // runScripts:dangerously — the same environment the real app boots in).
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 

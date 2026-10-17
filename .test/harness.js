@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const JS_DIR = path.join(APP_DIR, 'js');
 
 function jsFiles() {

@@ -176,7 +176,8 @@ const CC = moduleObj.exports;
     ok('sw.js precaches ' + f, sw.indexOf(f) >= 0);
   });
   const av = fs.readFileSync(path.join(ROOT, 'js/181-appversion.js'), 'utf8');
-  ok('version bumped past v474', av.indexOf("v48") >= 0);
+  const avn = parseInt((av.match(/v(\d+)/) || [])[1] || '0', 10);
+  ok('version bumped past v474', avn > 474);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
