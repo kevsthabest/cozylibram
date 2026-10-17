@@ -9,19 +9,18 @@ Maintained per the `constraint-driven` skill. **Any change to a number or rule i
 
 ## Pre-existing test-failure baseline
 
-The suite is 178 files in `.test/`, each run standalone with `node`. Measured serially on the checkout above, exactly **3 files fail**:
+The suite is 178 files in `.test/`, each run standalone with `node`. Measured serially on the checkout above, exactly **2 files fail**:
 
 | # | File | Failing assertion (as reported) |
 |---|---|---|
-| 1 | `.test/security-v194.test.js` | sw: vendor precache list present |
-| 2 | `.test/settings-groups.test.js` | subsections exist inside groups; v416 theme gallery replaced the th-theme dropdown |
-| 3 | `.test/tropelab-review.test.js` | ▲ vote button wired per trope |
+| 1 | `.test/settings-groups.test.js` | subsections exist inside groups; v416 theme gallery replaced the th-theme dropdown |
+| 2 | `.test/tropelab-review.test.js` | ▲ vote button wired per trope |
 
 **Reconciliation (2026-10-14):** this matches the latest recorded baseline of exactly 6 failures. The "7 baseline failures" figure quoted in the 2026-10-14 skills audit was **not reproduced** — the measured count is 6.
 
 **Measurement rule:** run the suite serially (or treat parallel failures as suspects). Under 6-way parallel load, `.test/cover-adoption-closure.test.js`, `.test/import.test.js`, and `.test/orbitcapture.test.js` fail on timeouts but pass serially — they are **not** baseline failures.
 
-These 3 are baseline: they pre-date your change, they are not yours to fix in passing, and a run is "green" when it shows exactly these 3 and no new failures. (`.test/modal-flairs.test.js` left the baseline by the User's named decision of 2026-10-17 — its signature-table pin was stale since the deliberate `wisp-vine` / `wisp-night-vine` split in `d8cfd17`; see `docs/baseline-failures-investigation.md` §2.) (`.test/community-corpus.test.js` left the baseline by the User's named decision of 2026-10-17 — its version probe substring-matched `v48`, so it could only pass while APP_VERSION sat in the v480s; the probe now parses the version number and compares it against 474; see `docs/baseline-failures-investigation.md` §1.) (`.test/v398-features.test.js` left the baseline by the User's named decision of 2026-10-17 — Wrapped totals have been summed from reading-log entries since v427, but its fixture books carried empty logs, so the honest total was 0 rather than the asserted 550; the fixture now gives the two books log entries summing to 550 and the assertion text is unchanged; see `docs/baseline-failures-investigation.md` §6.)
+These 2 are baseline: they pre-date your change, they are not yours to fix in passing, and a run is "green" when it shows exactly these 2 and no new failures. (`.test/modal-flairs.test.js` left the baseline by the User's named decision of 2026-10-17 — its signature-table pin was stale since the deliberate `wisp-vine` / `wisp-night-vine` split in `d8cfd17`; see `docs/baseline-failures-investigation.md` §2.) (`.test/community-corpus.test.js` left the baseline by the User's named decision of 2026-10-17 — its version probe substring-matched `v48`, so it could only pass while APP_VERSION sat in the v480s; the probe now parses the version number and compares it against 474; see `docs/baseline-failures-investigation.md` §1.) (`.test/v398-features.test.js` left the baseline by the User's named decision of 2026-10-17 — Wrapped totals have been summed from reading-log entries since v427, but its fixture books carried empty logs, so the honest total was 0 rather than the asserted 550; the fixture now gives the two books log entries summing to 550 and the assertion text is unchanged; see `docs/baseline-failures-investigation.md` §6.) (`.test/security-v194.test.js` left the baseline by the User's named decision of 2026-10-17 — its precache pin matched a literal `VENDOR` list that became a computed expression at v279, and it still named `three.min.js` after the bundle became `three.module.js`; the test now evaluates the `VENDOR` expression and deep-compares the derived list in order, mutation-proven exactly as strict as the old literal pin; see `docs/baseline-failures-investigation.md` §3.)
 
 ## Standing rules
 
