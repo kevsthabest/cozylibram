@@ -1,3 +1,9 @@
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 /* ---------------- first-party analytics (v118) ----------------
@@ -19,7 +25,7 @@
    Only signed-in users emit events (no anonymous attribution); the
    Settings → Privacy toggle opts out entirely. */
 
-const EVENT_DEFS = {
+export const EVENT_DEFS = {
   // library
   book_added:           { c: 'library',   p: ['source'] },
   book_removed:         { c: 'library',   p: [] },
@@ -95,7 +101,7 @@ const EVENT_DEFS = {
 };
 
 // Enum allowlists for property values. book_count is numeric (validated below).
-const PROP_VALUES = {
+export const PROP_VALUES = {
   // Addition sources reflect this app's real flows (spec §7: only track
   // sources that actually exist). 'wishlist' is not a creation flow here —
   // books reach the wishlist after being added elsewhere — so it is omitted.
@@ -120,30 +126,30 @@ const PROP_VALUES = {
   context: ['search', 'isbn', 'pagecount'],
 };
 
-const ANALYTICS_OPT_KEY   = 'spicyshelves.analytics'; // '0' = opted out
-const ANALYTICS_FLAGS_KEY = 'spicyshelves.analytics.flags';
-const ANALYTICS_SEEN_KEY  = 'spicyshelves.analytics.firstseen';
-const ANALYTICS_FLUSH_MS  = 15000;
-const ANALYTICS_BATCH_MAX = 50;
-const ANALYTICS_QUEUE_MAX = 500;
-const ANALYTICS_COOLDOWN_MS = 5 * 60 * 1000;
+export const ANALYTICS_OPT_KEY   = 'spicyshelves.analytics'; // '0' = opted out
+export const ANALYTICS_FLAGS_KEY = 'spicyshelves.analytics.flags';
+export const ANALYTICS_SEEN_KEY  = 'spicyshelves.analytics.firstseen';
+export const ANALYTICS_FLUSH_MS  = 15000;
+export const ANALYTICS_BATCH_MAX = 50;
+export const ANALYTICS_QUEUE_MAX = 500;
+export const ANALYTICS_COOLDOWN_MS = 5 * 60 * 1000;
 
-let analyticsQueue = null; // lazy-loaded per user; null = not loaded yet
-let analyticsFlushTimer = 0;
-let analyticsCooldownUntil = 0;
-const analyticsDedupe = new Map();
+export let analyticsQueue = null; // lazy-loaded per user; null = not loaded yet
+export let analyticsFlushTimer = 0;
+export let analyticsCooldownUntil = 0;
+export const analyticsDedupe = new Map();
 
-function analyticsQueueKey() {
+export function analyticsQueueKey() {
   // cloudUser is guaranteed non-null by track(); per-user partition keeps one
   // user's offline events from being uploaded (and RLS-rejected) as another's.
   return 'spicyshelves.analytics.queue.' + cloudUser.id;
 }
 
-function analyticsEnabled() {
+export function analyticsEnabled() {
   try { return localStorage.getItem(ANALYTICS_OPT_KEY) !== '0'; } catch (e) { return true; }
 }
 
-function setAnalyticsEnabled(on) {
+export function setAnalyticsEnabled(on) {
   try { localStorage.setItem(ANALYTICS_OPT_KEY, on ? '1' : '0'); } catch (e) {}
   if (!on) {
     analyticsQueue = [];
@@ -151,7 +157,7 @@ function setAnalyticsEnabled(on) {
   }
 }
 
-function loadAnalyticsQueue() {
+export function loadAnalyticsQueue() {
   if (analyticsQueue !== null) return analyticsQueue;
   analyticsQueue = [];
   try {
@@ -164,12 +170,12 @@ function loadAnalyticsQueue() {
   return analyticsQueue;
 }
 
-function persistAnalyticsQueue() {
+export function persistAnalyticsQueue() {
   try { localStorage.setItem(analyticsQueueKey(), JSON.stringify(analyticsQueue)); } catch (e) {}
 }
 
 /* Queue one event. Returns true when queued, false when dropped. Never throws. */
-function track(eventName, props, opts) {
+export function track(eventName, props, opts) {
   try {
     const def = EVENT_DEFS[eventName];
     if (!def || !analyticsEnabled()) return false;
@@ -213,7 +219,7 @@ function track(eventName, props, opts) {
 }
 
 /* Fire an event at most once ever (per user). Used for onboarding funnels. */
-function trackOnce(flag, eventName, props) {
+export function trackOnce(flag, eventName, props) {
   try {
     if (typeof cloudUser === 'undefined' || !cloudUser || !cloudUser.id) return false;
     const key = ANALYTICS_FLAGS_KEY + '.' + cloudUser.id;
@@ -231,7 +237,7 @@ function trackOnce(flag, eventName, props) {
 
 /* Seed once-ever flags from existing state so long-time users don't pollute
    onboarding funnels (e.g. their next added book is not their "first"). */
-function initAnalyticsFlags() {
+export function initAnalyticsFlags() {
   try {
     if (typeof cloudUser === 'undefined' || !cloudUser || !cloudUser.id) return;
     if (typeof library === 'undefined') return;
@@ -252,7 +258,7 @@ function initAnalyticsFlags() {
 
 /* Diff a book's saved fields against their pre-save snapshot. Called from the
    detail modal's Save handler. Pure logic — no DOM, no book content leaves. */
-function trackBookSaveDiff(before, after) {
+export function trackBookSaveDiff(before, after) {
   try {
     before = before || {}; after = after || {};
     if (after.status && after.status !== before.status) {
@@ -279,7 +285,7 @@ function trackBookSaveDiff(before, after) {
 
 /* Once per signed-in app boot: seed onboarding flags, then fire the session
    and onboarding-funnel events. Called from enterApp(). */
-function analyticsSessionBoot() {
+export function analyticsSessionBoot() {
   try {
     initAnalyticsFlags();
     track('session_started');
@@ -303,12 +309,12 @@ function analyticsSessionBoot() {
   } catch (e) {}
 }
 
-function scheduleAnalyticsFlush() {
+export function scheduleAnalyticsFlush() {
   if (analyticsFlushTimer) return;
   analyticsFlushTimer = setTimeout(() => { analyticsFlushTimer = 0; flushAnalytics(); }, ANALYTICS_FLUSH_MS);
 }
 
-async function flushAnalytics() {
+export async function flushAnalytics() {
   let batch = null; // retained for requeue if the upload fails
   try {
     const q = loadAnalyticsQueue();
@@ -341,3 +347,38 @@ async function flushAnalytics() {
     scheduleAnalyticsFlush();
   }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (25 files) call track() and its companions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.EVENT_DEFS = EVENT_DEFS;
+window.PROP_VALUES = PROP_VALUES;
+window.ANALYTICS_OPT_KEY = ANALYTICS_OPT_KEY;
+window.ANALYTICS_FLAGS_KEY = ANALYTICS_FLAGS_KEY;
+window.ANALYTICS_SEEN_KEY = ANALYTICS_SEEN_KEY;
+window.ANALYTICS_FLUSH_MS = ANALYTICS_FLUSH_MS;
+window.ANALYTICS_BATCH_MAX = ANALYTICS_BATCH_MAX;
+window.ANALYTICS_QUEUE_MAX = ANALYTICS_QUEUE_MAX;
+window.ANALYTICS_COOLDOWN_MS = ANALYTICS_COOLDOWN_MS;
+window.analyticsQueue = analyticsQueue;
+window.analyticsFlushTimer = analyticsFlushTimer;
+window.analyticsCooldownUntil = analyticsCooldownUntil;
+window.analyticsDedupe = analyticsDedupe;
+window.analyticsQueueKey = analyticsQueueKey;
+window.analyticsEnabled = analyticsEnabled;
+window.setAnalyticsEnabled = setAnalyticsEnabled;
+window.loadAnalyticsQueue = loadAnalyticsQueue;
+window.persistAnalyticsQueue = persistAnalyticsQueue;
+window.track = track;
+window.trackOnce = trackOnce;
+window.initAnalyticsFlags = initAnalyticsFlags;
+window.trackBookSaveDiff = trackBookSaveDiff;
+window.analyticsSessionBoot = analyticsSessionBoot;
+window.scheduleAnalyticsFlush = scheduleAnalyticsFlush;
+window.flushAnalytics = flushAnalytics;
