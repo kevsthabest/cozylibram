@@ -1,31 +1,27 @@
 'use strict';
 
-/* ---------------- Logs (v167) ----------------
-   The Observatory's Logs tab, extracted into its own module
-   (architecture candidate 6, final piece): the on-device
-   log viewer — the render path is renderLogsTab(),
-   dispatched from the Observatory shell in js/199-admin.js
-   (adminTab === 'logs'). It reads AppLog (js/002-log.js) at
-   runtime and shares no state with the shell, which is why
-   it travels as its own zone. Nothing else moves: the shell
-   and the other tabs stay in js/199 (the Trope, Character,
-   Analytics, Spine Lab and Edition Assets tabs live in
-   js/161–165). Load order: after js/165 and before js/199
-   (whose dispatch calls renderLogsTab at runtime); every
-   cross-file reference is a runtime call through the shared
-   global scope — this file declares only its own state at
-   eval time. */
-
-/* ---------------- v167: on-device log viewer ----------------
-   Read AppLog (js/002-log.js). On this device only — nothing is uploaded.
-   Reproduce the problem first, then open this tab before clearing site
-   data (clearing wipes the log along with everything else). */
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/166-logs.js — Logs: one tab of the Observatory (admin), the
+ * on-device log viewer.
+ *
+ * renderLogsTab() draws AppLog's entries (js/002-log.js) newest-first
+ * with a level filter (all / warnings and up / errors only), capped
+ * at the newest 150, plus refresh and clear controls. The log lives
+ * on this device only and nothing here uploads anything — which sets
+ * the tab's diagnostic contract: reproduce the problem first, then
+ * open this tab before clearing site data, because clearing wipes
+ * the log along with everything else.
+ *
+ * The Observatory shell in js/199-admin.js dispatches here at runtime
+ * (adminTab === 'logs') and is this file's only caller; it still
+ * reads renderLogsTab through the window bridge at the bottom of
+ * this file. The file shares no state with the shell: adminLogFilter
+ * is its one piece of module state, so a chosen filter survives
+ * repaints. This file's own outbound reads are wired as real
+ * imports — AppLog from js/002-log.js, the rest from
+ * js/050-helpers.js (see ADR-003).
+ */
+import { AppLog } from './002-log.js';
+import { confirmModal, esc, icon } from './050-helpers.js';
 export let adminLogFilter = 'all'; // all | warn | error
 export function renderLogsTab() {
   const body = document.getElementById('ob-body');
@@ -72,11 +68,11 @@ export function renderLogsTab() {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The one classic consumer, js/199-admin.js, calls renderLogsTab() at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
+   file can see them. Its one consumer, js/199-admin.js, calls renderLogsTab() at runtime and still reads it as a global, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve through the global object, so the caller needs no
    changes. Module scripts are deferred, so the bridge is in place
    before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   when its last window-reading caller has wired the read as an import
+   (ADR-003). */
 window.adminLogFilter = adminLogFilter;
 window.renderLogsTab = renderLogsTab;

@@ -1,29 +1,26 @@
 'use strict';
 
-/* ---------------- Spine Lab (v264) ----------------
-   The Observatory's Spine Lab tab, extracted into its own
-   module (architecture candidate 6, final piece): the spine
-   search test and its result renderer — the render path is
-   renderSpineLab(), dispatched from the Observatory shell
-   in js/199-admin.js (adminTab === 'spine'). Nothing else
-   moves: the shell and the other tabs stay in js/199 (the
-   Trope, Character, Analytics, Edition Assets and Logs
-   tabs live in js/161–163, js/165 and js/166). Load order:
-   after js/163 and before js/199 (whose dispatch calls
-   renderSpineLab at runtime); every cross-file reference
-   is a runtime call through the shared global scope — this
-   file declares only its own functions at eval time. */
+/* js/164-spinelab.js — Spine Lab: one tab of the Observatory (admin).
+ *
+ * An experiment, not a feature: can a web search find a usable spine
+ * photo for a book? renderSpineLab() draws a title/author form, posts
+ * it to /api/spine-search, and renders the returned candidates for a
+ * human to judge; spineLabResultHTML() is the pure renderer for that
+ * response. Nothing is saved to any library and no result touches
+ * book data — until search proves reliable, photographing the spine
+ * remains the dependable path.
+ *
+ * The Observatory shell in js/199-admin.js dispatches here at runtime
+ * (adminTab === 'spine') and is this file's only caller; it still
+ * reads renderSpineLab through the window bridge at the bottom of
+ * this file. This file's own outbound reads are wired as real
+ * imports from js/050-helpers.js (see ADR-003).
+ */
+import { apiFetch, esc, icon } from './050-helpers.js';
 
-/* ---------------- v264: Spine Lab ----------------
-   Experiment: can Gemini (web-search grounding) find a book's spine photo?
-   Admin-only diagnostic — results are shown for human judgment, nothing is
-   saved to any library. */
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+// Candidates, notes and URLs in the response are web-search output —
+// untrusted text headed for innerHTML — so every interpolation below
+// passes through esc, URLs included.
 export function spineLabResultHTML(data) {
   if (!data) return '';
   const cands = Array.isArray(data.candidates) ? data.candidates : [];
@@ -88,11 +85,11 @@ export async function renderSpineLab() {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The one classic consumer, js/199-admin.js, calls renderSpineLab() at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
+   file can see them. Its one consumer, js/199-admin.js, calls renderSpineLab() at runtime and still reads it as a global, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve through the global object, so the caller needs no
    changes. Module scripts are deferred, so the bridge is in place
    before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   when its last window-reading caller has wired the read as an import
+   (ADR-003). */
 window.spineLabResultHTML = spineLabResultHTML;
 window.renderSpineLab = renderSpineLab;

@@ -1,20 +1,32 @@
 'use strict';
 
-/* ---------------- Inventaire (inventaire.io) metadata source ----------------
-   v244: Wikidata-centered CC0 book database — strong on French editions
-   (it bootstraps editions from the BnF's own SPARQL endpoint by ISBN).
-   Used in the ISBN-lookup waterfall between Google Books and Open Library.
-
-   Requests go through the same-origin /api/inventaire proxy (Pages Function
-   or server.py), which sets the identifying User-Agent Inventaire asks for
-   (browsers cannot set User-Agent themselves). */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/062-inventaire.js — Inventaire (inventaire.io) metadata source.
+ *
+ * One source in the ISBN-lookup waterfall, between Google Books and
+ * Open Library: given an ISBN, invLookupISBN() resolves edition → work
+ * → authors through Inventaire's Wikidata-centered CC0 database, which
+ * is strong on French editions (it bootstraps editions from the BnF's
+ * own SPARQL endpoint by ISBN). The invClaim()/invTitle()/invLabel()
+ * helpers read Wikidata-style claims (P1476 title, P212 ISBN, P577
+ * date, P1104 pages, P629 work, P50 authors) off the raw entities.
+ *
+ * Every request goes through the same-origin /api/inventaire proxy
+ * (Pages Function or server.py), never to inventaire.io directly: the
+ * proxy sets the identifying User-Agent Inventaire asks for, and
+ * browsers cannot set a User-Agent themselves.
+ *
+ * invEditionToBook() maps an edition entity into the app's book shape,
+ * mirroring olDocToBook. Inventaire carries no description or ratings,
+ * so those fields are born empty here; enrichRatings blends Open
+ * Library ratings in afterwards.
+ *
+ * Surface: the inv* functions, exported and republished on window by
+ * the bridge at the bottom of this file — js/061-gbooks-key.js and
+ * js/080-pagecount.js still read them as globals (see ADR-003). This
+ * file's own outbound reads are wired as real imports, below.
+ */
+import { apiFetch, uid } from './050-helpers.js';
+import { autoDetectAxes } from './020-ratings.js';
 export function invProxyUrl(query) {
   return '/api/inventaire/entities?' + query;
 }
@@ -126,12 +138,12 @@ export async function invLookupISBN(isbn) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers, js/061-gbooks-key.js and js/080-pagecount.js, call these helpers at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
+   file can see them. The consumers js/061-gbooks-key.js and js/080-pagecount.js call these helpers at runtime and still read them as globals, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve through the global object, so the callers need no
    changes. Module scripts are deferred, so the bridge is in place
    before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   when its last window-reading caller has wired the read as an import
+   (ADR-003). */
 window.invProxyUrl = invProxyUrl;
 window.invByUris = invByUris;
 window.invClaims = invClaims;
