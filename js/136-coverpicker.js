@@ -5,15 +5,21 @@
    opens a picker with candidate covers (Google Books editions + every cover
    Open Library has for the work), plus an upload-your-own option. ---- */
 
-const coverCandidateCache = new Map(); // isbn-or-title key -> [{url, label}] (excludes "current")
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export const coverCandidateCache = new Map(); // isbn-or-title key -> [{url, label}] (excludes "current")
 
-function httpsCover(u) {
+export function httpsCover(u) {
   return String(u || '').replace(/^http:/, 'https:');
 }
 
 // Apple Books (iTunes Search API — free, no key). Artwork comes back at
 // 100x100; the same CDN serves larger sizes, so ask for 600x600.
-async function appleBookCovers(term, freshPush) {
+export async function appleBookCovers(term, freshPush) {
   try {
     const r = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(term) +
       '&media=ebook&entity=ebook&limit=8');
@@ -26,7 +32,7 @@ async function appleBookCovers(term, freshPush) {
 }
 
 // Hardcover edition cover art — only when the home-server token is set.
-async function hardcoverCover(isbn, freshPush) {
+export async function hardcoverCover(isbn, freshPush) {
   if (typeof hcReady !== 'function' || !hcReady()) return;
   try {
     const q = 'query { editions(where: {isbn_13: {_eq: ' + JSON.stringify(isbn) +
@@ -42,7 +48,7 @@ async function hardcoverCover(isbn, freshPush) {
 // Every candidate cover for this book: current first, then Hardcover's
 // edition art, Apple Books artwork, all Open Library covers for the edition
 // and its work, and Google Books edition thumbnails last. Deduped.
-async function fetchCoverCandidates(book) {
+export async function fetchCoverCandidates(book) {
   const seen = new Set();
   const out = [];
   const push = (url, label) => {
@@ -103,7 +109,7 @@ async function fetchCoverCandidates(book) {
 }
 
 // Downscale an uploaded image to a data URL small enough for localStorage.
-function fileToCoverDataURL(file) {
+export function fileToCoverDataURL(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -124,12 +130,12 @@ function fileToCoverDataURL(file) {
   });
 }
 
-let coverPickerToken = null; // v220: history entry for the back-gesture
-function closeCoverPickerDom() { // v220: DOM-only teardown
+export let coverPickerToken = null; // v220: history entry for the back-gesture
+export function closeCoverPickerDom() { // v220: DOM-only teardown
   const ov = document.getElementById('cover-picker');
   if (ov) ov.remove();
 }
-function closeCoverPicker() {
+export function closeCoverPicker() {
   if (coverPickerToken) { overlayClosed(coverPickerToken); coverPickerToken = null; } // v220
   closeCoverPickerDom();
 }
@@ -150,19 +156,19 @@ function closeCoverPicker() {
 // returns empty, and choosing/adding a cover never blocks on it
 // beyond the await the call sites already had. Already-canonical
 // bucket URLs pass through untouched.
-const COVER_WEBP_MAX_W = 600; // px wide cap, never upscale (v218 size class)
-const COVER_WEBP_MAX_PX = 2000000; // total decoded-pixel cap (Advisor follow-up: width-only caps let a tall sliver allocate a huge canvas)
-const COVER_WEBP_MAX_DATA_LEN = 7 * 1024 * 1024; // data: source length cap (~5 MB binary; legit producers are ≤512px)
-const coverAdoptInflight = new Map(); // source URL -> Promise<{url, hex}|null>
-const coverAdoptWaiters = [];         // queued {url, resolve}
-let coverAdoptActive = 0;
-let coverAdoptLastStart = 0;
-let coverAdoptDenyLogged = false;     // upload-denial AppLog: once per session
+export const COVER_WEBP_MAX_W = 600; // px wide cap, never upscale (v218 size class)
+export const COVER_WEBP_MAX_PX = 2000000; // total decoded-pixel cap (Advisor follow-up: width-only caps let a tall sliver allocate a huge canvas)
+export const COVER_WEBP_MAX_DATA_LEN = 7 * 1024 * 1024; // data: source length cap (~5 MB binary; legit producers are ≤512px)
+export const coverAdoptInflight = new Map(); // source URL -> Promise<{url, hex}|null>
+export const coverAdoptWaiters = [];         // queued {url, resolve}
+export let coverAdoptActive = 0;
+export let coverAdoptLastStart = 0;
+export let coverAdoptDenyLogged = false;     // upload-denial AppLog: once per session
 
-function coverWebpDisabled() {
+export function coverWebpDisabled() {
   try { return localStorage.getItem('cozylibram.coverWebp') === 'off'; } catch (e) { return false; }
 }
-function isCanonicalCoverUrl(url) {
+export function isCanonicalCoverUrl(url) {
   return typeof url === 'string' &&
     url.indexOf('/storage/v1/object/public/covers/') !== -1;
 }
@@ -170,7 +176,7 @@ function isCanonicalCoverUrl(url) {
 // The signed-in Supabase client, or null when adoption cannot run at all
 // (cloud not configured, signed out, storage unavailable). Checked before
 // any pixel work so a signed-out device pays nothing.
-async function coverWebpClient() {
+export async function coverWebpClient() {
   try {
     if (typeof cloudClient !== 'function') return null;
     const sb = await cloudClient();
@@ -186,7 +192,7 @@ async function coverWebpClient() {
 // Load one pixel source into an Image element; resolves the element, or
 // null on error/timeout. (coverImageHex in js/120 is the same shape, but
 // resolves only the sampled hex — the adopter needs the image itself.)
-function coverLoadImage(src, useCors) {
+export function coverLoadImage(src, useCors) {
   return new Promise(resolve => {
     let settled = false;
     const done = (img) => { if (!settled) { settled = true; resolve(img); } };
@@ -204,7 +210,7 @@ function coverLoadImage(src, useCors) {
 // The cover's pixels as a loaded image. Remote URLs try the sampler's
 // ordered sources (same-origin proxy first, then direct-with-CORS where
 // the host allows it); data: URLs are already local and load directly.
-async function coverPixelsImage(url) {
+export async function coverPixelsImage(url) {
   if (url.indexOf('data:') === 0) return coverLoadImage(url, false);
   const sources = (typeof coverColorSources === 'function')
     ? coverColorSources(url) : [[url, false]];
@@ -215,13 +221,13 @@ async function coverPixelsImage(url) {
   return null;
 }
 
-function coverUploadIsDup(err) {
+export function coverUploadIsDup(err) {
   if (!err) return false;
   const sc = err.statusCode != null ? err.statusCode : err.status;
   if (sc === 409 || sc === '409') return true;
   return /already exists|duplicate/i.test(String(err.message || ''));
 }
-function coverHexOf(buf) {
+export function coverHexOf(buf) {
   return Array.from(new Uint8Array(buf),
     b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -229,7 +235,7 @@ function coverHexOf(buf) {
 // One adoption job: pixels → WebP → bucket. Resolves {url, hex} (hex =
 // the cover's dominant colour sampled from the same pixels, may be
 // null), or null on any failure — the caller keeps the original source.
-async function coverWebpConvert(url) {
+export async function coverWebpConvert(url) {
   try {
     if (url.indexOf('data:') === 0 && url.length > COVER_WEBP_MAX_DATA_LEN) return null;
     const sb = await coverWebpClient();
@@ -288,7 +294,7 @@ async function coverWebpConvert(url) {
 
 // Modest queue: max 2 adoptions at once, ~350 ms between starts (the
 // bulk filler's politeness, shared by every adoption caller).
-function coverAdoptPump() {
+export function coverAdoptPump() {
   while (coverAdoptActive < 2 && coverAdoptWaiters.length) {
     const job = coverAdoptWaiters.shift();
     coverAdoptActive++;
@@ -301,7 +307,7 @@ function coverAdoptPump() {
     }, wait);
   }
 }
-function coverAdoptSchedule(url) {
+export function coverAdoptSchedule(url) {
   const hit = coverAdoptInflight.get(url);
   if (hit) return hit;
   const p = new Promise(resolve => {
@@ -317,7 +323,7 @@ function coverAdoptSchedule(url) {
 // book is attached and the cover was sampled during ingest, its spine
 // colour is seeded against the NEW bucket URL, so adopted covers never
 // need the network sampler (the exact cache write the painters make).
-async function adoptCoverWebP(url, book) {
+export async function adoptCoverWebP(url, book) {
   try {
     if (!url || typeof url !== 'string') return url;
     if (isCanonicalCoverUrl(url)) return url;
@@ -347,7 +353,7 @@ async function adoptCoverWebP(url, book) {
 // repointed and saved through the normal path (saveLibrary → sync),
 // exactly like the v216 call sites. Never throws, never blocks the
 // caller; any failure leaves the cover exactly as it was.
-function adoptBookCoverInBackground(book) {
+export function adoptBookCoverInBackground(book) {
   try {
     if (!book || !book.id || typeof book.cover !== 'string' || !book.cover) return;
     const src = book.cover;
@@ -381,7 +387,7 @@ function adoptBookCoverInBackground(book) {
 // the bucket, so it leaves the target set the moment it lands, and a
 // killed session simply leaves the rest for the next boot. Called once
 // per sign-in from enterApp; the adopter itself no-ops signed out.
-function sweepCoverAdoptions() {
+export function sweepCoverAdoptions() {
   try {
     if (coverWebpDisabled()) return; // kill-switch: the sweep stays home too
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
@@ -396,7 +402,7 @@ function sweepCoverAdoptions() {
   } catch (e) {}
 }
 
-async function chooseCover(bookId, url) {
+export async function chooseCover(bookId, url) {
   const b = library.find(x => x.id === bookId);
   if (!b || !url) return;
   b.cover = await adoptCoverWebP(url, b);
@@ -415,7 +421,7 @@ async function chooseCover(bookId, url) {
   toast('🖼️ Cover updated');
 }
 
-function openCoverPicker(bookId) {
+export function openCoverPicker(bookId) {
   const b = library.find(x => x.id === bookId);
   if (!b) return;
   // v220: defensive re-open adopts the existing history entry (no push/back churn)
@@ -484,7 +490,7 @@ function openCoverPicker(bookId) {
 // verified with a real image load (8s timeout) before it is saved, so a dead
 // link can never be stamped onto a book. Re-runnable — it always targets
 // whatever is still missing a cover.
-function coverURLLoads(url) {
+export function coverURLLoads(url) {
   return new Promise(resolve => {
     let settled = false;
     const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
@@ -498,7 +504,7 @@ function coverURLLoads(url) {
   });
 }
 
-async function downloadMissingCovers(onProgress, fns) {
+export async function downloadMissingCovers(onProgress, fns) {
   const getCands = (fns && fns.candidates) || fetchCoverCandidates;
   const verify = (fns && fns.verify) || coverURLLoads;
   // v455 (import concierge): fns.targets scopes the run to a given book list
@@ -525,3 +531,51 @@ async function downloadMissingCovers(onProgress, fns) {
   if (done) { saveLibrary(); render(); }
   return { total: targets.length, done: done };
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/070-hardcover.js, js/095-gate.js,
+   js/130-add.js, js/132-import.js, js/133-bookmory.js, js/134-verify.js,
+   js/138-editions.js, js/139-import-concierge.js, js/150-modal-discovery.js
+   and js/180-settings.js — reach these names at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups in classic scripts resolve through the global object,
+   so the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name from this
+   bridge only when its last classic caller is gone.
+ */
+window.coverCandidateCache = coverCandidateCache;
+window.httpsCover = httpsCover;
+window.appleBookCovers = appleBookCovers;
+window.hardcoverCover = hardcoverCover;
+window.fetchCoverCandidates = fetchCoverCandidates;
+window.fileToCoverDataURL = fileToCoverDataURL;
+window.coverPickerToken = coverPickerToken;
+window.closeCoverPickerDom = closeCoverPickerDom;
+window.closeCoverPicker = closeCoverPicker;
+window.COVER_WEBP_MAX_W = COVER_WEBP_MAX_W;
+window.COVER_WEBP_MAX_PX = COVER_WEBP_MAX_PX;
+window.COVER_WEBP_MAX_DATA_LEN = COVER_WEBP_MAX_DATA_LEN;
+window.coverAdoptInflight = coverAdoptInflight;
+window.coverAdoptWaiters = coverAdoptWaiters;
+window.coverAdoptActive = coverAdoptActive;
+window.coverAdoptLastStart = coverAdoptLastStart;
+window.coverAdoptDenyLogged = coverAdoptDenyLogged;
+window.coverWebpDisabled = coverWebpDisabled;
+window.isCanonicalCoverUrl = isCanonicalCoverUrl;
+window.coverWebpClient = coverWebpClient;
+window.coverLoadImage = coverLoadImage;
+window.coverPixelsImage = coverPixelsImage;
+window.coverUploadIsDup = coverUploadIsDup;
+window.coverHexOf = coverHexOf;
+window.coverWebpConvert = coverWebpConvert;
+window.coverAdoptPump = coverAdoptPump;
+window.coverAdoptSchedule = coverAdoptSchedule;
+window.adoptCoverWebP = adoptCoverWebP;
+window.adoptBookCoverInBackground = adoptBookCoverInBackground;
+window.sweepCoverAdoptions = sweepCoverAdoptions;
+window.chooseCover = chooseCover;
+window.openCoverPicker = openCoverPicker;
+window.coverURLLoads = coverURLLoads;
+window.downloadMissingCovers = downloadMissingCovers;

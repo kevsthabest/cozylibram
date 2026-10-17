@@ -8,14 +8,20 @@
 // v89: the key never reaches the browser. Requests go to the same-origin
 // /api/gbooks proxy (Pages Function or server.py), which attaches the key
 // server-side. /config.js only carries a boolean flag.
-function gbReady() {
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+export function gbReady() {
   try { return !!((window.SPICY_CONFIG && window.SPICY_CONFIG.gbooks)); }
   catch (e) { return false; }
 }
 // Rewrite a Google Books API URL to the same-origin proxy. Any client-side
 // `key` param is stripped — the server attaches its own (or forwards the
 // request anonymously when it has none).
-function gbProxyUrl(googleUrl) {
+export function gbProxyUrl(googleUrl) {
   try {
     const u = new URL(googleUrl);
     u.searchParams.delete('key');
@@ -26,7 +32,7 @@ function gbProxyUrl(googleUrl) {
 // v243: provider_used analytics — which metadata backend served data, so
 // Google Books reliance can be measured against the alternatives.
 // Enum-only (no query text, no ISBNs); safe to call when track() is absent.
-function trackProvider(provider, context) {
+export function trackProvider(provider, context) {
   try { track('provider_used', { provider: provider, context: context }); } catch (e) {}
 }
 
@@ -36,7 +42,7 @@ function trackProvider(provider, context) {
 // unrelated classic for it ("The Robbers / Wallenstein"). No real
 // ISBN is a single repeated digit, so these never reach the network
 // or the shared cache: the lookup simply finds nothing.
-function isJunkIsbn(clean) {
+export function isJunkIsbn(clean) {
   const d = String(clean || '').replace(/[^0-9X]/gi, '');
   return d.length >= 10 && /^(\d)\1+$/.test(d);
 }
@@ -44,7 +50,7 @@ function isJunkIsbn(clean) {
 // ISBN lookup with the shared metadata cache in front: a cache hit returns
 // instantly with zero API calls; a miss runs the normal API path and stores
 // the result so the next user gets it from Supabase.
-async function lookupISBN(isbn) {
+export async function lookupISBN(isbn) {
   const clean = String(isbn || '').replace(/[^0-9X]/gi, '');
   if (isJunkIsbn(clean)) return null;
   const snap = await metaCacheGet(clean);
@@ -62,7 +68,7 @@ async function lookupISBN(isbn) {
   return book;
 }
 
-async function lookupISBNFromAPIs(isbn) {
+export async function lookupISBNFromAPIs(isbn) {
   const clean = isbn.replace(/[^0-9X]/gi, '');
   if (isJunkIsbn(clean)) return null;
   try {
@@ -113,7 +119,7 @@ async function lookupISBNFromAPIs(isbn) {
 }
 
 // v196: normalize an ISBN-10/13 to ISBN-13 for cross-source comparison.
-function isbn13of(s) {
+export function isbn13of(s) {
   s = String(s || '').replace(/[^0-9X]/gi, '').toUpperCase();
   if (/^\d{13}$/.test(s)) return s;
   if (/^\d{9}[\dX]$/.test(s)) {
@@ -125,7 +131,7 @@ function isbn13of(s) {
   return s;
 }
 
-async function searchBooks(q, source) {
+export async function searchBooks(q, source) {
   // v140: "All" tries Hardcover first (strongest catalog for these shelves),
   // then Google Books, then Open Library. In "All" mode only results that
   // resemble the query count — junk from one source never blocks the next.
@@ -157,12 +163,12 @@ async function searchBooks(q, source) {
 }
 
 // Significant words in the query (v138): 3+ chars, minus stopwords.
-function queryTokens(q) {
+export function queryTokens(q) {
   const stop = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'by', 'in', 'on', 'to', 'for', 'with']);
   return String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !stop.has(w));
 }
 // At least half the query's significant words must appear in the title/author.
-function resultMatchesQuery(b, toks) {
+export function resultMatchesQuery(b, toks) {
   if (!toks.length) return true;
   const hay = ((b.title || '') + ' ' + (b.authors || []).join(' ')).toLowerCase();
   const hits = toks.filter(t => hay.indexOf(t) !== -1).length;
@@ -171,7 +177,7 @@ function resultMatchesQuery(b, toks) {
 
 // Map an Open Library search doc to our book shape (used when Google Books is
 // unreachable — fewer fields, but enough to add the book).
-function olDocToBook(doc) {
+export function olDocToBook(doc) {
   const isbn = ((doc.isbn || []).find(s => s.length === 13) || (doc.isbn || [])[0] || '').replace(/[^0-9X]/gi, '');
   const book = {
     id: uid(),
@@ -202,7 +208,7 @@ function olDocToBook(doc) {
 
 // Pull description + subjects for an Open Library-sourced book from its work
 // record, then derive genre axes and starter trope tags from the subjects.
-async function enrichOLBook(book, workKey) {
+export async function enrichOLBook(book, workKey) {
   try {
     delete book._olKey;
     if (!workKey) return book;
@@ -223,9 +229,9 @@ async function enrichOLBook(book, workKey) {
   return book;
 }
 
-const TROPE_STOPWORDS = new Set(['general', 'fiction', 'nonfiction', 'large type', 'audiobooks', 'textbook', 'textbooks']);
+export const TROPE_STOPWORDS = new Set(['general', 'fiction', 'nonfiction', 'large type', 'audiobooks', 'textbook', 'textbooks']);
 // Seed editable starter tags from the book's genre/subject data.
-function seedTropes(book) {
+export function seedTropes(book) {
   if (book.tropes && book.tropes.length) return;
   const tags = [];
   // v211: also consult the canonical format-junk set (js/020) — this is where
@@ -239,3 +245,32 @@ function seedTropes(book) {
   book.tropes = tags.slice(0, 6);
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this file
+   can see them. The consumers — js/060-metadata.js, js/070-hardcover.js,
+   js/080-pagecount.js, js/092-metacache.js, js/130-add.js,
+   js/135-vision.js, js/136-coverpicker.js, js/137-shelf.js,
+   js/139-import-concierge.js, js/150-modal-discovery.js and
+   js/161-tropelab.js — reach these names at runtime, so the bridge
+   republishes exactly the pre-conversion public surface on window.
+   Bare-name lookups in classic scripts resolve through the global object,
+   so the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name from this
+   bridge only when its last classic caller is gone.
+ */
+window.gbReady = gbReady;
+window.gbProxyUrl = gbProxyUrl;
+window.trackProvider = trackProvider;
+window.isJunkIsbn = isJunkIsbn;
+window.lookupISBN = lookupISBN;
+window.lookupISBNFromAPIs = lookupISBNFromAPIs;
+window.isbn13of = isbn13of;
+window.searchBooks = searchBooks;
+window.queryTokens = queryTokens;
+window.resultMatchesQuery = resultMatchesQuery;
+window.olDocToBook = olDocToBook;
+window.enrichOLBook = enrichOLBook;
+window.TROPE_STOPWORDS = TROPE_STOPWORDS;
+window.seedTropes = seedTropes;

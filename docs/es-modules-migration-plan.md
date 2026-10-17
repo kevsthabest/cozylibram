@@ -1238,3 +1238,45 @@ baseline); 71 of 104 files converted.
   was 200/6, all baselines A/B-identical.
 - **Nit — a stale draft sentence in the body.** Patched
   post-merge.
+
+## Gate notes — PR #280 (v604)
+
+Recorded from the Security Advisor's gate on the final
+phase-2 PR, at the program manager's direction. The gate
+closed PASS_WITH_RISK; merged as 999c837. Live at v604
+with 78 module tags. Line tally at v604: 55,521 js lines
+(+238 this PR, +2,632 cumulative against the 52,889
+baseline); 78 of 104 files converted — PHASE 2 COMPLETE.
+Phase subtotals: phase 1 +1,047, phase 2 +1,585.
+
+- **R4 RULED SOUND as a class.** A conversion may
+  re-express a dynamic-import specifier when the class
+  conditions are met: identical-URL resolution proven at
+  runtime, the deviating line named in the strip proof,
+  and old-spelling pins repointed as R1-class enumeration
+  and disclosed. All three were met for js/130; the User
+  ratified proceeding on 2026-10-16, and the gate's own
+  js/130 loader proof ran 11/11 including the negative
+  control (the old specifier from a module URL resolves
+  to the /js/js/ 404 the hold prevented).
+- **The security-v194:88 repoint RULED SOUND.** The
+  zxing same-origin pin now accepts either exact quoted
+  specifier (classic or module spelling) with assertion
+  text and intent unchanged; the gate reproduced the
+  6-way mutation battery, and the suite's output is
+  byte-identical to pristine base.
+- **js/180-settings §9.5 DISCHARGED.** The code-derived
+  19-name surface was verified independently, and the
+  settings-groups pristine A/B is byte-identical — the
+  named hold's evidence obligation is closed.
+- **js/157↔js/161 accessor proof 11/11** in both
+  directions against the real converted files.
+- **Low, standing pattern — eight value-bridged
+  bindings** with zero cross-file readers proven. Nothing
+  observable diverges. The caution is unchanged.
+- **Nit — a stale Draft sentence in the body.** Patched
+  post-merge.
+- **One environmental adjudication on the gate run:**
+  cloud.test.js produced a 0-byte log from the gate's
+  own /tmp exhaustion; a standalone re-run passed 37/0
+  and the net signature stood at 200/6.
