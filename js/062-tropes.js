@@ -1,16 +1,26 @@
-// v81: automatic trope suggestions from two sources — an offline keyword scan
-// of the book's blurb, and community tags from Hardcover. Suggestions land in
-// book.tropesAuto and are shown as tappable chips in the book editor; they
-// never overwrite book.tropes (her hand-picked list). The source is chosen in
-// Settings → Library → Reading log → "Trope suggestions" (the control
-// moved there in v535 after its original section was removed in v476).
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/062-tropes.js — Tropes: automatic trope suggestions for a book.
+ *
+ * refreshTropeSuggestions(book) fills book.tropesAuto from up to two
+ * sources: an offline keyword scan of the book's blurb and title
+ * against TROPE_PATTERNS, and Hardcover's community tags, cleaned by
+ * cleanTag (genre-ish and junk tags are stopworded out — they are not
+ * tropes). Suggestions are capped at 8 and NEVER overwrite
+ * book.tropes, the hand-picked list: tropesAuto is what the book
+ * editor offers as tappable chips.
+ *
+ * Which sources run is the reader's choice — tropeSource(): off /
+ * keywords / hardcover / both, stored under 'spicyshelves.tropesrc'
+ * and chosen in Settings → Library → Reading log; it defaults to
+ * 'both'. The Hardcover leg is best-effort and never throws: a 429 or
+ * a schema change just yields fewer suggestions.
+ *
+ * The Hardcover leg's reads are wired as real imports — hcReady and
+ * hcGraphQL from js/070-hardcover.js (see ADR-003); the typeof guards
+ * at the call site predate the wiring and stay harmless. This file's
+ * own surface still reaches js/070, js/150 and js/180 through the
+ * window bridge at the bottom of this file.
+ */
+import { hcGraphQL, hcReady } from './070-hardcover.js';
 
 export const TROPE_SRC_KEY = 'spicyshelves.tropesrc';
 export const TROPE_SOURCES = ['off', 'keywords', 'hardcover', 'both'];
@@ -145,13 +155,14 @@ export async function refreshTropeSuggestions(book) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The consumers — js/070-hardcover.js, js/150-modal-discovery.js and js/180-settings.js — reach these
-   names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. Its consumers — js/070-hardcover.js,
+   js/150-modal-discovery.js and js/180-settings.js — still read this
+   surface as globals at runtime, so the bridge republishes exactly
+   the pre-conversion public surface on window. Bare-name lookups
+   resolve through the global object, so the callers need no changes.
+   Module scripts are deferred, so the bridge is in place before any
+   consumer can run. Remove a name from this bridge only when its last
+   window-reading caller has wired the read as an import (ADR-003). */
 window.TROPE_SRC_KEY = TROPE_SRC_KEY;
 window.TROPE_SOURCES = TROPE_SOURCES;
 window.TROPE_SRC_LABELS = TROPE_SRC_LABELS;
