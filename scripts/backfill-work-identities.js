@@ -19,7 +19,7 @@
 
    Phase 3 — dedupe report (read-only): groups of works sharing title_norm
    with differing author_norm, printed for review. No merges are performed —
-   merges are destructive and need Kevin's explicit call.
+   merges are destructive and need the User's explicit call.
 
    Hardcover: NOT queried here — the token lives in server-config.json on
    his home PC, not in this environment. hardcover_id still backfills via

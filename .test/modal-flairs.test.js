@@ -38,7 +38,7 @@ for (const id of ids) {
   // neutral, works on any background; used by velvet/verdant vines)
   const hexes = e.svg.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
   if (hexes.some(h => h.toLowerCase() !== '#000')) noHex = false;
-  // stormrider-vine is Kevin's own raster emblem (his explicit direction), exempt from currentColor
+  // stormrider-vine is the owner's own raster emblem (his explicit direction), exempt from currentColor
   if (id !== 'stormrider-vine' && e.svg.indexOf('currentColor') < 0) allSvg = false;
   if (e.file !== 'Asset/flairs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.svg' && e.file !== 'Asset/packs/' + id + '.png') allFields = false;
 }

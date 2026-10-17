@@ -34,7 +34,7 @@ const seed = () => runInWindow(`(function(){
 })();`);
 
 (async () => {
-  // 1. auto-enrich is always on (Kevin's call: no toggle, no preference key)
+  // 1. auto-enrich is always on (the User's call: no toggle, no preference key)
   seed();
   ok('auto-enrich sweep runs without a toggle', typeof window.autoEnrichSweep === 'function');
 
@@ -72,7 +72,7 @@ const seed = () => runInWindow(`(function(){
   ok('concurrent sweep is skipped', !still.b1);
   runInWindow(`hcEnrichBusy = false;`);
 
-  // 6. (removed: no toggle to disable — always on per Kevin's call)
+  // 6. (removed: no toggle to disable — always on per the User's call)
 
   // 7. no toggle UI: enrichment is automatic, not a settings step.
 

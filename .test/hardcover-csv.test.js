@@ -83,7 +83,7 @@ const runInWindow = (js) => {
   ok('unknown status → tbr', weird[0].status === 'tbr');
   ok('rating clamps to 5', weird[0].myRating === 5);
 
-  // 4. validate against Kevin's real export (if present — never committed to the repo)
+  // 4. validate against the User's real export (if present — never committed to the repo)
   const realPath = '/home/hatch/workspace/user/files/hardcover-export-3327_14_9uu1.csv';
   if (fs.existsSync(realPath)) {
     const realText = fs.readFileSync(realPath, 'utf8');

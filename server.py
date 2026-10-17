@@ -63,7 +63,7 @@ def load_cloud_cfg():
 
 def load_supabase_service_key():
     """v216: service key for server-side writes to the `covers` bucket.
-    Kevin-owned: paste into server-config.json (never committed). Without
+    Owner-supplied: paste into server-config.json (never committed). Without
     it /api/cache-cover answers 503 and clients keep the remote URL."""
     try:
         with open(CONFIG_PATH, encoding='utf-8') as f:
@@ -712,7 +712,7 @@ class Handler(SimpleHTTPRequestHandler):
         Supabase Storage `covers` bucket, and returns the public URL.
         Guards: POST only, rate limit, https + host allowlist (SSRF), 4 MB
         cap, must be an image. Needs supabase_service_key in
-        server-config.json (Kevin-owned) — without it → 503 and the client
+        server-config.json (owner-supplied) — without it → 503 and the client
         keeps the remote URL. Every failure falls back to the remote URL;
         a cover is never lost here.
         """

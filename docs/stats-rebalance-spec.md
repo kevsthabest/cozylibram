@@ -1,13 +1,13 @@
 # Stats rebalance spec: leveling the field toward understanding
 
-**Status:** spec, not code. Kevin reviews before anything builds.
+**Status:** spec, not code. The User reviews before anything builds.
 **Brief gate:** test #3 — "does it help someone understand a book, or only count
-it?" Kevin's call: keep the numbers, elevate the understanding layer so it's not
+it?" The User's call: keep the numbers, elevate the understanding layer so it's not
 outnumbered.
 
 ## 1. Audit: what's in Stats today
 
-**Counting** (kept — Kevin likes them):
+**Counting** (kept — the User likes them):
 - Dashboard: month hero cards (books finished, pages, avg rating, reading time),
   month-over-month note, streak banner, shelves distribution, library value.
 - Details: overview row, daily stats, Activity (heatmap, calendar), Pace,
@@ -120,7 +120,7 @@ product's voice. Backup: "Tasting Notes".
 Portrait"), share-card title, canvas filename/label. Rolls into the rebalance
 build. Code comments may be updated incidentally; nothing structural changes.
 
-## 7. Open questions (Kevin / UX Tester)
+## 7. Open questions (the User / UX Tester)
 
 - Dashboard hero: trope fingerprint pinned, or rotate among understanding
   modules the way the insight card does today?
