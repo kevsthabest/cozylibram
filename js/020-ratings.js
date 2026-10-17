@@ -1,3 +1,9 @@
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 /* ---------------- genre-aware ratings ---------------- */
@@ -5,7 +11,7 @@
 // adventure. Nonfiction (User's shelves): insight/readability/depth/
 // practical. Only axes matching the book's genres/tropes/title are shown;
 // everything else stays behind the + chips.
-const RATING_AXES = [
+export const RATING_AXES = [
   { key: 'spice', icon: 'pepper', label: 'Spice', color: '#ff5d6d',
     genres: ['romance', 'erotica'],
     levels: ['Sweet', 'Teasing', 'Steamy', 'Explicit', 'Filthy'] },
@@ -44,7 +50,7 @@ const RATING_AXES = [
     tropes: ['motorcycle', 'automotive', 'repair', 'diy'],
     levels: ['Theory only', 'Some tips', 'Useful', 'Very handy', 'Essential reference'] },
 ];
-function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES[0]; }
+export function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES[0]; }
 
 // Genres come from the Google Books categories saved on each book,
 // e.g. "Fiction / Romance / Contemporary" -> ["Romance", "Contemporary"].
@@ -54,13 +60,13 @@ function axisByKey(k) { return RATING_AXES.find(a => a.key === k) || RATING_AXES
 // character headings ("Blomkvist, Mikael (Fictional character)"), OL-specific
 // non-genres ("Large type books", "Accessible book"), and overlong headings.
 // None of these are genres.
-const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?(print|type( books?)?)|accessible book|protected daisy|in library|overdrive|internet archive)$/i;
+export const GENRE_JUNK = /^(fiction|nonfiction|general|audio[ -]?books?|e[ -]?books?|paperback|hardcover|large[ -]?(print|type( books?)?)|accessible book|protected daisy|in library|overdrive|internet archive)$/i;
 // v354: miscategorized subjects/shelf names (Advisor: triage #7 follow-up)
-const GENRE_SUBJECT_EXTRA = /^(native americans?|did-not-finish|to-read|currently-reading|favorites?)$/i;
-const GENRE_SUBJECT_JUNK = /\((fictional|fictitious|imaginary|legendary|mythical)\b/i;
+export const GENRE_SUBJECT_EXTRA = /^(native americans?|did-not-finish|to-read|currently-reading|favorites?)$/i;
+export const GENRE_SUBJECT_JUNK = /\((fictional|fictitious|imaginary|legendary|mythical)\b/i;
 /* v353: multilingual genre normalization — map non-English variants to
    canonical English (triage #7: "Fantasia"/"fantástico" → "Fantasy") */
-const GENRE_NORM = {
+export const GENRE_NORM = {
   'fantasia': 'Fantasy', 'fantastique': 'Fantasy', 'fantástico': 'Fantasy', 'fantastica': 'Fantasy',
   'romance': 'Romance', 'romantique': 'Romance', 'romântico': 'Romance',
   'horreur': 'Horror', 'terror': 'Horror',
@@ -74,7 +80,7 @@ const GENRE_NORM = {
   'action & abenteuer': 'Action & Adventure',
   'abenteuer': 'Adventure',
 };
-function bookGenres(b) {
+export function bookGenres(b) {
   const out = [];
   (b.categories || []).forEach(c => {
     String(c).split('/').map(s => s.trim()).forEach(s => {
@@ -89,7 +95,7 @@ function bookGenres(b) {
 
 // Guess which axes fit a book from its genres, tropes and title. Falls back to spice.
 // v132: per-axis trope keywords also match (e.g. "dark romance" trope -> Darkness).
-function autoDetectAxes(b) {
+export function autoDetectAxes(b) {
   const hay = (bookGenres(b).join(' ') + ' ' + (b.tropes || []).join(' ') + ' ' + (b.title || '')).toLowerCase();
   const hit = RATING_AXES.filter(a =>
     a.genres.some(g => hay.includes(g)) || (a.tropes || []).some(t => hay.includes(t))
@@ -100,13 +106,13 @@ function autoDetectAxes(b) {
 // v211: format junk is not a trope. One canonical set, shared by seedTropes
 // (js/061) and the migrateBook strip below — the bug was two stopword sets
 // drifting apart ('audiobook' singular slipped through 061's).
-const TROPE_FORMAT_JUNK = new Set([
+export const TROPE_FORMAT_JUNK = new Set([
   'audiobook', 'audiobooks', 'ebook', 'ebooks', 'paperback', 'hardcover',
   'textbook', 'textbooks', 'large type',
 ]);
 
 // Migrate old books (b.spice) to the new { ratings, axes } model.
-function migrateBook(b) {
+export function migrateBook(b) {
   if (!b.ratings) b.ratings = {};
   if (b.spice) b.ratings.spice = b.spice;
   delete b.spice;
@@ -193,7 +199,7 @@ function migrateBook(b) {
    get a fresh _mtime so they win the next cloud merge and push once;
    the load paths persist them through the dirty-flag machinery.
    Returns the number of books changed. Idempotent on its own output. */
-function wishlistShelfTransform(books) {
+export function wishlistShelfTransform(books) {
   let n = 0;
   const now = Date.now();
   for (const b of (books || [])) {
@@ -220,7 +226,7 @@ function wishlistShelfTransform(books) {
    books get a fresh _mtime so they win the next cloud merge and push
    once; the load paths persist them through the dirty-flag machinery.
    Returns the number of books changed. Idempotent on its own output. */
-function wishlistUnifyTransform(books) {
+export function wishlistUnifyTransform(books) {
   let n = 0;
   const now = Date.now();
   for (const b of (books || [])) {
@@ -231,10 +237,33 @@ function wishlistUnifyTransform(books) {
 }
 
 // Ownership badge: line-art home vs cart vs lent-out book vs renew (v84, v148, v563)
-function ownedBadge(b) {
+export function ownedBadge(b) {
   if (b.owned === 'tobuy') return '<span class="badge tobuy">' + icon('tobuy') + ' To buy</span>';
   if (b.owned === 'borrowed') return '<span class="badge borrowed">' + icon('borrowed') + ' Borrowed</span>';
   if (b.owned === 'subscription') return '<span class="badge subscription">' + icon('subscription') + ' Subscription</span>';
   return '<span class="badge owned">' + icon('owned') + ' Owned</span>';
 }
 
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (25 files) call these functions and read these tables at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.RATING_AXES = RATING_AXES;
+window.axisByKey = axisByKey;
+window.GENRE_JUNK = GENRE_JUNK;
+window.GENRE_SUBJECT_EXTRA = GENRE_SUBJECT_EXTRA;
+window.GENRE_SUBJECT_JUNK = GENRE_SUBJECT_JUNK;
+window.GENRE_NORM = GENRE_NORM;
+window.bookGenres = bookGenres;
+window.autoDetectAxes = autoDetectAxes;
+window.TROPE_FORMAT_JUNK = TROPE_FORMAT_JUNK;
+window.migrateBook = migrateBook;
+window.wishlistShelfTransform = wishlistShelfTransform;
+window.wishlistUnifyTransform = wishlistUnifyTransform;
+window.ownedBadge = ownedBadge;

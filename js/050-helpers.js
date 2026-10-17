@@ -1,28 +1,34 @@
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 'use strict';
 
 /* ---------------- helpers ---------------- */
-function esc(s) {
+export function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 /* v492: per-session monotonic counter kills same-ms collisions in tight
    loops (bulk imports call uid() hundreds of times per millisecond). */
-let _uidSeq = 0;
-function uid() { return 'b' + Date.now().toString(36) + (_uidSeq++).toString(36) + Math.random().toString(36).slice(2, 8); }
+export let _uidSeq = 0;
+export function uid() { return 'b' + Date.now().toString(36) + (_uidSeq++).toString(36) + Math.random().toString(36).slice(2, 8); }
 /* v399: Top-N entries from a count map, sorted descending. Replaces the
    Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,N) idiom. */
-function topEntries(map, n) {
+export function topEntries(map, n) {
   return Object.entries(map || {}).sort((a, b) => b[1] - a[1]).slice(0, n);
 }
 /* v399: Extract positive spice values from a book list. */
-function spiceVals(books) {
+export function spiceVals(books) {
   return books.map(b => (b.ratings || {}).spice || 0).filter(v => v > 0);
 }
 /* v399: Shared 1080x1920 story-card canvas setup. Returns {cv, x, W, H, C}
    with gradient background painted and palette C = {ink, mut, acc, gold, grn}.
    Pass stops for a custom gradient (default: DNA 2-stop). */
-function cardCanvas(stops) {
+export function cardCanvas(stops) {
   const W = 1080, H = 1920;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -38,8 +44,8 @@ function cardCanvas(stops) {
    on first use and cached for the session. Until it lands (or if it
    fails), footers draw the wordmark alone — the same tolerance the
    portrait share cards always had when their icon load failed. */
-let _cardIconImg = null, _cardIconStarted = false;
-function cardFooterIcon() {
+export let _cardIconImg = null, _cardIconStarted = false;
+export function cardFooterIcon() {
   if (_cardIconImg || _cardIconStarted) return _cardIconImg;
   _cardIconStarted = true;
   try {
@@ -57,7 +63,7 @@ function cardFooterIcon() {
    color: wordmark colour (default the card palette's muted tone),
    icon: an Image to draw as the mark — pass null for wordmark-only;
    when omitted, the cached icon.svg is used once it has loaded }. */
-function cardFooter(x, W, opts) {
+export function cardFooter(x, W, opts) {
   opts = opts || {};
   const y = opts.y || 1845;
   const word = 'Cozy Libram';
@@ -79,11 +85,11 @@ function cardFooter(x, W, opts) {
 }
 /* v397: Simple case-insensitive normalization for comparisons.
    For full normalization (strip punctuation, articles), use CharacterStore.normName(). */
-function norm(s) {
+export function norm(s) {
   return String(s || '').trim().toLowerCase();
 }
 /* v397: Find a character by name (case-insensitive). */
-function findCharByName(chars, name) {
+export function findCharByName(chars, name) {
   // v399: use strong normalization (strip punctuation/articles) to match
   // CharacterStore.normName dedupe paths — weak norm() lets duplicates slip.
   const strong = (s) => String(s || '').trim().toLowerCase()
@@ -105,7 +111,7 @@ function findCharByName(chars, name) {
    title-case uniformly-cased names ("H D CARLTON" -> "H D Carlton"). Mixed-case
    names ("McDonald", "bell hooks") are left as-is. Display only — records keep
    their raw strings. */
-function displayAuthorName(n) {
+export function displayAuthorName(n) {
   let s = String(n || '').normalize('NFC').replace(/\s+/g, ' ').trim();
   s = s.replace(/\s*\b(Inc|LLC|Ltd|Co)\.?$/i, '').trim();
   if (/[a-zA-Z]/.test(s) && (s === s.toUpperCase() || s === s.toLowerCase())) {
@@ -114,7 +120,7 @@ function displayAuthorName(n) {
   }
   return s;
 }
-function displayAuthors(arr) {
+export function displayAuthors(arr) {
   const list = (arr || []).map(displayAuthorName).filter(Boolean);
   // v403: truncate long cast lists (dramatized audiobooks) to avoid tall rows
   if (list.length > 3) {
@@ -126,7 +132,7 @@ function displayAuthors(arr) {
 }
 // v79: cohesive line-art icon set (inline SVG, inherits text color). Used for
 // the library toolbar and view headers instead of mixed emoji glyphs.
-const ICONS = {
+export const ICONS = {
   // two book covers side by side (grid / covers view)
   covers: '<rect x="3.5" y="4.5" width="7" height="15" rx="1.5"/><rect x="13.5" y="4.5" width="7" height="15" rx="1.5"/>',
   // list view
@@ -302,7 +308,7 @@ const ICONS = {
   // leaf (season nudge: stpatrick / thanksgiving — icon sweep, js/010)
   leaf: '<path d="M5.5 19.5C5.5 10 11.5 4.8 20 4.5c.3 8.5-4.5 14.5-14 14.5z"/><path d="M5.5 19.5c2.8-6.2 6.8-10 11.5-12"/>',
 };
-function icon(name) {
+export function icon(name) {
   const body = ICONS[name] || ICONS.covers;
   return '<svg class="ticon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -311,7 +317,7 @@ function icon(name) {
 
 /* v352: in-app confirm modal — replaces native confirm() which blocks the
    renderer (breaks automation, ugly on mobile). Returns a Promise<boolean>. */
-function confirmModal(message, opts) {
+export function confirmModal(message, opts) {
   opts = opts || {};
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -338,7 +344,7 @@ function confirmModal(message, opts) {
   });
 }
 
-function fmtDate(iso) {
+export function fmtDate(iso) {
   if (!iso) return '';
   try {
     // v352: date-only strings ("2026-10-08") parse as UTC midnight in new Date(),
@@ -352,7 +358,7 @@ function fmtDate(iso) {
 /* v126: one consistent empty-state block — empathetic title, gentle guidance,
    and a single contextual action. `body` is trusted HTML from the call site;
    `cta` navigates to a view via go(). */
-function emptyState(o) {
+export function emptyState(o) {
   return '<div class="empty"><div class="big">' + icon(o.icon || 'covers') + '</div>' +
     '<h2 class="serif">' + esc(o.title) + '</h2>' +
     (o.body ? '<p>' + o.body + '</p>' : '') +
@@ -367,7 +373,7 @@ document.addEventListener('click', e => {
   if (el && typeof go === 'function') go(el.dataset.emptyGo);
 });
 // v113: days from today (local) until a YYYY-MM-DD date; null when unparsable.
-function daysUntil(iso) {
+export function daysUntil(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return null;
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const t = new Date(iso + 'T00:00:00');
@@ -375,12 +381,12 @@ function daysUntil(iso) {
   return Math.round((t - now) / 86400000);
 }
 // v113: human countdown for a release date ('' when past/unparsable).
-function releaseCountdown(iso) {
+export function releaseCountdown(iso) {
   const n = daysUntil(iso);
   if (n == null || n < 0) return '';
   return n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days';
 }
-function toast(msg) {
+export function toast(msg) {
   const root = document.getElementById('toast-root');
   // v590: the toast is the privacy panel's only save feedback — it must be
   // announced. index.html carries aria-live; enforce it here too so any
@@ -392,13 +398,13 @@ function toast(msg) {
   root.appendChild(el);
   setTimeout(() => el.remove(), 2600);
 }
-function coverHTML(book, cls, extra) {
+export function coverHTML(book, cls, extra) {
   const inner = book.cover
     ? '<img src="' + esc(book.cover) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' // v217: async decode off the main thread
     : icon('covers'); // v85: line-art no-cover placeholder
   return '<div class="cover-wrap ' + (cls || '') + '">' + inner + (extra || '') + '</div>';
 }
-function stars(n) {
+export function stars(n) {
   if (!n) return '';
   return '★'.repeat(Math.round(n)) + ' <span style="color:var(--faint)">' + Number(n).toFixed(1) + '</span>';
 }
@@ -407,7 +413,7 @@ function stars(n) {
    cloudSyncing stuck and wedged all future pushes. The abort surfaces as an
    ordinary fetch rejection, which every caller already handles as a network
    failure. `var` (not const) so tests can shorten it. */
-var NET_TIMEOUT_MS = 30000;
+export var NET_TIMEOUT_MS = 30000;
 /* v225: authed same-origin API fetch. Attaches the Supabase session JWT as
    `Authorization: Bearer <token>` so the /api/* Pages Functions can verify
    the caller is signed in. cloudClient() lives in js/090-sync.js — this only
@@ -424,7 +430,7 @@ var NET_TIMEOUT_MS = 30000;
    where the old flow did. A dismissed sheet (AbortError) is a silent
    success — the user made their choice; any other share failure falls back
    to the download rather than stranding the file. */
-async function shareOrDownloadFile(opts) {
+export async function shareOrDownloadFile(opts) {
   opts = opts || {};
   const name = opts.filename || 'cozy-libram-file';
   const file = opts.file || new File([opts.blob], name, { type: (opts.blob && opts.blob.type) || '' });
@@ -447,7 +453,7 @@ async function shareOrDownloadFile(opts) {
   return 'downloaded';
 }
 
-async function apiFetch(path, options) {
+export async function apiFetch(path, options) {
   options = options || {};
   let token = null;
   try {
@@ -471,7 +477,7 @@ async function apiFetch(path, options) {
    for both. Our per-IP limiter answers 429 with the exact text body
    "rate limited"; an upstream (Google) quota 429 carries the provider's
    JSON body. This resolves to the honest user-facing message for each. */
-async function api429Message(res, localMsg) {
+export async function api429Message(res, localMsg) {
   let kind = 'upstream';
   try {
     const ct = String((res.headers && res.headers.get('content-type')) || '').toLowerCase();
@@ -526,7 +532,7 @@ document.addEventListener('pointerdown', e => {
 /* v290: torch toggle for a live camera viewfinder. Wires btn to the video
    track's torch constraint; the button stays hidden when unsupported.
    Returns a cleanup that extinguishes the torch, or null. */
-function ecTorchWire(video, btn) {
+export function ecTorchWire(video, btn) {
   try {
     var stream = video && video.srcObject;
     var track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
@@ -554,3 +560,42 @@ function ecTorchWire(video, btn) {
     };
   } catch (e) { return null; }
 }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (76 files — nearly every file in the tree) call these helpers and read these tables at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.esc = esc;
+window._uidSeq = _uidSeq;
+window.uid = uid;
+window.topEntries = topEntries;
+window.spiceVals = spiceVals;
+window.cardCanvas = cardCanvas;
+window._cardIconImg = _cardIconImg;
+window._cardIconStarted = _cardIconStarted;
+window.cardFooterIcon = cardFooterIcon;
+window.cardFooter = cardFooter;
+window.norm = norm;
+window.findCharByName = findCharByName;
+window.displayAuthorName = displayAuthorName;
+window.displayAuthors = displayAuthors;
+window.ICONS = ICONS;
+window.icon = icon;
+window.confirmModal = confirmModal;
+window.fmtDate = fmtDate;
+window.emptyState = emptyState;
+window.daysUntil = daysUntil;
+window.releaseCountdown = releaseCountdown;
+window.toast = toast;
+window.coverHTML = coverHTML;
+window.stars = stars;
+window.NET_TIMEOUT_MS = NET_TIMEOUT_MS;
+window.shareOrDownloadFile = shareOrDownloadFile;
+window.apiFetch = apiFetch;
+window.api429Message = api429Message;
+window.ecTorchWire = ecTorchWire;

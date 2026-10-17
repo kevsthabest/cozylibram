@@ -1,3 +1,9 @@
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* ---- overlay history (v220): Android's system back-gesture must close the
    topmost overlay instead of navigating away. The SPA keeps its routes in
    memory (no hash routing), so without this the back gesture pops the
@@ -23,12 +29,12 @@
    manager degrades silently: overlays still open/close, the gesture just
    can't reach them. ---- */
 
-let ovStack = []; // [{ token, slot, domCloser, pushed }]
-let ovSeq = 0;
-let ovSuppressPop = false; // our own history.back() is in flight — swallow its popstate
-let ovAdoptNext = false; // overlayReplace armed: next overlayOpened adopts instead of pushing
+export let ovStack = []; // [{ token, slot, domCloser, pushed }]
+export let ovSeq = 0;
+export let ovSuppressPop = false; // our own history.back() is in flight — swallow its popstate
+export let ovAdoptNext = false; // overlayReplace armed: next overlayOpened adopts instead of pushing
 
-function ovHistoryUsable() {
+export function ovHistoryUsable() {
   try {
     return typeof window !== 'undefined' && !!window.history &&
       typeof window.history.pushState === 'function' &&
@@ -39,7 +45,7 @@ function ovHistoryUsable() {
 // Register an opening overlay. Returns its token; the caller passes the
 // token to overlayClosed / overlayIsTop / overlayReplace. domCloser must do
 // DOM teardown ONLY (no history) — the manager owns the history entry.
-function overlayOpened(slot, domCloser) {
+export function overlayOpened(slot, domCloser) {
   const top = ovStack[ovStack.length - 1];
   if (top && top.slot === slot) {
     top.domCloser = domCloser; // same-slot re-render: keep the single entry
@@ -60,7 +66,7 @@ function overlayOpened(slot, domCloser) {
 // entry so a later back-gesture doesn't hit a phantom. A buried non-top close
 // leaves its entry inert (self-heals as one dead gesture) rather than
 // stealing a live overlay's entry via history.back().
-function overlayClosed(token) {
+export function overlayClosed(token) {
   const i = ovStack.findIndex(function (e) { return e.token === token; });
   if (i === -1) return false;
   const wasTop = i === ovStack.length - 1;
@@ -75,7 +81,7 @@ function overlayClosed(token) {
 
 // True when token is the visible overlay — Escape handlers use this so only
 // the topmost overlay answers Escape (no double-close through a stack).
-function overlayIsTop(token) {
+export function overlayIsTop(token) {
   const top = ovStack[ovStack.length - 1];
   return !!top && top.token === token;
 }
@@ -83,7 +89,7 @@ function overlayIsTop(token) {
 // Sequential handoff: tear the old overlay's DOM down first, then call
 // overlayReplace(oldToken, openFn) — openFn's overlay adopts the old one's
 // history entry. If openFn opens nothing, the leftover entry self-heals.
-function overlayReplace(oldToken, openFn) {
+export function overlayReplace(oldToken, openFn) {
   const i = ovStack.findIndex(function (e) { return e.token === oldToken; });
   const pushed = i !== -1 ? ovStack.splice(i, 1)[0].pushed : false;
   ovAdoptNext = pushed;
@@ -92,7 +98,7 @@ function overlayReplace(oldToken, openFn) {
 
 // System back-gesture (or any popstate): the browser already popped the
 // entry — close the topmost overlay's DOM and keep the URL where it is.
-function __overlayOnPopState() {
+export function __overlayOnPopState() {
   if (ovSuppressPop) { ovSuppressPop = false; return; }
   const top = ovStack.pop();
   if (top && typeof top.domCloser === 'function') {
@@ -107,9 +113,9 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 // overlays, but the Android back-gesture still needs somewhere to go —
 // without a history entry the gesture exits the app. A route registers a
 // 'route' slot entry whose closer navigates back; any go() consumes it.
-let routeBackToken = null;
-let routeBackFn = null;
-function routeBackOpened(onBack) {
+export let routeBackToken = null;
+export let routeBackFn = null;
+export function routeBackOpened(onBack) {
   // Re-renders (e.g. the series filter chips) keep the existing entry and
   // just refresh where it leads — only the first open pushes history.
   if (routeBackToken) { routeBackFn = onBack; return; }
@@ -120,12 +126,38 @@ function routeBackOpened(onBack) {
     try { fn(); } catch (e) { /* never break navigation */ }
   });
 }
-function routeBackClosed() {
+export function routeBackClosed() {
   if (routeBackToken) { overlayClosed(routeBackToken); routeBackToken = null; routeBackFn = null; }
 }
 
 // Test-only introspection (not part of the app contract).
-function __overlayHistoryReset() {
+export function __overlayHistoryReset() {
   ovStack = []; ovSuppressPop = false; ovAdoptNext = false;
 }
-function __overlayStackDepth() { return ovStack.length; }
+export function __overlayStackDepth() { return ovStack.length; }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers (24 files) call the overlay and route-back functions at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.ovStack = ovStack;
+window.ovSeq = ovSeq;
+window.ovSuppressPop = ovSuppressPop;
+window.ovAdoptNext = ovAdoptNext;
+window.ovHistoryUsable = ovHistoryUsable;
+window.overlayOpened = overlayOpened;
+window.overlayClosed = overlayClosed;
+window.overlayIsTop = overlayIsTop;
+window.overlayReplace = overlayReplace;
+window.__overlayOnPopState = __overlayOnPopState;
+window.routeBackToken = routeBackToken;
+window.routeBackFn = routeBackFn;
+window.routeBackOpened = routeBackOpened;
+window.routeBackClosed = routeBackClosed;
+window.__overlayHistoryReset = __overlayHistoryReset;
+window.__overlayStackDepth = __overlayStackDepth;
