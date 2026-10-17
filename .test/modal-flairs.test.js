@@ -83,7 +83,7 @@ const sigExpect = {
   amour: 'garland-rose', shamrock: 'garland-clover', pastel: 'garland-blossom',
   harvest: 'garland-wheat', solstice: 'garland-solstice',
   stormrider: 'stormrider-vine', briarthrone: 'briarthrone-vine',
-  voidsignal: 'voidsignal-vine', wisp: 'wisp-vine', 'wisp-night': 'wisp-vine',
+  voidsignal: 'voidsignal-vine', wisp: 'wisp-vine', 'wisp-night': 'wisp-night-vine',
 };
 let sigOk = true;
 for (const t of Object.keys(sigExpect)) {
