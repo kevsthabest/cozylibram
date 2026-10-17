@@ -33,6 +33,19 @@
  *   banner (the successor phase replaces that banner with a real header,
  *   so the column is the burn-down list for the banner).
  *
+ * One deliberate exception to "everything is derived": the documented
+ * bridge exceptions (BRIDGE_EXCEPTIONS, below). A file that stays
+ * bridge-fed by decision — not by omission — cannot be recognised from
+ * source: the tree shows a bridge, never the reason it stays. So the
+ * registry is the generator's one hand-recorded input, kept minimal on
+ * purpose (file, ADR number, a one-line reason, a one-line revisit
+ * condition), and it buys exactly two things in the output: a marker
+ * on the file's table row and a section after the table stating the
+ * reason and when the exception lapses. Everything else about the
+ * file's row — shape, imports, census counts — is derived exactly as
+ * before, and the census controls in the freshness suite are
+ * unaffected: an exception changes a file's status, never its count.
+ *
  * Determinism is a hard requirement, not a nicety: the freshness suite
  * (.test/module-map.test.js) byte-compares the committed map against a
  * fresh generation, so the same tree must always produce the same bytes.
@@ -53,6 +66,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const BANNER_MARKER = '/* ES MODULE (ES-modules migration, bridge-everything pass):';
+
+/* ------------------------------------------------------------------ */
+/* Documented bridge exceptions — the one hand-recorded input.         */
+/*                                                                     */
+/* Every fact the map prints is derived from source except this:       */
+/* whether a bridge is transitional (the normal case — it disappears   */
+/* when the file is wired) or deliberate. That is a decision, recorded */
+/* in an ADR, and no scan of the tree can recover it. Keep entries     */
+/* minimal and current: one per standing decision, removed in the      */
+/* same change that removes the exception itself. `reason` and         */
+/* `revisit` are single lines — they render verbatim into the map.     */
+/* ------------------------------------------------------------------ */
+
+const BRIDGE_EXCEPTIONS = {
+  '061-gbooks-key.js': {
+    adr: '014',
+    reason: 'Wiring its bridge reads into static imports would close an import cycle: `060-metadata.js` imports seedTropes from this file, while this file resolves normalizeVolume (from `060-metadata.js`), apiFetch (from `050-helpers.js`), track (from `065-analytics.js`), and autoDetectAxes, TROPE_FORMAT_JUNK and bookGenres (from `020-ratings.js`) through the bridge at call time.',
+    revisit: 'seedTropes moves out of this file, `060-metadata.js` stops importing from it, or phase 4 reshapes the import graph — the file then joins the normal per-file wiring pattern and this entry is removed.',
+  },
+};
 
 /* ------------------------------------------------------------------ */
 /* Tokenizer                                                           */
@@ -404,9 +437,39 @@ function buildMap(root) {
       pubsCell = total + ' (' + r.pubs.value.length + ' value, ' + r.pubs.accessor.length + ' accessor): '
         + names.map(x => x.acc ? x.nm + ' (accessor)' : x.nm).join(', ');
     }
+    /* A documented exception is marked on the row it exempts: the row
+     * stays fully derived, and the marker only points at the decision. */
+    const exception = BRIDGE_EXCEPTIONS[r.file];
+    if (exception && total > 0) pubsCell += ' (exception: ADR-' + exception.adr + ')';
     out.push('| `js/' + r.file + '` | ' + r.shape + ' | ' + purpose + ' | ' + cell(imports) + ' | ' + importedByCell + ' | ' + cell(pubsCell) + ' | ' + (r.banner ? 'yes' : 'no') + ' |');
   }
   out.push('');
+
+  /* The exceptions section. Bullets, not a table: the freshness suite
+   * counts table rows to prove one row per file, and an exception is
+   * not a file row. The preamble is fixed text; the entries render
+   * from the registry, sorted, so the section is as deterministic as
+   * the rest of the map. */
+  const exceptionFiles = Object.keys(BRIDGE_EXCEPTIONS).sort();
+  if (exceptionFiles.length) {
+    out.push('## Documented bridge exceptions');
+    out.push('');
+    out.push('Every other bridge row above is transitional: it disappears when');
+    out.push('its file is wired to static imports. The files below are bridge-fed');
+    out.push('by decision, not by omission — each entry names the ADR that records');
+    out.push('the decision. This section is the one part of the map that is not');
+    out.push('derived from source: an exception is a decision, and a decision');
+    out.push('cannot be derived. The registry lives in `scripts/module-map.mjs`');
+    out.push('(BRIDGE_EXCEPTIONS); everything in each file\'s table row above');
+    out.push('stays derived as before.');
+    out.push('');
+    for (const f of exceptionFiles) {
+      const ex = BRIDGE_EXCEPTIONS[f];
+      out.push('- `js/' + f + '` — ADR-' + ex.adr + ': ' + cell(ex.reason));
+      out.push('  The exception lapses when ' + cell(ex.revisit));
+    }
+    out.push('');
+  }
   return out.join('\n');
 }
 
