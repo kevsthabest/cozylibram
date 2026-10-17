@@ -1322,3 +1322,88 @@ baseline); 84 of 104 files converted.
 - **Nits — two body defects** (a stale Draft intro
   sentence; §3's overstated grep scope). Both patched
   post-merge.
+
+## Gate notes — PR #282 (v606)
+
+Recorded from the Security Advisor's gate on the second
+phase-3 PR, at the program manager's direction. The gate
+closed PASS_WITH_RISK; merged as d75fa70. Live at v606
+with 90 module tags. Line tally at v606: 56,254 js lines
+(+310 this PR, +3,365 cumulative against the 52,889
+baseline); 90 of 104 files converted.
+
+- **R1 repoint RULED SOUND** — circle-shield's js/230
+  tag pin. The gate extracted the two literals from the
+  test file itself and reproduced the 5-way mutation
+  battery: both tag forms pass; missing, wrong-src, and
+  attribute-swapped all fail.
+- **Accessor liveness re-proven 44/44** against the
+  real converted files: js/150's previewOpenId
+  (including the real openPreviewModal internal write,
+  observed by js/159's verbatim stash-guard reads) and
+  js/195's circFriend + circBookMap (js/195's verbatim
+  handler statements against js/243's verbatim read
+  expressions). The counterpart files js/159 and js/243
+  are byte-untouched in the diff, as the accessor
+  design requires.
+- **Reassignment inventory independently re-derived**
+  with a control-validated walker (controls: the known
+  positives found, APP_VERSION clean): exactly 14
+  reassigned exported bindings — 3 accessor-bridged
+  + 11 value-bridged — name-for-name and site-for-site
+  against the PR body. Nothing missing, nothing extra.
+- **The js/230 tag-flip incident is confirmed
+  resolved in the final tree.** The flip silently
+  dropped by a mid-build commit restructure was caught
+  by the composed-tree census at 89 tags and restored;
+  the gate verified the final index.html diff is
+  exactly 6 in-place flips with no reordering, and set
+  equality 104 = 104 = 104 holds.
+- **Low, standing pattern — the 11 value-bridged
+  bindings,** zero production readers proven by the
+  gate's own derivation. The caution is unchanged.
+- **Nit** — a stale Draft intro sentence in the PR
+  body; patched post-merge.
+
+## Gate notes — PR #284 (idb-storage harness fix)
+
+Recorded from the Security Advisor's gate on a
+test-infrastructure fix lane, at the program manager's
+direction. The gate closed with a clean PASS; merged
+as afbc479. Test-only: two lines in
+.test/idb-storage.test.js, no version bump.
+
+- **The suite was the tree's only absolute-path
+  harness binding.** It loaded its harness from the
+  main checkout by absolute path — a stale working tree
+  at v537, pre-dating the classicize harness entirely —
+  while the files it injects came from BOOKTOK_DIR.
+  Its passes at v606 were partly hollow: 31/31
+  reported alongside 810 swallowed SyntaxErrors in its
+  own log. The trap stayed invisible only because every
+  file the suite needs was still classic; it sprang
+  when the phase-3 batch-3 conversions (PR #283)
+  converted js/002 and js/020.
+- **The fix is two lines:** ROOT honours BOOKTOK_DIR
+  (falling back to the main checkout), and the harness
+  is required relatively — mirroring the sibling
+  suites' established pattern. No assertion changed.
+- **The gate reproduced every figure firsthand.**
+  Before the fix: the suite FAILs on the composed
+  tree (FATAL ReferenceError amid the SyntaxErrors)
+  and passes 31/31-with-810-SyntaxErrors on the
+  pristine base. After the fix: 31/31 with zero
+  SyntaxErrors on both trees, and the full suite
+  stands at 200/6 with idb-storage genuinely passing
+  for the first time.
+- **Sequencing:** landed before PR #283's release,
+  per the User's ruling of 2026-10-17 — the fix ships
+  in its own gated PR rather than riding the
+  conversion PR, whose body flagged the finding under
+  the STOP rule instead of absorbing it.
+- **Open residue (separate disposition):** 12 further
+  suites hardcode ROOT for file reads while binding
+  the harness relatively. They are not sprung by any
+  current conversion, but they carry the same
+  wrong-tree shape; normalizing them is a named
+  follow-up, not part of this fix.
