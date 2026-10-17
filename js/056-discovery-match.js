@@ -12,7 +12,7 @@
  * the bottom of this file, so this module loads early, before its
  * consumers. The matchers are pure functions of their arguments,
  * with one stated exception: inLibrary reads the app-global
- * `library` (owned by the classic js/000-core.js). Nothing here reads
+ * `library` (owned by the classic js/040-storage.js). Nothing here reads
  * another module's bridge-published names.
  *
  * The shared yardstick is looseTitleKey: "(…)" qualifiers,
