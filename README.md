@@ -22,7 +22,10 @@ New to this repo — human or agent, arriving cold? Read in this order:
 4. **[docs/es-modules-migration-plan.md](docs/es-modules-migration-plan.md)**
    — the ES-modules migration record; its appended gate notes are the
    decision history of the modular tree.
-5. **[js/README.md](js/README.md)** — module conventions and the per-file
+5. **[docs/runbook.md](docs/runbook.md)** — operations: how deploys,
+   versions, diagnosis, database work, and incidents are handled. Read it
+   when something is broken or about to be shipped.
+6. **[js/README.md](js/README.md)** — module conventions and the per-file
    table for the client code under `js/`.
 
 More routes join this block as each layer of the Legibility Standard
