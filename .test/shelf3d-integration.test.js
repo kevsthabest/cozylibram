@@ -317,6 +317,10 @@ const section12 = (async () => {
       return window.__origCreate(tag);
     };
   `);
+  // Pin the core count before the 2-core assertion: jsdom reports the
+  // host's own hardwareConcurrency, so unstubbed this assertion would
+  // pass or fail with the machine it runs on, not with the gate's rule.
+  run(`Object.defineProperty(window.navigator, 'hardwareConcurrency', { value: 2, configurable: true })`);
   ok('capable: WebGL present but a 2-core device -> gate closed (hardware-concurrency check)',
     run(`shelf3DCapable()`) === false);
   run(`Object.defineProperty(window.navigator, 'hardwareConcurrency', { value: 8, configurable: true })`);
