@@ -208,3 +208,33 @@ Never in the repo, never in docs, never in screenshots. Locations only:
   - [The title-write misdiagnosis, 2026-10-16](incidents/2026-10-16-title-write-misdiagnosis.md)
     — a frightening claim settled by an automated case: the write path
     was innocent; historical data was not.
+
+## 8. Continuous integration
+
+- **What runs.** `.github/workflows/ci.yml` fires on every pull request
+  to `main` and every push to `main`: `npm ci`, then
+  `node scripts/run-ci.mjs`. The runner executes the full suite
+  serially (the baseline's measurement condition — `CONSTRAINTS.md`),
+  then the version-pair check below. Job timeout is 45 minutes.
+- **The baseline rule.** The job is green only when the failing set
+  **equals** `.test/baseline-failures.txt` exactly. A new failure fails
+  it; a baseline file starting to pass also fails it — the list moves
+  only by named decision, never by drift. The runner's log prints the
+  suite counts, the failing set, the baseline status, and both
+  version-check results.
+- **The version-pair check.** In the same run: `APP_VERSION` must equal
+  the `CACHE` version (§2); and when a PR changes served app code
+  (the exact set is defined in `scripts/run-ci.mjs` — `js/`,
+  `index.html`, `sw.js`, `styles.css`, `assets/`, `img/`, `vendor/`,
+  `functions/`, and the root manifest/header/icon files), the pair must
+  differ from the PR base's pair. The check never demands a specific
+  number — numbers are allocated at rebase (§2) — only that the pair
+  moved. Docs-only and test-only PRs are exempt from the "moved" half.
+- **Updating the baseline.** Only as a named decision (ADR-012): one
+  PR updates the `CONSTRAINTS.md` table and
+  `.test/baseline-failures.txt` together, with the reason stated. A CI
+  run reporting "baseline now passing" is the prompt to open that PR —
+  never to edit the list inside an unrelated change.
+- **CI is not the merge gate.** Merges still run on the merge model
+  (tests at baseline + Security Advisor PASS — `CONTRIBUTING.md`). A
+  green CI job is evidence for the gate, not a substitute for it.
