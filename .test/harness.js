@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 
 function jsFiles() {
   return fs.readdirSync(path.join(APP_DIR, 'js'))

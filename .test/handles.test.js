@@ -20,7 +20,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 const read = (p) => fs.readFileSync(path.join(APP_DIR, p), 'utf8');
 
 let pass = 0, fail = 0;

@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const ROOT = process.env.BOOKTOK_DIR || path.join(__dirname, '..');
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 

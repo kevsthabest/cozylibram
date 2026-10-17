@@ -16,7 +16,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
-const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const ROOT = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 // pretendToBeVisual: jsdom otherwise reports document.hidden === true and
 // the engine's frame loop (which steps every tween) skips each frame.

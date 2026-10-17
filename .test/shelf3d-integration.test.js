@@ -15,7 +15,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const { classicize } = require('./harness');
 
-const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const ROOT = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;

@@ -122,7 +122,7 @@ ok('eligible: re-read thin portrait', eligible(Object.assign({ readCount: 2, dna
 // second, user's own third; the first source to claim a trope owns its slot
 // AND its provenance label. Drives the real portraitEnhance through its
 // window export with cloud / CharacterStore / document stubbed.
-const ROOT547 = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const ROOT547 = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 function jeq(name, a, b) {
   ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.stringify(b) + ')',
     JSON.stringify(a) === JSON.stringify(b));

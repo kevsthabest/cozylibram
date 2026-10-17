@@ -11,7 +11,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
 
-const APP_DIR = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
+const APP_DIR = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously', pretendToBeVisual: true });
 const window = dom.window;
@@ -330,7 +330,7 @@ const useAs = (uid) => runInWindow('cloudUser = ' + (uid ? '{ id: "' + uid + '",
   // facet (Advisor ruling 2026-10-15: marginalia IN, buddy reads OUT —
   // buddy visibility flows from the pair's per-book accept, not shelf
   // posture, so v528 keeps the 2-arg call by decision, not oversight).
-  // Negative control (PR #185 pattern): run this file with BOOKTOK_DIR
+  // Negative control (PR #185 pattern): run this file with COZYLIBRAM_DIR
   // at a pre-v578 checkout and exactly this section's pins must FAIL —
   // the migration file is absent there and schema.sql carries none of
   // it — while every earlier section still passes. readSql turns a
