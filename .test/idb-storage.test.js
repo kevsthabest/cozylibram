@@ -11,9 +11,9 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
-const ROOT = '/home/hatch/workspace/booktok';
+const ROOT = process.env.BOOKTOK_DIR || '/home/hatch/workspace/booktok';
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const { loadApp } = require('/home/hatch/workspace/booktok/.test/harness');
+const { loadApp } = require('./harness');
 
 // ---------------------------------------------------------------------------
 // Fake IndexedDB
