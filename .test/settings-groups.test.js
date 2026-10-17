@@ -89,8 +89,19 @@ ok('all pre-existing control ids still present (v590: th-rmentry retired with it
   ['th-accent', 'th-anim', 'bk-export', 'bk-import', 'im-pick',
    'ac-signup', 'ac-logout', 'ap-ver']
     .every(id => !!doc().getElementById(id)));
+// v416 guard, re-pinned 2026-10-17 (named decision; investigation §4): the
+// old magic count (=== 18) rotted as the catalogue grew. The expectation is
+// now the renderer's own rule (themeGalleryHTML, js/180): one card per
+// theme, except wisp-night — Wisp shows one card (Daybreak) and the Night
+// variant is picked via the toggle in its detail sheet. Keys are read from
+// the app under test, so a theme silently losing its card fails here by
+// key instead of hiding inside a wrong total.
+runInWindow(`window.__sgThemeKeys = THEMES.map(t => t.key);`);
 ok('v416: theme gallery replaced the th-theme dropdown',
-  !doc().getElementById('th-theme') && doc().querySelectorAll('.tcard').length === 18);
+  !doc().getElementById('th-theme') &&
+  window.__sgThemeKeys.every(k => k === 'wisp-night'
+    ? !doc().querySelector('.tcard[data-th="wisp-night"]')
+    : !!doc().querySelector('.tcard[data-th="' + k + '"]')));
 ok('S1: header says Settings with a sync-status line (no stat row)',
   (() => {
     const h2 = doc().querySelector('#view > .view-head h2');
