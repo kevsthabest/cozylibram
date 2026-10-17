@@ -1,3 +1,9 @@
+/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
+   a real ES module — loaded via <script type="module"> in index.html.
+   Its public surface is exported in place and republished on window by
+   the compatibility bridge at the bottom of this file, so classic
+   scripts keep resolving the same globals. See
+   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
 /* ---------------- AppLog: on-device diagnostic log (v167) ----------------
    A tiny ring buffer for troubleshooting: JS errors, sync push/pull
    outcomes, cover changes, and anything else worth tracing. Entries live
@@ -6,17 +12,17 @@
    admin-only in the Libram Observatory. Every method is throw-safe: a
    logging failure must never break the app it instruments. */
 
-const APP_LOG_MEM_MAX = 300;
-const APP_LOG_STORE_MAX = 150;
-const APP_LOG_KEY = 'cozylibram.applog.v1';
+export const APP_LOG_MEM_MAX = 300;
+export const APP_LOG_STORE_MAX = 150;
+export const APP_LOG_KEY = 'cozylibram.applog.v1';
 // v494 (#133): persisting on every log call meant a device-storage write per
 // save (scheduleCloudPush logs on every save) plus every sync event. Writes
 // are now throttled to one per APP_LOG_PERSIST_MS, with a flush on pagehide
 // so the last entries before unload still survive a reload.
 
-const APP_LOG_PERSIST_MS = 2000;
+export const APP_LOG_PERSIST_MS = 2000;
 
-const AppLog = {
+export const AppLog = {
   _mem: [],
   _levels: { info: 0, warn: 1, error: 2 },
   _lastPersist: 0,
@@ -113,3 +119,18 @@ try {
     } catch (x) {}
   });
 } catch (e) { /* very old webviews: skip the safety net */ }
+
+/* ---- Compatibility bridge (ES-module transition pattern — see
+   docs/es-modules-migration-plan.md §3) ----
+   A module's top-level names are module-private: nothing outside this
+   file can see them. The classic consumers across the tree (js/040-storage, js/090-sync, and 19 more files) call AppLog and read its constants at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups in classic
+   scripts resolve through the global object, so the caller needs no
+   changes. Module scripts are deferred, so the bridge is in place
+   before any consumer can run. Remove a name from this bridge only
+   when its last classic caller is gone. */
+window.APP_LOG_MEM_MAX = APP_LOG_MEM_MAX;
+window.APP_LOG_STORE_MAX = APP_LOG_STORE_MAX;
+window.APP_LOG_KEY = APP_LOG_KEY;
+window.APP_LOG_PERSIST_MS = APP_LOG_PERSIST_MS;
+window.AppLog = AppLog;
