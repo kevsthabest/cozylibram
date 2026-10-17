@@ -29,8 +29,10 @@ export function filteredBooks() {
     author: (a, b) => String((a.authors || [])[0] || '').localeCompare(String((b.authors || [])[0] || '')),
     rating: (a, b) => (b.myRating || b.publicRating || 0) - (a.myRating || a.publicRating || 0),
     progress: (a, b) => {
-      const pa = a.pageCount ? (a.progress || 0) / a.pageCount : 0;
-      const pb = b.pageCount ? (b.progress || 0) / b.pageCount : 0;
+      // Sort by percent read, whichever unit a book logs in — a percent
+      // divided by a print page count would rank audiobooks by fiction.
+      const pa = (progressPctOf(a) ?? 0) / 100;
+      const pb = (progressPctOf(b) ?? 0) / 100;
       return pb - pa;
     },
     added: (a, b) => String(b.dateAdded || '').localeCompare(String(a.dateAdded || '')),
@@ -56,9 +58,13 @@ export function coverFav(b) {
 }
 export function tileStatusBar(b) {
   let fill = '';
-  if (b.status === 'reading' && b.pageCount) {
-    const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
-    fill = '<i class="bt-fill" style="width:' + pct + '%"></i>';
+  if (b.status === 'reading') {
+    // The fill is the book's percent read, whichever unit it logs in:
+    // progressPctOf derives it from pages, or returns the stored
+    // percent itself for a percent-logging audiobook (whose progress
+    // is not a page number and may have no pageCount to divide by).
+    const pct = progressPctOf(b);
+    if (pct != null) fill = '<i class="bt-fill" style="width:' + pct + '%"></i>';
   }
   return '<span class="bt-statusbar status-' + esc(b.status) + '" title="' + esc(STATUS[b.status]) + '">' + fill + '</span>';
 }
@@ -70,10 +76,16 @@ export function bookCard(b, i) {
   if (b.myRating > 0) badges.push('<span class="badge">' + '♥'.repeat(b.myRating) + '</span>');
   const anim = animateIn ? ' rise" style="--d:' + Math.min((i || 0) * 40, 400) + 'ms' : '';
   let progHTML = '';
-  if (b.status === 'reading' && b.pageCount) {
-    const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
-    progHTML = '<div class="progress-line slim"><div class="fill" style="width:' + pct + '%"></div></div>' +
-      '<p class="card-progress">p. ' + (b.progress || 0) + ' / ' + b.pageCount + ' · ' + pct + '%</p>';
+  if (b.status === 'reading') {
+    const pct = progressPctOf(b);
+    if (pct != null) {
+      progHTML = '<div class="progress-line slim"><div class="fill" style="width:' + pct + '%"></div></div>' +
+        // A percent-logging audiobook's label is the percent alone —
+        // "p. 45 / 384" would present a percent as a page number.
+        (progressUnitOf(b) === 'pct'
+          ? '<p class="card-progress">' + pct + '%</p>'
+          : '<p class="card-progress">p. ' + (b.progress || 0) + ' / ' + b.pageCount + ' · ' + pct + '%</p>');
+    }
   }
   return '<div class="book-card' + anim + '" data-id="' + esc(b.id) + '">' +
     coverHTML(b, '', coverFav(b)) +
@@ -102,9 +114,9 @@ export function bookTile(b, i) {
   const stateBadge = sb
     ? '<span class="tile-badge st-' + badgeKey + '" title="' + sb[1] + '" aria-label="' + sb[1] + '">' + icon(sb[0]) + '</span>' : '';
   let pctPill = '';
-  if (b.status === 'reading' && b.pageCount) {
-    const pct = Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100)));
-    pctPill = '<span class="bt-pct">' + pct + '%</span>';
+  if (b.status === 'reading') {
+    const pct = progressPctOf(b);
+    if (pct != null) pctPill = '<span class="bt-pct">' + pct + '%</span>';
   }
   return '<div class="book-tile' + anim + '" data-id="' + esc(b.id) + '">' +
     '<div class="bt-cover">' + inner + coverFav(b) + stateBadge + pctPill + tileStatusBar(b) + '</div>' +

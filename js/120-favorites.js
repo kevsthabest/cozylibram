@@ -354,8 +354,11 @@ export function homeSublineFor(s) {
     let out = line;
     if (out.indexOf('{title}') >= 0) out = out.split('{title}').join(cutTitle(reading && reading.title));
     if (out.indexOf('{pct}') >= 0) {
-      const pc = reading && reading.pageCount > 0 ? Math.round(reading.progress / reading.pageCount * 100) : null;
-      if (pc === null) return null; // skip pct lines when pageCount is 0
+      // The percent comes from the seam, whichever unit the book logs
+      // in — page-derived for page books, the stored percent itself for
+      // percent-logging audiobooks (which may have no pageCount at all).
+      const pc = reading ? progressPctOf(reading) : null;
+      if (pc === null) return null; // skip pct lines when no percent can be derived
       out = out.split('{pct}').join(String(pc));
     }
     if (out.indexOf('{n}') >= 0) out = out.split('{n}').join(String(s.tbr));
@@ -491,7 +494,13 @@ export function readingHeroHTML() {
     const b = reading[0];
     const total = b.pageCount || 0;
     const cur = total ? Math.min(b.progress || 0, total) : (b.progress || 0);
-    const pct = total ? Math.round(cur / total * 100) : 0;
+    // A percent-logging audiobook's position is the percent itself —
+    // the page math would divide a percent by a print page count. A
+    // known length adds how much listening is left: a plain fact about
+    // the recording, never a pace.
+    const isPct = progressUnitOf(b) === 'pct';
+    const pct = isPct ? (progressPctOf(b) ?? 0) : (total ? Math.round(cur / total * 100) : 0);
+    const left = isPct ? audioLeftSecs(b) : null;
     html += '<div class="cr-hero">' +
       '<button class="cr-cover" data-cr="' + b.id + '" aria-label="Open ' + esc(b.title) + '">' +
       coverHTML(b, 'cr-cov') + '</button>' +
@@ -500,9 +509,11 @@ export function readingHeroHTML() {
       '<p class="cr-author">' + esc((b.authors || []).join(', ') || 'Unknown author') + '</p>' +
       (b.publicRating ? '<div class="cr-stars">' + stars(b.publicRating) + '</div>' : '') +
       '<div class="cr-prog"><span class="progress-line"><span class="fill" style="width:' + pct + '%"></span></span>' +
-      '<small>page ' + cur + ' of ' + (total || '\u2013') + ' \u00b7 ' + pct + '%</small></div>' +
-      '<div class="cr-stepper"><button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="1" aria-label="Log 1 page">+1</button>' +
-      '<button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="10" aria-label="Log 10 pages">+10</button>' +
+      '<small>' + (isPct
+        ? pct + '%' + (left != null ? ' \u00b7 about ' + fmtHMS(left) + ' left' : '')
+        : 'page ' + cur + ' of ' + (total || '\u2013') + ' \u00b7 ' + pct + '%') + '</small></div>' +
+      '<div class="cr-stepper"><button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="1" aria-label="Log 1 ' + (isPct ? 'percent' : 'page') + '">+1</button>' +
+      '<button class="btn ghost sm" data-stepcr="' + b.id + '" data-step="10" aria-label="Log 10 ' + (isPct ? 'percent' : 'pages') + '">+10</button>' +
       '<button class="btn sm" data-cr="' + b.id + '">Update Progress</button></div></div></div>';
     if (reading.length > 1) {
       html += '<div class="cr-also">' + reading.slice(1, 5).map(o =>
@@ -653,6 +664,24 @@ export function renderLibrary() {
       e.stopPropagation();
       const b = (typeof library !== 'undefined' ? library : []).find(x => x && String(x.id) === String(el.dataset.stepcr));
       if (!b) return;
+      if (b.format === 'audio') {
+        // Percent twin of the page stepper below: the steps are percent
+        // points of the recording, logged as percent from wherever the
+        // book currently sits — a book still on page history starts
+        // from the percent its pages work out to, and its history
+        // itself is never rewritten (§6).
+        const oldPct = progressUnitOf(b) === 'pct' ? (b.progress || 0) : (progressPctOf(b) ?? 0);
+        const newPct = Math.max(0, Math.min(100, oldPct + Number(el.dataset.step)));
+        b.progress = newPct;
+        b.progressUnit = 'pct';
+        b._mtime = Date.now();
+        if (typeof logProgress === 'function') logProgress(b, oldPct, newPct, 'pct');
+        if (typeof saveLibrary === 'function') saveLibrary();
+        if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+        renderLibrary();
+        toast(newPct + '%');
+        return;
+      }
       const total = b.pageCount || 0;
       const oldP = b.progress || 0;
       b.progress = total ? Math.max(0, Math.min(total, oldP + Number(el.dataset.step))) : Math.max(0, oldP + Number(el.dataset.step));
