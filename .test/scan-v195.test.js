@@ -6,8 +6,9 @@
 // the render while the scan panel is open.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });
@@ -60,7 +61,7 @@ const runInWindowRet = (js) => {
     runInWindowRet(`window.__renderCalls`) === 1);
 
   // 4. Regression: addBook's background paths must not call bare render().
-  const src = fs.readFileSync('/home/hatch/workspace/booktok/js/070-hardcover.js', 'utf8');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js/070-hardcover.js'), 'utf8');
   const bgSection = src.slice(src.indexOf('Background page-count fill'));
   ok('page-count fill background path uses renderKeepScan',
     /fillPageCount\(book\)\.then[\s\S]*?else renderKeepScan\(\)/.test(bgSection));

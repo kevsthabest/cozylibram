@@ -3,10 +3,11 @@
 // reload, the global error/rejection safety net, and the Logs tab render.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 const harness = require('./harness');
 
 function buildDom() {
-  const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
   const window = dom.window;
   window.fetch = async () => { throw new Error('no network in tests'); };
@@ -72,7 +73,7 @@ function ok(cond, name) {
     const parsed = JSON.parse(stored);
     ok(Array.isArray(parsed) && parsed.some(e => e.msg === 'push failed: boom'), 'entries persisted to localStorage');
     // simulate a reload: seed a fresh window's storage before the scripts load
-    const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     const dom2 = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
     dom2.window.localStorage.setItem('cozylibram.applog.v1', stored);
     dom2.window.fetch = async () => { throw new Error('no network in tests'); };
@@ -84,7 +85,7 @@ function ok(cond, name) {
 
   // --- 5: corrupt storage does not break the log ---
   {
-    const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
     dom.window.localStorage.setItem('cozylibram.applog.v1', 'not-json{{{');
     dom.window.fetch = async () => { throw new Error('no network in tests'); };

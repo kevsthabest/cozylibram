@@ -1,8 +1,9 @@
 // Edition picker (v210): edition listing, switching, persistence, UI.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const html = fs.readFileSync('/home/hatch/workspace/booktok/index.html', 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const dom = new JSDOM(html, { url: 'http://localhost:8000/', runScripts: 'dangerously' });
 const window = dom.window;
 window.matchMedia = () => ({ matches: false });
@@ -126,7 +127,7 @@ const tick = (n = 10) => new Promise(r => { const f = () => --n <= 0 ? r() : set
     window.__wiredSheets[0] === window.document.querySelector('#edition-picker .cover-picker'));
   ok('cover-picker CSS blocks pull-to-refresh chaining',
     /\.cover-picker\s*\{[^}]*overscroll-behavior:\s*contain/.test(
-      require('fs').readFileSync('/home/hatch/workspace/booktok/styles.css', 'utf8')));
+      require('fs').readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8')));
 
   // tapping a row switches the edition and closes the picker
   window.document.querySelector('#ep-list .ep-pick:not(.current)').click();

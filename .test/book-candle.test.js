@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { classicize } = require('./harness');
-const ROOT = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 
 function loadJS(rel, extra) {
   // R3 repoint (migration plan §9.3): js/238 is a real ES module since

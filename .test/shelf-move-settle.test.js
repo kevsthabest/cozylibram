@@ -15,8 +15,9 @@
 // zoneHit during the move), frames advance via the harness rAF polyfill.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
+const path = require('path');
 
-const ROOT = process.env.COZYLIBRAM_DIR || '/home/hatch/workspace/booktok';
+const ROOT = process.env.COZYLIBRAM_DIR || path.join(__dirname, '..');
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 // pretendToBeVisual: jsdom otherwise reports document.hidden === true and
 // the engine's frame loop (which steps every tween) skips each frame.
