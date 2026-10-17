@@ -13,19 +13,22 @@ New to this repo — human or agent, arriving cold? Read in this order:
 1. **[CONSTRAINTS.md](CONSTRAINTS.md)** — the quality bar. Read it before
    changing anything: the test baseline, the run discipline, and the rules
    that never bend silently.
-2. **[GLOSSARY.md](GLOSSARY.md)** — the app's naming language: what the
+2. **[CONTRIBUTING.md](CONTRIBUTING.md)** — how the agent team works: the
+   merge model, the gates, the roles, and the discipline every change
+   here follows. Read it before opening a PR.
+3. **[GLOSSARY.md](GLOSSARY.md)** — the app's naming language: what the
    features and concepts are called, so the code's words mean what you
    think they mean.
-3. **[docs/repo-legibility-spec.md](docs/repo-legibility-spec.md)** — the
+4. **[docs/repo-legibility-spec.md](docs/repo-legibility-spec.md)** — the
    Repo Legibility Standard: the standard this repo is being brought up
    to, and the programme building it, layer by layer.
-4. **[docs/es-modules-migration-plan.md](docs/es-modules-migration-plan.md)**
+5. **[docs/es-modules-migration-plan.md](docs/es-modules-migration-plan.md)**
    — the ES-modules migration record; its appended gate notes are the
    decision history of the modular tree.
-5. **[docs/runbook.md](docs/runbook.md)** — operations: how deploys,
+6. **[docs/runbook.md](docs/runbook.md)** — operations: how deploys,
    versions, diagnosis, database work, and incidents are handled. Read it
    when something is broken or about to be shipped.
-6. **[js/README.md](js/README.md)** — module conventions and the per-file
+7. **[js/README.md](js/README.md)** — module conventions and the per-file
    table for the client code under `js/`.
 
 More routes join this block as each layer of the Legibility Standard
