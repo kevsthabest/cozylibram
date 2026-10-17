@@ -1,5 +1,5 @@
 # ADR-003 — Bridge-publishing interop for ES modules; no build step
-Date: 2026-10-16 · Status: active
+Date: 2026-10-16 · Status: active (superseded in part by ADR-013 — census figure only)
 
 ## Context
 
