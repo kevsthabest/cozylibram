@@ -1,29 +1,37 @@
 'use strict';
 
-/* ---------------- Trope taxonomy (v151) ----------------
-   The canonical, versioned, genre-aware trope list. Curated by hand —
-   the LLM inference client (v152) may ONLY tag books with these ids;
-   anything else it returns is dropped. Ships with the app so tagging
-   prompts work offline and self-hosted copies get it for free.
-
-   The `tropes` Supabase table mirrors this list (supabase/tropes.sql);
-   community proposals live in `trope_proposals` until an admin approves
-   them into the canon (v155), at which point this file is re-exported.
-
-   Shape: { id, name, description, genres[] }
-   - id: stable slug, lowercase alnum + hyphens.
-   - genres: subset of TROPE_GENRES — used to filter the prompt per book
-     so a sci-fi blurb never sees romance-only tropes.
-   v207: TROPE_ALIASES / TROPE_EXCLUSIONS map model-emitted variants to
-   canonical ids (or veto them); tropeResolveId() is the only entry point
-   and returns canonical ids exclusively. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/156-trope-taxonomy.js — Trope taxonomy: the canonical,
+ * versioned, genre-aware trope list (95 tropes across 9 genres in
+ * TROPE_GENRES), curated by hand.
+ *
+ * This list is the closed vocabulary for trope tagging: the LLM
+ * inference client may only tag books with these ids, and anything
+ * else it returns is dropped — a closed list is what keeps tags
+ * comparable across books instead of drifting into free text. The
+ * list ships with the app so tagging prompts work offline and
+ * self-hosted copies get it for free. TROPE_TAXONOMY_VERSION stamps
+ * the bundled revision.
+ *
+ * The `tropes` Supabase table mirrors this list
+ * (supabase/tropes.sql); community proposals live in
+ * `trope_proposals` until an admin approves them into the canon, at
+ * which point this file is re-exported.
+ *
+ * Each entry is { id, name, description, genres[] }: the id is a
+ * stable slug (lowercase alnum + hyphens) that stored tags join on,
+ * and genres is a subset of TROPE_GENRES used to filter the prompt
+ * per book, so a sci-fi blurb never sees romance-only tropes.
+ *
+ * Free-text terms never enter storage as-is: TROPE_ALIASES maps
+ * model-emitted variants to canonical ids and TROPE_EXCLUSIONS vetoes
+ * variants too generic to auto-map; tropeResolveId() is the single
+ * resolution entry point and returns canonical ids exclusively
+ * (v207). Every helper here is pure, and callers may pass a merged
+ * live pool in place of the bundled list. The taxonomy is pinned by
+ * .test/trope-taxonomy.test.js. This file reads nothing from any
+ * other module; its consumers reach it through the window bridge at
+ * the bottom of this file.
+ */
 export const TROPE_TAXONOMY_VERSION = 1;
 
 export const TROPE_GENRES = [
@@ -330,20 +338,19 @@ export const TROPES = [
     genres: ['non-fiction', 'mystery-thriller'] },
 ];
 
-/* Pure: look up one trope by id. Returns the trope or null. */
 export function tropeById(id) {
   if (!id) return null;
   for (const t of TROPES) if (t.id === id) return t;
   return null;
 }
 
-/* ---------------- Aliases & exclusions (v207) ----------------
+/* ---------------- Aliases & exclusions ----------------
    The model doesn't always emit the exact canonical id — it writes
    "reverse harem" instead of "why-choose", "morally gray" instead of
    "morally-grey". Rather than dropping those near-misses (lost tags) or
    accepting free text (invented tags), validation resolves them here:
    aliases map a variant to its canonical id, exclusions veto a variant
-   that is too generic to auto-map.
+   that is too generic to auto-map. (v207)
 
    Only canonical ids ever leave the resolver — storage, claims, and the
    UI never see an alias. Live `tropes` table rows may carry their own
@@ -400,12 +407,14 @@ export const TROPE_ALIASES = {
 export const TROPE_EXCLUSIONS = {
   /* Terms deliberately never auto-mapped: considered, rejected as too
      generic. Documented here so nobody re-adds them as aliases.
-     v314: 'betrayal' removed — now a canonical trope in its own right. */
+     ('betrayal' was removed from this list when it became a canonical
+     trope in its own right, v314.) */
   'royalty': ['prince', 'princess'],
 };
 
-/* Pure: normalize a free-text trope term to slug form so "Enemies To
-   Lovers", "enemies_to_lovers" and "enemies-to-lovers" all match. */
+/* Slug form is the matching yardstick for every lookup below, so
+   "Enemies To Lovers", "enemies_to_lovers" and "enemies-to-lovers"
+   all compare equal. */
 export function tropeNormTerm(s) {
   return String(s || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -413,11 +422,13 @@ export function tropeNormTerm(s) {
     .replace(/^-+|-+$/g, '');
 }
 
-/* Pure: resolve a free-text term to a canonical trope id, or null.
-   Order: exact id → alias (unless excluded for that trope). Only
-   canonical ids are ever returned. `pool` defaults to the bundled list;
-   pass the merged live list (whose rows may carry aliases/exclusions)
-   and row-level arrays take precedence over the bundled maps. */
+/* Resolve a free-text term to a canonical trope id, or null.
+   Order matters: an exact id wins first, then an alias — unless the
+   term is excluded for that trope, because an exclusion is a veto on
+   auto-mapping, not a weaker alias. Only canonical ids are ever
+   returned. `pool` defaults to the bundled list; pass the merged
+   live list (whose rows may carry aliases/exclusions) and row-level
+   arrays take precedence over the bundled maps. */
 export function tropeResolveId(term, pool) {
   const n = tropeNormTerm(term);
   if (!n) return null;
@@ -433,9 +444,10 @@ export function tropeResolveId(term, pool) {
   return null;
 }
 
-/* Pure: tropes whose genres intersect the book's genres. Used to keep the
-   LLM prompt small and genre-relevant. Unknown genres are ignored.
-   v157: optional `pool` (live merged taxonomy); defaults to TROPES. */
+/* The genre filter exists to keep the LLM prompt small and
+   genre-relevant: only tropes whose genres intersect the book's are
+   offered. Unknown genres are ignored. Optional `pool` (the live
+   merged taxonomy) defaults to TROPES (v157). */
 export function tropesForGenres(genres, pool) {
   const want = new Set((genres || []).map(g => String(g).toLowerCase()));
   const list = pool || TROPES;
@@ -443,27 +455,29 @@ export function tropesForGenres(genres, pool) {
   return list.filter(t => t.genres.some(g => want.has(g)));
 }
 
-/* Pure: normalize a trope name for dedup ("Forced Proximity!" -> "forcedproximity"). */
+/* The dedup key strips everything but alphanumerics, so punctuation
+   and spacing differences can't split one trope into two
+   ("Forced Proximity!" -> "forcedproximity"). */
 export function tropeNameKey(name) {
   return String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
 }
 
-/* Pure: split a name into normalized words for fuzzy matching. */
 export function tropeWords(name) {
   return String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-/* Pure: fuzzy-ish match of a free-text name against the canonical taxonomy.
-   Returns { trope, score } for the best match, or null. Used by the proposal
-   flow to redirect near-duplicates ("forced closeness" -> forced-proximity).
-   score: 1 = exact name_key match, 0.9 = one contains the other,
-   otherwise word overlap ratio. */
-/* v157: optional `pool` so callers can fuzzy-match over the live (merged)
-   taxonomy instead of just the bundled file. Defaults to TROPES. */
+/* Fuzzy-ish match of a free-text name against the canonical taxonomy,
+   returning { trope, score } for the best match or null. The proposal
+   flow uses it to redirect near-duplicates ("forced closeness" ->
+   forced-proximity) instead of minting a second trope. score: 1 =
+   exact name_key match, 0.9 = one contains the other, otherwise word
+   overlap ratio; matches below 0.5 are rejected. Optional `pool` so
+   callers can fuzzy-match over the live (merged) taxonomy instead of
+   just the bundled file; defaults to TROPES (v157). */
 export function findSimilarTrope(name, pool) {
   const key = tropeNameKey(name);
   if (!key) return null;
@@ -486,9 +500,10 @@ export function findSimilarTrope(name, pool) {
   return best && bestScore >= 0.5 ? { trope: best, score: bestScore } : null;
 }
 
-/* Pure: build a collision-safe slug from a proposed name. `taken` is a Set
-   of ids already in use. "Forced Proximity" -> "forced-proximity",
-   "forced-proximity-2" on collision. */
+/* Build a collision-safe slug from a proposed name, because ids are
+   join keys and a mint must never overwrite an existing trope.
+   `taken` is a Set of ids already in use. "Forced Proximity" ->
+   "forced-proximity", "forced-proximity-2" on collision. */
 export function tropeSlugFor(name, taken) {
   const base = String(name || '').toLowerCase().normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -502,13 +517,16 @@ export function tropeSlugFor(name, taken) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The consumers — js/157-trope-inference.js, js/160-roulette.js, js/161-tropelab.js, js/198-discovery.js, js/238-book-candle.js and js/241-book-ambience.js — reach these
-   names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
+   file can see them. The consumers — js/157-trope-inference.js,
+   js/160-roulette.js, js/161-tropelab.js, js/198-discovery.js,
+   js/238-book-candle.js and js/241-book-ambience.js — still reach
+   these names as globals at runtime, so the bridge republishes
+   exactly the pre-conversion public surface on window. Bare-name
+   lookups resolve through the global object, so the callers need no
    changes. Module scripts are deferred, so the bridge is in place
    before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   when its last window-reading caller has wired the read as an
+   import (ADR-003). */
 window.TROPE_TAXONOMY_VERSION = TROPE_TAXONOMY_VERSION;
 window.TROPE_GENRES = TROPE_GENRES;
 window.TROPES = TROPES;

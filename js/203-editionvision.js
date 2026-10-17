@@ -1,25 +1,30 @@
 'use strict';
 
-/* ---- Edition vision core (v557): homography + auto-scan detection ----
-   The pure pixel/geometry half of edition-face capture, split out of
-   js/206-editioncapture.js so the vision unit tests reach it without
-   loading the whole capture wizard. Classic-script globals with the
-   same ec* names as before; this file must load BEFORE js/206, whose
-   capture sheet, corner editor and orbit flow call these functions.
-
-   Contents: homography solve/invert/apply + pixel warp, locked-rect
-   quad ops, the auto-scan detection pipeline (grayscale / blur / Sobel
-   / morphology / flood fill / components / convex hull / min-area
-   rect / scan tracker), the two canvas adapters, and the orbit
-   guide-ROI mapping. No UI and no session state — the only globals
-   are the functions below and the EC_ALPHA/EC_BETA corner tables. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/203-editionvision.js — Edition vision core: the pure
+ * pixel/geometry half of edition-face capture — homography and
+ * auto-scan book detection.
+ *
+ * This half was split out of js/206-editioncapture.js so the vision
+ * unit tests can reach it without loading the whole capture wizard
+ * (v557). It holds no UI and no session state: the only top-level
+ * values are the functions below and the EC_ALPHA / EC_BETA corner
+ * tables, and even the scan tracker is a plain object the caller
+ * owns and passes back in. Contents: homography solve / invert /
+ * apply plus the pixel warp, the locked-rectangle quad ops, the
+ * auto-scan detection pipeline (grayscale / blur / Sobel /
+ * morphology / flood fill / components / convex hull / min-area
+ * rect / scan tracker), the orbit guide-ROI mapping, and two canvas
+ * adapters (ecWarpCanvas, ecDataUrlToCanvas) — the only functions
+ * here that touch the DOM.
+ *
+ * js/206-editioncapture.js is the only consumer: its capture sheet,
+ * corner editor, and orbit flow call these functions through the
+ * window bridge at the bottom of this file, so this module must load
+ * before js/206 in index.html. The surface is pinned by
+ * .test/editioncapture.test.js and .test/orbit-roi.test.js. Apart
+ * from platform globals (ImageData, Uint16Array), this file reads
+ * nothing from any other module.
+ */
 
 /* ---------- homography ---------- */
 
@@ -119,7 +124,7 @@ export function ecQuadSize(quad, maxDim) {
   return [Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s))];
 }
 
-// ---------- locked-rectangle helpers (v274b) ----------
+// ---------- locked-rectangle helpers ----------
 // Books are always 90° rectangles, so the editor defaults to a locked
 // rectangle: corner drags resize (opposite corner anchored), a rotate
 // handle straightens tilt, dragging inside moves. Free-quad mode stays
@@ -181,7 +186,7 @@ export function ecSnapToRect(q) {
   });
 }
 
-/* ---------- auto-scan book detection (v278) ----------
+/* ---------- auto-scan book detection ----------
    Pure image pipeline (no DOM): downscaled grayscale in, rotated rectangle
    out. Finds the book as the largest interior region after morphological
    opening (erases cover text/partitions, keeps the book blob), fits a
@@ -223,8 +228,9 @@ export function ecSobel(g, w, h) {
   return { mag: mag, max: max };
 }
 
-// v297: one-pass separated Sobel (|gx|, |gy|) for projection-based
-// guided detection.
+// One-pass separated Sobel (|gx|, |gy|): the guided-detection code
+// projects the two gradient directions separately, so it needs them
+// unmixed (v297).
 export function ecSobelSep(g, w, h) {
   var gx = new Uint16Array(w * h), gy = new Uint16Array(w * h);
   for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
@@ -235,10 +241,11 @@ export function ecSobelSep(g, w, h) {
   return { gx: gx, gy: gy };
 }
 
-// v299: one-time precise crop for the burst frame. Aiming uses the guide
-// rect (stable); here we measure the book's actual edges once — no flicker
-// risk — and tighten the crop so the 3D view isn't padded with background.
-// Returns a quad in the input coords, or null (caller falls back to guide).
+// One-time precise crop for the burst frame. Aiming uses the guide
+// rect (stable); here we measure the book's actual edges once — no
+// flicker risk — and tighten the crop so the 3D view isn't padded
+// with background. Returns a quad in the input coords, or null
+// (caller falls back to guide). (v299)
 export function ecTightenQuad(gray, w, h, roi, tall) {
   var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
   var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
@@ -298,9 +305,10 @@ export function ecTightenQuad(gray, w, h, roi, tall) {
   return ecNormQuad([[x0 + xb[0], gy0], [x0 + xb[1], gy0], [x0 + xb[1], gy1], [x0 + xb[0], gy1]]);
 }
 
-// v298: region contrast — the strongest object-vs-surroundings signal over
-// centered candidate strips at several widths. A book bounds a region that
-// differs from what's beside it; texture (floor, wall) does not.
+// Region contrast — the strongest object-vs-surroundings signal over
+// centered candidate strips at several widths. A book bounds a region
+// that differs from what's beside it; texture (floor, wall) does
+// not. (v298)
 export function ecRegionContrast(gray, w, h, roi, tall) {
   var x0 = Math.max(0, Math.floor(roi.x)), x1 = Math.min(w - 1, Math.ceil(roi.x + roi.w));
   var y0 = Math.max(0, Math.floor(roi.y)), y1 = Math.min(h - 1, Math.ceil(roi.y + roi.h));
@@ -332,10 +340,11 @@ export function ecRegionContrast(gray, w, h, roi, tall) {
   return best;
 }
 
-// v298: book-likeness in the guide. A long straight edge alone is not enough
-// (wood floors have those). A book face shows FEW dominant parallel edges —
-// a spine usually two, a weak-contrast spine one strong edge bounding a
-// contrasting region — while texture shows many.
+// Book-likeness in the guide. A long straight edge alone is not
+// enough (wood floors have those). A book face shows FEW dominant
+// parallel edges — a spine usually two, a weak-contrast spine one
+// strong edge bounding a contrasting region — while texture shows
+// many. (v298)
 export function ecBookPresent(gray, w, h, roi, tall) {
   var se = ecSobelSep(ecBlur3(gray, w, h), w, h);
   var x0 = Math.max(1, Math.floor(roi.x)), x1 = Math.min(w - 2, Math.ceil(roi.x + roi.w));
@@ -583,11 +592,12 @@ export function ecPerimeterDensity(edges, w, h, quad) {
 
 export function ecDetectBookRect(gray, w, h, roi, guide) {
   var n = w * h;
-  // v297: with a guide ROI, verify a book-like edge structure is present and
-  // then trust the guide rect itself. The user framed the shot; the detector's
-  // job is presence, not re-measuring the outline (which background clutter
-  // corrupts). The rect is perfectly stable, so the stability tracker just
-  // gates on continued presence.
+  // With a guide ROI, verify a book-like edge structure is present
+  // and then trust the guide rect itself. The user framed the shot;
+  // the detector's job is presence, not re-measuring the outline
+  // (which background clutter corrupts). The rect is perfectly
+  // stable, so the stability tracker just gates on continued
+  // presence. (v297)
   if (roi && guide) {
     if (ecBookPresent(gray, w, h, roi, guide === 'tall')) {
       var qx = roi.x, qy = roi.y;
@@ -602,11 +612,9 @@ export function ecDetectBookRect(gray, w, h, roi, guide) {
   var t = Math.max(30, Math.min(110, se.max * 0.16));
   var th = ecThreshold(se.mag, w, h, t);
   if (th.count < n * 0.004 || th.count > n * 0.4) return null;
-  // Path 1: the book outline is the largest edge component (cover text
-  // stays as separate small components, or merges harmlessly inside).
-  // v296: with a region of interest (the on-screen guide), try the top
-  // components and take the first validated rect centered in the ROI, so
-  // background clutter outside the guide can no longer win.
+  // Path 1: the book outline is the largest edge component (cover
+  // text stays as separate small components, or merges harmlessly
+  // inside).
   var edges = ecDilate(th.bin, w, h, 3);
   var r = ecRectFromPixels(edges, ecLargestComponent(edges, w, h), edges, w, h);
   if (r) return r;
@@ -719,9 +727,10 @@ export function ecDataUrlToCanvas(dataUrl) {
 
 /* ---------- guide ROI math (orbit capture) ---------- */
 
-// v296: map the dashed guide's box to analysis pixels. The viewfinder shows
-// the video with object-fit: cover, so the guide rect is mapped through the
-// cover crop back onto the video frame. Pure math — unit tested.
+// Map the dashed guide's box to analysis pixels. The viewfinder
+// shows the video with object-fit: cover, so the guide rect is
+// mapped through the cover crop back onto the video frame. Pure
+// math — unit tested. (v296)
 export function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
   if (!gr || !vr || !gr.width || !vr.width || !vw || !vh) return null;
   var elA = vr.width / vr.height, vidA = vw / vh;
@@ -739,13 +748,14 @@ export function ecGuideRoiMath(gr, vr, vw, vh, aw, ah) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The one classic consumer, js/206-editioncapture.js,
-   calls these vision functions at runtime, so the bridge republishes
-   exactly the pre-conversion public surface on window. Bare-name
-   lookups in classic scripts resolve through the global object, so the
-   caller needs no changes. Module scripts are deferred, so the bridge
-   is in place before any consumer can run. Remove a name from this
-   bridge only when its last classic caller is gone. */
+   file can see them. Its one consumer, js/206-editioncapture.js,
+   still calls these vision functions as globals at runtime, so the
+   bridge republishes exactly the pre-conversion public surface on
+   window. Bare-name lookups resolve through the global object, so
+   the caller needs no changes. Module scripts are deferred, so the
+   bridge is in place before any consumer can run. Remove a name
+   from this bridge only when its last window-reading caller has
+   wired the read as an import (ADR-003). */
 window.EC_ALPHA = EC_ALPHA;
 window.EC_BETA = EC_BETA;
 window.ecAngDiff = ecAngDiff;

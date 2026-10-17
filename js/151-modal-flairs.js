@@ -1,56 +1,63 @@
 'use strict';
 
-/* ---- 151-modal-flairs.js: book-modal thematic flair catalog (v418) ----
-   Single source of truth for modal flairs: catalog entries, per-theme
-   selection, and injection into the book modal.
-
-   Catalog format per entry:
-     id        — stable key, matches Asset/flairs/<id>.svg
-     name      — display name
-     motif     — motif key
-     placement — 'vine' | 'corners' | 'divider' | 'garland' | 'watermark'
-     themes    — theme keys this flair matches; '*' = every theme (fallback)
-     file      — production SVG path (Asset/flairs/)
-     svg       — inline SVG string (mirrors file; inlined so currentColor
-                 tinting works — <img> can't inherit the page's currentColor)
-     seasonal  — seasonal-theme flair (garlands)
-     premium   — premium-tier flag. INTERNAL ONLY during alpha: everything
-                 stays unlocked and usable; no paywall enforcement yet. The
-                 flag establishes the entitlement structure for later
-                 (same rule as the shelf decorations).
-
-   Selection: flairFor(placement, theme) prefers an exact theme match, then
-   the '*' fallback; free entries win ties over premium. flairsForTheme()
-   resolves the full theme-matched set. Themes with no vine (fete, yuletide)
-   get none — their seasonal garlands carry the look.
-
-   Placements (all divider-proof by construction — nothing spans section
-   backgrounds, so the old full-height-strip slicing bug can't recur):
-     vine      — anchored inside .d-hero (position:relative), right side,
-                 bottom fade via CSS mask; compact on mobile
-     corners   — single book-plate ornament at the hero's top-left, clear of
-                 the vine and action buttons
-     divider   — hairline + centered motif in normal flow, injected between
-                 the Details panel's section blocks
-     garland   — hangs from the modal top edge (seasonal themes only)
-     watermark — huge, faint, centered, atmospheric (premium)
-
-   Behavior contract:
-   - Theme-matched flairs auto-apply when the book modal renders.
-   - Refresh on theme change (applyTheme calls ModalFlairs.refresh()).
-   - Containers are aria-hidden (decorative); injected SVG ids are
-     namespaced per instance so duplicate title/desc ids never collide.
-   - All art is static — reduced-motion safe by construction.
-   - Tinting: containers use color: var(--floral-tint); every asset is
-     currentColor-only, so user accent changes can't break a flair. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   The catalog's IIFE result is the file's whole public surface: it is
-   exported in place below and republished on window by the
-   compatibility bridge at the bottom of this file, so classic scripts
-   keep resolving the same global. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/151-modal-flairs.js — Book-modal thematic flair catalog and
+ * injector: the single source of truth for the modal's decorative
+ * flairs, how a theme's set is selected, and how flairs are injected
+ * when the book modal renders.
+ *
+ * The catalog holds 37 entries. An entry's `id` is its stable key
+ * and matches its production SVG's file name (under Asset/flairs/,
+ * or Asset/packs/ for the premium theme packs). The `svg` string
+ * inlines that file because tinting depends on it: an <img> cannot
+ * inherit the page's currentColor, and every asset is
+ * currentColor-only, so user accent changes can't break a flair.
+ * `placement` is 'vine' (15 entries), 'corners' (10), 'garland'
+ * (10), or 'watermark' (2); 'divider' remains in the PLACEMENTS list
+ * but carries no catalog entries, because divider motifs are retired
+ * — apply() injects plain hairlines between section blocks instead.
+ * `signature` marks the entries eligible to be a theme's one
+ * decorative statement, `seasonal` marks the seasonal garlands, and
+ * `premium` is an internal entitlement flag only during alpha:
+ * everything stays unlocked and usable, with no paywall enforcement
+ * yet (the same rule as the shelf decorations in js/218).
+ *
+ * Selection runs in two layers. flairFor(placement, theme) prefers
+ * an exact theme match, then the '*' fallback, with free entries
+ * winning ties over premium; flairsForTheme() resolves the full
+ * theme-matched set. Above that, signatureFor(theme) picks the
+ * theme's single signature flair: exact theme match only, a seasonal
+ * garland winning ties because the theme's seasonal identity is its
+ * signature, then free over premium (v426). Themes with no vine
+ * (fete, yuletide) get none — their seasonal garlands carry the look.
+ *
+ * Behavior contract for apply():
+ * - Flairs auto-apply when the book modal renders, and refresh()
+ *   re-applies when the theme changes while the modal is open
+ *   (applyTheme in js/010-theming.js calls ModalFlairs.refresh()).
+ * - The modal carries at most two decorative elements (the
+ *   restraint rule): the signature at full presence, plus corners
+ *   as the secondary element. A non-signature watermark is injected
+ *   only when there are no corners, and never duplicates the
+ *   signature — midnight and twilight get one moon, not two.
+ * - A garland signature is an in-flow banner above the Details
+ *   panel, so it physically cannot overlap the cover or nav chrome;
+ *   a vine anchors inside .d-hero; a watermark sits as a backdrop
+ *   at the modal's head.
+ * - Injected containers are aria-hidden (decorative), and each
+ *   injected SVG's title/desc ids are namespaced per instance so
+ *   repeated flairs never produce duplicate ids. All art is static,
+ *   so flairs are reduced-motion safe by construction. Tinting runs
+ *   through the containers' color (var(--floral-tint) in the sheet).
+ *
+ * One consumer-side read beyond the bridge: apply() reads the
+ * classic `getTheme` global from js/010-theming.js, typeof-guarded,
+ * defaulting to 'dark' — js/010 is a classic script, so getTheme is
+ * not a module bridge publication. The catalog and the signature
+ * mapping are pinned by .test/modal-flairs.test.js. The ModalFlairs
+ * namespace reaches its two window-reading consumers
+ * (js/010-theming.js and js/150-modal-discovery.js) through the
+ * bridge at the bottom of this file.
+ */
 export const ModalFlairs = (function () {
 
 var CATALOG = [
@@ -334,7 +341,8 @@ var CATALOG = [
 <circle cx="90" cy="120" r="1.8"/><circle cx="350" cy="220" r="1.8"/>
 </g>
 </svg>` },
-    /* ---- v423: premium theme packs (all premium:true, unlocked in alpha) ---- */
+    /* ---- premium theme packs: every entry premium:true but unlocked
+       during alpha, per the catalog rule in the header (v423) ---- */
     { id: 'stormrider-vine', name: 'Stormrider emblem vine', motif: 'dragon', placement: 'vine', signature: true,
       themes: ["stormrider"], file: 'Asset/packs/stormrider-vine.svg', premium: true,
       svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" role="img" aria-labelledby="t d"><title id="t">Stormrider emblem</title><desc id="d">A winged dragon with a winged sword, in one tint.</desc><g fill="currentColor" fill-opacity=".42"><path d="M72,60 L46,40 L8,32 L4,30 L14,46 Q18,52 20,66 Q24,56 30,74 Q36,62 42,88 Q50,72 58,100 Q66,84 74,98 Z"/><path d="M72,60 L46,40 L8,32 L4,30 L14,46 Q18,52 20,66 Q24,56 30,74 Q36,62 42,88 Q50,72 58,100 Q66,84 74,98 Z" transform="translate(160,0) scale(-1,1)"/><path d="M80,38 C71,50 70,74 74,98 C76,114 78,132 80,150 C82,132 84,114 86,98 C90,74 89,50 80,38Z"/><path d="M80,4 L85,12 L92,6 L88,18 L85,24 L84,36 L76,36 L75,24 L72,18 L68,6 L75,12Z"/><path d="M80,150 l4,4 4,-4 -4,12 -4,-12 -4,4z" fill-opacity="1"/></g><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".9"><path d="M72,60 L46,40 L8,32 M46,40 L20,66 M46,40 L42,88 M46,40 L58,100" /><path d="M72,60 L46,40 L8,32 M46,40 L20,66 M46,40 L42,88 M46,40 L58,100" transform="translate(160,0) scale(-1,1)"/></g><g fill="currentColor"><path d="M80,52 L84,64 L83,112 L80,122 L77,112 L76,64Z"/><path d="M80,64 L58,58 L46,62 L56,64 L42,70 L56,70 L46,78 L60,74 L72,70Z"/><path d="M80,64 L102,58 L114,62 L104,64 L118,70 L104,70 L114,78 L100,74 L88,70Z"/><circle cx="80" cy="50" r="4"/></g><g fill="currentColor"><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(18,118)"/><path d="M0,-5 Q0,0 5,0 Q0,0 0,5 Q0,0 -5,0 Q0,0 0,-5Z" transform="translate(142,120)"/><path d="M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4Z" transform="translate(30,18)"/><path d="M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4Z" transform="translate(130,20)"/></g></svg>` },
@@ -497,10 +505,11 @@ var CATALOG = [
     };
   }
 
-  // v426: one signature flair per theme — the modal's single decorative
-  // statement. Exact theme match. Seasonal garland wins ties (the theme's
-  // seasonal identity is its signature); otherwise free entries win over
-  // premium.
+  // One signature flair per theme — the modal's single decorative
+  // statement. Exact theme match only, because a signature borrowed
+  // from another theme would read as a bug, not a fallback. A
+  // seasonal garland wins ties (the theme's seasonal identity is its
+  // signature); otherwise free entries win over premium. (v426)
   function signatureFor(theme) {
     var exact = [];
     for (var i = 0; i < CATALOG.length; i++) {
@@ -552,14 +561,17 @@ var CATALOG = [
     return out;
   }
 
-  // v426: signature system — one flair per modal. Renders:
-  //  1. the theme's signature at full presence (vine in hero, garland as an
-  //     in-flow banner above the Details panel, watermark as backdrop),
-  //  2. the watermark faint as before (skipped when the watermark IS the
-  //     signature — midnight/twilight get one moon, not two),
-  //  3. plain hairline separators between section blocks — no motifs.
-  // Corners are retired from injection; the absolute top-edge garland is
-  // retired (seasonal garlands now live in the document flow).
+  // Signature system — one signature flair per modal (v426). Renders:
+  //  1. the theme's signature at full presence (vine in hero, garland
+  //     as an in-flow banner above the Details panel, watermark as
+  //     backdrop),
+  //  2. corners as the secondary element, when the theme has one,
+  //  3. the watermark faint as before — only when there are no
+  //     corners, and skipped when the watermark IS the signature
+  //     (midnight/twilight get one moon, not two),
+  //  4. plain hairline separators between section blocks — divider
+  //     motifs are retired, and the old absolute top-edge garland
+  //     with them (seasonal garlands now live in the document flow).
   function apply(root) {
     root = root || document;
     var modal = root.querySelector ? root.querySelector('#modal-root .modal') : null;
@@ -640,10 +652,13 @@ var CATALOG = [
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers, js/010-theming.js and js/150-modal-discovery.js, read the ModalFlairs namespace at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
+   file can see them. Its two consumers, js/010-theming.js and
+   js/150-modal-discovery.js, still read the ModalFlairs namespace
+   as a global at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups
+   resolve through the global object, so the callers need no
    changes. Module scripts are deferred, so the bridge is in place
    before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   when its last window-reading caller has wired the read as an
+   import (ADR-003). */
 window.ModalFlairs = ModalFlairs;
