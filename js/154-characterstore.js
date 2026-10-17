@@ -1,30 +1,49 @@
 'use strict';
 
-/* ---------------- Character store (v317) ----------------
-   CharacterStore: the Supabase data layer for pipeline-extracted book
-   characters (book_characters / characters / character_links), plus the
-   pure character helpers shared by the character surfaces.
-   Consumers: js/159-characters.js (character wiki), js/225-book-portrait.js,
-   js/050-helpers.js (normName) and the Character Lab UI in js/199-admin.js.
-   Data contract (from Ebook Processor):
-   - book_characters: work_id, name, role (protagonist/antagonist/supporting/minor),
-     description, relationships JSONB [{to: "<name>", type: "<type>"}]
-   - Relationship `to` is a NAME string, not an ID — resolve defensively.
-   - Relationship types: closed set of 10 (spouse/parent/child/sibling/friend/
-     enemy/mentor/colleague/neighbor/other); unknown -> "other".
-   - Each work's cast is isolated (no cross-book linking yet).
-   - Unresolved targets shown, never dropped.
-   Extracted from js/199-admin.js (architecture survey candidate 3):
-   reader-facing files depended on a store homed in an admin screen.
-   All names and behaviour unchanged; this file must load before
-   js/159, js/199 and js/225. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/154-characterstore.js — Character store: the Supabase data layer
+ * for pipeline-extracted book characters, plus the pure character
+ * helpers shared by the character surfaces (v317).
+ *
+ * CharacterStore reads and writes four tables: book_characters (one
+ * row per character per work), characters (the canonical people),
+ * character_links (which book rows are which canonical person, with
+ * the audit trail), and character_relationships (the reviewed edge
+ * table between canonical characters).
+ *
+ * Data contract (from the Ebook Processor):
+ * - book_characters: work_id, name, role, description,
+ *   relationships JSONB [{to: "<name>", type: "<type>"}].
+ * - A book row's role is one of CHAR_ROLES (protagonist / antagonist
+ *   / supporting / minor); listForWork coerces anything else to
+ *   'minor'.
+ * - Relationship `to` is a NAME string, not an ID — resolve it
+ *   defensively (charResolveTarget: exact match first, then
+ *   substring; unresolved targets are shown, never dropped).
+ * - Relationship types are the closed set CHAR_REL_TYPES (10:
+ *   spouse/parent/child/sibling/friend/enemy/mentor/colleague/
+ *   neighbor/other); charNormRelType maps anything unknown to
+ *   "other".
+ * - Each work's cast is isolated (no cross-book linking yet).
+ *
+ * Failure posture is asymmetric on purpose: reads fail soft (list
+ * methods return [], detail returns null, autoLinkSeries returns
+ * {error}), while writes throw when the cloud is unavailable, so a
+ * caller can never mistake a failed write for a saved one.
+ * Auto-linking is deliberately narrow: autoLinkSeries links only
+ * same-author + same-series + exact-normalized-name groups — see
+ * the comment on the method for the case that rule protects.
+ *
+ * Extracted from js/199-admin.js (architecture survey candidate 3):
+ * reader-facing files depended on a store homed in an admin screen.
+ * This file must load before js/159 and js/225. Its one outbound
+ * read is cloudClient, called at runtime from the classic
+ * js/090-sync.js; it reads no module's bridge-published names.
+ * Consumers: js/050-helpers.js (CharacterStore.normName, behind a
+ * typeof guard), js/159-characters.js and js/225-book-portrait.js
+ * read the surface as globals through the window bridge at the
+ * bottom of this file, and js/162-charlab.js imports six names
+ * from it.
+ */
 
 export const CHAR_ROLES = ['protagonist', 'antagonist', 'supporting', 'minor'];
 export const CHAR_REL_TYPES = ['spouse', 'parent', 'child', 'sibling', 'friend',
@@ -102,9 +121,8 @@ export const CharacterStore = {
     } catch (e) { return []; }
   },
 
-  /* Full unified view: canonical character + all linked book rows with
-     their per-work relationships. */
-  /* v377 Phase 2: Edge table methods. */
+  /* Relationship edge-table methods (character_relationships, the
+     reviewed canonical-to-canonical edges — Phase 2, v377). */
   async listRelationships(characterId) {
     const sb = await this._sb();
     if (!sb) return [];
@@ -159,6 +177,8 @@ export const CharacterStore = {
     } catch (e) { throw e; }
   },
 
+  /* Full unified view: canonical character + all linked book rows with
+     their per-work relationships. */
   async getCanonicalDetail(charId) {
     const sb = await this._sb();
     if (!sb) return null;
@@ -166,7 +186,7 @@ export const CharacterStore = {
       const { data: c, error } = await sb.from('characters')
         .select('id, name, description, aliases, source').eq('id', charId).maybeSingle();
       if (error || !c) return null;
-      // v320: links via character_links (audit trail)
+      // Links come via character_links, which carries the audit trail (v320)
       const { data: links, error: lerr } = await sb.from('character_links')
         .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, source_type, works(title, series))')
         .eq('character_id', charId);
@@ -248,14 +268,14 @@ export const CharacterStore = {
     if (error) throw error;
   },
 
-  /* v321: series-aware auto-link. Finds unlinked book_characters with
+  /* Series-aware auto-link. Finds unlinked book_characters with
      identical normalized names in works by the SAME author in the SAME
      series, and links them to a shared canonical character.
      This is the safe automation: same author + same series + exact name
      is strong evidence (the Pete Sebeck case). Cross-author and
      cross-series matches are NEVER auto-linked.
      Returns {linked: n, groups: m} — counts of rows linked and canonicals
-     created/touched. Never throws — returns {error} on failure. */
+     created/touched. Never throws — returns {error} on failure (v321). */
   async autoLinkSeries() {
     const sb = await this._sb();
     if (!sb) return { error: 'cloud unavailable' };
@@ -364,10 +384,10 @@ export const CharacterStore = {
           characterId: (link && link.character_id) || null,
           suggestedCharacterId: c.suggested_character_id || null,
           duplicateOf: c.duplicate_of || null,
-          // v577: the merge snapshot charMerge recorded on a merged row
-          // (null for active rows and for pre-v577 legacy merges).
+          // The merge snapshot charMerge recorded on a merged row
+          // (null for active rows and for pre-v577 legacy merges) (v577).
           mergeSnapshot: c.merge_snapshot || null,
-          // v402: first-appearance chapter from pipeline (null when unknown)
+          // First-appearance chapter from the pipeline (null when unknown) (v402)
           firstAppearance: (c.first_appearance_chapter != null && c.first_appearance_chapter !== '') ? c.first_appearance_chapter : null,
         };
       });
@@ -396,7 +416,7 @@ export function charNormRelType(t) {
   return CHAR_REL_TYPES.includes(t) ? t : 'other';
 }
 
-/* v317: quality gates (per Trope Review Agent).
+/* Quality gates (per Trope Review Agent) (v317).
    BLOCKED: generic kinship terms and obvious non-names — hidden by default.
    Duplicates: substring/similar names flagged for merge review. */
 export const CHAR_BLOCKED_NAMES = ['dad', 'mom', 'mother', 'father', 'parent',
@@ -433,13 +453,15 @@ export function charFindDuplicates(chars) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The consumers — js/050-helpers.js, js/159-characters.js, js/162-charlab.js and js/225-book-portrait.js — reach these
-   names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   file can see them. The consumers — js/050-helpers.js,
+   js/159-characters.js and js/225-book-portrait.js — still reach
+   these names as globals at runtime (js/162-charlab.js imports them
+   instead), so the bridge republishes exactly the pre-conversion
+   public surface on window. Bare-name lookups resolve through the
+   global object, so the callers need no changes. Module scripts are
+   deferred, so the bridge is in place before any consumer can run.
+   Remove a name from this bridge only when its last window-reading
+   caller has wired the read as an import (ADR-003). */
 window.CHAR_ROLES = CHAR_ROLES;
 window.CHAR_REL_TYPES = CHAR_REL_TYPES;
 window.CharacterStore = CharacterStore;

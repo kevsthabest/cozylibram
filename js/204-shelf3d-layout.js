@@ -1,25 +1,26 @@
-/* 204-shelf3d-layout.js — pure layout math for the 3D shelf: decoration
-   footprints, the shared case packer, and the camera fit / pan math.
-
-   Extracted from js/215-shelf3d.js: this zone was already pure (no THREE,
-   no DOM, no instance state) and already shared — js/217-shelf3d-view.js
-   slices the room into cases by simulating this packer through the
-   window.Shelf3D facade. Classic script, no modules, no side effects:
-   it only defines the globals below. Must load before js/215 and js/217
-   (index.html + sw.js precache carry it there).
-
-   Globals: SHELF_W, MAX_BOOKS (the two case constants the packer reads;
-   js/215's remaining dimensions stay in js/215), DECO_FOOTPRINTS,
-   shelf3dDecoFootprint, shelf3dPackCase, shelf3dFitDistance,
-   shelf3dClampPan, shelf3dFaceWidth, shelf3dFaceDepth, shelf3dFaceZ,
-   shelf3dCoverCrop. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/204-shelf3d-layout.js — Pure layout math for the 3D shelf:
+ * decoration footprints, the shared case packer, the camera
+ * fit / pan math, and the face-out display geometry.
+ *
+ * Everything here is pure — no THREE, no DOM, no instance state —
+ * which is what makes the packer shareable: shelf3dPackCase is the
+ * single source of truth for how books fill a case, the engine
+ * (js/215-shelf3d.js) lays out the visible case with it, and
+ * js/217-shelf3d-view.js slices the room into cases by simulating
+ * it, so case boundaries always match what the engine can actually
+ * show. Extracted from js/215 for exactly that sharing; this file
+ * must load before js/215 and js/217 (index.html + sw.js precache
+ * carry it there).
+ *
+ * Surface: SHELF_W and MAX_BOOKS (the two case constants the packer
+ * reads; js/215's remaining dimensions stay in js/215),
+ * DECO_FOOTPRINTS, shelf3dDecoFootprint, s3dDim, shelf3dPackCase,
+ * shelf3dFitDistance, shelf3dClampPan, shelf3dFaceWidth,
+ * shelf3dFaceDepth, shelf3dFaceZ, shelf3dCoverCrop. js/215 reads the
+ * packer and constants as globals through the window bridge at the
+ * bottom of this file; js/217 reads shelf3dFaceWidth the same way.
+ * This file reads nothing from any other module.
+ */
 export var SHELF_W = 10;                          // bookcase width (world units)
 export var MAX_BOOKS = 60;                        // ~20 per shelf x 3 shelves
 
@@ -161,14 +162,14 @@ export function shelf3dCoverCrop(imgW, imgH, aspect) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers (js/215-shelf3d.js,
-   js/217-shelf3d-view.js) read this layout math at runtime, so the
-   bridge republishes exactly the pre-conversion public surface on
-   window. Bare-name lookups in classic scripts resolve through the
+   file can see them. Its consumers (js/215-shelf3d.js,
+   js/217-shelf3d-view.js) still read this layout math as globals at
+   runtime, so the bridge republishes exactly the pre-conversion
+   public surface on window. Bare-name lookups resolve through the
    global object, so the callers need no changes. Module scripts are
    deferred, so the bridge is in place before any consumer can run.
-   Remove a name from this bridge only when its last classic caller
-   is gone. */
+   Remove a name from this bridge only when its last window-reading
+   caller has wired the read as an import (ADR-003). */
 window.SHELF_W = SHELF_W;
 window.MAX_BOOKS = MAX_BOOKS;
 window.DECO_FOOTPRINTS = DECO_FOOTPRINTS;

@@ -1,26 +1,32 @@
 'use strict';
 
-/* ---------------- discovery matching core ----------------
-   Extracted from js/150-modal-discovery.js (v556): the pure matchers that decide
-   whether an external row is already in the library, a duplicate of another
-   row, foreign-only, junk or a mashed-title record — and the loose title
-   key (v116) they share. They are a de-facto shared API (js/140 calls
-   dedupeExternal, js/155 calls inLibrary, js/198 mirrors looseTitleKey), so
-   they live in their own early module, loaded before all consumers. Pure
-   relocation: function names, signatures and behaviour unchanged. The only
-   impurity is inLibrary reading the app-global `library`. */
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/056-discovery-match.js — Discovery matching core: the matchers
+ * that decide whether an external search row is already in the
+ * library, a duplicate of another row, foreign-only, junk, or a
+ * mashed-title record.
+ *
+ * Extracted from js/150-modal-discovery.js (v556) because the matchers
+ * are a de-facto shared API: js/140-collections.js calls
+ * dedupeExternal, js/155-authors.js calls inLibrary, and js/150 itself
+ * reads seven of the eight — all as globals through the window bridge at
+ * the bottom of this file, so this module loads early, before its
+ * consumers. The matchers are pure functions of their arguments,
+ * with one stated exception: inLibrary reads the app-global
+ * `library` (owned by the classic js/040-storage.js). Nothing here reads
+ * another module's bridge-published names.
+ *
+ * The shared yardstick is looseTitleKey: "(…)" qualifiers,
+ * " - Series #N" suffixes and a leading "The " are noise when
+ * deciding whether two rows are the same book, so the key strips
+ * them before comparison (v116).
+ */
 
 export function normISBN(s) { return String(s || '').replace(/[^0-9X]/gi, ''); }
 
-// true when an external result is already on her shelves (ISBN or title+author match)
-// v116: title comparison uses the loose key so "Hallowed Ground - Flight &
-// Glory #4" matches a shelf entry titled just "Hallowed Ground".
+// True when an external result is already on her shelves (ISBN or
+// title+author match). Title comparison uses the loose key so
+// "Hallowed Ground - Flight & Glory #4" matches a shelf entry titled
+// just "Hallowed Ground" (v116).
 export function inLibrary(x) {
   const isbn = normISBN(x.isbn);
   const xt = looseTitleKey(x.title);
@@ -32,9 +38,9 @@ export function inLibrary(x) {
   });
 }
 
-// v116: loose title key for messy Open Library work titles — "(…)"
-// qualifiers, " - Series #N" suffixes and a leading "The " are noise when
-// deciding whether two rows are the same book.
+// Loose title key for messy Open Library work titles — "(…)"
+// qualifiers, " - Series #N" suffixes and a leading "The " are noise
+// when deciding whether two rows are the same book (v116).
 export function looseTitleKey(t, keepThe) {
   const k = String(t || '')
     .replace(/\s*\([^)]*\)/g, '')
@@ -46,8 +52,9 @@ export function looseTitleKey(t, keepThe) {
   return keepThe ? k : k.replace(/^the /, '');
 }
 
-// v116: dedupe that collapses subtitle/special-edition variants of the same
-// book ("Hallowed Ground - Flight & Glory #4" vs "Hallowed ground").
+// Dedupe that collapses subtitle/special-edition variants of the
+// same book ("Hallowed Ground - Flight & Glory #4" vs "Hallowed
+// ground") (v116).
 export function dedupeLoose(rows) {
   const seenTitle = new Set();
   const seenIsbn = new Set();
@@ -61,13 +68,15 @@ export function dedupeLoose(rows) {
   });
 }
 
-// v116: works Open Library only lists in another language — noise on an English shelf.
+// Works Open Library only lists in another language — noise on an
+// English shelf (v116).
 export function isForeignOnly(x) {
   const langs = x.languages || [];
   return langs.length > 0 && !langs.some(l => String(l).toLowerCase() === 'eng');
 }
 
-// v116: placeholder records, box sets and merch are not books she's missing.
+// Placeholder records, box sets and merch are not books she's
+// missing (v116).
 export function isJunkTitle(x) {
   const t = String(x.title || '');
   return t.indexOf(' / ') !== -1 ||
@@ -76,8 +85,9 @@ export function isJunkTitle(x) {
     /\btarot\b/i.test(t);
 }
 
-// v116: "Great and Precious Things The Last Letter" — two titles mashed into
-// one bad work record. Drop it when it decomposes into two other rows.
+// "Great and Precious Things The Last Letter" — two titles mashed
+// into one bad work record. Drop it when it decomposes into two
+// other rows (v116).
 export function isMashedTitle(x, all) {
   const k = looseTitleKey(x.title, true);
   if (!k) return false;
@@ -110,11 +120,11 @@ export function dedupeExternal(rows) {
    A module's top-level names are module-private: nothing outside this
    file can see them. The consumers — js/140-collections.js, js/150-modal-discovery.js and js/155-authors.js — reach these
    names at runtime, so the bridge republishes exactly the
-   pre-conversion public surface on window. Bare-name lookups in classic
-   scripts resolve through the global object, so the caller needs no
-   changes. Module scripts are deferred, so the bridge is in place
-   before any consumer can run. Remove a name from this bridge only
-   when its last classic caller is gone. */
+   pre-conversion public surface on window. Bare-name lookups resolve
+   through the global object, so the caller needs no changes. Module
+   scripts are deferred, so the bridge is in place before any consumer
+   can run. Remove a name from this bridge only when its last
+   window-reading caller has wired the read as an import (ADR-003). */
 window.normISBN = normISBN;
 window.inLibrary = inLibrary;
 window.looseTitleKey = looseTitleKey;

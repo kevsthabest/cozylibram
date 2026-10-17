@@ -1,15 +1,25 @@
 'use strict';
 
-/* v286: lightweight image-quality analysis for edition repository candidates.
-   No ML dependency: the capture is already perspective-corrected, so a small
-   canvas pass is enough to score the evidence consistently. */
-
-/* ES MODULE (ES-modules migration, bridge-everything pass): this file is
-   a real ES module — loaded via <script type="module"> in index.html.
-   Its public surface is exported in place and republished on window by
-   the compatibility bridge at the bottom of this file, so classic
-   scripts keep resolving the same globals. See
-   docs/es-modules-migration-plan.md (§3–§4) for the pattern. */
+/* js/209-editionquality.js — Edition image quality: lightweight,
+ * dependency-free scoring of edition-capture photos, so repository
+ * candidates can be compared on evidence instead of eyeballing.
+ *
+ * No ML: the capture is already perspective-corrected by the time a
+ * photo gets here, so a small canvas pass is enough.
+ * editionAnalyzeDataUrl(dataUrl) downscales the image to at most
+ * 360px on its long side and derives sharpness (Laplacian variance),
+ * exposure and glare (dark/bright clipping fractions) and resolution;
+ * perspective, coverage and stability are reported as the constant
+ * 100 — this pass does not measure them, and the weighted blend in
+ * editionQualityScore (weights sum to 1) counts them at full marks.
+ * The promise never rejects: a non-image input, a decode failure or
+ * any error resolves null, so a bad photo simply has no score.
+ *
+ * The two scorers are used inside this file; the surface other files
+ * reach is editionAnalyzeDataUrl, read as a global through the window
+ * bridge by js/206-editioncapture.js and js/208-editionassets.js.
+ * This file reads nothing from any other module.
+ */
 export function editionClampScore(n) {
   n = Number(n);
   if (!isFinite(n)) return 0;
@@ -119,13 +129,14 @@ export function editionAnalyzeDataUrl(dataUrl) {
 /* ---- Compatibility bridge (ES-module transition pattern — see
    docs/es-modules-migration-plan.md §3) ----
    A module's top-level names are module-private: nothing outside this
-   file can see them. The classic consumers (js/206-editioncapture.js,
-   js/208-editionassets.js) call these scorers at runtime, so the bridge
-   republishes exactly the pre-conversion public surface on window.
-   Bare-name lookups in classic scripts resolve through the global
-   object, so the callers need no changes. Module scripts are deferred,
-   so the bridge is in place before any consumer can run. Remove a name
-   from this bridge only when its last classic caller is gone. */
+   file can see them. Its consumers — js/206-editioncapture.js and
+   js/208-editionassets.js — still read editionAnalyzeDataUrl as a
+   global at runtime, so the bridge republishes exactly the
+   pre-conversion public surface on window. Bare-name lookups resolve
+   through the global object, so the callers need no changes. Module
+   scripts are deferred, so the bridge is in place before any consumer
+   can run. Remove a name from this bridge only when its last
+   window-reading caller has wired the read as an import (ADR-003). */
 window.editionClampScore = editionClampScore;
 window.editionQualityScore = editionQualityScore;
 window.editionAnalyzeDataUrl = editionAnalyzeDataUrl;
