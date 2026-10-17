@@ -6,6 +6,28 @@ library. The library lives on-device in IndexedDB (fully offline-capable);
 sign-in syncs it to Supabase for cloud backup, multi-device sync, and
 social shelves.
 
+## Start Here
+
+New to this repo — human or agent, arriving cold? Read in this order:
+
+1. **[CONSTRAINTS.md](CONSTRAINTS.md)** — the quality bar. Read it before
+   changing anything: the test baseline, the run discipline, and the rules
+   that never bend silently.
+2. **[GLOSSARY.md](GLOSSARY.md)** — the app's naming language: what the
+   features and concepts are called, so the code's words mean what you
+   think they mean.
+3. **[docs/repo-legibility-spec.md](docs/repo-legibility-spec.md)** — the
+   Repo Legibility Standard: the standard this repo is being brought up
+   to, and the programme building it, layer by layer.
+4. **[docs/es-modules-migration-plan.md](docs/es-modules-migration-plan.md)**
+   — the ES-modules migration record; its appended gate notes are the
+   decision history of the modular tree.
+5. **[js/README.md](js/README.md)** — module conventions and the per-file
+   table for the client code under `js/`.
+
+More routes join this block as each layer of the Legibility Standard
+lands — it only ever points at documents that exist.
+
 ## What it does
 
 **Add books, three taps or less**
@@ -90,7 +112,8 @@ social shelves.
   toasting; manual syncs report what changed
 
 **Feel**
-- 17 themes (10 core + 7 seasonal), 12 accent colors, cohesive
+- 23 themes, 12 accent colors (the `THEMES` / `ACCENTS` registries in
+  `js/010-theming.js` are the source of truth), cohesive
   line-art icon set, 3-step
   onboarding, thoughtful empty states, full PWA (installable, offline
   covers via a size-capped cache)
@@ -162,9 +185,11 @@ creates each:
 
 ## Tech notes
 
-- Single-page vanilla JS — 73 numbered scripts (`js/000-core.js`
-  … `js/224-curation-queue.js`), zero runtime dependencies, no build step
-  (current state; see the stack-policy note under "Run it locally" above).
+- Single-page vanilla JS — numbered modules under `js/`, one file per
+  feature area (running `js/000-core.js` … `js/244-gift-postal.js` today;
+  the per-file table lives in `js/README.md`), zero runtime dependencies,
+  no build step (current state; see the stack-policy note under
+  "Run it locally" above).
 - Book schema: `id, isbn, title, authors[], cover, description,
   pageCount, publishedDate, categories[], publicRating, ratingsCount,
   status, ratings{spice|scare|suspense|adventure}, myRating, tropes[],
@@ -174,9 +199,10 @@ creates each:
 - Service worker precaches the app; bump `APP_VERSION`
   (`js/181-appversion.js`) **and** the `sw.js` cache name together to
   force a full asset refetch (paired by `appversion.test.js`).
-- Test suite in `.test/` (153 files — 152 jsdom tests + `server_test.py`,
-  run with `node .test/<name>.test.js`; `package.json` has no test script) —
-  one feature per version, tests green + committed + pushed is the
+- Test suite in `.test/` (run with `node .test/<name>.test.js`;
+  `package.json` has no test script) — the suite's size, its baseline of
+  tolerated failures, and the run discipline live in `CONSTRAINTS.md`, not
+  here. One feature per version; tests green + committed + pushed is the
   definition of done.
 
 ## Direction

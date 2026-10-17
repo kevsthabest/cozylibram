@@ -1,9 +1,11 @@
 # Cozy Libram — client JS modules
 
 The app is plain, dependency-free JavaScript split into one file per feature.
-Files are classic scripts (no `import`/`export`, no build step) loaded in
-numeric order by `index.html` — classic scripts are the current state, and
-module adoption is a per-proposal decision, not a ban. They share one global scope, exactly as if
+Files load in numeric order by `index.html`: 95 are ES modules and 9 are
+classic scripts (phases 1–3 of the ES-modules migration, complete at v607;
+the record is `docs/es-modules-migration-plan.md`). Modules publish their
+surface on `window` via bridge blocks, so the remaining classic consumers
+see the same globals as before. They share one global scope, exactly as if
 they were still a single `app.js` — so load order matters: keep the zero-padded numeric
 prefixes (lexicographic sort must equal numeric order) and don't create circular top-level dependencies.
 
@@ -34,6 +36,8 @@ prefixes (lexicographic sort must equal numeric order) and don't create circular
 | `180-settings.js` | Settings tab: backup, page counts, keys, sync |
 | `190-wishlist.js` | Wishlist tab |
 | `200-boot.js` | `applyTheme(); boot(); initCloud();` |
+
+*This table is hand-maintained and incomplete (it stops at `js/200-boot.js`); the generated module map (`docs/module-map.md`) replaces it when the legibility programme's map step lands.*
 
 Conventions:
 - New feature → new numbered file (pick the next free number in its area).
