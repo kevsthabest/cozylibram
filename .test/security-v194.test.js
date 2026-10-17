@@ -123,9 +123,26 @@ ok('vendor: sources document zxing', /zxing-wasm@3\.1\.5/.test(read('js/vendor/S
 //      against the composed sw.js on the rebased tree — unchanged
 //      (supabase + three in VENDOR; quagga gone; zxing runtime-cached
 //      and absent from every precache list).
+//   #4 (2026-10-17, named decision): the pin stops matching source
+//      text and evaluates the VENDOR statement instead. The literal
+//      list became a computed expression at v279 (.map + .concat),
+//      so the old regex pin had been failing on a source shape that
+//      no longer exists — and it never absorbed the three.min.js →
+//      three.module.js rename from the UMD→ES-module migration,
+//      while the derived precache set itself stayed correct.
+//      Strictness unchanged: the derived list is deep-compared,
+//      whole and in order, against the three real paths; an added,
+//      dropped, or renamed entry fails exactly as a changed literal
+//      did (docs/baseline-failures-investigation.md §3).
 
 const sw = read('sw.js');
-ok('sw: vendor precache list present', /VENDOR = \['supabase\.min\.js', 'three\.min\.js'\]/.test(sw));
+// Movement #4 (history above): evaluate the VENDOR statement and
+// deep-compare the derived list — the pin's strictness applied to the
+// computed value, since the source has not been a literal since v279.
+const vendorList = new Function(
+  sw.match(/const VENDOR = [^\n]*\n/)[0].replace('const VENDOR =', 'return'))();
+ok('sw: vendor precache list present', JSON.stringify(vendorList) === JSON.stringify(
+  ['./js/vendor/supabase.min.js', './js/vendor/three.module.js', './vendor/d3.min.js']));
 ok('sw: vendor files in ASSETS', /\.concat\(JS, VENDOR, AVATARS/.test(sw));
 ok('sw: zxing absent from precache lists',
   !/VENDOR = \[[^\]]*zxing/.test(sw) && !/'zxing\/(share|es\/reader|zxing_reader)/.test(sw));
