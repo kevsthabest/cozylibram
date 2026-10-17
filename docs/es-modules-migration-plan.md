@@ -1407,3 +1407,47 @@ as afbc479. Test-only: two lines in
   current conversion, but they carry the same
   wrong-tree shape; normalizing them is a named
   follow-up, not part of this fix.
+
+## Gate notes — PR #295 (import-wiring loader, §9.4)
+
+Recorded from the Security Advisor's gate on the
+import-wiring phase's loader PR, at the program
+manager's direction. The gate closed PASS; merged as
+623db8c. Test-infrastructure only: the loader and its
+fixtures live under .test/, its suite
+(.test/harness-loader.test.js) joins the suite set —
+207 files, signature 201/6 — and no production file
+changed. No version bump.
+
+- **The §9.4 sketch's mechanism was substituted, and
+  the substitution RULED SOUND.** §9.4 sketched the
+  loader as Node's vm.SourceTextModule behind
+  --experimental-vm-modules. PR #295 instead implements
+  the loader inside the existing classicize pipeline:
+  loadJsFile (.test/harness.js) resolves a module's
+  relative imports to sibling files, evaluates the
+  graph into the jsdom window, and binds imports to
+  the window-published surface. The gate ruled PASS on
+  two grounds: (1) vm.SourceTextModule is unavailable
+  without the flag, and the flag is a process-launch
+  property no harness code can set — while the suite
+  contract is plain `node .test/<file>` at every
+  invocation site, so a flag-dependent loader cannot
+  run where the suites actually run; (2) window-surface
+  binding reproduces ADR-003's bridge-published
+  semantics exactly, accessor get/set forwarding
+  included, where a vm-module registry would create a
+  second binding model diverging from the surface
+  under test.
+- **classicize() retains its throw for direct
+  callers.** It strips markers only and refuses a file
+  carrying a static import or re-export, pointing at
+  the loader instead; the vm suites that call it
+  directly migrate their call sites to the loader per
+  cluster PR as the wiring proceeds — a deliberate,
+  disclosed step, never a silent change of meaning.
+- **No recorded decision was reversed.** §9.4's
+  requirement — a real loader, built and gated as its
+  own step before the first import lands — stands met;
+  only the sketched mechanism changed. ADR-003 is
+  honored, and no new ADR is required.
