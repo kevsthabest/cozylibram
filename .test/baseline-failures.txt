@@ -1,0 +1,12 @@
+# The named test baseline — the machine-readable mirror of the table in
+# CONSTRAINTS.md ("Pre-existing test-failure baseline"). One suite file
+# per line, repo-relative. CI (scripts/run-ci.mjs) fails a run whose
+# failing set differs from this list in EITHER direction: a new failure,
+# or a listed file starting to pass. This file changes only together
+# with the CONSTRAINTS.md table, in the same named-decision PR
+# (CONSTRAINTS.md rule 4; docs/adr/012-named-test-baseline.md).
+.test/community-corpus.test.js
+.test/security-v194.test.js
+.test/settings-groups.test.js
+.test/tropelab-review.test.js
+.test/v398-features.test.js

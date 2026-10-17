@@ -25,6 +25,8 @@ The suite is 178 files in `.test/`, each run standalone with `node`. Measured se
 
 These 5 are baseline: they pre-date your change, they are not yours to fix in passing, and a run is "green" when it shows exactly these 5 and no new failures. (`.test/modal-flairs.test.js` left the baseline by the User's named decision of 2026-10-17 — its signature-table pin was stale since the deliberate `wisp-vine` / `wisp-night-vine` split in `d8cfd17`; see `docs/baseline-failures-investigation.md` §2.)
 
+**Machine-readable copy:** the same list lives in `.test/baseline-failures.txt` (one file per line). CI (`.github/workflows/ci.yml`, runner `scripts/run-ci.mjs`) runs the suite on every PR and every push to main and fails the job when the failing set differs from that file in either direction — a new failure, or a baseline file starting to pass. This table is the human record; the `.txt` is its mechanical mirror. The two are updated together, in the same named-decision change (rule 4 below).
+
 ## Standing rules
 
 1. **COZYLIBRAM_DIR outside the main checkout.** Test suites default their ROOT to the main checkout. When running tests from a worktree or branch checkout, `export COZYLIBRAM_DIR=<that worktree>` first — otherwise you have tested main, not your change, and the result proves nothing.
