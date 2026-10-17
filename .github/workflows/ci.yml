@@ -1,0 +1,52 @@
+name: CI
+
+# Every PR to main and every push to main runs the full test suite plus
+# the version-pair check (scripts/run-ci.mjs). The job is green only
+# when the failing-suite set equals the named baseline in
+# .test/baseline-failures.txt exactly — a new failure fails it, and so
+# does a baseline file starting to pass (the baseline moves only by
+# named decision: CONSTRAINTS.md rule 4, docs/adr/012-named-test-baseline.md).
+# CI complements the Security Advisor gate; it never replaces it
+# (CONTRIBUTING.md, merge model).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The suite runs SERIALLY by design (parallel runs false-fail — see
+    # scripts/run-ci.mjs) and takes ~8–14 minutes locally; hosted
+    # runners differ, so the timeout leaves generous headroom.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the version-moved check diffs against the PR
+          # base / the push's before-SHA and reads the pair at that ref.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24 satisfies jsdom's engines in package-lock.json
+          # (^22.22.2 || ^24.15.0 || >=26) and matches the environment
+          # the baseline is measured in locally.
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test suite + version-pair check
+        env:
+          # PRs: the base branch tip the PR was opened against.
+          # Pushes: the commit main pointed at before this push
+          # (all-zeros on a first push — the runner skips the
+          # version-moved check then and still runs everything else).
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/run-ci.mjs
