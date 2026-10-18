@@ -25,7 +25,7 @@ const { execFileSync } = require('child_process');
 
 const SB = '/home/hatch/workspace/skills/supabase/bin/sb-query';
 const REF = 'dvhimjkrroxuatthiizc';
-const APP = '/home/hatch/workspace/booktok';
+const APP = path.join(__dirname, '..');
 const PROXY = (process.env.EMBED_BASE || 'https://cozylibram.pages.dev/api/embed').replace(/\/+$/, '');
 const LIMIT = parseInt(process.env.LIMIT || '0', 10);
 const PROBE = LIMIT === 1;

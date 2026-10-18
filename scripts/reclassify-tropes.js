@@ -26,7 +26,7 @@ const { execFileSync } = require('child_process');
 const SB = '/home/hatch/workspace/skills/supabase/bin/sb-query';
 const REF = 'dvhimjkrroxuatthiizc';
 const PROXY = 'https://cozylibram.pages.dev/api/trope-infer';
-const APP = '/home/hatch/workspace/booktok';
+const APP = path.join(__dirname, '..');
 const LIMIT = parseInt(process.env.LIMIT || '0', 10);
 const PROBE = LIMIT === 1;
 const PACE_MS = 2600; // under the proxy's 30 req/min rate limit
