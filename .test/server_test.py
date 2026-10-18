@@ -78,7 +78,11 @@ if not ok:
     raise SystemExit(1)
 
 server.load_token = lambda: ''
-conn.request('POST', '/api/hardcover', body=b'{"query":"query { x }"}',
+# Probe with a shape-valid query: since SEC-03 an out-of-allowlist root
+# field is rejected 403 before the token check, so the no-token 503 is only
+# reachable with an allowed shape. (Harness probe fix — the assertion,
+# "no token -> 503", is unchanged.)
+conn.request('POST', '/api/hardcover', body=b'{"query":"query { search }"}',
              headers={'Content-Type': 'application/json'})
 r = conn.getresponse()
 ok = r.status == 503
@@ -160,6 +164,77 @@ else:
     print(('PASS' if ok else 'FAIL') + ' - /cover-proxy fetches a real cover image (200)')
     if not ok:
         raise SystemExit(1)
+
+# --- SEC-01a blocklist vs path normalization (issue #338) ------------------
+# _path_blocked must judge the path translate_path() will resolve — the
+# unquoted, posixpath-normalized form. Against the raw request path,
+# duplicate-slash / dot-segment / parent-segment spellings of a protected
+# file slip past the exact-string checks and are served.
+_h = server.Handler.__new__(server.Handler)
+for _p in ['/server-config.json', '//server-config.json',
+           '/./server-config.json', '/x/../server-config.json',
+           '/a/../../server-config.json', '/%2e%2e/server-config.json',
+           '/server-config.json/', '/server-config.json?x=1',
+           '/.git', '/.git/config', '//.git/config', '/.git//HEAD',
+           '/x/../../.git/config',
+           '/.env', '/foo/.env', '/.env.local',
+           '/cert.pem', '/a/../key.key']:
+    ok = _h._path_blocked(_p) is True
+    print(('PASS' if ok else 'FAIL') + ' - blocklist blocks %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+for _p in ['/index.html', '/config.js', '/js/181-appversion.js',
+           '/.gitignore', '/styles.css']:
+    ok = _h._path_blocked(_p) is False
+    print(('PASS' if ok else 'FAIL') + ' - blocklist allows %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+
+# Live: a served directory holding the real files; every spelling must 404
+# without leaking a byte, for GET and HEAD, while normal files still serve.
+import tempfile
+from functools import partial
+_tmp = tempfile.mkdtemp(prefix='cozy-blocklist-')
+with open(os.path.join(_tmp, 'server-config.json'), 'w') as _f:
+    _f.write('SENTINEL-CONFIG')
+os.mkdir(os.path.join(_tmp, '.git'))
+with open(os.path.join(_tmp, '.git', 'config'), 'w') as _f:
+    _f.write('SENTINEL-GIT')
+with open(os.path.join(_tmp, 'ok.txt'), 'w') as _f:
+    _f.write('hello')
+_srv2 = server.ThreadingHTTPServer(
+    ('127.0.0.1', 0), partial(server.Handler, directory=_tmp))
+threading.Thread(target=_srv2.serve_forever, daemon=True).start()
+_conn2 = http.client.HTTPConnection(
+    '127.0.0.1', _srv2.server_address[1], timeout=5)
+
+
+def _req2(method, p):
+    _conn2.request(method, p)
+    _r = _conn2.getresponse()
+    return _r.status, _r.read()
+
+
+for _p in ['/server-config.json', '//server-config.json',
+           '/./server-config.json', '/x/../server-config.json',
+           '/%2e%2e/server-config.json',
+           '/.git/config', '//.git/config']:
+    _st, _body = _req2('GET', _p)
+    ok = _st == 404 and b'SENTINEL' not in _body
+    print(('PASS' if ok else 'FAIL') + ' - live GET %r -> 404, no leak' % _p)
+    if not ok:
+        raise SystemExit(1)
+_st, _body = _req2('HEAD', '//server-config.json')
+ok = _st == 404 and b'SENTINEL' not in _body
+print(('PASS' if ok else 'FAIL') + ' - live HEAD //server-config.json -> 404')
+if not ok:
+    raise SystemExit(1)
+_st, _body = _req2('GET', '/ok.txt')
+ok = _st == 200 and _body == b'hello'
+print(('PASS' if ok else 'FAIL') + ' - live GET /ok.txt still serves (200)')
+if not ok:
+    raise SystemExit(1)
+_srv2.shutdown()
 
 srv.shutdown()
 print('ALL SERVER TESTS PASSED')
