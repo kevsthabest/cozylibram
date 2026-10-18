@@ -1014,6 +1014,20 @@ export const RECO_DISMISS_KEY = 'reco_dismissed';
 export const RECO_DISMISS_CAP = 200;
 export let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
 
+// The localStorage fallback is partitioned per local user, like every
+// other legacy store (library, tombstones, up Next): a single shared
+// key let one account's dismissals be read — and, through js/229's
+// sync snapshot, unioned into the cloud reco_state — by the next
+// account on the same device (#374). The pre-partition shared key is
+// deliberately not adopted into any user's partition: whose
+// dismissals it holds is unknowable, and adopting it would be the
+// leak itself. A signed-in user's own set returns via their cloud
+// reco_state on the next user-state pull.
+export function recoDismissFallbackKey() {
+  const uid = (typeof localUid !== 'undefined') ? localUid : null;
+  return uid ? 'spicyshelves.' + RECO_DISMISS_KEY + '.' + uid : 'spicyshelves.' + RECO_DISMISS_KEY;
+}
+
 export async function recoDismissedSet() {
   try {
     if (typeof currentDb !== 'undefined' && currentDb) {
@@ -1022,7 +1036,7 @@ export async function recoDismissedSet() {
     }
   } catch (e) {}
   try {
-    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
+    const arr = JSON.parse(localStorage.getItem(recoDismissFallbackKey()) || '[]');
     recoDismissedMirror = Array.isArray(arr) ? arr.slice() : [];
   } catch (e) { recoDismissedMirror = []; }
   return new Set(recoDismissedMirror);
@@ -1040,7 +1054,7 @@ export async function recoPersistDismissals(arr) {
     }
   } catch (e) {}
   if (!saved) {
-    try { localStorage.setItem('spicyshelves.' + RECO_DISMISS_KEY, JSON.stringify(arr)); } catch (e) {}
+    try { localStorage.setItem(recoDismissFallbackKey(), JSON.stringify(arr)); } catch (e) {}
   }
 }
 
@@ -1100,7 +1114,7 @@ export function recoUnionDismissals(a, b) {
 export function recoDismissedKeys() {
   if (Array.isArray(recoDismissedMirror)) return recoDismissedMirror.slice();
   try {
-    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
+    const arr = JSON.parse(localStorage.getItem(recoDismissFallbackKey()) || '[]');
     return Array.isArray(arr) ? arr.filter(k => typeof k === 'string' && k) : [];
   } catch (e) { return []; }
 }
