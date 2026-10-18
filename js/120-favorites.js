@@ -175,7 +175,14 @@ export function renderUpNext() {
       animateIn = false; renderUpNext();
     }));
   document.querySelectorAll('.un-row [data-open]').forEach(btn =>
-    btn.addEventListener('click', () => openDetail(btn.dataset.open)));
+    btn.addEventListener('click', () => {
+      // The row's cover thumb is this open's cover element: the transition
+      // flies from the cover, as on every other surface. (Every row renders
+      // a .un-thumb — the cover img, or the no-cover placeholder.)
+      const thumb = btn.closest('.un-row').querySelector('.un-thumb');
+      if (thumb) openBookFromEl(thumb, btn.dataset.open);
+      else openDetail(btn.dataset.open);
+    }));
 }
 
 /* ---- spine colors from covers + pull-out animation ---- */
@@ -656,7 +663,13 @@ export function renderLibrary() {
   if (unm) unm.addEventListener('click', () => go('upnext'));
   // v122 home-section wiring
   document.querySelectorAll('[data-cr]').forEach(el =>
-    el.addEventListener('click', () => openDetail(el.dataset.cr)));
+    el.addEventListener('click', () => {
+      // The hero cover and the also-reading minis are covers — they hand
+      // off to the book-opening transition. The Update Progress button
+      // shares data-cr but is a text control, so it keeps opening plainly.
+      if (el.classList.contains('cr-cover') || el.classList.contains('cr-mini')) openBookFromEl(el, el.dataset.cr);
+      else openDetail(el.dataset.cr);
+    }));
   // v404: quick page stepper on the Currently Reading hero card — logs pages
   // without opening the dialog. Same save path as the modal stepper.
   document.querySelectorAll('[data-stepcr]').forEach(el =>

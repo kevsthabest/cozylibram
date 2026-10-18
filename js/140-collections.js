@@ -150,7 +150,7 @@ export function renderSeries() {
       renderSeries();
     }));
   document.querySelectorAll('.sr-cover').forEach(btn =>
-    btn.addEventListener('click', () => openDetail(btn.dataset.id)));
+    btn.addEventListener('click', () => openBookFromEl(btn, btn.dataset.id)));
   document.querySelectorAll('.sr-next').forEach(btn =>
     btn.addEventListener('click', () => openDetail(btn.dataset.id)));
   // The Finale (js/239): override + keepsake share wiring.
