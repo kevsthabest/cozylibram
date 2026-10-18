@@ -95,6 +95,21 @@ export function finaleMaxPos(books, rows) {
   return m;
 }
 
+/* How many distinct series positions the library actually holds.
+   Duplicate editions of one volume are ONE position: counting raw
+   records let a second copy of volume 1 substitute for a never-owned
+   volume 2 and still earn the seal. A record with no position counts
+   individually — with no position recorded there is nothing to
+   dedupe it against, and positions are metadata garnish. */
+export function finaleDistinctPositions(books) {
+  const seen = new Set();
+  (books || []).forEach(b => {
+    const p = finalePos(b);
+    seen.add(p == null ? 'id:' + b.id : 'pos:' + p);
+  });
+  return seen.size;
+}
+
 /* The verdict. listing is null (total unknown) or { total, maxPos } from
    a FOUND Hardcover listing. Returns 'complete' | 'caughtup' | null
    (null = no finale: not a series, not library-complete, or the wrong
@@ -105,7 +120,7 @@ export function finaleKindFor(books, finishedId, listing) {
   if (!fin || fin.status !== 'read') return null;
   if (!finaleAllRead(books)) return null;
   if (!finaleIsHighest(books, finishedId)) return null;
-  if (listing && listing.total != null && books.length >= listing.total &&
+  if (listing && listing.total != null && finaleDistinctPositions(books) >= listing.total &&
       (listing.maxPos == null || finalePos(fin) === listing.maxPos)) {
     return 'complete';
   }
