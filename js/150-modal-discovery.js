@@ -362,7 +362,10 @@ export async function loadCharsTabForBook(t) {
 export async function loadQuotesForBook(t) {
   try {
     const wrap = document.getElementById('m-quotes-wrap');
-    const box = document.getElementById('m-quotes');
+    // The work quotes get their own box: #m-quotes is the Notes tab's
+    // saved-quotes editor, and painting corpus quotes into it would
+    // clobber the reader's own quotes (and vice versa).
+    const box = document.getElementById('m-wquotes');
     if (!wrap || !box || typeof CharacterWiki === 'undefined') return;
     const workId = await resolveWork(t);
     if (!workId) return;
@@ -1414,6 +1417,9 @@ export function renderDetailModal(b, viaBook) {
     '<div id="m-chaptermeta"></div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div>' +
     '<p class="note" style="margin:6px 0 0">Only the axes that fit this book are shown.</p></div>' +
+    // v337: Memorable quotes — the work's quotes from the corpus, painted
+    // by loadQuotesForBook below; the wrap stays hidden until quotes land.
+    '<div class="field" id="m-quotes-wrap" style="display:none"><label>' + icon('quotes') + ' Memorable quotes</label><div id="m-wquotes"></div></div>' +
 
     // Variant A §2: Status & Ownership — one card. The v405 ownership
     // accordion dissolves; the ownership summary lives in the label row
