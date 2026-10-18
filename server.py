@@ -1835,7 +1835,15 @@ class Handler(SimpleHTTPRequestHandler):
             with _COVER_OPENER.open(req, timeout=15) as r:
                 data = r.read(4 * 1024 * 1024 + 1)
                 ctype = r.headers.get('Content-Type', 'application/octet-stream')
-            if not ctype.split(';')[0].strip().lower().startswith('image/'):
+            base_type = ctype.split(';')[0].strip().lower()
+            # (#345 parity): image/svg+xml starts with image/ but is not
+            # a cover image — it is an XML document that can carry
+            # script, and served from this origin a top-level navigation
+            # to the proxy URL would run that script where the app's
+            # session lives. Every allowlisted provider serves raster
+            # covers, so SVG is refused with the non-images.
+            if not base_type.startswith('image/') \
+                    or base_type == 'image/svg+xml':
                 self.send_error(502, 'not an image')
                 return
             if len(data) > 4 * 1024 * 1024:
@@ -1844,6 +1852,13 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Cache-Control', 'public, max-age=86400')
+            # (#345 parity) defense in depth for any future
+            # document-like image type: nosniff pins the declared
+            # type, and a sandboxed CSP makes a top-level navigation
+            # to this URL land in an opaque origin with script
+            # disabled. Subresource <img>/fetch use ignores both.
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Content-Security-Policy', 'sandbox')
             self.send_header('Content-Length', str(len(data)))
             self.end_headers()
             self.wfile.write(data)

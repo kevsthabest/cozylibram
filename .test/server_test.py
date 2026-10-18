@@ -693,9 +693,9 @@ _check_api('trope-infer: oversize message content still rejected (400)',
 # oversize with 502 'image too large'. The upstream fetch is faked
 # (a 5 MiB image body); DNS is the harness's public-IP fake.
 class _FakeImgResp:
-    def __init__(self, body):
+    def __init__(self, body, ctype='image/jpeg'):
         self._b = body
-        self.headers = {'Content-Type': 'image/jpeg'}
+        self.headers = {'Content-Type': ctype}
 
     def read(self, n=-1):
         return self._b if n is None or n < 0 else self._b[:n]
@@ -708,11 +708,12 @@ class _FakeImgResp:
 
 
 class _FakeImgOpener:
-    def __init__(self, body):
+    def __init__(self, body, ctype='image/jpeg'):
         self._b = body
+        self._ctype = ctype
 
     def open(self, req, timeout=None):
-        return _FakeImgResp(self._b)
+        return _FakeImgResp(self._b, self._ctype)
 
 
 _COVER_URL = ('/cover-proxy?url=' + urllib.parse.quote(
@@ -741,12 +742,34 @@ try:
           + ' - cover-proxy: 5 MiB image -> 502, not a truncated 200')
     if not ok:
         raise SystemExit(1)
+    # (#390, Pages #345 parity): image/svg+xml starts with image/ but is
+    # an XML document that can carry script — refused with the
+    # non-images, never served inline from this origin.
+    server._COVER_OPENER = _FakeImgOpener(
+        b'<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        'image/svg+xml')
+    _st, _b = _api('GET', _COVER_URL)
+    ok = _st == 502
+    print(('PASS' if ok else 'FAIL')
+          + ' - cover-proxy: SVG refused (502), not served inline')
+    if not ok:
+        raise SystemExit(1)
     _small = b'\xff\xd8' + b'y' * 1024
     server._COVER_OPENER = _FakeImgOpener(_small)
-    _st, _b = _api('GET', _COVER_URL)
-    ok = _st == 200 and _b == _small
+    _c = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+    _c.request('GET', _COVER_URL)
+    _r = _c.getresponse()
+    _b = _r.read()
+    # (#390): served images also carry the Pages protective headers —
+    # nosniff pins the declared type, sandboxed CSP neutralizes any
+    # future document-like type reached by top-level navigation.
+    ok = _r.status == 200 and _b == _small \
+        and _r.getheader('X-Content-Type-Options') == 'nosniff' \
+        and _r.getheader('Content-Security-Policy') == 'sandbox'
+    _c.close()
     print(('PASS' if ok else 'FAIL')
-          + ' - cover-proxy: under-cap image served complete')
+          + ' - cover-proxy: under-cap image served complete, '
+            'with protective headers')
     if not ok:
         raise SystemExit(1)
 finally:
