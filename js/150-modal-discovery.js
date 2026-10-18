@@ -753,8 +753,10 @@ export function wireSeriesRows(scope) {
     el.addEventListener('click', () => openBookFromEl(el, el.dataset.book)));
 }
 /* js/070 calls this after background enrichment lands more data, so the
-   strip (and the series position in the header) can repaint without a
-   reopen. Modal Variant A: the strip lives in #m-series-wrap. */
+   strip can repaint without a reopen. Modal Variant A: the strip lives
+   in #m-series-wrap and carries the position on its own badges — the
+   pre-Variant-A header position element this once also painted is
+   gone, and nothing here writes to it anymore. */
 export function refreshSeriesInline(book) {
   if (!book) return;
   const wrap = document.getElementById('m-series-wrap');
@@ -763,9 +765,6 @@ export function refreshSeriesInline(book) {
     paintSeriesStrip(book);
     fillSeriesStrip(book);
   }
-  const hdrPos = document.getElementById('d-pos');
-  if (hdrPos) hdrPos.textContent = (book.series && book.series.position != null && book.series.position !== '')
-    ? ' · Book ' + book.series.position : '';
 }
 
 export function openCollection(kind, name, fromId) {

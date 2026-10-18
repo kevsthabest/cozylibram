@@ -73,10 +73,11 @@ export async function fillPageCount(book) {
   return true;
 }
 
-// Backfill every book missing a page count (Settings → Library tools).
 // Backfill every book missing a page count. v476: opts.quiet suppresses
 // toasts for the automatic boot sweep — the user never asked for this,
-// so it shouldn't announce itself.
+// so it shouldn't announce itself. Progress reaches the user through
+// the toast (the Settings note element this once wrote to was removed
+// with its host UI in v476, so the toast is the only channel now).
 export async function backfillPageCounts(paceMs, opts) {
   var quiet = !!(opts && opts.quiet);
   var say = function (m) { if (!quiet) toast(m); };
@@ -84,13 +85,10 @@ export async function backfillPageCounts(paceMs, opts) {
   const targets = library.filter(b => !(b.pageCount > 0) && b.isbn);
   if (!targets.length) { say('All books already have page counts ✨'); return 0; }
   let found = 0;
-  const note = document.getElementById('pc-backfill-note');
   for (let i = 0; i < targets.length; i++) {
-    if (note) note.textContent = 'Looking up ' + (i + 1) + ' / ' + targets.length + '…';
     try { if (await fillPageCount(targets[i])) found++; } catch (e) { /* next */ }
     if (paceMs && i < targets.length - 1) await new Promise(r => setTimeout(r, paceMs));
   }
-  if (note) note.textContent = 'Done — found page counts for ' + found + ' of ' + targets.length + ' books.';
   say('📄 Found ' + found + ' page counts');
   render();
   return found;
