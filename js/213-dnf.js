@@ -75,7 +75,10 @@ export function saveDnfReason(b, reasonKey) {
   // Local-first: store on the book object (syncs via existing book sync)
   b.dnfReason = reasonKey;
   b.dnfAt = new Date().toISOString();
-  const progressPct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : null;
+  // Clamped 0-100: progress can exceed pageCount after an edition
+  // switch shrinks the count, and the stored percent must stay a
+  // percent (a raw ratio persisted 125 here).
+  const progressPct = b.pageCount ? Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100))) : null;
   if (progressPct != null) b.dnfProgressPct = progressPct;
   saveLibrary();
 

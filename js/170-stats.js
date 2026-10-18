@@ -1234,7 +1234,10 @@ export function renderStats() {
   const reading = library.filter(b => b.status === 'reading');
   const nowReading = reading.length
     ? '<div class="stat-sub">' + icon('reading') + ' Currently reading</div><div class="now-reading">' + reading.map(b => {
-        const pct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : 0;
+        // Clamped 0-100 like progressPctOf (js/040): an edition switch
+        // can shrink pageCount under an existing progress, and the raw
+        // ratio would render "400 / 320 pages · 125%" with a 125% bar.
+        const pct = b.pageCount ? Math.max(0, Math.min(100, Math.round((b.progress || 0) / b.pageCount * 100))) : 0;
         // Percent-unit books show their percent (and always have a bar,
       // even with no print page count to divide by); page books as before.
       const pctv = progressPctOf(b);
