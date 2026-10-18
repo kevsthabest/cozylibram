@@ -63,9 +63,14 @@ function stableJson(v) {
 // newer _mtime rides along with the assign so both sides agree on the winner.
 // (New books take the push path in mergeCloudBooks, which marks them dirty
 // explicitly — they're new to this device and must persist.)
+// The book is marked persist-only instead: the local store still holds the
+// pre-merge copy, so the persist plan must write this book even though it
+// is not a local edit — with dirty as the plan's only signal, merged
+// updates never reached the store and a restart reverted them (#334).
 function mergeAssign(lb, rd) {
   Object.assign(lb, rd);
   unmarkDirty(lb);
+  markPersistOnly(lb);
 }
 // Merge cloud rows into the local library. Newer _mtime wins conflicts.
 // Rows for tombstoned books are skipped — that's the deletion propagating
