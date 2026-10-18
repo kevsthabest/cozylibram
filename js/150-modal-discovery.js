@@ -950,6 +950,15 @@ export const MODAL_AUTOSAVE_MS = 700;
 // pending debounce timer can never write one book's staged values into
 // another book's record, and no edit is lost on the hop.
 export let modalFormFlush = null;
+// The live render's form-listener controller. Every render registers
+// delegated input/change/focusout listeners on the persistent
+// #modal-root element, and that element outlives the render — without
+// an abort, a superseded render's listeners stay live and its form
+// controller can still schedule commits, reading the CURRENT modal's
+// inputs while writing into its own book. Aborting on supersede and on
+// close is what retires a form controller; the doCommit liveness guard
+// is the backstop for any trigger that survives (e.g. a pending timer).
+let modalFormAbort = null;
 export function flushPreviousModalForm() {
   if (!modalFormFlush) return;
   const f = modalFormFlush;
@@ -996,6 +1005,11 @@ export function renderDetailModal(b, viaBook) {
   // render touches editingId or the DOM, so its edits land on its own
   // book and its timers die with its own render.
   flushPreviousModalForm();
+  // Retire the previous render's form listeners (see modalFormAbort):
+  // from here on, only this render's controller may react to form events.
+  if (modalFormAbort) modalFormAbort.abort();
+  modalFormAbort = new AbortController();
+  const formSignal = modalFormAbort.signal;
   const id = b.id;
   editingId = id;
   const statusAtOpen = b.status; // Variant B: celebration baseline (see applyDetailForm)
@@ -2054,6 +2068,13 @@ export function renderDetailModal(b, viaBook) {
     savedFlashTimer = setTimeout(() => { savedFlash = false; setSaveState(''); }, 1600);
   };
   const doCommit = () => {
+    // A superseded render's controller must never commit: its field
+    // reads resolve through getElementById to the LIVE modal's inputs,
+    // so a stale commit would write the open book's values into this
+    // render's book. The legitimate final commits (the next render's
+    // flush, this modal's own close) run while editingId still names
+    // this render's book, so they pass.
+    if (editingId !== id) return true;
     if (!formState.isDirty()) { commitError = ''; return true; }
     try {
       applyDetailForm();
@@ -2100,13 +2121,13 @@ export function renderDetailModal(b, viaBook) {
   // Text inputs and selects report through one delegated pair of
   // listeners — recompute is idempotent, and inputs that aren't
   // registered fields (e.g. the quick page box) can't dirty anything.
-  root.addEventListener('input', () => formState.touch());
-  root.addEventListener('change', () => formState.touch());
+  root.addEventListener('input', () => formState.touch(), { signal: formSignal });
+  root.addEventListener('change', () => formState.touch(), { signal: formSignal });
   formState.onChange(scheduleAutosave);
   // Blur commits promptly — no waiting out the debounce when the user
   // tabs or taps away from a field. (flushAutosave re-reads the fields
   // itself, so it no-ops on a clean form.)
-  root.addEventListener('focusout', () => flushAutosave());
+  root.addEventListener('focusout', () => flushAutosave(), { signal: formSignal });
   // Cross-book navigation re-renders without close(): the next render
   // flushes this form first (see flushPreviousModalForm).
   const myFormFlush = () => { if (flushAutosave()) fireDeferredCelebrations(); };
@@ -2125,6 +2146,10 @@ export function renderDetailModal(b, viaBook) {
     document.removeEventListener('keydown', escClose);
     let flushOk = true;
     if (!flushSuppressed) { try { flushOk = flushAutosave(); } catch (e) { flushOk = false; } }
+    // Retire this render's form listeners with the modal (identity
+    // check: a superseding render has already installed its own
+    // controller, and that one must stay live).
+    if (modalFormAbort && modalFormAbort.signal === formSignal) { modalFormAbort.abort(); modalFormAbort = null; }
     unlockBodyScroll(); // v215: release the background scroll lock
     root.innerHTML = ''; editingId = null; editingDraft = null; refreshProgressSection = null;
     if (modalFormFlush === myFormFlush) modalFormFlush = null;
