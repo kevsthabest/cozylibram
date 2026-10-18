@@ -643,6 +643,11 @@ async function userStatePullSections(deviceOwner) {
       .select('warning_prefs,up_next,release_state,shelf_state,privacy_state,milestone_state,prefs_state,finale_state,reco_state').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     await userStatePreloadReco(); // collect/apply for reco read the loaded set
+    // Same discard as the settings leg (#327): two awaits have passed
+    // since uid was read, so re-check the current account before any
+    // section apply writes the live globals (the Up Next queue above
+    // all) or any meta is patched under uid.
+    if (typeof cloudUser === 'undefined' || !cloudUser || cloudUser.id !== uid) return false;
     const meta = userStateMeta(uid);
     let changed = false;
     for (const key of USER_STATE_SECTION_ORDER) {
@@ -699,6 +704,11 @@ async function userStatePullSettings() {
     const { data, error } = await sb.from('user_state')
       .select('settings').eq('user_id', uid).maybeSingle();
     if (error) throw error;
+    // Discard the pull if the account changed while the fetch was in
+    // flight: applying now would write the previous account's settings
+    // into the current session and claim ownership of them for the
+    // wrong account (#327).
+    if (typeof cloudUser === 'undefined' || !cloudUser || cloudUser.id !== uid) return false;
     const remote = (data && data.settings && typeof data.settings === 'object') ? data.settings : null;
     const remoteValues = (remote && remote.values && typeof remote.values === 'object') ? remote.values : null;
     const meta = userStateMeta(uid);
