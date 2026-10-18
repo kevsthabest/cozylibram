@@ -63,7 +63,51 @@ print(('PASS' if ok else 'FAIL') + ' - /config.js: flags + supabase, no secrets,
 if not ok:
     raise SystemExit(1)
 
-# /api/hardcover guards (no upstream network needed)
+# --- Stub Supabase for the /api/* auth gate (issue #339) -------------------
+# authed_user() validates the caller's JWT against
+# <supabaseUrl>/auth/v1/user and checks banned_users with the caller's own
+# token. This stub plays that API on loopback: 'good-token' -> user-1,
+# 'banned-token' -> user-2 (who is on banned_users), anything else -> 401.
+import http.server as _http_server
+
+
+class _StubSupa(_http_server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        auth = self.headers.get('Authorization') or ''
+        body, status = b'{}', 200
+        if self.path.startswith('/auth/v1/user'):
+            if auth == 'Bearer good-token':
+                body = b'{"id": "user-1", "email": "one@example.com"}'
+            elif auth == 'Bearer banned-token':
+                body = b'{"id": "user-2", "email": "two@example.com"}'
+            else:
+                status = 401
+        elif self.path.startswith('/rest/v1/banned_users'):
+            body = (b'[{"user_id": "user-2"}]'
+                    if auth == 'Bearer banned-token' else b'[]')
+        else:
+            status = 404
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *a):
+        pass
+
+
+_supa_srv = server.ThreadingHTTPServer(('127.0.0.1', 0), _StubSupa)
+threading.Thread(target=_supa_srv.serve_forever, daemon=True).start()
+_STUB_URL = 'http://127.0.0.1:%d' % _supa_srv.server_address[1]
+server.load_cloud_cfg = lambda: {'supabaseUrl': _STUB_URL,
+                                 'supabaseAnonKey': 'anon-stub'}
+server.load_supabase_service_key = lambda: ''
+_GOOD = {'Authorization': 'Bearer good-token'}
+
+# /api/hardcover guards (no upstream network needed). Since the v225-parity
+# gate (issue #339) these requests carry a signed-in caller; the
+# unauthenticated cases live in the auth section below.
 conn.request('GET', '/api/hardcover')
 ok = conn.getresponse().status == 405
 print(('PASS' if ok else 'FAIL') + ' - /api/hardcover GET -> 405')
@@ -71,7 +115,7 @@ if not ok:
     raise SystemExit(1)
 
 conn.request('POST', '/api/hardcover', body=b'{"nope":1}',
-             headers={'Content-Type': 'application/json'})
+             headers={'Content-Type': 'application/json', **_GOOD})
 ok = conn.getresponse().status == 400
 print(('PASS' if ok else 'FAIL') + ' - /api/hardcover bad body -> 400')
 if not ok:
@@ -83,7 +127,7 @@ server.load_token = lambda: ''
 # reachable with an allowed shape. (Harness probe fix — the assertion,
 # "no token -> 503", is unchanged.)
 conn.request('POST', '/api/hardcover', body=b'{"query":"query { search }"}',
-             headers={'Content-Type': 'application/json'})
+             headers={'Content-Type': 'application/json', **_GOOD})
 r = conn.getresponse()
 ok = r.status == 503
 print(('PASS' if ok else 'FAIL') + ' - /api/hardcover no token -> 503')
@@ -91,7 +135,8 @@ if not ok:
     raise SystemExit(1)
 
 # /api/gbooks guards (no upstream network needed)
-conn.request('GET', '/api/gbooks/books/v1/mylibrary/bookshelves')
+conn.request('GET', '/api/gbooks/books/v1/mylibrary/bookshelves',
+             headers=_GOOD)
 ok = conn.getresponse().status == 404
 print(('PASS' if ok else 'FAIL') + ' - /api/gbooks non-volumes path -> 404')
 if not ok:
@@ -235,6 +280,116 @@ print(('PASS' if ok else 'FAIL') + ' - live GET /ok.txt still serves (200)')
 if not ok:
     raise SystemExit(1)
 _srv2.shutdown()
+
+# --- /api/* caller authentication, v225 parity (issue #339) ----------------
+# Every /api/* handler must reject unauthenticated callers with the Pages
+# functions' 401 (and banned callers with 403) before any rate budget or
+# upstream quota is spent; a valid session passes through to the handler's
+# own responses. Fresh connection per call: pre-fix, some of these paths
+# drop or hang the shared connection.
+def _api(method, path, body=None, auth=None):
+    _c = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+    _headers = {'Content-Type': 'application/json'}
+    if auth is not None:
+        _headers['Authorization'] = auth
+    try:
+        _c.request(method, path, body=body, headers=_headers)
+        _r = _c.getresponse()
+        return _r.status, _r.read()
+    except Exception:
+        return None, b''
+    finally:
+        _c.close()
+
+
+def _check_api(name, got, want_status, want_error=None):
+    _st, _body = got
+    _ok = _st == want_status
+    if want_error is not None:
+        try:
+            _ok = _ok and json.loads(_body).get('error') == want_error
+        except Exception:
+            _ok = False
+    print(('PASS' if _ok else 'FAIL') + ' - ' + name)
+    if not _ok:
+        raise SystemExit(1)
+
+
+_HC_BODY = b'{"query":"query { search }"}'
+_check_api('auth: hardcover, no Authorization -> 401 sign-in required',
+           _api('POST', '/api/hardcover', _HC_BODY),
+           401, 'sign-in required')
+_check_api('auth: hardcover, junk token -> 401',
+           _api('POST', '/api/hardcover', _HC_BODY, 'Bearer junk'),
+           401, 'sign-in required')
+_check_api('auth: hardcover, token without Bearer scheme -> 401',
+           _api('POST', '/api/hardcover', _HC_BODY, 'good-token'),
+           401, 'sign-in required')
+_check_api('auth: hardcover, trailing junk after token -> 401',
+           _api('POST', '/api/hardcover', _HC_BODY, 'Bearer good-token x'),
+           401, 'sign-in required')
+_check_api('auth: hardcover, banned caller -> 403 account suspended',
+           _api('POST', '/api/hardcover', _HC_BODY, 'Bearer banned-token'),
+           403, 'account suspended')
+_check_api('auth: hardcover, valid session passes gate (503 no HC token)',
+           _api('POST', '/api/hardcover', _HC_BODY, 'Bearer good-token'),
+           503)
+_check_api('auth: trope-infer, no Authorization -> 401',
+           _api('POST', '/api/trope-infer', b'{}'),
+           401, 'sign-in required')
+_check_api('auth: trope-infer, valid session passes gate (400 bad body)',
+           _api('POST', '/api/trope-infer', b'{}', 'Bearer good-token'),
+           400)
+_check_api('auth: read-cover, no Authorization -> 401',
+           _api('POST', '/api/read-cover', b'{}'),
+           401, 'sign-in required')
+_check_api('auth: read-cover, valid session passes gate (400 bad body)',
+           _api('POST', '/api/read-cover', b'{}', 'Bearer good-token'),
+           400)
+_check_api('auth: trope-models, no Authorization -> 401',
+           _api('GET', '/api/trope-models?provider=nope'),
+           401, 'sign-in required')
+_check_api('auth: trope-models, valid session passes gate (400 provider)',
+           _api('GET', '/api/trope-models?provider=nope', None,
+                'Bearer good-token'),
+           400)
+_check_api('auth: cache-cover, no Authorization -> 401',
+           _api('POST', '/api/cache-cover',
+                b'{"url":"https://covers.openlibrary.org/b/id/1-L.jpg"}'),
+           401, 'sign-in required')
+_check_api('auth: cache-cover, valid session passes gate (503 unconfigured)',
+           _api('POST', '/api/cache-cover',
+                b'{"url":"https://covers.openlibrary.org/b/id/1-L.jpg"}',
+                'Bearer good-token'),
+           503, 'cover cache not configured')
+_check_api('auth: embed, no Authorization -> 401 (gate precedes handler)',
+           _api('POST', '/api/embed', b'{"texts":["x"]}'),
+           401, 'sign-in required')
+_check_api('auth: gbooks, no Authorization -> 401',
+           _api('GET', '/api/gbooks/books/v1/volumes?q=x'),
+           401, 'sign-in required')
+_check_api('auth: inventaire, no Authorization -> 401',
+           _api('GET', '/api/inventaire/entities?uris=isbn:9780141030319'),
+           401, 'sign-in required')
+
+# authed_user() unit checks against the stub (same values as the live API)
+_u = server.authed_user({'Authorization': 'Bearer good-token'})
+ok = isinstance(_u, dict) and _u.get('id') == 'user-1' and not _u.get('banned')
+print(('PASS' if ok else 'FAIL') + ' - authed_user: good token -> user-1')
+if not ok:
+    raise SystemExit(1)
+_u = server.authed_user({'Authorization': 'Bearer banned-token'})
+ok = isinstance(_u, dict) and _u.get('id') == 'user-2' and _u.get('banned') is True
+print(('PASS' if ok else 'FAIL') + ' - authed_user: banned token -> banned user')
+if not ok:
+    raise SystemExit(1)
+ok = server.authed_user({'Authorization': 'Bearer junk'}) is None \
+    and server.authed_user({}) is None \
+    and server.authed_user({'Authorization': 'good-token'}) is None
+print(('PASS' if ok else 'FAIL') + ' - authed_user: junk/missing/schemaless -> None')
+if not ok:
+    raise SystemExit(1)
+_supa_srv.shutdown()
 
 srv.shutdown()
 print('ALL SERVER TESTS PASSED')
