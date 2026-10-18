@@ -84,6 +84,10 @@ function makeFake() {
 }
 
 (async () => {
+  // The boot load completes before anything drives the library (the
+  // production contract since the legacy boot was DOMContentLoaded-gated):
+  // awaiting storageReady keeps the deferred load from landing mid-scenario.
+  await window.eval('storageReady');
   // 1. bookToRow mapping
   const row = window.bookToRow({ id: 'b1', isbn: '978123', title: 'T' }, 'u9');
   ok('bookToRow maps fields', row.user_id === 'u9' && row.book_id === 'b1' && row.isbn === '978123' && row.data.title === 'T');

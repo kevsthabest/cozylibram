@@ -44,6 +44,10 @@ const mk = (id, extra) => `({ id: '${id}', isbn: '978${id}', title: 'Book ${id}'
   ${extra || ''} })`;
 
 (async () => {
+  // Await the boot load before seeding (the production contract since
+  // the legacy boot was DOMContentLoaded-gated) so it cannot land
+  // mid-scenario and replace the seeded state.
+  await window.eval('storageReady');
   // ---------- #372: applied tombstones keep their original time ----------
   runInWindow(`library = [${mk('x1')}]; tombstones = []; tombstoneFloor = 0;`);
   runInWindow(`applyTombstones([{ id: 'x1', at: 1000000 }]);`);
