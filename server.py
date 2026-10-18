@@ -21,6 +21,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import posixpath
 import re
 import socket
 import time
@@ -301,7 +302,20 @@ class Handler(SimpleHTTPRequestHandler):
     _BLOCKED_BASENAMES = {'.env'}
 
     def _path_blocked(self, raw_path):
+        # Judge the path the file server will actually resolve, not the
+        # raw request spelling: translate_path() unquotes the path and
+        # posixpath-normalizes it (dot segments dropped, duplicate
+        # separators collapsed, parent segments resolved) before joining
+        # it under the served directory. Running the checks on the raw
+        # path let spellings like //server-config.json or
+        # /x/../server-config.json slip past the exact matches and land
+        # on the real file (issue #338) — so normalize first, exactly as
+        # translate_path does, then check. The leading-slash collapse is
+        # the one extra step: posixpath.normpath preserves a leading '//'
+        # (POSIX implementation-defined), translate_path's word filter
+        # does not.
         p = urllib.parse.unquote(raw_path.split('?')[0])
+        p = '/' + posixpath.normpath(p).lstrip('/')
         if p in self._BLOCKED_EXACT or p.startswith('/.git/'):
             return True
         base = p.rsplit('/', 1)[-1]
