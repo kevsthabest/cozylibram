@@ -236,10 +236,12 @@ function loadLegacyLibrary() {
 }
 // Returns whether the write landed. Callers that clear state on the
 // strength of a save (persistBooks' dirty flags, #373) or report one
-// (the modal's save status, #347) need the answer: a swallowed quota
-// failure that still reads as success is silent data loss, so the
-// failure is logged as well as toasted, the way the write-through
-// path surfaces its failures, and recorded for storagePersistError().
+// (the modal's save status, #347) need the answer, and the one-time
+// migration flag writes below key their retry behaviour off it too
+// (#331): a swallowed quota failure that still reads as success is
+// silent data loss, so the failure is logged as well as toasted, the
+// way the write-through path surfaces its failures, and recorded for
+// storagePersistError().
 function saveLegacyLibrary() {
   try { localStorage.setItem(libKey(), JSON.stringify(library)); return true; }
   catch (e) {
@@ -323,11 +325,12 @@ function loadLegacyAll() {
       // the sweep below still owes them the unification pair.
       const storedWish = new Set(raw.filter(b => b && b.status === 'wishlist').map(b => b.id));
       let dirtyRaw = false;
+      let ranNine = false;
       const fk9 = libKey() + '.wishlist529';
       if (!localStorage.getItem(fk9)) {
         raw = raw.map(migrateBook);
         if (wishlistShelfTransform(raw)) dirtyRaw = true;
-        localStorage.setItem(fk9, '1');
+        ranNine = true;
       }
       let nU = wishlistUnifyTransform(raw);
       if (storedWish.size) {
@@ -337,8 +340,13 @@ function loadLegacyAll() {
         }
       }
       if (nU) dirtyRaw = true;
-      localStorage.setItem(fkU, '1');
+      // Flag-last (#331): the transformed rows must be durable before
+      // either done-flag is written. A quota failure on the data write
+      // throws past both flag writes, so the transforms retry on the
+      // next boot instead of being marked done over pre-transform rows.
       if (dirtyRaw) localStorage.setItem(libKey(), JSON.stringify(raw));
+      if (ranNine) localStorage.setItem(fk9, '1');
+      localStorage.setItem(fkU, '1');
     }
   } catch (e) {}
   library = loadLegacyLibrary();
@@ -354,8 +362,9 @@ function loadLegacyAll() {
     const fk = libKey() + '.wishlist529';
     if (!localStorage.getItem(fk)) {
       const nW = wishlistShelfTransform(library);
-      localStorage.setItem(fk, '1');
-      if (nW) saveLegacyLibrary();
+      // Flag-last (#331): only mark the migration done once the
+      // transformed library is durable (or nothing changed).
+      if (!nW || saveLegacyLibrary()) localStorage.setItem(fk, '1');
     }
   } catch (e) {}
 }
@@ -390,7 +399,39 @@ async function migrateSlotFromLegacy(db) {
   if (f) await idbKvPut(db, 'tombFloor', f);
   const u = readLegacyUpNext();
   if (u.length) await idbKvPut(db, 'upNext', u);
+  // Carry the one-time wishlist-transform flags across with the data
+  // (#337): the legacy backend records them as localStorage keys beside
+  // the partition, while the IDB load reads its own kv flags. Without
+  // the carry, this slot's first IDB load runs both transforms a second
+  // time — and their contract is that they must never re-run, because
+  // the states they rewrite are legitimate user states afterwards.
+  if (localStorage.getItem(libKey() + '.wishlist529')) await idbKvPut(db, 'wishlistShelfV529', 1);
+  if (localStorage.getItem(libKey() + '.wishlist559')) await idbKvPut(db, 'wishlistUnifiedV559', 1);
   await idbKvPut(db, 'legacyMigrationDone', true);
+  return true;
+}
+
+// The one-time load transforms (v529, v559) must write into the slot
+// being loaded — the `db` argument — never through persistBooks(),
+// which targets the ambient currentDb: during an account switch that
+// still names the OUTGOING slot until the load returns (#330). The
+// write is also the transforms' durability point, so their caller sets
+// the done-flag only when this returns true (#331). Transforms never
+// add or remove books, so the store's pre-write count is the count the
+// write must verify against. On success the written books are unmarked:
+// they are durable in this slot now, and leaving them dirty would only
+// make the next save rewrite them. Their push is unaffected — the push
+// batch selects on the _mtime the transforms stamp, not on dirty flags.
+async function persistSlotTransform(db, changed) {
+  if (!changed.length) return true;
+  try {
+    const expected = await idbCountBooks(db);
+    await idbPutDirtyBooks(db, changed, [], expected);
+  } catch (e) {
+    try { AppLog.error('storage', 'load transform persist failed (will retry next load): ' + (e && e.message)); } catch (_) {}
+    return false;
+  }
+  for (const b of changed) { unmarkDirty(b); unmarkPersistOnly(b); }
   return true;
 }
 
@@ -411,14 +452,16 @@ async function loadSlotState(db) {
   knownBookIds = new Set(library.map(b => b.id));
   // v529: one-time wishlist-shelf migration (js/020 wishlistShelfTransform),
   // flagged per slot in the slot kv. Changed books re-dirty via their
-  // proxies and carry a fresh _mtime from the transform, so they
-  // persist + push on the next save at the latest (at boot, right now).
+  // proxies and carry a fresh _mtime from the transform. The done-flag
+  // is written only after the transformed books are durable in THIS
+  // slot (persistSlotTransform) — flag-last, so a failed write retries
+  // the transform on the next load instead of losing it (#330, #331).
   if (!(await idbKvGet(db, 'wishlistShelfV529'))) {
     const nW = wishlistShelfTransform(library);
-    await idbKvPut(db, 'wishlistShelfV529', 1);
-    if (nW) {
-      persistBooks();
-      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+    const changed = library.filter(b => dirtyBooks.has(b));
+    if (await persistSlotTransform(db, changed)) {
+      await idbKvPut(db, 'wishlistShelfV529', 1);
+      if (nW && typeof scheduleCloudPush === 'function') scheduleCloudPush();
     }
   }
   // v559: one-time wishlist unification, its own per-slot kv flag —
@@ -428,8 +471,9 @@ async function loadSlotState(db) {
   // status-'wishlist' rows were coerced to 'tbr' by the map above, so
   // their captured ids get the same pair directly (status already
   // 'tbr'; the facet is the transform's one sanctioned write).
-  // Mutations ride the proxies, so changed books re-dirty and persist
-  // + push exactly like the v529 pass above.
+  // Mutations ride the proxies, so changed books re-dirty; durability
+  // and the done-flag follow the same persist-then-flag order as the
+  // v529 pass above (#330, #331).
   if (!(await idbKvGet(db, 'wishlistUnifiedV559'))) {
     let nU = wishlistUnifyTransform(library);
     if (storedWishIds.size) {
@@ -438,10 +482,10 @@ async function loadSlotState(db) {
         if (storedWishIds.has(b.id) && b.owned !== 'tobuy') { b.owned = 'tobuy'; b._mtime = now; nU++; }
       }
     }
-    await idbKvPut(db, 'wishlistUnifiedV559', 1);
-    if (nU) {
-      persistBooks();
-      if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
+    const changed = library.filter(b => dirtyBooks.has(b));
+    if (await persistSlotTransform(db, changed)) {
+      await idbKvPut(db, 'wishlistUnifiedV559', 1);
+      if (nU && typeof scheduleCloudPush === 'function') scheduleCloudPush();
     }
   }
   tombstones = (await idbKvGet(db, 'tombstones')) || [];
@@ -541,9 +585,12 @@ function persistBooks() {
     // reads as a successful save and the edits are lost on next load.
     // saveLegacyLibrary reports the outcome (it toasts and logs the
     // failure itself); the surviving flags make the next save the retry.
-    if (!saveLegacyLibrary()) return;
+    // The outcome is returned because saveLibrary passes it to callers
+    // that may only write a one-time migration's done-flag once the
+    // transformed library is durable (#331).
+    if (!saveLegacyLibrary()) return false;
     for (const b of library) { unmarkDirty(b); unmarkPersistOnly(b); }
-    return;
+    return true;
   }
   const db = currentDb;
   if (!db) { try { AppLog.error('storage', 'persistBooks: no open database'); } catch (_) {} return; }
@@ -600,11 +647,16 @@ function persistUpNext() {
 function saveLibrary(opts) {
   opts = opts || {};
   stampMtimes();
-  persistBooks();
+  const persisted = persistBooks();
   if (!opts.noCloud) scheduleCloudPush();
   // v571: a status/progress/cover change can change what the app dresses
   // for (or end the dressing) — re-resolve. Cheap + idempotent.
   try { if (typeof refreshBookDressing === 'function') refreshBookDressing(); } catch (e) {}
+  // The legacy backend's persist result (true/false), for callers who
+  // must know whether a write landed — the one-time migration flag
+  // blocks below. Undefined on the IndexedDB backend, whose writes are
+  // asynchronous.
+  return persisted;
 }
 function saveTombstones() { persistTombstones(); }
 function saveTombFloor() { persistTombFloor(); }
@@ -817,8 +869,10 @@ function setLocalUserLegacy(uid) {
     const fk = libKey() + '.wishlist529';
     if (!localStorage.getItem(fk)) {
       const nW = wishlistShelfTransform(library);
-      localStorage.setItem(fk, '1');
-      if (nW) saveLibrary();
+      // Flag-last (#331), as in loadLegacyAll: the flag is written
+      // only once the transformed library is durable (or unchanged).
+      const landed = nW ? saveLibrary() : true;
+      if (landed !== false) localStorage.setItem(fk, '1');
     }
   } catch (e) {}
   // v559: the same one-time wishlist unification for the incoming
@@ -831,8 +885,8 @@ function setLocalUserLegacy(uid) {
     const fkU = libKey() + '.wishlist559';
     if (!localStorage.getItem(fkU)) {
       const nU = wishlistUnifyTransform(library);
-      localStorage.setItem(fkU, '1');
-      if (nU) saveLibrary();
+      const landed = nU ? saveLibrary() : true;
+      if (landed !== false) localStorage.setItem(fkU, '1');
     }
   } catch (e) {}
 }
@@ -979,8 +1033,28 @@ async function restorePartition(key) {
     try { const a = JSON.parse(localStorage.getItem(key)); if (Array.isArray(a)) arr = a; } catch (e) {}
   }
   if (!arr) return 0;
+  const outgoing = library;
   library = arr.map(migrateBook); // v495 (#125): migrateBook wraps+dirties — restored content may differ from the store, so it all persists
   library.forEach(b => untombstone(b.id));
+  // The books this restore displaces are deletions from the library
+  // now: record them as tombstones the way removeBook does, or the
+  // next sync merge re-adds them from the cloud (mergeCloudBooks skips
+  // only tombstoned ids) and silently undoes the restore (#332).
+  // Compared after the migrateBook map so id rewrites are accounted
+  // for. knownBookIds needs no manual reset here: the persist plan
+  // derives the displaced store-deletions from the pre-restore set and
+  // rewrites knownBookIds from the plan on success — the adoption path
+  // resets it by hand only because it writes the store directly,
+  // bypassing the plan.
+  const restoredIds = new Set(library.map(b => b.id));
+  let tombsChanged = false;
+  for (const b of outgoing) {
+    if (b && b.id != null && !restoredIds.has(b.id) && !tombstones.some(t => t.id === b.id)) {
+      tombstones.push({ id: b.id, at: Date.now() });
+      tombsChanged = true;
+    }
+  }
+  if (tombsChanged) saveTombstones();
   saveLibrary();
   return library.length;
 }
