@@ -631,7 +631,16 @@ class Handler(SimpleHTTPRequestHandler):
         # the one extra step: posixpath.normpath preserves a leading '//'
         # (POSIX implementation-defined), translate_path's word filter
         # does not.
+        # The backslash translation is the Windows half of the same rule:
+        # this server's deployment machine is Windows, where a backslash
+        # separates path components for the filesystem at open time but
+        # means nothing to posixpath.normpath. Judged raw, a spelling like
+        # /%5cserver-config.json or /..%5cserver-config.json looks like an
+        # ordinary filename here while Windows resolves it onto the real
+        # file — so judge a backslash as a separator too, and the verdict
+        # is the same on both platforms.
         p = urllib.parse.unquote(raw_path.split('?')[0])
+        p = p.replace('\\', '/')
         p = '/' + posixpath.normpath(p).lstrip('/')
         if p in self._BLOCKED_EXACT or p.startswith('/.git/'):
             return True
