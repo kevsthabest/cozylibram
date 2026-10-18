@@ -69,29 +69,62 @@ if not ok:
 # token. This stub plays that API on loopback: 'good-token' -> user-1,
 # 'banned-token' -> user-2 (who is on banned_users), anything else -> 401.
 import http.server as _http_server
+import urllib.parse
 
 
 class _StubSupa(_http_server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        auth = self.headers.get('Authorization') or ''
-        body, status = b'{}', 200
-        if self.path.startswith('/auth/v1/user'):
-            if auth == 'Bearer good-token':
-                body = b'{"id": "user-1", "email": "one@example.com"}'
-            elif auth == 'Bearer banned-token':
-                body = b'{"id": "user-2", "email": "two@example.com"}'
-            else:
-                status = 401
-        elif self.path.startswith('/rest/v1/banned_users'):
-            body = (b'[{"user_id": "user-2"}]'
-                    if auth == 'Bearer banned-token' else b'[]')
-        else:
-            status = 404
+    # Token map for /auth/v1/user; user-1 and user-4 are app admins,
+    # user-2 is banned, user-3 is a plain signed-in user. The admin REST
+    # endpoints answer only to the service-key bearer ('svc-stub').
+    _USERS = {'Bearer good-token': ('user-1', 'one@example.com'),
+              'Bearer banned-token': ('user-2', 'two@example.com'),
+              'Bearer plain-token': ('user-3', 'three@example.com'),
+              'Bearer admin2-token': ('user-4', 'four@example.com')}
+    _ADMINS = {'user-1', 'user-4'}
+
+    def _send(self, body, status=200):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_GET(self):
+        auth = self.headers.get('Authorization') or ''
+        if self.path.startswith('/auth/v1/admin/users'):
+            if auth != 'Bearer svc-stub':
+                return self._send(b'{}', 401)
+            return self._send(
+                b'{"users": [{"id": "user-1", "email": "one@example.com",'
+                b' "created_at": "2024-01-01T00:00:00Z",'
+                b' "last_sign_in_at": null},'
+                b' {"id": "user-3", "email": "three@example.com",'
+                b' "created_at": "2024-02-01T00:00:00Z",'
+                b' "last_sign_in_at": "2024-03-01T00:00:00Z"}]}')
+        if self.path.startswith('/auth/v1/user'):
+            who = self._USERS.get(auth)
+            if who is None:
+                return self._send(b'{}', 401)
+            return self._send(json.dumps(
+                {'id': who[0], 'email': who[1]}).encode('utf-8'))
+        if self.path.startswith('/rest/v1/banned_users'):
+            return self._send(b'[{"user_id": "user-2"}]'
+                              if auth == 'Bearer banned-token' else b'[]')
+        if self.path.startswith('/rest/v1/app_admins'):
+            if auth != 'Bearer svc-stub':
+                return self._send(b'{}', 401)
+            uid = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get(
+                'user_id', [''])[0].removeprefix('eq.')
+            return self._send(b'[{"user_id": "%s"}]' % uid.encode('utf-8')
+                              if uid in self._ADMINS else b'[]')
+        return self._send(b'{}', 404)
+
+    def do_DELETE(self):
+        auth = self.headers.get('Authorization') or ''
+        if auth != 'Bearer svc-stub':
+            return self._send(b'{}', 401)
+        return self._send(b'{}')
 
     def log_message(self, *a):
         pass
@@ -437,6 +470,196 @@ print(('PASS' if ok else 'FAIL') + ' - spine cleaner: markdown fences stripped')
 if not ok:
     raise SystemExit(1)
 
+# --- The three missing /api routes (issue #350) ----------------------------
+# /api/enhance-face, /api/spine-search and /api/admin-users existed only
+# on Pages — the mirror's do_POST had no branch for them, so LAN calls
+# fell through to a static 404. From here the stub also plays the
+# service-key side (admin checks, the Auth admin API): 'svc-stub'.
+server.load_supabase_service_key = lambda: 'svc-stub'
+server.load_brave_key = lambda: ''
+
+
+def _expect(name, cond):
+    print(('PASS' if cond else 'FAIL') + ' - ' + name)
+    if not cond:
+        raise SystemExit(1)
+
+
+_EF_BODY = b'{"image":"data:image/jpeg;base64,AAAA","mode":"sharpen"}'
+_check_api('enhance-face: route exists, body validated before auth (400)',
+           _api('POST', '/api/enhance-face', b'{}'),
+           400)
+_check_api('enhance-face: signed-in caller, empty body -> 400',
+           _api('POST', '/api/enhance-face', b'{}', 'Bearer good-token'),
+           400)
+_check_api('enhance-face: non-jpeg/png/webp data URL -> 400',
+           _api('POST', '/api/enhance-face',
+                b'{"image":"data:image/gif;base64,AAAA","mode":"sharpen"}',
+                'Bearer good-token'),
+           400)
+_check_api("enhance-face: no vision key -> 503 (documented setup error)",
+           _api('POST', '/api/enhance-face', _EF_BODY, 'Bearer good-token'),
+           503, "face enhancement isn't set up on this server "
+                "(set vision_api_key or trope_key_gemini)")
+
+# Upstream calls (Gemini / Brave) are dispatched to fakes; loopback calls
+# (the stub Supabase) pass through to the real urlopen.
+import io
+import urllib.error
+import urllib.request
+_real_urlopen = urllib.request.urlopen
+_GEMINI_EF_OK = json.dumps({'candidates': [{'content': {'parts': [
+    {'text': 'done'},
+    {'inlineData': {'mimeType': 'image/png', 'data': 'QUJD'}}]}}]}
+).encode('utf-8')
+_BRAVE_OK = json.dumps({'results': [
+    {'properties': {'url': 'https://img.example.com/spine.jpg'},
+     'url': 'https://shop.example.com/book', 'title': 'A spine'}]}
+).encode('utf-8')
+
+
+class _FakeResp:
+    def __init__(self, body, status=200):
+        self._b = body
+        self.status = status
+        self.headers = {'Content-Type': 'application/json'}
+
+    def read(self, *a):
+        return self._b
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _fake_urlopen(req, timeout=None, **kw):
+    url = getattr(req, 'full_url', '') or ''
+    if 'generativelanguage.googleapis.com' in url:
+        err = getattr(_fake_urlopen, 'gemini_error', None)
+        if err:
+            raise urllib.error.HTTPError(url, err, 'err', {},
+                                         io.BytesIO(b'{}'))
+        return _FakeResp(getattr(_fake_urlopen, 'gemini_body',
+                                 _GEMINI_EF_OK))
+    if 'api.search.brave.com' in url:
+        return _FakeResp(_BRAVE_OK)
+    if timeout is None:
+        return _real_urlopen(req, **kw)
+    return _real_urlopen(req, timeout=timeout, **kw)
+
+
+urllib.request.urlopen = _fake_urlopen
+server.load_vision_cfg = lambda: {'key': 'vision-stub',
+                                  'model': 'gemini-3.8-flash'}
+
+_st, _b = _api('POST', '/api/enhance-face',
+               b'{"image":"data:image/jpeg;base64,AAAA","mode":"restore"}',
+               'Bearer good-token')
+_expect('enhance-face: upstream image returned as a data URL',
+        _st == 200
+        and json.loads(_b).get('image') == 'data:image/png;base64,QUJD')
+_fake_urlopen.gemini_body = json.dumps(
+    {'candidates': [{'content': {'parts': [{'text': 'no image'}]}}]}
+).encode('utf-8')
+_check_api('enhance-face: upstream returns no image -> 502',
+           _api('POST', '/api/enhance-face', _EF_BODY, 'Bearer good-token'),
+           502, 'enhance model returned no image')
+_fake_urlopen.gemini_body = _GEMINI_EF_OK
+_fake_urlopen.gemini_error = 503
+_check_api('enhance-face: upstream 503 -> 502 temporarily unavailable',
+           _api('POST', '/api/enhance-face', _EF_BODY, 'Bearer good-token'),
+           502, 'enhance model temporarily unavailable (upstream 503)')
+_fake_urlopen.gemini_error = None
+
+_SS_BODY = b'{"title":"Dune","author":"Frank Herbert"}'
+_check_api('spine-search: no Authorization -> 401',
+           _api('POST', '/api/spine-search', _SS_BODY),
+           401, 'sign-in required')
+_check_api('spine-search: banned caller -> 403',
+           _api('POST', '/api/spine-search', _SS_BODY, 'Bearer banned-token'),
+           403, 'account suspended')
+_check_api('spine-search: non-admin caller -> 403 admin only',
+           _api('POST', '/api/spine-search', _SS_BODY, 'Bearer plain-token'),
+           403, 'admin only')
+_check_api('spine-search: admin, missing title -> 400',
+           _api('POST', '/api/spine-search', b'{}', 'Bearer good-token'),
+           400, 'title is required')
+server.load_brave_key = lambda: 'brave-stub'
+_st, _b = _api('POST', '/api/spine-search', _SS_BODY, 'Bearer good-token')
+_d = json.loads(_b) if _st == 200 else {}
+_expect("spine-search: Brave candidates served with via='brave'",
+        _st == 200 and _d.get('via') == 'brave'
+        and _d.get('candidates', [{}])[0].get('image_url')
+        == 'https://img.example.com/spine.jpg'
+        and _d.get('candidates', [{}])[0].get('page_url')
+        == 'https://shop.example.com/book')
+server.load_brave_key = lambda: ''
+_fake_urlopen.gemini_body = json.dumps({'candidates': [
+    {'content': {'parts': [{'text':
+        '{"candidates": [{"image_url": "https://img.example.com/g.jpg",'
+        ' "page_url": "https://p.example.com", "note": "found"}]}'}]},
+     'groundingMetadata': {'groundingChunks': [
+         {'web': {'uri': 'https://src.example.com', 'title': 'Src'}}]}}]}
+).encode('utf-8')
+_st, _b = _api('POST', '/api/spine-search', _SS_BODY, 'Bearer good-token')
+_d = json.loads(_b) if _st == 200 else {}
+_expect('spine-search: Gemini-grounded candidates + sources served',
+        _st == 200
+        and _d.get('candidates', [{}])[0].get('image_url')
+        == 'https://img.example.com/g.jpg'
+        and _d.get('sources', [{}])[0].get('uri')
+        == 'https://src.example.com')
+_fake_urlopen.gemini_body = _GEMINI_EF_OK
+
+_check_api('admin-users: no Authorization -> 401',
+           _api('POST', '/api/admin-users', b'{"action":"list_users"}'),
+           401, 'sign-in required')
+_check_api('admin-users: non-admin caller -> 403 admin only',
+           _api('POST', '/api/admin-users', b'{"action":"list_users"}',
+                'Bearer plain-token'),
+           403, 'admin only')
+_st, _b = _api('POST', '/api/admin-users', b'{"action":"list_users"}',
+               'Bearer good-token')
+_d = json.loads(_b) if _st == 200 else {}
+_expect('admin-users: list_users maps the auth directory',
+        _st == 200 and len(_d.get('users', [])) == 2
+        and _d['users'][0].get('user_id') == 'user-1'
+        and _d['users'][0].get('email') == 'one@example.com'
+        and _d['users'][1].get('last_sign_in_at')
+        == '2024-03-01T00:00:00Z')
+_check_api('admin-users: unknown action -> 400',
+           _api('POST', '/api/admin-users', b'{"action":"nope"}',
+                'Bearer good-token'),
+           400, 'unknown action')
+_check_api('admin-users: delete without target -> 400',
+           _api('POST', '/api/admin-users', b'{"action":"delete_user"}',
+                'Bearer good-token'),
+           400, 'target_user_id required')
+_check_api('admin-users: cannot delete your own account -> 400',
+           _api('POST', '/api/admin-users',
+                b'{"action":"delete_user","target_user_id":"user-1"}',
+                'Bearer good-token'),
+           400, 'cannot delete your own account here')
+_check_api('admin-users: cannot delete an admin account -> 400',
+           _api('POST', '/api/admin-users',
+                b'{"action":"delete_user","target_user_id":"user-1"}',
+                'Bearer admin2-token'),
+           400, 'cannot delete an admin account')
+_st, _b = _api('POST', '/api/admin-users',
+               b'{"action":"delete_user","target_user_id":"user-3"}',
+               'Bearer good-token')
+_expect('admin-users: delete_user wipes and deletes (ok:true)',
+        _st == 200 and json.loads(_b).get('ok') is True)
+server.load_supabase_service_key = lambda: ''
+_check_api('admin-users: no service key configured -> 500 misconfigured',
+           _api('POST', '/api/admin-users', b'{"action":"list_users"}',
+                'Bearer good-token'),
+           500, 'server misconfigured')
+server.load_supabase_service_key = lambda: 'svc-stub'
+urllib.request.urlopen = _real_urlopen
+
 # --- /api/embed: the documented 503 must be reachable (issue #348) --------
 # handle_api_embed opens with _check_rate('embed'), but _RATE_LIMITS had no
 # 'embed' key and rate_limit_ok indexes it unguarded — every POST raised
@@ -452,7 +675,7 @@ if not ok:
     raise SystemExit(1)
 for _name in ['trope-infer', 'read-cover', 'hardcover', 'gbooks',
               'inventaire', 'trope-models', 'cover-proxy', 'cache-cover',
-              'embed']:
+              'embed', 'enhance-face', 'spine-search']:
     ok = _name in server._RATE_LIMITS
     print(('PASS' if ok else 'FAIL') + ' - rate-limit name %r defined' % _name)
     if not ok:

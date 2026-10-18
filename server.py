@@ -136,6 +136,217 @@ def authed_user(headers):
         return None
 
 
+def _supabase_fetch(method, url, headers, timeout=30):
+    """One raw HTTP call for the admin endpoints; returns (status, body
+    text) and never raises — status 0 means the request never completed.
+    Callers map statuses onto the Pages error bodies."""
+    req = urllib.request.Request(url, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read(4 * 1024 * 1024).decode(
+                'utf-8', 'replace')
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, e.read(64 * 1024).decode('utf-8', 'replace')
+        except Exception:
+            return e.code, ''
+    except Exception:
+        return 0, ''
+
+
+def _gemini_generate(model, key, payload):
+    """POST a native Gemini generateContent call (the v1beta endpoint
+    the Pages enhance-face / spine-search functions use, key in the
+    x-goog-api-key header — never in the URL where it would land in
+    server logs). Returns (status, parsed, text); status 0 on a
+    network failure, parsed None on an unparseable body. Never raises.
+    Single attempt, like the mirror's other provider calls."""
+    url = ('https://generativelanguage.googleapis.com/v1beta/models/' +
+           model + ':generateContent')
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode('utf-8'), method='POST',
+        headers={'Content-Type': 'application/json',
+                 'x-goog-api-key': key,
+                 'User-Agent': 'CozyLibram/1.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            text = r.read(16 * 1024 * 1024).decode('utf-8', 'replace')
+            try:
+                return r.status, json.loads(text), text
+            except Exception:
+                return r.status, None, text
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, None, e.read(64 * 1024).decode(
+                'utf-8', 'replace')
+        except Exception:
+            return e.code, None, ''
+    except Exception:
+        return 0, None, ''
+
+
+# --- /api/spine-search helpers (mirror of functions/api/spine-search.js) --
+_SPINE_IMG_RE = re.compile(
+    r'^https?://[^\s"\'<>]+?\.(?:jpg|jpeg|png|webp)'
+    r'(?:\?[^\s"\'<>]*)?$', re.I)
+_SPINE_URL_IN_TEXT_RE = re.compile(
+    r'https?://[^\s"\'<>]+?\.(?:jpg|jpeg|png|webp)'
+    r'(?:\?[^\s"\'<>]*)?', re.I)
+
+
+def _spine_search_query(title, author):
+    return '"' + title + '"' + \
+        ((' ' + author) if author else '') + ' book spine'
+
+
+def _spine_search_prompt(title, author):
+    return (
+        'Find a real photograph or product image of the physical SPINE '
+        '(the bound edge, seen edge-on \u2014 not the front cover) of '
+        'this exact book:\n'
+        'Title: "' + title + '"' +
+        (('\nAuthor: "' + author + '"') if author else '') +
+        '\nSearch the web (bookstores, publisher pages, library '
+        'catalogues, collector and marketplace listings, reviews, '
+        'photos of the book on a shelf). Prefer a straight-on, '
+        'well-lit spine photo where the full spine (top to bottom) is '
+        'visible.\n'
+        'Reply with ONLY a JSON object of the form '
+        '{"candidates": [{"image_url": "<direct image URL>", '
+        '"page_url": "<page the image is on>", "note": "<short note, '
+        'e.g. publisher or edition>"}]} with up to 5 candidates, best '
+        'first. image_url must end in .jpg, .jpeg, .png, or .webp. '
+        'Never invent or guess a URL \u2014 only include an image_url '
+        'that appeared in your search results. If you cannot find a '
+        'spine image, reply {"candidates": []}.')
+
+
+def _spine_candidate(img, page, note):
+    return {
+        'image_url': img[:500],
+        'page_url': page[:500] if page.startswith('http') else None,
+        'note': (note.strip()[:200] or None) if note else None,
+    }
+
+
+def _clean_spine_search_candidates(list_in):
+    """Model-proposed candidates are untrusted: keep only direct image
+    URLs on http(s), dedupe case-insensitively, cap the list."""
+    out, seen = [], set()
+    if not isinstance(list_in, list):
+        return out
+    for c in list_in:
+        if len(out) >= 5:
+            break
+        if not isinstance(c, dict):
+            continue
+        img = str(c.get('image_url') or '').strip()
+        if not _SPINE_IMG_RE.match(img) or img.lower() in seen:
+            continue
+        seen.add(img.lower())
+        out.append(_spine_candidate(
+            img, str(c.get('page_url') or '').strip(),
+            str(c.get('note') or '')))
+    return out
+
+
+def _clean_brave_candidates(results):
+    """Brave image results: properties.url is the direct image, url is
+    the page it sits on, title is the note. Same distrust rules."""
+    out, seen = [], set()
+    if not isinstance(results, list):
+        return out
+    for r in results:
+        if len(out) >= 5:
+            break
+        if not isinstance(r, dict):
+            continue
+        img = str((r.get('properties') or {}).get('url') or '').strip()
+        if not _SPINE_IMG_RE.match(img) or img.lower() in seen:
+            continue
+        seen.add(img.lower())
+        out.append(_spine_candidate(
+            img, str(r.get('url') or '').strip(),
+            str(r.get('title') or '')))
+    return out
+
+
+def _spine_search_sources(data):
+    """Grounding sources behind a spine-search answer, for the result
+    card's Sources list."""
+    out = []
+    try:
+        chunks = (((data.get('candidates') or [{}])[0]
+                   .get('groundingMetadata') or {})
+                  .get('groundingChunks') or [])
+    except Exception:
+        return out
+    for ch in chunks:
+        web = (ch or {}).get('web') or {}
+        uri = str(web.get('uri') or '').strip()
+        if uri.startswith('http'):
+            out.append({'uri': uri[:500],
+                        'title': str(web.get('title') or '').strip()[:200]})
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _spine_urls_from_text(text):
+    """Fallback when the model didn't answer in JSON: salvage any
+    direct image URLs out of its prose."""
+    seen, urls = set(), []
+    for m in _SPINE_URL_IN_TEXT_RE.finditer(text or ''):
+        u = m.group(0)
+        if u.lower() not in seen:
+            seen.add(u.lower())
+            urls.append(u)
+        if len(urls) >= 5:
+            break
+    return urls
+
+
+# --- /api/enhance-face prompts (verbatim from functions/api/enhance-face.js)
+# Enhancement, never regeneration: the model may only work with what's
+# in the photo. Every "do not invent" clause exists because an earlier
+# build cheerfully re-lettered a cover with made-up text.
+ENHANCE_PROMPTS = {
+    'sharpen': (
+        'Enhance this book cover photo. The photo shows a real book '
+        'cover that is slightly soft, blurry, or out of focus. Sharpen '
+        'the existing cover artwork and its printed text so edges and '
+        'lettering are crisp. Work ONLY with what is already in the '
+        'image: do not redraw, repaint, restyle, rearrange, add, or '
+        'remove any element of the cover. Do not change colors, '
+        'composition, wording, or lettering. Do not invent detail, '
+        'texture, or background. If part of the cover is cut off, '
+        'leave it cut off. The output must look like the exact same '
+        'cover photographed in perfect focus.'),
+    'restore': (
+        'Restore this photo of a book cover. The photo may be blurry, '
+        'skewed, glared, shadowed, or slightly faded. Produce a clean, '
+        'straight-on, evenly lit, sharp version of the SAME cover: '
+        'correct perspective, remove glare and shadows, restore faded '
+        'color and contrast. Work ONLY with what is already in the '
+        'image: do not redraw, repaint, restyle, rearrange, add, or '
+        'remove any element of the cover. Keep the title, author name, '
+        'artwork, and wording exactly as they are \u2014 never '
+        're-letter, retype, or rewrite text; if text is unreadable, '
+        'keep the original lettering rather than inventing words. Do '
+        'not invent detail or background. If part of the cover is cut '
+        'off, leave it cut off \u2014 do not reconstruct missing parts '
+        'of the cover. The result must be recognizably the exact same '
+        'edition of the same book, just photographed well.'),
+}
+
+# Per-user tables the admin delete_user action wipes, in the Pages order
+# (functions/api/admin-users.js PER_USER_TABLES): every row owned by the
+# user across these goes, then the auth user itself.
+_ADMIN_PER_USER_TABLES = ('analytics_events', 'banned_users', 'books',
+                          'circle_invites', 'deleted_books', 'profiles',
+                          'trope_proposal_votes', 'trope_votes')
+
+
 TROPE_PROVIDER_URLS = {
     'openrouter': 'https://openrouter.ai/api/v1',
     'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -192,6 +403,29 @@ def load_vision_cfg():
                 'model': (d.get('vision_model') or 'gemini-3.8-flash').strip()}
     except Exception:
         return {'key': '', 'model': 'gemini-3.8-flash'}
+
+
+def load_enhance_model():
+    """Image-edit model for /api/enhance-face (v281): server-config key
+    enhance_model, default gemini-2.5-flash-image — the Pages function's
+    ENHANCE_MODEL default."""
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            return (json.load(f).get('enhance_model')
+                    or 'gemini-2.5-flash-image').strip()
+    except Exception:
+        return 'gemini-2.5-flash-image'
+
+
+def load_brave_key():
+    """Brave image-search key for /api/spine-search (v268):
+    server-config key brave_search_api_key. Without it the endpoint
+    uses the Gemini-grounded search, as on Pages."""
+    try:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
+            return (json.load(f).get('brave_search_api_key') or '').strip()
+    except Exception:
+        return ''
 
 
 VISION_PROMPT_SINGLE = (
@@ -305,6 +539,8 @@ _RATE_LIMITS = {
     'inventaire': (120, 60),
     'trope-models': (60, 60),
     'embed': (30, 60),         # same numbers as functions/api/embed.js
+    'enhance-face': (10, 60),  # same numbers as functions/api/enhance-face.js
+    'spine-search': (10, 60),  # same numbers as functions/api/spine-search.js
     'cover-proxy': (120, 60),
     'cache-cover': (300, 60),   # v216: bulk backfill paces itself at ~150/min
 }
@@ -468,6 +704,15 @@ class Handler(SimpleHTTPRequestHandler):
         if path == '/api/cache-cover':
             self.handle_api_cache_cover()
             return
+        if path == '/api/enhance-face':
+            self.handle_api_enhance_face()
+            return
+        if path == '/api/spine-search':
+            self.handle_api_spine_search()
+            return
+        if path == '/api/admin-users':
+            self.handle_api_admin_users()
+            return
         self.send_error(404)
 
     def _require_auth(self):
@@ -484,6 +729,46 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json(403, {'error': 'account suspended'})
             return False
         return True
+
+    def _require_admin(self):
+        """The caller's user id when they are a signed-in app admin,
+        else None (the error response has already been sent). Shared by
+        the admin endpoints (v246): the sign-in gate first, then the
+        app_admins check with the service key — the client's is_admin
+        flag is never trusted. Fails closed, as on Pages: an
+        unconfigured server is a 500, a failed lookup is a 500, a
+        non-admin is a 403."""
+        user = authed_user(self.headers)
+        if user is None:
+            self._send_json(401, {'error': 'sign-in required'})
+            return None
+        if user.get('banned'):
+            self._send_json(403, {'error': 'account suspended'})
+            return None
+        cc = load_cloud_cfg()
+        svc = load_supabase_service_key()
+        base = (cc['supabaseUrl'] or '').rstrip('/')
+        if not base or not svc:
+            self._send_json(500, {'error': 'server misconfigured'})
+            return None
+        status, text = _supabase_fetch(
+            'GET', base + '/rest/v1/app_admins?user_id=eq.' +
+            urllib.parse.quote(str(user['id']), safe='') +
+            '&select=user_id',
+            {'apikey': svc, 'Authorization': 'Bearer ' + svc})
+        rows = None
+        if status == 200:
+            try:
+                rows = json.loads(text)
+            except Exception:
+                rows = None
+        if rows is None:
+            self._send_json(500, {'error': 'admin check failed'})
+            return None
+        if not rows:
+            self._send_json(403, {'error': 'admin only'})
+            return None
+        return str(user['id'])
 
     def _check_rate(self, name):
         """v194 (security): 429 when this client is over the per-endpoint budget."""
@@ -889,6 +1174,324 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json(502, {'error': 'cover cache failed'})
             except Exception:
                 pass
+
+    def handle_api_enhance_face(self):
+        """POST /api/enhance-face {image, mode} → enhanced photo (v281).
+        Mirrors functions/api/enhance-face.js: an image-edit call on the
+        native Gemini endpoint (the OpenAI-compatible endpoint cannot
+        return images) that may only work with what's in the photo —
+        glares/sharpens/restores, never regenerates. Ordering matches
+        Pages: body validated first, then sign-in, then rate limit,
+        then the key check."""
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+        raw = self.rfile.read(min(length, 4 * 1024 * 1024)) \
+            if length > 0 else b''
+        try:
+            body = json.loads(raw.decode('utf-8')) \
+                if raw.strip() else None
+        except Exception:
+            body = None
+        if not isinstance(body, dict):
+            self.send_error(400, 'bad request')
+            return
+        mode = body.get('mode')
+        image = body.get('image')
+        if mode not in ('sharpen', 'restore') \
+                or not isinstance(image, str) or not image \
+                or len(image) > 3500000:
+            self.send_error(400, 'bad request')
+            return
+        if not image.startswith('data:'):
+            image = 'data:image/jpeg;base64,' + image
+        if not re.match(r'^data:image/(jpeg|png|webp);base64,', image):
+            self.send_error(400, 'bad request')
+            return
+        if not self._require_auth():
+            return
+        if not self._check_rate('enhance-face'):
+            return
+        vc = load_vision_cfg()
+        if not vc['key']:
+            self._send_json(503, {'error':
+                "face enhancement isn't set up on this server "
+                "(set vision_api_key or trope_key_gemini)"})
+            return
+        model = load_enhance_model()
+        if not TROPE_MODEL_RE.match(model):
+            self._send_json(503, {'error': 'bad enhance_model'})
+            return
+        payload = {
+            'contents': [{'parts': [
+                {'text': ENHANCE_PROMPTS[mode]},
+                {'inlineData': {'mimeType': 'image/jpeg',
+                                'data': image.split(',', 1)[1]}}]}],
+            'generationConfig': {'responseModalities': ['TEXT', 'IMAGE']},
+        }
+        status, parsed, text = _gemini_generate(model, vc['key'], payload)
+        if status == 0:
+            self._send_json(502, {'error': 'enhance provider unreachable'})
+            return
+        if status == 503:
+            self._send_json(502, {'error':
+                'enhance model temporarily unavailable (upstream 503)'})
+            return
+        if status != 200:
+            body_bytes = text.encode('utf-8') if text else b'{}'
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body_bytes)))
+            self.end_headers()
+            self.wfile.write(body_bytes)
+            return
+        parts = []
+        if isinstance(parsed, dict):
+            parts = (((parsed.get('candidates') or [{}])[0]
+                      .get('content') or {}).get('parts') or [])
+        out = None
+        for part in parts:
+            inline = (part or {}).get('inlineData') or {}
+            if inline.get('data'):
+                out = 'data:' + (inline.get('mimeType') or 'image/png') \
+                    + ';base64,' + inline['data']
+                break
+        if not out:
+            self._send_json(502, {'error':
+                'enhance model returned no image'})
+            return
+        self._send_json(200, {'image': out})
+
+    def handle_api_spine_search(self):
+        """POST /api/spine-search {title, author?} → spine-photo
+        candidates (v268). Mirrors functions/api/spine-search.js:
+        admin-only (the client gate is a menu filter, not a check).
+        Brave image search when a key is configured; otherwise a
+        Gemini call with web grounding ON THIS SERVER's key. The
+        model's candidate URLs are untrusted and are cleaned before
+        they reach the client. Rate limit first, as on Pages."""
+        if not self._check_rate('spine-search'):
+            return
+        if self._require_admin() is None:
+            return
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+        raw = self.rfile.read(min(length, 64 * 1024)) \
+            if length > 0 else b''
+        try:
+            body = json.loads(raw.decode('utf-8')) \
+                if raw.strip() else {}
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        title = str(body.get('title') or '').strip()[:200]
+        author = str(body.get('author') or '').strip()[:200]
+        if not title:
+            self._send_json(400, {'error': 'title is required'})
+            return
+        brave_key = load_brave_key()
+        if brave_key:
+            query = _spine_search_query(title, author)
+            url = ('https://api.search.brave.com/res/v1/images/search'
+                   '?q=' + urllib.parse.quote(query) +
+                   '&count=8&safesearch=strict')
+            req = urllib.request.Request(url, headers={
+                'X-Subscription-Token': brave_key,
+                'Accept': 'application/json',
+                'User-Agent': 'CozyLibram/1.0 spine-search'})
+            status, parsed, _t = 0, None, ''
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    _t = r.read(4 * 1024 * 1024).decode('utf-8', 'replace')
+                    status = r.status
+                parsed = json.loads(_t)
+            except urllib.error.HTTPError as e:
+                status = e.code
+            except Exception:
+                status = 0
+            if status == 0:
+                self._send_json(502, {'error': 'image search unreachable'})
+                return
+            if status == 429:
+                self._send_json(502, {'error':
+                    'image search is rate-limiting right now — '
+                    'wait a minute and try again'})
+                return
+            if status in (401, 403):
+                self._send_json(502, {'error':
+                    'image search key rejected — '
+                    'check the Brave API key'})
+                return
+            if status != 200:
+                self._send_json(502, {'error':
+                    'image search error (upstream %d)' % status})
+                return
+            if parsed is None:
+                self._send_json(502, {'error':
+                    'image search returned an unreadable answer'})
+                return
+            self._send_json(200, {
+                'candidates':
+                    _clean_brave_candidates(parsed.get('results')),
+                'sources': [], 'via': 'brave'})
+            return
+        vc = load_vision_cfg()
+        if not vc['key']:
+            self._send_json(503, {'error':
+                "cover reading isn't set up on this server "
+                "(set vision_api_key or trope_key_gemini)"})
+            return
+        if not TROPE_MODEL_RE.match(vc['model']):
+            self._send_json(503, {'error': 'bad vision_model'})
+            return
+        payload = {
+            'contents': [{'parts': [
+                {'text': _spine_search_prompt(title, author)}]}],
+            'tools': [{'google_search': {}}],
+            'generationConfig': {
+                'responseMimeType': 'application/json',
+                'temperature': 0, 'maxOutputTokens': 1500},
+        }
+        status, parsed, _t = _gemini_generate(
+            vc['model'], vc['key'], payload)
+        if status == 0:
+            self._send_json(502, {'error': 'vision provider unreachable'})
+            return
+        if status == 429:
+            self._send_json(502, {'error':
+                'Gemini is rate-limiting this key right now — '
+                'wait a minute and try again'})
+            return
+        if status != 200:
+            self._send_json(502, {'error':
+                'vision provider error (upstream %d)' % status})
+            return
+        if parsed is None:
+            self._send_json(502, {'error':
+                'vision provider returned an unreadable answer'})
+            return
+        parts = (((parsed.get('candidates') or [{}])[0]
+                  .get('content') or {}).get('parts') or [])
+        text = ''.join(str((p or {}).get('text') or '') for p in parts)
+        try:
+            answer = json.loads(text)
+            candidates = _clean_spine_search_candidates(
+                answer.get('candidates'))
+        except Exception:
+            candidates = [{'image_url': u, 'page_url': None,
+                           'note': 'scraped from answer text'}
+                          for u in _spine_urls_from_text(text)]
+        self._send_json(200, {'candidates': candidates,
+                              'sources': _spine_search_sources(parsed)})
+
+    def handle_api_admin_users(self):
+        """POST /api/admin-users {action} → admin user management
+        (v246). Mirrors functions/api/admin-users.js: list_users pages
+        the Auth admin API into the id→email directory the Observatory
+        renders with; delete_user wipes the target's per-user rows and
+        deletes the auth user. Admin-only (see _require_admin), and an
+        admin can never delete themself or another admin here."""
+        caller = self._require_admin()
+        if caller is None:
+            return
+        cc = load_cloud_cfg()
+        svc = load_supabase_service_key()
+        base = (cc['supabaseUrl'] or '').rstrip('/')
+        svc_headers = {'apikey': svc, 'Authorization': 'Bearer ' + svc}
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+        raw = self.rfile.read(min(length, 64 * 1024)) \
+            if length > 0 else b''
+        try:
+            body = json.loads(raw.decode('utf-8')) \
+                if raw.strip() else {}
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        action = body.get('action')
+        if action == 'list_users':
+            users = []
+            for page in range(1, 51):
+                status, text = _supabase_fetch(
+                    'GET', base + '/auth/v1/admin/users?per_page=100'
+                    '&page=%d' % page, svc_headers)
+                batch = None
+                if status == 200:
+                    try:
+                        data = json.loads(text)
+                        batch = data.get('users') if isinstance(
+                            data, dict) else data
+                    except Exception:
+                        batch = None
+                if not isinstance(batch, list):
+                    self._send_json(500, {'error': 'user list failed'})
+                    return
+                for u in batch:
+                    if isinstance(u, dict) and u.get('id'):
+                        users.append({
+                            'user_id': u['id'],
+                            'email': u.get('email'),
+                            'created_at': u.get('created_at'),
+                            'last_sign_in_at': u.get('last_sign_in_at')})
+                if len(batch) < 100:
+                    break
+            self._send_json(200, {'users': users})
+            return
+        if action == 'delete_user':
+            target = body.get('target_user_id')
+            if not target or not isinstance(target, str):
+                self._send_json(400, {'error':
+                    'target_user_id required'})
+                return
+            if target == caller:
+                self._send_json(400, {'error':
+                    'cannot delete your own account here'})
+                return
+            status, text = _supabase_fetch(
+                'GET', base + '/rest/v1/app_admins?user_id=eq.' +
+                urllib.parse.quote(target, safe='') + '&select=user_id',
+                svc_headers)
+            rows = None
+            if status == 200:
+                try:
+                    rows = json.loads(text)
+                except Exception:
+                    rows = None
+            if rows:
+                self._send_json(400, {'error':
+                    'cannot delete an admin account'})
+                return
+            wipes = [(t, 'user_id') for t in _ADMIN_PER_USER_TABLES]
+            wipes += [('circle_links', 'requester_id'),
+                      ('circle_links', 'addressee_id'),
+                      ('user_reports', 'reporter_id'),
+                      ('user_reports', 'reported_user_id')]
+            for table, col in wipes:
+                status, _t = _supabase_fetch(
+                    'DELETE', base + '/rest/v1/' + table + '?' + col +
+                    '=eq.' + urllib.parse.quote(target, safe=''),
+                    svc_headers)
+                if not (200 <= status < 300):
+                    self._send_json(500, {'error':
+                        'wipe failed on ' + table})
+                    return
+            status, text = _supabase_fetch(
+                'DELETE', base + '/auth/v1/admin/users/' +
+                urllib.parse.quote(target, safe=''), svc_headers)
+            if not (200 <= status < 300):
+                self._send_json(500, {'error': 'auth deletion failed',
+                                      'detail': (text or '')[:200]})
+                return
+            self._send_json(200, {'ok': True})
+            return
+        self._send_json(400, {'error': 'unknown action'})
 
     def handle_api_read_cover(self):
         """POST /api/read-cover {image, mode} → vision model.
