@@ -664,7 +664,13 @@ function longestStreak() {
   const sorted = Array.from(days).sort();
   let best = 0, run = 0, prev = null;
   sorted.forEach(k => {
-    const t = new Date(k + 'T12:00:00').getTime(); // local noon dodges DST edges
+    // Day keys are calendar days, so the gap is measured in UTC (the
+    // pattern js/170's year streak already uses): local noon-to-noon
+    // is 23h or 25h across a DST change, never the exact 864e5 the
+    // comparison needs — the local-noon version silently broke every
+    // run spanning a clock change.
+    const p = k.split('-');
+    const t = Date.UTC(+p[0], +p[1] - 1, +p[2]);
     run = (prev != null && t - prev === 864e5) ? run + 1 : 1;
     if (run > best) best = run;
     prev = t;

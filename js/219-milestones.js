@@ -273,7 +273,11 @@ export function longestStreakFor(lib) {
   const sorted = Array.from(days).sort();
   let best = 0, run = 0, prev = null;
   sorted.forEach(k => {
-    const t = new Date(k + 'T12:00:00').getTime(); // local noon dodges DST edges
+    // UTC day math, as in js/040's longestStreak and js/170's year
+    // streak: local noon-to-noon is 23h/25h across a DST change, so an
+    // exact-ms comparison against local noons breaks the run.
+    const p = k.split('-');
+    const t = Date.UTC(+p[0], +p[1] - 1, +p[2]);
     if (isNaN(t)) return;
     run = (prev != null && t - prev === 864e5) ? run + 1 : 1;
     if (run > best) best = run;
