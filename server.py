@@ -73,6 +73,69 @@ def load_supabase_service_key():
         return ''
 
 
+_BEARER_RE = re.compile(r'^Bearer\s+(\S+)$')
+
+
+def _supabase_get(path, token, apikey, timeout):
+    """One GET against the configured Supabase project; parsed JSON, or
+    None on any failure (HTTP error, network, bad JSON). Never raises:
+    the auth checks built on this fail closed for the user lookup and
+    open only where the Pages code does."""
+    cc = load_cloud_cfg()
+    base = (cc['supabaseUrl'] or '').rstrip('/')
+    if not base or not token or not apikey:
+        return None
+    req = urllib.request.Request(
+        base + path,
+        headers={'apikey': apikey, 'Authorization': 'Bearer ' + token})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if r.status != 200:
+                return None
+            return json.loads(r.read(256 * 1024).decode('utf-8', 'replace'))
+    except Exception:
+        return None
+
+
+def authed_user(headers):
+    """Mirror of functions/_lib/require-user.js (v225; ban check v246).
+
+    The client sends its Supabase session JWT as
+    `Authorization: Bearer <token>` (apiFetch in js/050-helpers.js); this
+    validates it against the Auth API of the Supabase project configured
+    in server-config.json and returns the user object — or None when
+    the caller is not signed in (missing/malformed header, unconfigured
+    server, Supabase rejecting the token). A caller on banned_users
+    comes back with banned=True: that lookup runs with the caller's own
+    JWT so the "users see own" RLS policy applies, has a short timeout,
+    and fails open (returns the user) exactly like the Pages version —
+    the client-side sign-out check is the other enforcement point.
+    Never raises."""
+    try:
+        m = _BEARER_RE.match(headers.get('Authorization') or '')
+        if not m:
+            return None
+        token = m.group(1)
+        cc = load_cloud_cfg()
+        apikey = (cc['supabaseAnonKey'] or '').strip() or \
+            load_supabase_service_key()
+        if not (cc['supabaseUrl'] or '').strip() or not apikey:
+            return None
+        user = _supabase_get('/auth/v1/user', token, apikey, 10)
+        if not isinstance(user, dict) or not user.get('id'):
+            return None
+        rows = _supabase_get(
+            '/rest/v1/banned_users?user_id=eq.' +
+            urllib.parse.quote(str(user['id']), safe='') + '&select=user_id',
+            token, apikey, 4)
+        if isinstance(rows, list) and rows:
+            user = dict(user)
+            user['banned'] = True
+        return user
+    except Exception:
+        return None
+
+
 TROPE_PROVIDER_URLS = {
     'openrouter': 'https://openrouter.ai/api/v1',
     'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -389,6 +452,21 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def _require_auth(self):
+        """v225 parity: /api/* is signed-in only, like the Pages
+        functions — this mirror spent the same metered quotas (and, for
+        cache-cover, service-key writes) for anyone who could reach the
+        port (issue #339). 401 with no valid session, 403 for a banned
+        account (v246); the JSON bodies match require-user.js."""
+        user = authed_user(self.headers)
+        if user is None:
+            self._send_json(401, {'error': 'sign-in required'})
+            return False
+        if user.get('banned'):
+            self._send_json(403, {'error': 'account suspended'})
+            return False
+        return True
+
     def _check_rate(self, name):
         """v194 (security): 429 when this client is over the per-endpoint budget."""
         if not rate_limit_ok(name, self.client_address[0]):
@@ -405,6 +483,8 @@ class Handler(SimpleHTTPRequestHandler):
         Mirrors functions/api/hardcover.js. Hardcover's own HTTP status is
         forwarded so the client's 401/403 handling keeps working.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('hardcover'):
             return
         try:
@@ -512,6 +592,8 @@ class Handler(SimpleHTTPRequestHandler):
         IS reachable and listed here. The key is resolved like
         handle_api_trope_infer and never leaves the server.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('trope-models'):
             return
         try:
@@ -592,6 +674,8 @@ class Handler(SimpleHTTPRequestHandler):
         max_tokens clamped to 100..4000. The upstream HTTP status is
         forwarded so the client's 401/403/429 handling keeps working.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('trope-infer'):
             return
         try:
@@ -710,6 +794,8 @@ class Handler(SimpleHTTPRequestHandler):
         production. Always 503 here; the client degrades to loved-author
         ranking instead of failing.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('embed'):
             return
         try:
@@ -730,6 +816,8 @@ class Handler(SimpleHTTPRequestHandler):
         keeps the remote URL. Every failure falls back to the remote URL;
         a cover is never lost here.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('cache-cover'):
             return
         try:
@@ -798,6 +886,8 @@ class Handler(SimpleHTTPRequestHandler):
         base64 (the client downscales to ~1024px first). The client validates
         any returned ISBN's check digit before trusting it.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('read-cover'):
             return
         try:
@@ -945,6 +1035,8 @@ class Handler(SimpleHTTPRequestHandler):
         Mirrors functions/api/gbooks/[[path]].js. Only the volumes endpoint
         is allowed; a client-supplied key param is stripped and replaced.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('gbooks'):
             return
         try:
@@ -991,6 +1083,8 @@ class Handler(SimpleHTTPRequestHandler):
         endpoint is allowed; no key needed — the identifying User-Agent
         Inventaire asks for is set server-side.
         """
+        if not self._require_auth():
+            return
         if not self._check_rate('inventaire'):
             return
         try:
