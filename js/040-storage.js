@@ -574,11 +574,14 @@ function logProgress(b, oldV, newV, unit) {
   // mixed-unit day holds one entry per unit.
   let e = b.log.find(x => x.d === k && entryUnit(x) === unit);
   if (!e) {
+    // v468: reading session counter for portrait nudges — its unit is
+    // a DAY with a log, so only the day's first entry (of either unit)
+    // counts; a mixed-unit day is still one day.
+    const dayAlreadyLogged = b.log.some(x => x.d === k);
     e = { d: k, from: Math.min(oldV, newV), to: Math.max(oldV, newV) };
     if (unit === 'pct') e.u = 'pct';
     b.log.push(e);
-    // v468: reading session counter for portrait nudges (a day with a log).
-    b.readSessions = (b.readSessions || 0) + 1;
+    if (!dayAlreadyLogged) b.readSessions = (b.readSessions || 0) + 1;
   }
   else { e.from = Math.min(e.from, newV); e.to = Math.max(e.to, newV); }
   if (b.log.length > 730) b.log = b.log.slice(-730); // ~2 years cap

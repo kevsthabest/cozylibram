@@ -2503,6 +2503,13 @@ export function renderDetailModal(b, viaBook) {
     if (!ok) return;
     b.log = (b.log || []).filter(x => x.d !== tk || entryUnit(x) !== unit);
     draft.log = b.log;
+    // readSessions counts a DAY with a log (its definition at the
+    // counter): if that removed the day's last entry in either unit,
+    // the day stops counting — the counter must be able to fall, or
+    // the portrait nudges fire on sessions that no longer exist.
+    if (!b.log.some(x => x.d === tk)) {
+      b.readSessions = Math.max(0, (b.readSessions || 0) - 1);
+    }
     b.progress = draft.progress = e.from; // roll progress back to where the day started
     startProgress = e.from; // keep Save from re-logging the removed entry
     startPct = e.from; // …and keep the percent comparison from re-logging it either
