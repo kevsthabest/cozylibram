@@ -1810,7 +1810,10 @@ class Handler(SimpleHTTPRequestHandler):
 
         Lets the app read cover pixels (favorites spine colors) from hosts
         that don't send CORS headers (e.g. Google Books). Guards: only
-        http(s) URLs, 4 MB cap, must be an image, and the host must not
+        http(s) URLs, 4 MB cap (larger images are rejected 502, never
+        silently truncated — the client reads pixels from whatever
+        arrives, so a cut-off image would corrupt its sampling without
+        any error surfacing), must be an image, and the host must not
         resolve to a private/loopback/link-local address (SSRF guard).
         """
         if not self._check_rate('cover-proxy'):
@@ -1830,10 +1833,13 @@ class Handler(SimpleHTTPRequestHandler):
             # v194: opener re-validates every redirect hop against the SSRF
             # guard (urllib would otherwise follow them unchecked).
             with _COVER_OPENER.open(req, timeout=15) as r:
-                data = r.read(4 * 1024 * 1024)
+                data = r.read(4 * 1024 * 1024 + 1)
                 ctype = r.headers.get('Content-Type', 'application/octet-stream')
             if not ctype.split(';')[0].strip().lower().startswith('image/'):
                 self.send_error(502, 'not an image')
+                return
+            if len(data) > 4 * 1024 * 1024:
+                self.send_error(502, 'image too large')
                 return
             self.send_response(200)
             self.send_header('Content-Type', ctype)

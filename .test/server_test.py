@@ -685,6 +685,74 @@ _check_api('trope-infer: oversize message content still rejected (400)',
                 ).encode('utf-8'), 'Bearer good-token'),
            400)
 
+# --- /cover-proxy: oversize images rejected, never truncated (#352) ------
+# The proxy read at most 4 MB and served whatever came back as a
+# complete 200 with a matching Content-Length, so an oversize cover
+# arrived silently cut off — and the favorites spine-colour sampler
+# averaged a partial image without any error surfacing. Pages rejects
+# oversize with 502 'image too large'. The upstream fetch is faked
+# (a 5 MiB image body); DNS is the harness's public-IP fake.
+class _FakeImgResp:
+    def __init__(self, body):
+        self._b = body
+        self.headers = {'Content-Type': 'image/jpeg'}
+
+    def read(self, n=-1):
+        return self._b if n is None or n < 0 else self._b[:n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _FakeImgOpener:
+    def __init__(self, body):
+        self._b = body
+
+    def open(self, req, timeout=None):
+        return _FakeImgResp(self._b)
+
+
+_COVER_URL = ('/cover-proxy?url=' + urllib.parse.quote(
+    'https://covers.openlibrary.org/b/id/1-L.jpg', safe=''))
+_real_opener = server._COVER_OPENER
+_real_gai_cp = server.socket.getaddrinfo
+_cp_fake_gai = fake_gai_factory(ips=['93.184.216.34'])
+
+
+def _cp_gai(host, port, *a, **k):
+    # The canned public-IP fake for the cover host, but loopback must
+    # keep resolving for real — the test client itself connects via
+    # 127.0.0.1 in this same process.
+    if host in ('127.0.0.1', 'localhost', '::1'):
+        return _real_gai_cp(host, port, *a, **k)
+    return _cp_fake_gai(host, port, *a, **k)
+
+
+server.socket.getaddrinfo = _cp_gai
+try:
+    server._COVER_OPENER = _FakeImgOpener(
+        b'\xff\xd8' + b'x' * (5 * 1024 * 1024))
+    _st, _b = _api('GET', _COVER_URL)
+    ok = _st == 502
+    print(('PASS' if ok else 'FAIL')
+          + ' - cover-proxy: 5 MiB image -> 502, not a truncated 200')
+    if not ok:
+        raise SystemExit(1)
+    _small = b'\xff\xd8' + b'y' * 1024
+    server._COVER_OPENER = _FakeImgOpener(_small)
+    _st, _b = _api('GET', _COVER_URL)
+    ok = _st == 200 and _b == _small
+    print(('PASS' if ok else 'FAIL')
+          + ' - cover-proxy: under-cap image served complete')
+    if not ok:
+        raise SystemExit(1)
+finally:
+    server._COVER_OPENER = _real_opener
+    server.socket.getaddrinfo = _real_gai_cp
+
 # --- /api/embed: the documented 503 must be reachable (issue #348) --------
 # handle_api_embed opens with _check_rate('embed'), but _RATE_LIMITS had no
 # 'embed' key and rate_limit_ok indexes it unguarded — every POST raised
