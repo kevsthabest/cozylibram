@@ -11,11 +11,39 @@
 // functions/_lib/cover-hosts.js — a single source of truth since the
 // endpoints' private copies diverged twice (v504, v518). (The other
 // consumer, /api/cache-cover, was removed in v537.)
+//
+// Redirects are followed manually, hop by hop, and every hop target is
+// re-validated against the same admission rule before it is fetched —
+// with the platform's default redirect handling the initial check alone
+// decides nothing, because a listed host can redirect anywhere (issue
+// #344 demonstrated an everyday Open Library cover fetching two
+// unlisted hosts). Admission is exact-match against the allowlist, plus
+// subdomains of archive.org: Open Library covers land on per-item
+// ia*.us.archive.org storage hosts that cannot be enumerated in an
+// exact list, and archive.org is already trusted as an entry host, so
+// the suffix admit extends trust only to archive-controlled storage
+// nodes (Decision, 2026-10-18). Every other host stays exact-match.
 
 import { rateLimit } from './_lib/rate-limit.js';
 import { COVER_PROXY_HOSTS as ALLOWED_HOSTS } from './_lib/cover-hosts.js';
 
 const MAX_BYTES = 4 * 1024 * 1024;
+// Legitimate cover chains are short (Open Library's is two hops); the
+// bound exists so a redirect loop or an over-long chain is refused by
+// this endpoint's own policy instead of running into the platform's
+// fetch cap in a shape nobody chose.
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+// The one admission rule, applied to the requested URL and to every
+// redirect hop alike: exact allowlist match, or a subdomain of
+// archive.org (see the header for why the suffix admit exists).
+// archive.org itself is an exact allowlist entry; the dot boundary
+// keeps lookalikes (archive.org.evil.com, evilarchive.org) out.
+function hostAdmitted(hostname) {
+  const host = hostname.toLowerCase();
+  return ALLOWED_HOSTS.has(host) || host.endsWith('.archive.org');
+}
 
 export async function onRequest(context) {
   // v194 (security): unauthenticated internet-facing endpoint — cap it.
@@ -29,15 +57,39 @@ export async function onRequest(context) {
   } catch {
     return new Response('need an https url', { status: 400 });
   }
-  if (target.protocol !== 'https:' || !ALLOWED_HOSTS.has(target.hostname.toLowerCase())) {
+  if (target.protocol !== 'https:' || !hostAdmitted(target.hostname)) {
     return new Response('host not allowed', { status: 403 });
   }
 
+  // Fetch with redirect handling off and follow the chain by hand, so
+  // each hop target passes hostAdmitted (and stays https) before it is
+  // fetched. A hop that fails validation is refused unfetched — that is
+  // what makes the header's "a non-listed host can never be fetched"
+  // true for the whole chain, not just its first URL.
   let upstream;
+  let current = target;
   try {
-    upstream = await fetch(target.toString(), {
-      headers: { 'User-Agent': 'CozyLibram/1.0 cover-proxy' },
-    });
+    for (let redirects = 0; ; redirects++) {
+      upstream = await fetch(current.toString(), {
+        headers: { 'User-Agent': 'CozyLibram/1.0 cover-proxy' },
+        redirect: 'manual',
+      });
+      const location = upstream.headers.get('Location');
+      if (!REDIRECT_STATUSES.has(upstream.status) || !location) break;
+      if (redirects >= MAX_REDIRECTS) {
+        return new Response('too many redirects', { status: 502 });
+      }
+      let next;
+      try {
+        next = new URL(location, current);
+      } catch {
+        return new Response('bad redirect', { status: 502 });
+      }
+      if (next.protocol !== 'https:' || !hostAdmitted(next.hostname)) {
+        return new Response('host not allowed', { status: 403 });
+      }
+      current = next;
+    }
   } catch {
     return new Response('upstream fetch failed', { status: 502 });
   }
