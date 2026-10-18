@@ -639,9 +639,20 @@ class Handler(SimpleHTTPRequestHandler):
         # ordinary filename here while Windows resolves it onto the real
         # file — so judge a backslash as a separator too, and the verdict
         # is the same on both platforms.
+        # The word filter below is translate_path's other half: it does
+        # not resolve parent words, it drops them (along with empty and
+        # '.' words) and joins what remains under the served directory.
+        # normpath cannot resolve a leading '..' above the root, so a
+        # bare-relative target like ../server-config.json kept its '..'
+        # through normalization and the judged path never matched the
+        # protected set — while the resolver dropped the '..' and served
+        # the file (issue #399). Dropping the same words here makes the
+        # judged path the path that will actually be served.
         p = urllib.parse.unquote(raw_path.split('?')[0])
         p = p.replace('\\', '/')
         p = '/' + posixpath.normpath(p).lstrip('/')
+        p = '/' + '/'.join(w for w in p.split('/')
+                           if w not in ('', '.', '..'))
         if p in self._BLOCKED_EXACT or p.startswith('/.git/'):
             return True
         base = p.rsplit('/', 1)[-1]
