@@ -296,7 +296,8 @@ def _req2(method, p):
 for _p in ['/server-config.json', '//server-config.json',
            '/./server-config.json', '/x/../server-config.json',
            '/%2e%2e/server-config.json',
-           '/.git/config', '//.git/config']:
+           '/%5cserver-config.json', '/..%5cserver-config.json',
+           '/.git/config', '//.git/config', '/.git%5cconfig']:
     _st, _body = _req2('GET', _p)
     ok = _st == 404 and b'SENTINEL' not in _body
     print(('PASS' if ok else 'FAIL') + ' - live GET %r -> 404, no leak' % _p)
@@ -313,6 +314,30 @@ print(('PASS' if ok else 'FAIL') + ' - live GET /ok.txt still serves (200)')
 if not ok:
     raise SystemExit(1)
 _srv2.shutdown()
+
+# --- SEC-01a blocklist: backslash spellings (follow-up to issue #338) -----
+# server.py's deployment machine is Windows, where a backslash separates
+# path components for the filesystem at open time but means nothing to
+# posixpath.normpath. Judged raw, a backslash spelling of a protected file
+# looks like an ordinary filename to the checks above while Windows
+# resolves it onto the real file. _path_blocked judges a backslash as a
+# separator, so every spelling below must block exactly like its
+# forward-slash twin in the #338 block.
+for _p in ['/%5cserver-config.json', '/%5Cserver-config.json',
+           '/..%5cserver-config.json', '/..\\server-config.json',
+           '/x\\..\\server-config.json',
+           '/.git\\config', '/.git%5cconfig',
+           '/%5c.env', '/foo\\.env']:
+    ok = _h._path_blocked(_p) is True
+    print(('PASS' if ok else 'FAIL') + ' - blocklist blocks backslash spelling %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+# Legitimate backslash-free paths stay unaffected by the translation.
+for _p in ['/index.html', '/config.js', '/js/181-appversion.js']:
+    ok = _h._path_blocked(_p) is False
+    print(('PASS' if ok else 'FAIL') + ' - blocklist still allows %r' % _p)
+    if not ok:
+        raise SystemExit(1)
 
 # --- /api/* caller authentication, v225 parity (issue #339) ----------------
 # Every /api/* handler must reject unauthenticated callers with the Pages
