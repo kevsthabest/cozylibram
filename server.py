@@ -287,6 +287,7 @@ _RATE_LIMITS = {
     'gbooks': (120, 60),
     'inventaire': (120, 60),
     'trope-models': (60, 60),
+    'embed': (30, 60),         # same numbers as functions/api/embed.js
     'cover-proxy': (120, 60),
     'cache-cover': (300, 60),   # v216: bulk backfill paces itself at ~150/min
 }
