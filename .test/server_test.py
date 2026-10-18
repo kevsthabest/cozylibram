@@ -660,6 +660,31 @@ _check_api('admin-users: no service key configured -> 500 misconfigured',
 server.load_supabase_service_key = lambda: 'svc-stub'
 urllib.request.urlopen = _real_urlopen
 
+# --- /api/trope-infer: full-size legal bodies must not truncate (#351) ----
+# The handler validates messages at up to 20 x 20,000 chars (the Pages
+# contract, ~400 KB of text), but read the request body with a 64 KB cap:
+# a legal 80 KB body was cut mid-JSON and failed downstream instead of
+# reaching the provider. No trope key is configured here, so a body that
+# survives validation must arrive at the documented 503.
+server.load_trope_cfg = lambda: {'provider': 'gemini', 'model': 'gemini-x',
+                                 'keys': {}, 'key': '', 'base_url': '',
+                                 'base_url_explicit': ''}
+_BIG_BODY = json.dumps({'messages': [
+    {'role': 'user', 'content': 'x' * 20000} for _ in range(4)]
+}).encode('utf-8')
+_expect('trope-infer test body is legal-sized but over 64 KB (%d bytes)'
+        % len(_BIG_BODY), 65536 < len(_BIG_BODY) < 400 * 1024)
+_check_api('trope-infer: 80 KB legal body reaches the no-key 503',
+           _api('POST', '/api/trope-infer', _BIG_BODY, 'Bearer good-token'),
+           503, "no API key configured for provider 'gemini' "
+                "(set trope_key_gemini)")
+_check_api('trope-infer: oversize message content still rejected (400)',
+           _api('POST', '/api/trope-infer',
+                json.dumps({'messages': [
+                    {'role': 'user', 'content': 'x' * 20001}]}
+                ).encode('utf-8'), 'Bearer good-token'),
+           400)
+
 # --- /api/embed: the documented 503 must be reachable (issue #348) --------
 # handle_api_embed opens with _check_rate('embed'), but _RATE_LIMITS had no
 # 'embed' key and rate_limit_ok indexes it unguarded — every POST raised

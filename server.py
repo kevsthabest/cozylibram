@@ -983,7 +983,13 @@ class Handler(SimpleHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get('Content-Length') or 0)
-            raw = self.rfile.read(min(length, 65536)).decode('utf-8', 'replace')
+            # The read cap must cover the largest body the validation
+            # below accepts — 20 messages x 20,000 chars, the Pages
+            # contract (~400 KB of text). This was 64 KB, which cut
+            # legal bodies off mid-JSON (issue #351); validation, not
+            # the socket read, is the size guard. 4 MB matches the cap
+            # read-cover uses in this file.
+            raw = self.rfile.read(min(length, 4 * 1024 * 1024)).decode('utf-8', 'replace')
             body = json.loads(raw)
             messages = body.get('messages')
             if not isinstance(messages, list) or not messages or len(messages) > 20:
