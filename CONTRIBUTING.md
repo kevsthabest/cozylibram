@@ -318,6 +318,24 @@ Completion reports carry: verdict (done / done-with-risk / blocked),
 commit SHA + files changed, test evidence, residual risks, handoff note
 location. Keep reports terse; link commits instead of pasting logs.
 
+### Report routing — Decision, 2026-10-18
+
+- **Gate verdicts go to the owning seat.** A gate verdict on a work
+  item — PASS, PASS_WITH_RISK, or BLOCKED, with its findings — is
+  delivered as a handoff to the chat of the seat that owns the work,
+  never only posted in the reviewing seat's own chat. (Precedent:
+  PR #312's Advisor PASS, stranded in the Advisor's chat, cost ~3.5h.)
+- **Reports live with their seat.** A seat's own reports and
+  deliverables are posted in that seat's own chat. The coordinator
+  chat and the Agent Team reports chat receive a one-line pointer
+  (what + where), not the full report text.
+- **Relays collect the pointer back.** A chat that relays a question
+  to another seat collects the pointer back when the answer lands;
+  the full answer lives with the owning seat.
+
+Seats' replies surfacing inside other seats' chats made the work hard
+to track — each chat reads as its own seat's story.
+
 ## Operating Rules
 
 - Max 3 review→fix rounds per item, then escalate to the User with the
