@@ -78,6 +78,14 @@ function mergeCloudBooks(local, remoteRows) {
     if (!r || !r.book_id || dead.has(r.book_id)) continue;
     const lb = byId.get(r.book_id);
     const rd = migrateBook(Object.assign({}, r.data || {}));
+    // The row key wins: every other sync path (push upserts, tombstone
+    // deletes, this map) keys on book_id, so the merged book's id is
+    // forced to it. The payload's own id may differ (legacy rows) or
+    // sanitize away from the key inside migrateBook; letting it win
+    // detaches the book from its server row — re-added as new on every
+    // pull, and its deletion tombstones an id the cloud row doesn't
+    // carry, so the book can never be deleted.
+    rd.id = r.book_id;
     if (!lb) { local.push(rd); markDirty(rd); byId.set(r.book_id, rd); changed = true; }
     else if ((rd._mtime || 0) > (lb._mtime || 0)) { mergeAssign(lb, rd); changed = true; }
     else if ((rd._mtime || 0) === (lb._mtime || 0) && (rd._mtime || 0) > 0) {
@@ -175,8 +183,17 @@ async function cloudPushNow() {
     // last successful push. Bootstrap (no high-water yet) pushes everything,
     // exactly like before. Tombstones always go up whole (they're tiny) and
     // are pruned below once the push succeeds.
+    // The tombstone leg below runs after the books upsert await, by
+    // which time a sign-out/sign-in may have replaced the globals —
+    // capture the owner and the tombstone set this push was
+    // materialized for, the same way the books batch is materialized
+    // into rows here. Writing the NEW slot's tombstones (or pruning
+    // and persisting its set) from a dead session's push would mutate
+    // another account's deletion state.
+    const pushUserId = cloudUser.id;
+    const pushTombs = tombstones;
     const pushSel = selectPushBatch(library, since);
-    const rows = pushSel.batch.map(b => bookToRow(b, cloudUser.id));
+    const rows = pushSel.batch.map(b => bookToRow(b, pushUserId));
     // sendCeil bounds the high-water advance: it covers every _mtime in the
     // batch, so a book edited DURING the upsert (stamped after batch
     // selection) lands strictly above it and is caught by the re-scan below
@@ -187,24 +204,28 @@ async function cloudPushNow() {
       const { error } = await abortable(sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' }));
       if (error) throw error;
     }
-    if (tombstones.length) {
-      const trows = tombstones.map(t => ({ user_id: cloudUser.id, book_id: t.id,
+    if (pushTombs.length) {
+      const trows = pushTombs.map(t => ({ user_id: pushUserId, book_id: t.id,
         deleted_at: new Date(t.at).toISOString() }));
       const { error } = await abortable(sb.from('deleted_books').upsert(trows, { onConflict: 'user_id,book_id' }));
       if (error) throw error;
       // v147: a tombstoned book is gone for good — drop its row from the cloud
       // library too, so no pull/merge on any device can ever resurrect it.
       // Only an explicit manual re-add (which untombstones the id) brings it back.
-      const deadIds = tombstones.map(t => t.id);
+      const deadIds = pushTombs.map(t => t.id);
       const { error: delError } = await abortable(sb.from('books').delete()
-        .eq('user_id', cloudUser.id).in('book_id', deadIds));
+        .eq('user_id', pushUserId).in('book_id', deadIds));
       if (delError) throw delError;
     }
-    const pruned = pruneTombstones(tombstones, Date.now());
-    if (pruned.length !== tombstones.length) { tombstones = pruned; saveTombstones(); }
+    const pruned = pruneTombstones(pushTombs, Date.now());
+    // Write the prune back only if the live set is still the set this
+    // push captured; a different array means the slot changed hands
+    // mid-push and the set now belongs to the new session, whose own
+    // push will prune it.
+    if (pruned.length !== pushTombs.length && tombstones === pushTombs) { tombstones = pruned; saveTombstones(); }
     if (currentDb === pushDb) await writePushHighWater(sendCeil);
     cloudLastSync = Date.now();
-    AppLog.info('sync', 'push ok: ' + rows.length + ' books (' + library.length + ' total), ' + tombstones.length + ' tombstones');
+    AppLog.info('sync', 'push ok: ' + rows.length + ' books (' + library.length + ' total), ' + pushTombs.length + ' tombstones');
     // v495 (#128): convergence — re-scan after advancing the high-water mark;
     // anything edited mid-push is now strictly above it and gets its own round
     // instead of waiting for the next user save.
@@ -279,19 +300,25 @@ function applyTombstones(rows) {
   // v142: ignore stale deletions older than the tombstone floor (set by an
   // explicit "Download into this library" un-delete). Fresh deletions still
   // propagate normally. Accepts plain id strings for backward compatibility.
-  const ids = rows
+  const fresh = rows
     .map(r => (typeof r === 'string' ? { id: r, at: 0 } : r))
-    .filter(r => r && r.id && (r.at || 0) >= tombstoneFloor)
-    .map(r => r.id);
-  if (!ids.length) return false;
+    .filter(r => r && r.id && (r.at || 0) >= tombstoneFloor);
+  if (!fresh.length) return false;
   const dead = tombstonedIds();
   let changed = false;
-  for (const id of ids) {
+  for (const row of fresh) {
+    const id = row.id;
     if (library.some(b => b.id === id)) {
       library = library.filter(b => b.id !== id);
       changed = true;
     }
-    if (!dead.has(id)) { tombstones.push({ id: id, at: Date.now() }); dead.add(id); changed = true; }
+    // The recorded time must be the deletion's own time, never a fresh
+    // stamp: this device re-publishes the tombstone with that time on
+    // its next push, and a fabricated "now" would defeat the v142
+    // restore floor on other devices — a book another user explicitly
+    // restored after this deletion would be re-deleted there by a
+    // deletion that actually predates the restore.
+    if (!dead.has(id)) { tombstones.push({ id: id, at: row.at || Date.now() }); dead.add(id); changed = true; }
   }
   if (changed) { saveTombstones(); saveLibrary({ noCloud: true }); }
   return changed;
