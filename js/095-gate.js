@@ -304,9 +304,21 @@ async function enterApp(user) {
   // v204: drop the retired offline-mode flags (the choice no longer exists).
   try { localStorage.removeItem('spicyshelves.offline'); localStorage.removeItem('spicyshelves.offline.owner'); } catch (e) {}
   // v202: async in the IndexedDB backend — the slot must be loaded before render().
-  // A failed switch is logged (not thrown): enterApp is fire-and-forget.
+  // #328: a failed switch ABORTS the entry. The previous behaviour —
+  // log and continue — rendered and cloud-synced whatever mixed state
+  // the half-finished switch had left behind (the old account's books
+  // under the new account's cloud id). The failed switch changed no
+  // live state (the load stages before it publishes), so the honest
+  // surface is the gate itself with a plain failure notice and the
+  // entered-marker reset — a retry must stay possible.
   try { await setLocalUser(user.id); }
-  catch (e) { try { AppLog.error('storage', 'sign-in slot switch failed: ' + (e && e.message)); } catch (_) {} }
+  catch (e) {
+    try { AppLog.error('storage', 'sign-in slot switch failed: ' + (e && e.message)); } catch (_) {}
+    gateEnteredUid = null;
+    gateNotice = 'We couldn\u2019t load your library on this device. Check your connection or storage, then try signing in again.';
+    renderGate();
+    return;
+  }
   // Names captured on the "Create account" form travel in user_metadata —
   // adopt them into the local profile so syncCloudProfile pushes them to
   // the profiles table. Never overwrites names already set on the device.

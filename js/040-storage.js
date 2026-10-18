@@ -428,20 +428,29 @@ async function persistSlotTransform(db, changed) {
 }
 
 async function loadSlotState(db) {
+  // Everything loads into STAGED locals and is published to the live
+  // globals in one synchronous block at the end (#328): a load that
+  // fails halfway must leave the previous slot's state fully intact,
+  // because the caller (a slot switch) has no honest way to render or
+  // sync a half-loaded library — and the staged transforms' writes go
+  // to this load's own db, so a discarded stage has written nothing to
+  // any live state. (The transforms may still land in the TARGET
+  // slot's store before a later read fails; that state is durable and
+  // consistent, and the retry simply reads it back.)
   // v559: the stored ids carrying status 'wishlist' are captured from
   // the RAW rows before the migrateBook map below — its coercion to
   // 'tbr' would erase the evidence the unification keys on. The
   // transform itself runs after the v529 block (see there).
   const rawBooks = await idbGetAllBooks(db);
   const storedWishIds = new Set(rawBooks.filter(b => b && b.status === 'wishlist').map(b => b.id));
-  library = rawBooks.map(migrateBook);
+  const stagedLibrary = rawBooks.map(migrateBook);
   // v495 (#125): freshly loaded books are already in the store — unmark the
   // dirty flags trackBook() set, and record the store's id set so the
   // differential persist below knows what's new vs. deleted. The
   // persist-only set clears too: nothing merged can be pending against a
   // library that was just read out of this store.
-  for (const b of library) { unmarkDirty(b); unmarkPersistOnly(b); }
-  knownBookIds = new Set(library.map(b => b.id));
+  for (const b of stagedLibrary) { unmarkDirty(b); unmarkPersistOnly(b); }
+  const stagedKnownIds = new Set(stagedLibrary.map(b => b.id));
   // v529: one-time wishlist-shelf migration (js/020 wishlistShelfTransform),
   // flagged per slot in the slot kv. Changed books re-dirty via their
   // proxies and carry a fresh _mtime from the transform. The done-flag
@@ -449,8 +458,8 @@ async function loadSlotState(db) {
   // slot (persistSlotTransform) — flag-last, so a failed write retries
   // the transform on the next load instead of losing it (#330, #331).
   if (!(await idbKvGet(db, 'wishlistShelfV529'))) {
-    const nW = wishlistShelfTransform(library);
-    const changed = library.filter(b => dirtyBooks.has(b));
+    const nW = wishlistShelfTransform(stagedLibrary);
+    const changed = stagedLibrary.filter(b => dirtyBooks.has(b));
     if (await persistSlotTransform(db, changed)) {
       await idbKvPut(db, 'wishlistShelfV529', 1);
       if (nW && typeof scheduleCloudPush === 'function') scheduleCloudPush();
@@ -467,26 +476,39 @@ async function loadSlotState(db) {
   // and the done-flag follow the same persist-then-flag order as the
   // v529 pass above (#330, #331).
   if (!(await idbKvGet(db, 'wishlistUnifiedV559'))) {
-    let nU = wishlistUnifyTransform(library);
+    let nU = wishlistUnifyTransform(stagedLibrary);
     if (storedWishIds.size) {
       const now = Date.now();
-      for (const b of library) {
+      for (const b of stagedLibrary) {
         if (storedWishIds.has(b.id) && b.owned !== 'tobuy') { b.owned = 'tobuy'; b._mtime = now; nU++; }
       }
     }
-    const changed = library.filter(b => dirtyBooks.has(b));
+    const changed = stagedLibrary.filter(b => dirtyBooks.has(b));
     if (await persistSlotTransform(db, changed)) {
       await idbKvPut(db, 'wishlistUnifiedV559', 1);
       if (nU && typeof scheduleCloudPush === 'function') scheduleCloudPush();
     }
   }
-  tombstones = (await idbKvGet(db, 'tombstones')) || [];
-  tombstoneFloor = Number(await idbKvGet(db, 'tombFloor')) || 0;
-  upNext = (await idbKvGet(db, 'upNext')) || [];
-  // v74 cleanup, IDB edition: drop queued ids for books that no longer exist.
-  const have = new Set(library.map(b => b.id));
-  const cleaned = upNext.filter(id => have.has(id));
-  if (cleaned.length !== upNext.length) { upNext = cleaned; persistUpNext(); }
+  const stagedTombs = (await idbKvGet(db, 'tombstones')) || [];
+  const stagedFloor = Number(await idbKvGet(db, 'tombFloor')) || 0;
+  let stagedUpNext = (await idbKvGet(db, 'upNext')) || [];
+  // v74 cleanup, IDB edition: drop queued ids for books that no longer
+  // exist. The cleaned queue is REPORTED, not persisted here: persisting
+  // goes through the ambient currentDb, which during a switch still
+  // names the outgoing slot — the caller persists once currentDb names
+  // this slot.
+  const have = new Set(stagedLibrary.map(b => b.id));
+  const cleaned = stagedUpNext.filter(id => have.has(id));
+  const upNextCleaned = cleaned.length !== stagedUpNext.length;
+  if (upNextCleaned) stagedUpNext = cleaned;
+  // Publish: one synchronous block, only after every await above has
+  // succeeded — a failed load has changed no live state at all.
+  library = stagedLibrary;
+  knownBookIds = stagedKnownIds;
+  tombstones = stagedTombs;
+  tombstoneFloor = stagedFloor;
+  upNext = stagedUpNext;
+  return { upNextCleaned };
 }
 
 async function idbPersistSlot(uid, state) {
@@ -503,7 +525,8 @@ async function storageInit() {
   try {
     currentDb = await idbOpenSlot(localUid);
     await migrateSlotFromLegacy(currentDb);
-    await loadSlotState(currentDb);
+    const loaded = await loadSlotState(currentDb);
+    if (loaded && loaded.upNextCleaned) persistUpNext();
   } catch (e) {
     idbDisabled = true;
     currentDb = null;
@@ -876,9 +899,22 @@ async function setLocalUserIdb(uid) {
   // loaded the wrong library). With the flip deferred, an in-window save
   // targets the old slot's database with the old slot's books — a harmless
   // no-op, since the outgoing slot was already flushed above.
-  const db = await idbOpenSlot(localUid);
-  await migrateSlotFromLegacy(db);
-  await loadSlotState(db);
+  // #328: the flip above is load-bearing (the legacy migration reads the
+  // TARGET partition through localUid-keyed helpers), so a failure in
+  // the load restores the previous uid and rethrows instead: the staged
+  // load has published nothing, currentDb never flipped, and the
+  // outgoing slot's state is still the live, consistent one. The switch
+  // either lands whole or does not land at all.
+  let loaded;
+  let db;
+  try {
+    db = await idbOpenSlot(localUid);
+    await migrateSlotFromLegacy(db);
+    loaded = await loadSlotState(db);
+  } catch (e) {
+    localUid = prevUid;
+    throw e;
+  }
   currentDb = db;
   // v204: signed-out mode is deprecated — the only offline shelf left is a
   // pre-v204 library, which the first sign-in adopts into the new account's
@@ -894,6 +930,10 @@ async function setLocalUserIdb(uid) {
     // v202: legacy localStorage partition keys are read-only — kept as the
     // grace-period fallback, not deleted.
   }
+  // The staged load's Up Next cleanup persists only now that currentDb
+  // names this slot (and after adoption, so the persisted queue is the
+  // one that is actually live).
+  if (loaded && loaded.upNextCleaned) persistUpNext();
 }
 
 /* ---------------- library recovery ---------------- */
