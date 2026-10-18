@@ -263,7 +263,11 @@ export async function charLabRenderInbox(body, works) {
     });
     html += '</tbody></table></div>';
   }
-  html += '</div>';
+  html += '</div>' +
+    // charLabCanonDetail() paints the unified canonical view into this
+    // container; it must exist in the Review view's markup or the
+    // painter has nowhere to land.
+    '<div id="ch-canon-detail"></div>';
   body.innerHTML = html;
 
   // Wire view toggle (v389: was renderAdminBody which lands on Analytics — Claude caught it)
@@ -740,6 +744,7 @@ export function charLabDetail(chars) {
       : '') +
     '<p>' + (c.characterId
       ? '<span class="note">Linked to canonical character</span> ' +
+        '<button class="btn sm ghost" data-chcanonview="' + esc(c.characterId) + '">Unified view</button> ' +
         '<button class="btn sm ghost" data-chunlink-row="' + esc(c.id) + '">Unlink</button>'
       : '<button class="btn sm" id="ch-link-btn" data-chid="' + esc(c.id) + '">Link to character…</button>') +
     '</p>' +
@@ -914,6 +919,16 @@ export function charLabDetail(chars) {
       c.suggestedCharacterId = null;
       charLabDetail(chars);
     } catch (e) { b.disabled = false; b.title = 'Failed: ' + ((e && e.message) || e); }
+  }));
+  // Wire the unified canonical view: set the gate and switch to the
+  // Review view, whose render emits #ch-canon-detail and ends by
+  // painting it via charLabCanonDetail(). This button is the only
+  // assignment charLabCanonicalId ever gets — without it the unified
+  // view exists but can never be opened.
+  el.querySelectorAll('[data-chcanonview]').forEach(b => b.addEventListener('click', () => {
+    charLabCanonicalId = b.getAttribute('data-chcanonview');
+    charLabView = 'review';
+    renderCharacterLab();
   }));
   // Wire unlink from detail
   el.querySelectorAll('[data-chunlink-row]').forEach(b => b.addEventListener('click', async () => {
