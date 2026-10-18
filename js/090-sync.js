@@ -67,8 +67,23 @@ function stableJson(v) {
 // pre-merge copy, so the persist plan must write this book even though it
 // is not a local edit — with dirty as the plan's only signal, merged
 // updates never reached the store and a restart reverted them (#334).
+// The fields real flows delete from a book (photo/face removal, pose
+// reset) plus migrateBook's one legacy drop. A winning merge that no
+// longer carries one of these has deleted it — see mergeAssign.
+const MERGE_DELETE_FIELDS = ['spinePhoto', 'spinePhotoAssetId', 'editionFaceRefs', 'editionFaces', 'shelfPose', 'spice'];
+
 function mergeAssign(lb, rd) {
   Object.assign(lb, rd);
+  // Bounded replace (#336, ruled): Object.assign can overwrite but
+  // never remove, so without this a deleted field would survive on
+  // every peer and be pushed back to the deleter on their next edit.
+  // Only the deletion-managed fields above reconcile — absence of any
+  // other key never deletes, which bounds what an old-shape producer
+  // with a newer stamp can clear.
+  for (const f of MERGE_DELETE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(rd, f) &&
+        Object.prototype.hasOwnProperty.call(lb, f)) delete lb[f];
+  }
   unmarkDirty(lb);
   markPersistOnly(lb);
 }
