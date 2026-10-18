@@ -43,7 +43,12 @@ export async function onRequest(context) {
   }
 
   const ctype = (upstream.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (!upstream.ok || !ctype.startsWith('image/')) {
+  // (#345): image/svg+xml starts with image/ but is not a cover image — it
+  // is an XML document that can carry script, and served from this origin a
+  // top-level navigation to the proxy URL would run that script where the
+  // app's session lives. Every allowlisted provider serves raster covers,
+  // so SVG is refused with the non-images.
+  if (!upstream.ok || !ctype.startsWith('image/') || ctype === 'image/svg+xml') {
     return new Response('not an image', { status: 502 });
   }
 
@@ -56,6 +61,12 @@ export async function onRequest(context) {
     headers: {
       'Content-Type': ctype,
       'Cache-Control': 'public, max-age=86400',
+      // (#345) defense in depth for any future document-like image type:
+      // nosniff pins the declared type, and a sandboxed CSP makes a
+      // top-level navigation to this URL land in an opaque origin with
+      // script disabled. Subresource <img>/fetch use ignores both.
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': 'sandbox',
     },
   });
 }
