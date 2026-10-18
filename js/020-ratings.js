@@ -133,6 +133,28 @@ export function migrateBook(b) {
   // only place the facet is set, and it runs on raw stored rows
   // before this coercion can erase the evidence.
   if (!Object.prototype.hasOwnProperty.call(STATUS, b.status)) b.status = 'tbr';
+  // (#355): pageCount, progress and ratingsCount cross the same trust
+  // boundary as id/status — records are free-form JSON (a books row's data
+  // payload is whatever its owner's client wrote), and renderers
+  // interpolate these three into innerHTML raw (the card progress line,
+  // the preview/detail meta rows, the editions strip), so a string value
+  // is markup in a friend's session. Coerce once here, before any other
+  // line of this function reads them: Number() keeps the value a numeric
+  // string names (imports carry those), and anything non-numeric or out
+  // of range drops to absent — the canonical unknown, as with audioSecs
+  // below. Counts are whole; progress is a position (pages or percent
+  // points) and keeps the exact number it names.
+  const _numField = (v, min, whole) => {
+    const n = Number(v);
+    if (!isFinite(n) || n < min) return undefined;
+    return whole ? Math.round(n) : n;
+  };
+  const _pc = _numField(b.pageCount, 1, true);
+  if (_pc === undefined) delete b.pageCount; else b.pageCount = _pc;
+  const _pr = _numField(b.progress, 0, false);
+  if (_pr === undefined) delete b.progress; else b.progress = _pr;
+  const _rc = _numField(b.ratingsCount, 0, true);
+  if (_rc === undefined) delete b.ratingsCount; else b.ratingsCount = _rc;
   // v449: backfill readCount for books finished before reread tracking existed
   if (b.status === 'read' && (b.readCount == null || b.readCount < 1)) b.readCount = 1;
   // v536 (UX P3-15): a finished book with progress 0 reads as untouched
