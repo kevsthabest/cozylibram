@@ -3,7 +3,7 @@
 
 
 
-const CACHE = 'cozy-libram-v615';
+const CACHE = 'cozy-libram-v616';
 
 const IMG_CACHE = 'cozy-libram-covers'; // v109: cover art, survives version bumps
 // v500: Reader Portrait sticker artwork (assets/stickers/cut-webp/) is
