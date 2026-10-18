@@ -163,7 +163,7 @@ export function renderAuthorDetail() {
   // exiting the app.
   if (typeof routeBackOpened === 'function') routeBackOpened(() => go('authors'));
   document.querySelectorAll('#view [data-book]').forEach(el =>
-    el.addEventListener('click', () => openDetail(el.dataset.book)));
+    el.addEventListener('click', () => openBookFromEl(el, el.dataset.book)));
   fillMissingBooks(name);
 }
 

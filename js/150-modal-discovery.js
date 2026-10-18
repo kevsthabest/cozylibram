@@ -716,7 +716,7 @@ export function paintSeriesStrip(b) {
       figCover(bk.cover, bk.title) + '<figcaption>' + cap + '</figcaption></figure>';
   }).join('');
   strip.querySelectorAll('[data-book]').forEach(el =>
-    el.addEventListener('click', () => openDetail(el.dataset.book)));
+    el.addEventListener('click', () => openBookFromEl(el, el.dataset.book)));
   strip.querySelectorAll('[data-extfig]').forEach(fig => fig.addEventListener('click', () => {
     const e = entries[Number(fig.dataset.extfig)];
     if (!e || !e.ext) return;
@@ -747,7 +747,7 @@ export async function fillSeriesStrip(b) {
 }
 export function wireSeriesRows(scope) {
   scope.querySelectorAll('#m-series [data-book]').forEach(el =>
-    el.addEventListener('click', () => openDetail(el.dataset.book)));
+    el.addEventListener('click', () => openBookFromEl(el, el.dataset.book)));
 }
 /* js/070 calls this after background enrichment lands more data, so the
    strip (and the series position in the header) can repaint without a
@@ -884,14 +884,46 @@ export function similarBooks(book, limit) {
     String(x.book.title || '').localeCompare(String(y.book.title || '')));
   return scored.slice(0, limit || 6).map(s => s.book);
 }
+/* In-flight guard for the transition. While a cover is staged and flying,
+   a second open must not stack a second animation on top of it, and the
+   flying cover's landing callback must not render its (now stale) book
+   over the newer open. So: every open bumps the generation; a landing
+   callback renders only if its generation is still current; and an open
+   that arrives mid-flight skips the animation, tears the staged cover
+   down, and renders its own book immediately. The guard can never swallow
+   an open — every path through openDetail ends in a render. */
+let bookOpenGen = 0;
+let bookOpenBusy = false;
 export function openDetail(id, opts) {
   const b = library.find(x => x.id === id);
   if (!b) return;
   track('book_opened', null, { dedupeKey: 'open-' + id, dedupeMs: 60000 });
   const from = opts && (opts.fromEl || opts.fromRect);
-  if (from && !reducedMotion()) {
-    playBookOpen(b, from, opts.dropEl, () => renderDetailModal(b, true));
+  const gen = ++bookOpenGen; // this open supersedes any transition in flight
+  if (from && !reducedMotion() && !bookOpenBusy) {
+    bookOpenBusy = true;
+    try {
+      playBookOpen(b, from, opts.dropEl, () => {
+        // A superseded landing does nothing at all: the superseding open
+        // already cleared the flag and rendered, and a newer transition
+        // may be flying now — clearing the flag here would unguard it.
+        if (gen !== bookOpenGen) return;
+        bookOpenBusy = false;
+        renderDetailModal(b, true);
+      });
+    } catch (e) {
+      // The transition failed to stage: fall back to the plain modal
+      // rather than leaving the tap unanswered.
+      bookOpenBusy = false;
+      renderDetailModal(b, false);
+    }
   } else {
+    if (bookOpenBusy) {
+      // Superseding a staged cover: remove its overlay so it cannot
+      // finish its swing above the modal rendered below.
+      bookOpenBusy = false;
+      document.querySelectorAll('.bookopen-overlay').forEach(o => o.remove());
+    }
     if (opts && opts.dropEl && opts.dropEl.remove) opts.dropEl.remove();
     renderDetailModal(b, false);
   }
@@ -2118,8 +2150,8 @@ export function renderDetailModal(b, viaBook) {
     closeNow();
   };
   document.addEventListener('keydown', escClose);
-  root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book
-    el.addEventListener('click', () => openDetail(el.dataset.sim)));
+  root.querySelectorAll('[data-sim]').forEach(el => // v110: jump to a similar book (a cover button — it hands off to the transition)
+    el.addEventListener('click', () => openBookFromEl(el, el.dataset.sim)));
   // NB: never bind close directly as an event listener — the event
   // object would land in the force parameter and skip the close flush.
   document.getElementById('m-x').addEventListener('click', () => close());
@@ -2649,6 +2681,14 @@ export function quoteCardHTML(book, qt, feat) {
     esc((book.authors || []).join(', ') || 'Unknown author') +
     (qt.p ? ' · p. ' + qt.p : '') + '</span></span></div></div>';
 }
+/* A quote card opens its book. The card's cover thumbnail is the cover
+   element for the open when the book has one on the card; a book without
+   a cover has no cover element to fly from, so it opens plainly. */
+export function openQuoteCard(card, id) {
+  const img = card ? card.querySelector('.q-meta img') : null;
+  if (img) openBookFromEl(img, id);
+  else openDetail(id);
+}
 export function renderQuotes() {
   const all = allQuotes();
   let html = '<button class="btn ghost" id="q-back">← Shelves</button>' +
@@ -2669,11 +2709,11 @@ export function renderQuotes() {
     const e = all[Math.floor(Math.random() * all.length)];
     const spot = document.getElementById('q-spot');
     spot.innerHTML = quoteCardHTML(e.book, e.q, true);
-    spot.querySelector('.q-card').addEventListener('click', () => openDetail(e.book.id));
+    spot.querySelector('.q-card').addEventListener('click', () => openQuoteCard(spot.querySelector('.q-card'), e.book.id));
     if (spot.scrollIntoView) spot.scrollIntoView({ block: 'nearest' });
   });
   document.querySelectorAll('.q-list .q-card').forEach(c =>
-    c.addEventListener('click', () => openDetail(c.dataset.book)));
+    c.addEventListener('click', () => openQuoteCard(c, c.dataset.book)));
 }
 
 /* v153: fill the Trope intelligence row — DB tropes when present, heuristic

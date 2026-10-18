@@ -40,7 +40,13 @@ const b0 = book('s0', { title: 'Prequel Book', series: { name: 'The Great Saga',
 const b1 = book('s1', { title: 'First Book', series: { name: 'The Great Saga', position: 1 } });
 const b2 = book('s2', { title: 'Second Book', series: { name: 'The Great Saga', position: 2 } });
 const b3 = book('s3', { title: 'Standalone', series: null });
-runInWindow(`localStorage.clear(); library = [];
+// Motion off for this suite (named decision, book-opening-everywhere PR):
+// strip figures now hand off to the book-opening transition, so with
+// motion on a tap lands ~0.8s later and this suite's synchronous pins
+// would be timing tests. The behaviours pinned here (strip content and
+// tap-to-book navigation) are unchanged; the motion-on strip tap is
+// covered by bookopen-wiring.test.js. Every assertion below is untouched.
+runInWindow(`localStorage.clear(); localStorage.setItem('spicyshelves.animation', 'off'); library = [];
   library.push(${JSON.stringify(b0)}, ${JSON.stringify(b1)}, ${JSON.stringify(b2)}, ${JSON.stringify(b3)});
   saveLibrary();`);
 
