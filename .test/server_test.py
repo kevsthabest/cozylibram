@@ -1,7 +1,10 @@
 """server.py tests: /config.js flags (no secrets since v89) + /api/* proxies + cover proxy."""
 import importlib.util
+import os
 
-spec = importlib.util.spec_from_file_location('spicy_server', '/home/hatch/workspace/booktok/server.py')
+spec = importlib.util.spec_from_file_location(
+    'spicy_server',
+    os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'server.py')))
 server = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(server)
 

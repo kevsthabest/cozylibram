@@ -43,7 +43,7 @@ const { execFileSync } = require('child_process');
 
 const SB = '/home/hatch/workspace/skills/supabase/bin/sb-query';
 const REF = 'dvhimjkrroxuatthiizc';
-const APP = '/home/hatch/workspace/booktok';
+const APP = path.join(__dirname, '..');
 const APPLY = process.argv.includes('--apply');
 const DEDUPE_ONLY = process.argv.includes('--dedupe-report');
 const SELFTEST = process.argv.includes('--selftest');
