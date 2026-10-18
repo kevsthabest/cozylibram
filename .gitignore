@@ -1,5 +1,6 @@
 node_modules/
 __pycache__/
+.work/
 *.pyc
 server-config.json
 scripts/reclassify-progress.jsonl
