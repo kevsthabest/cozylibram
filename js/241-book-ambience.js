@@ -618,13 +618,18 @@ export function openAmbienceSheet(bookId) {
   };
   var token = null;
   try { if (typeof overlayOpened === 'function') token = overlayOpened('sheet', closeDom); } catch (e) {}
+  var onKey = function (e) { if (e.key === 'Escape') close(); };
   var close = function () {
+    // The keydown listener comes off on EVERY close path — scrim tap,
+    // swipe, programmatic close, and Escape alike. Removing it only in
+    // the Escape branch leaked one live listener (holding this sheet's
+    // closure) per sheet closed any other way.
+    document.removeEventListener('keydown', onKey);
     try { if (token != null && typeof overlayClosed === 'function') overlayClosed(token); } catch (e) {}
     closeDom();
   };
   sheet._ambClose = close;
   scrim.addEventListener('click', close);
-  var onKey = function (e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
   document.addEventListener('keydown', onKey);
   if (typeof wireSheetDrag === 'function') wireSheetDrag(sheet, close);
   paintAmbienceSheet();
