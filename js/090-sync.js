@@ -354,6 +354,20 @@ async function cloudFirstSync(opts) {
   if (!cloudUser) return { changed: false };
   const announce = !!(opts && opts.announce);
   let changed = false;
+  // This sync applies whatever its fetches return to the live globals, so
+  // it must know whose globals those are. Capture the account and slot at
+  // entry and re-check before every apply: a sign-out or account switch
+  // during a fetch would otherwise land this account's library and
+  // tombstones in the now-current slot, where the adoption path (or the
+  // push below) carries them into the next account (#327).
+  const syncUid = cloudUser.id;
+  const syncDb = currentDb;
+  const stillMine = () => !!cloudUser && cloudUser.id === syncUid && currentDb === syncDb;
+  const discard = () => {
+    AppLog.info('sync', 'first sync discarded: account changed mid-pull');
+    syncEnd(changed);
+    return { changed };
+  };
   syncBegin();
   try {
     await syncCloudProfile();
@@ -361,9 +375,14 @@ async function cloudFirstSync(opts) {
     // seeding rule from js/229-user-state.js. A fresh device's defaults
     // must never overwrite the account's synced theme.
     try { if (typeof userStatePull === 'function') await userStatePull(); } catch (e) {}
-    if (applyTombstones(await cloudPullTombstones())) { render(); changed = true; }
+    if (!stillMine()) return discard();
+    const tombs = await cloudPullTombstones();
+    if (!stillMine()) return discard();
+    if (applyTombstones(tombs)) { render(); changed = true; }
     const remote = await cloudPullRows();
+    if (!stillMine()) return discard();
     if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); render(); changed = true; }
+    if (!stillMine()) return discard();
     await cloudPushNow();
     // v474: merge milestone achievements across devices (fire-and-forget —
     // the milestone pull never blocks the library sync).
@@ -459,10 +478,24 @@ async function cloudRealtimePull() {
   // never pushes — the cloud already holds whatever triggered this event, so
   // pushing here would echo our own writes back at us in a loop.
   if (!cloudUser) return;
+  // Same ownership discipline as cloudFirstSync (#327): capture the
+  // account and slot at entry and re-check before each apply, so a pull
+  // that resolves after a sign-out or account switch is discarded
+  // instead of landing in the new slot. The fetches are awaited into
+  // variables first — merging inline (mergeCloudBooks(library, await
+  // ...)) would also capture the pre-await library array, a stale-read
+  // hazard of its own.
+  const syncUid = cloudUser.id;
+  const syncDb = currentDb;
+  const stillMine = () => !!cloudUser && cloudUser.id === syncUid && currentDb === syncDb;
   syncBegin(); // v144
   try {
-    let changed = applyTombstones(await cloudPullTombstones());
-    if (mergeCloudBooks(library, await cloudPullRows())) { saveLibrary({ noCloud: true }); changed = true; }
+    const tombs = await cloudPullTombstones();
+    if (!stillMine()) { syncEnd(false); return; }
+    let changed = applyTombstones(tombs);
+    const remote = await cloudPullRows();
+    if (!stillMine()) { syncEnd(changed); return; }
+    if (mergeCloudBooks(library, remote)) { saveLibrary({ noCloud: true }); changed = true; }
     if (changed) render();
     cloudLastSync = Date.now();
     refreshAccountUI();
