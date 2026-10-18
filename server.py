@@ -214,6 +214,23 @@ VISION_PROMPT_SHELF = (
     'you cannot read at all. Vertical text, foil, and small print are common '
     '\u2014 transcribe carefully. Reply with ONLY the JSON object, no other '
     'text.')
+# v258: single close-up spine photo -> tight bounding box, for the crop
+# UI's pre-fit. Mirrors PROMPT_SPINE in functions/api/read-cover.js.
+VISION_PROMPT_SPINE = (
+    'You are looking at a close-up photo of one book spine (the photo '
+    'may also show table, background, or neighboring spines at the '
+    'edges). Find the single most prominent, centered book spine and '
+    'return a JSON object with exactly one key, "box": an object with '
+    '"x0", "y0", "x1", "y1" \u2014 the tight bounding box of that spine '
+    'as integers from 0 to 1000 (fractions of image width/height), '
+    'hugging the spine edges as closely as possible and excluding '
+    'background. The spine is the physical book\u2019s bound edge: its '
+    'top and bottom are where the BOOK ends \u2014 never extend the box '
+    'upward into screens, monitors, walls, shelves, or other '
+    'background, nor downward past the book. A glowing screen is never '
+    'part of a book spine. The spine usually has title text running '
+    'along its length. If no book spine is visible, return '
+    '{"box": null}. Reply with ONLY the JSON object, no other text.')
 VISION_MAX_SHELF_SPINES = 30
 
 
@@ -874,11 +891,13 @@ class Handler(SimpleHTTPRequestHandler):
                 pass
 
     def handle_api_read_cover(self):
-        """POST /api/read-cover {image, mode:'single'|'shelf'} → vision model.
+        """POST /api/read-cover {image, mode} → vision model.
         mode 'single' reads the printed ISBN (digits only), falling back to
         title/author when no ISBN is printed. mode 'shelf' (v199) reads
         bookshelf spines left-to-right and returns title/author candidates
         for the client to look up and review — nothing is added silently.
+        mode 'spine' (v258) finds the one spine in a close-up photo and
+        returns its bounding box for the crop UI's pre-fit.
         Mirrors functions/api/read-cover.js. The Gemini key
         comes from server-config.json (vision_api_key, falling back to the
         already-configured trope_key_gemini) — the browser never sees it.
@@ -897,7 +916,7 @@ class Handler(SimpleHTTPRequestHandler):
                 'utf-8', 'replace')
             body = json.loads(raw)
             mode = body.get('mode')
-            if mode not in ('single', 'shelf'):
+            if mode not in ('single', 'shelf', 'spine'):
                 self.send_error(400, 'bad request')
                 return
             image = body.get('image')
@@ -920,6 +939,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._send_json(503, {'error': 'bad vision_model'})
                 return
             is_shelf = (mode == 'shelf')
+            is_spine = (mode == 'spine')
             upstream_obj = {
                 'model': vc['model'],
                 'temperature': 0,
@@ -930,6 +950,7 @@ class Handler(SimpleHTTPRequestHandler):
                     'content': [
                         {'type': 'text',
                          'text': VISION_PROMPT_SHELF if is_shelf
+                         else VISION_PROMPT_SPINE if is_spine
                          else VISION_PROMPT_SINGLE},
                         {'type': 'image_url',
                          'image_url': {'url': image}},
@@ -946,8 +967,13 @@ class Handler(SimpleHTTPRequestHandler):
                 data = r.read(256 * 1024)
                 status = r.status
             if status == 200:
-                cleaned = self._clean_shelf_result(json.loads(data)) \
-                    if is_shelf else self._clean_vision_result(json.loads(data))
+                parsed = json.loads(data)
+                if is_shelf:
+                    cleaned = self._clean_shelf_result(parsed)
+                elif is_spine:
+                    cleaned = self._clean_spine_result(parsed)
+                else:
+                    cleaned = self._clean_vision_result(parsed)
                 data = json.dumps(cleaned).encode('utf-8')
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
@@ -1029,6 +1055,56 @@ class Handler(SimpleHTTPRequestHandler):
             if len(out) >= VISION_MAX_SHELF_SPINES:
                 break
         return {'books': out}
+
+    @staticmethod
+    def _clean_spine_result(parsed):
+        """v258: sanitize a spine-mode model answer into
+        {'box': {x0, y0, x1, y1} | None} — mirrors cleanSpineResult in
+        functions/api/read-cover.js. Coordinates are fractions of the
+        image (0-1000, rounded, clamped); a box with a missing or
+        non-numeric coordinate, or one implausibly thin (<5 wide or
+        <20 tall), is dropped to None, never trusted blindly."""
+        try:
+            content = (parsed.get('choices') or [{}])[0].get(
+                'message', {}).get('content')
+            content = re.sub(r'^```(?:json)?\s*', '',
+                             str(content or '').strip(), flags=re.I)
+            content = re.sub(r'\s*```$', '', content)
+            obj = json.loads(content)
+            box = obj.get('box') if isinstance(obj, dict) else None
+            if not isinstance(box, dict):
+                return {'box': None}
+        except Exception:
+            return {'box': None}
+
+        def c(v):
+            # Number(v) semantics for JSON values, as in the Pages
+            # cleaner: null -> 0, booleans -> 1/0, numeric strings
+            # parse; anything else is NaN and makes the box unusable.
+            if v is None:
+                n = 0.0
+            elif isinstance(v, bool):
+                n = 1.0 if v else 0.0
+            elif isinstance(v, (int, float)):
+                n = float(v)
+            elif isinstance(v, str):
+                try:
+                    n = float(v.strip())
+                except ValueError:
+                    return None
+            else:
+                return None
+            if n != n or n in (float('inf'), float('-inf')):
+                return None
+            return max(0, min(1000, int(round(n))))
+
+        x0, y0 = c(box.get('x0')), c(box.get('y0'))
+        x1, y1 = c(box.get('x1')), c(box.get('y1'))
+        if None in (x0, y0, x1, y1):
+            return {'box': None}
+        if x1 - x0 < 5 or y1 - y0 < 20:
+            return {'box': None}
+        return {'box': {'x0': x0, 'y0': y0, 'x1': x1, 'y1': y1}}
 
     def handle_api_gbooks(self):
         """GET /api/gbooks/books/v1/volumes?... → Google Books, key attached.

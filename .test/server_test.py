@@ -390,6 +390,53 @@ print(('PASS' if ok else 'FAIL') + ' - authed_user: junk/missing/schemaless -> N
 if not ok:
     raise SystemExit(1)
 
+# --- /api/read-cover 'spine' mode, v258 parity (issue #349) ---------------
+# The mirror's mode allowlist predates v258: POSTing mode 'spine' (what
+# js/205 spineDetectBox sends) got a 400 while production serves it. With
+# no vision key configured, a spine request must now pass the mode gate
+# and reach the documented 503; an unknown mode must still 400.
+server.load_vision_cfg = lambda: {'key': '', 'model': 'gemini-3.8-flash'}
+_check_api("read-cover: mode 'spine' passes the allowlist (503 no key)",
+           _api('POST', '/api/read-cover',
+                b'{"image":"data:image/jpeg;base64,AAAA","mode":"spine"}',
+                'Bearer good-token'),
+           503)
+_check_api("read-cover: unknown mode still rejected (400)",
+           _api('POST', '/api/read-cover',
+                b'{"image":"data:image/jpeg;base64,AAAA","mode":"bogus"}',
+                'Bearer good-token'),
+           400)
+
+
+def _spine(content):
+    return server.Handler._clean_spine_result(
+        {'choices': [{'message': {'content': content}}]})
+
+
+ok = _spine('{"box": {"x0": 100.4, "y0": 50, "x1": 300, "y1": 950}}') == \
+    {'box': {'x0': 100, 'y0': 50, 'x1': 300, 'y1': 950}}
+print(('PASS' if ok else 'FAIL') + ' - spine cleaner: valid box rounded through')
+if not ok:
+    raise SystemExit(1)
+ok = _spine('{"box": {"x0": -5, "y0": 0, "x1": 1200, "y1": 1000}}') == \
+    {'box': {'x0': 0, 'y0': 0, 'x1': 1000, 'y1': 1000}}
+print(('PASS' if ok else 'FAIL') + ' - spine cleaner: coordinates clamped to 0..1000')
+if not ok:
+    raise SystemExit(1)
+ok = _spine('{"box": null}') == {'box': None} \
+    and _spine('{"box": {"x0": 100, "y0": 50, "x1": 103, "y1": 950}}') == {'box': None} \
+    and _spine('{"box": {"x0": 100, "y0": 50, "x1": 300, "y1": 60}}') == {'box': None} \
+    and _spine('{"box": {"x0": 100, "y0": 50, "y1": 950}}') == {'box': None} \
+    and _spine('not json at all') == {'box': None}
+print(('PASS' if ok else 'FAIL') + ' - spine cleaner: null/thin/flat/incomplete/garbage -> box None')
+if not ok:
+    raise SystemExit(1)
+ok = _spine('```json\n{"box": {"x0": 10, "y0": 20, "x1": 110, "y1": 420}}\n```') == \
+    {'box': {'x0': 10, 'y0': 20, 'x1': 110, 'y1': 420}}
+print(('PASS' if ok else 'FAIL') + ' - spine cleaner: markdown fences stripped')
+if not ok:
+    raise SystemExit(1)
+
 # --- /api/embed: the documented 503 must be reachable (issue #348) --------
 # handle_api_embed opens with _check_rate('embed'), but _RATE_LIMITS had no
 # 'embed' key and rate_limit_ok indexes it unguarded — every POST raised
