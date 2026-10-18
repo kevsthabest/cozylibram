@@ -339,6 +339,93 @@ for _p in ['/index.html', '/config.js', '/js/181-appversion.js']:
     if not ok:
         raise SystemExit(1)
 
+# --- SEC-01a blocklist: bare-relative request targets (issue #399) -------
+# translate_path does not resolve parent words, it drops them, so a
+# request target with no leading slash at all — GET ../server-config.json —
+# still lands on the served directory's file. The normalized judge kept
+# the leading '..' that posixpath.normpath cannot resolve above the root
+# and compared '/../server-config.json' against the protected set: no
+# match, file served. The judge now applies translate_path's word
+# filtering too, so every spelling below is judged as the path the
+# resolver will actually serve.
+for _p in ['../server-config.json', '../../server-config.json',
+           '..%2fserver-config.json', '..%2Fserver-config.json',
+           '../.git/config', '..%2f.git%2fconfig',
+           '..\\server-config.json', '..%5cserver-config.json',
+           '..\\.git\\config', '..%5c.git%5cconfig', '../.git\\config']:
+    ok = _h._path_blocked(_p) is True
+    print(('PASS' if ok else 'FAIL') + ' - blocklist blocks bare-relative %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+# Unchanged controls: spellings the earlier blocks already blocked stay
+# blocked, and paths the resolver lands on unprotected files stay allowed
+# — including the bare-relative spelling of one.
+for _p in ['/../server-config.json', '//server-config.json']:
+    ok = _h._path_blocked(_p) is True
+    print(('PASS' if ok else 'FAIL') + ' - blocklist still blocks %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+for _p in ['/index.html', '/.gitignore', '../index.html']:
+    ok = _h._path_blocked(_p) is False
+    print(('PASS' if ok else 'FAIL') + ' - blocklist still allows %r' % _p)
+    if not ok:
+        raise SystemExit(1)
+
+# Live, over a raw socket so the request target reaches the server byte
+# for byte (an HTTP client may normalize a bare-relative target before
+# sending): the pre-fix server answers 200 with the sentinel's contents;
+# every spelling below must 404 without leaking a byte, while a
+# bare-relative spelling of an ordinary file still serves.
+import socket
+_tmp3 = tempfile.mkdtemp(prefix='cozy-blocklist399-')
+with open(os.path.join(_tmp3, 'server-config.json'), 'w') as _f:
+    _f.write('SENTINEL-CONFIG')
+os.mkdir(os.path.join(_tmp3, '.git'))
+with open(os.path.join(_tmp3, '.git', 'config'), 'w') as _f:
+    _f.write('SENTINEL-GIT')
+with open(os.path.join(_tmp3, 'ok.txt'), 'w') as _f:
+    _f.write('hello')
+_srv3 = server.ThreadingHTTPServer(
+    ('127.0.0.1', 0), partial(server.Handler, directory=_tmp3))
+threading.Thread(target=_srv3.serve_forever, daemon=True).start()
+
+
+def _raw(method, target):
+    _s = socket.create_connection(
+        ('127.0.0.1', _srv3.server_address[1]), timeout=5)
+    _s.sendall(('%s %s HTTP/1.1\r\nHost: 127.0.0.1\r\n'
+                'Connection: close\r\n\r\n'
+                % (method, target)).encode('latin-1'))
+    _chunks = []
+    while True:
+        _d = _s.recv(65536)
+        if not _d:
+            break
+        _chunks.append(_d)
+    _s.close()
+    _resp = b''.join(_chunks)
+    return int(_resp.split(b' ', 2)[1]), _resp
+
+
+for _t in ['../server-config.json', '..%2fserver-config.json',
+           '../.git/config']:
+    _st, _resp = _raw('GET', _t)
+    ok = _st == 404 and b'SENTINEL' not in _resp
+    print(('PASS' if ok else 'FAIL') + ' - live raw GET %r -> 404, no leak' % _t)
+    if not ok:
+        raise SystemExit(1)
+_st, _resp = _raw('GET', '../ok.txt')
+ok = _st == 200 and b'hello' in _resp
+print(('PASS' if ok else 'FAIL') + ' - live raw GET ../ok.txt still serves (200)')
+if not ok:
+    raise SystemExit(1)
+_st, _resp = _raw('GET', '/ok.txt')
+ok = _st == 200 and b'hello' in _resp
+print(('PASS' if ok else 'FAIL') + ' - live raw GET /ok.txt still serves (200)')
+if not ok:
+    raise SystemExit(1)
+_srv3.shutdown()
+
 # --- /api/* caller authentication, v225 parity (issue #339) ----------------
 # Every /api/* handler must reject unauthenticated callers with the Pages
 # functions' 401 (and banned callers with 403) before any rate budget or
