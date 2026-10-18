@@ -238,6 +238,8 @@ task responsibly requires.
    ../<repo>-<task> -b agent/<role>/<ticket>`; never two agents in one
    working directory. Each worktree needs its own untracked setup
    (node_modules, .env, server-config). Delete the worktree after merge.
+   Under jj, workspaces are the mechanism; see the Jujutsu subsection at
+   the end of this section.
 4. **Definition of Done** — no agent reports complete until every box
    ticks: acceptance criteria met; scope stayed in bounds (no silent
    additions); tests added/updated and executed, with evidence; the
@@ -260,6 +262,55 @@ task responsibly requires.
 6. **No unapproved scope.** Implement exactly the approved work order.
    Anything beyond scope goes under "Proposals" in the handoff note —
    never into code.
+
+### Working interface: Jujutsu (jj) — Decision, 2026-10-18
+
+The agent team's working interface for this repo is jj, colocated with
+git. Git and GitHub remain the substrate: a bookmark is an ordinary git
+branch, a push is ordinary git history, PRs and merges run through gh
+exactly as before, and a plain-git clone (the User's Windows clone) is
+unaffected. One driver per working copy: a copy driven by jj is not
+written by git commands, and a copy driven by git is not written by jj
+commands.
+
+The mapping from this section's git-shaped steps:
+
+| Step | Under jj |
+|---|---|
+| Task claim | A bookmark named exactly as the branch would be (`agent/<role>/<ticket>`), announced the same way |
+| Parallel work | `jj workspace add` to create, `jj workspace forget` to remove — forget also removes the colocated git worktree — instead of `git worktree add` / remove |
+| Committing | Edit, then `jj describe`: the working copy is the change, and there is no staging |
+| Sharing / syncing | `jj git fetch`, then `jj rebase` onto the fetched state, before `jj git push` |
+| Branch deletion after merge | `jj bookmark delete`, then `jj git push --deleted` |
+| Merges | gh, unchanged |
+
+**Pilot rules** — findings from the jj pilot (PR #320):
+
+- **Scratch.** jj snapshots everything that is not gitignored, without
+  being asked. `jj st` before `jj describe` and before `jj git push`
+  is a required step. Scratch directories are gitignored and never
+  pushed; this amendment adds `.work/` to `.gitignore`.
+- **Citations.** In-flight work is cited by change ID: a change's
+  commit SHA mutates every time the change is edited. SHAs are cited
+  only for pushed or merged state.
+- **Gates bind to origin refs.** A gate reviews the pushed bookmark /
+  branch and the PR — never the current state of a workspace
+  directory.
+- **Translation.** The git-shaped instructions elsewhere in this
+  document ("`git add` specific files only", "`git pull --rebase`
+  before committing") state intent. Under jj they read as: only the
+  intended files are in the change when it is described and pushed
+  (check `jj st` / `jj diff`; `jj split` when a change mixes
+  concerns), and a shared bookmark is fetched and rebased before it
+  is pushed.
+- **Basing.** `jj git fetch` does not advance the local `main`
+  bookmark. After a fetch, base new workspaces on `main@origin` — or
+  confirm local `main` matches `main@origin` — before basing: a
+  workspace based on a stale bookmark builds and tests a stale tree.
+
+Where jj and this document disagree, this document governs until
+amended. Amendments are named decisions in their own PRs, as this one
+is.
 
 ## Output Contract
 
