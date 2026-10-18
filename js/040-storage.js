@@ -466,9 +466,21 @@ async function storageInit() {
 }
 let storageReady;
 if (idbDisabled) {
-  // No indexedDB (old browsers, jsdom): v201 behavior, synchronous.
-  loadLegacyAll();
-  storageReady = Promise.resolve();
+  // No indexedDB (old browsers, jsdom): the v201 legacy load, but NOT
+  // synchronously here. loadLegacyAll maps the stored rows through
+  // migrateBook, and the bridge for it lives in js/020 — a deferred
+  // module that only executes once the document has parsed. Running
+  // the load during parsing therefore loads an empty library (the map
+  // throws and is caught as []), and loadLegacyUpNext then persists an
+  // empty queue over the stored one (#326). The IDB boot learned the
+  // same lesson in js/041: gate on DOMContentLoaded, which fires only
+  // after deferred modules have run. storageReady is still assigned
+  // synchronously as a promise, so boot code awaits it exactly as it
+  // does on the IDB path.
+  const domReady = document.readyState === 'loading'
+    ? new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+    : Promise.resolve();
+  storageReady = domReady.then(() => { loadLegacyAll(); });
 } else {
   // The async init is kicked off at the end of js/041-idb.js (which loads
   // right after this file): storageInit must not *start* before idbOpenDb
