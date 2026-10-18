@@ -48,8 +48,16 @@ let upNext = [];
    2. mergeCloudBooks UNMARKS after assigning the newer remote record: the
       set-traps fire on every assigned value, but merged content already lives
       in the cloud — dirtying here would bump _mtime and re-push on every
-      cross-device merge, an _mtime ping-pong that never converges. */
-const dirtyBooks = new WeakSet();    // root book proxies with unpersisted changes
+      cross-device merge, an _mtime ping-pong that never converges.
+   3. A merged book still differs from the LOCAL store, so the merge also
+      marks it in the second set below, `persistOnlyBooks`: "write me to
+      the local store, but I am not a local edit — never stamp my _mtime,
+      never push me on that account." One flag cannot serve both gates:
+      when dirty alone decided the persist plan, merged updates were
+      skipped by the plan and a restart silently reverted the book to
+      its pre-merge copy (#334). */
+const dirtyBooks = new WeakSet();    // root book proxies with unpersisted local edits
+const persistOnlyBooks = new WeakSet(); // merged-in content the local store lacks
 const proxyRootOf = new WeakMap();   // any tracked proxy -> root book proxy
 const proxyTargetOf = new WeakMap(); // tracked proxy -> raw target
 let knownBookIds = new Set();        // book ids currently in the IDB books store
@@ -61,6 +69,14 @@ function markDirty(b) {
 function unmarkDirty(b) {
   if (!b || typeof b !== 'object') return;
   dirtyBooks.delete(proxyRootOf.get(b) || b);
+}
+function markPersistOnly(b) {
+  if (!b || typeof b !== 'object') return;
+  persistOnlyBooks.add(proxyRootOf.get(b) || b);
+}
+function unmarkPersistOnly(b) {
+  if (!b || typeof b !== 'object') return;
+  persistOnlyBooks.delete(proxyRootOf.get(b) || b);
 }
 
 // Re-point a tracked proxy and all its tracked descendants at a new root.
@@ -186,8 +202,9 @@ function stampMtimes() {
 
 // Pure diff for the differential persist: which books to upsert, which ids to
 // delete, and the expected post-write store count (for the atomicity check).
-// A book is written when it's dirty, untracked (fail-safe), or unknown to the
-// store (new). Everything else is computed from id sets, so wholesale
+// A book is written when it's dirty, persist-only (merged content the store
+// doesn't have yet), untracked (fail-safe), or unknown to the store (new).
+// Everything else is computed from id sets, so wholesale
 // replaces (settings clear, partition restore) need no special-casing.
 function computePersistPlan(knownIds, books) {
   const ids = new Set();
@@ -195,7 +212,7 @@ function computePersistPlan(knownIds, books) {
   for (const b of books) {
     if (!b || b.id == null || b.id === '') continue;
     ids.add(b.id);
-    if (dirtyBooks.has(b) || !proxyRootOf.has(b) || !knownIds.has(b.id)) dirty.push(b);
+    if (dirtyBooks.has(b) || persistOnlyBooks.has(b) || !proxyRootOf.has(b) || !knownIds.has(b.id)) dirty.push(b);
   }
   const deleted = [];
   knownIds.forEach(id => { if (!ids.has(id)) deleted.push(id); });
@@ -376,8 +393,10 @@ async function loadSlotState(db) {
   library = rawBooks.map(migrateBook);
   // v495 (#125): freshly loaded books are already in the store — unmark the
   // dirty flags trackBook() set, and record the store's id set so the
-  // differential persist below knows what's new vs. deleted.
-  for (const b of library) unmarkDirty(b);
+  // differential persist below knows what's new vs. deleted. The
+  // persist-only set clears too: nothing merged can be pending against a
+  // library that was just read out of this store.
+  for (const b of library) { unmarkDirty(b); unmarkPersistOnly(b); }
   knownBookIds = new Set(library.map(b => b.id));
   // v529: one-time wishlist-shelf migration (js/020 wishlistShelfTransform),
   // flagged per slot in the slot kv. Changed books re-dirty via their
@@ -480,7 +499,7 @@ function persistBooks() {
     // _mtime would bump on every save and the differential push would
     // re-push the whole shelf each round. (saveLegacyLibrary never throws;
     // on quota failure it toasts and the flags stay set for a retry.)
-    for (const b of library) unmarkDirty(b);
+    for (const b of library) { unmarkDirty(b); unmarkPersistOnly(b); }
     return;
   }
   const db = currentDb;
@@ -498,13 +517,20 @@ function persistBooks() {
     // Unmark BEFORE the async write (not after): a book edited while the
     // write is in flight re-dirties via its set-trap, so the next plan picks
     // it up. Unmarking after completion would clear that newer edit's flag
-    // and lose it. On failure the flags are restored so the next save retries.
+    // and lose it. On failure each book's flags are restored so the next
+    // save retries — restored to the set it was actually in, not blanket-
+    // marked dirty: a persist-only (merged) book restored as dirty would
+    // get its _mtime stamped on the next save and re-push content that
+    // already lives in the cloud.
     const written = plan.dirty.slice();
-    for (const b of written) unmarkDirty(b);
+    const wasDirty = written.filter(b => dirtyBooks.has(b));
+    const wasPersistOnly = written.filter(b => persistOnlyBooks.has(b));
+    for (const b of written) { unmarkDirty(b); unmarkPersistOnly(b); }
     return idbPutDirtyBooks(db, plan.dirty, plan.deleted, plan.expectedCount).then(() => {
       knownBookIds = new Set(plan.ids);
     }, (err) => {
-      for (const b of written) markDirty(b);
+      for (const b of wasDirty) markDirty(b);
+      for (const b of wasPersistOnly) markPersistOnly(b);
       throw err;
     });
   });
