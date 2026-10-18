@@ -99,7 +99,7 @@ export function dayActivity() {
   const add = (k, e) => { (map[k] = map[k] || []).push(e); };
   library.forEach(b => {
     (b.log || []).forEach(e => {
-      if (e.to > e.from) add(e.d, { b: b, from: e.from, to: e.to, finished: false });
+      if (e.to > e.from) add(e.d, { b: b, from: e.from, to: e.to, finished: false, unit: entryUnit(e) });
     });
     if (b.status === 'read' && b.dateFinished) {
       const k = dayKey(new Date(b.dateFinished));
@@ -114,7 +114,9 @@ export function pagesByDayMap() {
   const out = {};
   Object.keys(byDay).forEach(k => {
     out[k] = {
-      pages: byDay[k].reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0),
+      // Percent entries count as activity (n) but contribute no pages —
+      // their span is percentage points, not a page range.
+      pages: byDay[k].reduce((s, a) => s + (a.finished || a.unit === 'pct' ? 0 : Math.max(0, a.to - a.from)), 0),
       n: byDay[k].length
     };
   });
@@ -138,7 +140,7 @@ export function pagesInRange(start, end) {
   library.forEach(b => {
     (b.log || []).forEach(e => {
       const d = String(e.d || '');
-      if (d >= start && d <= end && e.to > e.from) {
+      if (d >= start && d <= end && e.to > e.from && entryUnit(e) === 'page') {
         total += Math.max(0, e.to - e.from);
       }
     });
@@ -173,19 +175,25 @@ export function activityLevels() {
 /* ---- one day-detail renderer shared by the heatmap and the calendar ---- */
 export function dayDetailHTML(byDay, k) {
   const acts = (byDay[k] || []).slice().sort((x, y) => String(x.b.title).localeCompare(String(y.b.title)));
-  const dayPages = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
+  // Percent activity is reported in percent, never folded into the page
+  // total — the two units share a card, not a sum.
+  const dayPages = acts.reduce((s, a) => s + (a.finished || a.unit === 'pct' ? 0 : Math.max(0, a.to - a.from)), 0);
+  const dayPct = acts.reduce((s, a) => s + (a.finished || a.unit !== 'pct' ? 0 : Math.max(0, a.to - a.from)), 0);
   const nBooks = new Set(acts.map(a => a.b.id)).size;
   return '<div class="stat-sub" style="margin-top:12px">' +
     fmtDate(new Date(k + 'T12:00:00').toISOString()) +
     ' — ' + icon('reading') + ' ' + nBooks + ' book' + (nBooks === 1 ? '' : 's') +
-    ' · ' + icon('doc') + ' ' + dayPages + ' pages</div>' +
+    ' · ' + icon('doc') + ' ' + dayPages + ' pages' +
+    (dayPct > 0 ? ' · ' + dayPct + '% listened' : '') + '</div>' +
     (acts.length ? acts.map(a => {
       const pages = a.finished ? 0 : Math.max(0, a.to - a.from);
       const pct = (!a.finished && a.b.pageCount) ? ' (' + Math.round(pages / a.b.pageCount * 100) + '%)' : '';
       return '<div class="cal-book" data-id="' + esc(a.b.id) + '">' + coverHTML(a.b) +
         '<div><h4>' + esc(a.b.title) + '</h4>' +
         (a.finished ? '<p>Finished</p>'
-          : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
+          : a.unit === 'pct'
+            ? '<p>' + a.from + '% → ' + a.to + '%</p><p>+' + pages + '%</p>'
+            : '<p>p. ' + a.from + ' → p. ' + a.to + '</p><p>+' + pages + ' pages' + pct + '</p>') +
         '</div></div>';
     }).join('') : '<p class="note">Nothing read that day.</p>');
 }
@@ -243,7 +251,7 @@ export function readingCalHTML() {
     const k = kk(d);
     const acts = byDay[k] || [];
     const n = acts.length;
-    const dp = acts.reduce((s, a) => s + (a.finished ? 0 : Math.max(0, a.to - a.from)), 0);
+    const dp = acts.reduce((s, a) => s + (a.finished || a.unit === 'pct' ? 0 : Math.max(0, a.to - a.from)), 0);
     const cls = 'cal-day l' + level(k) + (n ? ' has' : '') + (k === todayK ? ' today' : '') + (k === calSel ? ' sel' : '');
     cells += '<div class="' + cls + '" data-day="' + k + '"><span class="d">' + d + '</span>' +
       (n ? '<span class="ccover">' +
@@ -332,27 +340,44 @@ export function paceHTML() {
 export function dailyStatsHTML() {
   const k = dayKey(new Date());
   const rows = [];
-  let total = 0;
+  let total = 0, pctTotal = 0;
   library.forEach(b => {
     const p = pagesOnDay(b, k);
-    if (p > 0) { total += p; rows.push({ b: b, p: p }); }
+    const q = loggedOnDay(b, k, 'pct');
+    if (p > 0 || q > 0) { total += p; pctTotal += q; rows.push({ b: b, p: p, q: q }); }
   });
   rows.sort((a, b) => b.p - a.p);
   const streak = readingStreak();
+  // The headline total is pages; a percent-only day headlines its percent
+  // instead of claiming "0 pages read" over a card full of listening.
+  const totalLine = total > 0
+    ? total + ' page' + (total === 1 ? '' : 's') + ' read'
+    : pctTotal + '% listened';
   return '<div class="stat-sub">Today</div>' +
     '<div class="dstat-card">' +
     '<div class="dstat-head"><span>' + icon('calendar') + ' ' + fmtDate(new Date().toISOString()) + '</span>' +
     (streak > 1 ? '<span class="streak">' + icon('flame') + ' ' + streak + '-day streak</span>' : '') + '</div>' +
     (rows.length
-      ? '<div class="dstat-total">' + total + ' page' + (total === 1 ? '' : 's') + ' read</div>' +
+      ? '<div class="dstat-total">' + totalLine + '</div>' +
         rows.map(r => {
-          const es = (r.b.log || []).filter(x => x.d === k);
-          const from = Math.min.apply(null, es.map(x => x.from));
-          const to = Math.max.apply(null, es.map(x => x.to));
-          const pct = r.b.pageCount ? ' (' + Math.round(r.p / r.b.pageCount * 100) + '%)' : '';
+          // Page and percent entries render in their own units — mixing
+          // the ranges would print percent points as page numbers.
+          const lines = [];
+          if (r.p > 0) {
+            const es = (r.b.log || []).filter(x => x.d === k && entryUnit(x) === 'page');
+            const from = Math.min.apply(null, es.map(x => x.from));
+            const to = Math.max.apply(null, es.map(x => x.to));
+            const pct = r.b.pageCount ? ' (' + Math.round(r.p / r.b.pageCount * 100) + '%)' : '';
+            lines.push('<p>p. ' + from + ' → p. ' + to + '</p><p>+' + r.p + ' pages' + pct + '</p>');
+          }
+          if (r.q > 0) {
+            const es = (r.b.log || []).filter(x => x.d === k && entryUnit(x) === 'pct');
+            const from = Math.min.apply(null, es.map(x => x.from));
+            const to = Math.max.apply(null, es.map(x => x.to));
+            lines.push('<p>' + from + '% → ' + to + '%</p><p>+' + r.q + '%</p>');
+          }
           return '<div class="cal-book" data-id="' + r.b.id + '">' + coverHTML(r.b) +
-            '<div><h4>' + esc(r.b.title) + '</h4><p>p. ' + from + ' → p. ' + to + '</p>' +
-            '<p>+' + r.p + ' pages' + pct + '</p></div></div>';
+            '<div><h4>' + esc(r.b.title) + '</h4>' + lines.join('') + '</div></div>';
         }).join('')
       : '<p class="note">Nothing logged today yet — the pages will be here when you are. ' + icon('reading') + '</p>') +
     '</div>';
@@ -821,7 +846,8 @@ export function yearInBooksData(yr) {
   readYr.forEach(b => {
     (b.log || []).forEach(e => {
       if (e.to > e.from && String(e.d || '').slice(0, 4) === String(yr)) {
-        dayPages[e.d] = (dayPages[e.d] || 0) + (e.to - e.from);
+        // Percent entries mark the day as active but add no pages.
+        if (entryUnit(e) === 'page') dayPages[e.d] = (dayPages[e.d] || 0) + (e.to - e.from);
         daySet.add(e.d);
       }
     });
@@ -1209,11 +1235,18 @@ export function renderStats() {
   const nowReading = reading.length
     ? '<div class="stat-sub">' + icon('reading') + ' Currently reading</div><div class="now-reading">' + reading.map(b => {
         const pct = b.pageCount ? Math.round((b.progress || 0) / b.pageCount * 100) : 0;
-        return '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
+        // Percent-unit books show their percent (and always have a bar,
+      // even with no print page count to divide by); page books as before.
+      const pctv = progressPctOf(b);
+      const progLine = progressUnitOf(b) === 'pct'
+        ? '<div class="progress-line"><div class="fill" style="width:' + pctv + '%"></div></div>' +
+          '<p class="author" style="margin-top:4px">' + pctv + '%</p>'
+        : (b.pageCount ? '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
+          '<p class="author" style="margin-top:4px">' + (b.progress || 0) + ' / ' + b.pageCount + ' pages · ' + pct + '%</p>' : '');
+      return '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
           '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
           '<p class="author">' + esc(displayAuthors(b.authors)) + '</p>' +
-          (b.pageCount ? '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
-            '<p class="author" style="margin-top:4px">' + (b.progress || 0) + ' / ' + b.pageCount + ' pages · ' + pct + '%</p>' : '') +
+          progLine +
           '</div></div>';
       }).join('') + '</div>'
     : '';

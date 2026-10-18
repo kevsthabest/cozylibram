@@ -1062,6 +1062,7 @@ export function renderDetailModal(b, viaBook) {
   formState.register('tropes', () => elVal('f-tropes').split(',').map(t => t.trim().toLowerCase()).filter(Boolean));
   formState.register('notes', () => elVal('f-notes'));
   formState.register('pageCount', () => elVal('f-pagecount'));
+  formState.register('audioSecs', () => [elVal('f-dur-h'), elVal('f-dur-m')]);
   formState.register('progressInput', () => elVal('f-progress'));
   formState.register('releaseDate', () => elVal('f-releasedate'));
   formState.register('series', () => [elVal('f-series').trim(), elVal('f-series-pos').trim()]);
@@ -1083,6 +1084,12 @@ export function renderDetailModal(b, viaBook) {
     draft.previouslyRead = !!(draft.dateFinished && Date.now() - new Date(draft.dateFinished).getTime() > 60 * 864e5);
   }
   let startProgress = draft.progress || 0; // v67: only genuine progress edits log pages
+  // The percent twin of startProgress: for an audiobook the progress
+  // field holds a percent, so the commit compares against the percent
+  // the book sat at on open — for a book still on page history (§6) the
+  // raw progress is pages, and only its percent equivalent can be
+  // compared against what the field holds.
+  let startPct = progressPctOf(draft) ?? 0;
 
   // v131: mood ratings as segmented bars — icon + label, 5 tap segments,
   // numeric readout, × removes the axis; unapplied axes offered as + chips.
@@ -1116,14 +1123,34 @@ export function renderDetailModal(b, viaBook) {
   const axAddHTML = () => RATING_AXES.filter(a => !draft.axes.includes(a.key)).map(a =>
     '<button class="chip" data-axadd="' + a.key + '">+ ' + esc(a.label) + '</button>').join('');
 
+  // The percent the quick tracker works in for an audiobook: the stored
+  // value once the book logs in percent; before that, the percent the
+  // current page position works out to. History is never rewritten (§6) —
+  // the first percent interaction simply starts from where the pages
+  // left off.
+  const draftPct = () => (progressUnitOf(b) === 'pct'
+    ? (draft.progress || 0)
+    : (progressPctOf({ ...b, progress: draft.progress }) ?? 0));
+
   // Quick page tracker for books being read: steppers + manual entry save
   // immediately — no need to dig into Details or hit Save.
   const applyProgress = (next) => {
+    const audio = draft.format === 'audio';
     const total = draft.pageCount || 0;
-    const oldP = draft.progress || 0;
-    draft.progress = total ? Math.max(0, Math.min(total, next)) : Math.max(0, next);
-    logPages(b, oldP, draft.progress);
-    draft.log = b.log; // logPages may have created the array on b
+    const oldP = audio ? draftPct() : (draft.progress || 0);
+    // An audiobook's position is a percent of the recording (0–100),
+    // never a page — its log entries carry the percent unit so the two
+    // histories never mix (§6).
+    draft.progress = audio ? Math.max(0, Math.min(100, next))
+      : total ? Math.max(0, Math.min(total, next)) : Math.max(0, next);
+    if (audio) {
+      logProgress(b, oldP, draft.progress, 'pct');
+      b.progressUnit = 'pct';
+      draft.progressUnit = 'pct';
+    } else {
+      logPages(b, oldP, draft.progress);
+    }
+    draft.log = b.log; // the log write may have created the array on b
     b.progress = draft.progress; // immediate save — no need to hit Save
     saveLibrary();
     const inp = document.getElementById('f-progress');
@@ -1138,6 +1165,24 @@ export function renderDetailModal(b, viaBook) {
   };
   const progressQuickHTML = () => {
     if (draft.status !== 'reading') return '';
+    if (draft.format === 'audio') {
+      // Percent mode: the bar is the percent itself, and a known length
+      // adds how much listening is left — a fact about the recording,
+      // stated plainly, never a pace or a deadline.
+      const cur = Math.min(100, draftPct());
+      const left = audioLeftSecs({ ...b, progress: cur, progressUnit: 'pct', audioSecs: draft.audioSecs, format: draft.format });
+      return '<div class="field"><label>Listening progress</label>' +
+        '<div class="progress-line big"><div class="fill" style="width:' + cur + '%"></div></div>' +
+        '<p class="pq-label"><b>' + cur + '</b>%' +
+        (left != null ? ' · about ' + fmtHMS(left) + ' left' : '') + '</p>' +
+        '<div class="pq-manual"><input id="pq-page" class="text-input" type="number" min="0" max="100" ' +
+        'inputmode="numeric" placeholder="Percent…" aria-label="Go to percent">' +
+        '<button class="btn" id="pq-set">Set %</button></div>' +
+        '<div class="stepper-row">' +
+        ['−10', '−1', '+1', '+10'].map(d =>
+          '<button class="btn ghost step" data-step="' + d.replace('−', '-') + '" aria-label="Adjust by ' + d + ' percent">' + d + '</button>').join('') +
+        '</div></div>';
+    }
     const total = draft.pageCount || 0;
     const cur = total ? Math.min(draft.progress || 0, total) : (draft.progress || 0);
     const pct = total ? Math.round(cur / total * 100) : 0;
@@ -1158,8 +1203,11 @@ export function renderDetailModal(b, viaBook) {
     const el = document.getElementById('m-progress');
     if (!el) return;
     el.innerHTML = progressQuickHTML();
+    // Steppers step from the value the section shows — for an audiobook
+    // that is the percent, not the raw (possibly page-based) progress.
+    const base = draft.format === 'audio' ? draftPct() : (draft.progress || 0);
     el.querySelectorAll('[data-step]').forEach(btn =>
-      btn.addEventListener('click', () => applyProgress((draft.progress || 0) + Number(btn.dataset.step))));
+      btn.addEventListener('click', () => applyProgress(base + Number(btn.dataset.step))));
     const setBtn = document.getElementById('pq-set');
     const pageInp = document.getElementById('pq-page');
     const setFromInput = () => {
@@ -1179,15 +1227,23 @@ export function renderDetailModal(b, viaBook) {
     if (!log.length) return '<p class="note">No sessions yet — the progress stepper logs them automatically.</p>';
     return '<ul class="d-log">' + log.map(e => {
       const n = Math.max(0, (e.to || 0) - (e.from || 0));
-      return '<li><span>' + esc(fmtDate(e.d)) + '</span><b>' + n + ' page' + (n === 1 ? '' : 's') + '</b></li>';
+      // A percent entry is a share of a recording, not a page count —
+      // label it in its own unit so the two histories read honestly.
+      return entryUnit(e) === 'pct'
+        ? '<li><span>' + esc(fmtDate(e.d)) + '</span><b>' + n + '%</b></li>'
+        : '<li><span>' + esc(fmtDate(e.d)) + '</span><b>' + n + ' page' + (n === 1 ? '' : 's') + '</b></li>';
     }).join('') + '</ul>';
   })();
   const rmLogHTML = (() => { // v68: optional "remove today's entry" button (Settings → Reading log)
     if (!logRemoveEnabled()) return '';
     const tk = dayKey(new Date());
-    const n = pagesOnDay(b, tk);
+    // The amount is in the book's current unit: for a percent-logging
+    // audiobook, today's entry is a share of the recording, not pages.
+    const unit = progressUnitOf(b);
+    const n = loggedOnDay(b, tk, unit);
     if (!n) return '';
-    return '<button class="btn ghost danger sm" id="m-rmlog" style="margin-top:8px">' + icon('trash') + ' Remove today’s entry (' + n + ' pages)</button>';
+    return '<button class="btn ghost danger sm" id="m-rmlog" style="margin-top:8px">' + icon('trash') + ' Remove today’s entry (' +
+      (unit === 'pct' ? n + '%' : n + ' pages') + ')</button>';
   })();
 
   // v182: mockup reading-log card header — Started / Last read.
@@ -1417,8 +1473,16 @@ export function renderDetailModal(b, viaBook) {
     '<div class="field secondary"><label>Total pages</label>' +
     '<div class="row-flex"><input id="f-pagecount" class="text-input" type="number" min="0" inputmode="numeric" placeholder="e.g. 384" value="' + (draft.pageCount || '') + '">' +
     (b.isbn ? '<button class="btn ghost" id="pc-lookup" title="Look up page count by ISBN">' + icon('search') + '</button>' : '') + '</div></div>' +
-    '<div class="field secondary"><label>Current page</label>' +
-    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.progress || 0) + '"></div>' +
+    // The recording's length, as hours + minutes: editions differ, so
+    // this is the listener's own number — a lookup only ever suggests
+    // it (§3). Shown only for audiobooks (paintDurRow keeps that true
+    // when the format changes mid-session); a print book has no
+    // recording whose length could be typed in.
+    '<div class="field secondary" id="f-dur-row" style="display:' + (draft.format === 'audio' ? '' : 'none') + '"><label>Audio length</label>' +
+    '<div class="row-flex"><input id="f-dur-h" class="text-input" type="number" min="0" inputmode="numeric" placeholder="Hours" aria-label="Audio length in hours" value="' + (draft.audioSecs ? Math.floor(draft.audioSecs / 3600) : '') + '">' +
+    '<input id="f-dur-m" class="text-input" type="number" min="0" max="59" inputmode="numeric" placeholder="Minutes" aria-label="Audio length in minutes" value="' + (draft.audioSecs ? Math.round((draft.audioSecs % 3600) / 60) : '') + '"></div></div>' +
+    '<div class="field secondary"><label id="f-progress-label">' + (draft.format === 'audio' ? 'Progress (%)' : 'Current page') + '</label>' +
+    '<input id="f-progress" class="text-input" type="number" min="0" inputmode="numeric" value="' + (draft.format === 'audio' ? (progressPctOf(draft) ?? 0) : (draft.progress || 0)) + '"></div>' +
     '<div class="field secondary"><label>' + icon('calendar') + ' Release date</label>' +
     '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
     '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
@@ -1511,7 +1575,11 @@ export function renderDetailModal(b, viaBook) {
   const primarySetStatusGo = (s, from) => {
     b.status = s; draft.status = s;
     if (['reading', 'read', 'dnf'].includes(s)) upNextRemove(id);
-    if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;
+    // Completing an audiobook tops out at 100% — the end of the
+    // recording, not the print edition's last page (which may not even
+    // exist for an audio-only release).
+    if (s === 'read' && !b.previouslyRead && draft.format === 'audio') { b.progress = 100; b.progressUnit = 'pct'; }
+    else if (s === 'read' && b.pageCount && !b.previouslyRead) b.progress = b.pageCount;
     // v449: track rereads — completing a book that was already finished
     // increments readCount (enables the "An Old Friend" milestone).
     // dateFinished is set by the draft save flow, not here.
@@ -1747,6 +1815,12 @@ export function renderDetailModal(b, viaBook) {
     paintWantRow();
     paintOwnedRow(); // the composed label carries the format segment
   };
+  // The audio-length row exists only for audiobooks — any other format
+  // has no recording whose length could be typed in.
+  const paintDurRow = () => {
+    const row = document.getElementById('f-dur-row');
+    if (row) row.style.display = draft.format === 'audio' ? '' : 'none';
+  };
   paintWantRow();
   root.querySelectorAll('[data-mrow]').forEach(t => t.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1781,8 +1855,11 @@ export function renderDetailModal(b, viaBook) {
       if (pv) pv.style.display = draft.status === 'read' ? '' : 'none';
       if (draft.status === 'read' && !draft.dateFinished && !draft.previouslyRead) draft.dateFinished = new Date().toISOString();
       if (draft.status !== 'read') draft.dateFinished = null;
-      if (draft.status === 'read' && draft.pageCount && !draft.previouslyRead) {
-        draft.progress = draft.pageCount; // Save logs the completion delta
+      if (draft.status === 'read' && !draft.previouslyRead && (draft.format === 'audio' || draft.pageCount)) {
+        // Completing an audiobook means reaching the end of the
+        // recording: 100%, not the print edition's last page.
+        draft.progress = draft.format === 'audio' ? 100 : draft.pageCount; // Save logs the completion delta
+        if (draft.format === 'audio') draft.progressUnit = 'pct';
         const pi = document.getElementById('f-progress');
         if (pi) { pi.value = draft.progress; formState.commitValue('progressInput', pi.value); } // the pick wrote it mechanically — bless
       }
@@ -1829,10 +1906,21 @@ export function renderDetailModal(b, viaBook) {
     if (draft.previouslyRead) {
       if (draft.dateFinished && !b.dateFinished) draft.dateFinished = null; // undo today's stamp
       draft.progress = startProgress; // undo the auto completion bump
-      if (pi) pi.value = draft.progress;
+      if (draft.format === 'audio') {
+        // The bump wrote percent into the draft; the undo must hand the
+        // book its own unit back and show the restored position as the
+        // percent the field speaks, or the next commit would read the
+        // page number as a percent and move the book.
+        if (progressUnitOf(b) === 'pct') draft.progressUnit = 'pct'; else delete draft.progressUnit;
+        if (pi) pi.value = progressPctOf(draft) ?? draft.progress;
+      } else if (pi) pi.value = draft.progress;
     } else if (draft.status === 'read' && !draft.dateFinished) {
       draft.dateFinished = new Date().toISOString();
-      if (draft.pageCount) {
+      if (draft.format === 'audio') {
+        draft.progress = 100; // the end of the recording, as in the status picker
+        draft.progressUnit = 'pct';
+        if (pi) pi.value = draft.progress;
+      } else if (draft.pageCount) {
         draft.progress = draft.pageCount;
         if (pi) pi.value = draft.progress;
       }
@@ -1865,6 +1953,21 @@ export function renderDetailModal(b, viaBook) {
       // the wanted format as the primary resolves the want.
       if (draft.wantFormat && draft.wantFormat === draft.format) draft.wantFormat = '';
       paintFormatRow();
+      paintDurRow();
+      // The progress field changes meaning with the format (pages vs
+      // percent): re-express the current position in the new unit,
+      // re-baseline the matching comparison, and bless the mechanical
+      // write — so the flip alone can never log a stretch or move the
+      // book's progress at the next commit.
+      const pi = document.getElementById('f-progress');
+      if (pi) {
+        if (draft.format === 'audio') { pi.value = progressPctOf(draft) ?? 0; startPct = Number(pi.value) || 0; }
+        else { pi.value = draft.progress || 0; startProgress = draft.progress || 0; }
+        formState.commitValue('progressInput', pi.value);
+      }
+      const pl = document.getElementById('f-progress-label');
+      if (pl) pl.textContent = draft.format === 'audio' ? 'Progress (%)' : 'Current page';
+      renderProgressSection(); // the quick tracker switches units with the format
       const opts = btn.closest('.mrow-opts');
       if (opts) { opts.hidden = true; }
       const chev = btn.closest('.mselect').querySelector('.mrow-chev');
@@ -2325,20 +2428,33 @@ export function renderDetailModal(b, viaBook) {
   const rmlog = document.getElementById('m-rmlog');
   if (rmlog) rmlog.addEventListener('click', async () => {
     const tk = dayKey(new Date());
-    const e = (b.log || []).find(x => x.d === tk);
+    // Only today's entry in the book's current unit is removed: a
+    // mixed-unit day holds two different records of the day, and the
+    // other unit's entry stays. Rolling back to the other unit's
+    // `from` would move progress in a unit the book no longer speaks.
+    const unit = progressUnitOf(b);
+    const e = (b.log || []).find(x => x.d === tk && entryUnit(x) === unit);
     const n = e ? Math.max(0, e.to - e.from) : 0;
     if (!n) return;
     // v352: in-app confirm
-    const ok = await confirmModal('Remove today\u2019s log entry (' + n + ' pages) for \u201c' + b.title + '\u201d?', { okLabel: 'Remove' });
+    const ok = await confirmModal('Remove today\u2019s log entry (' + n + (unit === 'pct' ? '%' : ' pages') + ') for \u201c' + b.title + '\u201d?', { okLabel: 'Remove' });
     if (!ok) return;
-    b.log = (b.log || []).filter(x => x.d !== tk);
+    b.log = (b.log || []).filter(x => x.d !== tk || entryUnit(x) !== unit);
     draft.log = b.log;
     b.progress = draft.progress = e.from; // roll progress back to where the day started
     startProgress = e.from; // keep Save from re-logging the removed entry
+    startPct = e.from; // …and keep the percent comparison from re-logging it either
+    if (unit === 'pct') { b.progressUnit = 'pct'; draft.progressUnit = 'pct'; } // the rolled-back value is a percent
     const pi = document.getElementById('f-progress');
-    if (pi) pi.value = draft.progress;
+    if (pi) {
+      pi.value = draft.progress;
+      // A page-unit audiobook's field speaks percent: show the
+      // rolled-back position as a percent and baseline the percent
+      // comparison on it, not on the page number.
+      if (draft.format === 'audio' && unit === 'page') { pi.value = progressPctOf(draft) ?? draft.progress; startPct = Number(pi.value) || 0; }
+    }
     saveLibrary();
-    formState.commitValue('progressInput', String(draft.progress)); // Variant A: committed — bless the field
+    formState.commitValue('progressInput', pi ? pi.value : String(draft.progress)); // Variant A: committed — bless the field
     rmlog.closest('.field').remove();
     renderProgressSection();
     toast('Today’s entry removed 🗑️');
@@ -2404,14 +2520,39 @@ export function renderDetailModal(b, viaBook) {
     if (_foSave) draft.faceOut = _foSave.checked;
     const totalEl = document.getElementById('f-pagecount');
     draft.pageCount = Math.max(0, Number(totalEl.value) || 0) || null;
+    // Audio length arrives as two plain fields (hours + minutes) edited
+    // as one value. Editions differ, so what the listener typed is the
+    // book's length — a lookup only ever suggests it (§3). Both blank
+    // means no known length, and % logging never needs one.
+    // …but only an audiobook's commit reads them: the row is hidden for
+    // other formats, and a book that used to be an audiobook keeps its
+    // recorded length if its format is corrected away and back.
+    if (draft.format === 'audio') {
+      const durSecs = (Math.max(0, Number(elVal('f-dur-h')) || 0) * 3600) +
+        (Math.max(0, Number(elVal('f-dur-m')) || 0) * 60);
+      draft.audioSecs = durSecs > 0 ? durSecs : null;
+    }
     const prog = document.getElementById('f-progress');
     const cap = draft.pageCount || Infinity;
     const enteredProg = Math.max(0, Number(prog.value) || 0);
     // v67: only a genuine change to the progress field logs pages — fixing the
     // total (which can clamp progress) no longer fabricates a reading session,
     // and previously-read books never log.
-    if (!draft.previouslyRead && enteredProg !== startProgress) logPages(b, startProgress, enteredProg);
-    draft.progress = Math.min(cap, enteredProg);
+    if (draft.format === 'audio') {
+      // The field holds a percent for audiobooks. Only a genuine percent
+      // change moves the book: an untouched field must leave a book that
+      // still sits on page history (§6) exactly as it was — rewriting
+      // its page progress from the derived percent would corrupt it.
+      const enteredPct = Math.min(100, enteredProg);
+      if (enteredPct !== startPct) {
+        if (!draft.previouslyRead) logProgress(b, startPct, enteredPct, 'pct');
+        draft.progress = enteredPct;
+        draft.progressUnit = 'pct';
+      }
+    } else {
+      if (!draft.previouslyRead && enteredProg !== startProgress) logPages(b, startProgress, enteredProg);
+      draft.progress = Math.min(cap, enteredProg);
+    }
     if (!draft.title.trim()) draft.title = 'Untitled';
     draft.log = b.log;
     draft.quotes = b.quotes; // v75: quotes save immediately — don't clobber them
@@ -2457,6 +2598,7 @@ export function renderDetailModal(b, viaBook) {
     formState.markSaved(); // Variant B: persistence first — a throw above leaves the form dirty and the commit retryable
     render();
     startProgress = draft.progress; // repeated autosave commits must not re-log the same stretch
+    startPct = progressPctOf(b) ?? startPct; // the percent comparison re-baselines the same way
     trackBookSaveDiff(_aBefore, draft); // v118: status/rating/axis/edited events
     // Variant B: completion celebrations defer to close (an autosave
     // commit lands mid-edit, modal open). Variant A fired them here,

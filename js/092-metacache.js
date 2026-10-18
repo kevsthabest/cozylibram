@@ -70,7 +70,10 @@ export function metaSnapshot(book) {
     moods: Array.isArray(book.moods) ? book.moods.slice() : [],
     releaseDate: book.releaseDate || '',
     hcId: book.hcId == null ? null : book.hcId,
-    hcEnriched: book.hcEnriched === true
+    hcEnriched: book.hcEnriched === true,
+    // Recording length in seconds (Hardcover audio_seconds, via the book);
+    // edition metadata like pageCount, never a user edit.
+    audioSecs: Number(book.audioSecs) > 0 ? Math.round(book.audioSecs) : null
   };
 }
 
@@ -90,7 +93,8 @@ export function enrichedSnapshot(pristine, book) {
     moods: Array.isArray(book.moods) ? book.moods.slice() : [],
     releaseDate: book.releaseDate || pristine.releaseDate || '',
     hcId: book.hcId == null ? null : book.hcId,
-    hcEnriched: true
+    hcEnriched: true,
+    audioSecs: Number(book.audioSecs) > 0 ? Math.round(book.audioSecs) : (pristine.audioSecs || null)
   });
   return snap;
 }
@@ -139,6 +143,7 @@ export function bookFromMeta(snap, isbnHint) {
   if (snap.releaseDate) book.releaseDate = snap.releaseDate;
   if (snap.hcId != null) book.hcId = snap.hcId;
   if (snap.hcEnriched) book.hcEnriched = true;
+  if (Number(snap.audioSecs) > 0) book.audioSecs = Math.round(snap.audioSecs);
   book.axes = autoDetectAxes(book);
   seedTropes(book);
   return book;

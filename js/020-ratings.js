@@ -165,7 +165,14 @@ export function migrateBook(b) {
   if (!Array.isArray(b.contentWarnings)) b.contentWarnings = [];
   if (!Array.isArray(b.moods)) b.moods = [];
   if (b.series === undefined) b.series = null;
-  if (!Array.isArray(b.log)) b.log = []; // daily reading log { d, from, to }
+  if (!Array.isArray(b.log)) b.log = []; // daily reading log { d, from, to } (+ u:'pct' on percent entries)
+  // Audiobook percent logging: the current-unit marker is meaningful only
+  // as 'pct' — anything else is the page default, so it is dropped rather
+  // than stored, keeping the persisted shape canonical (absent = pages).
+  // audioSecs is a recording length in seconds; only a positive number is
+  // a length, so junk and "unknown" both normalize to absent.
+  if (b.progressUnit !== 'pct') delete b.progressUnit;
+  if (!(Number(b.audioSecs) > 0) || !isFinite(Number(b.audioSecs))) delete b.audioSecs;
   if (!Array.isArray(b.quotes)) b.quotes = []; // v75: saved quotes { t, p, at }
   b.favorite = !!b.favorite; // pinned to the favorites bookshelf
   if (b.owned === undefined || b.owned === true) b.owned = 'owned'; // v148: ownership is now
