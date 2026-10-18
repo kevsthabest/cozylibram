@@ -49,7 +49,12 @@ export function pagesInRangeFor(books, start, end) {
   if (!hasLogs) {
     // Fallback: sum pageCounts of books finished in range, labelled estimated
     (books || []).forEach(b => {
-      const f = b.dateFinished ? String(b.dateFinished).slice(0, 10) : '';
+      // Bucket by the LOCAL day, like every sibling aggregate here
+      // (monthBooks via statMonthKey, streaks via statDayKey): slicing
+      // the ISO string takes the UTC date, which put a late-evening
+      // local finish (and its pages) in the neighbouring month while
+      // monthBooks counted the book itself in the local one.
+      const f = b.dateFinished ? statDayKey(new Date(b.dateFinished)) : '';
       if ((b.status === 'read' || f) && f >= start && f <= end) {
         pages += Number(b.pageCount) || Number(b.pages) || 0;
       }
