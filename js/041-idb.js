@@ -189,7 +189,23 @@ function idbKvPut(db, k, v) {
 
 /* Kick off the async storage init deferred from js/040-storage.js: open the
    slot, migrate legacy data, load state. 040 couldn't start it itself —
-   these wrappers didn't exist yet when 040 ran, and a microtask/macrotask
-   defer would be at the mercy of script-execution timing. This top-level
-   call runs synchronously right after 040, so ordering is deterministic. */
-if (!idbDisabled) storageReady = storageInit();
+   these wrappers didn't exist yet when 040 ran.
+   The start waits for DOMContentLoaded. The init's load path maps
+   migrateBook, which lives in an ES module (js/020) whose window bridge
+   runs only once the document has been parsed — module scripts are
+   deferred, classic scripts are not. Starting the IndexedDB chain from
+   this top-level call let a fast, warm IDB open reach that map before
+   the bridge existed ("migrateBook is not defined"), and the session
+   silently fell back to the localStorage backend. DOMContentLoaded is
+   the first moment module execution is guaranteed complete.
+   storageReady is still assigned synchronously as a promise, so the
+   boot code that awaits it is unaffected — only the init's start moves.
+   (A script executing mid-parse always sees readyState 'loading'; the
+   Promise.resolve() arm covers a hypothetical late injection, where
+   parsing — and therefore module execution — is long finished.) */
+if (!idbDisabled) {
+  const domReady = document.readyState === 'loading'
+    ? new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+    : Promise.resolve();
+  storageReady = domReady.then(() => storageInit());
+}
