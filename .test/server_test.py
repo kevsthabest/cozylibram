@@ -389,6 +389,33 @@ ok = server.authed_user({'Authorization': 'Bearer junk'}) is None \
 print(('PASS' if ok else 'FAIL') + ' - authed_user: junk/missing/schemaless -> None')
 if not ok:
     raise SystemExit(1)
+
+# --- /api/embed: the documented 503 must be reachable (issue #348) --------
+# handle_api_embed opens with _check_rate('embed'), but _RATE_LIMITS had no
+# 'embed' key and rate_limit_ok indexes it unguarded — every POST raised
+# KeyError outside the handler's try and dropped the connection, instead of
+# returning the documented "always 503" the client degrades around.
+ok = 'embed' in server._RATE_LIMITS
+print(('PASS' if ok else 'FAIL') + " - _RATE_LIMITS has an 'embed' entry")
+if not ok:
+    raise SystemExit(1)
+ok = server._RATE_LIMITS['embed'] == (30, 60)
+print(('PASS' if ok else 'FAIL') + " - 'embed' limit matches Pages (30/60s)")
+if not ok:
+    raise SystemExit(1)
+for _name in ['trope-infer', 'read-cover', 'hardcover', 'gbooks',
+              'inventaire', 'trope-models', 'cover-proxy', 'cache-cover',
+              'embed']:
+    ok = _name in server._RATE_LIMITS
+    print(('PASS' if ok else 'FAIL') + ' - rate-limit name %r defined' % _name)
+    if not ok:
+        raise SystemExit(1)
+_check_api('embed: valid session -> documented 503, not a dropped connection',
+           _api('POST', '/api/embed', b'{"texts":["hello"]}',
+                'Bearer good-token'),
+           503, 'embeddings not set up: add a Workers AI binding named AI '
+                'to this Pages project (Settings \u2192 Functions \u2192 '
+                'Workers AI bindings)')
 _supa_srv.shutdown()
 
 srv.shutdown()
