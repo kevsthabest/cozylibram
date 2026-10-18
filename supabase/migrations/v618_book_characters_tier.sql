@@ -28,13 +28,28 @@
 -- existing book_characters RLS governs them unchanged). Nothing
 -- reads these columns yet: the processor's tier pass and the
 -- console's push path are separate work that lands against them.
+--
+-- Every statement is guarded, so the file is re-runnable: if an
+-- apply's outcome is ever ambiguous, re-running it no-ops instead
+-- of dying halfway and leaving the applier to reconcile state by
+-- hand. (The columns guard with IF NOT EXISTS; Postgres has no
+-- such clause for ADD CONSTRAINT, so the constraints use the
+-- exception-guard idiom from v550.)
 alter table public.book_characters
   add column if not exists tier smallint,
   add column if not exists tier_source text;
 
-alter table public.book_characters
-  add constraint book_characters_tier_range
-    check (tier is null or tier in (1, 2, 3)),
-  add constraint book_characters_tier_source_vocab
-    check (tier_source is null
-           or tier_source in ('computed', 'pushed', 'override'));
+do $$ begin
+  alter table public.book_characters
+    add constraint book_characters_tier_range
+      check (tier is null or tier in (1, 2, 3));
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter table public.book_characters
+    add constraint book_characters_tier_source_vocab
+      check (tier_source is null
+             or tier_source in ('computed', 'pushed', 'override'));
+exception when duplicate_object then null;
+end $$;

@@ -35,6 +35,9 @@ ok('tier range check closes the vocabulary at 1-3',
   /check \(tier is null or tier in \(1, 2, 3\)\)/.test(sql));
 ok('tier_source check closes the vocabulary at computed/pushed/override',
   /check \(tier_source is null\s+or tier_source in \('computed', 'pushed', 'override'\)\)/.test(sql));
+ok('both constraint adds are exception-guarded, so the migration is re-runnable',
+  /do \$\$ begin\s+alter table public\.book_characters\s+add constraint book_characters_tier_range[\s\S]*?exception when duplicate_object then null;\s+end \$\$;/.test(sql) &&
+  /do \$\$ begin\s+alter table public\.book_characters\s+add constraint book_characters_tier_source_vocab[\s\S]*?exception when duplicate_object then null;\s+end \$\$;/.test(sql));
 
 ok('no backfill: no UPDATE against book_characters',
   !/update\s+public\.book_characters/.test(sql));
