@@ -8,7 +8,7 @@
 // into a temp file, never the working tree: a test that rewrites the
 // document it checks would pass by construction and prove nothing.
 //
-// The two census pins below (95 bridge files, 1,856 publications) are
+// The two census pins below (95 bridge files, 1,857 publications) are
 // stated literals on purpose, in the CONSTRAINTS posture: they are the
 // controls that prove the generator still counts the way ADR-013 says
 // (distinct names, tokenized, comment-stripped; value and accessor
@@ -75,10 +75,10 @@ if (generated !== null) {
   // regenerate-then-update discipline that governs moving them.
   ok('95 files publish on window through bridges (ADR-013 controls)',
     summaryCount('Files with bridge publications') === 95);
-  ok('1,856 distinct bridge publications (ADR-013 controls)',
-    summaryCount('Bridge publications (distinct)') === 1856);
-  ok('publication split is 1,836 value + 20 accessor',
-    summaryCount('— value-published') === 1836 && summaryCount('— accessor-published') === 20);
+  ok('1,857 distinct bridge publications (ADR-013 controls)',
+    summaryCount('Bridge publications (distinct)') === 1857);
+  ok('publication split is 1,837 value + 20 accessor',
+    summaryCount('— value-published') === 1837 && summaryCount('— accessor-published') === 20);
 
   // Structure: one table row per js file in the tree, so a file can
   // never be silently absent from the map.
