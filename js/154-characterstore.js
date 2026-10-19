@@ -179,13 +179,18 @@ export const CharacterStore = {
 
   /* Full unified view: canonical character + all linked book rows with
      their per-work relationships. */
-  async getCanonicalDetail(charId) {
+  async getCanonicalDetail(charId, opts) {
+    opts = opts || {};
     const sb = await this._sb();
-    if (!sb) return null;
+    if (!sb) {
+      if (opts.throwOnError) throw new Error('cloud unavailable');
+      return null;
+    }
     try {
       const { data: c, error } = await sb.from('characters')
         .select('id, name, description, aliases, source').eq('id', charId).maybeSingle();
-      if (error || !c) return null;
+      if (error) throw error;
+      if (!c) return null;
       // Links come via character_links, which carries the audit trail (v320)
       const { data: links, error: lerr } = await sb.from('character_links')
         .select('book_character_id, linked_at, note, book_characters!inner(id, work_id, name, role, description, relationships, status, aliases, appearance, first_appearance_chapter, source_type, works(title, series))')
@@ -218,7 +223,10 @@ export const CharacterStore = {
           };
         }),
       };
-    } catch (e) { return null; }
+    } catch (e) {
+      if (opts.throwOnError) throw e;
+      return null;
+    }
   },
 
   /* Create a canonical character and link book rows to it.
@@ -470,3 +478,4 @@ window.charNormRelType = charNormRelType;
 window.CHAR_BLOCKED_NAMES = CHAR_BLOCKED_NAMES;
 window.charIsBlocked = charIsBlocked;
 window.charFindDuplicates = charFindDuplicates;
+
