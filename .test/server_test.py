@@ -498,15 +498,21 @@ _check_api('auth: trope-models, valid session passes gate (400 provider)',
            _api('GET', '/api/trope-models?provider=nope', None,
                 'Bearer good-token'),
            400)
-_check_api('auth: cache-cover, no Authorization -> 401',
+# /api/cache-cover is NOT gated here because it must not exist here at
+# all (issue #366): production deleted the endpoint in v537, where a
+# request to the path matches no Function and no static asset and gets
+# Pages' plain 404. The mirror refuses it the same way — an unmatched
+# POST falls through to 404 for anonymous and signed-in callers alike,
+# before any auth, rate budget, or service-key write path can run.
+_check_api('parity: cache-cover, no Authorization -> 404 (endpoint retired)',
            _api('POST', '/api/cache-cover',
                 b'{"url":"https://covers.openlibrary.org/b/id/1-L.jpg"}'),
-           401, 'sign-in required')
-_check_api('auth: cache-cover, valid session passes gate (503 unconfigured)',
+           404)
+_check_api('parity: cache-cover, valid session -> 404 (endpoint retired)',
            _api('POST', '/api/cache-cover',
                 b'{"url":"https://covers.openlibrary.org/b/id/1-L.jpg"}',
                 'Bearer good-token'),
-           503, 'cover cache not configured')
+           404)
 _check_api('auth: embed, no Authorization -> 401 (gate precedes handler)',
            _api('POST', '/api/embed', b'{"texts":["x"]}'),
            401, 'sign-in required')
@@ -902,12 +908,22 @@ print(('PASS' if ok else 'FAIL') + " - 'embed' limit matches Pages (30/60s)")
 if not ok:
     raise SystemExit(1)
 for _name in ['trope-infer', 'read-cover', 'hardcover', 'gbooks',
-              'inventaire', 'trope-models', 'cover-proxy', 'cache-cover',
+              'inventaire', 'trope-models', 'cover-proxy',
               'embed', 'enhance-face', 'spine-search']:
     ok = _name in server._RATE_LIMITS
     print(('PASS' if ok else 'FAIL') + ' - rate-limit name %r defined' % _name)
     if not ok:
         raise SystemExit(1)
+# The retired /api/cache-cover (issue #366) leaves nothing behind: no
+# rate budget under its name and no handler on the Handler class.
+ok = 'cache-cover' not in server._RATE_LIMITS
+print(('PASS' if ok else 'FAIL') + " - no 'cache-cover' rate-limit entry remains")
+if not ok:
+    raise SystemExit(1)
+ok = not hasattr(server.Handler, 'handle_api_cache_cover')
+print(('PASS' if ok else 'FAIL') + ' - handle_api_cache_cover is gone')
+if not ok:
+    raise SystemExit(1)
 _check_api('embed: valid session -> documented 503, not a dropped connection',
            _api('POST', '/api/embed', b'{"texts":["hello"]}',
                 'Bearer good-token'),
