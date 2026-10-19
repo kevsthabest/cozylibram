@@ -241,26 +241,56 @@ export let _shelf3dWebGLFailed = false;
 export let _shelf3dMenuDocWired = false;
 /* Issue #375: a persisted 3D preference must never re-trap Shelves.
    Entering the 3D view arms a per-device watchdog flag; the flag is
-   cleared when the mount proves itself (a short timer after the mount
-   resolves), on clean unmount, and on both WebGL fallbacks — every path
-   where the attempt concluded without trapping the user. The one way
-   the flag survives into a later page load is a view that wedged before
-   any of those could run. A surviving flag therefore means the last
-   attempt never proved itself: the next visit falls back to 2D and
-   resets the preference, so the user lands somewhere escapable and
-   re-elects 3D explicitly if they want it. */
+   cleared when the mount proves itself (measured frame delivery —
+   see shelf3dWatchdogProve), on clean unmount, and on both WebGL
+   fallbacks — every path where the attempt concluded without trapping
+   the user. The one way the flag survives into a later page load is a
+   view that wedged before any of those could run. A surviving flag
+   therefore means the last attempt never proved itself: the next visit
+   falls back to 2D and resets the preference, so the user lands
+   somewhere escapable and re-elects 3D explicitly if they want it. */
 export const SHELF3D_WATCHDOG_KEY = 'cozylibram.s3d.watchdog';
 export let _shelf3dWatchdogArmedHere = false;
-export let _shelf3dProofTimer = 0;
+export let _shelf3dProofRaf = 0;
+export let _shelf3dProofGen = 0;
 export function shelf3dWatchdogArm() {
   _shelf3dWatchdogArmedHere = true;
   try { localStorage.setItem(SHELF3D_WATCHDOG_KEY, '1'); } catch (e) {}
 }
 export function shelf3dWatchdogClear() {
   _shelf3dWatchdogArmedHere = false;
-  clearTimeout(_shelf3dProofTimer);
-  _shelf3dProofTimer = 0;
+  _shelf3dProofGen++;   // any proof probe still chained belongs to a concluded attempt
+  if (_shelf3dProofRaf) { try { cancelAnimationFrame(_shelf3dProofRaf); } catch (e) {} _shelf3dProofRaf = 0; }
   try { localStorage.removeItem(SHELF3D_WATCHDOG_KEY); } catch (e) {}
+}
+/* Proof is measured interactivity, not elapsed time. Round 1 used a
+   1.5 s timer, and timers fire in the gaps between multi-second frame
+   tasks: in the field the flag cleared after ~4 delivered frames in
+   6 s (measured headlessly), "proving" a page nobody could click, so
+   the fallback never engaged and the trap re-armed on every reload.
+   The probe therefore counts delivered animation frames: the mount is
+   proven only when MIN_TICKS frames land inside a rolling WINDOW_MS
+   span (a sustained ~4 fps or better — a click is serviced between
+   frames at that rate; the wedged rate is one frame per ~2 s, which
+   never accumulates). Failing proof leaves the flag set but does NOT
+   yank this visit away — a slow first paint is not punished mid-
+   session; the next page load reads the flag as stale and falls
+   back. The probe runs until it proves, the attempt is cleared, or
+   the view unmounts. */
+export const SHELF3D_PROOF_WINDOW_MS = 1500;
+export const SHELF3D_PROOF_MIN_TICKS = 6;
+export function shelf3dWatchdogProve() {
+  const gen = ++_shelf3dProofGen;
+  const times = [];
+  const step = function (ts) {
+    if (gen !== _shelf3dProofGen || !_shelf3dWatchdogArmedHere) { _shelf3dProofRaf = 0; return; }
+    const t = (typeof ts === 'number') ? ts : performance.now();
+    times.push(t);
+    while (times.length && t - times[0] > SHELF3D_PROOF_WINDOW_MS) times.shift();
+    if (times.length >= SHELF3D_PROOF_MIN_TICKS) { _shelf3dProofRaf = 0; shelf3dWatchdogClear(); return; }
+    _shelf3dProofRaf = requestAnimationFrame(step);
+  };
+  _shelf3dProofRaf = requestAnimationFrame(step);
 }
 export function shelf3dWatchdogStale() {
   if (_shelf3dWatchdogArmedHere) return false;   // armed by this page load: an attempt in flight, not a leftover
@@ -520,13 +550,12 @@ export function renderShelf3D() {
     appTheme: (typeof getTheme === 'function') ? getTheme() : 'dark',
   }).then(function () {
     _shelf3dMounted = true;
-    // #375: the mount resolved and the view is painting. Give the loop a
-    // short window to prove it can actually run, then clear the
-    // watchdog. A wedged loop starves this timer along with everything
-    // else — which is the point: the flag survives exactly when the
-    // view is unusable.
-    clearTimeout(_shelf3dProofTimer);
-    _shelf3dProofTimer = setTimeout(function () { shelf3dWatchdogClear(); }, 1500);
+    // #375: the mount resolved and the view is painting. Proof is
+    // measured frame delivery (shelf3dWatchdogProve): the watchdog
+    // clears only if the loop demonstrably keeps delivering frames —
+    // a wedged loop delivers almost none, so its flag survives to the
+    // next page load and the stale-check above breaks the trap.
+    shelf3dWatchdogProve();
     shelf3DApplyTheme();
     shelf3dUpdateBar();
     shelf3dPaintCovers();

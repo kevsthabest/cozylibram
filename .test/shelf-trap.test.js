@@ -26,6 +26,24 @@
 //     the WebGL fallbacks. A flag that survives to a later page load
 //     means the previous attempt wedged before proving — the next visit
 //     must land in 2D with the preference reset, not back in the trap.
+//
+// Round 2 (the live re-verification of the round-1 fix failed on a
+// software-GL browser): two measured flaws in round 1.
+// (1b) The cadence bound cannot rescue a renderer whose frames cost
+//     seconds — every render overruns the 150 ms bound, so ambient
+//     frames still run back-to-back. Cost must be read from BOTH
+//     measurements (the render call's main-thread time, and the gap
+//     between delivered frames — presentation can saturate in the GPU
+//     process while submission looks cheap), and at extreme cost
+//     ambient motion must STOP outright and latch: no ambient renders,
+//     no idle drift manufacturing "interacting" frames, no camera
+//     glide tail demanding frames — until the next pointerdown.
+// (3b) The proof was a 1.5 s wall-clock timer. Timers fire in the gaps
+//     between multi-second frame tasks, so the flag cleared after ~4
+//     delivered frames in 6 s (measured headlessly) — proof measured
+//     elapsed time, not interactivity, and no fallback ever engaged.
+//     Proof must count delivered animation frames across the window:
+//     a wedged mount delivers almost none and never proves.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
@@ -52,6 +70,15 @@ const s215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
     !/if \(animating \|\| needsRender\)/.test(s215));
   ok('render loop: ambient-only renders are cadence-bounded behind measured frame cost',
     /frameEma/.test(s215) && /ambientOnly/.test(s215) && /lastAmbientRender/.test(s215));
+  ok('render loop: at extreme frame cost ambient rendering stops outright, not just slows',
+    /if \(!ambientStop && \(frameEma > 1000 \|\| frameGapEma > 1000\)\)/.test(s215) &&
+    /skipAmbient = ambientOnly && \(ambientStop \|\|/.test(s215));
+  ok('render loop: the stop reads delivered-frame gaps, not just render-call cost',
+    /var frameGap = now - lastFrameT/.test(s215) && /frameGapEma/.test(s215));
+  ok('render loop: while the stop is latched the camera snaps instead of gliding',
+    /dampK = ambientStop \? 1 :/.test(s215));
+  ok('render loop: idle drift cannot manufacture frames while the ambient stop is on',
+    /driftTarget = \(idle && !ambientStop\)/.test(s215));
   ok('panel: close button wiring intact', /\$\('s3dInvClose'\)\.addEventListener\('click'/.test(s215));
   ok('panel: Escape dismissal wiring intact',
     /'keydown'/.test(s215) && /e\.key === 'Escape'\) \{ closeInventory\(\)/.test(s215));
@@ -62,6 +89,8 @@ const s215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
     /pointermove/.test(s215.slice(dragAt, dragAt + 2500)));
   ok('panel: head row opts out of scroll-gesture stealing so the drag reaches it',
     /s3d-inv-head\{[^}]*touch-action:none/.test(s215));
+  ok('panel: drag never starts on the close button (pointer capture would eat its click)',
+    dragAt >= 0 && s215.indexOf("closest('button, a, input", dragAt) > dragAt);
 }
 
 /* ---- behaviour: js/217 watchdog against a stubbed scene layer ---- */
@@ -79,6 +108,18 @@ const WD = 'cozylibram.s3d.watchdog';
     };
     library = [{ id: 'bk1', title: 'Book One', status: 'read' }];
     shelfGroup = 'read';
+    // Controllable rAF: the round-2 watchdog proof counts DELIVERED
+    // frames, so the suite delivers them by hand, with timestamps.
+    window.__rafQ = [];
+    window.requestAnimationFrame = function (cb) { window.__rafQ.push(cb); return window.__rafQ.length; };
+    window.cancelAnimationFrame = function () {};
+    window.__pumpFrames = function (n, stepMs) {
+      var t0 = performance.now();
+      for (var i = 1; i <= n; i++) {
+        var q = window.__rafQ.splice(0);
+        q.forEach(function (cb) { cb(t0 + i * stepMs); });
+      }
+    };
     shelfSetViewMode('3d');
   `);
 
@@ -89,9 +130,20 @@ const WD = 'cozylibram.s3d.watchdog';
   ok('watchdog: the armed entry still mounts the scene', run(`window.__mountCalls`) === 1);
   ok('watchdog: the 3D view is on screen', !!doc.getElementById('shelf3d'));
 
-  // (b) the mount proving itself clears the flag (proof window lapses).
+  // (b1) ROUND 2 — wall-clock time passing proves nothing: with no
+  //      frames delivered, waiting past the old timer's window must
+  //      leave the flag set. (Round 1 failed exactly here: its 1.5 s
+  //      timer cleared the flag while the page had painted ~4 frames.)
   await wait(1900);
-  ok('watchdog: a proven mount clears the flag', run(`localStorage.getItem('${WD}')`) === null);
+  ok('watchdog: no delivered frames, no proof — the flag survives a wall-clock wait',
+    run(`localStorage.getItem('${WD}')`) === '1');
+
+  // (b2) delivering frames at a sustainable rate proves the mount:
+  //      8 frames at 200 ms spacing puts 6+ inside the proof window.
+  run(`window.__pumpFrames(8, 200)`);
+  await wait(30);
+  ok('watchdog: a mount that delivers frames through the window proves and clears',
+    run(`localStorage.getItem('${WD}')`) === null);
 
   // (c) re-enter (unmount clears, re-arm), then a clean unmount before
   //     the proof window also clears it.

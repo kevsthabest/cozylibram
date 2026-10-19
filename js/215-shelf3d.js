@@ -2307,6 +2307,16 @@
       var invDrag = null;
       invHead.addEventListener('pointerdown', function (e) {
         if (!$('s3dInvPanel').classList.contains('open')) return;
+        /* A press that starts on an interactive element in the head
+           (the close button) belongs to that element: taking pointer
+           capture here would retarget the press's click to the head,
+           and the button's own click handler would never fire — the
+           close button reads as dead even on a healthy renderer
+           (measured headlessly: the button is the hit target at its
+           centre, Escape dismisses instantly, the click changes
+           nothing). The shared helper never has this problem because
+           it drags on touch events, which do not retarget clicks. */
+        if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea')) return;
         invDrag = { y: e.clientY, dy: 0 };
         try { invHead.setPointerCapture(e.pointerId); } catch (_) {}
       });
@@ -3034,6 +3044,9 @@
     var needsRender = true;  // true when camera moving, tween active, pointer down, etc.
     var frameTimes = [];     // rolling window for adaptive resolution
     var frameEma = 0;        // measured per-render main-thread cost (ms), exponential average — gates the ambient bound below
+    var frameGapEma = 0;     // measured gap between delivered frames (ms), exponential average — catches pipeline-bound cost the line above cannot see
+    var ambientStop = false; // latched: ambient motion stopped outright at extreme measured cost (issue #375 round 2)
+    var stopInteractMark = 0; // lastInteract value when the stop latched; a later pointerdown releases it
     var lastAmbientRender = 0; // when the last ambient-only frame rendered (cadence bound, issue #375)
     var curPixelRatio = 1.5; // Phase 1: start at 1.5, adapt 1.0–2.0 from frame time
     var lastFrameT = performance.now();
@@ -3088,11 +3101,20 @@
     function animate() {
       if (dead) return;
       rafId = requestAnimationFrame(animate);
-      // Phase 1: skip entirely when tab hidden or modal open
-      if (document.hidden || isModalOpen()) return;
+      // Phase 1: skip entirely when tab hidden or modal open. The frame
+      // clock resets here so time spent paused never reads as a giant
+      // delivery gap when the loop resumes.
+      if (document.hidden || isModalOpen()) { lastFrameT = performance.now(); return; }
       var t = clockT.getElapsedTime();
       var now = performance.now();
       var dt = Math.min(0.1, (now - lastFrameT) / 1000);  // seconds, clamped
+      // Unclamped delivery gap: what the frame pipeline actually
+      // managed between the last tick and this one. Render cost hides
+      // here when submission is cheap but presentation is not
+      // (software GL rasterising in another process) — the main-thread
+      // frame cost above never sees it.
+      var frameGap = now - lastFrameT;
+      frameGapEma = frameGapEma ? (frameGapEma * 0.7 + frameGap * 0.3) : frameGap;
       lastFrameT = now;
       stepTweens(now);   // all UI tweens (place pop, delete shrink, mood crossfade)
       var tweensActive = tweens.length > 0;
@@ -3160,14 +3182,44 @@
       var dollyK = 1 - Math.pow(1 - lk, 3);
       // v412: apply user zoom (pinch/wheel) to the target distance.
       var targetZ = camBase.z * (1.22 * (1 - dollyK) + dollyK) * zoomFactor;
+      // Issue #375 round 2: at extreme measured frame cost the
+      // cadence bound at the render decision cannot rescue the page.
+      // Extreme cost shows up in one of two measurements: the render
+      // call itself occupying the main thread for a second or more
+      // (frameEma), or frames arriving a second or more apart because
+      // presentation is saturated elsewhere (frameGapEma — software
+      // GL rasterising in the GPU process: submission looks cheap on
+      // this thread while the pipeline delivers ~1 frame per 2 s).
+      // Either way every render overruns any cadence, autonomous
+      // frames run back-to-back, and input, transitions and timers
+      // starve behind them. So the stop latches: ambient motion
+      // ceases entirely — no ambient-only renders (render decision
+      // below), no idle drift (which would manufacture "interacting"
+      // frames and bypass the stop), and the camera snaps instead of
+      // gliding (below; its damping tail would otherwise keep
+      // demanding frames for seconds after every move, and at sub-1
+      // fps the glide is invisible anyway). Demanded renders — drags,
+      // tweens, an explicit dirty mark — are never skipped by the
+      // stop. The latch releases on the next pointerdown (lastInteract
+      // moves); if the cost is still extreme it simply latches again.
+      // The static scene stays painted and the page stays clickable.
+      if (!ambientStop && (frameEma > 1000 || frameGapEma > 1000)) {
+        ambientStop = true;
+        stopInteractMark = lastInteract;
+      } else if (ambientStop && lastInteract > stopInteractMark) {
+        ambientStop = false;
+      }
       // slow idle drift after 6s without interaction (Phase 1: time-based, stops after 30s)
       var idle = (now - lastInteract) > 6000 && (now - lastInteract) < 36000;
-      var driftTarget = idle ? 1 : 0;
+      var driftTarget = (idle && !ambientStop) ? 1 : 0;
       driftAmt += (driftTarget - driftAmt) * (1 - Math.exp(-dt * 2));
       var driftX = Math.sin(t * 0.24) * 0.4 * driftAmt;
       var driftY = Math.cos(t * 0.19) * 0.22 * driftAmt;
-      // camera parallax (Phase 1: time-based damping, frame-rate independent)
-      var dampK = 1 - Math.exp(-dt * 7);  // ~0.045 at 60fps, scales with dt
+      // camera parallax (Phase 1: time-based damping, frame-rate independent).
+      // While the ambient stop is latched the damping is a snap: the
+      // glide's tail would keep the camera "moved" — and renders
+      // demanded — for seconds of pipeline time after every move.
+      var dampK = ambientStop ? 1 : (1 - Math.exp(-dt * 7));  // ~0.045 at 60fps, scales with dt
       var px = tiltOn ? tilt.x : pointerPX * 0.55;
       var py = tiltOn ? tilt.y : pointerPY * 0.4;
       var camTX = camBase.x + panX + px * 0.9 + driftX;
@@ -3189,15 +3241,16 @@
       // starves input, transitions and timers — the view reads as hung
       // and panels cannot be dismissed (issue #375). So when the
       // measured frame cost is high, renders that serve ambient effects
-      // alone are cadence-bounded; a render anything interactive asked
-      // for (tweens, camera, drags, an explicit dirty mark) is never
-      // delayed by the bound.
+      // alone are cadence-bounded; past the extreme-cost stop
+      // (ambientStop, above) they do not run at all. A render anything
+      // interactive asked for (tweens, camera, drags, an explicit
+      // dirty mark) is never delayed by either gate.
       var interacting = tweensActive || camMoved || driftAmt > 0.01 ||
         (trayDrag && trayDrag.hasTarget) || (moveDrag && moveDrag.hasTarget && moveDrag.moved) ||
         (roomDrag && roomDrag.hasTarget);
       var ambient = candleFlames.length > 0 || fairyBulbs.length > 0;
       var ambientOnly = ambient && !interacting && !needsRender;
-      var skipAmbient = ambientOnly && frameEma > 40 && (now - lastAmbientRender < 150);
+      var skipAmbient = ambientOnly && (ambientStop || (frameEma > 40 && (now - lastAmbientRender < 150)));
       if (interacting || needsRender || (ambient && !skipAmbient)) {
         renderer.render(scene, camera);
         needsRender = false;
