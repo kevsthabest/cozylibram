@@ -163,7 +163,7 @@
     '.s3d-root #s3dInvPanel h3{margin:0 0 4px;font-size:15px;color:#f6eff8;font-family:system-ui,sans-serif;}',
     // v535 (UX P2-8): a visible close control — the panel previously
     // closed only via the (hidden) toggle button, Esc, or picking an item.
-    '.s3d-root .s3d-inv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}',
+    '.s3d-root .s3d-inv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;touch-action:none;}',
     '.s3d-root #s3dInvClose{flex:0 0 auto;width:30px;height:30px;border-radius:999px;border:1px solid rgba(229,184,106,.35);',
     '  background:rgba(40,30,52,.9);color:#f6eff8;font-size:17px;line-height:1;cursor:pointer;font-family:system-ui,sans-serif;}',
     '.s3d-root #s3dInvClose:active{transform:scale(.93);border-color:#e5b86a;}',
@@ -2296,6 +2296,37 @@
     on(window, 'keydown', function (e) {
       if (e.key === 'Escape') { closeInventory(); deselect(); pickedType = null; hidePlaceBar(); setHint(DEFAULT_HINT); }
     });
+    /* App rule: sheets dismiss by dragging down. This panel is engine-owned
+       DOM rather than an app sheet, so it carries its own equivalent of the
+       shared wireSheetDrag helper: drag the head row down past a threshold
+       to dismiss; a shorter drag snaps back. The drag starts on the head
+       only, so the inventory grid below keeps its own scroll and
+       pick-up gestures. */
+    var invHead = root.querySelector('.s3d-inv-head');
+    if (invHead) {
+      var invDrag = null;
+      invHead.addEventListener('pointerdown', function (e) {
+        if (!$('s3dInvPanel').classList.contains('open')) return;
+        invDrag = { y: e.clientY, dy: 0 };
+        try { invHead.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+      invHead.addEventListener('pointermove', function (e) {
+        if (!invDrag) return;
+        invDrag.dy = Math.max(0, e.clientY - invDrag.y);
+        var p = $('s3dInvPanel');
+        p.style.transition = 'none';
+        p.style.transform = 'translateY(' + invDrag.dy + 'px)';
+      });
+      var invDragEnd = function () {
+        if (!invDrag) return;
+        var dy = invDrag.dy; invDrag = null;
+        var p = $('s3dInvPanel');
+        p.style.transition = ''; p.style.transform = '';
+        if (dy > 70) closeInventory();
+      };
+      invHead.addEventListener('pointerup', invDragEnd);
+      invHead.addEventListener('pointercancel', invDragEnd);
+    }
     buildInventory();
 
     /* tap-shelf-to-place when a type is picked */
@@ -3002,6 +3033,8 @@
     /* Phase 1: render on demand + adaptive resolution */
     var needsRender = true;  // true when camera moving, tween active, pointer down, etc.
     var frameTimes = [];     // rolling window for adaptive resolution
+    var frameEma = 0;        // measured per-render main-thread cost (ms), exponential average — gates the ambient bound below
+    var lastAmbientRender = 0; // when the last ambient-only frame rendered (cadence bound, issue #375)
     var curPixelRatio = 1.5; // Phase 1: start at 1.5, adapt 1.0–2.0 from frame time
     var lastFrameT = performance.now();
     renderer.setPixelRatio(curPixelRatio);
@@ -3148,15 +3181,30 @@
       camera.position.z += dz * dampK;
       lookV.set(camTarget.x + panX, camTarget.y + panY, camTarget.z);
       camera.lookAt(lookV);
-      // Phase 1: render on demand — only when something changed
-      var animating = tweensActive || camMoved || driftAmt > 0.01 ||
+      // Phase 1: render on demand — only when something changed.
+      // Ambient effects (candle flames, fairy bulbs) animate continuously,
+      // but their presence alone may not claim a full render on every
+      // frame unconditionally: on a slow renderer (software GL, a weak
+      // GPU) one render can take seconds, and an unbroken chain of them
+      // starves input, transitions and timers — the view reads as hung
+      // and panels cannot be dismissed (issue #375). So when the
+      // measured frame cost is high, renders that serve ambient effects
+      // alone are cadence-bounded; a render anything interactive asked
+      // for (tweens, camera, drags, an explicit dirty mark) is never
+      // delayed by the bound.
+      var interacting = tweensActive || camMoved || driftAmt > 0.01 ||
         (trayDrag && trayDrag.hasTarget) || (moveDrag && moveDrag.hasTarget && moveDrag.moved) ||
-        (roomDrag && roomDrag.hasTarget) || candleFlames.length > 0 || fairyBulbs.length > 0;
-      if (animating || needsRender) {
+        (roomDrag && roomDrag.hasTarget);
+      var ambient = candleFlames.length > 0 || fairyBulbs.length > 0;
+      var ambientOnly = ambient && !interacting && !needsRender;
+      var skipAmbient = ambientOnly && frameEma > 40 && (now - lastAmbientRender < 150);
+      if (interacting || needsRender || (ambient && !skipAmbient)) {
         renderer.render(scene, camera);
         needsRender = false;
+        if (ambientOnly) lastAmbientRender = now;
         // Phase 1: adaptive resolution — track frame time, adjust pixel ratio 1.0–2.0
         var frameMs = performance.now() - now;
+        frameEma = frameEma ? (frameEma * 0.7 + frameMs * 0.3) : frameMs;
         frameTimes.push(frameMs);
         if (frameTimes.length > 60) frameTimes.shift();
         if (frameTimes.length === 60) {
