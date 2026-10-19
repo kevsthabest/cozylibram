@@ -204,3 +204,4 @@ window.checkBootVersion = checkBootVersion;
 window.checkForAppUpdate = checkForAppUpdate;
 window._showUpdateBanner = _showUpdateBanner;
 window.watchForAppUpdates = watchForAppUpdates;
+
