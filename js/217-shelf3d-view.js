@@ -239,6 +239,33 @@ export let _shelf3dMounted = false;
 export let _shelf3dWebGLFailed = false;
 // v427: guard for the document-level menu-close listener (added once, not per render).
 export let _shelf3dMenuDocWired = false;
+/* Issue #375: a persisted 3D preference must never re-trap Shelves.
+   Entering the 3D view arms a per-device watchdog flag; the flag is
+   cleared when the mount proves itself (a short timer after the mount
+   resolves), on clean unmount, and on both WebGL fallbacks — every path
+   where the attempt concluded without trapping the user. The one way
+   the flag survives into a later page load is a view that wedged before
+   any of those could run. A surviving flag therefore means the last
+   attempt never proved itself: the next visit falls back to 2D and
+   resets the preference, so the user lands somewhere escapable and
+   re-elects 3D explicitly if they want it. */
+export const SHELF3D_WATCHDOG_KEY = 'cozylibram.s3d.watchdog';
+export let _shelf3dWatchdogArmedHere = false;
+export let _shelf3dProofTimer = 0;
+export function shelf3dWatchdogArm() {
+  _shelf3dWatchdogArmedHere = true;
+  try { localStorage.setItem(SHELF3D_WATCHDOG_KEY, '1'); } catch (e) {}
+}
+export function shelf3dWatchdogClear() {
+  _shelf3dWatchdogArmedHere = false;
+  clearTimeout(_shelf3dProofTimer);
+  _shelf3dProofTimer = 0;
+  try { localStorage.removeItem(SHELF3D_WATCHDOG_KEY); } catch (e) {}
+}
+export function shelf3dWatchdogStale() {
+  if (_shelf3dWatchdogArmedHere) return false;   // armed by this page load: an attempt in flight, not a leftover
+  try { return localStorage.getItem(SHELF3D_WATCHDOG_KEY) === '1'; } catch (e) { return false; }
+}
 // v430 (#56, re-applied v453): robust toggle — set both hidden property and
 // inline display. Belt-and-suspenders against CSS specificity issues.
 export function _shelf3dSetMenuVisible(visible) {
@@ -315,6 +342,9 @@ export function shelfSetViewMode(m) {
 export function shelfUnmount3D() {
   if (!_shelf3dMounted) return;
   _shelf3dMounted = false;
+  // Leaving a live view concludes the attempt — the watchdog proof is
+  // moot once the user has navigated away under their own power.
+  shelf3dWatchdogClear();
   try {
     if (typeof Shelf3D !== 'undefined' && Shelf3D && typeof Shelf3D.unmount === 'function') {
       Shelf3D.unmount();
@@ -369,6 +399,16 @@ export function shelf3DApplyTheme() {
 }
 
 export function renderShelf3D() {
+  // #375 watchdog: a flag still set at a fresh page load means the last
+  // 3D attempt wedged before it could prove itself. Break the re-trap —
+  // reset the preference and land in the 2D view instead.
+  if (shelf3dWatchdogStale()) {
+    shelf3dWatchdogClear();
+    shelfSetViewMode('2d');
+    renderShelf();
+    return;
+  }
+  shelf3dWatchdogArm();
   const books = (typeof library !== 'undefined' ? library : []);
   const counts = {};
   SHELF_GROUPS.forEach(function (g) {
@@ -465,6 +505,7 @@ export function renderShelf3D() {
     // v408: don't persist '2d' on fallback — a transient failure shouldn't
     // permanently flip the preference. Session flag only.
     _shelf3dWebGLFailed = true;
+    shelf3dWatchdogClear();   // the attempt concluded (fell back), so it is not a trap leftover
     renderShelf();
     return;
   }
@@ -479,6 +520,13 @@ export function renderShelf3D() {
     appTheme: (typeof getTheme === 'function') ? getTheme() : 'dark',
   }).then(function () {
     _shelf3dMounted = true;
+    // #375: the mount resolved and the view is painting. Give the loop a
+    // short window to prove it can actually run, then clear the
+    // watchdog. A wedged loop starves this timer along with everything
+    // else — which is the point: the flag survives exactly when the
+    // view is unusable.
+    clearTimeout(_shelf3dProofTimer);
+    _shelf3dProofTimer = setTimeout(function () { shelf3dWatchdogClear(); }, 1500);
     shelf3DApplyTheme();
     shelf3dUpdateBar();
     shelf3dPaintCovers();
@@ -490,6 +538,7 @@ export function renderShelf3D() {
     // v408: session flag only, don't persist — user can retry 3D via toggle.
     _shelf3dMounted = false;
     _shelf3dWebGLFailed = true;
+    shelf3dWatchdogClear();   // concluded attempt — must not read as a trap leftover next load
     renderShelf();
   });
 }
