@@ -297,10 +297,22 @@ export function paceHTML() {
   const withPages = read.filter(b => (b.pageCount || 0) > 0);
   const avgOf = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
   const avgLen = avgOf(withPages.map(b => b.pageCount));
+  // Average time to finish starts at the first logged reading day, not the
+  // day the book entered the library: a book can wait on the TBR without
+  // being read, so the add date would count shelf time as reading time.
+  // Finished books without logs have no observed start and stay out of the
+  // average rather than mixing the two definitions.
   const daysData = read
-    .filter(b => b.dateAdded && b.dateFinished)
-    .map(b => (new Date(b.dateFinished) - new Date(b.dateAdded)) / 864e5)
-      .filter(d => d >= 0 && d < 3650);
+    .filter(b => b.dateFinished && Array.isArray(b.log) && b.log.length)
+    .map(b => {
+      const logDays = b.log.map(e => e && e.d).filter(Boolean).sort();
+      if (!logDays.length) return null;
+      const start = logDays[0].split('-');
+      const finish = dayKey(new Date(b.dateFinished)).split('-');
+      return (Date.UTC(+finish[0], +finish[1] - 1, +finish[2]) -
+        Date.UTC(+start[0], +start[1] - 1, +start[2])) / 864e5;
+    })
+    .filter(d => d !== null && d >= 0 && d < 3650);
   const avgDays = avgOf(daysData);
   // v400: qualify small-n averages
   const avgDaysLabel = avgDays != null ? (() => {
