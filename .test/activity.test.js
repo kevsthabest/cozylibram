@@ -47,12 +47,16 @@ runInWindow(`localStorage.clear();
   library.push(mk('h4', 'Streak Day', { log: [{ d: '${dk(1)}', from: 0, to: 60 }] }));
   // finish-only day (5 days ago), no log
   library.push(mk('h3', 'Finished Solo', { status: 'read', dateFinished: '${isoDaysAgo(5)}' }));
-  // finished books for pace records (avg finish time: (10 + 2) / 2 = 6 days;
-  // finishes placed 20/21 days back so they form their own 2-day run)
+  // Finished books for the pace average. Both were added 100 days ago, but
+  // their logs span 10 and 2 days, so the average is (10 + 2) / 2 = 6 days.
+  // The older no-log finish above is excluded rather than counted from its
+  // add date. Finishes sit 20/21 days back so they form their own 2-day run.
   library.push(mk('h5', 'Longest Read', { status: 'read', pageCount: 1200, myRating: 4,
-    dateAdded: '${isoDaysAgo(30)}', dateFinished: '${isoDaysAgo(20)}', progress: 1200 }));
+    dateAdded: '${isoDaysAgo(100)}', dateFinished: '${isoDaysAgo(20)}', progress: 1200,
+    log: [{ d: '${dk(30)}', from: 0, to: 50, u: 'pct' }, { d: '${dk(20)}', from: 50, to: 100, u: 'pct' }] }));
   library.push(mk('h6', 'Shortest Read', { status: 'read', pageCount: 96, myRating: 5,
-    dateAdded: '${isoDaysAgo(23)}', dateFinished: '${isoDaysAgo(21)}', progress: 96 }));
+    dateAdded: '${isoDaysAgo(100)}', dateFinished: '${isoDaysAgo(21)}', progress: 96,
+    log: [{ d: '${dk(23)}', from: 0, to: 25, u: 'pct' }, { d: '${dk(21)}', from: 0, to: 1 }] }));
   heatSel = null;
   renderStats();`);
 
@@ -99,6 +103,7 @@ ok('pace grid has day/week/month', qa('.pace').length === 3 &&
   qa('.pace')[1].textContent.includes('70') && qa('.pace')[2].textContent.includes('304'));
 ok('average book length shown', q('.kv').textContent.includes('532 pages')); // (300 + 1200 + 96) / 3
 ok('average time to finish shown', q('.kv').textContent.includes('6 days'));
+ok('average time counts only the two logged finishes', q('.kv').textContent.includes('(based on 2 books)'));
 // longest/shortest now live in Personal records (v66), not in pace
 
 // 6. (removed: pace no longer has tappable record rows; see records.test.js)
@@ -114,6 +119,16 @@ ok('streak card shows day streak', cards[3].textContent.includes('Day streak'));
 // 8. longestStreak: today + yesterday = 2-day run; lone days don't extend it
 runInWindow(`window.__best = longestStreak();`);
 ok('longest streak is 2', window.__best === 2);
+
+// 8b. average time has no eligible books when every finish lacks a log:
+// the row hides instead of falling back to the add-to-finish interval.
+runInWindow(`library.length = 0;
+  library.push({ id: 'h7', isbn: '', title: 'No Log Finish', authors: ['A'], cover: '',
+    description: '', pageCount: 300, publishedDate: '', categories: [], publicRating: null,
+    ratingsCount: 0, status: 'read', ratings: {}, axes: [], myRating: 0, tropes: [],
+    progress: 300, log: [], dateAdded: '${isoDaysAgo(100)}', dateFinished: '${isoDaysAgo(0)}', notes: '' });
+  window.__paceNoLog = paceHTML();`);
+ok('average time row hides when no finished book has a log', !window.__paceNoLog.includes('Average time to finish'));
 
 // 9. month calendar: covers + heat tint + nav (v63). Fixed fixtures so the
 // assertions hold whatever day the suite runs.
