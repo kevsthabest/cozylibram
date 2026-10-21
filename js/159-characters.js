@@ -76,24 +76,23 @@ export const CharacterWiki = {
   /* Full character page data: canonical + instances + notes. */
   async getPage(charId) {
     const sb = await this._sb();
-    if (!sb) return null;
+    if (!sb) throw new Error('cloud unavailable');
+    const detail = await CharacterStore.getCanonicalDetail(charId, { throwOnError: true });
+    if (!detail) return null;
+    // Per-user note
+    let note = null;
     try {
-      const detail = await CharacterStore.getCanonicalDetail(charId);
-      if (!detail) return null;
-      // Per-user note
-      let note = null;
-      try {
-        const { data: { user } } = await sb.auth.getUser();
-        if (user) {
-          const { data } = await sb.from('character_notes')
-            .select('note, updated_at').eq('character_id', charId)
-            .eq('user_id', user.id).maybeSingle();
-          if (data) note = data;
-        }
-      } catch (e) {}
-      detail.userNote = note;
-      return detail;
-    } catch (e) { return null; }
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const { data, error } = await sb.from('character_notes')
+          .select('note, updated_at').eq('character_id', charId)
+          .eq('user_id', user.id).maybeSingle();
+        if (error) throw error;
+        if (data) note = data;
+      }
+    } catch (e) { detail.userNoteUnavailable = true; }
+    detail.userNote = note;
+    return detail;
   },
 
   /* Characters for a work, grouped by role tier for the Cast section. */
@@ -121,35 +120,33 @@ export const CharacterWiki = {
   async getQuotesForCanonical(charId) {
     const sb = await this._sb();
     if (!sb) return [];
-    try {
-      // Get linked book_character ids
-      const { data: links } = await sb.from('character_links')
-        .select('book_character_id').eq('character_id', charId);
-      const bcIds = (links || []).map(l => l.book_character_id).filter(Boolean);
-      if (!bcIds.length) return [];
-      const { data, error } = await sb.from('book_quotes')
-        .select('quote, context, speaker_name, works(title)')
-        .in('book_character_id', bcIds)
-        .order('created_at').limit(10);
-      if (error) throw error;
-      return (data || []).map(q => ({
-        quote: q.quote, context: q.context,
-        workTitle: (q.works || {}).title || '',
-      }));
-    } catch (e) { return []; }
+    // Get linked book_character ids. Query failures propagate so the page
+    // can distinguish an empty quote list from an unavailable one.
+    const { data: links, error: linkError } = await sb.from('character_links')
+      .select('book_character_id').eq('character_id', charId);
+    if (linkError) throw linkError;
+    const bcIds = (links || []).map(l => l.book_character_id).filter(Boolean);
+    if (!bcIds.length) return [];
+    const { data, error } = await sb.from('book_quotes')
+      .select('quote, context, speaker_name, works(title)')
+      .in('book_character_id', bcIds)
+      .order('created_at').limit(10);
+    if (error) throw error;
+    return (data || []).map(q => ({
+      quote: q.quote, context: q.context,
+      workTitle: (q.works || {}).title || '',
+    }));
   },
 
   async getQuotesForBookCharacter(bookCharId) {
     const sb = await this._sb();
     if (!sb) return [];
-    try {
-      const { data, error } = await sb.from('book_quotes')
-        .select('quote, context, speaker_name')
-        .eq('book_character_id', bookCharId)
-        .order('created_at').limit(10);
-      if (error) throw error;
-      return (data || []).map(q => ({ quote: q.quote, context: q.context }));
-    } catch (e) { return []; }
+    const { data, error } = await sb.from('book_quotes')
+      .select('quote, context, speaker_name')
+      .eq('book_character_id', bookCharId)
+      .order('created_at').limit(10);
+    if (error) throw error;
+    return (data || []).map(q => ({ quote: q.quote, context: q.context }));
   },
 
   /* Fallback: quotes matched by speaker name within a work (when
@@ -157,17 +154,15 @@ export const CharacterWiki = {
   async getQuotesBySpeaker(workId, speakerName) {
     const sb = await this._sb();
     if (!sb || !speakerName) return [];
-    try {
-      // v337: escape LIKE wildcards in the speaker name
-      const safeName = String(speakerName).trim().replace(/[\\%_]/g, m => '\\' + m);
-      const { data, error } = await sb.from('book_quotes')
-        .select('quote, context')
-        .eq('work_id', workId)
-        .ilike('speaker_name', '%' + safeName + '%')
-        .order('created_at').limit(10);
-      if (error) throw error;
-      return (data || []).map(q => ({ quote: q.quote, context: q.context }));
-    } catch (e) { return []; }
+    // v337: escape LIKE wildcards in the speaker name
+    const safeName = String(speakerName).trim().replace(/[\\%_]/g, m => '\\' + m);
+    const { data, error } = await sb.from('book_quotes')
+      .select('quote, context')
+      .eq('work_id', workId)
+      .ilike('speaker_name', '%' + safeName + '%')
+      .order('created_at').limit(10);
+    if (error) throw error;
+    return (data || []).map(q => ({ quote: q.quote, context: q.context }));
   },
 
   /* v337: quotes for a work (book-level, regardless of speaker attribution). */
@@ -262,8 +257,8 @@ export function charQuotesHTML(quotes) {
   if (!quotes || !quotes.length) return '';
   let h = '<h3 class="serif">Memorable quotes</h3><div class="ch-quotes">';
   quotes.slice(0, 5).forEach(q => {
-    h += '<blockquote class="ch-quote"><p>"' + esc(q.quote) + '"</p>' +
-      (q.context ? '<cite>' + esc(q.context) + '</cite>' : '') +
+    h += '<blockquote class="ch-quote"><p>' + spoilerWrap('&ldquo;' + esc(q.quote) + '&rdquo;', 'Character quote') + '</p>' +
+      (q.context ? '<cite>' + spoilerWrap(esc(q.context), 'Quote context') + '</cite>' : '') +
       (q.workTitle ? '<span class="note"> — ' + esc(q.workTitle) + '</span>' : '') +
       '</blockquote>';
   });
@@ -282,13 +277,25 @@ export function spoilersHidden() {
 export function setSpoilersHidden(hide) {
   try { localStorage.setItem('cl_hide_spoilers', hide ? '1' : '0'); } catch (e) {}
 }
+/* A chapter or relationship detail is safe to show unblurred only after the
+   reader marks that specific book as read. */
+export function charBookIsRead(title) {
+  const norm = t => String(t || '').toLowerCase().replace(/\s*\(.*\)\s*$/, '').trim();
+  const key = norm(title);
+  if (!key) return false;
+  try {
+    return ((typeof library !== 'undefined' ? library : []) || []).some(b =>
+      b && b.status === 'read' && norm(b.title) === key);
+  } catch (e) { return false; }
+}
 /* v469: provenance pills — wiki rework Variant A (quiet badges).
    Color is always paired with text, never color alone (a11y).
    States: pipeline ("from the books"), community, pending. */
 export function provPill(source) {
   var s = String(source || '').toLowerCase();
   var cls, label;
-  if (s === 'community') { cls = 'prov-community'; label = 'community'; }
+  if (s === 'community') { cls = 'prov-community'; label = 'community confirmed'; }
+  else if (s === 'user' || s === 'reader') { cls = 'prov-community'; label = 'reader contributed'; }
   else if (s === 'pending') { cls = 'prov-pending'; label = 'pending review'; }
   else { cls = 'prov-pipeline'; label = 'from the books'; }
   return '<span class="prov-pill ' + cls + '">' + esc(label) + '</span>';
@@ -351,7 +358,7 @@ export function charTimelineHTML(instances, workCharsByWorkId) {
   let h = '<h3 class="serif">Story timeline</h3><div class="ch-timeline">';
   sorted.forEach((inst, i) => {
     const isLast = i === sorted.length - 1;
-    const rels = (inst.relationships || []).slice(0, 3);
+    const rels = (charBookIsRead(inst.workTitle) ? (inst.relationships || []) : []).slice(0, 3);
     // Resolve top relationship names to links
     const wChars = (workCharsByWorkId && inst.workId && workCharsByWorkId[inst.workId]) || [];
     const relLinks = rels.map(r => {
@@ -982,31 +989,63 @@ export function openBookCharacter(bookCharId) {
 }
 
 export async function renderBookCharacterPage() {
+  setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+    '<p class="note">Opening this character…</p>');
   const sb = await CharacterWiki._sb();
   if (!sb || !bookCharViewId) {
-    setView('<div class="view-head"><h2 class="serif">Not found</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
+    setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+      '<div class="empty-state"><h2 class="serif">Character details are unavailable</h2>' +
+      '<p class="note">Connect to the library to open this character.</p></div>');
     return;
   }
   try {
     const { data, error } = await sb.from('book_characters')
-      .select('id, name, role, description, relationships, work_id, works(title)')
+      .select('id, name, role, description, relationships, work_id, status, aliases, appearance, first_appearance_chapter, source_type, works(title)')
       .eq('id', bookCharViewId).maybeSingle();
-    if (error || !data) throw error || new Error('not found');
+    if (error) throw error;
+    if (!data) {
+      setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+        '<div class="empty-state"><h2 class="serif">Character not found</h2>' +
+        '<p class="note">This entry may have been removed.</p></div>');
+      return;
+    }
     const w = data.works || {};
     // v333: fetch work characters for relationship link resolution
     let workChars = [];
     try { workChars = await CharacterStore.listForWork(data.work_id); } catch (e) {}
     // v334: premium hero for book character page too
     const relCount = (Array.isArray(data.relationships) ? data.relationships : []).length;
+    let canonical = null;
+    try {
+      const { data: link, error: linkError } = await sb.from('character_links')
+        .select('character_id, characters(id, name)')
+        .eq('book_character_id', bookCharViewId).maybeSingle();
+      const linked = link && (Array.isArray(link.characters) ? link.characters[0] : link.characters);
+      if (!linkError && linked) canonical = linked;
+    } catch (e) {}
+    const readBook = charBookIsRead(w.title);
     let html = '<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
       '<div class="ch-hero">' +
       charAvatar(data.name, data.role, 72) +
       '<div class="ch-hero-info"><h2 class="serif">' + esc(data.name) + '</h2>' +
       '<span class="chip dbtrope ch-role-' + esc(data.role || 'minor') + '">' + esc(CHAR_ROLE_LABELS[data.role] || data.role || '?') + '</span><br>' +
-      '<span class="note">in ' + esc(w.title || 'unknown book') + '</span></div></div>' +
+      '<span class="note">in ' + esc(w.title || 'this book') + '</span> ' + provPill(data.source_type || 'ai') +
+      (canonical ? '<p><button class="btn sm ghost" data-chwiki="' + esc(canonical.id) + '">View character across books</button></p>' : '') +
+      '</div></div>' +
       '<div class="stat-row ch-stats">' +
-      '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div></div>';
-    if (data.description) html += '<p class="ch-desc">' + esc(data.description) + '</p>';
+      '<div class="stat"><div class="n">' + (readBook ? relCount : 'Hidden') + '</div><div class="l">Connections</div></div></div>';
+    if (data.aliases && data.aliases.length)
+      html += '<p class="ch-aliases">Also known as: ' + (readBook ? esc(data.aliases.join(', ')) : spoilerWrap(esc(data.aliases.join(', ')), 'Character aliases')) + '</p>';
+    if (data.appearance) html += '<p class="ch-appearance">' + (readBook ? esc(data.appearance) : spoilerWrap(esc(data.appearance), 'Character appearance')) + provPill(data.source_type || 'ai') + '</p>';
+    if (data.description) html += '<h3 class="serif">About</h3><p class="ch-desc">' +
+      spoilerWrap(esc(data.description), 'Character description') + provPill(data.source_type || 'ai') + '</p>';
+    else html += '<p class="note">No character description has been recorded for this book yet.</p>';
+    if (data.first_appearance_chapter && readBook)
+      html += '<p class="note">First appears: Chapter ' + esc(data.first_appearance_chapter) + '</p>';
+    if (data.status && data.status !== 'unknown') {
+      const statusLabel = { alive: 'Alive', dead: 'Deceased', missing: 'Missing' }[data.status] || data.status;
+      html += '<p>' + spoilerWrap('<span class="chip dbtrope sm">' + esc(statusLabel) + '</span>', 'Character status') + '</p>';
+    }
     const rels = Array.isArray(data.relationships) ? data.relationships : [];
     if (rels.length) {
       html += '<h3 class="serif">Relationships</h3><p>';
@@ -1023,37 +1062,55 @@ export async function renderBookCharacterPage() {
         if (t === 'child' && seenParents.has(nameKey)) return; // contradictory, skip
         (byType[t] || (byType[t] = [])).push(r.to);
       });
-      html += Object.keys(byType).sort().map(t =>
+      const relHtml = Object.keys(byType).sort().map(t =>
         '<b>' + esc(t) + ':</b> ' + byType[t].map(n => charRelLink(n, workChars)).join(', ')
       ).join('<br>');
+      html += readBook ? relHtml : spoilerWrap(relHtml, 'Character relationships');
       html += '</p>';
-    }
+    } else html += '<h3 class="serif">Relationships</h3><p class="note">No relationships have been recorded for this character in this book yet.</p>';
     // v336: memorable quotes (by character id, fallback to speaker name)
     try {
       let quotes = await CharacterWiki.getQuotesForBookCharacter(bookCharViewId);
       if (!quotes.length && data.work_id) {
         quotes = await CharacterWiki.getQuotesBySpeaker(data.work_id, data.name);
       }
-      html += charQuotesHTML(quotes);
-    } catch (e) {}
-    html += '<p class="note">Not yet linked to a canonical character. ' +
-      'Link it in the Observatory → Characters to connect across books.</p>';
+      if (quotes.length) html += charQuotesHTML(quotes);
+      else html += '<h3 class="serif">Memorable quotes</h3><p class="note">No quotes have been collected for this character yet.</p>';
+    } catch (e) {
+      html += '<h3 class="serif">Memorable quotes</h3><p class="note">Quotes could not be loaded. Reopen this character when you’re back online.</p>';
+    }
+    if (!canonical) html += '<p class="note">This character is recorded for this book. A shared page across books is not available yet.</p>';
     setView(html);
     wireCharRelLinks(document.getElementById('view'));
   } catch (e) {
-    setView('<div class="view-head"><h2 class="serif">Could not load</h2><button class="btn sm" onclick="goBack()">← Back</button></div>');
+    setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+      '<div class="empty-state"><h2 class="serif">Character details are unavailable</h2>' +
+      '<p class="note">We couldn’t load this character right now. Please try again when you’re back online.</p>' +
+      '<button class="btn sm" onclick="renderBookCharacterPage()">Try again</button></div>');
   }
 }
 
 export async function renderCharacterPage() {
-  const d = await CharacterWiki.getPage(characterViewId);
+  setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+    '<p class="note">Opening this character…</p>');
+  let d;
+  try { d = await CharacterWiki.getPage(characterViewId); }
+  catch (e) {
+    setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+      '<div class="empty-state"><h2 class="serif">Character details are unavailable</h2>' +
+      '<p class="note">We couldn’t load this character right now. Please try again when you’re back online.</p>' +
+      '<button class="btn sm" onclick="renderCharacterPage()">Try again</button></div>');
+    return;
+  }
   if (!d) {
-    setView('<div class="view-head"><h2 class="serif">Character not found</h2>' +
-      '<button class="btn sm" onclick="goBack()">← Back</button></div>');
+    setView('<div class="view-head"><button class="btn sm ghost" onclick="goBack()">← Back</button></div>' +
+      '<div class="empty-state"><h2 class="serif">Character not found</h2>' +
+      '<p class="note">This entry may have been removed.</p></div>');
     return;
   }
   // v334: premium hero — avatar, name, role badge, at-a-glance stats
   const primaryRole = charPrimaryRole(d.instances);
+  const allStoryBooksRead = d.instances.length > 0 && d.instances.every(i => charBookIsRead(i.workTitle));
   const relCount = d.instances.reduce((n, inst) => n + (inst.relationships || []).length, 0);
   // "Closest to" — most frequent relationship target
   const targetCounts = {};
@@ -1110,15 +1167,7 @@ export async function renderCharacterPage() {
       if (!withChap.length) return '';
       const first = [...withChap].sort((a, b) =>
         ((a.seriesPos == null ? Infinity : a.seriesPos) - (b.seriesPos == null ? Infinity : b.seriesPos)))[0];
-      const normT = t => String(t || '').toLowerCase().replace(/\s*\(.*\)\s*$/, '').trim();
-      const key = normT(first.workTitle);
-      let bookRead = false;
-      try {
-        for (const b of (typeof library !== 'undefined' ? library : []) || []) {
-          if (b && b.title && normT(b.title) === key && b.status === 'read') { bookRead = true; break; }
-        }
-      } catch (e) {}
-      if (!bookRead) return '';
+      if (!charBookIsRead(first.workTitle)) return '';
       return '<p class="note">First appears: Chapter ' + first.firstAppearance +
         (withChap.length > 1 ? ' (' + esc(first.workTitle) + ')' : '') + '</p>';
     })() +
@@ -1139,8 +1188,8 @@ export async function renderCharacterPage() {
     '</div></div>' +
     '<div class="stat-row ch-stats">' +
     '<div class="stat"><div class="n">' + d.instances.length + '</div><div class="l">' + (d.instances.length === 1 ? 'Book' : 'Books') + '</div></div>' +
-    '<div class="stat"><div class="n">' + relCount + '</div><div class="l">Connections</div></div>' +
-    (closest ? '<div class="stat"><div class="n" style="font-size:0.9em;line-height:1.2">' + charRelLink(closest[0], allWorkChars) + '</div><div class="l">Closest to</div></div>' : '') +
+    '<div class="stat"><div class="n">' + (allStoryBooksRead ? relCount : 'Hidden') + '</div><div class="l">Connections</div></div>' +
+    (closest && allStoryBooksRead ? '<div class="stat"><div class="n" style="font-size:0.9em;line-height:1.2">' + charRelLink(closest[0], allWorkChars) + '</div><div class="l">Closest to</div></div>' : '') +
     '</div>';
   // v469: provenance pill on the canonical description
   if (d.description) html += '<p class="ch-desc">' + esc(d.description) + provPill(d.source) + '</p>';
@@ -1212,7 +1261,8 @@ export async function renderCharacterPage() {
       types: [...g.types].sort(),
       importance: g.importance || null,
     }));
-    html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
+    if (allStoryBooksRead) html += charGraphHTML(grouped, allWorkChars, d.name, primaryRole);
+    else if (grouped.length) html += '<p class="note">The relationship map stays hidden until every book on this page is marked read.</p>';
   } catch (e) { console.warn('Graph merge failed', e); }
   let hasRels = false;
   for (const inst of d.instances) {
@@ -1234,25 +1284,30 @@ export async function renderCharacterPage() {
       if (t === 'child' && seenParents.has(String(r.to || '').trim().toLowerCase())) return;
       (byType[t] || (byType[t] = [])).push(r.to);
     });
-    html += Object.keys(byType).sort().map(t =>
+    const relHtml = Object.keys(byType).sort().map(t =>
       '<b>' + esc(t) + ':</b> ' + byType[t].map(n => charRelLink(n, wChars)).join(', ')
     ).join('<br>');
+    html += charBookIsRead(inst.workTitle) ? relHtml : spoilerWrap(relHtml, 'Relationships in ' + inst.workTitle);
     html += '</p>';
   }
-  if (!hasRels) html += '<p class="note">No recorded relationships.</p>';
+  if (!hasRels) html += '<p class="note">No relationships have been recorded for these books yet.</p>';
 
   // v336: memorable quotes
   try {
     const quotes = await CharacterWiki.getQuotesForCanonical(characterViewId);
-    html += charQuotesHTML(quotes);
-  } catch (e) {}
+    html += quotes.length ? charQuotesHTML(quotes) :
+      '<h3 class="serif">Memorable quotes</h3><p class="note">No quotes have been collected for this character yet.</p>';
+  } catch (e) {
+    html += '<h3 class="serif">Memorable quotes</h3><p class="note">Quotes could not be loaded. Reopen this character when you’re back online.</p>';
+  }
 
   // Per-user notes
   html += '<h3 class="serif">My notes</h3>' +
     '<textarea id="ch-note" class="text-input" rows="3" placeholder="Your thoughts on this character…">' +
     esc(d.userNote ? d.userNote.note : '') + '</textarea>' +
     '<p><button class="btn sm" id="ch-note-save">Save note</button> ' +
-    '<span class="note" id="ch-note-msg"></span></p>';
+    '<span class="note" id="ch-note-msg"></span></p>' +
+    (d.userNoteUnavailable ? '<p class="note">Your note could not be loaded. Try reopening this page when you’re back online.</p>' : '');
 
   setView(html);
   const viewBox = document.getElementById('view');
@@ -1301,6 +1356,7 @@ window.charPrimaryRole = charPrimaryRole;
 window.charQuotesHTML = charQuotesHTML;
 window.spoilersHidden = spoilersHidden;
 window.setSpoilersHidden = setSpoilersHidden;
+window.charBookIsRead = charBookIsRead;
 window.provPill = provPill;
 window.spoilerWrap = spoilerWrap;
 window.spoilerToggle = spoilerToggle;
@@ -1314,3 +1370,4 @@ window.bookCharViewId = bookCharViewId;
 window.openBookCharacter = openBookCharacter;
 window.renderBookCharacterPage = renderBookCharacterPage;
 window.renderCharacterPage = renderCharacterPage;
+
