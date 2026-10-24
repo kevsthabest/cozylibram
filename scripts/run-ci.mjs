@@ -27,6 +27,15 @@
 //    specific number, only that the pair moved. Docs-only and
 //    test-only changes never bump and are exempt from the "moved" half.
 //
+// 4. The theme-token contrast gate (Tuned spec §5). styles.css's
+//    per-theme --ink/--muted/--faint tokens must hold WCAG AA (4.5:1)
+//    against --card/--card2/--bg in all 23 themes — the failure mode
+//    this closes is a theme shipping unreadable faint text while every
+//    functional suite stays green, because no .test suite renders the
+//    token pairs. scripts/check-theme-contrast.mjs computes the pairs
+//    from the token blocks themselves; a failure here names the theme,
+//    the pair and the measured ratio.
+//
 // Suites are run with COZYLIBRAM_DIR pointed at this checkout
 // (CONSTRAINTS.md rule 1): run against any other tree, the result
 // would prove nothing about this change.
@@ -217,6 +226,23 @@ function main() {
     }
   }
 
+  // 4: the theme-token contrast gate.
+  const contrast = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'check-theme-contrast.mjs')], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const contrastOut = `${contrast.stdout || ''}${contrast.stderr || ''}`.trim();
+  let themeContrastLine;
+  if (contrast.status === 0) {
+    themeContrastLine = `OK (${contrastOut.split(/\r?\n/).pop() || 'all pairs >= 4.5:1'})`;
+    console.log(`PASS scripts/check-theme-contrast.mjs`);
+  } else {
+    themeContrastLine = 'FAIL (see output below)';
+    problems.push(`theme contrast gate failed: ${contrastOut.split(/\r?\n/).slice(0, 4).join(' | ')}`);
+    console.log(`FAIL scripts/check-theme-contrast.mjs (exit ${contrast.status === null ? 'killed' : contrast.status})`);
+  }
+
   // Summary — the log is the artefact a reader triages from.
   console.log('\n================ CI SUMMARY ================');
   console.log(`Suites run:        ${suites.length}`);
@@ -232,6 +258,7 @@ function main() {
   );
   console.log(`Version pair:      ${versionPairLine}`);
   console.log(`Version moved:     ${versionMovedLine}`);
+  console.log(`Theme contrast:    ${themeContrastLine}`);
   for (const n of notes) console.log(`Note:              ${n}`);
   console.log(`Verdict:           ${problems.length ? 'FAIL' : 'PASS'}`);
   console.log('============================================');
@@ -245,6 +272,7 @@ function main() {
       `- Baseline: ${cmp.equal ? 'equal to `.test/baseline-failures.txt`' : '**differs** (see log)'}`,
       `- Version pair: ${versionPairLine}`,
       `- Version moved: ${versionMovedLine}`,
+      `- Theme contrast: ${themeContrastLine}`,
       `- Verdict: **${problems.length ? 'FAIL' : 'PASS'}**`,
       '',
     ].join('\n');
@@ -254,6 +282,12 @@ function main() {
   if (problems.length) {
     console.log('\nProblems:');
     for (const p of problems) console.log(`- ${p}`);
+  }
+
+  if (contrast.status !== 0 && contrastOut) {
+    const lines = contrastOut.split(/\r?\n/);
+    console.log(`\n----- output: scripts/check-theme-contrast.mjs (${lines.length} lines) -----`);
+    console.log(lines.join('\n'));
   }
 
   // Failing suites' own output, tailed — the first thing a triage needs.

@@ -89,7 +89,7 @@ export function bookCard(b, i) {
   }
   return '<div class="book-card' + anim + '" data-id="' + esc(b.id) + '">' +
     coverHTML(b, '', coverFav(b)) +
-    '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
+    '<div class="book-meta"><h4>' + esc(b.title) + '</h4>' +
     '<p class="author">' + esc(displayAuthors(b.authors) || 'Unknown author') + '</p>' +
     '<div class="badges">' + badges.join('') + '</div>' + progHTML + '</div></div>';
 }

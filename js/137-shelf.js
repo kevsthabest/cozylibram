@@ -192,7 +192,7 @@ export function paintShelfResults() {
       const done = e._added || e.status === 'have';
       return '<div class="book-card" data-i="' + i + '"' + (done ? ' style="opacity:0.4"' : '') + '>' +
         (e.book ? coverHTML(e.book) : '<div class="cover-ph"></div>') +
-        '<div class="book-meta"><h3>' + (e.book ? esc(e.book.title) : shelfSpineLabel(e)) + '</h3>' +
+        '<div class="book-meta"><h4>' + (e.book ? esc(e.book.title) : shelfSpineLabel(e)) + '</h4>' +
         '<p class="author">' + (e.book ? esc(displayAuthors(e.book.authors)) +
           (e.book.publishedDate ? ' · ' + esc(e.book.publishedDate.slice(0, 4)) : '')
           : 'spine: ' + shelfSpineLabel(e)) + '</p>' +

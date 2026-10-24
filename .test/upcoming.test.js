@@ -79,7 +79,7 @@ ok('Coming soon section rendered', !!section && /Coming soon/.test(section.textC
 const pills = [...window.document.querySelectorAll('.up-pill')].map(p => p.textContent);
 ok('upcoming sorted by date with countdowns',
   pills.length === 2 && /in 5 days/.test(pills[0]) && /in 20 days/.test(pills[1]));
-const cards = [...window.document.querySelectorAll('#view .book-card h3')].map(h => h.textContent);
+const cards = [...window.document.querySelectorAll('#view .book-card h4')].map(h => h.textContent);
 ok('upcoming books lead the wishlist', cards[0] === 'Sooner Book' && cards[1] === 'Soon Book' && cards[2] === 'Old Book');
 
 console.log(`\n${pass} passed, ${fail} failed`);

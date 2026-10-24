@@ -912,7 +912,7 @@ export function renderYearInBooks(yr) {
     '<span class="num">' + n + '</span></div>').join('');
   const books = d.topBooks.map((b, i) =>
     '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
-    '<div class="book-meta"><h3>#' + (i + 1) + ' ' + esc(b.title) + '</h3>' +
+    '<div class="book-meta"><h4>#' + (i + 1) + ' ' + esc(b.title) + '</h4>' +
     '<p class="author">' + esc(displayAuthors(b.authors)) + ' · ♥ ' + b.myRating.toFixed(1) + '</p>' +
     '</div></div>').join('');
   const recs = [];
@@ -1259,7 +1259,7 @@ export function renderStats() {
         : (b.pageCount ? '<div class="progress-line"><div class="fill" style="width:' + pct + '%"></div></div>' +
           '<p class="author" style="margin-top:4px">' + (b.progress || 0) + ' / ' + b.pageCount + ' pages · ' + pct + '%</p>' : '');
       return '<div class="book-card" data-id="' + esc(b.id) + '">' + coverHTML(b) +
-          '<div class="book-meta"><h3>' + esc(b.title) + '</h3>' +
+          '<div class="book-meta"><h4>' + esc(b.title) + '</h4>' +
           '<p class="author">' + esc(displayAuthors(b.authors)) + '</p>' +
           progLine +
           '</div></div>';
@@ -1303,7 +1303,7 @@ export function renderStats() {
           milestoneCard = '<div class="milestone-celebration" data-mid="' + esc(nm.def.id) + '">' +
             '<div class="micon">' + icon(nm.def.icon || 'sparkles') + '</div><div style="flex:1">' +
             '<div class="mtitle">A little reading milestone</div>' +
-            '<h3>' + esc(nm.def.title) + '</h3><p>' + esc(nm.def.copy) + '</p>' +
+            '<h4>' + esc(nm.def.title) + '</h4><p>' + esc(nm.def.copy) + '</p>' +
             '<a href="#" data-act="milestones">View milestones \u2192</a></div>' +
             '<button class="btn ghost sm" data-act="dismiss-milestone" aria-label="Dismiss" style="flex:none">\u2715</button></div>';
         }
