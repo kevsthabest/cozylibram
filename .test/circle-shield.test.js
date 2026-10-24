@@ -244,7 +244,7 @@ const NOW = new Date().toISOString();
   probe('renderCovenFriend()'); await tick(8);
   const grid = window.document.querySelector('#view .grid');
   ok('friend grid renders', !!grid);
-  const cardOf = (title) => Array.from(window.document.querySelectorAll('#view .book-card')).find(c => (c.querySelector('h3') || {}).textContent === title);
+  const cardOf = (title) => Array.from(window.document.querySelectorAll('#view .book-card')).find(c => (c.querySelector('h4') || {}).textContent === title);
   ok('shield ON: record-spice cover blurred + tagged', !!cardOf('Filthy Book') && !!cardOf('Filthy Book').querySelector('.cover-wrap.shield-blur') && !!cardOf('Filthy Book').querySelector('.shield-note'));
   ok('shield ON: baseline-spice cover blurred once the map lands', !!cardOf('Baseline Book') && !!cardOf('Baseline Book').querySelector('.cover-wrap.shield-blur'));
   ok('shield ON: steamy + unknown covers stay clear', !!cardOf('Steamy Book') && !cardOf('Steamy Book').querySelector('.shield-blur') && !!cardOf('Unknown Book') && !cardOf('Unknown Book').querySelector('.shield-blur'));

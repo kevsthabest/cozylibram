@@ -1,0 +1,52 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      "docs/design-preview.html"
+    ],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "styles.css"
+        ],
+        "createdAt": "2026-10-24T19:26:28.751Z",
+        "reason": "Brand wordmark (.app-header h1) - locked 2026-10-24. v4.7 ignoreValues have no selector scoping, so the suppression is rule+value+file and the selector is named here for human readers."
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-24T19:26:28.753Z",
+        "reason": "Inter is the brand typeface - locked 2026-10-24"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "styles.css"
+        ],
+        "createdAt": "2026-10-24T19:26:28.756Z",
+        "reason": "Gold side-tab on the currently-reading card - locked 2026-10-24"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "js/110-library.js"
+        ],
+        "createdAt": "2026-10-24T19:26:28.758Z",
+        "reason": "Gold side-tab on the currently-reading card - locked 2026-10-24"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-24T19:29:15.524Z",
+        "reason": "Brand wordmark as resolved through the page's linked stylesheet (.app-header h1 and .nav-brand-name - the same locked gradient wordmark in the wide-layout nav) - locked 2026-10-24"
+      }
+    ]
+  }
+}

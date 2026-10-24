@@ -782,7 +782,7 @@ export function renderCoven() {
   if (!cloudUser) {
     setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
       '<div class="empty"><div class="big">' + icon('friends') + '</div>' +
-      '<h2 class="serif">Your ' + covenNameBare().toLowerCase() + ' lives in the cloud</h2>' +
+      '<h3 class="serif">Your ' + covenNameBare().toLowerCase() + ' lives in the cloud</h3>' +
       '<p>Sign in to add friends and browse each other’s shelves.</p>' +
       '<button class="btn" id="cc-signin">Sign in</button></div>');
     document.getElementById('cc-signin').addEventListener('click', () => go('settings'));
@@ -808,7 +808,7 @@ export function renderCoven() {
     })
     .catch(e => {
       setView('<div class="view-head"><h2 class="serif">' + icon('friends') + ' ' + covenName() + '</h2></div>' +
-        '<div class="empty"><h2 class="serif">Couldn’t load your ' + covenNameBare().toLowerCase() + '</h2>' +
+        '<div class="empty"><h3 class="serif">Couldn’t load your ' + covenNameBare().toLowerCase() + '</h3>' +
         '<p>' + esc((e && e.message) || e) + '</p>' +
         '<button class="btn" id="cc-retry">Try again</button></div>');
       document.getElementById('cc-retry').addEventListener('click', renderCoven);
@@ -909,7 +909,7 @@ export function renderCovenMain(code, lists, priv) {
 
   // Requests
   if (lists.received.length || lists.sent.length) {
-    html += '<h2 class="section serif">Requests</h2><div class="circle-list">';
+    html += '<h3 class="section serif">Requests</h3><div class="circle-list">';
     lists.received.forEach(r => {
       html += circleRowHTML(r.profile, r.name,
         '<button class="btn sm" data-accept="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Accept</button>' +
@@ -997,7 +997,7 @@ export function renderCovenFriend() {
     .catch(e => {
       setView('<div class="view-head"><button class="btn ghost sm" id="cf-back2">← Back</button>' +
         '<h2 class="serif">' + icon('friends') + ' ' + esc(f.name) + '</h2></div>' +
-        '<div class="empty"><h2 class="serif">Couldn’t open their shelves</h2><p>' + esc((e && e.message) || e) + '</p></div>');
+        '<div class="empty"><h3 class="serif">Couldn’t open their shelves</h3><p>' + esc((e && e.message) || e) + '</p></div>');
       document.getElementById('cf-back2').addEventListener('click', () => go('coven'));
     });
 }
@@ -1038,7 +1038,7 @@ export function renderCovenFriendMain() {
     ['tbr', 'reading', 'read', 'dnf'].map(s => chip(s, STATUS[s])).join('') + '</div>';
   if (!circBooks.length) {
     html += '<div class="empty"><div class="big">' + icon('covers') + '</div>' +
-      '<h2 class="serif">Nothing shared</h2><p>' + esc(f.name) + ' isn’t sharing any shelves with you right now.</p></div>';
+      '<h3 class="serif">Nothing shared</h3><p>' + esc(f.name) + ' isn’t sharing any shelves with you right now.</p></div>';
   } else if (!books.length && !trophyBooks.length) {
     html += '<p class="note" style="text-align:center">Nothing on this shelf.</p>';
   } else {

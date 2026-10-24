@@ -188,7 +188,7 @@
   --card2: #402216;
   --ink: #f7e8d6;
   --muted: #d0a080;
-  --faint: #9a7a54; /* v228: was #8d6f52 at 4.06:1 — now 4.57 */
+  --faint: #a98c69; /* Tuned lift toward --ink: the v228 value passed on --card but fell under AA on --card2, a surface the earlier audits never measured; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #e0722a; /* v416 (T2): ember-red fireside — was rose, colliding with Harvest */
   --accent-deep: #b0511a;
   --gold: #d9a44f;
@@ -223,7 +223,7 @@
   --card2: #222b46;
   --ink: #e9ebf7;
   --muted: #a4aac9;
-  --faint: #79809f; /* v228: was #6e7492 at 4.09:1 — now 4.82 */
+  --faint: #8c92ae; /* Tuned lift toward --ink: the v228 value passed on --card but fell under AA on --card2, a surface the earlier audits never measured; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #8b5cf6; /* v228: twilight defaults to celestial violet */
   --accent-deep: #6d3fd4;
   --gold: #d4a24e;
@@ -240,7 +240,7 @@
   --card2: #1e2f21;
   --ink: #eaf3e5;
   --muted: #a5bda1;
-  --faint: #70876f;
+  --faint: #829781; /* Tuned lift toward --ink: the old value fell under AA on --card and --card2; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #8aa864; /* v228: verdant defaults to botanical sage */
   --accent-deep: #687f4b;
   --gold: #d4a24e;
@@ -258,7 +258,7 @@
   --card2: #2a2c4e;
   --ink: #f0edf9;
   --muted: #b3b0d2;
-  --faint: #8784a9; /* v228: was #7e7b9f at 4.24:1 — now 4.79 */
+  --faint: #9693b4; /* Tuned lift toward --ink: the v228 value passed on --card but fell under AA on --card2, a surface the earlier audits never measured; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #e5488f;
   --accent-deep: #c2377a;
   --gold: #f0c46c;
@@ -275,7 +275,7 @@
   --card2: #372631;
   --ink: #f7ecef;
   --muted: #c9a9b5;
-  --faint: #987888; /* v228: was #8f6f7c at 4.12:1 — now 4.68 */
+  --faint: #a78b98; /* Tuned lift toward --ink: the v228 value passed on --card but fell under AA on --card2, a surface the earlier audits never measured; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #e5488f;
   --accent-deep: #c2377a;
   --gold: #dfa08a;
@@ -292,7 +292,7 @@
   --card2: #1a2f33;
   --ink: #e8f2f1;
   --muted: #a3bcb9;
-  --faint: #6d8a87;
+  --faint: #7d9895; /* Tuned lift toward --ink: the old value fell under AA on --card and --card2; scripts/check-theme-contrast.mjs now holds every text token at 4.5:1 on all three surfaces */
   --accent: #2fa39a; /* v228: abyss defaults to deep teal */
   --accent-deep: #1f7a74;
   --gold: #e3c078;
@@ -323,7 +323,7 @@
 /* ---------- seasonal themes (v257) ---------- */
 [data-theme="haunt"] {
   --bg: #150e1c; --bg2: #1c1226; --card: #221630; --card2: #2b1c3d;
-  --ink: #f5e8f0; --muted: #c2a8c8; --faint: #9a7fa3;
+  --ink: #f5e8f0; --muted: #c2a8c8; --faint: #9b80a4;
   --accent: #e0722a; --accent-deep: #b0511a;
   --gold: #d4a24e; --line: #3d2a52;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -332,7 +332,7 @@
 }
 [data-theme="yuletide"] {
   --bg: #0c1811; --bg2: #102016; --card: #142a1c; --card2: #1a3524;
-  --ink: #f0f4ec; --muted: #a9c2ae; --faint: #7f9a85;
+  --ink: #f0f4ec; --muted: #a9c2ae; --faint: #829d88;
   --accent: #d43a55; --accent-deep: #a11f3c;
   --gold: #d4a24e; --line: #234434;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -341,7 +341,7 @@
 }
 [data-theme="fete"] {
   --bg: #0f1330; --bg2: #151a3d; --card: #1a2049; --card2: #222a55;
-  --ink: #f2ecdc; --muted: #b3abd0; --faint: #877fa5;
+  --ink: #f2ecdc; --muted: #b3abd0; --faint: #9890ae;
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #e3b94f; --line: #2c3462;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -350,7 +350,7 @@
 }
 [data-theme="amour"] {
   --bg: #2a1420; --bg2: #331a27; --card: #3d2030; --card2: #4a2739;
-  --ink: #fbeef3; --muted: #d8b0bf; --faint: #a17b89;
+  --ink: #fbeef3; --muted: #d8b0bf; --faint: #b2919d;
   --accent: #f2a3c0; --accent-deep: #d16a96; /* v416 (T1): blush-forward Valentine's — was rose, colliding with Velvet */
   --gold: #d4a24e; --line: #5c2f42;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -359,7 +359,7 @@
 }
 [data-theme="shamrock"] {
   --bg: #0c1e13; --bg2: #112a19; --card: #163620; --card2: #1d4429;
-  --ink: #ecf5e8; --muted: #a4c8ab; --faint: #7ba184;
+  --ink: #ecf5e8; --muted: #a4c8ab; --faint: #8dae94;
   --accent: #6fce9e; --accent-deep: #4da878;
   --gold: #d4a24e; --line: #234d30;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -368,7 +368,7 @@
 }
 [data-theme="pastel"] {
   --bg: #f7f2fa; --bg2: #efe7f4; --card: #fffdf9; --card2: #f4ecf8;
-  --ink: #3a2c44; --muted: #6f5b79; --faint: #7d6a87;
+  --ink: #3a2c44; --muted: #6f5b79; --faint: #796683;
   --accent: #b9a3f2; --accent-deep: #9378dd;
   --gold: #a87b24; --line: #ddd0e6;
   --ok: #3e8e52; --danger: #c64f4f;
@@ -377,7 +377,7 @@
 }
 [data-theme="harvest"] {
   --bg: #191007; --bg2: #211409; --card: #2a1a0d; --card2: #352112;
-  --ink: #f5e9d6; --muted: #c8a87e; --faint: #9d7f5c;
+  --ink: #f5e9d6; --muted: #c8a87e; --faint: #a48766;
   --accent: #c47b4a; --accent-deep: #9a5a32;
   --gold: #d4a24e; --line: #453015;
   --ok: #7bc98a; --danger: #e56b6b;
@@ -398,7 +398,7 @@
 /* v423: premium theme packs */
 [data-theme="stormrider"] {
   --bg: #12141f; --bg2: #0e1019; --card: #1d2233; --card2: #161b2a;
-  --ink: #eef1f8; --muted: #8a94b8; --faint: #6a7494;
+  --ink: #eef1f8; --muted: #8a94b8; --faint: #8089a5;
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #e8a94e; --line: #2e3650;
   --ok: #4ecb8f; --danger: #e0637f;
@@ -407,7 +407,7 @@
 }
 [data-theme="briarthrone"] {
   --bg: #130e1a; --bg2: #0f0b14; --card: #211628; --card2: #1a1120;
-  --ink: #f3e9f5; --muted: #a898b8; --faint: #84748f;
+  --ink: #f3e9f5; --muted: #a898b8; --faint: #8d7d97;
   --accent: #b9a3f2; --accent-deep: #8a6fd4;
   --gold: #c9b3f5; --line: #352a44;
   --ok: #4ecb8f; --danger: #e0637f;
@@ -416,7 +416,7 @@
 }
 [data-theme="voidsignal"] {
   --bg: #0a0f14; --bg2: #070b0f; --card: #111a22; --card2: #0d141b;
-  --ink: #e6f1f5; --muted: #7a94a8; --faint: #5a7488;
+  --ink: #e6f1f5; --muted: #7a94a8; --faint: #6c8496;
   --accent: #3f8fd6; --accent-deep: #2a6aa8;
   --gold: #38e1ff; --line: #1e2e3a;
   --ok: #4ecb8f; --danger: #ff5470;
@@ -425,7 +425,7 @@
 }
 [data-theme="wisp"] {
   --bg: #fdf6ec; --bg2: #f6ead6; --card: #ffffff; --card2: #faf3e6;
-  --ink: #3a2f28; --muted: #8a7a68; --faint: #6a5a4c;
+  --ink: #3a2f28; --muted: #7c6d5d; --faint: #6a5a4c;
   --accent: #e5488f; --accent-deep: #b8326a;
   --gold: #ffd76a; --line: #e8dcc8;
   --ok: #4ecb8f; --danger: #c64f4f;
@@ -434,7 +434,7 @@
 }
 [data-theme="wisp-night"] {
   --bg: #0e0a1a; --bg2: #0a0714; --card: #1a1230; --card2: #140e26;
-  --ink: #f5eefb; --muted: #a898c8; --faint: #8474a0;
+  --ink: #f5eefb; --muted: #a898c8; --faint: #8979a4;
   --accent: #c08a24; --accent-deep: #96690f;
   --gold: #ffd76a; --line: #2e2148;
   --ok: #4ecb8f; --danger: #e0637f;
@@ -919,7 +919,7 @@ img.avatar-stk {
    lighter blur falloff past the wrap's clipped edges. */
 .cover-wrap.shield-blur img { filter: blur(12px) saturate(.6); transform: scale(1.3); }
 .book-meta { flex: 1; min-width: 0; }
-.book-meta h3 { margin: 0 0 2px; font-size: 16px; line-height: 1.25; }
+.book-meta h3, .book-meta h4 { margin: 0 0 2px; font-size: 16px; line-height: 1.25; }
 .book-meta .author { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .badge {
@@ -945,6 +945,10 @@ img.avatar-stk {
 }
 .empty .big { font-size: 44px; margin-bottom: 10px; }
 .empty p { margin: 6px 0 18px; }
+/* Tuned (heading ladder): empty-state titles render as h3 so they stop
+   competing with the view's own h2 in the outline; the size and margins
+   the h2 carried are restated here so the states look exactly as before. */
+.empty h3 { font-size: 1.5em; margin: 0.83em 0; }
 
 /* ---------- buttons / inputs ---------- */
 .btn {
@@ -1053,7 +1057,7 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .scan-box.live .scan-dim, .scan-box.live .scan-frame { opacity: 1; }
 .scan-frame i {
   position: absolute; width: 26px; height: 26px;
-  border: 0 solid var(--gold, #e8b4a0);
+  border: 0 solid var(--gold);
   filter: drop-shadow(0 0 4px rgba(0,0,0,0.65));
 }
 .scan-frame .c1 { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: 8px; }
@@ -1062,8 +1066,8 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 .scan-frame .c4 { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: 8px; }
 .scan-line {
   position: absolute; left: 8%; right: 8%; height: 2px; border-radius: 2px;
-  background: var(--gold, #e8b4a0);
-  box-shadow: 0 0 10px var(--gold, #e8b4a0);
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
   animation: scan-sweep 2.4s ease-in-out infinite;
 }
 @keyframes scan-sweep { 0%, 100% { top: 6%; } 50% { top: 90%; } }
@@ -1082,7 +1086,7 @@ textarea.text-input { min-height: 90px; resize: vertical; }
   border-radius: var(--radius);
   padding: 12px; margin-top: 14px;
 }
-.result-card .book-meta h3 { font-size: 15px; }
+.result-card .book-meta h3, .result-card .book-meta h4 { font-size: 15px; }
 
 .search-row { display: flex; gap: 8px; }
 .search-row .text-input { flex: 1; min-width: 0; } /* v137: let the search box shrink on narrow phones */
@@ -1351,7 +1355,7 @@ textarea.text-input { min-height: 90px; resize: vertical; }
 /* v590: visually-hidden (screen-reader-only) text — real <label>s for
    fields whose visible label is a placeholder or a section heading. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
+h2.section, h3.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ---------- toast ---------- */
 #toast-root {
@@ -1406,6 +1410,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .view-toggle button {
   border: none; background: none; color: var(--faint);
   font-size: 15px; padding: 7px 11px; border-radius: 999px; cursor: pointer;
+  min-height: 44px; /* Tuned: the list/grid toggle measured 34px rendered — a segmented control under the 44px touch-target floor is a miss-tap on the app's most-used view switch */
 }
 .view-toggle button.active { background: var(--card2); color: var(--ink); }
 
@@ -2515,10 +2520,10 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ob-card { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
 .ob-card h3 { margin: 0 0 10px; font-size: 17px; }
 .ob-stat { text-align: center; margin-bottom: 0; }
-.ob-stat-val { font-size: 26px; font-weight: 800; color: var(--gold, #e8b4a0); }
+.ob-stat-val { font-size: 26px; font-weight: 800; color: var(--gold); }
 .ob-stat-label { font-size: 12px; opacity: 0.75; margin-top: 2px; }
 .ob-progress { height: 10px; border-radius: 6px; background: var(--card2); overflow: hidden; margin: 8px 0; }
-.ob-progress-fill { height: 100%; border-radius: 6px; background: var(--gold, #e8b4a0); transition: width 0.3s; }
+.ob-progress-fill { height: 100%; border-radius: 6px; background: var(--gold); transition: width 0.3s; }
 .ob-scroll { overflow-x: auto; }
 .ob-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ob-table th, .ob-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line, rgba(255,255,255,0.08)); }
@@ -2547,7 +2552,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .ob-funnel-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
 .ob-funnel-label { flex: 0 0 150px; }
 .ob-funnel-barwrap { flex: 1; height: 10px; background: var(--bg); border-radius: 6px; overflow: hidden; }
-.ob-funnel-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--accent, #e8a0bf), var(--gold, #e8b4a0)); border-radius: 6px; }
+.ob-funnel-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--accent, #e8a0bf), var(--gold)); border-radius: 6px; }
 
 /* ================= v236: roulette trope autocomplete ================= */
 .pk-trope-wrap { position: relative; }
@@ -2924,8 +2929,8 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 
 /* ================= v173: home redesign (greeting + reading hero + tiles) ================= */
 .home-greet { padding: 4px 2px 0; }
-.home-greet h2 { font-size: 25px; margin: 0; display: flex; align-items: center; gap: 8px; }
-.home-greet h2 svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+.home-greet h2, .home-greet h3 { font-size: 25px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.home-greet h2 svg, .home-greet h3 svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
 .home-greet p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
 /* v446: tappable contextual subline */
 .home-greet .home-sub { background: none; border: 0; padding: 8px 0; margin: -6px 0 -4px; font: inherit; color: var(--muted); text-align: left; cursor: pointer; }
@@ -2988,6 +2993,7 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
   flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
   padding: 10px 4px; font-weight: 700; font-size: 14px; color: var(--muted);
   cursor: pointer;
+  min-height: 44px; /* Tuned: the book modal's tab bar measured 39px rendered — under the 44px touch-target floor on a flagship surface */
 }
 .d-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
 .d-panel { padding: 6px 0 18px; }
@@ -3322,14 +3328,15 @@ h2.section { font-size: 20px; margin: 18px 0 6px; font-style: italic; }
 .shelfview { padding-bottom: 96px; }
 .sv-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 4px; }
 .sv-head h2 { margin: 0; font-size: 26px; font-family: Georgia, 'Times New Roman', serif; }
-.sv-cam { width: 42px; height: 42px; border-radius: 50%; background: var(--accent); border: none;
+.sv-cam { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); border: none; /* Tuned: 42px measured under the 44px touch-target floor */
   color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
   box-shadow: 0 4px 14px rgba(229, 72, 143, .4); }
 .sv-cam svg { width: 20px; height: 20px; }
 .sv-cam:active { transform: scale(.93); }
 .sv-chips { display: flex; gap: 8px; padding: 10px 18px 2px; }
 .sv-chip { border: 1px solid var(--line); background: var(--card); color: var(--muted);
-  border-radius: 999px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  border-radius: 999px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+  min-height: 44px; display: inline-flex; align-items: center; /* Tuned: the shelf filter chips measured 31px rendered — the smallest tappable family on a flagship surface */ }
 .sv-chip .n { opacity: .7; font-size: 12px; }
 .sv-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .sv-assign { display: flex; align-items: center; gap: 8px; margin: 10px 18px 0; padding: 10px 14px;

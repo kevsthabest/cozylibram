@@ -126,9 +126,9 @@ const menuIds = () => qa('#menu-pop [data-m]').map(b => b.dataset.m);
   // first name with a neutral fallback. No more terms of endearment.
   runInWindow(`library.push({ id: 'g1', title: 'Seed', authors: ['A'], status: 'tbr', owned: 'owned', cover: '', tropes: [] });
     view = 'library'; renderLibrary();`); await tick();
-  ok('greeting uses the profile first name (v405)', q('.home-greet h2').textContent.includes('Ada'));
+  ok('greeting uses the profile first name (v405)', q('.home-greet h3').textContent.includes('Ada'));
   runInWindow(`{ const p = loadProfile(); p.firstName = ''; touchProfile(p); renderLibrary(); }`); await tick();
-  ok('greeting falls back gracefully without a name', /Good (morning|afternoon|evening)/.test(q('.home-greet h2').textContent));
+  ok('greeting falls back gracefully without a name', /Good (morning|afternoon|evening)/.test(q('.home-greet h3').textContent));
   runInWindow(`view = 'profile'; renderProfile();`); await tick();
   ok('back on the account form', !!q('#pf-first'));
 

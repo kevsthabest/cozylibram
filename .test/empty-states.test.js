@@ -36,7 +36,7 @@ const book = (id, status) => ({ id, title: 'T' + id, authors: ['A'], status,
 const es = run(`emptyState({ icon: 'dice', title: 'Hello', body: 'Some <b>words</b>.',
   cta: { label: 'Go', go: 'add' } })`);
 ok('helper: icon, serif title, body, CTA button',
-  /class="big"/.test(es) && /<h2 class="serif">Hello<\/h2>/.test(es) &&
+  /class="big"/.test(es) && /<h3 class="serif">Hello<\/h3>/.test(es) &&
   /Some <b>words<\/b>/.test(es) && /data-empty-go="add">Go<\/button>/.test(es));
 ok('helper: no CTA when omitted', !/data-empty-go/.test(run(`emptyState({ title: 'T' })`)));
 ok('helper: title is escaped', !/<script/.test(run(`emptyState({ title: '<script>' })`)));

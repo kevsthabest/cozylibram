@@ -1,0 +1,882 @@
+{
+ "mobile": {
+  "library": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Library"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Back to Reading One?"
+    },
+    {
+     "tag": "H3",
+     "cls": "home-sec-title",
+     "text": "Currently Reading"
+    },
+    {
+     "tag": "H4",
+     "cls": "serif",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H3",
+     "cls": "home-sec-title",
+     "text": "Your Library"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Recently Added"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Up Next"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Favorites"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "sn-x",
+     "text": "✕",
+     "h": 35,
+     "w": 29,
+     "id": "snDismiss",
+     "html": "<button class=\"sn-x\" id=\"snDismiss\" aria-label=\"Dismiss\">✕</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "home-sub",
+     "text": "Quiet hours, good books.",
+     "h": 36.3,
+     "w": 178,
+     "id": "",
+     "html": "<button type=\"button\" class=\"home-sub\" data-home-sub=\"book\" data-book-id=\"f1\">Quiet hours, good books.</button"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "cr-mini",
+     "text": "",
+     "h": 24.1,
+     "w": 46,
+     "id": "",
+     "html": "<button class=\"cr-mini\" data-cr=\"f2\" title=\"Reading Two\" aria-label=\"Open Reading Two\"><svg class=\"ticon\" view"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "cr-mini",
+     "text": "",
+     "h": 24.1,
+     "w": 46,
+     "id": "",
+     "html": "<button class=\"cr-mini\" data-cr=\"f3\" title=\"Reading Three\" aria-label=\"Open Reading Three\"><svg class=\"ticon\" "
+    }
+   ],
+   "interactiveCount": 44,
+   "goErr": null
+  },
+  "shelf": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "",
+     "text": "Shelf"
+    }
+   ],
+   "small": [],
+   "interactiveCount": 11,
+   "goErr": null
+  },
+  "stats": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "section serif",
+     "text": "Chronicles"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Personal best: 3-day streak"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Two"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    }
+   ],
+   "small": [
+    {
+     "tag": "A",
+     "cls": "",
+     "text": "View milestones →",
+     "h": 16,
+     "w": 117,
+     "id": "",
+     "html": "<a href=\"#\" data-act=\"milestones\">View milestones →</a>"
+    }
+   ],
+   "interactiveCount": 4,
+   "goErr": null
+  },
+  "coven": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "The Hearth"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Your hearth lives in the cloud"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Sign in",
+     "h": 40,
+     "w": 91,
+     "id": "cc-signin",
+     "html": "<button class=\"btn\" id=\"cc-signin\">Sign in</button>"
+    }
+   ],
+   "interactiveCount": 1,
+   "goErr": null
+  },
+  "stats-detail": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "section serif",
+     "text": "Chronicles"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Two"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    },
+    {
+     "tag": "H3",
+     "cls": "",
+     "text": "October 2026"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Share my portrait",
+     "h": 40.1,
+     "w": 180,
+     "id": "dna-share-btn",
+     "html": "<button class=\"btn\" id=\"dna-share-btn\" style=\"margin-top:12px\">Share my portrait <svg class=\"ticon\" viewBox=\"0"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "‹",
+     "h": 32,
+     "w": 40,
+     "id": "cal-prev",
+     "html": "<button class=\"btn ghost\" id=\"cal-prev\">‹</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "›",
+     "h": 32,
+     "w": 40,
+     "id": "cal-next",
+     "html": "<button class=\"btn ghost\" id=\"cal-next\">›</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Rate a book",
+     "h": 40,
+     "w": 123,
+     "id": "",
+     "html": "<button class=\"btn\" data-act=\"rate-book\">Rate a book</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Rate a book",
+     "h": 40,
+     "w": 123,
+     "id": "",
+     "html": "<button class=\"btn\" data-act=\"rate-book\">Rate a book</button>"
+    }
+   ],
+   "interactiveCount": 19
+  },
+  "library-filtered": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Library"
+    }
+   ],
+   "small": [],
+   "interactiveCount": 15
+  },
+  "modal": {
+   "opener": "openDetail(id)",
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Reading One"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "d-back",
+     "text": "←",
+     "h": 36,
+     "w": 36,
+     "id": "m-x",
+     "html": "<button class=\"d-back\" id=\"m-x\" aria-label=\"Close\">←</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "",
+     "h": 36,
+     "w": 36,
+     "id": "m-more",
+     "html": "<button class=\"btn ghost\" id=\"m-more\" aria-label=\"More actions\" aria-haspopup=\"true\"><svg class=\"ticon\" viewBo"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink",
+     "text": "A. Writer",
+     "h": 20.3,
+     "w": 58,
+     "id": "",
+     "html": "<button class=\"taplink\" data-author=\"A. Writer\">A. Writer</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink",
+     "text": "Set edition",
+     "h": 18.8,
+     "w": 230,
+     "id": "m-edition",
+     "html": "<button class=\"taplink\" id=\"m-edition\" title=\"Choose edition\"><svg class=\"ticon\" viewBox=\"0 0 24 24\" fill=\"non"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink candle-share",
+     "text": "Share",
+     "h": 21.8,
+     "w": 41,
+     "id": "",
+     "html": "<button class=\"taplink candle-share\" data-candle=\"share\" data-book=\"f1\">Share</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "axrm",
+     "text": "×",
+     "h": 28,
+     "w": 24,
+     "id": "",
+     "html": "<button class=\"axrm\" data-axrm=\"spice\" aria-label=\"Remove Spice rating\">×</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "axrm",
+     "text": "×",
+     "h": 28,
+     "w": 24,
+     "id": "",
+     "html": "<button class=\"axrm\" data-axrm=\"feels\" aria-label=\"Remove Feels rating\">×</button>"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "",
+     "text": "on",
+     "h": 18,
+     "w": 18,
+     "id": "f-faceout",
+     "html": "<input type=\"checkbox\" id=\"f-faceout\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 212,
+     "id": "pq-page",
+     "html": "<input id=\"pq-page\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" placeholder=\"Page number…\" ar"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Set page",
+     "h": 43,
+     "w": 102,
+     "id": "pq-set",
+     "html": "<button class=\"btn\" id=\"pq-set\">Set page</button>"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "Reading One",
+     "h": 43,
+     "w": 292,
+     "id": "f-title",
+     "html": "<input class=\"text-input\" id=\"f-title\" value=\"Reading One\" maxlength=\"300\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "A. Writer",
+     "h": 43,
+     "w": 292,
+     "id": "f-author",
+     "html": "<input class=\"text-input\" id=\"f-author\" value=\"A. Writer\" maxlength=\"300\" placeholder=\"Separate multiple with "
+    },
+    {
+     "tag": "SELECT",
+     "cls": "",
+     "text": "Source…AmazonIndigoWalmartOthe",
+     "h": 21.3,
+     "w": 141,
+     "id": "f-purchase-source",
+     "html": "<select id=\"f-purchase-source\"><option value=\"\">Source…</option><option value=\"Amazon\">Amazon</option><option "
+    },
+    {
+     "tag": "INPUT",
+     "cls": "",
+     "text": "",
+     "h": 21.3,
+     "w": 144,
+     "id": "f-purchase-date",
+     "html": "<input type=\"date\" id=\"f-purchase-date\" value=\"\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 220,
+     "id": "f-series",
+     "html": "<input id=\"f-series\" class=\"text-input\" list=\"f-series-list\" autocomplete=\"off\" placeholder=\"Series name — e.g"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 64,
+     "id": "f-series-pos",
+     "html": "<input id=\"f-series-pos\" class=\"text-input\" inputmode=\"decimal\" placeholder=\"#\" aria-label=\"Position in series"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "320",
+     "h": 43,
+     "w": 292,
+     "id": "f-pagecount",
+     "html": "<input id=\"f-pagecount\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" placeholder=\"e.g. 384\" va"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "140",
+     "h": 43,
+     "w": 292,
+     "id": "f-progress",
+     "html": "<input id=\"f-progress\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" value=\"140\">"
+    }
+   ],
+   "modalHTML": true
+  }
+ },
+ "desktop": {
+  "library": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Library"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Back to Reading One?"
+    },
+    {
+     "tag": "H3",
+     "cls": "home-sec-title",
+     "text": "Currently Reading"
+    },
+    {
+     "tag": "H4",
+     "cls": "serif",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H3",
+     "cls": "home-sec-title",
+     "text": "Your Library"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Recently Added"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Up Next"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Favorites"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "sn-x",
+     "text": "✕",
+     "h": 35,
+     "w": 29,
+     "id": "snDismiss",
+     "html": "<button class=\"sn-x\" id=\"snDismiss\" aria-label=\"Dismiss\">✕</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "home-sub",
+     "text": "Quiet hours, good books.",
+     "h": 36.3,
+     "w": 178,
+     "id": "",
+     "html": "<button type=\"button\" class=\"home-sub\" data-home-sub=\"book\" data-book-id=\"f1\">Quiet hours, good books.</button"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "cr-mini",
+     "text": "",
+     "h": 24.1,
+     "w": 46,
+     "id": "",
+     "html": "<button class=\"cr-mini\" data-cr=\"f2\" title=\"Reading Two\" aria-label=\"Open Reading Two\"><svg class=\"ticon\" view"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "cr-mini",
+     "text": "",
+     "h": 24.1,
+     "w": 46,
+     "id": "",
+     "html": "<button class=\"cr-mini\" data-cr=\"f3\" title=\"Reading Three\" aria-label=\"Open Reading Three\"><svg class=\"ticon\" "
+    }
+   ],
+   "interactiveCount": 44,
+   "goErr": null
+  },
+  "shelf": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "",
+     "text": "Shelf"
+    }
+   ],
+   "small": [],
+   "interactiveCount": 11,
+   "goErr": null
+  },
+  "stats": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "section serif",
+     "text": "Chronicles"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Personal best: 3-day streak"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Two"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    }
+   ],
+   "small": [
+    {
+     "tag": "A",
+     "cls": "",
+     "text": "View milestones →",
+     "h": 16,
+     "w": 117,
+     "id": "",
+     "html": "<a href=\"#\" data-act=\"milestones\">View milestones →</a>"
+    }
+   ],
+   "interactiveCount": 4,
+   "goErr": null
+  },
+  "coven": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "The Hearth"
+    },
+    {
+     "tag": "H3",
+     "cls": "serif",
+     "text": "Your hearth lives in the cloud"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Sign in",
+     "h": 40,
+     "w": 91,
+     "id": "cc-signin",
+     "html": "<button class=\"btn\" id=\"cc-signin\">Sign in</button>"
+    }
+   ],
+   "interactiveCount": 1,
+   "goErr": null
+  },
+  "stats-detail": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "section serif",
+     "text": "Chronicles"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Two"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading One"
+    },
+    {
+     "tag": "H4",
+     "cls": "",
+     "text": "Reading Three"
+    },
+    {
+     "tag": "H3",
+     "cls": "",
+     "text": "October 2026"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Share my portrait",
+     "h": 40.1,
+     "w": 180,
+     "id": "dna-share-btn",
+     "html": "<button class=\"btn\" id=\"dna-share-btn\" style=\"margin-top:12px\">Share my portrait <svg class=\"ticon\" viewBox=\"0"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "‹",
+     "h": 32,
+     "w": 40,
+     "id": "cal-prev",
+     "html": "<button class=\"btn ghost\" id=\"cal-prev\">‹</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "›",
+     "h": 32,
+     "w": 40,
+     "id": "cal-next",
+     "html": "<button class=\"btn ghost\" id=\"cal-next\">›</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Rate a book",
+     "h": 40,
+     "w": 123,
+     "id": "",
+     "html": "<button class=\"btn\" data-act=\"rate-book\">Rate a book</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Rate a book",
+     "h": 40,
+     "w": 123,
+     "id": "",
+     "html": "<button class=\"btn\" data-act=\"rate-book\">Rate a book</button>"
+    }
+   ],
+   "interactiveCount": 19
+  },
+  "library-filtered": {
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Library"
+    }
+   ],
+   "small": [],
+   "interactiveCount": 15
+  },
+  "modal": {
+   "opener": "openDetail(id)",
+   "outline": [
+    {
+     "tag": "H2",
+     "cls": "serif",
+     "text": "Reading One"
+    }
+   ],
+   "small": [
+    {
+     "tag": "BUTTON",
+     "cls": "d-back",
+     "text": "←",
+     "h": 36,
+     "w": 36,
+     "id": "m-x",
+     "html": "<button class=\"d-back\" id=\"m-x\" aria-label=\"Close\">←</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn ghost",
+     "text": "",
+     "h": 36,
+     "w": 36,
+     "id": "m-more",
+     "html": "<button class=\"btn ghost\" id=\"m-more\" aria-label=\"More actions\" aria-haspopup=\"true\"><svg class=\"ticon\" viewBo"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink",
+     "text": "A. Writer",
+     "h": 20.3,
+     "w": 58,
+     "id": "",
+     "html": "<button class=\"taplink\" data-author=\"A. Writer\">A. Writer</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink",
+     "text": "Set edition",
+     "h": 18.8,
+     "w": 84,
+     "id": "m-edition",
+     "html": "<button class=\"taplink\" id=\"m-edition\" title=\"Choose edition\"><svg class=\"ticon\" viewBox=\"0 0 24 24\" fill=\"non"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "taplink candle-share",
+     "text": "Share",
+     "h": 21.8,
+     "w": 41,
+     "id": "",
+     "html": "<button class=\"taplink candle-share\" data-candle=\"share\" data-book=\"f1\">Share</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "axrm",
+     "text": "×",
+     "h": 28,
+     "w": 24,
+     "id": "",
+     "html": "<button class=\"axrm\" data-axrm=\"spice\" aria-label=\"Remove Spice rating\">×</button>"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "axrm",
+     "text": "×",
+     "h": 28,
+     "w": 24,
+     "id": "",
+     "html": "<button class=\"axrm\" data-axrm=\"feels\" aria-label=\"Remove Feels rating\">×</button>"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "",
+     "text": "on",
+     "h": 18,
+     "w": 18,
+     "id": "f-faceout",
+     "html": "<input type=\"checkbox\" id=\"f-faceout\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 614,
+     "id": "pq-page",
+     "html": "<input id=\"pq-page\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" placeholder=\"Page number…\" ar"
+    },
+    {
+     "tag": "BUTTON",
+     "cls": "btn",
+     "text": "Set page",
+     "h": 43,
+     "w": 102,
+     "id": "pq-set",
+     "html": "<button class=\"btn\" id=\"pq-set\">Set page</button>"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "Reading One",
+     "h": 43,
+     "w": 694,
+     "id": "f-title",
+     "html": "<input class=\"text-input\" id=\"f-title\" value=\"Reading One\" maxlength=\"300\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "A. Writer",
+     "h": 43,
+     "w": 694,
+     "id": "f-author",
+     "html": "<input class=\"text-input\" id=\"f-author\" value=\"A. Writer\" maxlength=\"300\" placeholder=\"Separate multiple with "
+    },
+    {
+     "tag": "SELECT",
+     "cls": "",
+     "text": "Source…AmazonIndigoWalmartOthe",
+     "h": 21.3,
+     "w": 342,
+     "id": "f-purchase-source",
+     "html": "<select id=\"f-purchase-source\"><option value=\"\">Source…</option><option value=\"Amazon\">Amazon</option><option "
+    },
+    {
+     "tag": "INPUT",
+     "cls": "",
+     "text": "",
+     "h": 21.3,
+     "w": 345,
+     "id": "f-purchase-date",
+     "html": "<input type=\"date\" id=\"f-purchase-date\" value=\"\">"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 622,
+     "id": "f-series",
+     "html": "<input id=\"f-series\" class=\"text-input\" list=\"f-series-list\" autocomplete=\"off\" placeholder=\"Series name — e.g"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "",
+     "h": 43,
+     "w": 64,
+     "id": "f-series-pos",
+     "html": "<input id=\"f-series-pos\" class=\"text-input\" inputmode=\"decimal\" placeholder=\"#\" aria-label=\"Position in series"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "320",
+     "h": 43,
+     "w": 694,
+     "id": "f-pagecount",
+     "html": "<input id=\"f-pagecount\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" placeholder=\"e.g. 384\" va"
+    },
+    {
+     "tag": "INPUT",
+     "cls": "text-input",
+     "text": "140",
+     "h": 43,
+     "w": 694,
+     "id": "f-progress",
+     "html": "<input id=\"f-progress\" class=\"text-input\" type=\"number\" min=\"0\" inputmode=\"numeric\" value=\"140\">"
+    }
+   ],
+   "modalHTML": true
+  }
+ }
+}

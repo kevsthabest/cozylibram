@@ -484,7 +484,7 @@ export function homeGreetingHTML() {
   const subBtn = '<button type="button" class="home-sub" data-home-sub="' + sub.action + '"' +
     (sub.action === 'book' && sub.bookId ? ' data-book-id="' + esc(String(sub.bookId)) + '"' : '') +
     '>' + esc(sub.text) + '</button>';
-  return '<section class="home-sec home-greet"><h2 class="serif">' + esc(greet) + ' ' + icon('covers') + '</h2>' +
+  return '<section class="home-sec home-greet"><h3 class="serif">' + esc(greet) + ' ' + icon('covers') + '</h3>' +
     '<p>' + subBtn + '</p></section>';
 }
 
@@ -578,7 +578,12 @@ export function renderLibrary() {
   counts.wishlist = library.filter(isWishlistBook).length; // v559: derived, not a status count
   const isHome = filter === 'all' && ownFilter === 'all' && !query.trim();
 
-  let html = (isHome ? seasonThemeNudgeHTML() : '') +
+  // Tuned (heading ladder): the view carries its own h2 title like the
+  // other flagship views — before this, the Library outline opened on
+  // whatever section happened to render first and the filtered state
+  // had no heading at all.
+  let html = '<div class="view-head"><h2 class="serif">Library</h2></div>' +
+    (isHome ? seasonThemeNudgeHTML() : '') +
     (isHome && library.length ? libraryHomeHTML(counts) : '') +
     '<div class="toolbar"><input id="q" class="search" placeholder="Search title, author, trope…" value="' + esc(query) + '">' +
     '<div class="view-toggle"><button data-l="list" class="' + (layout === 'list' ? 'active' : '') + '" aria-label="List view">' + icon('list') + '</button>' +

@@ -359,8 +359,12 @@ export function fmtDate(iso) {
    and a single contextual action. `body` is trusted HTML from the call site;
    `cta` navigates to a view via go(). */
 export function emptyState(o) {
+  // Tuned (heading ladder): an empty state's title is a section-level
+  // heading under its view's own h2, never a second view title — as an
+  // h2 it competed with the view head in every outline it appeared in.
+  // The .empty h3 rule in styles.css keeps the rendered size unchanged.
   return '<div class="empty"><div class="big">' + icon(o.icon || 'covers') + '</div>' +
-    '<h2 class="serif">' + esc(o.title) + '</h2>' +
+    '<h3 class="serif">' + esc(o.title) + '</h3>' +
     (o.body ? '<p>' + o.body + '</p>' : '') +
     // v185: the current theme's divider art — a quiet flourish between the
     // message and the call to action, styled per theme in CSS.
