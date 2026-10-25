@@ -1394,9 +1394,6 @@ export function renderDetailModal(b, viaBook) {
     // v541: "Reading it too" presence slot (js/235 fills it async;
     // stays empty unless a circle friend is visibly reading this).
     '<div id="m-rittoo"></div>' +
-    // v574: Marginalia slot (js/242 fills it async; stays empty
-    // unless the feature is live for this reader and this book).
-    '<div id="m-marginalia"></div>' +
     // Variant A: the series strip — header zone, immediately above the tabs.
     '<div id="m-series-wrap">' + seriesStripHTML(b, id) + '</div>' +
     // Tabbed detail view (v174; reorganized into five rooms —
@@ -1469,6 +1466,15 @@ export function renderDetailModal(b, viaBook) {
     '<div class="row-flex" style="margin-top:8px"><button class="btn sm" id="m-notesave">Save note</button></div></div>' +
     '<div class="field"><label>' + icon('quotes') + ' Saved quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
     '<div id="m-quotes"></div></div>' +
+    // v574: Marginalia slot (js/242 fills it async; stays empty
+    // unless the feature is live for this reader and this book).
+    // It lives at the END of the Notes panel, after Saved quotes:
+    // margin notes are the circle's annotations on this book, kin
+    // to the reader's own notes and quotes — in the header zone the
+    // box competed with the book's facts on every open (moved on
+    // the User's request from the live app). js/242 fills by id,
+    // so the slot's position carries no fill-contract meaning.
+    '<div id="m-marginalia"></div>' +
     '</div>' +
     '<div class="d-panel" id="dtab-extras" role="tabpanel" hidden>' +
     extrasHTML +
