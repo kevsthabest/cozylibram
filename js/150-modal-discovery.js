@@ -1043,7 +1043,7 @@ export function renderDetailModal(b, viaBook) {
   // with the format segment omitted when the format is unset.
   const ownedLabel = (d) => (OWNED_META[d.owned] || OWNED_META.tobuy).label +
     (FORMAT_META[d.format] ? ' · ' + FORMAT_META[d.format].label : '');
-  // Variant A: the description renders ONCE — in the header's About bar.
+  // Variant A: the description renders ONCE — in the Details tab's About bar.
   const descHTML = (idpfx, cls) =>
     (b.description
       ? '<div class="m-desc' + (cls ? ' ' + cls : '') + '" id="' + idpfx + '"><p>' +
@@ -1303,6 +1303,42 @@ export function renderDetailModal(b, viaBook) {
       '<span>Last read <b>' + esc(fmtDate(ds[ds.length - 1])) + '</b></span></div>';
   };
 
+  // Tab reorganization: About, the reading-so-far summary, and the
+  // Extras blocks are composed here so the template below only places
+  // them. About keeps its slim-bar rendering verbatim — it moved out
+  // of the header into the Details read view, same ids, same toggles.
+  const aboutHTML = (() => {
+    if (!b.description) return '';
+    var txt = String(b.description).replace(/<[^>]*>/g, '').trim();
+    var teaser = txt.length > 110 ? txt.slice(0, 110) + '…' : txt;
+    return '<div class="d-about"><button class="slimbar" id="m-about-toggle" aria-expanded="false">' +
+      '<span class="slimbar-main"><b>About this book</b><small>' + esc(teaser) + '</small></span>' +
+      '<span class="mrow-chev">›</span></button>' +
+      '<div id="m-about-body" hidden>' + descHTML('m-desc') + '</div></div>';
+  })();
+  // Reading so far: the Started / Last read summary, read-only on
+  // Details. It reuses logSummaryHTML so it can never disagree with
+  // the Manage tab's Reading Log copy; the id is stripped because
+  // #m-logsummary must stay unique to that copy (the progress
+  // stepper re-renders it in place when pages are logged).
+  const readingSoFarHTML = (() => {
+    const sum = logSummaryHTML();
+    if (!sum.includes('log-summary')) return '';
+    return '<div class="field m-card"><label>' + icon('history') + ' Reading so far</label>' +
+      sum.replace(' id="m-logsummary"', '') + '</div>';
+  })();
+  // Extras: ambience, portrait, candle — each block self-gates exactly
+  // as it did in the header zone (a feature with nothing to show
+  // renders nothing). When none of them renders, the panel says so
+  // instead of opening onto a void.
+  const extrasBlocksHTML =
+    (typeof ambienceEntryHTML === 'function' ? ambienceEntryHTML(b) : '') +
+    (typeof portraitCardHTML === 'function' ? portraitCardHTML(b) : '') +
+    (typeof candleCardHTML === 'function' ? candleCardHTML(b) : '');
+  const extrasHTML = extrasBlocksHTML.trim()
+    ? extrasBlocksHTML
+    : '<div class="field"><p class="note">Nothing extra for this book yet — ambience, portrait, and candle land here when they exist.</p></div>';
+
   root.innerHTML =
     '<div class="modal-backdrop' + (viaBook ? ' from-book' : '') + '" id="m-back"><div class="modal detail-v174" role="dialog" aria-modal="true" aria-label="Book details">' +
     '<div class="sheet-grabber" aria-hidden="true"></div>' + // v215: drag-to-dismiss affordance (touch)
@@ -1354,18 +1390,6 @@ export function renderDetailModal(b, viaBook) {
     '<button class="more-item" id="m-measurethick">' + icon('ruler') + ' <span>Measure thickness</span></button>' +
     '<button class="more-item" id="m-view3d">' + icon('cube') + ' <span>View in 3D</span></button>' +
     '</div></div></div>' +
-    // Variant A: the blurb lives HERE and only here — the header
-    // "About this book" slim bar (one summary line, tap to expand).
-    // The v182 hero copy and the Details-tab copy are both deleted.
-    (function() {
-      if (!b.description) return '';
-      var txt = String(b.description).replace(/<[^>]*>/g, '').trim();
-      var teaser = txt.length > 110 ? txt.slice(0, 110) + '…' : txt;
-      return '<div class="d-about"><button class="slimbar" id="m-about-toggle" aria-expanded="false">' +
-        '<span class="slimbar-main"><b>About this book</b><small>' + esc(teaser) + '</small></span>' +
-        '<span class="mrow-chev">›</span></button>' +
-        '<div id="m-about-body" hidden>' + descHTML('m-desc') + '</div></div>';
-    })() +
     '</div>' +
     // v541: "Reading it too" presence slot (js/235 fills it async;
     // stays empty unless a circle friend is visibly reading this).
@@ -1373,34 +1397,17 @@ export function renderDetailModal(b, viaBook) {
     // v574: Marginalia slot (js/242 fills it async; stays empty
     // unless the feature is live for this reader and this book).
     '<div id="m-marginalia"></div>' +
-    // Variant A: Book Portrait is a one-line slim bar in the header
-    // zone; the full v468 card renders inside it, collapsed.
-    (typeof portraitCardHTML === 'function'
-      ? '<div class="portrait-slim"><button class="slimbar" id="m-portrait-toggle" aria-expanded="false">' +
-        '<span class="slim-ic">' + icon('portrait') + '</span>' +
-        '<span class="slimbar-main"><b>Book Portrait</b><small id="ptSlimSum">' +
-        (typeof portraitSlimLine === 'function' ? esc(portraitSlimLine(b)) : '') +
-        '</small></span><span class="mrow-chev">›</span></button>' +
-        '<div id="m-portrait-body" hidden>' + portraitCardHTML(b) + '</div></div>'
-      : '') +
-    // v565: Your Book as a Candle — directly beside (below) Book Portrait
-    // (composition at the Variant A rebase: below the portrait slim bar,
-    // same header-zone position the candle shipped in).
-    (typeof candleCardHTML === 'function' ? candleCardHTML(b) : '') +
-    // v572: Ambience — one entry on the book page, directly below the
-    // Candle (same header zone): a slim bar naming the matched recipe
-    // (or the house sounds) + its own play control. The player sheet
-    // and mini-control are js/241's own.
-    (typeof ambienceEntryHTML === 'function' ? ambienceEntryHTML(b) : '') +
     // Variant A: the series strip — header zone, immediately above the tabs.
     '<div id="m-series-wrap">' + seriesStripHTML(b, id) + '</div>' +
-    // v174: tabbed detail view — Details | Tropes | Notes (replaces the v124
-    // collapsible sections; every control keeps its id). v182: mockup tab icons.
+    // Tabbed detail view (v174; reorganized into five rooms —
+    // Details reads, Lore holds tropes + characters, Notes, Extras,
+    // Manage edits; every control keeps its id). v182: tab icons.
     '<div class="d-tabs" role="tablist">' +
     '<button class="d-tab active" data-dtab="details" role="tab" aria-selected="true">' + icon('doc') + 'Details</button>' +
-    '<button class="d-tab" data-dtab="tropes" role="tab" aria-selected="false">' + icon('sparkles') + 'Tropes</button>' +
+    '<button class="d-tab" data-dtab="lore" role="tab" aria-selected="false">' + icon('sparkles') + 'Lore</button>' +
     '<button class="d-tab" data-dtab="notes" role="tab" aria-selected="false">' + icon('clipboard') + 'Notes</button>' +
-    '<button class="d-tab" data-dtab="characters" role="tab" aria-selected="false">' + icon('friends') + 'Characters</button></div>' +
+    '<button class="d-tab" data-dtab="extras" role="tab" aria-selected="false">' + icon('crystal') + 'Extras</button>' +
+    '<button class="d-tab" data-dtab="manage" role="tab" aria-selected="false">' + icon('gear') + 'Manage</button></div>' +
 
     '<div class="d-panel" id="dtab-details" role="tabpanel">' +
     // Variant A §1: Rating first — stars + axes reunited in ONE card.
@@ -1416,10 +1423,58 @@ export function renderDetailModal(b, viaBook) {
     '<div id="m-chaptermeta"></div>' +
     '<div class="chips" id="f-axadd">' + axAddHTML() + '</div>' +
     '<p class="note" style="margin:6px 0 0">Only the axes that fit this book are shown.</p></div>' +
+    aboutHTML +
     // v337: Memorable quotes — the work's quotes from the corpus, painted
     // by loadQuotesForBook below; the wrap stays hidden until quotes land.
     '<div class="field" id="m-quotes-wrap" style="display:none"><label>' + icon('quotes') + ' Memorable quotes</label><div id="m-wquotes"></div></div>' +
 
+    readingSoFarHTML +
+    // Variant A: discovery sits BELOW the form under a divider —
+    // outside the edit path entirely.
+    '<div class="field m-explore"><div class="zone-div"><span>Keep exploring</span></div>' +
+    '<label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
+    (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
+      const sims = similarBooks(b, 6);
+      if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
+      track('similar_books_opened', null, { dedupeKey: 'sim-' + b.id, dedupeMs: 60000 });
+      return '<div class="sim-row">' + sims.map(o =>
+        '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
+        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
+                 : '<span class="sim-nocover">' + icon('covers') + '</span>') +
+        '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
+    })() + '</div>' +
+    '</div>' +
+
+    '<div class="d-panel" id="dtab-lore" role="tabpanel" hidden>' +
+    // v182: mockup tropes — your tropes as chips (+ Add), suggested tropes
+    // with View more, trope intelligence card. The hidden #f-tropes input
+    // stays the save-flow source of truth; chips mirror it.
+    '<div class="field"><label>Your tropes</label>' +
+    '<div class="chips" id="f-tropechips"></div>' +
+    '<button class="chip" id="f-tropeaddtoggle">+ Add</button>' +
+    '<div class="tadd-row" id="f-tropeaddwrap" hidden>' +
+    '<input id="f-tropeadd" class="text-input" placeholder="e.g. forced proximity" aria-label="Add a trope">' +
+    '<button class="btn sm" id="f-tropeaddbtn">Add</button></div>' +
+    '<input id="f-tropes" type="hidden" value="' + esc(b.tropes.join(', ')) + '"></div>' +
+    '<div class="field"><label>Suggested tropes</label>' +
+    '<div id="f-tropesugg" class="chips"></div>' +
+    '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
+    '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
+    '<div class="tropedb-card"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
+
+    '<div id="m-charstab"><p class="note">Loading characters…</p></div></div>' +
+    '<div class="d-panel" id="dtab-notes" role="tabpanel" hidden>' +
+    '<div class="field"><label>My notes</label>' +
+    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea>' +
+    '<div class="row-flex" style="margin-top:8px"><button class="btn sm" id="m-notesave">Save note</button></div></div>' +
+    '<div class="field"><label>' + icon('quotes') + ' Saved quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
+    '<div id="m-quotes"></div></div>' +
+    '</div>' +
+    '<div class="d-panel" id="dtab-extras" role="tabpanel" hidden>' +
+    extrasHTML +
+    '</div>' +
+
+    '<div class="d-panel" id="dtab-manage" role="tabpanel" hidden>' +
     // Variant A §2: Status & Ownership — one card. The v405 ownership
     // accordion dissolves; the ownership summary lives in the label row
     // now (paintOwnedRow still updates #f-owned-sum). The v563 Format
@@ -1538,48 +1593,7 @@ export function renderDetailModal(b, viaBook) {
     '<input id="f-releasedate" class="text-input" type="date" value="' + esc(b.releaseDate || '') + '">' +
     '<p class="note">For announced books — the Wishlist surfaces them under “Coming soon”.</p></div>' +
     '</details>' +
-    // Variant A: discovery sits BELOW the form under a divider —
-    // outside the edit path entirely.
-    '<div class="field m-explore"><div class="zone-div"><span>Keep exploring</span></div>' +
-    '<label>' + icon('sparkles') + ' More like this <span class="note-inline">· from your shelves</span></label>' +
-    (() => { // v110: similar owned books, ranked by tropes/genres/author/spice
-      const sims = similarBooks(b, 6);
-      if (!sims.length) return '<p class="note">No close matches yet — tropes and genres power this.</p>';
-      track('similar_books_opened', null, { dedupeKey: 'sim-' + b.id, dedupeMs: 60000 });
-      return '<div class="sim-row">' + sims.map(o =>
-        '<button class="sim-cover" data-sim="' + o.id + '" aria-label="' + esc(o.title) + '">' +
-        (o.cover ? '<img src="' + esc(o.cover) + '" alt="" loading="lazy" onerror="this.remove()">'
-                 : '<span class="sim-nocover">' + icon('covers') + '</span>') +
-        '<small>' + esc(o.title) + '</small></button>').join('') + '</div>';
-    })() + '</div>' +
-    '</div>' +
-
-    '<div class="d-panel" id="dtab-tropes" role="tabpanel" hidden>' +
-    // v182: mockup tropes — your tropes as chips (+ Add), suggested tropes
-    // with View more, trope intelligence card. The hidden #f-tropes input
-    // stays the save-flow source of truth; chips mirror it.
-    '<div class="field"><label>Your tropes</label>' +
-    '<div class="chips" id="f-tropechips"></div>' +
-    '<button class="chip" id="f-tropeaddtoggle">+ Add</button>' +
-    '<div class="tadd-row" id="f-tropeaddwrap" hidden>' +
-    '<input id="f-tropeadd" class="text-input" placeholder="e.g. forced proximity" aria-label="Add a trope">' +
-    '<button class="btn sm" id="f-tropeaddbtn">Add</button></div>' +
-    '<input id="f-tropes" type="hidden" value="' + esc(b.tropes.join(', ')) + '"></div>' +
-    '<div class="field"><label>Suggested tropes</label>' +
-    '<div id="f-tropesugg" class="chips"></div>' +
-    '<button class="taplink" id="m-tropemore" hidden>View more →</button></div>' +
-    '<div class="field"><label>' + icon('sparkles') + ' Trope intelligence</label>' +
-    '<div class="tropedb-card"><div id="m-tropedb" class="chips"><p class="note">Checking…</p></div></div></div>' +
-    '</div>' +
-
-    '<div class="d-panel" id="dtab-characters" role="tabpanel" hidden>' +
-    '<div id="m-charstab"><p class="note">Loading characters…</p></div></div>' +
-    '<div class="d-panel" id="dtab-notes" role="tabpanel" hidden>' +
-    '<div class="field"><label>My notes</label>' +
-    '<textarea id="f-notes" class="text-input" placeholder="Thoughts, quotes, warnings for future self…">' + esc(b.notes) + '</textarea>' +
-    '<div class="row-flex" style="margin-top:8px"><button class="btn sm" id="m-notesave">Save note</button></div></div>' +
-    '<div class="field"><label>' + icon('quotes') + ' Saved quotes <span class="note-inline">· ' + (b.quotes || []).length + '</span></label>' +
-    '<div id="m-quotes"></div></div>' +
+    '<div class="field"><button class="btn ghost danger" id="m-del-manage">' + icon('trash') + ' Remove from Library</button></div>' +
     '</div>' +
 
     // Variant B: no save bar — autosave replaced it (see the wiring below).
@@ -1670,9 +1684,12 @@ export function renderDetailModal(b, viaBook) {
     toast('Marked owned 📚');
   };
   const scrollToField = (fid) => {
-    showDTab('details'); // v174: tabbed modal — the target lives on Details
     const el = document.getElementById(fid);
     if (!el) return;
+    // Show the tab the target actually lives on — the primary jumps
+    // cross rooms now (rating sits on Details, progress on Manage).
+    const panel = el.closest('.d-panel');
+    showDTab(panel ? panel.id.replace('dtab-', '') : 'details');
     el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1400);
@@ -2185,8 +2202,14 @@ export function renderDetailModal(b, viaBook) {
   // NB: never bind close directly as an event listener — the event
   // object would land in the force parameter and skip the close flush.
   document.getElementById('m-x').addEventListener('click', () => close());
-  // v174: tab switching — Details | Tropes | Notes.
+  // v174: tab switching. Retired tab names land on their merged
+  // homes instead of silently no-opping — tropes and characters
+  // merged into Lore, a portrait jump belongs with the portrait's
+  // new home in Extras — and an unknown name falls back to Details.
+  const DTAB_ALIASES = { tropes: 'lore', characters: 'lore', portrait: 'extras' };
   const showDTab = (name) => {
+    name = DTAB_ALIASES[name] || name;
+    if (!root.querySelector('#dtab-' + name)) name = 'details';
     root.querySelectorAll('.d-tab').forEach(t => {
       const on = t.dataset.dtab === name;
       t.classList.toggle('active', on);
@@ -2196,8 +2219,9 @@ export function renderDetailModal(b, viaBook) {
   };
   root.querySelectorAll('.d-tab').forEach(t =>
     t.addEventListener('click', () => showDTab(t.dataset.dtab)));
-  // v329: character tab loader — calls shared module-level function
-  root.querySelectorAll('[data-dtab="characters"]').forEach(btn =>
+  // v329: character loader — opening Lore loads its characters half
+  // lazily, as opening the Characters tab did before the merge.
+  root.querySelectorAll('[data-dtab="lore"]').forEach(btn =>
     btn.addEventListener('click', () => loadCharsTabForBook(b)));
   // v337: load memorable quotes for the Details tab
   loadQuotesForBook(b);
@@ -2223,7 +2247,7 @@ export function renderDetailModal(b, viaBook) {
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
   // v215: bottom-sheet drag-to-dismiss (touch only) on the sheet element.
   wireSheetDrag(root.querySelector('#m-back .modal'), () => close());
-  // v182: description read-more toggle — the single header copy now.
+  // v182: description read-more toggle — the single copy, in Details now.
   // Hidden when the text fits unclamped.
   const wireDescToggle = (wrapId) => {
     const dWrap = document.getElementById(wrapId);
@@ -2238,7 +2262,8 @@ export function renderDetailModal(b, viaBook) {
     });
   };
   wireDescToggle('m-desc');
-  // Variant A: the header slim bars (About / Book Portrait) expand in place.
+  // Variant A: the About slim bar expands in place (Details tab now;
+  // the Portrait slim bar retired when the card moved to Extras).
   const wireSlimToggle = (btnId, bodyId) => {
     const btn = document.getElementById(btnId);
     const body = document.getElementById(bodyId);
@@ -2250,7 +2275,6 @@ export function renderDetailModal(b, viaBook) {
     });
   };
   wireSlimToggle('m-about-toggle', 'm-about-body');
-  wireSlimToggle('m-portrait-toggle', 'm-portrait-body');
   // Variant A: the Cover pill opens the cover-tools menu.
   const coverPill = document.getElementById('m-coverpill');
   const coverTools = document.getElementById('m-covertools');
@@ -2680,7 +2704,9 @@ export function renderDetailModal(b, viaBook) {
     pendingDnf = (b.status === 'dnf' && statusAtOpen !== 'dnf');
   };
 
-  document.getElementById('m-del').addEventListener('click', async () => {
+  // One Remove path for both entries — the ⋯ menu's and Manage's —
+  // so the confirm and the no-flush-into-a-removed-book rule can't drift.
+  const removeFromLibrary = async () => {
     // v352: in-app confirm (native confirm blocks renderer)
     const ok = await confirmModal('Remove "' + b.title + '" from your shelves?', { okLabel: 'Remove' });
     if (!ok) return;
@@ -2688,7 +2714,9 @@ export function renderDetailModal(b, viaBook) {
     flushSuppressed = true; // Variant B: never flush the form into a removed book
     close(true); render(); // the book is gone — close without an autosave flush
     toast('Removed');
-  });
+  };
+  document.getElementById('m-del').addEventListener('click', removeFromLibrary);
+  document.getElementById('m-del-manage').addEventListener('click', removeFromLibrary);
 
   // v418: theme-matched modal flairs (vine/corners/divider/garland/watermark).
   try { if (typeof ModalFlairs !== 'undefined') ModalFlairs.apply(); } catch (e) {}

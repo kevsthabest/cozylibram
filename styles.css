@@ -3067,14 +3067,10 @@ h2.section, h3.section { font-size: 20px; margin: 18px 0 6px; font-style: italic
     max-width: 480px; /* Variant A: the Cover pill joins this row */
     margin: 0 0 2px;
   }
-  /* Variant A: the About slim bar takes the old hero-desc grid slot. */
-  .modal.detail-v174 .d-about {
-    grid-column: 2;
-    grid-row: 3;
-    margin: 2px 0 0;
-    max-width: 560px;
-    width: 100%;
-  }
+  /* Variant A placed the About slim bar in this third grid row; the
+     tab reorganization moved About into the Details panel, so the
+     row stays empty on purpose (the cover still spans it) — the
+     base .d-about rule governs the bar in its new home. */
 
   /* Sticky rails re-anchor to the widened desktop modal padding. */
   .modal.detail-v174 .d-tabs {
@@ -3175,6 +3171,13 @@ h2.section, h3.section { font-size: 20px; margin: 18px 0 6px; font-style: italic
 /* --- tab icons --- */
 .d-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .d-tab svg { width: 17px; height: 17px; }
+/* Five tabs share the phone-width bar now: shrink type, icons, and
+   padding so every label fits without truncating or wrapping (the
+   ≥44px height floor above is untouched). */
+@media (max-width: 480px) {
+  .d-tab { font-size: 12px; padding: 10px 2px; gap: 4px; white-space: nowrap; }
+  .d-tab svg { width: 14px; height: 14px; }
+}
 
 /* --- mockup tappable rows (shelf / ownership) --- */
 .mselect { border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
