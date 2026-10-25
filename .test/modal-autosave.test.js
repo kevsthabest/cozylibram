@@ -21,7 +21,8 @@
 // - Carried over from the Variant A suite, unchanged: blurb exactly once
 //   (header About row), Rating = stars + axes in one card first in the
 //   form, Purchase inside "More details", series strip above the tabs,
-//   "More like this" below the form, Book Portrait as a slim bar,
+//   "More like this" below the form, Book Portrait rendered directly
+//   on the Extras tab (tab reorganization — the slim bar retired),
 //   reading log collapsed by default, v563 format + trophy, v564 faceOut.
 
 const fs = require('fs');
@@ -123,10 +124,21 @@ ok('stars are line-icon stars (not hearts)',
   qa('#f-myrating button').length === 5 &&
   qa('#f-myrating button').every(b => b.innerHTML.includes('M12 3.6')) &&
   qa('#f-myrating button').every(b => !b.innerHTML.includes('M12 20.3')));
-ok('form order: rating, status, progress, details, more details, explore', (() => {
+// MOVEMENT (tab reorganization, named in its PR): the old single-panel
+// order split across rooms — the rating opens the Details read view
+// and Keep exploring closes it; the form sequence between them
+// (status, progress, details card, more details) keeps its relative
+// order on Manage.
+ok('details order: rating opens, explore closes the read view', (() => {
   const h = q('#dtab-details').innerHTML;
-  const order = ['id="f-myrating"', 'id="f-status"', 'id="m-progress"', 'id="m-hc"',
-    'id="f-title"', 'id="f-purchase-source"', 'id="f-pagecount"', 'Keep exploring'];
+  const order = ['id="f-myrating"', 'Keep exploring'];
+  let last = -1;
+  return order.every(s => { const i = h.indexOf(s); const good = i > last; last = i; return good; });
+})());
+ok('manage order: status, progress, details, more details', (() => {
+  const h = q('#dtab-manage').innerHTML;
+  const order = ['id="f-status"', 'id="m-progress"', 'id="m-hc"',
+    'id="f-title"', 'id="f-purchase-source"', 'id="f-pagecount"'];
   let last = -1;
   return order.every(s => { const i = h.indexOf(s); const good = i > last; last = i; return good; });
 })());
@@ -238,21 +250,23 @@ ok('save note persists immediately', run(`library[0].notes`) === 'a fresh note')
 ok('save note blesses the field (status quiet)', st() === '');
 q('[data-dtab="details"]').click();
 
-// --- 10. Blurb exactly once, in the header About row ---
+// --- 10. Blurb exactly once, in the Details About row ---
+// MOVEMENT (tab reorganization, named in its PR): the About row moved
+// from the header into the Details read view; still exactly one copy.
 ok('blurb renders exactly once', qa('.m-desc').length === 1);
-ok('blurb is out of the Details form', !q('#dtab-details .m-desc'));
-ok('blurb lives in the header About row', !!q('.d-about #m-desc'));
+ok('blurb lives in the Details About row', !!q('#dtab-details .d-about #m-desc'));
+ok('blurb is out of the header zone', !q('.d-hero .m-desc'));
 ok('about row starts collapsed', q('#m-about-body').hidden === true);
 q('#m-about-toggle').click();
 ok('about row expands', q('#m-about-body').hidden === false);
 ok('the single copy keeps its read-more toggle', !!q('#m-desc-toggle'));
 
-// --- 11. Header zone: portrait slim bar + series strip above the tabs ---
-ok('portrait card sits inside the slim bar body', !!q('#m-portrait-body #portraitCard'));
-ok('portrait body starts collapsed', q('#m-portrait-body').hidden === true);
-ok('slim summary line shows the mapped %', /% mapped/.test(q('#ptSlimSum').textContent));
-q('#m-portrait-toggle').click();
-ok('portrait bar expands', q('#m-portrait-body').hidden === false);
+// --- 11. Extras holds the portrait card; series strip above the tabs ---
+// MOVEMENT (tab reorganization, named in its PR): the portrait slim
+// bar retired — the card renders directly on Extras, no collapse.
+ok('portrait card renders directly in Extras', !!q('#dtab-extras #portraitCard'));
+ok('portrait slim bar is gone', !q('#m-portrait-toggle') && !q('#m-portrait-body') && !q('#ptSlimSum'));
+ok('portrait card shows the mapped %', /% mapped/.test(q('#ptPct').textContent));
 ok('series strip is above the tabs',
   !!q('#m-series') && !q('#dtab-details #m-series') &&
   q('#modal-root').innerHTML.indexOf('id="m-series"') < q('#modal-root').innerHTML.indexOf('d-tabs'));

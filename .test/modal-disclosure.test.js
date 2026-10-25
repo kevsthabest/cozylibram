@@ -1,10 +1,12 @@
 // Tests for v174 — tabbed book detail (UI mockup, Book Details panel).
 //
-// Replaces the v124 progressive-disclosure test: the modal is now a hero
-// (back button, big cover, title/author/stars/meta) plus Details | Tropes |
-// Notes tabs. Covered: hero content, tab switching, every control keeps its
-// ID on the right tab, Save persists edits made while another tab is active,
-// the visible Remove button uses the existing delete flow.
+// Replaces the v124 progressive-disclosure test: the modal is a hero
+// (back button, big cover, title/author/stars/meta) plus five tabs —
+// Details (read view) | Lore (tropes + characters) | Notes | Extras |
+// Manage (the edit form), per the tab-reorganization spec. Covered:
+// hero content, tab switching, every control keeps its ID on the right
+// tab, Save persists edits made while another tab is active, the
+// visible Remove button uses the existing delete flow.
 
 const fs = require('fs');
 const path = require('path');
@@ -63,14 +65,19 @@ ok('desktop panel CSS uses the approved mockup hero grid', (() => {
 
 // --- 2. Tabs exist; Details active, others hidden ---
 const tabs = qa('.d-tab').map(t => t.textContent);
-ok('tabs: Details | Tropes | Notes | Characters', JSON.stringify(tabs) === JSON.stringify(['Details', 'Tropes', 'Notes', 'Characters']));
+ok('tabs: Details | Lore | Notes | Extras | Manage', JSON.stringify(tabs) === JSON.stringify(['Details', 'Lore', 'Notes', 'Extras', 'Manage']));
 ok('tabs: Details active by default',
   q('.d-tab[data-dtab="details"]').classList.contains('active') && !q('#dtab-details').hidden);
-ok('tabs: Tropes + Notes start hidden', q('#dtab-tropes').hidden && q('#dtab-notes').hidden);
+ok('tabs: Lore + Notes + Extras + Manage start hidden',
+  q('#dtab-lore').hidden && q('#dtab-notes').hidden && q('#dtab-extras').hidden && q('#dtab-manage').hidden);
 
 // --- 3. Priority content: hero + Details tab + action bar ---
-['#f-myrating', '#m-progress', '#f-status'].forEach(id =>
-  ok('details tab: ' + id + ' present', !!q('#dtab-details ' + id)));
+// MOVEMENT (tab reorganization, spec-mandated): Details is a read view
+// now — the rating stays, the form (status, progress) lives on Manage.
+ok('details tab: #f-myrating present', !!q('#dtab-details #f-myrating'));
+['#m-progress', '#f-status'].forEach(id =>
+  ok('manage tab: ' + id + ' present', !!q('#dtab-manage ' + id)));
+ok('details tab: no form fields remain', !q('#dtab-details #f-status') && !q('#dtab-details #f-title') && !q('#dtab-details #m-progress'));
 ok('action bar intact with primary action', !!q('#m-primary'));
 ok('details tab: reading log lists the session',
   q('#m-loglist').textContent.includes('30 pages'));
@@ -85,27 +92,31 @@ ok('hero order: cover, then title, then primary', (() => {
   return h.indexOf('d-cover') < h.indexOf('d-hero-text') &&
     h.indexOf('d-hero-text') < h.indexOf('id="m-primary"');
 })());
-// MOVEMENT (Variant A modal rebuild, named in its PR): the Details form
-// order is the decided design's — Rating card (stars + axes) first, then
-// Status & Ownership, progress, the quiet Details card (warnings, log,
-// title), More details (pages) last; the blurb and the series strip left
-// the panel for the header zone entirely.
-ok('details order: rating (stars+axes), shelf, ownership, progress, warnings, log, title, metadata', (() => {
-  const h = q('#dtab-details').innerHTML;
-  const order = ['id="f-myrating"', 'id="f-axrows"', 'id="f-status"',
-    'id="f-owned"', 'id="m-progress"', 'id="m-hc"', 'id="m-loglist"', 'id="f-title"', 'id="f-pagecount"'];
+// MOVEMENT (tab reorganization, named in its PR): the form order the
+// Variant A rebuild decided — Status & Ownership, progress, the quiet
+// Details card (warnings, log, title), More details (pages) last — is
+// preserved verbatim, but the whole sequence lives on Manage now; the
+// rating card stayed behind on Details as the read view's first block.
+ok('manage order: shelf, ownership, progress, warnings, log, title, metadata', (() => {
+  const h = q('#dtab-manage').innerHTML;
+  const order = ['id="f-status"', 'id="f-owned"', 'id="m-progress"', 'id="m-hc"',
+    'id="m-loglist"', 'id="f-title"', 'id="f-pagecount"'];
   let last = -1;
   return order.every(id => { const i = h.indexOf(id); const good = i > last; last = i; return good; });
 })());
+ok('details order: rating first in the read view', (() => {
+  const h = q('#dtab-details').innerHTML;
+  return h.indexOf('id="f-myrating"') > -1 && h.indexOf('id="f-myrating"') < h.indexOf('id="m-quotes-wrap"');
+})());
 
-// --- 4. Tropes + Notes tabs hold their controls ---
-q('[data-dtab="tropes"]').click();
-ok('tab switch: Tropes shows, Details hides', !q('#dtab-tropes').hidden && q('#dtab-details').hidden);
-['#f-tropes', '#f-tropesugg', '#m-tropedb'].forEach(id =>
-  ok('tropes tab: ' + id + ' present', !!q('#dtab-tropes ' + id)));
+// --- 4. Lore + Notes tabs hold their controls ---
+q('[data-dtab="lore"]').click();
+ok('tab switch: Lore shows, Details hides', !q('#dtab-lore').hidden && q('#dtab-details').hidden);
+['#f-tropes', '#f-tropesugg', '#m-tropedb', '#m-charstab'].forEach(id =>
+  ok('lore tab: ' + id + ' present', !!q('#dtab-lore ' + id)));
 // Note: #m-tropepropose was removed (trope proposal moved to community flows).
 q('[data-dtab="notes"]').click();
-ok('tab switch: Notes shows, Tropes hides', !q('#dtab-notes').hidden && q('#dtab-tropes').hidden);
+ok('tab switch: Notes shows, Lore hides', !q('#dtab-notes').hidden && q('#dtab-lore').hidden);
 ['#f-notes', '#m-quotes'].forEach(id =>
   ok('notes tab: ' + id + ' present', !!q('#dtab-notes ' + id)));
 
@@ -117,12 +128,12 @@ ok('tab switch: Notes shows, Tropes hides', !q('#dtab-notes').hidden && q('#dtab
 
 // --- 6. Save persists edits made while another tab is active ---
 run(`document.getElementById('f-notes').value = 'new notes';`);
-q('[data-dtab="tropes"]').click();
+q('[data-dtab="lore"]').click();
 run(`document.getElementById('f-tropes').value = 'forced proximity';`);
 q('[data-dtab="details"]').click();
 run(`document.getElementById('m-x').click();`);
 ok('save: notes persisted from the Notes tab', run(`library[0].notes`) === 'new notes');
-ok('save: tropes persisted from the Tropes tab',
+ok('save: tropes persisted from the Lore tab',
   JSON.stringify(run(`library[0].tropes`)) === JSON.stringify(['forced proximity']));
 
 // --- 7. Overflow-menu Remove triggers the delete flow ---
@@ -133,6 +144,24 @@ q('#m-del').click();
 ok('remove button asks for confirmation', !!q('.confirm-overlay') && q('.confirm-overlay').textContent.includes('b1') === false); // title in dialog
 q('.confirm-overlay [data-ca="cancel"]').click();
 ok('cancel keeps the book', run(`library.length`) === 1 && !!q('#m-back'));
+
+// --- 8. Extras holds the three blocks; Manage holds its own Remove ---
+ok('extras: ambience entry landed', !!q('#dtab-extras .amb-entry'));
+ok('extras: portrait card landed', !!q('#dtab-extras #portraitCard'));
+ok('extras: candle card landed', !!q('#dtab-extras #candleCard'));
+ok('extras: header zone is clear of all three', !q('.amb-entry') || !!q('#dtab-extras .amb-entry'));
+ok('manage: remove row present', !!q('#dtab-manage #m-del-manage'));
+q('[data-dtab="manage"]').click();
+q('#m-del-manage').click();
+ok('manage remove asks for confirmation too', !!q('.confirm-overlay'));
+q('.confirm-overlay [data-ca="cancel"]').click();
+ok('manage remove cancel keeps the book', run(`library.length`) === 1 && !!q('#m-back'));
+
+// --- 9. Extras empty state: no block renders -> the panel says so ---
+run(`window.ambienceEntryHTML = undefined; window.portraitCardHTML = undefined; window.candleCardHTML = undefined;`);
+run(`openDetail('b1');`);
+ok('extras empty state shows the honest copy',
+  q('#dtab-extras').textContent.includes('Nothing extra for this book yet'));
 
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

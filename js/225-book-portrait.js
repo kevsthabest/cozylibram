@@ -210,7 +210,7 @@ function tropeChipsHTML(tropes, bookId, votes) {
       (tappable ? ' tabindex="0" role="button" aria-label="' + esc(t.name) + ' — ' + esc(prov.label) + '. Tap to confirm or dispute."' : '') +
       '>' + esc(t.name) + '<span class="tprov">' + esc(prov.label) + '</span></span>';
   }).join(' ');
-  if (tropes.length > 2) shown += ' <button class="chip ghost" data-pt="gotab" data-tab="tropes">+' + (tropes.length - 2) + '</button>';
+  if (tropes.length > 2) shown += ' <button class="chip ghost" data-pt="gotab" data-tab="lore">+' + (tropes.length - 2) + '</button>';
   return shown;
 }
 function warnChipsHTML(warns, b, bookId) {
@@ -285,7 +285,7 @@ export async function portraitEnhance(b) {
           '<button class="taplink" data-pt="suggest-chars" data-book="' + esc(fresh.id || '') + '">who\u2019s in this story?</button>';
       } else {
         chEl.innerHTML = cd.top.map(function (c) { return '<span class="chip">' + esc(c.name) + '</span>'; }).join(' ') +
-          (cd.count > 2 ? ' <button class="chip ghost" data-pt="gotab" data-tab="characters">+' + (cd.count - 2) + '</button>' : '');
+          (cd.count > 2 ? ' <button class="chip ghost" data-pt="gotab" data-tab="lore">+' + (cd.count - 2) + '</button>' : '');
       }
       card._ptChars = cd;
     }
@@ -374,11 +374,13 @@ function suggestVia(which, bookId) {
       if (which === 'chars' && s.character) return s.character(b);
       if (which === 'warn' && s.warning) return s.warning(b);
     }
-    // fallback: open the tab where the suggest buttons live
-    var tab = which === 'tropes' ? 'tropes' : 'characters';
+    // fallback: open the tab where the suggest buttons live — tropes
+    // and characters share the Lore tab now; content warnings live on
+    // Manage with the rest of the edit form.
+    var tab = which === 'warn' ? 'manage' : 'lore';
     var btn = document.querySelector('[data-dtab="' + tab + '"]');
     if (btn) btn.click();
-    toast(which === 'warn' ? 'Open Details → content warnings to suggest' : 'Use the Suggest button on the tab');
+    toast(which === 'warn' ? 'Open Manage → content warnings to suggest' : 'Use the Suggest button on the tab');
   } catch (e) {}
 }
 if (typeof document !== 'undefined') {
@@ -417,7 +419,11 @@ if (typeof document !== 'undefined') {
       el.textContent = open ? 'Hide breakdown ↑' : 'See full breakdown ↓';
     } else if (kind === 'gotab') {
       var tab = el.getAttribute('data-tab');
+      // Retired tab names land on their merged homes, never no-op.
+      if (tab === 'tropes' || tab === 'characters') tab = 'lore';
+      else if (tab === 'portrait') tab = 'extras';
       var btn = document.querySelector('[data-dtab="' + tab + '"]');
+      if (!btn) btn = document.querySelector('[data-dtab="details"]');
       if (btn) btn.click();
     } else if (kind === 'suggest-tropes') suggestVia('tropes', el.getAttribute('data-book'));
     else if (kind === 'suggest-chars') suggestVia('chars', el.getAttribute('data-book'));

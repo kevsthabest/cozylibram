@@ -5,6 +5,9 @@
 // renders EXACTLY ONCE — the header "About this book" slim bar. The
 // Details-tab copy and the m-desc-hero copy are deleted; pins below
 // were retargeted to the single header copy.
+// MOVEMENT (tab reorganization, named in its PR): the single copy
+// moved again — the About slim bar now sits in the Details read view,
+// out of the header zone; pins below retargeted to it.
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const path = require('path');
@@ -40,11 +43,12 @@ const seed = (id, over) => {
 
 const DESC = 'A tale of two cities. It was the best of times.\n\nIt was the worst of times.';
 
-// --- description: ONE copy, in the header "About this book" row ---
+// --- description: ONE copy, in the Details "About this book" row ---
 seed('d1', { description: DESC });
-ok('description does NOT render on the Details tab', !q('#dtab-details #m-desc'));
-ok('header About row carries the description copy', !!q('.d-about #m-desc') &&
+ok('description renders on the Details tab', !!q('#dtab-details #m-desc'));
+ok('Details About row carries the description copy', !!q('#dtab-details .d-about #m-desc') &&
   q('#m-desc').textContent.includes('best of times'));
+ok('no header copy remains', !q('.d-hero #m-desc'));
 ok('no hero duplicate copy', !q('#m-desc-hero'));
 ok('description toggle exists', !!q('#m-desc-toggle'));
 ok('description text present', q('#m-desc').textContent.includes('best of times'));

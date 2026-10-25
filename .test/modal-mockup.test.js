@@ -80,14 +80,14 @@ ok('menu favorite toggles back off',
 ok('menu favorite label flips back', q('#m-favmenu').textContent.includes('Add to Favorites'));
 
 // --- 4. Tabs carry icons ---
-ok('tabs have icons', qa('.d-tab svg').length === 4);
+ok('tabs have icons', qa('.d-tab svg').length === 5);
 
 // --- 5. Details: about heading, tappable rows, more-details, log summary ---
-// MOVEMENT (Variant A modal rebuild, named in its PR): "About this book"
-// is the header slim bar now — the Details-tab field is deleted (the
-// blurb renders exactly once, in the header).
-ok('about-this-book heading lives in the header About bar',
-  !!q('.d-about #m-about-toggle') && q('#m-about-toggle').textContent.includes('About this book'));
+// MOVEMENT (tab reorganization, named in its PR; the Variant A rebuild
+// had it as the header slim bar): "About this book" is the Details
+// read view's slim bar now — the blurb still renders exactly once.
+ok('about-this-book heading lives in the Details About bar',
+  !!q('#dtab-details .d-about #m-about-toggle') && q('#m-about-toggle').textContent.includes('About this book'));
 ok('shelf row shows the current status', q('#f-status-val').textContent === 'Currently Reading');
 ok('shelf options start collapsed', q('#f-status .mrow-opts').hidden === true);
 q('#f-status [data-mrow]').click();
@@ -106,8 +106,8 @@ ok('more-details holds the quiet fields',
 ok('reading log summary card', q('.log-summary').textContent.includes('Started') &&
   q('.log-summary').textContent.includes('Last read'));
 
-// --- 6. Tropes: chips, add, remove, suggestions, view more ---
-q('[data-dtab="tropes"]').click();
+// --- 6. Lore (tropes half): chips, add, remove, suggestions, view more ---
+q('[data-dtab="lore"]').click();
 ok('your tropes render as chips', q('#f-tropechips').textContent.includes('enemies to lovers'));
 ok('hidden input stays the save source', q('#f-tropes').value === 'enemies to lovers');
 q('#f-tropeaddtoggle').click();
