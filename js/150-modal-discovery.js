@@ -1356,6 +1356,13 @@ export function renderDetailModal(b, viaBook) {
     '<button class="more-item" id="m-favmenu">' + icon('heart') + ' <span>Add to Favorites</span></button>' +
     '<button class="more-item" id="m-upnext">' + icon('upnext') + ' <span>Add to Up Next</span></button>' +
     '<button class="more-item" id="m-covermenu">' + icon('camera') + ' <span>Change Cover</span></button>' +
+    // The edition tools live here with Change Cover: their old "Cover ▾"
+    // pill sat in the primary row, which now holds only the primary action,
+    // favorite, and share — and these three entries were that pill's only
+    // callers, so moving them is what keeps the tools reachable at all.
+    '<button class="more-item" id="m-scanfaces">' + icon('camera') + ' <span>Scan Edition</span></button>' +
+    '<button class="more-item" id="m-measurethick">' + icon('ruler') + ' <span>Measure thickness</span></button>' +
+    '<button class="more-item" id="m-view3d">' + icon('cube') + ' <span>View in 3D</span></button>' +
     '<div class="more-sep"></div>' +
     '<button class="more-item danger" id="m-del">' + icon('trash') + ' <span>Remove from Library</span></button>' +
     '</div></div></div>' +
@@ -1381,15 +1388,7 @@ export function renderDetailModal(b, viaBook) {
     '<div class="d-primary-row"><button class="btn primary d-primary" id="m-primary"></button>' +
     '<button class="fav-btn d-fav2' + (draft.favorite ? ' on' : '') + '" id="f-fav2" aria-label="Toggle favorite">' + icon('heart') + '</button>' +
     '<button class="d-fav2" id="m-share2" aria-label="Share this book">' + icon('share') + '</button>' +
-    // Variant A: cover tools sit behind this "Cover ▾" pill (same ids,
-    // same sheets) instead of the toolbar that sat under the cover.
-    '<div class="more-wrap cover-wrap"><button class="btn ghost" id="m-coverpill" aria-haspopup="true">Cover ▾</button>' +
-    '<div class="more-menu" id="m-covertools" hidden>' +
-    '<button class="more-item" id="m-changecover">' + icon('image') + ' <span>Change Cover</span></button>' +
-    '<button class="more-item" id="m-scanfaces">' + icon('camera') + ' <span>Scan Edition</span></button>' +
-    '<button class="more-item" id="m-measurethick">' + icon('ruler') + ' <span>Measure thickness</span></button>' +
-    '<button class="more-item" id="m-view3d">' + icon('cube') + ' <span>View in 3D</span></button>' +
-    '</div></div></div>' +
+    '</div>' +
     '</div>' +
     // v541: "Reading it too" presence slot (js/235 fills it async;
     // stays empty unless a circle friend is visibly reading this).
@@ -1712,8 +1711,6 @@ export function renderDetailModal(b, viaBook) {
   });
   root.addEventListener('click', (e) => {
     if (!moreMenu.hidden && !e.target.closest('.more-wrap')) moreMenu.hidden = true;
-    const ct = document.getElementById('m-covertools');
-    if (ct && !ct.hidden && !e.target.closest('.cover-wrap')) ct.hidden = true;
   });
 
   // wire controls (work on the draft copy until the autosave commits)
@@ -2241,13 +2238,12 @@ export function renderDetailModal(b, viaBook) {
   // button when this is your own trophy want; silent otherwise.
   const giftBuySlot = document.getElementById('f-giftbuy');
   if (giftBuySlot && typeof giftModalBuySlot === 'function') giftModalBuySlot(giftBuySlot, b);
-  document.getElementById('m-changecover').addEventListener('click', () => { coverTools.hidden = true; openCoverPicker(id); });
   // v274: guided multi-face edition scan (spine, sprayed edges, covers).
-  document.getElementById('m-scanfaces').addEventListener('click', () => { coverTools.hidden = true; ecStartScan(id); });
+  document.getElementById('m-scanfaces').addEventListener('click', () => { moreMenu.hidden = true; ecStartScan(id); });
   // v287: calibrated physical thickness capture using an ID-1 reference card.
-  document.getElementById('m-measurethick').addEventListener('click', () => { coverTools.hidden = true; editionMeasureThickness(id); });
+  document.getElementById('m-measurethick').addEventListener('click', () => { moreMenu.hidden = true; editionMeasureThickness(id); });
   // v279: 3D edition viewer (spine/covers/sprayed edges from scanned faces).
-  document.getElementById('m-view3d').addEventListener('click', () => { coverTools.hidden = true; b3dOpenViewer(id); });
+  document.getElementById('m-view3d').addEventListener('click', () => { moreMenu.hidden = true; b3dOpenViewer(id); });
   // v210: edition picker — change which edition of the book she owns.
   document.getElementById('m-edition').addEventListener('click', () => openEditionPicker(id));
   document.getElementById('m-back').addEventListener('click', e => { if (e.target.id === 'm-back') close(); });
@@ -2281,15 +2277,6 @@ export function renderDetailModal(b, viaBook) {
     });
   };
   wireSlimToggle('m-about-toggle', 'm-about-body');
-  // Variant A: the Cover pill opens the cover-tools menu.
-  const coverPill = document.getElementById('m-coverpill');
-  const coverTools = document.getElementById('m-covertools');
-  if (coverPill && coverTools) {
-    coverPill.addEventListener('click', (e) => {
-      e.stopPropagation();
-      coverTools.hidden = !coverTools.hidden;
-    });
-  }
   root.querySelectorAll('[data-author]').forEach(el =>
     el.addEventListener('click', () => openCollection('author', el.dataset.author, id)));
   // Variant A: the series strip (header zone) — paint owned + missing.

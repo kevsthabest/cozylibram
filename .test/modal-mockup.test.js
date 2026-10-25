@@ -65,7 +65,7 @@ ok('primary row holds primary + hero favorite',
   !!q('.d-primary-row #m-primary') && !!q('.d-primary-row #f-fav2'));
 ok('primary still singular', qa('#m-primary').length === 1);
 ok('metadata row uses icons', qa('.d-meta svg').length === 3);
-ok('change cover is a labeled button', q('#m-changecover').textContent.includes('Cover'));
+ok('change cover is a labeled button', q('#m-covermenu').textContent.includes('Cover'));
 
 // --- 3. Favorite controls: hero heart + menu entry stay in sync ---
 ok('hero favorite starts off', !q('#f-fav2').classList.contains('on'));

@@ -122,7 +122,8 @@ ok('tab switch: Notes shows, Lore hides', !q('#dtab-notes').hidden && q('#dtab-l
 
 // --- 5. Every control survived the move ---
 ['#f-tropes', '#f-pagecount', '#f-progress', '#f-releasedate', '#f-notes',
- '#m-upnext', '#f-owned', '#m-hc', '#m-quotes', '#m-buywrap', '#m-changecover',
+ '#m-upnext', '#f-owned', '#m-hc', '#m-quotes', '#m-buywrap', '#m-covermenu',
+ '#m-scanfaces', '#m-measurethick', '#m-view3d',
  '#m-desc', '#m-loglist', '#f-axrows'
 ].forEach(id => ok('control kept: ' + id, !!q(id)));
 

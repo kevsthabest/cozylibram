@@ -2204,7 +2204,6 @@ h2.section, h3.section { font-size: 20px; margin: 18px 0 6px; font-style: italic
 /* ---- Cover picker (v47) ---- */
 .mcover-col { display: flex; flex-direction: column; gap: 6px; align-items: center; flex: none; }
 .mcover-col .cover-wrap { flex: none; }
-#m-changecover { font-size: 15px; padding: 3px 8px; line-height: 1.2; }
 .cover-picker-backdrop {
   position: fixed; inset: 0; background: rgba(8, 5, 12, 0.72);
   z-index: 70; display: flex; align-items: flex-end; justify-content: center;
@@ -2976,7 +2975,6 @@ h2.section, h3.section { font-size: 20px; margin: 18px 0 6px; font-style: italic
   width: 150px; height: 225px; margin: 0 auto; border-radius: 12px;
   box-shadow: 0 16px 34px var(--shadow-c);
 }
-.d-cover #m-changecover { margin-top: 8px; }
 .d-hero h2 { margin: 12px 0 2px; font-size: 25px; line-height: 1.2; }
 .d-hero .author { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
 .d-hero .pub-rating { margin-bottom: 8px; }

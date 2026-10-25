@@ -89,7 +89,7 @@ ok('ownership buttons use line icons', qa('#f-owned .ticon').length === 5); // v
 ok('axis rows use line icons', qa('#f-axrows .axlab .ticon').length === qa('#f-axrows .axrow').length && qa('#f-axrows .axrow').length > 0);
 ok('header rating hearts use line icons', qa('#f-myrating .ticon').length === 5);
 ok('favorite button uses line icon', !!q('#f-fav2 .ticon'));
-ok('change-cover button uses line icon', !!q('#m-changecover .ticon'));
+ok('change-cover button uses line icon', !!q('#m-covermenu .ticon'));
 ok('previously-read uses line icon', !!q('#f-prevwrap .ticon'));
 ok('store links use line icon', qa('#m-buywrap .ticon').length > 0);
 

@@ -274,16 +274,34 @@ ok('strip shows the owned sibling as a figure', !!q('#m-series [data-book="b2"]'
 ok('strip caption carries position + status',
   q('#m-series [data-book="b2"]').textContent.includes('#2'));
 
-// --- 12. Purchase inside More details; log collapsed; cover tools behind the pill ---
+// --- 12. Purchase inside More details; log collapsed; edition tools in the overflow menu ---
 ok('purchase fields live in More details',
   !!q('.m-more-details #f-purchase-source') && !!q('.m-more-details #f-purchase-date'));
 ok('series editor lives in More details', !!q('.m-more-details #f-series'));
 ok('reading log collapsed by default despite entries',
   q('#m-loglist').closest('details').open === false);
-ok('cover tools are menu items behind the Cover pill',
-  !!q('#m-covertools #m-changecover') && !!q('#m-covertools #m-view3d') && q('#m-covertools').hidden === true);
-q('#m-coverpill').click();
-ok('cover pill opens the tools menu', q('#m-covertools').hidden === false);
+ok('primary row holds no cover pill', !q('#m-coverpill') && !q('.d-primary-row .more-wrap'));
+ok('edition tools are items in the overflow menu',
+  !!q('#m-moremenu #m-covermenu') && !!q('#m-moremenu #m-scanfaces') &&
+  !!q('#m-moremenu #m-measurethick') && !!q('#m-moremenu #m-view3d') &&
+  q('#m-moremenu').hidden === true);
+q('#m-more').click();
+ok('overflow button opens the menu', q('#m-moremenu').hidden === false);
+// The moved entries still invoke their tools with the open book's id and
+// close the menu behind them — the retired pill's menu was their only
+// caller, so this is the check that keeps them reachable at all.
+run(`window.__calls = [];
+     window.ecStartScan = (x) => window.__calls.push(['scan', x]);
+     window.editionMeasureThickness = (x) => window.__calls.push(['measure', x]);
+     window.b3dOpenViewer = (x) => window.__calls.push(['3d', x]);`);
+q('#m-scanfaces').click();
+q('#m-measurethick').click();
+q('#m-view3d').click();
+const openId = run(`library[0].id`);
+ok('moved entries invoke scan / measure / 3D with the book id',
+  JSON.stringify(run(`window.__calls`)) ===
+  JSON.stringify([['scan', openId], ['measure', openId], ['3d', openId]]));
+ok('moved entries close the menu', q('#m-moremenu').hidden === true);
 
 // --- 13. v563 format + trophy still work; close commits them ---
 seed();
