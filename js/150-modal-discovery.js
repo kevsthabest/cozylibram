@@ -995,6 +995,17 @@ export function createModalFormState() {
     },
     commitValue(key, value) { baseline[key] = clone(value); api.touch(); },
     markSaved() { baseline = readAll(); api.touch(); },
+    // #347: a commit whose persistence failed must be able to become
+    // dirty again — markSaved() advances the baseline on the strength
+    // of the save, so the caller snapshots the pre-commit baseline and
+    // restores it when the save turns out not to have landed, leaving
+    // the staged edits staged and the commit retryable.
+    snapshotBaseline() { return clone(baseline); },
+    // Deliberately no touch(): the caller owns the status surface, and
+    // notifying would schedule an immediate autosave retry — a broken
+    // storage backend would then re-fail (and re-toast) every debounce
+    // interval instead of waiting for the next edit or close flush.
+    restoreBaseline(snap) { if (snap) baseline = clone(snap); },
     onChange(cb) { subs.push(cb); },
     touch() { if (!armed) return; const n = api.count(); subs.forEach(cb => { try { cb(n); } catch (e) {} }); }
   };
@@ -2101,11 +2112,28 @@ export function renderDetailModal(b, viaBook) {
     // this render's book, so they pass.
     if (editingId !== id) return true;
     if (!formState.isDirty()) { commitError = ''; return true; }
+    // #347: applyDetailForm's save almost never throws — the IDB
+    // write-through catches its own failures and the legacy backend
+    // swallows quota errors — so a try/catch alone reports "Saved"
+    // over a save that never landed (the failure surfaced only as a
+    // toast). Snapshot the persist-error counter and the form baseline
+    // before the commit, then verify: synchronously for the legacy
+    // backend (its outcome is known on return), and once the write
+    // chain drains for the IDB backend. A failed verification restores
+    // the baseline, so the edits stay staged and retryable exactly as
+    // they do for a throwing commit.
+    const errSeqBefore = (typeof storagePersistErrorCount === 'function') ? storagePersistErrorCount() : 0;
+    const baselineBefore = formState.snapshotBaseline();
+    const failFromPersist = () => {
+      const e = (typeof storagePersistError === 'function') ? storagePersistError() : null;
+      commitError = (e && e.message) ? e.message : 'storage unavailable';
+      formState.restoreBaseline(baselineBefore);
+      savedFlash = false; clearTimeout(savedFlashTimer);
+      setSaveState('Couldn’t save — ' + commitError, true);
+      return false;
+    };
     try {
       applyDetailForm();
-      commitError = '';
-      showSaved();
-      return true;
     } catch (e) {
       // A commit that genuinely cannot apply (persistence threw): the
       // staged edits stay staged, the reason stays visible in the
@@ -2114,6 +2142,25 @@ export function renderDetailModal(b, viaBook) {
       setSaveState('Couldn’t save — ' + commitError, true);
       return false;
     }
+    if (typeof storagePersistErrorCount === 'function' && storagePersistErrorCount() !== errSeqBefore) {
+      return failFromPersist();
+    }
+    commitError = '';
+    showSaved();
+    if (typeof storageDrain === 'function' && typeof idbDisabled !== 'undefined' && !idbDisabled) {
+      const baselineAfter = formState.snapshotBaseline();
+      storageDrain().then(() => {
+        if (editingId !== id) return; // a newer render owns the status now
+        if (storagePersistErrorCount() === errSeqBefore) return;
+        // Only flip when this commit is still the latest save state: a
+        // later commit (successful or still staged) has re-baselined
+        // since, and its own verification owns the outcome.
+        if (formState.isDirty()) return;
+        if (JSON.stringify(formState.snapshotBaseline()) !== JSON.stringify(baselineAfter)) return;
+        failFromPersist();
+      });
+    }
+    return true;
   };
   const scheduleAutosave = () => {
     clearTimeout(saveTimer); saveTimer = null;
