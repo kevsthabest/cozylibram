@@ -68,6 +68,18 @@ function stableJson(v) {
 // is not a local edit — with dirty as the plan's only signal, merged
 // updates never reached the store and a restart reverted them (#334).
 function mergeAssign(lb, rd) {
+  // #336: a field deletion is represented in this codebase by the
+  // key's ABSENCE (migrateBook's `delete b.x` cleanups, js/020) — there
+  // is no deletion marker on a book record. Object.assign alone can
+  // never express that: it adds and overwrites but never removes, so a
+  // field deleted on the winning device resurrected from every peer
+  // whose copy still carried it. The winner won the whole record, so
+  // keys the winner lacks are deleted from the local book first. The
+  // proxy delete-traps dirty the book as a side effect; the unmark
+  // below restores the merge semantics, as with the assigns.
+  for (const k of Object.keys(lb)) {
+    if (!Object.prototype.hasOwnProperty.call(rd, k)) delete lb[k];
+  }
   Object.assign(lb, rd);
   unmarkDirty(lb);
   markPersistOnly(lb);
@@ -147,6 +159,29 @@ function selectPushBatch(books, since) {
   const sendCeil = batch.reduce((m, b) => Math.max(m, (b && b._mtime) || 0), since);
   return { batch: batch, sendCeil: sendCeil };
 }
+// Pure push reconciliation (unit-tested) for #335: given the rows a
+// push is about to upsert and the rows the cloud already holds, split
+// off the rows the cloud holds a STRICTLY NEWER _mtime for. Upserting
+// one of those would regress the cloud copy to this device's stale
+// record, and because the pull merge also keys on _mtime the
+// divergence would never heal — the newer edits would be lost
+// everywhere. Skipping is enough: the next pull merges the newer
+// record down into this device and the copies converge. Ties are NOT
+// skipped — the #129 tie-break owns equal _mtimes, and the pull side
+// resolves them deterministically.
+function reconcilePushRows(rows, cloudRows) {
+  const cloudMtime = new Map();
+  for (const r of cloudRows || []) {
+    if (r && r.book_id) cloudMtime.set(r.book_id, (r.data && r.data._mtime) || 0);
+  }
+  const keep = [], skipped = [];
+  for (const row of rows || []) {
+    const cm = cloudMtime.get(row.book_id);
+    if (cm !== undefined && cm > ((row.data && row.data._mtime) || 0)) skipped.push(row);
+    else keep.push(row);
+  }
+  return { keep: keep, skipped: skipped };
+}
 // Pure tombstone pruning (unit-tested): deletions older than 90 days have
 // propagated to every device by now, so drop them instead of upserting and
 // .in()-deleting an ever-growing list. Trade-off, documented: a device
@@ -198,7 +233,29 @@ async function cloudPushNow() {
     const pushUserId = cloudUser.id;
     const pushTombs = tombstones;
     const pushSel = selectPushBatch(library, since);
-    const rows = pushSel.batch.map(b => bookToRow(b, pushUserId));
+    let rows = pushSel.batch.map(b => bookToRow(b, pushUserId));
+    const booksTable = sb.from('books');
+    if (rows.length && typeof booksTable.select === 'function') {
+      // #335: reconcile against the cloud before upserting. A stale
+      // device must not regress a newer cloud copy (see
+      // reconcilePushRows). The fetch is scoped to this push's owner
+      // and, when the client supports it, to the batch's ids. A failed
+      // fetch aborts the push (the catch below retries next round) —
+      // pushing blind would risk exactly the regression this prevents.
+      let cloudQuery = booksTable.select('book_id,data').eq('user_id', pushUserId);
+      if (typeof cloudQuery.in === 'function') {
+        cloudQuery = cloudQuery.in('book_id', rows.map(r => r.book_id));
+      }
+      const existing = await abortable(cloudQuery);
+      if (existing && existing.error) throw existing.error;
+      const rec = reconcilePushRows(rows, (existing && existing.data) || []);
+      if (rec.skipped.length) {
+        AppLog.info('sync', 'push reconciliation: skipped ' + rec.skipped.length +
+          ' stale row(s) the cloud holds newer copies of (' +
+          rec.skipped.map(r => r.book_id).join(', ') + ')');
+        rows = rec.keep;
+      }
+    }
     // sendCeil bounds the high-water advance: it covers every _mtime in the
     // batch, so a book edited DURING the upsert (stamped after batch
     // selection) lands strictly above it and is caught by the re-scan below
