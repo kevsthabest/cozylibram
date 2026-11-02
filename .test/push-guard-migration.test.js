@@ -70,8 +70,10 @@ ok('a strictly newer incoming row is written',
   /if v_in_mtime > v_stored_mtime then[\s\S]*?v_status := 'written';/.test(sql));
 ok('a strictly older incoming row is rejected_stale',
   /elsif v_in_mtime < v_stored_mtime then\s+v_status := 'rejected_stale';/.test(sql));
-ok('equal _mtime falls to the canonical tie-break',
-  /elsif public\.book_canonical_json\(v_data\) > public\.book_canonical_json\(v_stored_data\) then/.test(sql));
+ok('equal _mtime falls to the canonical tie-break (C-collated: byte order, not locale)',
+  /elsif public\.book_canonical_json\(v_data\) collate "C" > public\.book_canonical_json\(v_stored_data\) collate "C" then/.test(sql));
+ok('the tie-break identity comparison is likewise C-collated on both operands',
+  /elsif public\.book_canonical_json\(v_data\) collate "C" = public\.book_canonical_json\(v_stored_data\) collate "C" then/.test(sql));
 ok('a tie-break loser is rejected_tiebreak',
   /v_status := 'rejected_tiebreak';/.test(sql));
 ok('malformed rows are rejected_invalid, never written',

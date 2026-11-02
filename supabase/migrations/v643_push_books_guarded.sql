@@ -78,8 +78,20 @@
 -- Tie-break fidelity — the canonical form in SQL: book_canonical_json
 -- reproduces js/090's stableJson (recursive key sort, JSON.stringify
 -- leaf forms) using jsonb's own text form for scalars and a
--- byte-wise (collation "C") key sort. Two bounded deviations from
--- the JS original, both confined to the equal-_mtime tie case:
+-- byte-wise (collation "C") key sort. The comparisons between the
+-- two canonical strings in push_books_guarded are C-collated on
+-- both operands as well, so a tie is decided by byte order end to
+-- end. That collation is load-bearing, not decorative: production's
+-- database collation is en_US.UTF-8, and locale ordering weighs
+-- punctuation and case differently from the client's JS code-unit
+-- comparison, so an uncollated comparison would flip tie winners
+-- on ordinary data — and the client's high-water mark advances
+-- past a rejected row, so a flipped winner would diverge silently
+-- and permanently rather than self-heal on a later push. The
+-- C-collated comparisons belong to the same byte-order discipline
+-- as the key sort; they are not a further deviation. Two bounded
+-- deviations from the JS original, both confined to the
+-- equal-_mtime tie case:
 --   1. Key order: JS sorts keys by UTF-16 code unit; collation "C"
 --      sorts by code point (equivalently UTF-8 byte order). These
 --      agree for every BMP character; they can differ only for
@@ -224,12 +236,17 @@ begin
         v_status := 'written';
       elsif v_in_mtime < v_stored_mtime then
         v_status := 'rejected_stale';
-      elsif public.book_canonical_json(v_data) > public.book_canonical_json(v_stored_data) then
+      -- The tie-break comparisons collate "C" on both operands:
+      -- byte order, matching the key sort in book_canonical_json
+      -- and the client's code-unit comparison. The database's
+      -- locale collation would pick different winners on ordinary
+      -- data (see the header's tie-break fidelity note).
+      elsif public.book_canonical_json(v_data) collate "C" > public.book_canonical_json(v_stored_data) collate "C" then
         update public.books
            set isbn = v_isbn, data = v_data
          where user_id = v_me and book_id = v_book_id;
         v_status := 'written';
-      elsif public.book_canonical_json(v_data) = public.book_canonical_json(v_stored_data) then
+      elsif public.book_canonical_json(v_data) collate "C" = public.book_canonical_json(v_stored_data) collate "C" then
         v_status := 'written';
       else
         v_status := 'rejected_tiebreak';
