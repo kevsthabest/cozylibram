@@ -448,10 +448,12 @@ export async function circleSavePrivacy(share, hidden, bio, activity, recos, bud
 /* v559: the hideable-shelf list — the four statuses plus 'wishlist'.
  * The Wishlist is no longer a status, but its SHELF identity persists
  * for visibility: hidden_shelves keeps the 'wishlist' key, and both
- * privacy surfaces offer it. (Server note: circle_book_visible gates
- * on the stored status string, so a hidden 'wishlist' key alone no
- * longer gates the derived set server-side — those books carry status
- * 'tbr' now; hiding 'tbr' hides them with the rest of the TBR.) */
+ * privacy surfaces offer it. (Server note: since v578 the derived set
+ * IS gated server-side — the 3-arg circle_book_visible overload takes
+ * the row's owned facet and withholds exactly the tbr+tobuy books when
+ * 'wishlist' is hidden, while the 2-arg form still gates on the raw
+ * status string for its other callers; hiding 'tbr' hides the derived
+ * set with the rest of the TBR either way.) */
 export function hideableShelves() { return Object.keys(STATUS).concat(['wishlist']); }
 export function shelfLabel(s) { return s === 'wishlist' ? 'Wishlist' : (STATUS[s] || s); }
 
