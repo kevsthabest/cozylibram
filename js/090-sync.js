@@ -159,28 +159,60 @@ function selectPushBatch(books, since) {
   const sendCeil = batch.reduce((m, b) => Math.max(m, (b && b._mtime) || 0), since);
   return { batch: batch, sendCeil: sendCeil };
 }
-// Pure push reconciliation (unit-tested) for #335: given the rows a
-// push is about to upsert and the rows the cloud already holds, split
-// off the rows the cloud holds a STRICTLY NEWER _mtime for. Upserting
-// one of those would regress the cloud copy to this device's stale
-// record, and because the pull merge also keys on _mtime the
-// divergence would never heal — the newer edits would be lost
-// everywhere. Skipping is enough: the next pull merges the newer
-// record down into this device and the copies converge. Ties are NOT
-// skipped — the #129 tie-break owns equal _mtimes, and the pull side
-// resolves them deterministically.
-function reconcilePushRows(rows, cloudRows) {
-  const cloudMtime = new Map();
-  for (const r of cloudRows || []) {
-    if (r && r.book_id) cloudMtime.set(r.book_id, (r.data && r.data._mtime) || 0);
+// #335 (v643): the push guard lives on the SERVER. The first fix for
+// #335 reconciled here in the client — fetch the cloud rows, drop
+// the ones the cloud holds newer, upsert the rest — but a fetch and
+// an upsert are two round trips, and another device's push landing
+// between them re-opens exactly the regression window the fix
+// exists to close. So the batch goes to the push_books_guarded RPC
+// (supabase/migrations/v643_push_books_guarded.sql), which compares
+// and writes inside one transaction and answers per-row outcomes
+// ({book_id, status: written | rejected_stale | rejected_tiebreak |
+// rejected_invalid}); logPushRejections surfaces the rejections.
+// Missing-function detection mirrors the handles RPC wrappers
+// (js/237): PostgREST reports an unknown function as PGRST202 with
+// a "could not find the function ... in the schema cache" message.
+function pushRpcMissing(e) {
+  const s = String((e && (e.code + ' ' + e.message)) || e || '');
+  return /PGRST20[0-9]|schema cache|could not find|does not exist|404/i.test(s);
+}
+// One guarded push attempt. Resolves { results } with the per-row
+// outcomes on success, or { missing: true } when the guarded path
+// is unavailable: the function does not exist on the server yet
+// (the migration applies after this client ships — see the fallback
+// in cloudPushNow), a test fake has no rpc surface, or the answer
+// carried no outcomes array (the function always returns one, so
+// an answer without it is not the function talking). Any other RPC
+// error throws: pushing blind after a real failure would risk the
+// regression the guard exists to prevent, so the push aborts and
+// the caller's catch retries next round, like an upsert failure.
+async function pushBooksGuarded(sb, rows, abortable) {
+  if (typeof sb.rpc !== 'function') return { missing: true };
+  const res = await abortable(sb.rpc('push_books_guarded', { p_rows: rows }));
+  if (res && res.error) {
+    if (pushRpcMissing(res.error)) return { missing: true };
+    throw res.error;
   }
-  const keep = [], skipped = [];
-  for (const row of rows || []) {
-    const cm = cloudMtime.get(row.book_id);
-    if (cm !== undefined && cm > ((row.data && row.data._mtime) || 0)) skipped.push(row);
-    else keep.push(row);
-  }
-  return { keep: keep, skipped: skipped };
+  if (!res || !Array.isArray(res.data)) return { missing: true };
+  return { results: res.data };
+}
+// The guard's rejections, logged the way the retired client-side
+// reconciliation logged its skips: a rejected row is convergence
+// doing its job (the next pull adopts the record that beat it), so
+// stale and tie-break rejections log at info, by book id. A refused
+// malformed row is a client bug, so it warns.
+function logPushRejections(results) {
+  const rejected = (results || []).filter(r => r && r.status && r.status !== 'written');
+  if (!rejected.length) return;
+  const stale = rejected.filter(r => r.status === 'rejected_stale').map(r => r.book_id);
+  const tied = rejected.filter(r => r.status === 'rejected_tiebreak').map(r => r.book_id);
+  const invalid = rejected.filter(r => r.status === 'rejected_invalid').map(r => r.book_id);
+  if (stale.length) AppLog.info('sync', 'push guard: skipped ' + stale.length +
+    ' stale row(s) the cloud holds newer copies of (' + stale.join(', ') + ')');
+  if (tied.length) AppLog.info('sync', 'push guard: ' + tied.length +
+    ' row(s) lost the #129 tie-break to the stored copy (' + tied.join(', ') + ')');
+  if (invalid.length) AppLog.warn('sync', 'push guard: ' + invalid.length +
+    ' malformed row(s) refused (' + invalid.join(', ') + ')');
 }
 // Pure tombstone pruning (unit-tested): deletions older than 90 days have
 // propagated to every device by now, so drop them instead of upserting and
@@ -233,38 +265,34 @@ async function cloudPushNow() {
     const pushUserId = cloudUser.id;
     const pushTombs = tombstones;
     const pushSel = selectPushBatch(library, since);
-    let rows = pushSel.batch.map(b => bookToRow(b, pushUserId));
-    const booksTable = sb.from('books');
-    if (rows.length && typeof booksTable.select === 'function') {
-      // #335: reconcile against the cloud before upserting. A stale
-      // device must not regress a newer cloud copy (see
-      // reconcilePushRows). The fetch is scoped to this push's owner
-      // and, when the client supports it, to the batch's ids. A failed
-      // fetch aborts the push (the catch below retries next round) —
-      // pushing blind would risk exactly the regression this prevents.
-      let cloudQuery = booksTable.select('book_id,data').eq('user_id', pushUserId);
-      if (typeof cloudQuery.in === 'function') {
-        cloudQuery = cloudQuery.in('book_id', rows.map(r => r.book_id));
-      }
-      const existing = await abortable(cloudQuery);
-      if (existing && existing.error) throw existing.error;
-      const rec = reconcilePushRows(rows, (existing && existing.data) || []);
-      if (rec.skipped.length) {
-        AppLog.info('sync', 'push reconciliation: skipped ' + rec.skipped.length +
-          ' stale row(s) the cloud holds newer copies of (' +
-          rec.skipped.map(r => r.book_id).join(', ') + ')');
-        rows = rec.keep;
-      }
-    }
+    const rows = pushSel.batch.map(b => bookToRow(b, pushUserId));
     // sendCeil bounds the high-water advance: it covers every _mtime in the
     // batch, so a book edited DURING the upsert (stamped after batch
     // selection) lands strictly above it and is caught by the re-scan below
     // instead of being skipped. A same-ms edit is narrower than the #129
     // tiebreak window and self-heals on the next change.
     const sendCeil = pushSel.sendCeil;
+    let pushedCount = rows.length;
     if (rows.length) {
-      const { error } = await abortable(sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' }));
-      if (error) throw error;
+      const guarded = await pushBooksGuarded(sb, rows, abortable);
+      if (guarded.missing) {
+        // Rollout window: this project has not had migration v643
+        // applied yet, so the guard does not exist server-side.
+        // Degrade to the plain upsert every previously shipped
+        // client performs — identical behaviour to the pre-guard
+        // world — but warn: until the migration lands, #335 is NOT
+        // fixed on the server, and a silent fallback would re-open
+        // the hole invisibly. The warn is the difference between a
+        // staged rollout and a false sense of closure.
+        AppLog.warn('sync', 'push_books_guarded unavailable — falling back to the ' +
+          'unguarded upsert for ' + rows.length + ' row(s); apply migration ' +
+          'v643_push_books_guarded.sql to close #335 on the server');
+        const { error } = await abortable(sb.from('books').upsert(rows, { onConflict: 'user_id,book_id' }));
+        if (error) throw error;
+      } else {
+        logPushRejections(guarded.results);
+        pushedCount = guarded.results.filter(r => r && r.status === 'written').length;
+      }
     }
     if (pushTombs.length) {
       const trows = pushTombs.map(t => ({ user_id: pushUserId, book_id: t.id,
@@ -287,7 +315,7 @@ async function cloudPushNow() {
     if (pruned.length !== pushTombs.length && tombstones === pushTombs) { tombstones = pruned; saveTombstones(); }
     if (currentDb === pushDb) await writePushHighWater(sendCeil);
     cloudLastSync = Date.now();
-    AppLog.info('sync', 'push ok: ' + rows.length + ' books (' + library.length + ' total), ' + pushTombs.length + ' tombstones');
+    AppLog.info('sync', 'push ok: ' + pushedCount + ' books (' + library.length + ' total), ' + pushTombs.length + ' tombstones');
     // v495 (#128): convergence — re-scan after advancing the high-water mark;
     // anything edited mid-push is now strictly above it and gets its own round
     // instead of waiting for the next user save.
