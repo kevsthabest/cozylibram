@@ -234,9 +234,18 @@ function loadLegacyLibrary() {
   try { return (JSON.parse(localStorage.getItem(libKey())) || []).map(migrateBook); }
   catch (e) { return []; }
 }
+// Returns whether the write landed. Callers that clear state on the
+// strength of a save (persistBooks' dirty flags, #373) need the answer:
+// a swallowed quota failure that still reads as success is silent data
+// loss, so the failure is logged as well as toasted, the way the
+// write-through path surfaces its failures.
 function saveLegacyLibrary() {
-  try { localStorage.setItem(libKey(), JSON.stringify(library)); }
-  catch (e) { toast('Storage full — export a backup!'); }
+  try { localStorage.setItem(libKey(), JSON.stringify(library)); return true; }
+  catch (e) {
+    try { AppLog.error('storage', 'saveLegacyLibrary failed: ' + (e && e.message)); } catch (_) {}
+    toast('Storage full — export a backup!');
+    return false;
+  }
 }
 // NOTE: library loads in storageInit/loadLegacyAll (not at the top of the
 // file) because migrateBook can reach RATING_AXES/autoDetectAxes — both must
@@ -493,12 +502,15 @@ function storageDrain() { return storageWriteChain; }
 
 function persistBooks() {
   if (idbDisabled) {
-    saveLegacyLibrary();
     // v495 (#125): the legacy backend rewrites the whole library, so a
     // completed write means everything is persisted — clear the flags, or
     // _mtime would bump on every save and the differential push would
-    // re-push the whole shelf each round. (saveLegacyLibrary never throws;
-    // on quota failure it toasts and the flags stay set for a retry.)
+    // re-push the whole shelf each round. But only a completed write:
+    // #373 — on quota failure the flags must stay set, or the failure
+    // reads as a successful save and the edits are lost on next load.
+    // saveLegacyLibrary reports the outcome (it toasts and logs the
+    // failure itself); the surviving flags make the next save the retry.
+    if (!saveLegacyLibrary()) return;
     for (const b of library) { unmarkDirty(b); unmarkPersistOnly(b); }
     return;
   }
