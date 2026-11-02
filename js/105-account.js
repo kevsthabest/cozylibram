@@ -298,6 +298,15 @@ export async function adoptCloudPhoto(sb, p, row) {
 export async function syncCloudProfile() {
   const sb = await cloudClient().catch(() => null);
   if (!sb || !cloudUser) return;
+  // #411: the same capture-and-recheck discipline #410 gave the library
+  // and settings pull legs after #327. This leg applies whatever its
+  // fetches return after several awaits, and profileKey() resolves
+  // against the LIVE cloudUser — so without a recheck, an account switch
+  // mid-flight writes the old account's adopted profile into the new
+  // account's slot (and the push leg below would push under the new id).
+  // Capture the owner at entry and re-check before every apply.
+  const profileUid = cloudUser.id;
+  const stillMine = () => !!cloudUser && cloudUser.id === profileUid;
   try {
     // v178: prefer the gender column, fall back to the old column set when
     // the database hasn't been migrated yet. v522: bio/fav_genres ride the
@@ -305,14 +314,15 @@ export async function syncCloudProfile() {
     const COLS_FULL = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender,bio,fav_genres,handle,findable';
     const COLS_MID = 'first_name,last_name,avatar_id,avatar_path,updated_at,gender';
     const COLS_BASIC = 'first_name,last_name,avatar_id,avatar_path,updated_at';
-    let res = await sb.from('profiles').select(COLS_FULL).eq('user_id', cloudUser.id).maybeSingle();
+    let res = await sb.from('profiles').select(COLS_FULL).eq('user_id', profileUid).maybeSingle();
     if (res.error && isMissingColumn(res.error)) {
-      res = await sb.from('profiles').select(COLS_MID).eq('user_id', cloudUser.id).maybeSingle();
+      res = await sb.from('profiles').select(COLS_MID).eq('user_id', profileUid).maybeSingle();
     }
     if (res.error && isMissingColumn(res.error)) {
-      res = await sb.from('profiles').select(COLS_BASIC).eq('user_id', cloudUser.id).maybeSingle();
+      res = await sb.from('profiles').select(COLS_BASIC).eq('user_id', profileUid).maybeSingle();
     }
     if (res.error) throw res.error;
+    if (!stillMine()) return;
     const row = res.data || null;
     const p = loadProfile();
     const localTs = p.updatedAt || 0;
@@ -332,6 +342,9 @@ export async function syncCloudProfile() {
       }
       if ('findable' in row) p.findable = row.findable === true;
       await adoptCloudPhoto(sb, p, row);
+      // The photo adoption awaits a storage download — a switch during
+      // it must not let the save below land in the new account's slot.
+      if (!stillMine()) return;
       p.updatedAt = remoteTs;
       saveProfile(p);
       renderTopbar();
@@ -339,7 +352,7 @@ export async function syncCloudProfile() {
       if (view === 'profile' && typeof renderProfile === 'function') renderProfile();
     } else {
       const hasContent = !!(p.firstName || p.lastName || p.avatar.type !== 'letter' || localTs > 0);
-      if (hasContent && (!row || localTs > remoteTs)) await pushCloudProfile(p);
+      if (hasContent && (!row || localTs > remoteTs) && stillMine()) await pushCloudProfile(p);
     }
   } catch (e) { /* offline — try again next sync */ }
 }
