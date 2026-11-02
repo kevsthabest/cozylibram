@@ -235,13 +235,15 @@ function loadLegacyLibrary() {
   catch (e) { return []; }
 }
 // Returns whether the write landed. Callers that clear state on the
-// strength of a save (persistBooks' dirty flags, #373) need the answer:
-// a swallowed quota failure that still reads as success is silent data
-// loss, so the failure is logged as well as toasted, the way the
-// write-through path surfaces its failures.
+// strength of a save (persistBooks' dirty flags, #373) or report one
+// (the modal's save status, #347) need the answer: a swallowed quota
+// failure that still reads as success is silent data loss, so the
+// failure is logged as well as toasted, the way the write-through
+// path surfaces its failures, and recorded for storagePersistError().
 function saveLegacyLibrary() {
   try { localStorage.setItem(libKey(), JSON.stringify(library)); return true; }
   catch (e) {
+    noteStoragePersistError(e);
     try { AppLog.error('storage', 'saveLegacyLibrary failed: ' + (e && e.message)); } catch (_) {}
     toast('Storage full — export a backup!');
     return false;
@@ -490,8 +492,25 @@ if (idbDisabled) {
    Arrays are snapshotted at enqueue so a slot switch can't redirect a queued
    write into the wrong database. */
 let storageWriteChain = Promise.resolve();
+/* #347: persist failures are observable. Every failed write-through —
+   and every failed legacy save — bumps this counter and keeps the
+   error, so a caller that reports a save (the book modal's status)
+   can check whether the save it just made actually landed instead of
+   trusting that no exception escaped: the write-through path catches
+   its own failures, and the legacy path is synchronous-swallow, so
+   neither ever throws into the caller. The counter only moves, so a
+   caller snapshots it before its save and compares after. */
+let storagePersistErrorSeq = 0;
+let storagePersistErrorLast = null;
+function noteStoragePersistError(e) {
+  storagePersistErrorSeq++;
+  storagePersistErrorLast = e || new Error('storage unavailable');
+}
+function storagePersistErrorCount() { return storagePersistErrorSeq; }
+function storagePersistError() { return storagePersistErrorLast; }
 function storageWriteThrough(label, fn) {
   storageWriteChain = storageWriteChain.then(fn, fn).catch(e => {
+    noteStoragePersistError(e);
     try { AppLog.error('storage', label + ' write failed: ' + (e && e.message)); } catch (_) {}
     try { toast('Couldn\'t save — export a backup!'); } catch (_) {}
   });
