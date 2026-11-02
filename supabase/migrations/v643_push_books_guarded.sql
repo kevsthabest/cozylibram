@@ -158,6 +158,12 @@ $function$;
 
 revoke execute on function public.book_canonical_json(jsonb) from public;
 revoke execute on function public.book_canonical_json(jsonb) from anon;
+-- authenticated must be named too: the platform's default privileges
+-- grant execute on new functions to it, so revoking only PUBLIC and
+-- anon would leave this helper callable by any signed-in user. The
+-- push function is unaffected — it is SECURITY DEFINER and reaches
+-- the helper as its owner, not through the caller's grants.
+revoke execute on function public.book_canonical_json(jsonb) from authenticated;
 
 -- ------------------------------------------------------------------
 -- The guarded push. SECURITY DEFINER because the guard must see and

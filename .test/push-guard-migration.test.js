@@ -42,6 +42,8 @@ ok('canonical helper carries no anon execute',
   /revoke execute on function public\.book_canonical_json\(jsonb\) from anon;/.test(sql));
 ok('canonical helper carries no PUBLIC execute',
   /revoke execute on function public\.book_canonical_json\(jsonb\) from public;/.test(sql));
+ok('canonical helper carries no authenticated execute (default privileges grant it, so the role must be named)',
+  /revoke execute on function public\.book_canonical_json\(jsonb\) from authenticated;/.test(sql));
 
 /* ---------- push_books_guarded: shape and ownership ---------- */
 ok('guard is create-or-replace, jsonb in, jsonb out',
