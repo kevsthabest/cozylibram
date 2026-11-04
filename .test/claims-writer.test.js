@@ -1,4 +1,4 @@
-// Shape pins for v647, the server-side confirmed-writer for
+// Shape pins for v647 writer as corrected by v648 for
 // book_trope_claims (#408; the DELETE narrowing closes #362's
 // remaining arm). Rulings of record: the User's 2026-10-18 #343
 // ruling (tighten now, confirmed-writer as the named follow-up) and
@@ -28,7 +28,15 @@ function ok(name, cond) {
 const migPath = path.join(ROOT, 'supabase/migrations/v647_claims_confirmed_writer.sql');
 ok('v647 migration file exists', fs.existsSync(migPath));
 const mig = fs.readFileSync(migPath, 'utf8');
-const sql = mig.replace(/--[^\n]*/g, ''); // pins judge statements, not the header prose
+// v648 replaces the function with the protection classification failing
+// closed; the policies and grants stay as v647 wrote them. Shape pins
+// judge both files together; the classification pins below judge v648
+// alone, discriminatorily.
+const mig2Path = path.join(ROOT, 'supabase/migrations/v648_claims_writer_protection_fix.sql');
+ok('v648 migration file exists', fs.existsSync(mig2Path));
+const mig2 = fs.readFileSync(mig2Path, 'utf8');
+const sql2 = mig2.replace(/--[^\n]*/g, '');
+const sql = (mig + '\n' + mig2).replace(/--[^\n]*/g, ''); // pins judge statements, not the header prose
 
 // The writer itself.
 ok('writer is create-or-replace, SECURITY DEFINER, search_path pinned',
@@ -47,10 +55,14 @@ ok('batch is capped',
 ok('rejected tropes are classified and skipped, never re-inserted',
   /c\.status = 'rejected'/.test(sql) &&
   /'reason', 'rejected'/.test(sql));
-ok('protected = confirmed and NOT ai-regenerable (jsonb compare, no boolean cast)',
+ok('regenerable test is a jsonb compare against true, no boolean cast',
   /c\.status = 'confirmed'/.test(sql) &&
   /\(c\.evidence -> 'auto_confirmed'\) = 'true'::jsonb/.test(sql) &&
   !/\(c\.evidence ->> 'auto_confirmed'\)::boolean/.test(sql));
+ok('protected classification fails closed (v648): only provably-auto ai rows are unprotected',
+  /c\.source_type <> 'ai'\s+or \(c\.evidence -> 'auto_confirmed'\) is distinct from 'true'::jsonb/.test(sql2));
+ok('the fail-open NOT form is absent from v648 (NULL evidence keys fell through it)',
+  !/not \(c\.source_type = 'ai'/.test(sql2));
 ok('the delete set is the ai regenerable set, computed in the function',
   /delete from public\.book_trope_claims c\s+where c\.work_id = p_work_id and c\.source_type = 'ai'/.test(sql));
 
