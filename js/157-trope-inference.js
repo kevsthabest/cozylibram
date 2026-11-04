@@ -1023,56 +1023,40 @@ export function ensureTropeQueueWired() {
      - a human/COMMUNITY CONFIRMED trope is never demoted back to candidate.
      Only regenerable AI rows are deleted — candidates plus AI
      auto-confirmed rows (isRegenerableClaim). Human confirmations,
-     rejections, and community rows are never touched (RLS wouldn't allow
-     it anyway).
+     rejections, and community rows are never touched.
      v208: evidence-backed auto-publishing — high-confidence tropes with
      quoted evidence are written as confirmed (source ai,
      evidence.auto_confirmed=true) instead of candidates; the Trope Lab
-     queue becomes corrections-only. */
+     queue becomes corrections-only.
+     v646 (#408): the replace cycle and the publish decision moved
+     server-side into the write_trope_claims RPC. The client used to run
+     the select/delete/insert itself and decide each row's status with
+     tropeAutoPublish; the v636 policy could only check the shape of
+     that decision, so a forged client could mint confirmed claims by
+     asserting confidence and quotes. The RPC validates the proposals,
+     enforces the survival rules above where they cannot be bypassed,
+     applies the same auto-publish rule to validated inputs, and
+     assembles the evidence envelope itself. This function now only
+     proposes; the returned set is still exactly the trope_ids written,
+     which the queue mirrors into the legacy book_tropes table (v271). */
   const upsertClaims = async (workId, tropes, meta) => {
     const sb = await cloudClient().catch(() => null);
     if (!sb) throw new Error('cloud unavailable');
-    let existing = [];
-    try {
-      const r = await sb.from('book_trope_claims')
-        .select('id, trope_id, status, source_type, evidence').eq('work_id', workId);
-      if (r.error) throw r.error;
-      existing = r.data || [];
-    } catch (e) { existing = []; }
-    const rejected = new Set(), confirmed = new Set(), regenIds = [];
-    for (const c of existing) {
-      if (!c || !c.trope_id) continue;
-      if (c.status === 'rejected') rejected.add(c.trope_id);
-      else if (c.status === 'confirmed' && !isRegenerableClaim(c)) confirmed.add(c.trope_id);
-      if (isRegenerableClaim(c) && c.id) regenIds.push(c.id);
-    }
-    const fresh = (tropes || []).filter(t => t && t.trope_id &&
-      !rejected.has(t.trope_id) && !confirmed.has(t.trope_id));
-    if (regenIds.length) {
-      const del = await sb.from('book_trope_claims').delete().in('id', regenIds);
-      if (del.error) throw del.error;
-    }
-    if (!fresh.length) return [];
-    const rows = fresh.map(t => {
-      const auto = tropeAutoPublish({ confidence: t.confidence,
-                                      evidence: t.evidence || [] });
-      return {
-        work_id: workId, trope_id: t.trope_id,
-        status: auto ? 'confirmed' : 'candidate',
-        confidence: t.confidence, source_type: 'ai',
-        model: (meta && meta.model) || null, model_version: null,
-        evidence: { taxonomy_version: TROPE_TAXONOMY_VERSION,
-                    taxonomy_rev: TropeTaxonomy.rev(),
-                    evidence: t.evidence || [],
-                    input_hash: (meta && meta.inputHash) || null,
-                    auto_confirmed: auto || undefined },
-      };
+    const claims = (tropes || []).filter(t => t && t.trope_id).map(t => ({
+      trope_id: t.trope_id,
+      confidence: t.confidence,
+      evidence: t.evidence || [],
+    }));
+    const { data, error } = await sb.rpc('write_trope_claims', {
+      p_work_id: workId,
+      p_claims: claims,
+      p_model: (meta && meta.model) || null,
+      p_input_hash: (meta && meta.inputHash) || null,
+      p_taxonomy_version: TROPE_TAXONOMY_VERSION,
+      p_taxonomy_rev: TropeTaxonomy.rev(),
     });
-    const ins = await sb.from('book_trope_claims').insert(rows);
-    if (ins.error) throw ins.error;
-    // v271: return the trope_ids actually written so the queue can mirror
-    // exactly this set into the legacy book_tropes table.
-    return fresh.map(t => t.trope_id);
+    if (error) throw error;
+    return (data && data.written) || [];
   };
   /* v208: input hashes + models of existing claims for one work, for the
      queue's reprocess cache. Never throws. */
