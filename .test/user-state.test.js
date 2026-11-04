@@ -94,7 +94,7 @@ function clearState() {
         'cozylibram.s3d.deco.v2', 'cozylibram.s3d.deco.v1', 'cozylibram.s3d.dressed.v1',
         'cozylibram.s3d.arrange', 'cozylibram.s3d.spines',
         'spicyshelves.auto_releases', 'spicyshelves.auto_releases_seen', 'spicyshelves.dismissed_releases',
-        'spicyshelves.reco_dismissed'].includes(k) ||
+        'spicyshelves.reco_dismissed', 'spicyshelves.reco_dismissed.owner'].includes(k) ||
       k.indexOf('spicyshelves.upnext.v1') === 0 ||
       k.indexOf('spicyshelves.shelforder.v1') === 0 ||
       k.indexOf('seasonThemeNudge:') === 0 || k.indexOf('wrapped-banner-') === 0)) doomed.push(k);
@@ -1088,6 +1088,62 @@ const setEq = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].
     setEq(await probeDismissals(), ['hc:l1', 'hc:s1', 'hc:l2', 'hc:s2']));
   ok('after the retry the reco section is clean (a further push is a no-op)',
     (await window.userStatePush()) === false);
+
+  /* ---------- #374: fallback dismissals are owner-stamped per account ---------- */
+  // The localStorage fallback is device-global storage: unstamped, one
+  // account's dismissals were read — and roamed — by the next account on
+  // the device. The fallback follows the js/219 milestones owner pattern:
+  // a stamp beside the value names its account; a mismatched reader sees
+  // nothing and cannot overwrite; an unstamped legacy copy is adopted
+  // (and stamped) by the first account that writes through it.
+  clearState();
+  setUser('user-a');
+  await window.recoDismiss('hc:x1');
+  ok('#374: a fallback write stamps the writer as owner',
+    ls.getItem('spicyshelves.reco_dismissed.owner') === 'user-a' &&
+    setEq(JSON.parse(ls.getItem('spicyshelves.reco_dismissed') || '[]'), ['hc:x1']));
+  setUser('user-b'); // same device, next account, fresh read of the store
+  ok('#374: account B does not see account A\'s fallback dismissals',
+    (await probeDismissals()).length === 0);
+  window.userStateApplyReco({ value: ['hc:b9'] });
+  ok('#374: the roamed union no longer inherits a foreign set',
+    setEq(window.userStateCollectReco().value, ['hc:b9']));
+  ok('#374: B\'s merge never overwrites A\'s fallback copy',
+    ls.getItem('spicyshelves.reco_dismissed.owner') === 'user-a' &&
+    setEq(JSON.parse(ls.getItem('spicyshelves.reco_dismissed') || '[]'), ['hc:x1']));
+  // A pre-stamped legacy copy is closed to everyone but its owner.
+  clearState();
+  ls.setItem('spicyshelves.reco_dismissed', JSON.stringify(['hc:old']));
+  ls.setItem('spicyshelves.reco_dismissed.owner', 'user-a');
+  setUser('user-b');
+  ok('#374: an owner-mismatched legacy value is not adopted',
+    (await probeDismissals()).length === 0);
+  runInWindow('cloudUser = null;');
+  ok('#374: a signed-out session does not read a stamped copy either',
+    (await probeDismissals()).length === 0);
+  setUser('user-a');
+  ok('#374: the owner still reads their own stamped copy',
+    setEq(await probeDismissals(), ['hc:old']));
+  // An account's own fallback dismissals still work end to end.
+  clearState();
+  setUser('user-c');
+  await window.recoDismiss('hc:own1');
+  ok('#374: the account\'s own fallback dismissals round-trip',
+    setEq(await probeDismissals(), ['hc:own1']) &&
+    window.recoDismissedKeys().includes('hc:own1'));
+  // An unstamped legacy copy (pre-stamp data, or written signed-out) is
+  // adopted by the first account that writes through it, then stamped.
+  clearState();
+  ls.setItem('spicyshelves.reco_dismissed', JSON.stringify(['hc:legacy']));
+  setUser('user-d');
+  ok('#374: an unstamped legacy copy is readable by the first account (js/219 adoption)',
+    setEq(await probeDismissals(), ['hc:legacy']));
+  await window.recoDismiss('hc:d1');
+  ok('#374: the first write stamps the adopter as owner',
+    ls.getItem('spicyshelves.reco_dismissed.owner') === 'user-d');
+  setUser('user-e');
+  ok('#374: once stamped, the adopted copy is closed to other accounts',
+    (await probeDismissals()).length === 0);
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

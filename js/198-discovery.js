@@ -1009,10 +1009,57 @@ export function recoSharedTropes(text, lovedIds) {
    edition stores its 'wk:' key alongside the 'hc:' key, and sweeps
    interpret legacy record-only dismissals at work level (adopting the
    derived work key into the stored set), so the collapse can no
-   longer promote a sibling edition into the dismissed work's place. */
+   longer promote a sibling edition into the dismissed work's place.
+   The localStorage fallback is device-global storage, so it carries
+   an owner stamp (#374, below): without one, the fallback copy of one
+   account's dismissals was read — and roamed — by the next account
+   to sign in on the same device. */
 export const RECO_DISMISS_KEY = 'reco_dismissed';
+export const RECO_DISMISS_OWNER_KEY = 'reco_dismissed.owner';
 export const RECO_DISMISS_CAP = 200;
 export let recoDismissedMirror = null; // last-known keys; js/229's sync snapshot
+
+/* The fallback's owner stamp, following the milestones pattern
+   (js/219): a separate localStorage key names the account whose
+   dismissals the fallback copy holds. A session whose uid does not
+   match the stamp — a different account, or signed out facing an
+   account's stamped copy — reads an empty set and may not overwrite
+   the copy, so a dismissal set can never cross accounts through the
+   shared device storage. A copy with NO stamp predates the stamp (or
+   was written signed-out, when there was no account to stamp): it
+   belongs to nobody yet, so the first account to write through the
+   fallback adopts it and stamps it, exactly as milestones adopt
+   their pre-stamp store. The IDB primary needs no stamp — its slots
+   are already per-account. */
+function recoFallbackUid() {
+  try { return (typeof cloudUser !== 'undefined' && cloudUser && cloudUser.id) || null; }
+  catch (e) { return null; }
+}
+function recoFallbackOwner() {
+  try { return localStorage.getItem('spicyshelves.' + RECO_DISMISS_OWNER_KEY); }
+  catch (e) { return null; }
+}
+// True when this session may use the fallback copy: unstamped, or
+// stamped for the signed-in account.
+function recoFallbackOwned() {
+  const owner = recoFallbackOwner();
+  return !owner || owner === recoFallbackUid();
+}
+function recoReadFallback() {
+  if (!recoFallbackOwned()) return [];
+  try {
+    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function recoWriteFallback(arr) {
+  if (!recoFallbackOwned()) return; // another account's copy: never overwrite
+  try {
+    localStorage.setItem('spicyshelves.' + RECO_DISMISS_KEY, JSON.stringify(arr));
+    const uid = recoFallbackUid();
+    if (uid) localStorage.setItem('spicyshelves.' + RECO_DISMISS_OWNER_KEY, uid);
+  } catch (e) {}
+}
 
 export async function recoDismissedSet() {
   try {
@@ -1021,10 +1068,7 @@ export async function recoDismissedSet() {
       if (Array.isArray(v)) { recoDismissedMirror = v.slice(); return new Set(v); }
     }
   } catch (e) {}
-  try {
-    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
-    recoDismissedMirror = Array.isArray(arr) ? arr.slice() : [];
-  } catch (e) { recoDismissedMirror = []; }
+  recoDismissedMirror = recoReadFallback();
   return new Set(recoDismissedMirror);
 }
 
@@ -1039,9 +1083,7 @@ export async function recoPersistDismissals(arr) {
       saved = true;
     }
   } catch (e) {}
-  if (!saved) {
-    try { localStorage.setItem('spicyshelves.' + RECO_DISMISS_KEY, JSON.stringify(arr)); } catch (e) {}
-  }
+  if (!saved) recoWriteFallback(arr);
 }
 
 export async function recoDismiss(key) {
@@ -1099,10 +1141,7 @@ export function recoUnionDismissals(a, b) {
 // otherwise the localStorage fallback copy.
 export function recoDismissedKeys() {
   if (Array.isArray(recoDismissedMirror)) return recoDismissedMirror.slice();
-  try {
-    const arr = JSON.parse(localStorage.getItem('spicyshelves.' + RECO_DISMISS_KEY) || '[]');
-    return Array.isArray(arr) ? arr.filter(k => typeof k === 'string' && k) : [];
-  } catch (e) { return []; }
+  return recoReadFallback().filter(k => typeof k === 'string' && k);
 }
 
 // Merge a roamed dismissal set into the local store (js/229's apply and
