@@ -76,13 +76,13 @@ ok('execute revoked from public AND anon by name; granted to authenticated + ser
 // Policy changes: exactly the two named moves.
 ok('direct confirmed insert policy is dropped by its exact live name',
   /drop policy if exists "claims: user insert ai auto-confirmed" on public\.book_trope_claims;/.test(sql));
-ok('no replacement insert policy is created (the writer is the only confirmed path)',
+ok('candidate insert policy is dropped too (gate condition: no direct writer remains)',
+  /drop policy if exists "claims: user insert ai candidates" on public\.book_trope_claims;/.test(sql));
+ok('no replacement insert policy is created (the writer is the only client path)',
   !/create policy "claims: user insert/.test(sql));
 ok('DELETE policy recreated candidates-only under its existing name',
   /drop policy if exists "claims: user replace ai regenerable" on public\.book_trope_claims;[\s\S]*?create policy "claims: user replace ai regenerable"[\s\S]*?for delete to authenticated\s+using \(source_type = 'ai' and status = 'candidate'\);/.test(sql));
-ok('candidate insert policy and the read/admin policies are untouched',
-  !/claims: user insert ai candidates/.test(sql.replace(
-    /drop policy if exists "claims: user insert ai auto-confirmed"[^;]*;/, '')) &&
+ok('the read and admin policies are untouched',
   !/(drop policy|create policy)[^;]*claims: (read for signed-in|admin write)/.test(sql));
 
 // Whole-file posture.

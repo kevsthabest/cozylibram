@@ -203,11 +203,19 @@ revoke execute on function public.write_trope_claims(uuid, jsonb, text, text, in
 grant execute on function public.write_trope_claims(uuid, jsonb, text, text, int, int) to authenticated, service_role;
 
 -- ------------------------------------------------------------------
--- Direct confirmed inserts close. The writer is now the only path
--- to a confirmed ai claim; the v636 shape-check policy has nothing
--- left to guard, because no client insert may carry 'confirmed'.
+-- Direct inserts close — both of them. The writer is now the only
+-- client path onto this table: the auto-confirmed policy's v636
+-- shape check has nothing left to guard once no client insert may
+-- carry 'confirmed', and the candidates policy's premise (other
+-- flows write candidates directly) no longer exists — after this
+-- change no flow in the tree inserts into book_trope_claims
+-- directly, so keeping it would leave a dead-but-live write surface
+-- that lets any signed-in user insert unbounded ai candidate rows
+-- at will. (Gate condition, Security Advisor review of PR #421:
+-- close it in this same migration.)
 -- ------------------------------------------------------------------
 drop policy if exists "claims: user insert ai auto-confirmed" on public.book_trope_claims;
+drop policy if exists "claims: user insert ai candidates" on public.book_trope_claims;
 
 -- ------------------------------------------------------------------
 -- The DELETE arm narrows to candidates (#362's remaining half).
