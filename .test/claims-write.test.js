@@ -1,6 +1,12 @@
-/* v206 claims write-path tests: the queue's upsertClaims (rejection filter,
-   confirmed exclusion, delete-then-insert replace, provenance), the pump's
+/* v206 claims write-path tests: the queue's upsertClaims, the pump's
    claims-vs-legacy branch, and TropeClaims.listCandidates/setStatus.
+   v647 (#408): the replace cycle, the survival rules and the publish
+   decision moved server-side into the write_trope_claims RPC, so the
+   writer sections here pin the CLIENT seam — the proposal payload,
+   the written-set pass-through the legacy mirror depends on, and the
+   throw-on-error contract. The server's semantics are pinned by
+   .test/claims-writer.test.js (migration posture) and exercised
+   against the live function in the post-apply probe pack.
    Run: node .test/claims-write.test.js */
 'use strict';
 const fs = require('fs');
@@ -46,47 +52,38 @@ function ok(name, cond) {
 
   const probe = src => vm.runInContext(src, ctx);
 
-  /* Fake Supabase client for the claims writer. */
-  const claimsSb = ({ existing, calls }) => ({
+  /* Fake Supabase client for the claims writer: the v647 writer speaks
+     rpc only. rpcResult is the canned server reply; by default the fake
+     echoes the proposed trope_ids as the written set (the seam contract
+     — survival filtering is the server's job, pinned elsewhere). Any
+     direct table access throws: the client must not go back to running
+     the replace cycle itself. */
+  const claimsSb = ({ rpcResult, calls }) => ({
+    rpc: (fn, args) => {
+      calls.push('rpc:' + fn);
+      calls.push('rpcArgs:' + JSON.stringify(args));
+      if (rpcResult) return Promise.resolve(rpcResult);
+      const written = (args.p_claims || []).map(c => c.trope_id);
+      return Promise.resolve({
+        data: { written, confirmed: [], skipped: [] }, error: null });
+    },
     from: (table) => {
-      if (table !== 'book_trope_claims') throw new Error('unexpected table ' + table);
-      return {
-        select: () => ({
-          eq: (col, val) => {
-            calls.push('select:' + col + '=' + val);
-            return Promise.resolve({ data: existing, error: null });
-          },
-        }),
-        delete: () => ({
-          in: (col, vals) => {
-            calls.push('delete:in:' + col + '=' + vals.join(','));
-            return Promise.resolve({ error: null });
-          },
-        }),
-        insert: (rows) => {
-          calls.push('insert:' + rows.map(r => r.trope_id).join(','));
-          calls.push('insertRows:' + JSON.stringify(rows));
-          return Promise.resolve({ error: null });
-        },
-      };
+      throw new Error('claims writer must not touch tables directly (' + table + ')');
     },
   });
 
-  /* ---- A. upsertClaims: rejection filter + replace semantics ---- */
+  /* ---- A. upsertClaims: the proposal seam (v647) ----
+     The survival rules (rejected never resurrected, human-confirmed
+     never demoted, only regenerable rows replaced) and the publish
+     decision are the server's now; what this section pins is that the
+     client proposes faithfully and consumes the verdict faithfully. */
   {
     probe('ensureTropeQueueWired()');
     const calls = [];
-    const existing = [
-      { id: 'r1', trope_id: 'vampire', status: 'rejected', source_type: 'ai' }, // never resurrected
-      { id: 'c1', trope_id: 'dragons', status: 'confirmed', source_type: 'ai' }, // human-confirmed: never demoted
-      { id: 'c2', trope_id: 'revenge', status: 'candidate', source_type: 'ai' }, // replaced
-      { id: 'c3', trope_id: 'mafia', status: 'confirmed', source_type: 'ai', // auto: regenerable
-        evidence: { auto_confirmed: true } },
-    ];
     vm.runInContext('cloudClient = async () => __sb;',
-      Object.assign(ctx, { __sb: claimsSb({ existing, calls }) }));
+      Object.assign(ctx, { __sb: claimsSb({ calls }) }));
     const upsert = probe('TropeQueue._upsertClaims');
-    await probe(`(${upsert.toString()})('w-1', [
+    const written = await probe(`(${upsert.toString()})('w-1', [
       { trope_id: 'vampire', confidence: 0.95, evidence: ['vampires stalk the night'] },
       { trope_id: 'dragons', confidence: 0.9, evidence: ['dragons soar above'] },
       { trope_id: 'revenge', confidence: 0.8, evidence: ['she seeks revenge'] },
@@ -94,38 +91,47 @@ function ok(name, cond) {
       { trope_id: 'mafia', confidence: 0.92, evidence: ['the mafia family rules'] },
     ], { model: 'test-model', inputHash: 'h1' })`).catch(e => 'THREW: ' + e.message);
 
-    ok('rejected trope never re-inserted', !calls.some(c => c === 'insert:vampire' || (c.indexOf('insert:') === 0 && c.includes('vampire'))));
-    const insRows = JSON.parse(calls.find(c => c.indexOf('insertRows:') === 0).slice('insertRows:'.length));
-    const ids = insRows.map(r => r.trope_id).sort();
-    ok('only fresh tropes inserted (rejected + human-confirmed filtered)',
-      JSON.stringify(ids) === JSON.stringify(['grumpy-x-sunshine', 'mafia', 'revenge']));
-    const byId = Object.fromEntries(insRows.map(r => [r.trope_id, r]));
-    ok('high-confidence + evidence auto-publishes as confirmed',
-      byId.mafia.status === 'confirmed' && byId.mafia.evidence.auto_confirmed === true);
-    ok('medium trope stays candidate even with evidence',
-      byId.revenge.status === 'candidate' && byId.revenge.evidence.auto_confirmed !== true);
-    ok('high-confidence without evidence stays candidate',
-      byId['grumpy-x-sunshine'].status === 'candidate');
-    ok('inserted rows carry provenance incl. input hash',
-      insRows.every(r => r.source_type === 'ai' && r.work_id === 'w-1' &&
-        r.model === 'test-model' && r.evidence &&
-        r.evidence.taxonomy_version === 1 && r.evidence.input_hash === 'h1' &&
-        Array.isArray(r.evidence.evidence)));
-    ok('regenerable rows deleted by id (candidate + auto-confirmed)',
-      calls.some(c => c === 'delete:in:id=c2,c3'));
-    ok('human-confirmed + rejected rows never deleted',
-      !calls.some(c => /delete:in.*c1/.test(c) || /delete:in.*r1/.test(c)));
+    ok('writer calls the confirmed-writer RPC and nothing else',
+      calls.length === 2 && calls[0] === 'rpc:write_trope_claims');
+    const args = JSON.parse(calls[1].slice('rpcArgs:'.length));
+    ok('proposal targets the work and carries the run provenance',
+      args.p_work_id === 'w-1' && args.p_model === 'test-model' &&
+      args.p_input_hash === 'h1' && args.p_taxonomy_version === 1 &&
+      typeof args.p_taxonomy_rev === 'number');
+    ok('every proposed trope rides with confidence + evidence quotes',
+      Array.isArray(args.p_claims) && args.p_claims.length === 5 &&
+      args.p_claims.every(c => typeof c.trope_id === 'string' &&
+        typeof c.confidence === 'number' && Array.isArray(c.evidence)));
+    ok('the proposal carries no status and no evidence envelope (server decides)',
+      args.p_claims.every(c => !('status' in c) && !('auto_confirmed' in c)));
+    ok('written set passes through for the legacy mirror',
+      JSON.stringify(written) === JSON.stringify(
+        ['vampire', 'dragons', 'revenge', 'grumpy-x-sunshine', 'mafia']));
   }
 
   {
-    // No fresh tropes and nothing regenerable: no delete, no insert.
+    // An empty proposal still runs the replace cycle server-side (the
+    // wholesale delete of regenerable rows must not be short-circuited
+    // by a client-side early return), and an rpc error throws so the
+    // queue marks the job failed and retries later.
     const calls = [];
     vm.runInContext('cloudClient = async () => __sb;',
-      Object.assign(ctx, { __sb: claimsSb({ existing: [{ id: 'r1', trope_id: 'vampire', status: 'rejected', source_type: 'ai' }], calls }) }));
+      Object.assign(ctx, { __sb: claimsSb({ calls }) }));
     const upsert = probe('TropeQueue._upsertClaims');
-    await probe(`(${upsert.toString()})('w-2', [{ trope_id: 'vampire', confidence: 0.9 }], {})`);
-    ok('all-rejected set: nothing deleted, nothing inserted',
-      !calls.some(c => c.indexOf('delete:') === 0) && !calls.some(c => c.indexOf('insert:') === 0));
+    const out = await probe(`(${upsert.toString()})('w-2', [], {})`);
+    ok('empty proposal still calls the RPC (replace cycle is server-side)',
+      calls.some(c => c === 'rpc:write_trope_claims') &&
+      JSON.parse(calls.find(c => c.indexOf('rpcArgs:') === 0).slice('rpcArgs:'.length)).p_claims.length === 0 &&
+      Array.isArray(out) && out.length === 0);
+
+    const errCalls = [];
+    vm.runInContext('cloudClient = async () => __sb;',
+      Object.assign(ctx, { __sb: claimsSb({
+        rpcResult: { data: null, error: { message: 'boom' } }, calls: errCalls }) }));
+    let threw = false;
+    try { await probe(`(${upsert.toString()})('w-2', [{ trope_id: 'mafia', confidence: 0.5 }], {})`); }
+    catch (e) { threw = true; }
+    ok('rpc error throws (job fails, retried later)', threw);
   }
 
   {
@@ -143,7 +149,7 @@ function ok(name, cond) {
     probe('TropeQueue.reset()');
     const calls = [];
     vm.runInContext('cloudClient = async () => __sb;',
-      Object.assign(ctx, { __sb: claimsSb({ existing: [], calls }) }));
+      Object.assign(ctx, { __sb: claimsSb({ calls }) }));
     probe(`inferBookTropes = async (book) => ({ tropes: [{ id: 'dragons', confidence: 0.9 }], model: 'm' });
       resolveWork = async (book) => ${JSON.stringify(workId)};
       window.__legacyRows = null;
@@ -165,8 +171,8 @@ function ok(name, cond) {
   {
     const r = await pumpOnce({ workId: 'w-9' });
     ok('pump completes via claims path', r.done === 1);
-    ok('claims inserted on the pump path',
-      r.calls.some(c => c === 'insert:dragons'));
+    ok('claims proposed on the pump path',
+      r.calls.some(c => c.indexOf('rpcArgs:') === 0 && c.includes('dragons')));
     // v271: dual-write — the legacy table mirrors the claims-kept tropes so
     // Trope Lab coverage and the review queue keep working.
     ok('legacy book_tropes write mirrors claims-kept tropes when work resolves',
@@ -182,7 +188,7 @@ function ok(name, cond) {
       Array.isArray(r.legacyRows) && r.legacyRows.length === 1 &&
       r.legacyRows[0].trope_id === 'dragons' && r.legacyRows[0].book_key);
     ok('claims untouched on the fallback path',
-      !r.calls.some(c => c.indexOf('insert:') === 0));
+      !r.calls.some(c => c === 'rpc:write_trope_claims'));
     probe('TropeQueue.reset()');
   }
 
