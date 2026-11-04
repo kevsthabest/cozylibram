@@ -1028,7 +1028,7 @@ export function ensureTropeQueueWired() {
      quoted evidence are written as confirmed (source ai,
      evidence.auto_confirmed=true) instead of candidates; the Trope Lab
      queue becomes corrections-only.
-     v646 (#408): the replace cycle and the publish decision moved
+     v647 (#408): the replace cycle and the publish decision moved
      server-side into the write_trope_claims RPC. The client used to run
      the select/delete/insert itself and decide each row's status with
      tropeAutoPublish; the v636 policy could only check the shape of

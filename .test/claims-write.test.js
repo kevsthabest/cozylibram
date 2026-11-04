@@ -1,6 +1,6 @@
 /* v206 claims write-path tests: the queue's upsertClaims, the pump's
    claims-vs-legacy branch, and TropeClaims.listCandidates/setStatus.
-   v646 (#408): the replace cycle, the survival rules and the publish
+   v647 (#408): the replace cycle, the survival rules and the publish
    decision moved server-side into the write_trope_claims RPC, so the
    writer sections here pin the CLIENT seam — the proposal payload,
    the written-set pass-through the legacy mirror depends on, and the
@@ -52,7 +52,7 @@ function ok(name, cond) {
 
   const probe = src => vm.runInContext(src, ctx);
 
-  /* Fake Supabase client for the claims writer: the v646 writer speaks
+  /* Fake Supabase client for the claims writer: the v647 writer speaks
      rpc only. rpcResult is the canned server reply; by default the fake
      echoes the proposed trope_ids as the written set (the seam contract
      — survival filtering is the server's job, pinned elsewhere). Any
@@ -72,7 +72,7 @@ function ok(name, cond) {
     },
   });
 
-  /* ---- A. upsertClaims: the proposal seam (v646) ----
+  /* ---- A. upsertClaims: the proposal seam (v647) ----
      The survival rules (rejected never resurrected, human-confirmed
      never demoted, only regenerable rows replaced) and the publish
      decision are the server's now; what this section pins is that the

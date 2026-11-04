@@ -1,4 +1,4 @@
-// Shape pins for v646, the server-side confirmed-writer for
+// Shape pins for v647, the server-side confirmed-writer for
 // book_trope_claims (#408; the DELETE narrowing closes #362's
 // remaining arm). Rulings of record: the User's 2026-10-18 #343
 // ruling (tighten now, confirmed-writer as the named follow-up) and
@@ -25,8 +25,8 @@ function ok(name, cond) {
   else { fail++; console.log('  NOT OK - ' + name); }
 }
 
-const migPath = path.join(ROOT, 'supabase/migrations/v646_claims_confirmed_writer.sql');
-ok('v646 migration file exists', fs.existsSync(migPath));
+const migPath = path.join(ROOT, 'supabase/migrations/v647_claims_confirmed_writer.sql');
+ok('v647 migration file exists', fs.existsSync(migPath));
 const mig = fs.readFileSync(migPath, 'utf8');
 const sql = mig.replace(/--[^\n]*/g, ''); // pins judge statements, not the header prose
 
