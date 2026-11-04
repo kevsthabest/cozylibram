@@ -100,7 +100,7 @@ ok('the read and admin policies are untouched',
 // Whole-file posture.
 ok('no data statements against existing rows (the only DML lives inside the writer function)',
   !/\binsert into public\.book_trope_claims\s*\(/.test(sql.replace(
-    /create or replace function public\.write_trope_claims[\s\S]*?\$function\$;/, '')) &&
+    /create or replace function public\.write_trope_claims[\s\S]*?\$function\$;/g, '')) &&
   !/update\s+public\./.test(sql));
 ok('no other table is altered',
   !/alter table/.test(sql));
