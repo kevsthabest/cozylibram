@@ -1,6 +1,6 @@
 # The App Dresses for Your Book — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
+**Status:** SHIPPED as v571 (`js/240-book-dressing.js`). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
 **Rubric snapshot:** Reader value — the app visibly responds to what you're reading; it's the feature a user shows a friend in the first thirty seconds. Brief-fit — pass (presentation delight tied to the current read; nothing tracked, scored, or pressured). Moat-fit — low-medium (uses cover-palette extraction the app already built for spines; no competitor does it). Scope — **M**. Placement — **Free** for the core effect (curated "dressing styles" are a natural premium extension later — not this spec). Displaced surface — none; it's a tint layer over the user's existing theme.
 
 ## 1. What

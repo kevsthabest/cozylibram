@@ -1,6 +1,6 @@
 # Blind Date with a Book — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
+**Status:** SHIPPED as v566 (PR #238). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
 **Rubric snapshot:** Reader value — turns "what do I read next" from a chore of judging covers into a small event. Brief-fit — pass (a choosing delight; no goals, no streaks, no pressure to finish). Moat-fit — medium (the clues are only trustworthy because tropes/spice come from the corpus, not marketing copy). Scope — **S–M**. Placement — **Free**. Displaced surface — none; it's a mode inside Surprise Me, not a new destination.
 
 ## 1. What

@@ -1,6 +1,6 @@
 # Your Book as a Candle — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
+**Status:** SHIPPED as v564 (`js/238-book-candle.js`). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
 **Rubric snapshot:** Reader value — every book gets a playful, shareable identity card beyond its metadata. Brief-fit — pass (celebration/presentation only; no goals, timers, or pressure). Moat-fit — medium (rides Book Portrait's surface and the corpus's trope/setting data; the mapping table is ours). Scope — **S**. Placement — **Free** (the card); premium share-card styles remain the existing premium lane, not this spec. Displaced surface — none; sits beside Book Portrait.
 
 ## 1. What

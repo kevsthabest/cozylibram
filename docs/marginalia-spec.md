@@ -1,6 +1,6 @@
 # Marginalia — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR for Phase 1; the safety dependencies in §5 are ship-blockers, not follow-ups.
+**Status:** SHIPPED as v574 (`js/242-marginalia.js`, migration `v574_marginalia.sql`). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR for Phase 1; the safety dependencies in §5 are ship-blockers, not follow-ups.
 **Rubric snapshot:** Reader value — the book club that lives inside the book: friends' reactions find you exactly when you reach the moment, at your own pace. Brief-fit — pass (circle-only, opt-in by friendship, progress-gated so it can never spoil; no schedules, no pace data shown — the anti-book-club-pressure shape). Moat-fit — **high** (it monetizes the app's existing spoiler discipline: progress tracking + the content shield + key-only social architecture). Scope — **L**. Placement — **Free** (social core is free — standing constraint). Displaced surface — none; a new section on the book page.
 
 ## 1. What

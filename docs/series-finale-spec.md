@@ -1,6 +1,6 @@
 # The Finale — Series Completion Ceremony — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
+**Status:** SHIPPED as v567 (`js/239-finale.js`). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
 **Rubric snapshot:** Reader value — finishing a long series is one of the biggest emotional moments in a reading life; today it gets the same quiet checkmark as a novella. Brief-fit — pass (celebrates what already happened; looks only backward; no "next book" pressure). Moat-fit — medium-high (series + character data from the corpus; the ratings arc is the reader's own). Scope — **S–M**. Placement — **Free** (a celebration of the reader's own data; withholding it would fail the placement test). Displaced surface — none; the ceremony presents once, the keepsake lives in the series view.
 
 ## 1. What

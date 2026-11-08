@@ -1,6 +1,6 @@
 # Ambience That Matches the Book — Spec
 
-**Status:** Approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
+**Status:** SHIPPED as v572 (`js/241-book-ambience.js`). Originally approved by the User (2026-10-15, from the wow-features brainstorm). One PR.
 **Rubric snapshot:** Reader value — the app joins the reading ritual itself, not just the bookkeeping around it; readers already seek out ambiance audio while reading. Brief-fit — pass (optional, ambient, no tracking/pressure; never autoplay). Moat-fit — medium (the recipe is chosen from the book's corpus tropes/setting, not a generic playlist). Scope — **M**. Placement — **Free** (procedurally generated audio has no per-play cost; later curated sound packs could be a premium extension — not this spec). Displaced surface — none; one entry point on the book page, plus a mini-control while playing.
 
 ## 1. What

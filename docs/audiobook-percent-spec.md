@@ -1,6 +1,7 @@
 # Audiobook percentage logging — spec
 
-Status: APPROVED by the User 2026-10-17 (incl. §6 as recommended — history
+Status: SHIPPED as v614 (PR #312; test-suite repoint PR #319). Originally
+APPROVED by the User 2026-10-17 (incl. §6 as recommended — history
 unconverted). Build dispatched to the Data & Sync seat as implementation owner.
 Origin: the User, 2026-10-16 — his partner listens via Hoopla, and audiobooks
 have no meaningful "page" to log. Inputs settled by the User at intake:

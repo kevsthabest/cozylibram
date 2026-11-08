@@ -111,13 +111,22 @@ lands — it only ever points at documents that exist.
 **Coven (private social)**
 - Invite-code friends, read-only shelf browsing, per-shelf privacy
   controls ("share my shelves" + hide individual shelves)
+- @handles (`js/237-handles.js`): a unique handle per reader, findable
+  only when the owner opts in; add-by-handle sends a pending request,
+  never an instant friendship
 - "You'd love this" recommendations from friends' 4★+ books
 - Soulmate scores, monthly leaderboard, buddy reads, now-reading feed
 
 **Sync & safety**
-- Supabase cloud sync: pull-merge-push with last-write-wins conflict
-  resolution, deletion tombstones (a deleted book stays deleted),
-  per-user on-device partitions, realtime updates across devices
+- Supabase cloud sync: pull-merge-push. Book pushes go through the
+  server-side `push_books_guarded` guard (migration v643): a stored
+  copy that is newer rejects the stale push row instead of being
+  overwritten, and equal timestamps resolve by a canonical-content
+  tie-break. Trope claims are written through the `write_trope_claims`
+  RPC (v647/v648), which validates proposals and applies the survival
+  rules server-side. Deletion tombstones (a deleted book stays
+  deleted), per-user on-device partitions, realtime updates across
+  devices
 - Quiet by design: background syncs pulse a small dot instead of
   toasting; manual syncs report what changed
 
@@ -191,7 +200,12 @@ creates each:
   (v246, moderation), `dnf_reasons` (v398),
   `v399_community_corpus_v1.sql` — `character_suggestions`,
   `trigger_taxonomy` (30-entry seed), `trigger_suggestions`,
-  `community_votes`, `community_tiers` (see `docs/community-corpus.md`)
+  `community_votes`, `community_tiers` (see `docs/community-corpus.md`);
+  later migrations include `v550_handles.sql` (handles),
+  `v574_marginalia.sql` (Marginalia), `v643_push_books_guarded.sql`
+  (server-side push guard), and `v647_claims_confirmed_writer.sql` +
+  `v648_claims_writer_protection_fix.sql` (the `write_trope_claims`
+  writer RPC)
 
 ## Tech notes
 
