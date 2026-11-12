@@ -8,18 +8,31 @@
 
    resolveWork(book) -> work uuid or null. Find-or-create against the
    shared tables:
-     1. SELECT works by (title_norm, author_norm).
-     2. Missing: upsert on the UNIQUE(title_norm, author_norm) constraint
-        (the constraint makes concurrent creators converge on one row).
-     3. Best-effort: register the edition by ISBN
-        (insert, ignoreDuplicates — an ISBN never changes works).
+     1. Prefer the register_work() RPC (#363): one server-side call
+        that finds or creates the work on (title_norm, author_norm),
+        registers the edition under real ISBN validation, and merges
+        provider ids fill-missing-only. A rejected ISBN (bad check
+        digit) or a conflict ISBN (owned by another work) never sinks
+        or hijacks the work — the RPC still returns its id, mirroring
+        the silent best-effort outcomes the direct writes produced.
+     2. RPC absent (the migration has not applied yet): SELECT works
+        by (title_norm, author_norm); missing: upsert on the
+        UNIQUE(title_norm, author_norm) constraint (the constraint
+        makes concurrent creators converge on one row); best-effort:
+        register the edition by ISBN (insert, ignoreDuplicates — an
+        ISBN never changes works).
    Never throws: offline, signed-out, and RLS denials all resolve null,
    and callers fall back to the legacy book_key path. Resolved ids are
    cached per session keyed by the book's stable key.
 
-   v205 requires the "works: user insert" / "editions: user insert" RLS
-   policies (metadata-staging/v205_01_claims_user_inserts.sql); without
-   them only admins can create works and everyone else resolves null. */
+   #363: the fallback in step 2 writes through the "works: user
+   insert" / "editions: user insert" RLS policies, whose checks are
+   presence-only. The v653 migration drops those policies and makes
+   register_work() the only client registration path — which is why
+   this client is tolerant in the v643 pattern (RPC preferred, direct
+   writes while they still work) and ships FIRST: the migration must
+   only apply once this client is live, or resolution would fail
+   closed for every user until it caught up. */
 
 /* Pure: identity keys for a book. Returns null when the book has no
    usable title — such a book cannot resolve to a work. Norms use
@@ -52,6 +65,17 @@ export function workKeysFor(book) {
     }
   } catch (e) { series = null; }
   return { title, titleNorm, authors, authorNorm, isbn, series };
+}
+
+/* #363: PostgREST reports an unknown function as PGRST202 with a
+   "could not find the function ... in the schema cache" message —
+   the same discriminator the push guard uses (js/090). It is how
+   resolve() tells "the v653 migration has not applied yet" (fall
+   back to the direct writes) apart from a real registration error
+   (fail closed). */
+function registerWorkMissing(e) {
+  const s = String((e && (e.code + ' ' + e.message)) || e || '');
+  return /PGRST20[0-9]|schema cache|could not find|does not exist|404/i.test(s);
 }
 
 export const WorkStore = {
@@ -88,6 +112,22 @@ export const WorkStore = {
     catch (e) { sb = null; }
     if (!sb) return null;
     try {
+      // #363: the RPC is the preferred path (see _register). Provider
+      // ids the book already carries (Hardcover id from enrichment,
+      // OL work key) go up as proposals; the server merges them
+      // fill-missing-only, which retires the direct provider_ids
+      // UPDATE _mergeProviderIds used to issue — an UPDATE that
+      // silently no-opped for non-admins anyway, since works has
+      // never had a user UPDATE policy.
+      const reg = await this._register(sb, keys, providerIdsFromBook(book));
+      if (reg) {
+        this._cache[ck] = reg.work_id;
+        return reg.work_id;
+      }
+      // Pre-migration fallback: the direct writes below are what the
+      // insert policies still allow. They carry no provider ids —
+      // merging waits for the RPC rather than reviving the retired
+      // UPDATE for the shrinking window before the migration lands.
       let id = await this._selectId(sb, keys);
       if (!id) {
         const { data, error } = await sb.from('works').upsert({
@@ -108,12 +148,6 @@ export const WorkStore = {
             { onConflict: 'isbn', ignoreDuplicates: true });
         } catch (e) { /* an unregistered edition doesn't block the work */ }
       }
-      // v272: work identity hub — fold provider IDs the book already
-      // carries (Hardcover id from enrichment, OL work key) into
-      // works.provider_ids. Best-effort; identity capture never blocks
-      // resolution.
-      try { await this._mergeProviderIds(sb, id, providerIdsFromBook(book)); }
-      catch (e) { /* pre-migration DBs lack the column — ignore */ }
       this._cache[ck] = id || null;
       return id || null;
     } catch (e) {
@@ -133,6 +167,45 @@ export const WorkStore = {
       .maybeSingle();
     if (error) throw error;
     return (data && data.id) || null;
+  },
+
+  /* #363: one registration attempt through the register_work() RPC
+     (supabase/migrations/v653_catalogue_registration_rpc.sql). The
+     RPC performs the whole registration server-side — find-or-create
+     on the natural key, the provider-id merge, edition registration
+     under ISBN shape + check-digit validation — and answers
+     { work_id, edition_id, created_work, created_edition, isbn }
+     with isbn one of absent / rejected / registered / existing /
+     conflict. Callers here only consume work_id: a rejected or
+     conflicted ISBN still resolves the work, exactly as the old
+     silent best-effort upserts behaved, so no outcome needs new
+     handling or new UI.
+     Returns the result object, or null when the function is not on
+     the server yet (the PGRST202 class — see registerWorkMissing) so
+     the caller falls back to the direct writes; a client without an
+     rpc surface (a test fake) reads the same way. An answer without
+     a work_id is not the function talking and also reads as missing.
+     Any other RPC error throws: once the migration has applied the
+     fallback cannot write anyway, and failing closed (resolve
+     returns null; the legacy book_key path carries the UI) beats
+     guessing at a half-applied registration. */
+  async _register(sb, keys, providerIds) {
+    if (!sb || typeof sb.rpc !== 'function') return null;
+    const { data, error } = await sb.rpc('register_work', {
+      p_title: keys.title,
+      p_title_norm: keys.titleNorm,
+      p_authors: keys.authors,
+      p_author_norm: keys.authorNorm,
+      p_series: keys.series,
+      p_isbn: keys.isbn,
+      p_provider_ids: providerIds || {},
+    });
+    if (error) {
+      if (registerWorkMissing(error)) return null;
+      throw error;
+    }
+    if (!data || typeof data !== 'object' || !data.work_id) return null;
+    return data;
   },
 
   /* v313: fetch the work-level spice baseline for a book. Returns
@@ -229,27 +302,6 @@ export const WorkStore = {
     } catch (e) { return null; }
   },
 
-  /* v272: merge provider IDs into a work's provider_ids JSONB. Only fills
-     keys that are absent or different — a capture never clobbers a
-     previously stored identity. No-op when there's nothing to merge. */
-  async _mergeProviderIds(sb, workId, ids) {
-    ids = ids || {};
-    const keys = Object.keys(ids).filter(k => ids[k] != null && ids[k] !== '');
-    if (!sb || !workId || !keys.length) return;
-    const { data, error } = await sb.from('works')
-      .select('provider_ids').eq('id', workId).maybeSingle();
-    if (error) throw error;
-    const cur = (data && data.provider_ids) || {};
-    const merged = { ...cur };
-    let changed = false;
-    for (const k of keys) {
-      if (merged[k] !== ids[k]) { merged[k] = ids[k]; changed = true; }
-    }
-    if (!changed) return;
-    const { error: uErr } = await sb.from('works')
-      .update({ provider_ids: merged }).eq('id', workId);
-    if (uErr) throw uErr;
-  },
 };
 
 /* Convenience wrapper used by the trope read path. Guards for contexts
@@ -278,18 +330,28 @@ export function providerIdsFromBook(book) {
 /* v272: best-effort attach of provider IDs to a book's work. Never throws
    and never blocks the caller — identity capture is advisory. Used by
    flows (like Hardcover enrichment) that learn a provider ID after the
-   work was already resolved. */
+   work was already resolved.
+   #363: the attach is a re-registration. register_work() converges on
+   the same work (find-or-create on the natural key) and merges the
+   proposed ids fill-missing-only, so proposing the newly learned ids
+   IS the attach — and unlike resolve() it bypasses the session cache,
+   because an attach exists precisely when resolution already happened.
+   Before the v653 migration the RPC is absent and the attach is a
+   no-op, which is also what the retired direct UPDATE amounted to for
+   every non-admin caller: works has never had a user UPDATE policy,
+   so it silently changed nothing. */
 export async function workAttachProviderIds(book, ids) {
   try {
     if (typeof WorkStore === 'undefined' || !WorkStore) return;
     const keys = ids && Object.keys(ids).filter(k => ids[k] != null && ids[k] !== '');
     if (!keys || !keys.length) return;
-    const id = await resolveWork(book);
-    if (!id) return;
+    let wkeys = null;
+    try { wkeys = workKeysFor(book); } catch (e) { wkeys = null; }
+    if (!wkeys) return;
     let sb = null;
     try { sb = await cloudClient(); } catch (e) { return; }
     if (!sb) return;
-    await WorkStore._mergeProviderIds(sb, id, ids);
+    await WorkStore._register(sb, wkeys, ids);
   } catch (e) {}
 }
 

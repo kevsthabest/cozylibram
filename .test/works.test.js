@@ -231,7 +231,7 @@ function ok(name, cond) {
     probe('TropeStore.invalidate()');
   }
 
-  /* ---- E. v272 work identity hub: provider_ids capture ---- */
+  /* ---- E. v272 work identity hub + #363 register_work client ---- */
   ok('providerIdsFromBook picks up hcId', JSON.stringify(
     probe(`providerIdsFromBook({ title: 'T', hcId: 12345 })`)) === '{"hardcover_id":"12345"}');
   ok('providerIdsFromBook picks up OL work key', JSON.stringify(
@@ -241,72 +241,123 @@ function ok(name, cond) {
   ok('providerIdsFromBook empty book -> {}', JSON.stringify(
     probe('providerIdsFromBook(null)')) === '{}');
 
-  // resolve() merges provider IDs without clobbering existing keys.
-  const fakeSbMerge = ({ existing, calls }) => ({
+  // #363: with register_work on the server, resolve() registers through
+  // the RPC alone — the direct writes (select/upsert/update) are the
+  // pre-migration fallback, exercised only when the function is absent.
+  const fakeSbRpc = ({ result, rpcError, calls }) => ({
+    rpc: async (fn, args) => {
+      calls.push('rpc:' + fn + ':' + JSON.stringify(args));
+      if (rpcError) return { data: null, error: rpcError };
+      return { data: result, error: null };
+    },
     from: (table) => {
-      if (table === 'works') return {
-        select: (cols) => ({
-          eq: (c, v) => (c === 'id'
-            ? { maybeSingle: async () => ({ data: { provider_ids: existing }, error: null }) }
-            : { eq: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
-        }),
-        update: (row) => ({ eq: () => {
-          calls.push('works.update:' + JSON.stringify(row.provider_ids));
-          return Promise.resolve({ data: null, error: null });
-        } }),
-        upsert: (row, opts) => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
+      calls.push('from:' + table);
+      return {
+        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),
+        upsert: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'w-direct' }, error: null }) }) }),
+        update: () => ({ eq: async () => ({ data: null, error: null }) }),
       };
-      if (table === 'editions') return {
-        upsert: async () => ({ data: null, error: null }),
-      };
-      throw new Error('unexpected table ' + table);
     },
   });
+  const rpcArgs = calls => {
+    const c = calls.find(x => x.indexOf('rpc:register_work:') === 0);
+    return c ? JSON.parse(c.slice('rpc:register_work:'.length)) : null;
+  };
   probe(`window.__resolveWith = async (b) => WorkStore.resolve(b, { getClient: async () => window.__fakeSb });`);
+
   {
-    // Existing keys preserved, new keys added.
+    // RPC preferred: identity keys + proposed provider ids go up in one
+    // call; the work id comes back; no direct table write is issued, so
+    // provider ids merge server-side (the retired client UPDATE is gone).
     const calls = [];
-    vm.runInContext('window.__fakeSb = __sb;',
-      Object.assign(ctx, { __sb: fakeSbMerge({ existing: { hardcover_id: '111' }, calls }) }));
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: { work_id: 'w-rpc', edition_id: 'e-1', created_work: true, created_edition: true, isbn: 'registered' },
+      calls }) }));
     probe('WorkStore.clear()');
-    const id = await probe(`window.__resolveWith({ title: 'T', authors: ['A'], hcId: 222, workKey: '/works/OL9W' })`);
-    ok('resolve still returns the work id', id === 'w-1');
-    const upd = calls.find(c => c.indexOf('works.update:') === 0);
-    const merged = upd ? JSON.parse(upd.slice('works.update:'.length)) : {};
-    ok('merge updates changed keys and adds new ones',
-      merged.hardcover_id === '222' && merged.openlibrary_id === '/works/OL9W');
+    const id = await probe(`window.__resolveWith({ id: 'b-rpc', title: 'Fourth Wing', authors: ['Rebecca Yarros'], isbn: '9781649374189', hcId: 777, workKey: '/works/OL123W' })`);
+    ok('RPC path resolves the work id', id === 'w-rpc');
+    const args = rpcArgs(calls);
+    ok('RPC receives the identity keys',
+      !!args && args.p_title === 'Fourth Wing' && args.p_title_norm === 'fourth wing' &&
+      args.p_author_norm === 'rebecca yarros' && args.p_isbn === '9781649374189');
+    ok('provider ids are proposed to the RPC',
+      !!args && args.p_provider_ids.hardcover_id === '777' &&
+      args.p_provider_ids.openlibrary_id === '/works/OL123W');
+    ok('RPC path issues no direct writes (no select/upsert/UPDATE)',
+      !calls.some(c => c.indexOf('from:') === 0));
     probe('WorkStore.clear()');
   }
+
   {
-    // Nothing new to merge -> no update call.
+    // Function missing (PGRST202): the tolerant client falls back to the
+    // direct writes the pre-migration policies still allow.
     const calls = [];
-    vm.runInContext('window.__fakeSb = __sb;',
-      Object.assign(ctx, { __sb: fakeSbMerge({ existing: { hardcover_id: '111' }, calls }) }));
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: null,
+      rpcError: { code: 'PGRST202', message: 'Could not find the function public.register_work(p_title, p_title_norm) in the schema cache' },
+      calls }) }));
     probe('WorkStore.clear()');
-    await probe(`window.__resolveWith({ title: 'T2', authors: ['A'], hcId: 111 })`);
-    ok('no update when nothing new to merge', !calls.some(c => c.indexOf('works.update:') === 0));
+    const id = await probe(`window.__resolveWith({ id: 'b-fb', title: 'Fallback Book', authors: ['A U Thor'], isbn: '9781649374189' })`);
+    ok('missing RPC falls back to the direct upsert', id === 'w-direct');
+    ok('fallback wrote directly to works', calls.some(c => c === 'from:works'));
     probe('WorkStore.clear()');
   }
+
   {
-    // Pre-migration DB (no provider_ids column): select throws -> resolve still works.
+    // Rejected ISBN: the work still registers and resolves — the bad
+    // scan is not a catalogue event, and resolve() surfaces no new UI.
     const calls = [];
-    const sbNoCol = {
-      from: (table) => {
-        if (table === 'works') return {
-          select: (cols) => cols === 'provider_ids'
-            ? { eq: () => ({ maybeSingle: async () => ({ data: null, error: new Error('column missing') }) }) }
-            : { eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }) },
-          upsert: (row, opts) => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'w-1' }, error: null }) }) }),
-        };
-        if (table === 'editions') return { upsert: async () => ({ data: null, error: null }) };
-        throw new Error('unexpected table ' + table);
-      },
-    };
-    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: sbNoCol }));
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: { work_id: 'w-rej', edition_id: null, created_work: true, created_edition: false, isbn: 'rejected' },
+      calls }) }));
     probe('WorkStore.clear()');
-    const id = await probe(`window.__resolveWith({ title: 'T3', authors: ['A'], hcId: 5 })`);
-    ok('missing column degrades gracefully (resolve still returns id)', id === 'w-1');
+    const id = await probe(`window.__resolveWith({ id: 'b-rej', title: 'Bad Scan', authors: ['A U Thor'], isbn: '9781649374180' })`);
+    ok('rejected ISBN still resolves the work', id === 'w-rej');
     probe('WorkStore.clear()');
+  }
+
+  {
+    // Conflict ISBN: taken by another work's edition — never reassigned,
+    // no edition id handed back, and the caller's own work still resolves.
+    const calls = [];
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: { work_id: 'w-conf', edition_id: null, created_work: false, created_edition: false, isbn: 'conflict' },
+      calls }) }));
+    probe('WorkStore.clear()');
+    const id = await probe(`window.__resolveWith({ id: 'b-conf', title: 'Same ISBN Other Work', authors: ['A U Thor'], isbn: '9781649374189' })`);
+    ok('conflict ISBN still resolves the caller\'s work', id === 'w-conf');
+    probe('WorkStore.clear()');
+  }
+
+  {
+    // A real RPC error (not the missing-function class) fails closed:
+    // resolve() returns null and does NOT fall back to blind writes.
+    const calls = [];
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: null,
+      rpcError: { code: 'P0001', message: 'register_work: an authenticated caller is required' },
+      calls }) }));
+    probe('WorkStore.clear()');
+    const id = await probe(`window.__resolveWith({ id: 'b-err', title: 'No Auth', authors: ['A U Thor'] })`);
+    ok('real RPC error resolves null without fallback writes',
+      id === null && !calls.some(c => c.indexOf('from:') === 0));
+    probe('WorkStore.clear()');
+  }
+
+  {
+    // workAttachProviderIds: a late-learned provider id attaches by
+    // re-registering through the RPC — no direct UPDATE anywhere.
+    const calls = [];
+    vm.runInContext('window.__fakeSb = __sb;', Object.assign(ctx, { __sb: fakeSbRpc({
+      result: { work_id: 'w-att', edition_id: null, created_work: false, created_edition: false, isbn: 'absent' },
+      calls }) }));
+    probe('window.__realCloud = cloudClient; cloudClient = async () => window.__fakeSb;');
+    await probe(`workAttachProviderIds({ title: 'Attach Me', authors: ['A U Thor'] }, { hardcover_id: '999' })`);
+    probe('cloudClient = window.__realCloud;');
+    const args = rpcArgs(calls);
+    ok('attach proposes the learned ids through the RPC',
+      !!args && args.p_provider_ids.hardcover_id === '999');
+    ok('attach issues no direct UPDATE', !calls.some(c => c.indexOf('from:') === 0));
   }
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
