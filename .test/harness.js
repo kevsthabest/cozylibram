@@ -34,11 +34,47 @@ function injectScript(window, text) {
   window.document.body.appendChild(el);
 }
 
-function loadApp(window) {
+// loadApp injects every app file (synchronously — an injection error
+// throws to the caller, as it always has), then settles the boot before
+// handing the window back.
+//
+// Why the settle exists: since #326 both storage backends complete
+// their load behind the window's storageReady promise, gated on
+// DOMContentLoaded — in a browser that event fires once the deferred
+// module scripts have run, i.e. after everything loadApp just injected.
+// jsdom queues its own DOMContentLoaded as a task, so without help it
+// lands at an arbitrary point inside a suite's scenario, and the
+// deferred load then replaces state the suite already seeded or
+// rendered (the failure class that turned 33 suites red when the
+// legacy boot was gated). The harness therefore fires the event itself
+// once injection is done — the same moment production reaches, with
+// the app's own once-only listeners making jsdom's later natural event
+// a no-op — and returns a promise that resolves when storageReady
+// settles, so a caller that awaits loadApp resumes only after the load
+// (and the boot chained on it) has run. Callers that do not await get
+// the deterministic version of the same ordering: the whole chain is
+// microtasks, drained before any timer a suite waits on.
+//
+// Suites that deliberately exercise the pre-ready boot (asserting on
+// the gated state itself) pass { awaitReady: false }: no event is
+// fired and no promise is awaited, so the gate stays shut until the
+// suite opens it by hand.
+function loadApp(window, options) {
   ensureAnimationFrame(window);
   for (const file of jsFiles()) {
     loadJsFile(window, file);
   }
+  if (options && options.awaitReady === false) return Promise.resolve();
+  if (window.document.readyState === 'loading') {
+    window.document.dispatchEvent(new window.Event('DOMContentLoaded', { bubbles: true }));
+  }
+  let ready = null;
+  try { ready = window.eval('typeof storageReady !== "undefined" ? storageReady : null'); }
+  catch (e) { ready = null; }
+  if (!ready || typeof ready.then !== 'function') return Promise.resolve();
+  // Settle, never reject: boot failure handling belongs to the app
+  // (js/200 boots on both branches); the harness only waits its turn.
+  return ready.then(() => undefined, () => undefined);
 }
 
 // --- ES-module support: classicize (plan §9.2) and the loader (§9.4) -------
