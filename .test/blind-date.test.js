@@ -57,6 +57,7 @@ const READ1 = { id: 'bdr', title: 'Already Read', authors: ['A'], status: 'read'
 const READING1 = { id: 'bdg', title: 'In Progress', authors: ['A'], status: 'reading', tropes: [] };
 
 (async () => {
+  await window.eval('storageReady');
   run('library = ' + JSON.stringify([BD1, BD2, BD5, READ1, READING1]) + ';');
   run('pickState = { genres: [], trope: "", minIntensity: 0, upNextOnly: false };');
   run('setBlindDate(true);');

@@ -67,14 +67,13 @@ function boot() {
   } catch (e) { renderGate(); }
 }
 
-if (idbDisabled) {
-  boot();
-  initCloud();
-} else {
-  // storageInit() never rejects (it falls back internally); the rejection
-  // branch is belt-and-braces so a blank screen is impossible.
-  storageReady.then(() => { boot(); initCloud(); }, () => { boot(); initCloud(); });
-}
+// Both backends boot through storageReady: the IDB init resolves it
+// once the slot is loaded, and the legacy backend resolves it once its
+// DOMContentLoaded-gated load has run (js/040). boot() reads the loaded
+// library, so it cannot honestly start earlier on either path.
+// storageInit() never rejects (it falls back internally); the rejection
+// branch is belt-and-braces so a blank screen is impossible.
+storageReady.then(() => { boot(); initCloud(); }, () => { boot(); initCloud(); });
 
 // New zips ship often — ask the service worker for an update on every
 // launch so devices pick up the latest version without a manual nudge.

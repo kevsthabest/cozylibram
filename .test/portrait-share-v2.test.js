@@ -83,6 +83,7 @@ function setLibrary(books) {
 }
 
 (async () => {
+  await window.eval('storageReady');
 
 /* ---------- portrait object: basics ---------- */
 ok('null portrait when nothing read', setLibrary([mkBook({ status: 'tbr' })]) === null);

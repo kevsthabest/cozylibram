@@ -72,6 +72,7 @@ ok('css: global reduced-motion kill-switch',
 // Profile view — the pack's assertions scan BOTH mounts so the move can
 // never silently drop coverage.
 (async () => {
+  await window.eval('storageReady');
   const tick = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
   const qa = (s, root) => Array.from((root || window.document).querySelectorAll(s));
 

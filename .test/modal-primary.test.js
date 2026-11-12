@@ -55,6 +55,7 @@ ok('dnf: primary is Give it another go', primaryLabel().includes('Give it anothe
 
 // --- 2. Start Reading applies immediately (v455: async trigger check) ---
 (async () => {
+  await window.eval('storageReady');
 seed('tbr');
 q('#m-primary').click();
 await tick();

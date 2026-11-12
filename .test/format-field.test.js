@@ -49,6 +49,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 1. the value sets + binding text map ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   ok('BOOK_FORMATS is exactly the five values',
     w.eval(`JSON.stringify(BOOK_FORMATS.slice().sort())`) ===
     '["audio","ebook","hardcover","paperback","physical"]');
@@ -67,6 +68,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 2. migrateBook coercion — the read path only unsets ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   const mig = (o) => w.eval(`migrateBook(${JSON.stringify(o)})`);
   ok('coercion: valid format kept', mig({ id: 'a', format: 'paperback' }).format === 'paperback');
   ok('coercion: unknown format -> unset', !mig({ id: 'b', format: 'scroll' }).format);
@@ -89,6 +91,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 3. derivations — wishlist core unchanged, trophy distinct ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   const T = (o) => w.eval(`isTrophyWant(${JSON.stringify(o)})`);
   const W = (o) => w.eval(`isWishlistBook(${JSON.stringify(o)})`);
   ok('wishlist core unchanged: tbr + tobuy is a wishlist book', W({ status: 'tbr', owned: 'tobuy' }) === true);
@@ -109,6 +112,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 4. icons exist and are real glyphs ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   ['subscription', 'physical', 'ebook', 'audio'].forEach(n => {
     ok('icon ' + n + ' renders a real glyph (not the covers fallback)',
       w.eval(`icon('${n}') !== icon('covers') && icon('${n}').includes('<svg')`));
@@ -122,6 +126,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 5. modal — subscription round-trip, composed label, picks, guard ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`library = ${JSON.stringify([
     book('sub1', 'tbr', 'subscription', { format: 'ebook', pageCount: 200 }),
     book('own1', 'read', 'owned', { format: 'paperback', wantFormat: 'hardcover', pageCount: 200 }),
@@ -197,6 +202,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 6. library — badge, counts, chip, filter ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`layout = 'list'; library = ${JSON.stringify([
     book('o', 'tbr', 'owned'), book('s', 'tbr', 'subscription'), book('t', 'tbr', 'tobuy'), book('b', 'tbr', 'borrowed'),
   ])}; renderLibrary();`);
@@ -218,6 +224,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 7. wishlist — trophy section, distinct label, no double count, Got it ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`library = ${JSON.stringify([
     book('wish1', 'tbr', 'tobuy'),
     book('trophy1', 'read', 'owned', { format: 'ebook', wantFormat: 'physical' }),
@@ -261,6 +268,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 8. friend view — trophy included, labelled, count stays plain ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`
     cloudUser = { id: 'me-1' };
     circFriend = { id: 'pal-2', name: 'Pal' };
@@ -286,6 +294,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 9. scan funnel + import maps ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`document.body.insertAdjacentHTML('beforeend', '<div id="t-mount"></div>'); library = [];`);
   // Success, no binding stated by the provider -> physical (object in hand).
   w.eval(`window.lookupISBN = async () => migrateBook({ id: 'scan1', isbn: '9781234567897', title: 'Scanned Book', authors: ['A'], status: 'tbr', owned: 'owned' });`);
@@ -331,6 +340,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 10. sync round-trip — whole-record JSON carries the new fields ============ */
 {
   const w = freshWindow();
+  await w.eval('storageReady');
   ok('sync: bookToRow carries format / wantFormat / subscription verbatim',
     w.eval(`(() => { const r = bookToRow({ id: 's1', owned: 'subscription', format: 'audio', wantFormat: 'hardcover' }, 'u1');
       return r.data.owned === 'subscription' && r.data.format === 'audio' && r.data.wantFormat === 'hardcover'; })()`));

@@ -46,6 +46,7 @@ const cand = (hcId, title) => {
 };
 
 (async () => {
+  await window.eval('storageReady');
   runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcover: true };
     library.push(${mk('d1', 'Owned Book')});`);
 

@@ -25,6 +25,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #135: ccEnrichWarnings is idempotent, sets no flag ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     let rows = [{ book_key: 'bk:b1', status: 'accepted', trigger_taxonomy: { label: 'Violence' } }];
     window.bookKeyFor = (b) => 'bk:' + b.id;
     window.cloudClient = async () => ({
@@ -57,6 +58,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #136: ccSheet token round-trip ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     const realOpened = window.overlayOpened, realClosed = window.overlayClosed;
     let openedToken = null, closedToken = 'unset';
     window.overlayOpened = function (slot, closer) {
@@ -80,6 +82,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #137: nudgeEvaluate in-flight guard ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     window.__sbStub = {}; // cloudClient resolves to a stub -> portraitCharCount bails to null
     window.document.body.insertAdjacentHTML('beforeend', '<div id="nudgeSlot"></div>');
     const book = { id: 'nb1', title: 'N', status: 'reading', readSessions: 5, dnaPromptCount: 0, dnaPromptAt: 0 };
@@ -93,6 +96,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #137: nudge send double-tap guard (chars flow) ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     window.__sbStub = {}; // cloudClient resolves to a stub -> portraitCharCount bails to null
     window.document.body.insertAdjacentHTML('beforeend', '<div id="nudgeSlot"></div>');
     const book = { id: 'nb2', title: 'N', status: 'reading', readSessions: 5, dnaPromptCount: 0, dnaPromptAt: 0 };
@@ -115,6 +119,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #138: validate before rate-limit ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     window.cloudClient = async () => null; // offline: submissions queue to the outbox
     const KEY = 'cozylibram.cc.ratelimit.v1';
     const count = () => { try { return JSON.parse(window.localStorage.getItem(KEY) || '{}').hourCount || 0; } catch (e) { return 0; } };
@@ -132,6 +137,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #139: survey sheets register with the overlay manager ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     const realOpened = window.overlayOpened, realClosed = window.overlayClosed;
     const opened = {}, closed = [];
     window.overlayOpened = function (slot, closer) {
@@ -154,6 +160,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #140: concurrent friend fetches ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     let inFlight = 0, maxInFlight = 0;
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
     const fakeQuery = (rows) => ({
@@ -193,6 +200,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #141: bounded work resolution ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     window.document.body.insertAdjacentHTML('beforeend', '<div id="disc-reco"></div>');
     window.eval('library = ' + JSON.stringify(
       Array.from({ length: 20 }, (_, i) => ({ id: 'rb' + i, title: 'T' + i, status: 'read' }))));

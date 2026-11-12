@@ -57,6 +57,14 @@ ok('unread spine has no read seal', !String(window.__tbrSpine).includes('spine-r
 (async () => {
 const tick = (ms) => new Promise(r => setTimeout(r, ms));
 
+// Wait for the real boot before driving: the deferred load replaces the
+// library the sync prefix above seeded, so re-seed the shelf once
+// storageReady has settled (the production boot contract).
+await window.eval('storageReady');
+runInWindow(`localStorage.clear(); favExpanded = false;
+  library.push(${mk('fa', true, 400)}, ${mk('fb', true, 200)}, ${mk('fc', false, 300)});
+  renderLibrary();`);
+
 // 3. spine click pulls out, then opens the book modal
 qa('.fav-shelf .spine')[0].click();
 ok('spine gets pulling class', qa('.fav-shelf .spine')[0].classList.contains('pulling'));

@@ -134,6 +134,7 @@ function mkStub(store, upsertCalls, rpcImpl) {
 }
 
 (async () => {
+  await window.eval('storageReady');
   // ---------- #336: a winning merge deletes keys the winner lacks ----------
   runInWindow(`library = [${mk('d1', ", _mtime: 100, legacyJunk: 'gone', progressUnit: 'pct'")}]; tombstones = []; tombstoneFloor = 0;`);
   runInWindow(`mergeCloudBooks(library, [{ book_id: 'd1', isbn: null, data: { id: 'd1', title: 'Winner', _mtime: 200 } }]);`);

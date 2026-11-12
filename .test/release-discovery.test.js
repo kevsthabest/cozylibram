@@ -63,6 +63,20 @@ ok('authors ranked by read count then rating',
   JSON.stringify(window.topReleaseAuthors()) === JSON.stringify(['Ann Author', 'Zed']));
 
 (async () => {
+  // Wait for the real boot before driving: the deferred load replaces
+  // the library the sync prefix above seeded, so re-seed the scenario
+  // once storageReady has settled (the production boot contract).
+  await window.eval('storageReady');
+  runInWindow(`
+  window.SPICY_CONFIG = { hardcover: 'test-token' };
+  localStorage.removeItem('spicyshelves.dismissed_releases');
+  library = [
+    { id: 'a1', title: 'Ann One', authors: ['Ann Author'], status: 'read', owned: 'owned', cover: '', tropes: [], myRating: 5, isbn: '9781111111111' },
+    { id: 'a2', title: 'Already Have', authors: ['Ann Author'], status: 'tbr', owned: 'tobuy', cover: '', tropes: [], myRating: 4 },
+    { id: 'z1', title: 'Zed One', authors: ['Zed'], status: 'read', owned: 'owned', cover: '', tropes: [], myRating: 0 },
+  ];
+  dismissRelease(5);
+`);
   const res = await window.checkNewReleases();
   const list = res.list;
   ok('only genuine future releases from her authors survive',

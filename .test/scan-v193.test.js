@@ -32,6 +32,7 @@ const runInWindowRet = (js) => {
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 30));
 
 (async () => {
+  await window.eval('storageReady');
   // ---- 1. isbnCheckOk: check-digit validation ----
   ok('valid ISBN-13 passes', runInWindowRet(`isbnCheckOk('9780439023528')`) === true);
   ok('valid ISBN-13 passes (2)', runInWindowRet(`isbnCheckOk('9780140328721')`) === true);

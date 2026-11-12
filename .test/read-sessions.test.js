@@ -38,6 +38,7 @@ const M = (id, extra) => Object.assign({
 }, extra);
 
 (async () => {
+  await window.eval('storageReady');
   runInWindow(`localStorage.clear();
     localStorage.setItem('spicyshelves.animation', 'off');
     library.length = 0;
