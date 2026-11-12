@@ -26,11 +26,14 @@ const mig = fs.readFileSync(path.join(APP_DIR, 'supabase/migrations/v574_margina
 const schema = fs.readFileSync(path.join(APP_DIR, 'supabase/schema.sql'), 'utf8');
 // v578 restates marginalia_for_book (issue #232 parity): the migration arm's
 // read-composition pin targets the LAST migration defining the function,
-// not the founding v574 text (the PR #218 last-definition pattern).
+// not the founding v574 text (the PR #218 last-definition pattern). The
+// selector anchors on the CREATE so a later migration that merely names
+// the function — v649 revokes its anon EXECUTE grant without redefining
+// it — is never mistaken for a restatement.
 const migRead = fs.readdirSync(path.join(APP_DIR, 'supabase/migrations'))
   .filter(f => f.endsWith('.sql')).sort()
   .map(f => fs.readFileSync(path.join(APP_DIR, 'supabase/migrations', f), 'utf8'))
-  .filter(s => s.includes('function public.marginalia_for_book')).pop() || mig;
+  .filter(s => s.includes('create or replace function public.marginalia_for_book')).pop() || mig;
 for (const [label, sql] of [['migration', mig], ['schema.sql', schema]]) {
   ok(label + ': profiles gains marginalia_enabled, default true',
     /add column if not exists marginalia_enabled boolean not null default true/.test(sql));
