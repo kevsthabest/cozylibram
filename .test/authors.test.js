@@ -39,6 +39,7 @@ const mk = (id, title, author, owned) =>
 const tick = (n = 2) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
 
 (async () => {
+  await window.eval('storageReady');
   // v559: the wishlist split is by DERIVATION (isWishlistBook: tbr +
   // tobuy) — a2 is a reco-add shape (tbr + tobuy) and counts as
   // "wanted" now (the unified model: the Wishlist is the to-buy part

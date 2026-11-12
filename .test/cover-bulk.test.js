@@ -22,6 +22,7 @@ const runInWindow = (js) => {
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 50));
 
 (async () => {
+  await window.eval('storageReady');
   // stub candidate + verify functions: book A gets a dead first URL then a good
   // one, book B gets nothing loadable, book C already has a cover.
   runInWindow(`library = [

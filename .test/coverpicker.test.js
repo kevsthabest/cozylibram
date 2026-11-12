@@ -39,6 +39,7 @@ const mk = (id, fields) =>
   `Object.assign({ id: '${id}', isbn: '', title: 'T', authors: ['A'], cover: '', owned: true, status: 'read', _mtime: 0 }, ${JSON.stringify(fields)})`;
 
 (async () => {
+  await window.eval('storageReady');
   gbItems = [
     { volumeInfo: { imageLinks: { thumbnail: 'http://example.com/a.jpg' } } },
     { volumeInfo: { imageLinks: { thumbnail: 'http://example.com/a.jpg' } } }, // dup

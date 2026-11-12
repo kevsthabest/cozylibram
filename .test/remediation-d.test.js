@@ -53,6 +53,7 @@ const mk = (id, title, status, extra) => Object.assign({
 const setLibrary = (books) => runInWindow('library = ' + JSON.stringify(books) + ';');
 
 (async () => {
+  await window.eval('storageReady');
 
   /* ================= 1. analytics allowlist ================= */
   runInWindow("cloudUser = { id: 'u-d', email: 't@t.t' };");

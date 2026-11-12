@@ -76,6 +76,7 @@ function seedBook(id, authors, isbn, status) {
 }
 
 (async () => {
+  await window.eval('storageReady');
   // Seed through the real load path (migrateBook ends in trackBook:
   // the records are proxy-tracked exactly as production holds them).
   run(`window.__pushes = []; window.__persistWrites = [];`);

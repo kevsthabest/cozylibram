@@ -26,6 +26,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #129: _mtime tiebreak is deterministic and converges ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     const mk = (title) => window.migrateBook({ id: 'b1', title, authors: ['A'], status: 'tbr', _mtime: 1000 });
     const recA = mk('Alpha Title'), recB = mk('Beta Title');
     const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -60,6 +61,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #134: malformed fetched_at reads as stale ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     const rows = [
       { isbn: '9780000000001', data: { title: 'Bad Date' }, fetched_at: 'not-a-date' },
       { isbn: '9780000000002', data: { title: 'Empty Date' }, fetched_at: '' },
@@ -90,6 +92,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // setItem we assert on the persisted payload itself.)
   {
     const window = buildDom();
+    await window.eval('storageReady');
     const KEY = 'cozylibram.applog.v1';
     runInWindow(window, 'AppLog.clear();');
     ok(window.localStorage.getItem(KEY) === null, 'clear() removes the stored log');
@@ -114,6 +117,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #126: hung sync push aborts and resets cloudSyncing ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     // abortSignal-aware hanging upsert: never resolves on its own, rejects on abort
     const hangingUpsert = () => {
       const b = {
@@ -157,6 +161,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #126: apiFetch + enrichRatings time out on hung network ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     window.__sbStub = { auth: { getSession: async () => ({ data: { session: null } }) } };
     window.fetch = (url, init) => new Promise((_, reject) => {
       const sig = init && init.signal;
@@ -179,6 +184,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   // ---------- #130: currentDb flips only after the new slot's state loads ----------
   {
     const window = buildDom();
+    await window.eval('storageReady');
     runInWindow(window, 'idbDisabled = false; localUid = null;');
     const fakeDb = { name: 'slot-u2' };
     window.__fakeDb = fakeDb;

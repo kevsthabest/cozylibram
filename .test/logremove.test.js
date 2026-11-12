@@ -49,6 +49,24 @@ ok('button names the page count', (q('#m-rmlog').textContent || '').includes('10
 
 // 3. removing clears the entry, rolls progress back, and Save does not re-log
 (async () => {
+// Wait for the real boot before driving: the deferred load replaces the
+// library the sync prefix above seeded, so re-seed the scenario and
+// reopen the modal once storageReady has settled (the production boot
+// contract).
+await window.eval('storageReady');
+runInWindow(`(function () {
+  localStorage.clear();
+  localStorage.setItem('spicyshelves.animation', 'off');
+  library.length = 0;
+  const tk = dayKey(new Date());
+  const M = (id, title, extra) => Object.assign({ id, isbn: '', title, authors: ['A'], cover: '',
+    description: '', pageCount: null, publishedDate: '', categories: [], publicRating: null,
+    ratingsCount: 0, status: 'tbr', ratings: {}, axes: [], myRating: 0, tropes: [],
+    progress: 0, log: [], dateAdded: new Date().toISOString(), dateFinished: null, notes: '' }, extra);
+  library.push(M('r1', 'Mis-tap', { status: 'reading', pageCount: 300, progress: 50, log: [{ d: tk, from: 40, to: 50 }] }));
+  library.push(M('r2', 'Clean Book', { status: 'read', pageCount: 200, progress: 200 }));
+  openDetail('r1');
+})();`);
 q('#m-rmlog').click();
 await new Promise(r => setTimeout(r, 0)); // let the confirmModal promise chain settle
 ok('entry removed', (book('r1').log || []).length === 0);

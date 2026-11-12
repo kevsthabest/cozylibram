@@ -162,6 +162,7 @@ const book = (id, status, owned, extra) => Object.assign({
 /* ============ 4. producers ============ */
 (async () => {
   const w = freshWindow();
+  await w.eval('storageReady');
   w.eval(`library = [];`);
   const rel = w.eval(`addReleaseBook({ title: 'Future One', authors: ['Ann Author'],
     isbns: ['9780000000001'], cover: '', description: '', pages: 300,
@@ -182,6 +183,7 @@ const book = (id, status, owned, extra) => Object.assign({
 
   /* ============ 5. consumer agreement (owner surfaces) ============ */
   const w2 = freshWindow();
+  await w2.eval('storageReady');
   w2.eval(`library = ${JSON.stringify([
     book('w1', 'tbr', 'tobuy', { releaseDate: '2999-05-01', dateAdded: '2026-01-01T00:00:00.000Z' }),
     book('w2', 'tbr', 'tobuy'),
@@ -211,6 +213,7 @@ const book = (id, status, owned, extra) => Object.assign({
 
   /* ============ 6. modal ============ */
   const w3 = freshWindow();
+  await w3.eval('storageReady');
   w3.eval(`library = ${JSON.stringify([
     book('m1', 'tbr', 'tobuy', { pageCount: 200 }),
     book('m2', 'tbr', 'owned', { pageCount: 200 }),
@@ -242,6 +245,7 @@ const book = (id, status, owned, extra) => Object.assign({
 
   /* ============ 7. friend view ============ */
   const w4 = freshWindow();
+  await w4.eval('storageReady');
   w4.eval(`
     cloudUser = { id: 'me-1' };
     circFriend = { id: 'pal-2', name: 'Pal' };

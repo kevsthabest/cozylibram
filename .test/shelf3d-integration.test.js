@@ -303,6 +303,7 @@ ok('218 loads before 215 in index.html',
    the DOM renderShelf3D builds, the mount contract, the case walk. */
 const tick12 = (n = 1) => new Promise(r => { const f = () => --n <= 0 ? r() : setTimeout(f, 0); setTimeout(f, 0); });
 const section12 = (async () => {
+  await window.eval('storageReady');
   const doc = window.document;
 
   /* (a) shelf3DCapable: URL override > stored preference > WebGL probe */

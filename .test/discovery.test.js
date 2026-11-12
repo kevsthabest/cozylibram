@@ -56,6 +56,7 @@ const mk = (id, title, series) =>
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 (async () => {
+  await window.eval('storageReady');
   runInWindow(`localStorage.clear(); window.SPICY_CONFIG = { hardcover: true };
     library.push(${mk('d1', 'Owned Book', true)});`);
 

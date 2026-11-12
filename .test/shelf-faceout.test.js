@@ -27,6 +27,7 @@ const placed = (r) => r.placed.map(p => [p.i, p.li, r6(p.x), r6(p.w), p.h]);
 const tick = (n) => new Promise(r => { let i = 0; const s = () => (++i >= (n || 3) ? r() : setTimeout(s, 20)); s(); });
 
 (async () => {
+  await window.eval('storageReady');
 
 /* ---- 1. pure helpers (js/204) ---- */
 ok('face width helper exists', run(`typeof shelf3dFaceWidth`) === 'function');

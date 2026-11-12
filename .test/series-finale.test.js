@@ -115,6 +115,7 @@ const clearFinales = () => run(`localStorage.removeItem('cozylibram.finale.v1')`
 
 /* ---------- orchestration: detection, once-only, upgrade ---------- */
 (async () => {
+  await window.eval('storageReady');
   setLib(SAGA);
   clearFinales();
   // Hardcover listing found, series total = exactly what she owns.

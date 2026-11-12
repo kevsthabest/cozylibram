@@ -35,6 +35,7 @@ const seed = () => runInWindow(`(function(){
 })();`);
 
 (async () => {
+  await window.eval('storageReady');
   // 1. auto-enrich is always on (the User's call: no toggle, no preference key)
   seed();
   ok('auto-enrich sweep runs without a toggle', typeof window.autoEnrichSweep === 'function');

@@ -96,6 +96,7 @@ const s215 = fs.readFileSync(ROOT + '/js/215-shelf3d.js', 'utf8');
 /* ---- behaviour: js/217 watchdog against a stubbed scene layer ---- */
 const WD = 'cozylibram.s3d.watchdog';
 (async () => {
+  await window.eval('storageReady');
   const doc = window.document;
   run(`
     localStorage.removeItem('shelfViewMode');

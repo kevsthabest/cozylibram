@@ -41,6 +41,7 @@ const runInWindowRet = (js) => {
 const tick = (ms) => new Promise(r => setTimeout(r, ms || 30));
 
 (async () => {
+  await window.eval('storageReady');
   runInWindow(`localStorage.clear(); searchSource = 'openlibrary'; addTab = 'search'; go('add');`);
   await tick();
 

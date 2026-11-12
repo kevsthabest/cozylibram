@@ -44,6 +44,7 @@ const runInWindow = (js) => {
 };
 
 (async () => {
+  await window.eval('storageReady');
   runInWindow(`(function(){
     localStorage.clear();
     library.length = 0;

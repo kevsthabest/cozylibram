@@ -30,6 +30,7 @@ const BOOKS = [
 ];
 
 (async () => {
+  await window.eval('storageReady');
   run('library = ' + JSON.stringify(BOOKS) + ';');
 
   /* ---- 1. pure ranking ---- */

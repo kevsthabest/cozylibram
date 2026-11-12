@@ -180,6 +180,7 @@ async function main() {
   const window = dom.window;
   window.matchMedia = () => ({ matches: false });
   require('./harness').loadApp(window);
+  await window.eval('storageReady');
   window.Response = Response; // JSDOM's window has no Response; use Node's
   const runInWindow = (js) => {
     const s = window.document.createElement('script');

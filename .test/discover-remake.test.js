@@ -39,6 +39,7 @@ const book = (over) => Object.assign({
 }, over || {});
 
 (async () => {
+  await window.eval('storageReady');
   // ---------- empty library: structure + honest empty states ----------
   run(`library = []; go('discover');`);
   const html0 = q('#view').innerHTML;
